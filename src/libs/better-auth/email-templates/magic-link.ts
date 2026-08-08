@@ -1,5 +1,7 @@
 import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
 
+import { emailBrandName, getEmailBrandCopyrightHtml, getEmailBrandLogoHtml } from './branding';
+
 /**
  * Magic link sign-in email template
  * Sent when user requests passwordless login
@@ -20,19 +22,14 @@ export const getMagicLinkEmailTemplate = (params: { expiresInSeconds: number; ur
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign in to LobeHub</title>
+  <title>Sign in to ${emailBrandName}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f5; color: #1a1a1a;">
   <!-- Container -->
   <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
     
     <!-- Logo -->
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #ffffff; border-radius: 12px; padding: 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-        <span style="font-size: 24px; line-height: 1; margin-right: 10px;">🤯</span>
-        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">LobeHub</span>
-      </div>
-    </div>
+    ${getEmailBrandLogoHtml()}
 
     <!-- Card -->
     <div style="background: #ffffff; border-radius: 20px; padding: 40px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.02);">
@@ -40,7 +37,7 @@ export const getMagicLinkEmailTemplate = (params: { expiresInSeconds: number; ur
       <!-- Header -->
       <div style="text-align: center; margin-bottom: 32px;">
         <h1 style="color: #111827; font-size: 24px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.5px;">
-          Sign in to LobeHub
+          Sign in to ${emailBrandName}
         </h1>
         <p style="color: #6b7280; font-size: 16px; margin: 0; line-height: 1.5;">
           Click the link below to sign in to your account.
@@ -90,14 +87,14 @@ export const getMagicLinkEmailTemplate = (params: { expiresInSeconds: number; ur
         ${getEmailSupportHtml()}
       </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        © ${new Date().getFullYear()} LobeHub. All rights reserved.
+        ${getEmailBrandCopyrightHtml()}
       </p>
     </div>
   </div>
 </body>
 </html>
     `,
-    subject: 'Your LobeHub sign-in link',
+    subject: `Your ${emailBrandName} sign-in link`,
     text: `Use this link to sign in: ${url}\n\nThis link expires in ${expirationText}.\n\n${getEmailSupportText()}`,
   };
 };

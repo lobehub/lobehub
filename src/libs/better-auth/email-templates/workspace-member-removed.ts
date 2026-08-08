@@ -1,5 +1,7 @@
 import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
 
+import { emailBrandName, getEmailBrandAutomatedMessage, getEmailBrandLogoHtml } from './branding';
+
 export const getWorkspaceMemberRemovedEmailTemplate = (params: {
   reason: 'downgrade' | 'removed_by_owner';
   workspaceName: string;
@@ -8,13 +10,9 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
 
   const isDowngrade = reason === 'downgrade';
 
-  const subject = isDowngrade
-    ? `You have been removed from ${workspaceName} on LobeHub`
-    : `You have been removed from ${workspaceName} on LobeHub`;
+  const subject = `You have been removed from ${workspaceName} on ${emailBrandName}`;
 
-  const heading = isDowngrade
-    ? `Removed from <strong>${workspaceName}</strong>`
-    : `Removed from <strong>${workspaceName}</strong>`;
+  const heading = `Removed from <strong>${workspaceName}</strong>`;
 
   const body = isDowngrade
     ? `The workspace <strong>${workspaceName}</strong> has been downgraded, and all team members have been removed as a result. Your personal data and workspaces are not affected.`
@@ -33,12 +31,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
   <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
 
     <!-- Logo -->
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #ffffff; border-radius: 12px; padding: 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-        <span style="font-size: 24px; line-height: 1; margin-right: 10px;">🤯</span>
-        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">LobeHub</span>
-      </div>
-    </div>
+    ${getEmailBrandLogoHtml()}
 
     <!-- Card -->
     <div style="background: #ffffff; border-radius: 20px; padding: 40px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.02);">
@@ -70,7 +63,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
       <!-- Footer note -->
       <div style="text-align: center;">
         <p style="color: #9ca3af; font-size: 13px; margin: 0;">
-          You can continue using LobeHub with your personal workspace.
+          You can continue using ${emailBrandName} with your personal workspace.
         </p>
       </div>
     </div>
@@ -81,7 +74,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
         ${getEmailSupportHtml()}
       </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        This is an automated message from LobeHub.
+        ${getEmailBrandAutomatedMessage()}
       </p>
     </div>
   </div>

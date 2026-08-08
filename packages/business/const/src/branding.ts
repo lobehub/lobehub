@@ -18,6 +18,9 @@ export const BRANDING_NAME = readBrandingEnv('BRANDING_NAME', 'Panachat');
  */
 export const BRANDING_NAME_FA = readBrandingEnv('BRANDING_NAME_FA', 'پاناچت');
 
+/** Brand mark / emoji used in auth emails and similar surfaces. */
+export const BRANDING_EMOJI = readBrandingEnv('BRANDING_EMOJI', '🐦‍🔥');
+
 /** Organization / legal entity name used in copyright and structured data. */
 export const ORG_NAME = readBrandingEnv('ORG_NAME', BRANDING_NAME);
 

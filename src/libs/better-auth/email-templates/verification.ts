@@ -1,5 +1,7 @@
 import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
 
+import { emailBrandName, getEmailBrandCopyrightHtml, getEmailBrandLogoHtml } from './branding';
+
 /**
  * Email verification template
  * Sent to users when they sign up to verify their email address
@@ -32,12 +34,7 @@ export const getVerificationEmailTemplate = (params: {
   <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
     
     <!-- Logo -->
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #ffffff; border-radius: 12px; padding: 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-        <span style="font-size: 24px; line-height: 1; margin-right: 10px;">🤯</span>
-        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">LobeHub</span>
-      </div>
-    </div>
+    ${getEmailBrandLogoHtml()}
 
     <!-- Card -->
     <div style="background: #ffffff; border-radius: 20px; padding: 40px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.02);">
@@ -57,7 +54,7 @@ export const getVerificationEmailTemplate = (params: {
         ${userName ? `<p style="margin: 0 0 16px 0;">Hi <strong>${userName}</strong>,</p>` : ''}
         
         <p style="margin: 0 0 24px 0;">
-          Thanks for creating an account with LobeHub. To access your account, please verify your email address by clicking the button below.
+          Thanks for creating an account with ${emailBrandName}. To access your account, please verify your email address by clicking the button below.
         </p>
 
         <!-- Button -->
@@ -100,14 +97,14 @@ export const getVerificationEmailTemplate = (params: {
         ${getEmailSupportHtml()}
       </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        © 2026 LobeHub. All rights reserved.
+        ${getEmailBrandCopyrightHtml()}
       </p>
     </div>
   </div>
 </body>
 </html>
     `,
-    subject: 'Verify Your Email - LobeHub',
+    subject: `Verify Your Email - ${emailBrandName}`,
     text: `Please verify your email by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\n${getEmailSupportText()}`,
   };
 };

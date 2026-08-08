@@ -10,6 +10,7 @@ describe('branding env configuration', () => {
     const {
       BRANDING_NAME,
       BRANDING_NAME_FA,
+      BRANDING_EMOJI,
       ORG_NAME,
       BRANDING_CLOUD_NAME,
       BRANDING_CLOUD_NAME_FA,
@@ -20,6 +21,7 @@ describe('branding env configuration', () => {
 
     expect(BRANDING_NAME).toBe('Panachat');
     expect(BRANDING_NAME_FA).toBe('پاناچت');
+    expect(BRANDING_EMOJI).toBe('🐦‍🔥');
     expect(ORG_NAME).toBe('Panachat');
     expect(BRANDING_CLOUD_NAME).toBe('Panachat Cloud');
     expect(BRANDING_CLOUD_NAME_FA).toBe('ابر پاناچت');
