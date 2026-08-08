@@ -1,6 +1,6 @@
 'use client';
 
-import { FormGroup, Grid, Icon } from '@lobehub/ui';
+import { Flexbox, FormGroup, Icon } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { type DatePickerProps } from 'antd';
@@ -30,23 +30,10 @@ import { AiHeatmaps } from './features/visualization';
 import { GroupBy, type UserDisplayResolver } from './types';
 
 interface StatsSettingProps {
-  /**
-   * Enable the "By User" group-by dimension in the Usage section. Only
-   * meaningful when multiple users contribute to the data (i.e. workspace
-   * mode). Combine with `resolveUser` to render names instead of opaque IDs.
-   */
   enableUserDimension?: boolean;
-  /**
-   * Replace the personal Welcome banner (uses user nickname / registration
-   * date) with a custom node. Pass `false` to drop the banner entirely.
-   * When set (non-undefined), the personal ShareButton is also hidden because
-   * the share link embeds user-identity context.
-   */
   headerNode?: ReactNode | false;
   mobile?: boolean;
-  /** Resolve userId → display info. Required when `enableUserDimension` is true. */
   resolveUser?: UserDisplayResolver;
-  /** Render the standard personal-settings title and divider. */
   showSettingHeader?: boolean;
 }
 
@@ -70,7 +57,6 @@ const StatsSetting = memo<StatsSettingProps>(
     }, [dateStrings]);
 
     const handleDateChange: DatePickerProps['onChange'] = (dates, dateStrings) => {
-      // Handle both single date and array
       const actualDate = Array.isArray(dates) ? dates[0] : dates;
       if (actualDate) {
         setDateRange(actualDate);
@@ -78,6 +64,53 @@ const StatsSetting = memo<StatsSettingProps>(
       if (typeof dateStrings === 'string') {
         setDateStrings(dateStrings);
       }
+    };
+
+    const usageToolbar = (
+      <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
+        <DatePicker picker="month" value={dateRange} onChange={handleDateChange} />
+        <Tabs
+          activeKey={groupBy}
+          style={{ marginLeft: 8 }}
+          items={[
+            {
+              icon: <Icon icon={Brain} />,
+              key: GroupBy.Model,
+              label: t('usage.welcome.model'),
+            },
+            {
+              icon: <Icon icon={ProviderIcon} />,
+              key: GroupBy.Provider,
+              label: t('usage.welcome.provider'),
+            },
+            ...(enableUserDimension
+              ? [
+                  {
+                    icon: <Icon icon={UserIcon} />,
+                    key: GroupBy.User,
+                    label: t('usage.welcome.user'),
+                  },
+                ]
+              : []),
+          ]}
+          onChange={(key) => setGroupBy(key as GroupBy)}
+        />
+      </Flexbox>
+    );
+
+    // 2×2 CSS grid for stat cards (matches mockup)
+    const statGridStyle: React.CSSProperties = {
+      display: 'grid',
+      gap: 8,
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    };
+
+    // Rankings container: full-width vertical layout
+    const rankingsStyle: React.CSSProperties = {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 16,
+      width: '100%',
     };
 
     return (
@@ -97,66 +130,48 @@ const StatsSetting = memo<StatsSettingProps>(
             )
           }
         >
-          <Grid gap={8} maxItemWidth={150} rows={4}>
+          <div style={statGridStyle}>
             <TotalAssistants mobile={mobile} />
             <TotalTopics mobile={mobile} />
             <TotalMessages mobile={mobile} />
             <TotalTokens />
-          </Grid>
+          </div>
           <Divider dashed />
           <AiHeatmaps mobile={mobile} />
           <Divider dashed />
-          <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
+          <div style={rankingsStyle}>
             <ModelsRank />
             <AssistantsRank mobile={mobile} />
             <TopicsRank mobile={mobile} />
-          </Grid>
+          </div>
         </FormGroup>
         <FormGroup
           collapsible={false}
           gap={16}
-          title={t('tab.usage')}
           variant={'filled'}
-          extra={
-            <>
-              <DatePicker picker="month" value={dateRange} onChange={handleDateChange} />
-              <Tabs
-                activeKey={groupBy}
-                style={{ marginLeft: 8 }}
-                items={[
-                  {
-                    icon: <Icon icon={Brain} />,
-                    key: GroupBy.Model,
-                    label: t('usage.welcome.model'),
-                  },
-                  {
-                    icon: <Icon icon={ProviderIcon} />,
-                    key: GroupBy.Provider,
-                    label: t('usage.welcome.provider'),
-                  },
-                  ...(enableUserDimension
-                    ? [
-                        {
-                          icon: <Icon icon={UserIcon} />,
-                          key: GroupBy.User,
-                          label: t('usage.welcome.user'),
-                        },
-                      ]
-                    : []),
-                ]}
-                onChange={(key) => setGroupBy(key as GroupBy)}
-              />
-            </>
+          title={
+            <Flexbox horizontal align={'center'} gap={8}>
+              <span>{t('tab.usage')}</span>
+              <span
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  padding: '2px 8px',
+                }}
+              >
+                {dateRange.format('YYYY-MM')}
+              </span>
+            </Flexbox>
           }
-          styles={{
-            title: { lineHeight: '35px' },
-          }}
         >
+          {usageToolbar}
           <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
             <UsageCards
               data={data}
               groupBy={groupBy}
               isLoading={isLoading}
+              mobile={mobile}
               resolveUser={resolveUser}
             />
             <Divider />

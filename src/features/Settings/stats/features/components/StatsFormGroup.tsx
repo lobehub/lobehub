@@ -17,14 +17,25 @@ const StatsFormGroup = memo<StatsFormGroupProps>(
   ({ fontSize = 18, afterTitle, children, extra, title, ...rest }) => {
     return (
       <Block gap={16} variant={'borderless'} {...rest}>
-        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-          <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          justify={'space-between'}
+          style={{ flexWrap: 'wrap', rowGap: 8 }}
+        >
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={8}
+            style={{ flex: '0 1 auto', overflow: 'hidden' }}
+          >
             <Text fontSize={fontSize} weight={500}>
               {title}
             </Text>
             {afterTitle}
           </Flexbox>
-          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
             {extra}
           </Flexbox>
         </Flexbox>
