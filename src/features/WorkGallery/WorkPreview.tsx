@@ -3,7 +3,7 @@
 import type { WorkSummaryItem } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2Icon, GitPullRequestIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,9 +41,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 88%, transparent);
     backdrop-filter: blur(12px);
-  `,
-  documentDescription: css`
-    -webkit-line-clamp: 2;
   `,
   grid: css`
     position: absolute;
@@ -91,7 +88,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
 
     margin-block-start: 8px;
 
@@ -196,14 +193,7 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
               </span>
             </Flexbox>
             <div className={styles.previewTitle}>{title}</div>
-            <div
-              className={cx(
-                styles.previewDescription,
-                item.resourceType === 'document' && styles.documentDescription,
-              )}
-            >
-              {description}
-            </div>
+            <div className={styles.previewDescription}>{description}</div>
           </div>
         )}
       </div>

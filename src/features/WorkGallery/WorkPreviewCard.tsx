@@ -16,6 +16,9 @@ import { formatWorkVersionCost } from '@/utils/workVersionCost';
 import WorkPreview from './WorkPreview';
 
 const styles = createStaticStyles(({ css }) => ({
+  agentAvatar: css`
+    align-self: flex-start;
+  `,
   agentName: css`
     overflow: hidden;
     flex: none;
@@ -217,13 +220,14 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
           )}
         </Flexbox>
         <div className={styles.title}>{title}</div>
-        <Flexbox horizontal align={'flex-start'} className={styles.footer} gap={7}>
+        <Flexbox horizontal align={'baseline'} className={styles.footer} gap={7}>
           {agent && (
             <>
               <Avatar
                 emojiScaleWithBackground
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
+                className={styles.agentAvatar}
                 shape={'square'}
                 size={24}
               />
