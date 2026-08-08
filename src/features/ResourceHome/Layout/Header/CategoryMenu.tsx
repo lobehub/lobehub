@@ -28,10 +28,11 @@ const CategoryMenu = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
   const location = useActiveLocation();
-  // In Work-gallery mode (`?works=`) no file category is selected, so suppress
-  // the category highlight — otherwise "All" reads as active alongside the
-  // active Work entry.
-  const worksActive = new URLSearchParams(location.search).has('works');
+  // In Work-gallery mode (/resource/works) no file category is selected, so
+  // suppress the category highlight — otherwise "Home" reads as active
+  // alongside the active Work entry. Match by suffix: the pathname may carry a
+  // workspace prefix.
+  const worksActive = location.pathname.endsWith('/resource/works');
 
   const items = useMemo(
     () => [
@@ -78,12 +79,12 @@ const CategoryMenu = memo(() => {
         url: '/resource/files',
       },
       // Single Works entry (no sub-categories this iteration): switches the
-      // content area to the topic-grouped Work gallery via `?works=all`.
+      // content area to the topic-grouped Work gallery.
       {
         icon: ClipboardListIcon,
         key: 'works',
         title: t('work.group'),
-        url: '/resource?works=all',
+        url: '/resource/works',
       },
       ...businessCategories.map((category) => ({
         icon: category.icon,

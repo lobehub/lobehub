@@ -23,6 +23,9 @@ export const PATH_CATEGORIES = new Set<string>([
   FilesTabs.Videos,
 ]);
 
+/** Path segment of the cross-topic Work gallery: /resource/works */
+export const WORKS_PATH_SEGMENT = 'works';
+
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -35,20 +38,28 @@ const ResourceHomePage = memo(() => {
 
   const pathCategory = params.category;
   const isValidPathCategory = !!pathCategory && PATH_CATEGORIES.has(pathCategory);
+  // The Work gallery owns its own path segment; `?works=<key>` narrows it
+  // (task / document / linear / github), defaulting to the combined view.
+  const isWorksPath = pathCategory === WORKS_PATH_SEGMENT;
+  const worksKey = isWorksPath ? (parseWorkGalleryKey(searchParams.get('works')) ?? 'all') : null;
   // The bare /resource route is the library home dashboard; explorer views
   // live under /resource/<category> (the all-files list at /resource/all).
   const categoryParam = isValidPathCategory ? (pathCategory as FilesTabs) : FilesTabs.Home;
 
-  // Legacy URLs used `?category=<x>`; canonical form is now `/resource/<x>`.
+  // Legacy URLs used `?category=<x>` / `?works=<key>` on the bare /resource
+  // route; canonical forms are now /resource/<x> and /resource/works.
   const legacyCategory = searchParams.get('category');
-  const isInvalidPath = !!pathCategory && !isValidPathCategory;
-
-  // `?works=<type>` switches the content area to the cross-topic Work gallery,
-  // independent of the file explorer (which stays keyed on the category path).
-  const worksKey = parseWorkGalleryKey(searchParams.get('works'));
+  const legacyWorksKey = isWorksPath ? null : parseWorkGalleryKey(searchParams.get('works'));
+  const isInvalidPath = !!pathCategory && !isValidPathCategory && !isWorksPath;
 
   useLayoutEffect(() => {
-    if (worksKey) return;
+    if (legacyWorksKey) {
+      navigate(
+        legacyWorksKey === 'all' ? '/resource/works' : `/resource/works?works=${legacyWorksKey}`,
+        { replace: true },
+      );
+      return;
+    }
     if (legacyCategory) {
       const target = PATH_CATEGORIES.has(legacyCategory)
         ? `/resource/${legacyCategory}`
@@ -57,7 +68,7 @@ const ResourceHomePage = memo(() => {
       return;
     }
     if (isInvalidPath) navigate('/resource', { replace: true });
-  }, [worksKey, legacyCategory, isInvalidPath, navigate]);
+  }, [legacyWorksKey, legacyCategory, isInvalidPath, navigate]);
 
   // Clear libraryId when on home route using useLayoutEffect
   // useLayoutEffect runs synchronously before browser paint, ensuring state is cleared
