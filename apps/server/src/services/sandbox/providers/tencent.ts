@@ -70,9 +70,11 @@ def main(encoded):
         exit_code = int(text) if text else None
 
     running = False
-    if exit_code is None and pid_file.exists():
+    pgid_file = base.with_suffix('.pgid')
+    probe = pgid_file if pgid_file.exists() else pid_file
+    if exit_code is None and probe.exists():
         try:
-            os.kill(int(pid_file.read_text().strip()), 0)
+            os.kill(int(probe.read_text().strip()), 0)
             running = True
         except (OSError, ValueError):
             running = False
@@ -93,17 +95,30 @@ import signal
 
 def main(encoded):
     args = load_args(encoded)
-    pid_file = (Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')).with_suffix('.pid')
-    if not pid_file.exists():
+    base = Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')
+    pgid_file, pid_file = base.with_suffix('.pgid'), base.with_suffix('.pid')
+
+    if not pgid_file.exists() and not pid_file.exists():
         emit({'success': False, 'error': 'unknown commandId'})
         return
+
+    # Signal the whole group so the wrapper and the command itself both stop.
     try:
-        os.kill(int(pid_file.read_text().strip()), signal.SIGTERM)
+        if pgid_file.exists():
+            os.killpg(int(pgid_file.read_text().strip()), signal.SIGTERM)
+        else:
+            os.kill(int(pid_file.read_text().strip()), signal.SIGTERM)
     except (OSError, ValueError) as error:
         emit({'success': False, 'error': str(error)})
         return
+
     emit({'success': True})
 `;
+
+interface DispatchResult {
+  result: unknown;
+  success: boolean;
+}
 
 interface AcquiredInstance {
   domain: string;
@@ -158,9 +173,9 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     try {
       const sandbox = await this.connect();
-      const result = await this.dispatch(sandbox, toolName, params);
+      const { result, success } = await this.dispatch(sandbox, toolName, params);
 
-      return { result, sessionExpiredAndRecreated: false, success: true };
+      return { result, sessionExpiredAndRecreated: false, success };
     } catch (error) {
       log('Tencent sandbox tool %s failed: %O', toolName, error);
 
@@ -209,75 +224,98 @@ export class TencentSandboxProvider implements SandboxProvider {
     sandbox: Sandbox,
     toolName: string,
     params: Record<string, unknown>,
-  ): Promise<unknown> {
+  ): Promise<DispatchResult> {
+    const ok = (result: unknown): DispatchResult => ({ result, success: true });
+
     switch (toolName) {
       case 'executeCode': {
         const execution = await sandbox.runCode(String(params.code ?? ''), {
           language: (params.language as string) ?? 'python',
         });
 
+        const stdout = execution.logs.stdout.join('');
+        const stderr = execution.logs.stderr.join('');
+
+        // The runtime renders `output` and takes the status from the outer
+        // envelope, so a raised exception has to fail the call itself.
         return {
-          error: execution.error ? execution.error.value : undefined,
-          results: execution.results,
-          stderr: execution.logs.stderr.join(''),
-          stdout: execution.logs.stdout.join(''),
+          result: {
+            error: execution.error ? execution.error.value : undefined,
+            output: stdout,
+            results: execution.results,
+            stderr,
+            stdout,
+          },
           success: !execution.error,
         };
       }
 
       case 'runCommand': {
-        return this.runCommand(sandbox, params);
+        return ok(await this.runCommand(sandbox, params));
       }
 
       case 'getCommandOutput': {
-        return this.runScript(sandbox, backgroundStatusScript, {
-          commandId: this.commandId(params),
-        });
+        // A finished-but-failed command legitimately reports success: false
+        // together with its output and exit code; that is a status, not a
+        // helper malfunction, so it must reach the caller intact.
+        return ok(
+          await this.runScript(
+            sandbox,
+            backgroundStatusScript,
+            { commandId: this.commandId(params) },
+            { allowReportedFailure: true },
+          ),
+        );
       }
 
       case 'killCommand': {
-        return this.runScript(sandbox, killBackgroundScript, {
-          commandId: this.commandId(params),
-        });
+        return ok(
+          await this.runScript(
+            sandbox,
+            killBackgroundScript,
+            { commandId: this.commandId(params) },
+            { allowReportedFailure: true },
+          ),
+        );
       }
 
       case 'writeFile':
       case 'writeLocalFile': {
-        return this.writeFile(sandbox, params);
+        return ok(await this.writeFile(sandbox, params));
       }
 
       case 'listFiles':
       case 'listLocalFiles': {
-        return this.runScript(sandbox, listFilesScript, params);
+        return ok(await this.runScript(sandbox, listFilesScript, params));
       }
 
       case 'readFile':
       case 'readLocalFile': {
-        return this.runScript(sandbox, readFileScript, params);
+        return ok(await this.runScript(sandbox, readFileScript, params));
       }
 
       case 'editFile':
       case 'editLocalFile': {
-        return this.runScript(sandbox, editFileScript, params);
+        return ok(await this.runScript(sandbox, editFileScript, params));
       }
 
       case 'searchFiles':
       case 'searchLocalFiles': {
-        return this.runScript(sandbox, searchFilesScript, params);
+        return ok(await this.runScript(sandbox, searchFilesScript, params));
       }
 
       case 'moveFiles':
       case 'moveLocalFiles': {
-        return this.runScript(sandbox, moveFilesScript, params);
+        return ok(await this.runScript(sandbox, moveFilesScript, params));
       }
 
       case 'globFiles':
       case 'globLocalFiles': {
-        return this.runScript(sandbox, globFilesScript, params);
+        return ok(await this.runScript(sandbox, globFilesScript, params));
       }
 
       case 'grepContent': {
-        return this.runScript(sandbox, grepContentScript, params);
+        return ok(await this.runScript(sandbox, grepContentScript, params));
       }
 
       case 'execScript': {
@@ -303,9 +341,13 @@ export class TencentSandboxProvider implements SandboxProvider {
       // Detach through the shell so the caller is not tied to the process, and
       // persist stdout, the pid, and the exit code so later polls can report
       // progress without waiting for completion.
+      // `setsid` puts the command in its own process group and the inner
+      // shell records that group id. Signalling the wrapper pid alone would
+      // leave the real child (node, python, sleep…) running.
       const launch =
         `mkdir -p ${BACKGROUND_DIR}; ` +
-        `( { ${command} ; } > ${base}.log 2>&1 ; echo $? > ${base}.exit ) & ` +
+        `setsid sh -c 'echo $$ > ${base}.pgid; ` +
+        `{ ${command} ; } > ${base}.log 2>&1; echo $? > ${base}.exit' & ` +
         `echo $! > ${base}.pid`;
 
       const result = await sandbox.commands.run(launch, {
@@ -358,6 +400,7 @@ export class TencentSandboxProvider implements SandboxProvider {
     sandbox: Sandbox,
     script: string,
     params: Record<string, unknown>,
+    options: { allowReportedFailure?: boolean } = {},
   ): Promise<Record<string, unknown>> {
     const result = await sandbox.commands.run(buildScriptCommand(script, params), {
       timeoutMs: this.timeoutMs(params),
@@ -369,7 +412,7 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     const parsed = JSON.parse(result.stdout || '{}') as Record<string, unknown>;
 
-    if (parsed.success === false) {
+    if (parsed.success === false && !options.allowReportedFailure) {
       throw new Error(String(parsed.error || 'Sandbox script failed'));
     }
 
@@ -438,6 +481,11 @@ export class TencentSandboxProvider implements SandboxProvider {
 
         return renewed;
       }
+
+      // A failed renewal says nothing about the instance itself. Keep using it
+      // while it is still valid and retry on the next call rather than
+      // discarding the topic's files and background processes.
+      if (cached.expiresAt > Date.now()) return cached;
 
       instances.delete(key);
       await this.release(cached.instanceId);

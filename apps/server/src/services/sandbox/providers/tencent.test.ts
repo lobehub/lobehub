@@ -90,7 +90,9 @@ describe('TencentSandboxProvider', () => {
     expect(calls.acquire).toBe(0);
   });
 
-  it('runs code and returns stdout', async () => {
+  // The execution card reads `output`, and takes its status from the outer
+  // envelope rather than anything nested in the payload.
+  it('maps executed code to the fields the runtime renders', async () => {
     mocks.sandbox.runCode.mockResolvedValue({
       logs: { stderr: [], stdout: ['42\n'] },
       results: [],
@@ -99,7 +101,21 @@ describe('TencentSandboxProvider', () => {
     const result = await (await load()).callTool('executeCode', { code: 'print(42)' });
 
     expect(result.success).toBe(true);
-    expect(result.result).toMatchObject({ stdout: '42\n', success: true });
+    expect(result.result).toMatchObject({ output: '42\n', stdout: '42\n' });
+  });
+
+  it('fails the call when the executed code raises', async () => {
+    mocks.sandbox.runCode.mockResolvedValue({
+      error: { value: 'ZeroDivisionError' },
+      logs: { stderr: ['boom'], stdout: [] },
+      results: [],
+    });
+
+    const result = await (await load()).callTool('executeCode', { code: '1/0' });
+
+    expect(result.success).toBe(false);
+    // The payload still has to reach the runtime so the card can show it.
+    expect(result.result).toMatchObject({ error: 'ZeroDivisionError', stderr: 'boom' });
   });
 
   // The runtime falls back to the outer envelope when the command result has no
