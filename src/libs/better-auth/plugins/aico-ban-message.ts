@@ -1,4 +1,4 @@
-import { APIError } from '@better-auth/core/error';
+import { APIError } from 'better-auth/api';
 import { type BetterAuthPlugin } from 'better-auth/types';
 
 /**
