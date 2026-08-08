@@ -6,6 +6,7 @@ import type {
   WorkListBaseItem,
   WorkListItem,
   WorkSummaryItem,
+  WorkSummaryVersionPreview,
   WorkVersionEventItem,
   WorkVersionPreview,
 } from '@lobechat/types';
@@ -118,6 +119,7 @@ export const currentVersionEventSelection = {
   changeType: currentVersions.changeType,
   createdAt: currentVersions.createdAt,
   cumulativeCost: currentVersions.cumulativeCost,
+  cumulativeUsage: currentVersions.cumulativeUsage,
   id: currentVersions.id,
   messageId: currentVersions.messageId,
   metadata: currentVersions.metadata,
@@ -169,7 +171,7 @@ export const eventWorkListFields = {
 };
 
 export interface TaskWorkSummaryQueryRow {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   /** Live-coalesced task columns; `deleted` flags a missing live row. */
   task: TaskWorkListItem['task'] & { deleted: TaskWorkListItem['taskDeleted'] };
   version: TaskWorkSummaryItem['version'];
@@ -266,7 +268,7 @@ export interface WorkConversationRowParams {
  * for non-task rows by the LEFT JOIN).
  */
 export interface WorkspaceSummaryQueryRow {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   task: TaskWorkSummaryQueryRow['task'];
   version: TaskWorkSummaryItem['version'];
   work: WorkListBaseItem;
