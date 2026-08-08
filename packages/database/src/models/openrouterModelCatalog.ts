@@ -1,3 +1,4 @@
+import { computeDefaultEnabledOpenRouterModelIds } from '@lobechat/business-const';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { AiProviderModelListItem, ModelAbilities, Pricing } from 'model-bank';
 import { AiModelSourceEnum, normalizeAiModelType } from 'model-bank';
@@ -64,6 +65,13 @@ export class OpenRouterModelCatalogModel {
 
   listAsProviderModels = async (): Promise<AiProviderModelListItem[]> => {
     const rows = await this.db.select().from(openrouterModelCatalog);
+    const defaultEnabled = computeDefaultEnabledOpenRouterModelIds(
+      rows.map((row) => ({
+        id: row.id,
+        releasedAt: row.releasedAt,
+        type: row.type,
+      })),
+    );
 
     return rows.map((row) => {
       const payload = (row.payload ?? {}) as Record<string, unknown>;
@@ -73,7 +81,9 @@ export class OpenRouterModelCatalogModel {
         contextWindowTokens: row.contextWindowTokens ?? undefined,
         description: row.description ?? undefined,
         displayName: row.displayName ?? undefined,
-        enabled: row.enabled,
+        // Platform default: latest 4 chat models per openai/anthropic/google.
+        // Per-user overrides live in `ai_models` and win at merge time.
+        enabled: defaultEnabled.has(row.id),
         id: row.id,
         pricing: (row.pricing ?? undefined) as Pricing | undefined,
         releasedAt: row.releasedAt ?? undefined,
@@ -85,8 +95,51 @@ export class OpenRouterModelCatalogModel {
   };
 
   /**
+   * Recompute and persist `enabled` flags from the current catalog rows
+   * (latest 4 chat models per openai / anthropic / google).
+   */
+  reseedDefaultEnabledFlags = async (): Promise<number> => {
+    const rows = await this.db
+      .select({
+        id: openrouterModelCatalog.id,
+        releasedAt: openrouterModelCatalog.releasedAt,
+        type: openrouterModelCatalog.type,
+      })
+      .from(openrouterModelCatalog);
+
+    if (rows.length === 0) return 0;
+
+    const defaultEnabled = computeDefaultEnabledOpenRouterModelIds(rows);
+    const now = new Date();
+
+    await this.db.transaction(async (tx) => {
+      const enabledIds = [...defaultEnabled];
+      const disabledIds = rows.map((r) => r.id).filter((id) => !defaultEnabled.has(id));
+
+      if (enabledIds.length > 0) {
+        await tx
+          .update(openrouterModelCatalog)
+          .set({ enabled: true, updatedAt: now })
+          .where(inArray(openrouterModelCatalog.id, enabledIds));
+      }
+      if (disabledIds.length > 0) {
+        const CHUNK = 200;
+        for (let i = 0; i < disabledIds.length; i += CHUNK) {
+          const chunk = disabledIds.slice(i, i + CHUNK);
+          await tx
+            .update(openrouterModelCatalog)
+            .set({ enabled: false, updatedAt: now })
+            .where(inArray(openrouterModelCatalog.id, chunk));
+        }
+      }
+    });
+
+    return defaultEnabled.size;
+  };
+
+  /**
    * Replace the catalog with a fresh OpenRouter snapshot.
-   * Preserves per-model `enabled` when the id already exists.
+   * Recomputes platform default `enabled` (latest 4 chat / openai|anthropic|google) on every sync.
    */
   replaceCatalog = async (params: {
     models: OpenRouterCatalogModelInput[];
@@ -96,9 +149,16 @@ export class OpenRouterModelCatalogModel {
     const incomingIds = params.models.map((m) => m.id);
 
     const existing = await this.db
-      .select({ enabled: openrouterModelCatalog.enabled, id: openrouterModelCatalog.id })
+      .select({ id: openrouterModelCatalog.id })
       .from(openrouterModelCatalog);
-    const enabledById = new Map(existing.map((r) => [r.id, r.enabled]));
+
+    const defaultEnabled = computeDefaultEnabledOpenRouterModelIds(
+      params.models.map((model) => ({
+        id: model.id,
+        releasedAt: model.releasedAt,
+        type: model.type,
+      })),
+    );
 
     const rows: NewOpenrouterModelCatalog[] = params.models.map((model) => {
       const {
@@ -120,7 +180,7 @@ export class OpenRouterModelCatalogModel {
         contextWindowTokens: contextWindowTokens ?? null,
         description: description ?? null,
         displayName: displayName ?? null,
-        enabled: enabledById.get(id) ?? true,
+        enabled: defaultEnabled.has(id),
         id,
         payload: {
           ...rest,
@@ -163,7 +223,7 @@ export class OpenRouterModelCatalogModel {
                 contextWindowTokens: sql`excluded.context_window_tokens`,
                 description: sql`excluded.description`,
                 displayName: sql`excluded.display_name`,
-                // Keep existing enabled — conflict target doesn't touch it
+                enabled: sql`excluded.enabled`,
                 payload: sql`excluded.payload`,
                 pricing: sql`excluded.pricing`,
                 releasedAt: sql`excluded.released_at`,

@@ -600,7 +600,7 @@ export const openrouterModelCatalog = pgTable(
     id: text('id').notNull().primaryKey(),
     displayName: text('display_name'),
     description: text('description'),
-    enabled: boolean('enabled').notNull().default(true),
+    enabled: boolean('enabled').notNull().default(false),
     type: varchar('type', { length: 20 }).notNull().default('chat'),
     contextWindowTokens: integer('context_window_tokens'),
     pricing: jsonb('pricing'),
