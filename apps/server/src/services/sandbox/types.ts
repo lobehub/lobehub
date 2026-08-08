@@ -7,7 +7,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
 
-export type SandboxProviderKind = 'market' | 'onlyboxes';
+export type SandboxProviderKind = 'market' | 'onlyboxes' | 'tencent';
 
 export interface SandboxSessionContext {
   topicId: string;

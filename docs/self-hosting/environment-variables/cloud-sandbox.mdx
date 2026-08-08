@@ -1,11 +1,11 @@
 ---
 title: Configuring Cloud Sandbox
 description: >-
-  Configure the built-in Cloud Sandbox provider, including Market and
-  self-hosted Onlyboxes.
+  Configure the built-in Cloud Sandbox provider, including Market and self-hosted Onlyboxes, and Tencent Cloud EdgeOne.
 tags:
   - Cloud Sandbox
   - Onlyboxes
+  - Tencent Cloud
   - Self-hosting
 ---
 
@@ -26,6 +26,7 @@ Supported values:
 
 - `market`: Use the existing Market sandbox.
 - `onlyboxes`: Use an Onlyboxes-compatible self-hosted sandbox console.
+- `tencent`: Use Tencent Cloud EdgeOne Agent Runtime sandboxes.
 
 ### `MARKET_BASE_URL`
 
@@ -83,6 +84,46 @@ Supported values:
 - Default: `900`
 - Example: `3600`
 
+### `TENCENT_SANDBOX_API_TOKEN`
+
+- Type: Required when `SANDBOX_PROVIDER=tencent`
+- Description: EdgeOne Pages API token used to acquire sandbox instances. Create one from the EdgeOne Pages console settings page.
+- Example: `your-edgeone-pages-api-token`
+
+### `TENCENT_SANDBOX_PROJECT_ID`
+
+- Type: Required when `SANDBOX_PROVIDER=tencent`
+- Description: EdgeOne Makers project that sandbox instances are billed against.
+- Example: `makers-xxxxxxxx`
+
+### `TENCENT_SANDBOX_MODE`
+
+- Type: Optional
+- Description: Controls the instance lifecycle. `persistent` keeps one container per topic and renews it before expiry, so state such as variables and files survives across tool calls. `on-demand` acquires a container for each tool call and releases it afterwards, which lowers idle cost at the price of a cold start on every call.
+- Default: `persistent`
+- Example: `on-demand`
+
+### `TENCENT_SANDBOX_TIMEOUT_SEC`
+
+- Type: Optional
+- Description: Lifetime requested for each sandbox instance, in seconds. In `persistent` mode the instance is renewed before this expires.
+- Default: `300`
+- Example: `900`
+
+### `TENCENT_SANDBOX_REGION`
+
+- Type: Optional
+- Description: Region used to allocate sandbox instances.
+- Default: `ap-beijing`
+- Example: `ap-singapore`
+
+### `TENCENT_SANDBOX_API_BASE`
+
+- Type: Optional
+- Description: Overrides the sandbox control-plane endpoint. Set this to use the international site instead of the mainland China site.
+- Default: `https://pages-api.cloud.tencent.com/v1/sandbox`
+- Example: `https://pages-api.edgeone.ai/v1/sandbox`
+
 ## Market Configuration
 
 By default, LobeHub uses the official Market sandbox and does not require extra sandbox configuration:
@@ -135,4 +176,32 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   File export still writes the exported artifact to the configured LobeHub S3 storage. Configure the
   S3 environment variables when users need to download files generated inside the sandbox.
+</Callout>
+
+## Tencent Cloud Configuration
+
+Tencent Cloud EdgeOne Agent Runtime exposes managed sandboxes that speak the E2B protocol. Minimum configuration:
+
+```bash
+SANDBOX_PROVIDER=tencent
+TENCENT_SANDBOX_API_TOKEN=your-edgeone-pages-api-token
+TENCENT_SANDBOX_PROJECT_ID=makers-xxxxxxxx
+```
+
+The sandbox image ships with Python and Node.js preinstalled, so code execution, shell commands, and file operations work without extra image preparation.
+
+Choose the instance lifecycle with `TENCENT_SANDBOX_MODE`:
+
+```bash
+# Reuse one container per topic (default). Variables and files persist
+# across tool calls within the same conversation.
+TENCENT_SANDBOX_MODE=persistent
+
+# Create and release a container per tool call. No state is carried over.
+TENCENT_SANDBOX_MODE=on-demand
+```
+
+<Callout type={'info'}>
+  LobeHub does not need to be deployed on EdgeOne to use these sandboxes. Instances are acquired
+  through a public control-plane API, so a self-hosted LobeHub on any server can use them.
 </Callout>
