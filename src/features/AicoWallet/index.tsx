@@ -3,7 +3,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { Table } from 'antd';
+import { Form, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckIcon, WalletIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -18,6 +18,11 @@ import {
   formatRemainingUsd,
   useAicoBillingSources,
 } from '@/features/AicoBilling';
+import {
+  type FxTopupChargeField,
+  FxTopupFields,
+  type FxTopupFormValues,
+} from '@/features/AicoBilling/FxTopupFields';
 import { buildPhoneVerifyRedirectUrl } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -86,12 +91,17 @@ const sourceTitle = (source: AicoBillingSource, t: (key: string) => string): str
 export const AicoWallet = () => {
   const { t } = useTranslation('aico');
   const [busy, setBusy] = useState(false);
+  const [chargeField, setChargeField] = useState<FxTopupChargeField>('toman');
+  const [topupForm] = Form.useForm<FxTopupFormValues>();
   const phoneVerified = useUserStore((s) =>
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
 
   const { data: wallet, mutate: mutateWallet } = useClientDataSWR('aico-my-wallet', () =>
     lambdaClient.aicoBilling.getMyWallet.query(),
+  );
+  const { data: fx } = useClientDataSWR('aico-fx', () =>
+    lambdaClient.aicoBilling.getFxRate.query(),
   );
   const { data: trial, mutate: mutateTrial } = useClientDataSWR('aico-my-trial', () =>
     lambdaClient.aicoBilling.getMyTrial.query(),
@@ -191,9 +201,26 @@ export const AicoWallet = () => {
       ) : null}
 
       <Block className={styles.section} variant="outlined">
-        <Flexbox gap={8}>
-          <Text strong>{t('wallet.creditTitle')}</Text>
+        <Flexbox gap={16}>
+          <Flexbox horizontal align="center" gap={8}>
+            <Text strong>{t('wallet.onlineTopupTitle')}</Text>
+            <Tag>{t('wallet.onlineTopupSoon')}</Tag>
+          </Flexbox>
+          <Text type="secondary">{t('wallet.onlineTopupDisabledHint')}</Text>
           <Text type="secondary">{t('wallet.manualCreditHint')}</Text>
+          <Form form={topupForm} layout="vertical">
+            <FxTopupFields
+              disabled
+              chargeField={chargeField}
+              form={topupForm}
+              fxRate={fx?.tomanPerUsd}
+              fxSource={fx?.source}
+              onChargeFieldChange={setChargeField}
+            />
+            <Button disabled type="primary">
+              {t('wallet.onlineTopupSubmit')}
+            </Button>
+          </Form>
         </Flexbox>
       </Block>
 

@@ -155,7 +155,11 @@ export default {
   'org.txHint': 'Organization ledger for the selected UTC date range.',
   'org.txDescription': 'Description',
   'org.walletManualHint':
-    'Credits are added by a platform administrator. Self-serve org top-up is not available yet.',
+    'Credits are added by a platform administrator. Online payment is not available yet.',
+  'org.onlineTopupDisabledHint':
+    'Online payment will appear here when gateway billing ships. The form below is disabled for now.',
+  'org.onlineTopupSubmit': 'Pay online',
+  'org.onlineTopupTitle': 'Online top-up',
   'org.walletTitle': 'Organization wallet',
   'org.walletToman': 'Org wallet (toman)',
   'org.walletUsd': 'Unallocated (USD)',
@@ -277,9 +281,13 @@ export default {
   'wallet.keyPending': 'Key will be created when credits are added',
   'wallet.keyProvisioned': 'Managed key active (hidden)',
   'wallet.linkOrg': 'Organization admin',
-  'wallet.creditTitle': 'Add credit',
   'wallet.manualCreditHint':
-    'Credits are added by a platform administrator. Self-serve top-up is not available yet.',
+    'Until online payment is live, a platform administrator adds credit for you.',
+  'wallet.onlineTopupDisabledHint':
+    'Online payment will appear here when gateway billing ships. The form below is disabled for now.',
+  'wallet.onlineTopupSoon': 'Coming soon',
+  'wallet.onlineTopupSubmit': 'Pay online',
+  'wallet.onlineTopupTitle': 'Online top-up',
   'wallet.provider': 'AI provider',
   'wallet.subtitle': 'Your USD wallet. Managed keys stay server-side.',
   'wallet.title': 'Panachat wallet',

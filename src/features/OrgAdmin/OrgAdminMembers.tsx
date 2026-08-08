@@ -13,6 +13,11 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import {
+  type FxTopupChargeField,
+  FxTopupFields,
+  type FxTopupFormValues,
+} from '@/features/AicoBilling/FxTopupFields';
 import { aicoPanelStyles } from '@/features/AicoPanels';
 import { presentInviteLink } from '@/features/OrgAdmin/InviteLinkModal';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
@@ -67,6 +72,8 @@ export const OrgAdminMembers = () => {
   );
   const [form] = Form.useForm<InviteForm>();
   const [teamForm] = Form.useForm<{ name: string }>();
+  const [topupForm] = Form.useForm<FxTopupFormValues>();
+  const [topupChargeField, setTopupChargeField] = useState<FxTopupChargeField>('toman');
   const [allocForm] = Form.useForm<{ amountUsd: number; orgMemberId: string }>();
   const [modelsForm] = Form.useForm<{ modelIds: string; teamId: string }>();
   const [upgradeForm] = Form.useForm<{ name: string }>();
@@ -109,6 +116,10 @@ export const OrgAdminMembers = () => {
   const { data: dashboard, mutate: mutateDashboard } = useClientDataSWR(
     selectedOrgId ? ['aico-org-dashboard', selectedOrgId] : null,
     () => lambdaClient.organization.getDashboard.query({ orgId: selectedOrgId }),
+  );
+
+  const { data: fx } = useClientDataSWR('aico-fx', () =>
+    lambdaClient.aicoBilling.getFxRate.query(),
   );
 
   const { data: usageChart, mutate: mutateUsageChart } = useClientDataSWR(
@@ -819,7 +830,7 @@ export const OrgAdminMembers = () => {
       {tab === 'wallet' && (
         <Flexbox gap={16}>
           <Block className={styles.section} variant="outlined">
-            <Flexbox gap={12}>
+            <Flexbox gap={16}>
               <Flexbox horizontal align="center" gap={8}>
                 <Building2Icon size={18} />
                 <Text strong>{t('org.walletTitle')}</Text>
@@ -827,7 +838,27 @@ export const OrgAdminMembers = () => {
               <Text>
                 {t('org.walletUsd')}: <Text strong>{usd(wallet?.balanceUsd)}</Text>
               </Text>
+              <Flexbox horizontal align="center" gap={8}>
+                <Text strong>{t('org.onlineTopupTitle')}</Text>
+                <Tag>{t('wallet.onlineTopupSoon')}</Tag>
+              </Flexbox>
+              <Text type="secondary">{t('org.onlineTopupDisabledHint')}</Text>
               <Text type="secondary">{t('org.walletManualHint')}</Text>
+              <Form form={topupForm} layout="vertical">
+                <FxTopupFields
+                  disabled
+                  chargeField={topupChargeField}
+                  form={topupForm}
+                  fxRate={fx?.tomanPerUsd}
+                  fxSource={fx?.source}
+                  tomanLabelKey="org.amountToman"
+                  usdLabelKey="org.amountUsd"
+                  onChargeFieldChange={setTopupChargeField}
+                />
+                <Button disabled type="primary">
+                  {t('org.onlineTopupSubmit')}
+                </Button>
+              </Form>
             </Flexbox>
           </Block>
 

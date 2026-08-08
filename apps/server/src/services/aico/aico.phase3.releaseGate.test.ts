@@ -389,6 +389,8 @@ describe('Phase 3 UI / route / secret static probes', () => {
     const wallet = readFileSync(join(REPO_ROOT, 'src/features/AicoWallet/index.tsx'), 'utf8');
     expect(wallet).not.toMatch(/mockTopup/i);
     expect(wallet).toMatch(/manualCreditHint/);
+    expect(wallet).toMatch(/onlineTopupTitle/);
+    expect(wallet).toMatch(/disabled/);
   });
 
   it('client wallet feature must not embed management API key env names as readable secrets', () => {
