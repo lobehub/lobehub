@@ -105,11 +105,16 @@ declare global {
 }
 
 export const getAuthConfig = () => {
+  const isProductionServerDatabase =
+    process.env.NODE_ENV === 'production' &&
+    process.env.NEXT_PUBLIC_IS_DESKTOP_APP !== '1' &&
+    !!process.env.DATABASE_URL;
+
   return createEnv({
     clientPrefix: 'NEXT_PUBLIC_',
     client: {},
     server: {
-      AUTH_SECRET: z.string().optional(),
+      AUTH_SECRET: isProductionServerDatabase ? z.string().min(32) : z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
