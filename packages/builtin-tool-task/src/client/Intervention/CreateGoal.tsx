@@ -176,16 +176,8 @@ const Section = memo<SectionProps>(({ children, extra, label, onToggle, open }) 
 
 Section.displayName = 'CreateGoalSection';
 
-export interface CreateGoalPlanEditorProps {
-  namePlaceholder?: string;
-  onChange?: (value: CreateGoalParams) => void | Promise<void>;
-  registerBeforeApprove?: BuiltinInterventionProps<CreateGoalParams>['registerBeforeApprove'];
-  value: CreateGoalParams;
-}
-
-/** Shared editor for both the createGoal tool confirmation and direct goal creation. */
-export const CreateGoalPlanEditor = memo<CreateGoalPlanEditorProps>(
-  ({ value: args, namePlaceholder, onChange, registerBeforeApprove }) => {
+const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
+  ({ args, onArgsChange, registerBeforeApprove }) => {
     const { t } = useTranslation('plugin');
     const editor = useEditor();
     const [openSections, setOpenSections] = useState({
@@ -193,7 +185,7 @@ export const CreateGoalPlanEditor = memo<CreateGoalPlanEditorProps>(
       criteria: true,
       instruction: true,
     });
-    const patch = (value: Partial<CreateGoalParams>) => onChange?.({ ...args, ...value });
+    const patch = (value: Partial<CreateGoalParams>) => onArgsChange?.({ ...args, ...value });
     const openEditModal = (index: number) =>
       openCriterionEditModal({
         criterion: args.criteria[index],
@@ -214,18 +206,15 @@ export const CreateGoalPlanEditor = memo<CreateGoalPlanEditorProps>(
     // a debounced onArgsChange — the same DB-backed draft path every other
     // field uses, so a refresh loses at most the debounce window. The
     // before-approve flush closes even that window.
-    // Lexical requires a non-empty root at mount time. A direct-create plan can
-    // legitimately begin blank, so seed an invisible text node and strip it
-    // before persisting instead of crashing the whole route.
-    const [initialInstruction] = useState(args.instruction || '\u200B');
+    const [initialInstruction] = useState(args.instruction);
     const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
     const saveInstruction = useCallback(async () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
       if (!editor) return;
-      const markdown = String(editor.getDocument('markdown') ?? '').replaceAll('\u200B', '');
-      await onChange?.({ ...args, instruction: markdown });
-    }, [editor, onChange, args]);
+      const markdown = String(editor.getDocument('markdown') ?? '');
+      await onArgsChange?.({ ...args, instruction: markdown });
+    }, [editor, onArgsChange, args]);
     const saveInstructionRef = useRef(saveInstruction);
     saveInstructionRef.current = saveInstruction;
 
@@ -244,7 +233,6 @@ export const CreateGoalPlanEditor = memo<CreateGoalPlanEditorProps>(
         <Flexbox className={styles.header}>
           <Input
             className={styles.titleInput}
-            placeholder={namePlaceholder}
             value={args.name}
             variant={'borderless'}
             onChange={(event) => patch({ name: event.target.value })}
@@ -401,18 +389,6 @@ export const CreateGoalPlanEditor = memo<CreateGoalPlanEditorProps>(
       </Flexbox>
     );
   },
-);
-
-CreateGoalPlanEditor.displayName = 'CreateGoalPlanEditor';
-
-const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
-  ({ args, onArgsChange, registerBeforeApprove }) => (
-    <CreateGoalPlanEditor
-      registerBeforeApprove={registerBeforeApprove}
-      value={args}
-      onChange={onArgsChange}
-    />
-  ),
 );
 
 CreateGoalIntervention.displayName = 'CreateGoalIntervention';

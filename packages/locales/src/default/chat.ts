@@ -1414,6 +1414,7 @@ export default {
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
+  'createGoal.addCriterion': 'Add criterion',
   'createGoal.costBudgetHint':
     'Stops once total spend reaches this amount; leave blank for no cap.',
   'createGoal.costBudgetLabel': 'Cost budget',
@@ -1423,12 +1424,11 @@ export default {
   'createGoal.contextLabel': 'Context for the Agent',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'What counts as done',
-  'createGoal.describeHint':
-    'Describe the outcome in one sentence. AI will draft a checklist you can review next.',
+  'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
-  'createGoal.next': 'Draft acceptance criteria',
+  'createGoal.next': 'Next',
   'createGoal.regenerate': 'Draft again',
   'createGoal.removeCriterion': 'Remove criterion',
   'createGoal.requirementHint': 'Judged at the end of every round',
@@ -1440,6 +1440,7 @@ export default {
   'createGoal.roundBudgetHint':
     'If it runs out without reaching the goal, it stops and waits for you.',
   'createGoal.roundBudgetLabel': 'Round budget',
+  'createGoal.roundsUnit': 'rounds',
   'createGoal.roundBudgetUncappedHint':
     'It keeps going until the goal is reached — watch the cost.',
   'createGoal.submit': 'Create goal',
