@@ -464,6 +464,8 @@ export default {
   'deleteSharedOwnerOnly':
     "Only a workspace owner can delete this — it carries other members' conversations",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
+  'openOnRight': 'Open on the right',
+  'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',

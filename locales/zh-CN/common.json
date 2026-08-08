@@ -411,6 +411,8 @@
   "oauth": "SSO 登录",
   "officialSite": "官方网站",
   "ok": "确认",
+  "openOnRight": "在右侧打开",
+  "openOnRightHint": "松开以在右侧并排打开",
   "operationFailed": "操作失败，请重试",
   "or": "或",
   "pageSizeItem": "{{count}} 个条目",

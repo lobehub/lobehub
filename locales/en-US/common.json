@@ -411,6 +411,8 @@
   "oauth": "SSO Sign-in",
   "officialSite": "Official Website",
   "ok": "OK",
+  "openOnRight": "Open on the right",
+  "openOnRightHint": "Release to open side-by-side on the right",
   "operationFailed": "Operation failed, please try again",
   "or": "or",
   "pageSizeItem": "{{count}} items",
