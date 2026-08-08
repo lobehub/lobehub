@@ -1,5 +1,11 @@
-import type { RuntimeStreamEvent, StreamChunkInput, StreamSink } from '@lobechat/agent-runtime';
+import type {
+  RuntimeStreamEvent,
+  StreamChunkInput,
+  StreamErrorInput,
+  StreamSink,
+} from '@lobechat/agent-runtime';
 
+import { formatErrorEventData } from '../formatErrorEventData';
 import { type IStreamEventManager } from '../types';
 
 /**
@@ -17,6 +23,14 @@ export class ServerStreamSink implements StreamSink {
     // `stepIndex` is a positional arg to the manager, not part of the chunk data.
     const { stepIndex, ...data } = chunk;
     await this.streamManager.publishStreamChunk(this.operationId, stepIndex, data as any);
+  }
+
+  async publishError({ error, phase, stepIndex }: StreamErrorInput): Promise<void> {
+    await this.streamManager.publishStreamEvent(this.operationId, {
+      data: formatErrorEventData(error, phase),
+      stepIndex,
+      type: 'error',
+    });
   }
 
   async publishEvent(event: RuntimeStreamEvent): Promise<void> {

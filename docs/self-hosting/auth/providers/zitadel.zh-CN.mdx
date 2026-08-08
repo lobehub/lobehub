@@ -50,10 +50,8 @@ tags:
   | `AUTH_ZITADEL_SECRET` | 必选 | ZITADEL 应用的 Client Secret                                    |
   | `AUTH_ZITADEL_ISSUER` | 必选 | ZITADEL Issuer URL（例如 `https://your-instance.zitadel.cloud`） |
 
-  <Callout type={'info'}>
-    **兼容的环境变量**：为了向后兼容，以下别名也支持：
-
-    - `ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER`
+  <Callout type={'warning'}>
+    **已废弃的环境变量**：`ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER` 已不再支持，设置其中任意一个都会导致部署在构建 / 启动阶段失败，请改用 `AUTH_ZITADEL_ID` / `AUTH_ZITADEL_SECRET` / `AUTH_ZITADEL_ISSUER`。
   </Callout>
 
   <Callout type={'tip'}>

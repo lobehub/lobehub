@@ -1,9 +1,9 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '1';
+export const VERIFY_PLAN_PROMPT_VERSION = '2';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = '1';
+export const VERIFY_JUDGE_PROMPT_VERSION = '2';
 /** Bump when the report prompt meaningfully changes. */
 export const VERIFY_REPORT_PROMPT_VERSION = '1';
 
@@ -27,7 +27,8 @@ export const buildPlanPrompt = ({
     'Given the run goal, propose a concise set of verification criteria — each a single pass/fail standard that determines whether the delivered work satisfies the user’s explicit requirements.',
     'Guidelines:',
     `- Propose at most ${maxCriteria} criteria. Fewer, sharper criteria are better than many vague ones.`,
-    '- Choose verifierType: "llm" for qualitative judgment from artifacts/output; "agent" when active investigation (reading files, running checks) is needed; "program" only for strictly deterministic command checks.',
+    '- First enumerate every deliverable and artifact needed to prove the criterion. Put each one in requiredEvidence with its type, semantic modality, source scope, and a concrete capture hint. Use [] only when the final text answer alone is sufficient.',
+    '- Choose verifierType: "llm" only when all required evidence is inline text, or a single image modality that a multimodal judge can directly inspect. Choose "agent" whenever evidence spans multiple modalities/files, requires opening a document or attachment, exceeds a normal prompt, or needs active investigation. Choose "program" only for strictly deterministic command checks.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',
     '- description: a one-sentence summary of what this criterion verifies.',
@@ -50,12 +51,14 @@ export const buildPlanPrompt = ({
 
 /** One captured artifact, summarized for the judge. */
 export interface JudgeEvidence {
+  /** Resolved, model-readable URL for supported inline media. */
+  accessUrl?: string;
   content?: string | null;
   description?: string | null;
   /**
-   * Stored artifact id (screenshot / video / large text). The text prompt only
-   * references it by presence + caption; the agent verifier attaches the actual
-   * file to its run via `execAgent({ fileIds })` so it can SEE the artifact.
+   * Stored artifact id (screenshot / video / large text). Inline judges must
+   * load supported files into the actual model message; agent verifiers attach
+   * every file to their isolated run.
    */
   fileId?: string | null;
   type: VerifyEvidenceType;
@@ -78,9 +81,11 @@ export const describeEvidence = (evidence: JudgeEvidence[] | undefined): string 
   if (!evidence?.length) return '';
   const lines = evidence.map((e) => {
     const caption = e.description ? ` — ${e.description}` : '';
-    // Inline text is quoted in full; a stored artifact (screenshot/gif/video) is
-    // referenced by presence + caption, which is itself supporting Data.
-    const payload = e.content ? `: ${e.content}` : ' [artifact captured]';
+    const payload = e.content
+      ? `: ${e.content}`
+      : e.fileId
+        ? ' [artifact attached to this judge request]'
+        : ' [artifact metadata only; contents unavailable]';
     return `  - (${e.type})${caption}${payload}`;
   });
   return `\nEvidence captured during the run:\n${lines.join('\n')}`;
@@ -102,7 +107,7 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
     '- counterEvidence: evidence pointing the other way, if any (the Rebuttal).',
     '- limitation: what you could not verify and why (the Rebuttal).',
     '- suggestion: a concrete fix when the verdict is failed/uncertain.',
-    'Artifacts listed under "Evidence captured during the run" are primary Data — weight them above the deliverable prose. An entry marked "[artifact captured]" means the screenshot/recording was taken; treat its presence and caption as supporting Data for what it depicts.',
+    'Artifacts listed under "Evidence captured during the run" are primary Data only when their contents are attached or quoted. Never treat mere existence, a filename, or a caption as proof of what an artifact depicts.',
     'Be skeptical: default to "uncertain" rather than "passed" when evidence is missing.',
     mode === 'batch'
       ? 'Return one verdict object per criterion, each tagged with its exact checkItemId.'

@@ -174,6 +174,20 @@ function LevelSlider<T extends string = string>({
   const sliderValue = currentIndex === -1 ? Math.floor(levels.length / 2) : currentIndex;
   const { minWidth: customMinWidth, ...restStyle } = style ?? {};
 
+  // Slider dots sit at i / (n - 1) of the track while equal grid columns center
+  // labels at (i + 0.5) / n, so labels drift off their dots (e.g. 'none' / 'max'
+  // float away from the track ends). Half-width edge columns with start/end
+  // alignment pin the first/last labels to the ends and center the middle
+  // labels exactly under their dots.
+  const gridTemplateColumns =
+    levels.length > 1
+      ? [
+          'minmax(0, 0.5fr)',
+          ...Array.from({ length: levels.length - 2 }).fill('minmax(0, 1fr)'),
+          'minmax(0, 0.5fr)',
+        ].join(' ')
+      : 'minmax(0, 1fr)';
+
   const handleChange = (index: number) => {
     if (disabled) return;
 
@@ -205,12 +219,12 @@ function LevelSlider<T extends string = string>({
           onChange={handleChange}
         />
       </div>
-      <div
-        className={styles.labels}
-        style={{ gridTemplateColumns: `repeat(${levels.length}, minmax(0, 1fr))` }}
-      >
+      <div className={styles.labels} style={{ gridTemplateColumns }}>
         {options.map((option, index) => {
           const selected = index === sliderValue;
+          const isFirst = index === 0;
+          const isLast = index === levels.length - 1;
+          const textAlign = isFirst === isLast ? 'center' : isFirst ? 'start' : 'end';
 
           return (
             <button
@@ -218,7 +232,7 @@ function LevelSlider<T extends string = string>({
               className={cx(styles.label, selected && styles.selectedLabel)}
               disabled={disabled}
               key={option.value}
-              style={option.style}
+              style={{ textAlign, ...option.style }}
               type="button"
               onClick={() => {
                 if (disabled) return;

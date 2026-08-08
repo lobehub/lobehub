@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { formatSpeed, formatTime } from '@/utils/format';
 
 export const useDownloadMonitor = (totalSize: number, completedSize: number) => {
@@ -7,7 +8,7 @@ export const useDownloadMonitor = (totalSize: number, completedSize: number) => 
   const [remainingTime, setRemainingTime] = useState<string>('-');
 
   const lastCompletedRef = useRef(completedSize);
-  const lastTimedRef = useRef(Date.now());
+  const lastTimedRef = useSingleton(() => ({ current: Date.now() }));
 
   useEffect(() => {
     const currentTime = Date.now();

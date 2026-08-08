@@ -1,13 +1,20 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { ChatGroupModel } from '../../models/chatGroup';
+import {
+  TOPIC_COMMENT_TOPIC_NOT_FOUND,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+  TopicCommentModel,
+} from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
+import { topicCommentMentions, topicComments } from '../../schemas/topicComment';
 import { users } from '../../schemas/user';
 import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
@@ -19,6 +26,7 @@ const otherUserId = 'other-agent-group-user';
 let agentGroupRepo: AgentGroupRepository;
 
 const serverDB: LobeChatDatabase = await getTestDB();
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 beforeEach(async () => {
   // Clean up
@@ -350,6 +358,123 @@ describe('AgentGroupRepository', () => {
       expect(result!.agents).toEqual([
         expect.objectContaining({ isSupervisor: true, title: 'Supervisor', virtual: true }),
       ]);
+    });
+
+    describe('member agent demoted to private ', () => {
+      const workspaceId = 'agent-group-demotion-ws';
+
+      beforeEach(async () => {
+        await serverDB.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Demotion WS',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await serverDB.insert(chatGroups).values({
+          id: 'ws-demotion-group',
+          title: 'WS demotion group',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        });
+        await serverDB.insert(agents).values([
+          {
+            id: 'ws-supervisor',
+            title: 'Supervisor',
+            userId,
+            virtual: true,
+            visibility: 'public',
+            workspaceId,
+          },
+          {
+            id: 'ws-public-member',
+            title: 'Public member',
+            userId,
+            visibility: 'public',
+            workspaceId,
+          },
+          {
+            id: 'ws-demoted-member',
+            systemRole: 'secret prompt',
+            title: 'Demoted member',
+            userId,
+            visibility: 'private',
+            workspaceId,
+          },
+        ]);
+        await serverDB.insert(chatGroupsAgents).values([
+          {
+            agentId: 'ws-supervisor',
+            chatGroupId: 'ws-demotion-group',
+            order: -1,
+            role: 'supervisor',
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'ws-public-member',
+            chatGroupId: 'ws-demotion-group',
+            order: 0,
+            role: 'participant',
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'ws-demoted-member',
+            chatGroupId: 'ws-demotion-group',
+            order: 1,
+            role: 'participant',
+            userId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      it('hides the private member config from another workspace member', async () => {
+        const viewerRepo = new AgentGroupRepository(serverDB, otherUserId, workspaceId);
+
+        const result = await viewerRepo.findByIdWithAgents('ws-demotion-group');
+
+        expect(result!.agents.map((a) => a.id)).toEqual(['ws-supervisor', 'ws-public-member']);
+        expect(JSON.stringify(result)).not.toContain('secret prompt');
+        expect(result!.supervisorAgentId).toBe('ws-supervisor');
+      });
+
+      it('keeps the private member visible to its owner', async () => {
+        const ownerRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+        const result = await ownerRepo.findByIdWithAgents('ws-demotion-group');
+
+        expect(result!.agents.map((a) => a.id)).toEqual([
+          'ws-supervisor',
+          'ws-public-member',
+          'ws-demoted-member',
+        ]);
+      });
+
+      it('does not auto-create a duplicate supervisor when the supervisor row is not visible', async () => {
+        // Out-of-sync legacy data: a group published while its supervisor row
+        // stayed private (publishToWorkspace now keeps them in sync).
+        await serverDB
+          .update(agents)
+          .set({ visibility: 'private' })
+          .where(eq(agents.id, 'ws-supervisor'));
+
+        const viewerRepo = new AgentGroupRepository(serverDB, otherUserId, workspaceId);
+        const result = await viewerRepo.findByIdWithAgents('ws-demotion-group');
+
+        // Supervisor existence is judged on raw rows: no duplicate is created,
+        // and the group-owned supervisor stays in the roster so that
+        // `supervisorAgentId` always resolves to a member entry.
+        expect(result!.supervisorAgentId).toBe('ws-supervisor');
+        expect(result!.agents.map((a) => a.id)).toEqual(['ws-supervisor', 'ws-public-member']);
+
+        const supervisorRows = await serverDB
+          .select()
+          .from(chatGroupsAgents)
+          .where(eq(chatGroupsAgents.chatGroupId, 'ws-demotion-group'));
+        expect(supervisorRows.filter((r) => r.role === 'supervisor')).toHaveLength(1);
+      });
     });
 
     it('should inject group-supervisor slug for supervisor agent', async () => {
@@ -1434,11 +1559,26 @@ describe('AgentGroupRepository', () => {
         userId,
         workspaceId,
       });
+      const originalCommentUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
+      await serverDB.insert(topicComments).values({
+        authorUserId: userId,
+        clientId: 'transfer-comment-client',
+        content: 'team note',
+        id: 'transfer-comment',
+        topicId: 'transfer-topic',
+        updatedAt: originalCommentUpdatedAt,
+        workspaceId,
+      });
+      await serverDB.insert(topicCommentMentions).values({
+        commentId: 'transfer-comment',
+        mentionedUserId: userId,
+        workspaceId,
+      });
 
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
       const result = await wsRepo.transferToWorkspace('transfer-group', targetWorkspaceId, userId);
 
-      expect(result).toEqual({ groupId: 'transfer-group' });
+      expect(result).toEqual({ groupId: 'transfer-group', transferJobId: null });
 
       const group = await serverDB.query.chatGroups.findFirst({
         where: (cg, { eq }) => eq(cg.id, 'transfer-group'),
@@ -1467,7 +1607,113 @@ describe('AgentGroupRepository', () => {
       expect(topic!.workspaceId).toBe(targetWorkspaceId);
       expect(thread!.workspaceId).toBe(targetWorkspaceId);
       expect(message!.workspaceId).toBe(targetWorkspaceId);
+
+      // Comments denormalize the topic's workspaceId — they must follow the move
+      const [comment] = await serverDB
+        .select()
+        .from(topicComments)
+        .where(eq(topicComments.id, 'transfer-comment'));
+      const [mention] = await serverDB
+        .select()
+        .from(topicCommentMentions)
+        .where(eq(topicCommentMentions.commentId, 'transfer-comment'));
+      expect(comment.workspaceId).toBe(targetWorkspaceId);
+      expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
+      expect(mention.workspaceId).toBe(targetWorkspaceId);
     });
+
+    it('flags teammate-authored comments as foreign transfer rows', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'guard-group',
+        title: 'Guard Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'guard-group',
+        id: 'guard-group-topic',
+        title: 'Own Topic',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      // Caller's own comment — not foreign
+      await serverDB.insert(topicComments).values({
+        authorUserId: userId,
+        clientId: 'guard-group-own',
+        content: 'my note',
+        id: 'tcm-group-guard-own',
+        topicId: 'guard-group-topic',
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(false);
+
+      // A teammate's comment on the caller's own topic — foreign
+      await serverDB.insert(topicComments).values({
+        authorUserId: otherUserId,
+        clientId: 'guard-group-teammate',
+        content: 'teammate note',
+        id: 'tcm-group-guard-teammate',
+        topicId: 'guard-group-topic',
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(true);
+    });
+
+    it.skipIf(!isServerDB)(
+      'serializes comment creation with the authoritative group transfer check',
+      async () => {
+        const targetWorkspaceId = 'agent-group-race-target-ws';
+        await serverDB.insert(workspaces).values({
+          id: targetWorkspaceId,
+          name: 'Race Target Workspace',
+          primaryOwnerId: userId,
+          slug: targetWorkspaceId,
+        });
+        const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+        const commenterModel = new TopicCommentModel(serverDB, otherUserId, workspaceId);
+
+        for (let i = 0; i < 10; i++) {
+          const groupId = `transfer-group-race-${i}`;
+          const topicId = `transfer-group-race-topic-${i}`;
+          await serverDB.insert(chatGroups).values({
+            id: groupId,
+            title: `Race Group ${i}`,
+            userId,
+            workspaceId,
+          });
+          await serverDB.insert(topics).values({
+            groupId,
+            id: topicId,
+            title: `Race Topic ${i}`,
+            userId,
+            workspaceId,
+          });
+
+          const outcomes = await Promise.allSettled([
+            wsRepo.transferToWorkspace(groupId, targetWorkspaceId, userId, undefined, {
+              rejectForeignTopicCommentAuthors: true,
+            }),
+            commenterModel.createWithMentions({
+              clientId: `transfer-group-race-comment-${i}`,
+              content: 'concurrent teammate comment',
+              topicId,
+            }),
+          ]);
+
+          expect(outcomes.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected']);
+          const rejection = outcomes.find(
+            (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+          );
+          expect([
+            TOPIC_COMMENT_TOPIC_NOT_FOUND,
+            TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+          ]).toContain(rejection?.reason.message);
+        }
+      },
+    );
 
     it('copies a workspace group and all members into the target scope', async () => {
       const targetWorkspaceId = 'agent-group-copy-target-ws';
@@ -1719,6 +1965,117 @@ describe('AgentGroupRepository', () => {
       });
       expect(copiedPlugin?.toolCallId).not.toBe('toolu_old');
       expect(copiedPlugin?.workspaceId).toBe(targetWorkspaceId);
+    });
+
+    it('copies a conversation history larger than one insert batch and backfills cross-batch parent references', async () => {
+      // Regression: an unchunked INSERT of a large history overflows PostgreSQL's
+      // 65,535 bind-parameter cap per statement; chunked inserts must also keep
+      // self-referential FKs valid when a reference points into a later batch.
+      const targetWorkspaceId = 'agent-group-copy-large-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy Large Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-copy-large-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'copy-large-group',
+        title: 'Copy Large Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values({
+        id: 'copy-large-member',
+        title: 'Member',
+        userId,
+        virtual: false,
+        workspaceId,
+      });
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'copy-large-member',
+        chatGroupId: 'copy-large-group',
+        order: 0,
+        role: 'participant',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'copy-large-group',
+        id: 'copy-large-topic',
+        title: 'Large topic',
+        userId,
+        workspaceId,
+      });
+
+      // 2401 rows × 31 `messages` columns ≈ 74k bind parameters — above the
+      // 65,535 cap, so the pre-fix unbatched INSERT provably fails here.
+      const messageCount = 2401;
+      const base = Date.parse('2026-01-01T00:00:00Z');
+      const sourceRows = Array.from({ length: messageCount }, (_, i) => ({
+        content: `msg ${i}`,
+        createdAt: new Date(base + i * 1000),
+        groupId: 'copy-large-group',
+        id: `copy-large-msg-${String(i).padStart(4, '0')}`,
+        // odd rows reply to the previous row; row 0 gets a forward reference
+        // (backfilled below) to a row that lands in a LATER insert batch when
+        // copying with 500-row batches (index 700 → batch 2)
+        parentId: i % 2 === 1 ? `copy-large-msg-${String(i - 1).padStart(4, '0')}` : null,
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        topicId: 'copy-large-topic',
+        // explicit historical stamps so the cross-batch fixup UPDATE would
+        // visibly restamp them if it forgot to restate `updatedAt`
+        updatedAt: new Date(base + i * 1000),
+        userId,
+        workspaceId,
+      }));
+      for (let i = 0; i < sourceRows.length; i += 400) {
+        await serverDB.insert(messages).values(sourceRows.slice(i, i + 400));
+      }
+      await serverDB
+        .update(messages)
+        // restate updatedAt: this seeding backfill would otherwise restamp the
+        // source row via $onUpdate before the copy even runs
+        .set({ parentId: 'copy-large-msg-0700', updatedAt: new Date(base) })
+        .where(eq(messages.id, 'copy-large-msg-0000'));
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.copyToWorkspace('copy-large-group', targetWorkspaceId, userId, {
+        includeConversationHistory: true,
+      });
+
+      expect(result).not.toBeNull();
+
+      const copiedMessages = await serverDB.query.messages.findMany({
+        where: (message, { eq }) => eq(message.groupId, result!.groupId),
+      });
+      expect(copiedMessages).toHaveLength(messageCount);
+      expect(copiedMessages.every((message) => message.workspaceId === targetWorkspaceId)).toBe(
+        true,
+      );
+      expect(copiedMessages.some((message) => message.id.startsWith('copy-large-msg-'))).toBe(
+        false,
+      );
+
+      const copiedByContent = new Map(copiedMessages.map((message) => [message.content, message]));
+      const copiedIds = new Set(copiedMessages.map((message) => message.id));
+
+      // the deferred fixup UPDATE restated `updatedAt` instead of letting
+      // `$onUpdate` restamp the cross-batch row to "now"
+      expect(copiedByContent.get('msg 0')?.updatedAt).toEqual(new Date(base));
+
+      // every in-order reply chain survived the chunked insert
+      for (let i = 1; i < messageCount; i += 2) {
+        expect(copiedByContent.get(`msg ${i}`)?.parentId).toBe(
+          copiedByContent.get(`msg ${i - 1}`)?.id,
+        );
+      }
+      // the forward reference into a later batch was backfilled after insert
+      expect(copiedByContent.get('msg 0')?.parentId).toBe(copiedByContent.get('msg 700')?.id);
+      // no copied parentId points outside the copied set
+      for (const message of copiedMessages) {
+        if (message.parentId) expect(copiedIds.has(message.parentId)).toBe(true);
+      }
     });
 
     it('removes workspace virtual agents created by another member', async () => {

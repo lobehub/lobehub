@@ -61,6 +61,21 @@ describe('resolveCliCommand', () => {
       platformMock.mockReturnValue('darwin');
     });
 
+    it('resolves AMP on PATH and validates its help banner', async () => {
+      callExecFile('/Users/x/.local/bin/amp\n');
+      callExecFile('Amp CLI\n\nUsage: amp [options] [command]');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('amp', 'amp');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/amp',
+        version: 'Amp CLI',
+      });
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
+    });
+
     it('resolves `codex` on PATH and validates it via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
@@ -75,7 +90,60 @@ describe('resolveCliCommand', () => {
       expect(execMock).not.toHaveBeenCalled();
     });
 
-    it('falls through a PATH `codex` that fails validation to the Codex.app bundled CLI', async () => {
+    it('resolves and validates OpenCode using its bare semver output', async () => {
+      callExecFile('/Users/x/.opencode/bin/opencode\n');
+      callExecFile('1.18.3');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.opencode/bin/opencode',
+        version: '1.18.3',
+      });
+    });
+
+    it('resolves and validates Qoder using its bare semver output', async () => {
+      callExecFile('/Users/x/.local/bin/qodercli\n');
+      callExecFile('1.1.15');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('qoder', 'qodercli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/qodercli',
+        version: '1.1.15',
+      });
+    });
+
+    it('finds OpenCode in its well-known user-local install path', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which opencode
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          version: '1.18.3',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls through a PATH `codex` that fails validation to the ChatGPT.app bundled CLI', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       // Deterministic env: no SHELL → no login-shell lookup.
@@ -87,15 +155,42 @@ describe('resolveCliCommand', () => {
         callExecFile('/Users/x/Library/pnpm/codex\n');
         // ...but its `--version` errors (ENOENT-style broken wrapper).
         callExecFileError(new Error('spawn ENOENT'));
-        // Fallback: the Codex.app bundled CLI validates.
+        // Fallback: the ChatGPT.app bundled CLI validates.
         callExecFile('codex-cli 0.142.5');
 
         const { detectHeterogeneousCliCommand } = await importModule();
         const status = await detectHeterogeneousCliCommand('codex', 'codex');
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
         expect(execFileMock.mock.calls[2]![0]).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex',
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls back to the legacy Codex.app bundle when ChatGPT.app is unavailable', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which codex
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFile('codex-cli 0.142.5'); // /Applications/Codex.app
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(execFileMock.mock.calls[3]![0]).toBe(
           '/Applications/Codex.app/Contents/Resources/codex',
         );
       } finally {
@@ -118,7 +213,7 @@ describe('resolveCliCommand', () => {
         const status = await detectHeterogeneousCliCommand('codex', 'codex-beta');
 
         expect(status.available).toBe(false);
-        // Only the custom command's own `which` runs — no Codex.app fallback.
+        // Only the custom command's own `which` runs — no app-bundle fallback.
         expect(execFileMock).toHaveBeenCalledTimes(1);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
       } finally {
@@ -191,6 +286,27 @@ describe('resolveCliCommand', () => {
       expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
     });
 
+    it('preserves PATH order: earlier .cmd beats later .exe (Vite+ claude.exe case)', async () => {
+      // `where claude` lists every match in PATH order. npm's .cmd shim is
+      // earlier; Vite+ ships a later standalone claude.exe. Preferring every
+      // .exe over every .cmd would pick Vite+ and break the real install.
+      callExecFile(
+        [
+          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
+          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
+        ].join('\r\n'),
+      );
+      callExec('1.2.3 (Claude Code)');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('claude', {
+        validateKeywords: ['claude code'],
+      });
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+    });
+
     it('rejects a command containing shell metacharacters', async () => {
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex & calc.exe', {
@@ -206,6 +322,31 @@ describe('resolveCliCommand', () => {
   describe('resolveHeteroSpawnCommand', () => {
     beforeEach(() => {
       platformMock.mockReturnValue('darwin');
+    });
+
+    it('uses amp as the default command for the AMP adapter', async () => {
+      callExecFile('/Users/x/.local/bin/amp\n');
+      callExecFile('Amp CLI');
+
+      const { resolveHeteroSpawnCommand } = await importModule();
+      const resolved = await resolveHeteroSpawnCommand('amp', undefined);
+
+      expect(resolved.command).toBe('/Users/x/.local/bin/amp');
+    });
+
+    it('defines opencode as the default OpenCode command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
+    });
+
+    it('defines pi as the default Pi command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
+    });
+
+    it('defines qodercli as the default Qoder command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {
@@ -252,8 +393,10 @@ describe('resolveCliCommand', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications candidate
-        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
 
         const { resolveHeteroSpawnCommand } = await importModule();
         const resolved = await resolveHeteroSpawnCommand('codex', 'codex');

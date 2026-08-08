@@ -20,7 +20,13 @@ import {
   modelsResultsPrompt,
   searchAgentsResultsPrompt,
 } from '@lobechat/prompts';
-import type { BuiltinToolResult, HeterogeneousProviderConfig } from '@lobechat/types';
+import {
+  type BuiltinToolResult,
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
@@ -67,6 +73,12 @@ import type {
 const MAX_SEARCH_AGENT_LIMIT = 20;
 
 export class AgentManagerRuntime {
+  /**
+   * Preserve invocation order for prompt updates targeting the same agent,
+   * including calls issued through different AgentManagerRuntime instances.
+   */
+  private static promptUpdateQueues = new Map<string, Promise<unknown>>();
+
   private agentService: IAgentService;
   private discoverService: IDiscoverService;
 
@@ -173,18 +185,17 @@ export class AgentManagerRuntime {
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const currentPlugins = previousConfig?.plugins || [];
-        const isCurrentlyEnabled = currentPlugins.includes(pluginId);
+        const isCurrentlyEnabled = getPluginMode(previousConfig?.plugins, pluginId) === 'pinned';
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
-        let newPlugins: string[];
-        if (shouldEnable && !isCurrentlyEnabled) {
-          newPlugins = [...currentPlugins, pluginId];
-        } else if (!shouldEnable && isCurrentlyEnabled) {
-          newPlugins = currentPlugins.filter((id) => id !== pluginId);
-        } else {
-          newPlugins = currentPlugins;
-        }
+        // upsertPluginMode preserves an already-matching entry as-is and
+        // flips a disabled entry back to pinned in place, instead of
+        // blindly pushing a duplicate bare-string identifier.
+        const newPlugins = upsertPluginMode(
+          previousConfig?.plugins,
+          pluginId,
+          shouldEnable ? 'pinned' : 'auto',
+        );
 
         finalConfig = { ...finalConfig, plugins: newPlugins };
 
@@ -314,12 +325,23 @@ export class AgentManagerRuntime {
       // orchestrator can reason about what the external agent can actually do.
       const runtime = describeHeterogeneousAgent(config.agencyConfig);
 
+      // Normalize to identifier strings (annotated with mode when not
+      // pinned) — `config.plugins` is the raw AgentPluginEntry[] (string |
+      // {identifier, mode}), but both the LLM-facing summary and the
+      // GetAgentDetailState.config.plugins contract expect string[]. Passing
+      // object-shaped entries through would break GetAgentDetailRender's
+      // <Tag key={plugin}>{plugin}</Tag>.
+      const pluginSummaries = config.plugins?.map((entry) => {
+        const { identifier, mode } = parsePluginEntry(entry);
+        return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+      });
+
       const detail = {
         config: {
           model: config.model,
           openingMessage: config.openingMessage,
           openingQuestions: config.openingQuestions,
-          plugins: config.plugins,
+          plugins: pluginSummaries,
           provider: config.provider,
           ...(runtime && { runtime }),
           systemRole: config.systemRole,
@@ -338,7 +360,9 @@ export class AgentManagerRuntime {
       if (detail.meta.description) parts.push(detail.meta.description);
       if (detail.config.model)
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-      if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      if (detail.config.plugins?.length) {
+        parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      }
       parts.push(...renderHeteroRuntimeLines(runtime));
       if (detail.config.systemRole) {
         parts.push(`System Prompt: ${detail.config.systemRole}`);
@@ -505,21 +529,19 @@ export class AgentManagerRuntime {
 
       const providers: AvailableProvider[] = filteredList.map((provider) => ({
         id: provider.id,
-        models: provider.children.map(
-          (model): AvailableModel => ({
-            abilities: model.abilities
-              ? {
-                  files: model.abilities.files,
-                  functionCall: model.abilities.functionCall,
-                  reasoning: model.abilities.reasoning,
-                  vision: model.abilities.vision,
-                }
-              : undefined,
-            description: model.description,
-            id: model.id,
-            name: model.displayName || model.id,
-          }),
-        ),
+        models: provider.children.map((model): AvailableModel => ({
+          abilities: model.abilities
+            ? {
+                files: model.abilities.files,
+                functionCall: model.abilities.functionCall,
+                reasoning: model.abilities.reasoning,
+                vision: model.abilities.vision,
+              }
+            : undefined,
+          description: model.description,
+          id: model.id,
+          name: model.displayName || model.id,
+        })),
         name: provider.name,
       }));
 
@@ -545,19 +567,22 @@ export class AgentManagerRuntime {
    */
   async updatePrompt(agentId: string, params: UpdatePromptParams): Promise<BuiltinToolResult> {
     try {
-      await this.ensureAgentLoaded(agentId);
-      const state = getAgentStoreState();
-      const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
-      const previousPrompt = previousConfig?.systemRole;
+      const previousPrompt = await this.enqueuePromptUpdate(agentId, async () => {
+        await this.ensureAgentLoaded(agentId);
+        const state = getAgentStoreState();
+        const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
 
-      if (params.streaming) {
-        await this.streamUpdatePrompt(agentId, params.prompt);
-      } else {
-        await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-          editorData: null,
-          systemRole: params.prompt,
-        });
-      }
+        if (params.streaming) {
+          await this.performStreamingPromptUpdate(agentId, params.prompt);
+        } else {
+          await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+            editorData: null,
+            systemRole: params.prompt,
+          });
+        }
+
+        return previousConfig?.systemRole;
+      });
 
       const content = params.prompt
         ? `Successfully updated system prompt (${params.prompt.length} characters)`
@@ -581,24 +606,59 @@ export class AgentManagerRuntime {
   }
 
   /**
+   * Queue prompt mutations by agent so later invocations cannot finish first
+   * and then be overwritten by an older, slower stream.
+   */
+  private async enqueuePromptUpdate<T>(agentId: string, update: () => Promise<T>): Promise<T> {
+    const previousUpdate = AgentManagerRuntime.promptUpdateQueues.get(agentId);
+    const previousSettled = previousUpdate
+      ? previousUpdate.then(
+          () => undefined,
+          () => undefined,
+        )
+      : Promise.resolve();
+    const queuedUpdate = previousSettled.then(update);
+
+    AgentManagerRuntime.promptUpdateQueues.set(agentId, queuedUpdate);
+
+    try {
+      return await queuedUpdate;
+    } finally {
+      if (AgentManagerRuntime.promptUpdateQueues.get(agentId) === queuedUpdate) {
+        AgentManagerRuntime.promptUpdateQueues.delete(agentId);
+      }
+    }
+  }
+
+  /**
    * Stream update prompt with typewriter effect
    */
-  private async streamUpdatePrompt(agentId: string, prompt: string): Promise<void> {
-    getAgentStoreState().startStreamingSystemRole();
+  private async performStreamingPromptUpdate(agentId: string, prompt: string): Promise<void> {
+    const generation = getAgentStoreState().startStreamingSystemRole(agentId);
 
     const chunkSize = 5;
     const delay = 10;
 
     for (let i = 0; i < prompt.length; i += chunkSize) {
       const chunk = prompt.slice(i, i + chunkSize);
-      getAgentStoreState().appendStreamingSystemRole(chunk);
+      getAgentStoreState().appendStreamingSystemRole(agentId, generation, chunk);
 
       if (i + chunkSize < prompt.length) {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
-    await getAgentStoreState().finishStreamingSystemRole(agentId);
+    try {
+      // Persistence is invocation-scoped and independent from ownership of the
+      // global visual stream. Another agent may take over the animation without
+      // turning this explicit update into a successful no-op.
+      await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+        editorData: null,
+        systemRole: prompt,
+      });
+    } finally {
+      await getAgentStoreState().finishStreamingSystemRole(agentId, generation);
+    }
   }
 
   // ==================== Plugin/Tools ====================
@@ -1035,11 +1095,14 @@ export class AgentManagerRuntime {
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
     await this.ensureAgentLoaded(agentId);
     const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins || [];
+    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins;
 
-    if (!currentPlugins.includes(pluginId)) {
+    // upsertPluginMode preserves an already-matching entry as-is and flips a
+    // disabled entry back to pinned in place, instead of blindly pushing a
+    // duplicate bare-string identifier.
+    if (getPluginMode(currentPlugins, pluginId) !== 'pinned') {
       await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-        plugins: [...currentPlugins, pluginId],
+        plugins: upsertPluginMode(currentPlugins, pluginId, 'pinned'),
       });
     }
   }

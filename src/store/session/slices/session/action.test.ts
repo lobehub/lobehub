@@ -1,7 +1,7 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { useSessionStore } from '@/store/session';
@@ -12,7 +12,6 @@ import { sessionSelectors } from './selectors';
 // Mock sessionService 和其他依赖项
 vi.mock('@/services/session', () => ({
   sessionService: {
-    removeAllSessions: vi.fn(),
     createSession: vi.fn(),
     cloneSession: vi.fn(),
     updateSessionGroup: vi.fn(),
@@ -31,12 +30,11 @@ vi.mock('@/services/chatGroup', () => ({
   },
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    loading: vi.fn(),
-    success: vi.fn(),
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
     error: vi.fn(),
-    destroy: vi.fn(),
+    loading: vi.fn(() => ({ close: vi.fn() })),
+    success: vi.fn(),
   },
 }));
 
@@ -53,19 +51,6 @@ afterEach(() => {
 });
 
 describe('SessionAction', () => {
-  describe('clearSessions', () => {
-    it('should clear all sessions and refresh the list', async () => {
-      const { result } = renderHook(() => useSessionStore());
-
-      await act(async () => {
-        await result.current.clearSessions();
-      });
-
-      expect(sessionService.removeAllSessions).toHaveBeenCalled();
-      expect(mockRefresh).toHaveBeenCalled(); // 假设 refreshSessions 调用了 getSessions
-    });
-  });
-
   describe('createSession', () => {
     it('should create a new session and switch to it', async () => {
       const { result } = renderHook(() => useSessionStore());
@@ -115,13 +100,11 @@ describe('SessionAction', () => {
       const sessionId = 'session-id';
       const duplicatedSessionId = 'duplicated-session-id';
       vi.mocked(sessionService.cloneSession).mockResolvedValue(duplicatedSessionId);
-      vi.mocked(message.loading).mockResolvedValue(true);
-
       await act(async () => {
         await result.current.duplicateSession(sessionId);
       });
 
-      expect(message.loading).toHaveBeenCalled();
+      expect(toast.loading).toHaveBeenCalled();
       expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, expect.any(String));
     });
   });

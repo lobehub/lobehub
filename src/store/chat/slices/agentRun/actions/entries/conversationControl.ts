@@ -2,12 +2,16 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import {
+  type ChatTopicStatus,
   type ConversationContext,
   type MessageMetadata,
   type UIChatMessage,
 } from '@lobechat/types';
+import { t } from 'i18next';
 
+import { type ChatInputEditor } from '@/features/ChatInput';
 import { lambdaClient } from '@/libs/trpc/client';
+import { aiAgentService } from '@/services/aiAgent';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors } from '@/store/chat/selectors';
@@ -18,6 +22,7 @@ import {
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -100,6 +105,36 @@ export class ConversationControlActionImpl {
     );
   };
 
+  #resolveHeteroInterventionExecutionOperation = (
+    initialOperationId: string,
+  ): { operation?: Operation; operationId: string } => {
+    const operations: ChatStore['operations'] = this.#get().operations;
+    const visited = new Set<string>();
+    let currentOperationId: string | undefined = initialOperationId;
+    let lastResolved: { operation?: Operation; operationId: string } | undefined;
+
+    while (currentOperationId && !visited.has(currentOperationId)) {
+      visited.add(currentOperationId);
+      const operation: Operation | undefined = operations[currentOperationId];
+      lastResolved = { operation, operationId: currentOperationId };
+
+      if (!operation) break;
+
+      // `sendMessage` is the tree root, but it does not own the AskUser bridge.
+      // Stop at the runtime execution node that produced this intervention.
+      if (
+        operation.type === 'execHeterogeneousAgent' ||
+        operation.type === 'execServerAgentRuntime'
+      ) {
+        return { operation, operationId: currentOperationId };
+      }
+
+      currentOperationId = operation.parentOperationId;
+    }
+
+    return lastResolved ?? { operationId: initialOperationId };
+  };
+
   /**
    * Local tool-interaction resumes are continuations of the original request.
    * Preserve the request trigger so downstream chat requests keep the same
@@ -138,6 +173,24 @@ export class ConversationControlActionImpl {
   };
 
   /**
+   * Parent for the synthetic user turn that answers / skips a tool interaction.
+   *
+   * Anchor it on the assistant that requested the interaction — the tool
+   * message's own parent — rather than leaving it null. A null parent makes the
+   * turn a SECOND root of the topic, which `conversation-flow`'s doctor reports
+   * as `segment-split`: the reader still shows it (roots are flattened in
+   * order), but it starts a fresh parent chain, so anything walking the tree
+   * (branch resolution, chain-based context assembly) loses the history before
+   * it.
+   *
+   * Deliberately not the tool message itself: `canAnchor` in the doctor's
+   * repair rule never treats a tool row as a spine tail, and this mirrors it so
+   * the write side and the repair side agree on the same shape.
+   */
+  #interactionTurnParentId = (toolMessage: UIChatMessage): string | undefined =>
+    toolMessage.parentId ?? undefined;
+
+  /**
    * Client-side fallback guard that retires paused server ops once a Gateway
    * resume op has started successfully. The server emits `agent_runtime_end`
    * after `human_approve_required`, but if that event is delayed or the
@@ -151,6 +204,25 @@ export class ConversationControlActionImpl {
   #completeOpsById = (opIds: readonly string[]): void => {
     const { completeOperation } = this.#get();
     for (const id of opIds) completeOperation(id);
+  };
+
+  #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
+    if (!context.topicId) return;
+
+    const topicScope =
+      context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
+
+    const statusWrite = this.#get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      ...(topicScope ? { scope: topicScope } : {}),
+      status,
+      topicId: context.topicId,
+    });
+
+    void statusWrite?.catch((error) => {
+      console.error('[conversationControl] updateTopicStatus failed:', error);
+    });
   };
 
   stopGenerateMessage = (): void => {
@@ -170,12 +242,26 @@ export class ConversationControlActionImpl {
     );
   };
 
-  cancelSendMessageInServer = (topicId?: string): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
+  cancelSendMessageInServer = (
+    target?: string | ConversationContext,
+    editor?: ChatInputEditor | null,
+  ): void => {
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
 
-    // Determine which operation to cancel
-    const targetTopicId = topicId ?? activeTopicId;
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: targetTopicId });
+    const activeContext: ConversationContext = {
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: activeTopicId,
+    };
+    const targetContext =
+      typeof target === 'object'
+        ? target
+        : {
+            ...activeContext,
+            topicId: target ?? activeTopicId,
+          };
+    const contextKey = messageMapKey(targetContext);
 
     // Cancel operations in the operation system
     const operationIds = this.#get().operationsByContext[contextKey] || [];
@@ -187,13 +273,18 @@ export class ConversationControlActionImpl {
       }
     });
 
-    // Restore editor state if it's the active session
-    if (contextKey === messageMapKey({ agentId: activeAgentId, topicId: activeTopicId })) {
+    // An embedded conversation (for example the create-thread portal) owns a
+    // separate editor even though ChatStore only tracks the most recently
+    // mounted editor globally. Prefer the explicitly supplied editor. The
+    // active-conversation fallback preserves the legacy call sites.
+    const targetEditor =
+      editor ?? (contextKey === messageMapKey(activeContext) ? this.#get().mainInputEditor : null);
+    if (targetEditor) {
       // Find the latest sendMessage operation with editor state
       for (const opId of [...operationIds].reverse()) {
         const op = this.#get().operations[opId];
         if (op && op.type === 'sendMessage' && op.metadata.inputEditorTempState) {
-          this.#get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+          targetEditor.setJSONState(op.metadata.inputEditorTempState);
           break;
         }
       }
@@ -201,8 +292,13 @@ export class ConversationControlActionImpl {
   };
 
   clearSendMessageError = (): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
+    const contextKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: activeTopicId,
+    });
     const operationIds = this.#get().operationsByContext[contextKey] || [];
 
     // Clear error message from all sendMessage operations in current context
@@ -261,6 +357,20 @@ export class ConversationControlActionImpl {
     });
   };
 
+  /**
+   * Honor a Stop pressed during the optimistic-write window. Interim ops
+   * (approve / submit / skip) are created synchronously, but their optimistic
+   * updates await, so a Stop landing in that gap cancels the op via
+   * `stopGenerating` → `cancelOperations`. Detect the cancelled/terminal op and
+   * bail before starting the run instead of resurrecting a stopped conversation.
+   * `cancelOperation` flips status but keeps the record, so a real Stop always
+   * leaves the op present here. Mirrors regenerateUserMessage's preflight guard.
+   */
+  #wasInterimOpStopped = (operationId: string): boolean => {
+    const op = this.#get().operations[operationId];
+    return !!op && op.status !== 'running';
+  };
+
   approveToolCalling = async (
     toolMessageId: string,
     _assistantGroupId: string,
@@ -285,22 +395,27 @@ export class ConversationControlActionImpl {
     // This ensures optimistic updates use the correct agentId/topicId
     const { operationId } = startOperation({
       type: 'approveToolCalling',
+      // Carry the full effective context (groupId / documentId / scope / …) so the
+      // interim op lands in the same messageMapKey bucket the UI queries. A cherry-
+      // picked context without groupId would bucket group conversations under
+      // `main_<agentId>` while the UI reads `group_<groupId>`, so the input-loading
+      // whitelist never matches there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });
 
     const optimisticContext = { operationId };
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
+
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool's approval.
     this.#emitRunResumed(effectiveContext, {
       operationId,
       parentMessageId: toolMessageId,
-      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
+      runtimeType: shouldUseGatewayResume ? 'gateway' : 'client',
     });
 
     // 2. Update intervention status to approved
@@ -309,6 +424,12 @@ export class ConversationControlActionImpl {
       { intervention: { status: 'approved' } },
       optimisticContext,
     );
+
+    // NOTE: intentionally do NOT bail on Stop here. `intervention: approved` is
+    // already persisted above; returning early would leave the tool marked
+    // approved but never executed — a stuck conversation. Stop pressed in this
+    // sub-second window is best-effort (the paused run can't be aborted yet);
+    // let the approval complete atomically and honor the next Stop normally.
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
 
     // 2.5. Server-mode: start a **new** Gateway op carrying the approval
@@ -316,7 +437,7 @@ export class ConversationControlActionImpl {
     // message, persists `intervention=approved`, dispatches the approved
     // tool, and streams results back on the new op. No in-place resume of
     // the paused op — simpler state + avoids stepIndex races.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -342,6 +463,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
@@ -409,6 +531,171 @@ export class ConversationControlActionImpl {
     }
   };
 
+  /**
+   * Approve every pending tool of a parallel batch in ONE action.
+   *
+   * Server mode resolves the whole batch through a single Gateway op carrying
+   * `resumeApprovals`, so the run executes all approved tools as one
+   * `call_tools_batch` and continues the LLM exactly once with the complete
+   * result set. Looping `approveToolCalling` instead would start one op per
+   * tool, and each op continues the run while its siblings are still empty
+   * pending rows — which is what forks the parent chain and shows the model
+   * blank tool results.
+   *
+   * Client mode has no batch resume: the local runtime re-parks on the
+   * remaining pending tools after each approval, so sequential approvals are
+   * already correct there. Approvals are issued in order and awaited so the
+   * runtime never sees two resumes racing on the same assistant turn.
+   */
+  /**
+   * Stop a run parked on tool approval — "from this step on, don't continue".
+   *
+   * Distinct from rejecting a tool: a rejection resumes the model so it can
+   * respond to the refusal, whereas stopping ends the turn outright. Nothing
+   * in the batch executes.
+   *
+   * This cannot go through the ordinary cancel actions: they all filter on
+   * `status === 'running'`, and a parked run's client operation is `completed`
+   * (the server's park is stream-terminal) and pruned ~30s later, so the client
+   * no longer holds the parked operation id. The server resolves it from the
+   * topic instead.
+   */
+  stopPendingApproval = async (
+    toolMessageIds: string[],
+    context?: ConversationContext,
+  ): Promise<void> => {
+    if (toolMessageIds.length === 0) return;
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const topicId = effectiveContext.topicId;
+    if (!topicId) {
+      console.warn('[stopPendingApproval] no active topic; skipping');
+      return;
+    }
+
+    // Only rows the server can address — an optimistic `tmp_` row has no server
+    // identity yet.
+    const addressable = toolMessageIds.filter((id) => !id.startsWith('tmp_'));
+    if (addressable.length === 0) return;
+
+    // Clear the cards in one paint rather than letting them wink out one by one
+    // as the server catches up.
+    await Promise.all(
+      addressable.map((toolMessageId) =>
+        this.#get().optimisticUpdateMessagePlugin(toolMessageId, {
+          intervention: { status: 'aborted' },
+        }),
+      ),
+    );
+
+    const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+
+    try {
+      await aiAgentService.stopPendingApproval({ toolMessageIds: addressable, topicId });
+      this.#completeOpsById(pausedOpIds);
+    } catch (error) {
+      console.error('[stopPendingApproval] failed:', error);
+      throw error;
+    }
+  };
+
+  approveAllToolCalls = async (
+    toolMessageIds: string[],
+    context?: ConversationContext,
+  ): Promise<void> => {
+    if (toolMessageIds.length === 0) return;
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    if (!this.#shouldUseGatewayResume(effectiveContext)) {
+      for (const toolMessageId of toolMessageIds) {
+        await this.approveToolCalling(toolMessageId, '', effectiveContext);
+      }
+      return;
+    }
+
+    const { completeOperation, startOperation } = this.#get();
+
+    // Drop anything that can't be addressed: an optimistic row (`tmp_`) has no
+    // server identity yet, and a tool message without `tool_call_id` can't be
+    // matched to its pending call.
+    const decisions = toolMessageIds
+      .map((toolMessageId) => {
+        const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+        const toolCallId = toolMessage?.tool_call_id;
+        return toolCallId && !toolMessageId.startsWith('tmp_')
+          ? { decision: 'approved' as const, parentMessageId: toolMessageId, toolCallId }
+          : undefined;
+      })
+      .filter((decision) => !!decision);
+
+    if (decisions.length === 0) {
+      console.warn('[approveAllToolCalls][server] no addressable pending tools; skipping resume');
+      return;
+    }
+
+    // The op-level anchor. The server re-derives the spine anchor from the
+    // batch itself, so this only has to be one of the batch's own rows.
+    const anchorMessageId = decisions.at(-1)!.parentMessageId;
+
+    const { operationId } = startOperation({
+      type: 'approveToolCalling',
+      context: { ...effectiveContext, messageId: anchorMessageId },
+    });
+
+    const optimisticContext = { operationId };
+
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: anchorMessageId,
+      runtimeType: 'gateway',
+    });
+
+    // Mark every card approved up front so the whole intervention bar settles in
+    // one paint instead of clearing card-by-card as the server catches up.
+    await Promise.all(
+      decisions.map((decision) =>
+        this.#get().optimisticUpdateMessagePlugin(
+          decision.parentMessageId,
+          { intervention: { status: 'approved' } },
+          optimisticContext,
+        ),
+      ),
+    );
+
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(anchorMessageId);
+    const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+
+    try {
+      await this.#get().executeGatewayAgent({
+        context: effectiveContext,
+        message: '',
+        metadata: requestMetadata,
+        parentMessageId: anchorMessageId,
+        resumeApprovals: decisions,
+      });
+      this.#writeTopicStatus(effectiveContext, 'active');
+      this.#completeOpsById(pausedOpIds);
+      completeOperation(operationId);
+    } catch (error) {
+      const err = error as Error;
+      console.error('[approveAllToolCalls][server] Gateway resume failed:', err);
+      this.#get().failOperation(operationId, {
+        type: 'approveToolCalling',
+        message: err.message || 'Unknown error',
+      });
+    }
+  };
+
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,
@@ -434,23 +721,27 @@ export class ConversationControlActionImpl {
 
     const { operationId } = startOperation({
       type: 'submitToolInteraction',
+      // Carry the full effective context so the interim op is bucketed under the
+      // same messageMapKey the UI queries (group / page need groupId / documentId,
+      // not just agentId) — otherwise the input-loading whitelist never matches
+      // there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
     const shouldCreateUserMessage = options?.createUserMessage !== false;
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
+
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool interaction.
     this.#emitRunResumed(effectiveContext, {
       operationId,
       parentMessageId: toolMessageId,
-      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
+      runtimeType: shouldUseGatewayResume ? 'gateway' : 'client',
     });
 
     // 1. Mark intervention as approved and set tool result to user's response
@@ -476,13 +767,19 @@ export class ConversationControlActionImpl {
       );
     }
 
+    // NOTE: intentionally do NOT bail on Stop here. `intervention: approved`
+    // and the tool result are already persisted above; returning early would
+    // leave the submission recorded but never resumed — a stuck conversation.
+    // Same best-effort rationale as approveToolCalling: complete atomically and
+    // honor the next Stop normally.
+
     // 1.5. Server-mode: start a **new** Gateway op carrying the human answer as
     // the tool result via `resumeToolResult`. The server writes the answer as
     // the pending tool message's content, marks intervention approved, and
     // resumes from `phase: 'tool_result'` (NO re-execution). The synthetic user
     // message (2b) is not needed — the server continues from the answered tool
     // call. Mirrors approveToolCalling's gateway branch.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -509,6 +806,7 @@ export class ConversationControlActionImpl {
             ...(options?.pluginState ? { pluginState: options.pluginState } : {}),
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
@@ -591,6 +889,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -605,6 +904,12 @@ export class ConversationControlActionImpl {
       });
       return;
     }
+
+    // Bail if a Stop landed while the synthetic user message was being created:
+    // optimisticCreateMessage above is another await round-trip after the earlier
+    // guard, and executeClientAgent would otherwise start a fresh child run that
+    // wasn't present when the cancellation propagated.
+    if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message (not tool re-execution)
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
@@ -660,16 +965,19 @@ export class ConversationControlActionImpl {
 
     const { operationId } = startOperation({
       type: 'skipToolInteraction',
+      // Carry the full effective context so the interim op is bucketed under the
+      // same messageMapKey the UI queries (group / page need groupId / documentId,
+      // not just agentId) — otherwise the input-loading whitelist never matches
+      // there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool interaction.
     this.#emitRunResumed(effectiveContext, {
@@ -693,10 +1001,16 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
+    // Bail if a Stop landed while the optimistic updates above were in flight,
+    // before creating the synthetic user message so Stop leaves no dangling turn.
+    if (this.#wasInterimOpStopped(operationId)) return;
+
     // 2. Create a user message indicating the skip
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
-    const userMessageContent = reason ? `I'll skip this. ${reason}` : "I'll skip this.";
+    const userMessageContent = reason
+      ? t('tool.intervention.skipMessageWithReason', { ns: 'chat', reason })
+      : t('tool.intervention.skipMessage', { ns: 'chat' });
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
       {
@@ -704,6 +1018,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -718,6 +1033,12 @@ export class ConversationControlActionImpl {
       });
       return;
     }
+
+    // Bail if a Stop landed while the synthetic user message was being created:
+    // optimisticCreateMessage above is another await round-trip after the guard
+    // before it, and executeClientAgent would otherwise start a fresh child run
+    // that wasn't present when the cancellation propagated.
+    if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
@@ -783,6 +1104,8 @@ export class ConversationControlActionImpl {
 
     const optimisticContext = { operationId };
 
+    this.#writeTopicStatus(effectiveContext, 'active');
+
     await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { rejectedReason: 'User cancelled interaction', status: 'rejected' } },
@@ -837,18 +1160,25 @@ export class ConversationControlActionImpl {
       return;
     }
 
-    // Walk up to the assistant that owns this tool — its operation is the
-    // running CC stream we need to address. Falls through to the tool
-    // message id itself if a producer ever associated it directly.
+    // Walk up to the assistant that owns this tool. `messageOperationMap` is a
+    // most-granular pointer, so it may reference a transient child op
+    // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
+    // the AskUser bridge.
     const { messageOperationMap } = this.#get();
-    const operationId =
+    const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
       messageOperationMap?.[toolMessageId];
 
-    if (!operationId) {
+    if (!candidateOperationId) {
       console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
       return;
     }
+
+    // Resolve the runtime execution op before choosing IPC vs remote transport.
+    // For local CC this is `execHeterogeneousAgent`; for gateway/device runs
+    // this is `execServerAgentRuntime`.
+    const { operation, operationId } =
+      this.#resolveHeteroInterventionExecutionOperation(candidateOperationId);
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -862,7 +1192,6 @@ export class ConversationControlActionImpl {
     // matches the active conversation the user just clicked in. The IPC
     // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
     // toolCallIds, so it's safe to fire even when the bridge is gone.
-    const operation = this.#get().operations[operationId];
     const operationAlive = !!operation;
     if (!operationAlive) {
       console.warn(
@@ -1049,6 +1378,9 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
+
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Optimistic update - update status to rejected and save reason
     const intervention = {
@@ -1078,7 +1410,7 @@ export class ConversationControlActionImpl {
     // `rejected_continue` share the same code path (both surface the
     // rejection to the LLM as user feedback), so a separate `rejected`
     // decision adds complexity without behavioural difference.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -1107,6 +1439,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
       } catch (error) {
         console.error('[rejectToolCalling][server] Gateway resume failed:', error);
@@ -1198,6 +1531,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {

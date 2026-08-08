@@ -1,8 +1,8 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
@@ -110,7 +110,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
 }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const [form] = Form.useForm();
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   const evalModeValue = Form.useWatch('evalMode', form);
@@ -146,11 +146,11 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
         },
         name: values.name.trim(),
       });
-      message.success(t('dataset.edit.success'));
+      toast.success(t('dataset.edit.success'));
       close();
       onSuccess?.();
     } catch {
-      message.error(t('dataset.edit.error'));
+      toast.error(t('dataset.edit.error'));
     } finally {
       onLoadingChange?.(false);
     }

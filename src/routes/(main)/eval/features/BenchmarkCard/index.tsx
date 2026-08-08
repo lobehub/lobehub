@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,
@@ -71,7 +72,6 @@ const styles = createStaticStyles(({ css }) => ({
   metricBand: css`
     padding: 16px;
     border-radius: ${cssVar.borderRadius};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   metricValue: css`
@@ -258,7 +258,7 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 </Text>
               </Flexbox>
               <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}`}>
-                <Button icon={Upload} size={'small'} variant={'filled'}>
+                <Button icon={Upload} size={'small'} type={'fill'}>
                   {t('benchmark.card.importDataset')}
                 </Button>
               </WorkspaceLink>
@@ -291,7 +291,7 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 </Text>
               </Flexbox>
               <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}?tab=runs`}>
-                <Button icon={Play} size={'small'} variant={'filled'}>
+                <Button icon={Play} size={'small'} type={'fill'}>
                   {t('benchmark.card.startFirst')}
                 </Button>
               </WorkspaceLink>

@@ -176,6 +176,87 @@ describe('CompressionRepository', () => {
     });
   });
 
+  describe('finalizeCompressionGroup', () => {
+    it('should supersede prior groups without deleting their messages', async () => {
+      await serverDB.insert(messages).values([
+        { content: 'Old question', id: 'msg-old-user', role: 'user', topicId, userId },
+        { content: 'Old answer', id: 'msg-old-assistant', role: 'assistant', topicId, userId },
+        { content: 'Recent question', id: 'msg-new-user', role: 'user', topicId, userId },
+        { content: 'Recent answer', id: 'msg-new-assistant', role: 'assistant', topicId, userId },
+      ]);
+      const oldGroupId = await compressionRepo.createCompressionGroup({
+        content: 'Old summary',
+        messageIds: ['msg-old-user', 'msg-old-assistant'],
+        metadata: { originalMessageCount: 2 },
+        topicId,
+      });
+      const newGroupId = await compressionRepo.createCompressionGroup({
+        content: '...',
+        messageIds: ['msg-new-user', 'msg-new-assistant'],
+        metadata: { originalMessageCount: 2 },
+        topicId,
+      });
+
+      await compressionRepo.finalizeCompressionGroup({
+        content: 'Combined summary',
+        groupId: newGroupId,
+        sourceGroupIds: [oldGroupId],
+        topicId,
+      });
+
+      const groups = await compressionRepo.getCompressionGroups(topicId);
+      expect(groups).toHaveLength(1);
+      expect(groups[0]).toMatchObject({ content: 'Combined summary', id: newGroupId });
+
+      const compressedMessages = await compressionRepo.getCompressedMessages(newGroupId);
+      expect(compressedMessages.map((message) => message.id)).toEqual(
+        expect.arrayContaining([
+          'msg-old-user',
+          'msg-old-assistant',
+          'msg-new-user',
+          'msg-new-assistant',
+        ]),
+      );
+      expect(compressedMessages).toHaveLength(4);
+    });
+
+    it('should not supersede groups outside the target topic', async () => {
+      await serverDB.insert(topics).values({ id: 'other-topic', userId });
+      await serverDB.insert(messages).values([
+        { content: 'Target', id: 'msg-target', role: 'user', topicId, userId },
+        {
+          content: 'Other topic',
+          id: 'msg-other-topic',
+          role: 'user',
+          topicId: 'other-topic',
+          userId,
+        },
+      ]);
+      const otherGroupId = await compressionRepo.createCompressionGroup({
+        content: 'Other summary',
+        messageIds: ['msg-other-topic'],
+        metadata: { originalMessageCount: 1 },
+        topicId: 'other-topic',
+      });
+      const targetGroupId = await compressionRepo.createCompressionGroup({
+        content: '...',
+        messageIds: ['msg-target'],
+        metadata: { originalMessageCount: 1 },
+        topicId,
+      });
+
+      await compressionRepo.finalizeCompressionGroup({
+        content: 'Target summary',
+        groupId: targetGroupId,
+        sourceGroupIds: [otherGroupId],
+        topicId,
+      });
+
+      expect(await compressionRepo.getCompressionGroups('other-topic')).toHaveLength(1);
+      expect(await compressionRepo.getCompressedMessages(otherGroupId)).toHaveLength(1);
+    });
+  });
+
   describe('updateMetadata', () => {
     it('should update metadata jsonb column on a compression group', async () => {
       const groupId = await compressionRepo.createCompressionGroup({

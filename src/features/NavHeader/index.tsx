@@ -37,7 +37,7 @@ const NavHeader = memo<NavHeaderProps>(
   }) => {
     const expand = useGlobalStore(systemStatusSelectors.showLeftPanel);
 
-    const noContent = !left && !right;
+    const noContent = !left && !right && !children;
 
     // When empty, this header only rendered to host the collapse toggle. Hide it
     // when expanded, and also on macOS desktop where the toggle moved to the titlebar.

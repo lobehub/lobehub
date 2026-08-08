@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import {
   isChatGroupSessionId,
@@ -6,7 +6,9 @@ import {
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
+import { t } from 'i18next';
 import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
@@ -22,6 +24,8 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -40,10 +44,17 @@ import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
+
+interface AgentConfigUpdateOptions {
+  /** Propagate the persistence failure so a scoped editor can render failed + Retry. */
+  rethrow?: boolean;
+  /** Keep generic error messaging for ordinary config controls. @default true */
+  showErrorMessage?: boolean;
+}
 
 const preserveWorkingDirDeleteMarkers = (
   merged: LobeAgentAgencyConfig,
@@ -79,12 +90,25 @@ export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
+  readonly #updateAgentConfigControllers = new Map<string, AbortController>();
+  readonly #updateAgentMetaControllers = new Map<string, AbortController>();
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
   }
+
+  #createAgentScopedAbortController = (
+    controllers: Map<string, AbortController>,
+    agentId: string,
+  ): AbortController => {
+    controllers.get(agentId)?.abort(MESSAGE_CANCEL_FLAT);
+
+    const controller = new AbortController();
+    controllers.set(agentId, controller);
+    return controller;
+  };
 
   #syncAgentDocuments = (agentId: string, documents: AgentContextDocument[]) => {
     this.#set(
@@ -99,13 +123,37 @@ export class AgentSliceActionImpl {
     );
   };
 
-  appendStreamingSystemRole = (chunk: string): void => {
-    const currentContent = this.#get().streamingSystemRole || '';
+  appendStreamingSystemRole = (agentId: string, generation: number, chunk: string): void => {
+    const {
+      streamingSystemRole,
+      streamingSystemRoleAgentId,
+      streamingSystemRoleGeneration,
+      streamingSystemRoleInProgress,
+    } = this.#get();
+    if (
+      !streamingSystemRoleInProgress ||
+      streamingSystemRoleAgentId !== agentId ||
+      streamingSystemRoleGeneration !== generation
+    )
+      return;
+
+    const currentContent = streamingSystemRole || '';
     this.#set({ streamingSystemRole: currentContent + chunk }, false, 'appendStreamingSystemRole');
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    const result = await agentService.createAgent(params);
+    // Seed a personal name so a new agent has an identity before the Agent
+    // Builder conversation produces one; the builder may replace it later. This
+    // lives here rather than in the create endpoint because the language only
+    // resolves on the client (`auto` follows the browser). A caller that already
+    // carries a name — e.g. a market agent — keeps it.
+    const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
+    const config = {
+      ...params.config,
+      name: params.config?.name || randomAgentName(locale),
+    };
+
+    const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
@@ -128,23 +176,18 @@ export class AgentSliceActionImpl {
     return result;
   };
 
-  finishStreamingSystemRole = async (agentId: string): Promise<void> => {
-    const { streamingSystemRole } = this.#get();
-
-    if (!streamingSystemRole) {
-      this.#set({ streamingSystemRoleInProgress: false }, false, 'finishStreamingSystemRole');
+  finishStreamingSystemRole = async (agentId: string, generation: number): Promise<void> => {
+    const { streamingSystemRoleAgentId, streamingSystemRoleGeneration } = this.#get();
+    if (streamingSystemRoleAgentId !== agentId || streamingSystemRoleGeneration !== generation)
       return;
-    }
 
-    // Save the final content to agent config
-    await this.#get().optimisticUpdateAgentConfig(agentId, {
-      systemRole: streamingSystemRole,
-    });
-
-    // Reset streaming state
+    // Persistence is handled by the invocation-scoped AgentManagerRuntime.
+    // This singleton state only owns the visible typewriter animation, so a
+    // superseded invocation must never clear the newer owner's buffer.
     this.#set(
       {
         streamingSystemRole: undefined,
+        streamingSystemRoleAgentId: undefined,
         streamingSystemRoleInProgress: false,
       },
       false,
@@ -170,15 +213,19 @@ export class AgentSliceActionImpl {
     );
   };
 
-  startStreamingSystemRole = (): void => {
+  startStreamingSystemRole = (agentId: string): number => {
+    const generation = (this.#get().streamingSystemRoleGeneration ?? 0) + 1;
     this.#set(
       {
         streamingSystemRole: '',
+        streamingSystemRoleAgentId: agentId,
+        streamingSystemRoleGeneration: generation,
         streamingSystemRoleInProgress: true,
       },
       false,
       'startStreamingSystemRole',
     );
+    return generation;
   };
 
   toggleAgentPinned = (): void => {
@@ -189,7 +236,7 @@ export class AgentSliceActionImpl {
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ agentId: string; slug: string | null }> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
   };
 
@@ -216,42 +263,57 @@ export class AgentSliceActionImpl {
     await updateAgentConfig({ plugins: newPlugins });
   };
 
-  updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {
+  updateAgentChatConfig = async (
+    config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfig({ chatConfig: config });
+    await this.#get().updateAgentConfig({ chatConfig: config }, options);
   };
 
   updateAgentChatConfigById = async (
     agentId: string,
     config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentConfigById(agentId, { chatConfig: config });
+    await this.#get().updateAgentConfigById(agentId, { chatConfig: config }, options);
   };
 
-  updateAgentConfig = async (config: PartialDeep<LobeAgentConfig>): Promise<void> => {
+  updateAgentConfig = async (
+    config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    const controller = this.#get().internal_createAbortController('updateAgentConfigSignal');
-
-    await this.#get().optimisticUpdateAgentConfig(activeAgentId, config, controller.signal);
+    await this.#get().updateAgentConfigById(activeAgentId, config, options);
   };
 
   updateAgentConfigById = async (
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
-    const controller = this.#get().internal_createAbortController('updateAgentConfigSignal');
+    const controller = this.#createAgentScopedAbortController(
+      this.#updateAgentConfigControllers,
+      agentId,
+    );
 
-    await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+    try {
+      await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal, options);
+    } finally {
+      if (this.#updateAgentConfigControllers.get(agentId) === controller) {
+        this.#updateAgentConfigControllers.delete(agentId);
+      }
+    }
   };
 
   updateAgentRuntimeEnvConfigById = async (
@@ -283,9 +345,24 @@ export class AgentSliceActionImpl {
 
     if (!activeAgentId) return;
 
-    const controller = this.#get().internal_createAbortController('updateAgentMetaSignal');
+    await this.#get().updateAgentMetaById(activeAgentId, meta);
+  };
 
-    await this.#get().optimisticUpdateAgentMeta(activeAgentId, meta, controller.signal);
+  updateAgentMetaById = async (agentId: string, meta: AgentMetaUpdate): Promise<void> => {
+    if (!agentId) return;
+
+    const controller = this.#createAgentScopedAbortController(
+      this.#updateAgentMetaControllers,
+      agentId,
+    );
+
+    try {
+      await this.#get().optimisticUpdateAgentMeta(agentId, meta, controller.signal);
+    } finally {
+      if (this.#updateAgentMetaControllers.get(agentId) === controller) {
+        this.#updateAgentMetaControllers.delete(agentId);
+      }
+    }
   };
 
   updateLoadingState = (key: keyof LoadingState, value: boolean): void => {
@@ -324,8 +401,25 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
-          if (!data) return;
-          this.#get().internal_dispatchAgentMap(agentId, data);
+          // A successful fetch that resolves to null means the agent doesn't
+          // exist or the caller lost access (e.g. a workspace agent switched
+          // back to private) — a settled state, not "still loading".
+          if (!data) {
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+          this.#clearAgentNotFound(agentId);
+          // This endpoint returns a complete, authoritative profile snapshot.
+          // Replace the cached entry instead of applying patch semantics: fields
+          // cleared on the server (for example editorData: null) may be omitted
+          // from the response and must not survive from an older local profile.
+          if (!isEqual(this.#get().agentMap[agentId], data)) {
+            this.#set(
+              (state) => ({ agentMap: { ...state.agentMap, [agentId]: data } }),
+              false,
+              'fetchAgentConfig',
+            );
+          }
           // Only adopt the fetched agent as the active one when nothing is
           // active yet. The active agent is owned by the route-level sync
           // (AgentIdSync on desktop/mobile, the popup pages' own setState).
@@ -372,6 +466,41 @@ export class AgentSliceActionImpl {
     );
   };
 
+  #markAgentNotFound = (agentId: string) => {
+    const { agentNotFoundMap, agentMap } = this.#get();
+    if (agentNotFoundMap[agentId] && !agentMap[agentId]) return;
+
+    this.#set(
+      (state) => {
+        // Also drop the previously cached config: surfaces reading `agentMap`
+        // (title/avatar in the sidebar or header) must not keep showing an
+        // agent the viewer lost access to next to the 404 content area.
+        const nextAgentMap = { ...state.agentMap };
+        delete nextAgentMap[agentId];
+        return {
+          agentMap: nextAgentMap,
+          agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true },
+        };
+      },
+      false,
+      'markAgentNotFound',
+    );
+  };
+
+  #clearAgentNotFound = (agentId: string) => {
+    if (!this.#get().agentNotFoundMap[agentId]) return;
+
+    this.#set(
+      (state) => {
+        const next = { ...state.agentNotFoundMap };
+        delete next[agentId];
+        return { agentNotFoundMap: next };
+      },
+      false,
+      'clearAgentNotFound',
+    );
+  };
+
   #clearAgentConfigError = (agentId: string) => {
     if (!this.#get().agentConfigErrorMap[agentId]) return;
 
@@ -403,7 +532,11 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
-          if (!data) return;
+          if (!data) {
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+          this.#clearAgentNotFound(agentId);
           this.#get().internal_dispatchAgentMap(agentId, data);
         },
       },
@@ -506,6 +639,7 @@ export class AgentSliceActionImpl {
     id: string,
     data: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
     const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
@@ -533,7 +667,21 @@ export class AgentSliceActionImpl {
       } else {
         console.error('[AgentStore] Failed to save config:', error);
         updateSaveStatus('idle');
+        // A swallowed failure reads as saved and surfaces later as mysterious
+        // data loss (the next refetch reverts the optimistic value) — tell the
+        // user right away.
+        if (options?.showErrorMessage !== false) {
+          toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
+        // Roll back only agencyConfig patches: those are discrete picks the
+        // server actively validates (e.g. a workspace agent binding a
+        // non-workspace device is rejected), so keeping the optimistic value
+        // just shows a selection that never persisted. Other config fields keep
+        // the optimistic value on purpose — refetching would clobber in-flight
+        // form edits on a transient failure (see #16337).
+        if (data.agencyConfig) await this.#get().internal_refreshAgentConfig(id);
       }
+      if (options?.rethrow) throw error;
     }
   };
 

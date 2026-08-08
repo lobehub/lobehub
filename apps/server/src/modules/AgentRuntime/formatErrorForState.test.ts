@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -82,8 +82,15 @@ describe('formatErrorForState', () => {
       });
     });
 
-    it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
-      const result = formatErrorForState(new ModelEmptyError());
+    it('enriches a thrown ModelEmptyError into a readable non-retryable terminal error', () => {
+      const result = formatErrorForState(
+        new ModelEmptyError(undefined, {
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
+        }),
+      );
 
       // The `errorType` field must win over the generic Error → InternalServerError
       // path so the terminal state is classified and dashboard-visible instead of
@@ -91,10 +98,47 @@ describe('formatErrorForState', () => {
       expect(result.type).toBe(AgentRuntimeErrorType.ModelEmptyCompletion);
       expect(result.category).toBe('provider');
       expect(result.attribution).toBe('provider');
-      expect(result.retryable).toBe(true);
+      expect(result.retryable).toBe(false);
       expect(result.countAsFailure).toBe(true);
       expect(result.numericId).toBe(8014);
       expect(result.message).toContain('empty completion');
+      expect(result.body).toMatchObject({
+        diagnostics: {
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
+        },
+      });
+    });
+
+    it('enriches a thrown ModelRefusalError without counting it as an operational failure', () => {
+      const result = formatErrorForState(
+        new ModelRefusalError(undefined, {
+          attempt: 1,
+          finishReason: 'refusal',
+          model: 'fable',
+          provider: 'lobehub',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        attribution: 'provider',
+        body: {
+          diagnostics: {
+            attempt: 1,
+            finishReason: 'refusal',
+            model: 'fable',
+            provider: 'lobehub',
+          },
+        },
+        category: 'provider',
+        countAsFailure: false,
+        httpStatus: 471,
+        numericId: 8015,
+        retryable: false,
+        type: AgentRuntimeErrorType.ModelRefusal,
+      });
     });
 
     it('marks provider-side rate limits as retryable with provider attribution', () => {
@@ -167,6 +211,35 @@ describe('formatErrorForState', () => {
       expect(result.type).toBe(AgentRuntimeErrorType.DatabasePersistError);
       expect(result.numericId).toBe(7004);
       expect(result.attribution).toBe('harness');
+    });
+
+    it('unwraps PG diagnostics from a Drizzle "Failed query" cause for final state errors', () => {
+      const error = new Error('Failed query: begin \nparams: ');
+      (error as any).cause = {
+        code: 'XX000',
+        message:
+          'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+        severity: 'ERROR',
+      };
+
+      const result = formatErrorForState(error);
+
+      expect(result.type).toBe('pg_XX000');
+      expect(result.message).toBe(
+        'PG XX000 · ERROR · Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+      );
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.countAsFailure).toBe(true);
+      expect(result.body).toMatchObject({
+        pg: {
+          code: 'XX000',
+          message:
+            'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+          severity: 'ERROR',
+        },
+        wrappedMessage: 'Failed query: begin \nparams: ',
+      });
     });
   });
 

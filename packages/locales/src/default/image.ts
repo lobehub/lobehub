@@ -54,6 +54,9 @@ export default {
   'generation.metadata.createdAt': 'Created at {{time}}',
   'generation.status.failed': 'Generation hit a problem. Adjust the prompt and try again',
   'generation.status.generating': 'Generating...',
+  'generationTopic.notFound.desc':
+    'This generation does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'generationTopic.notFound.title': 'Generation Unavailable',
   'notSupportGuide.desc':
     'The current deployment mode does not support AI image generation. Switch to the <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.',
   'notSupportGuide.features.fileIntegration.desc':
@@ -66,6 +69,10 @@ export default {
     'Supports multiple AI image generation providers, including OpenAI gpt-image-1, Google Imagen, FAL.ai, and more, offering a wide selection of models.',
   'notSupportGuide.features.multiProviders.title': 'Multi-Provider Support',
   'notSupportGuide.title': 'Current Deployment Mode Does Not Support AI Image Generation',
+  'notice.modelRemoved':
+    'The current model is no longer available from {{name}}. Please switch to an available model.',
+  'notice.providerDisabled':
+    'The provider {{name}} for the current model is disabled. Please enable it or switch to an available model.',
   'topic.createNew': 'Create New Topic',
   'topic.createdBy': 'Created by {{name}}',
   'topic.deleteConfirm': 'Delete Generation Topic',

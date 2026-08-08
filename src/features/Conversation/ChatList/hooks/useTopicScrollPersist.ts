@@ -25,21 +25,30 @@ interface PendingWrite {
 interface UseTopicScrollPersistOptions {
   contextKey: string;
   dataSourceLength: number;
+  /**
+   * Number of synthetic rows prepended to the VList before the messages
+   * (e.g. the headerSlot spacer). Added when targeting the last message so
+   * scrollToIndex lands on the right virtua row.
+   */
+  headerOffset?: number;
   virtuaRef: RefObject<VListHandle | null>;
 }
 
 /**
  * Persists per-topic chat scroll position to localStorage.
  *
- * In practice `ChatList` shows a SkeletonList while `messagesInit` is false,
- * so VirtualizedList unmounts on every topic switch and this hook is
- * re-initialized fresh. The contextKey-change branch below still exists for
- * the in-place draft → real-id promotion path, where the same instance
- * survives the key change.
+ * The provider is not keyed by context, so switching to a topic whose messages
+ * are already cached keeps VirtualizedList mounted and lands in the
+ * contextKey-change branch below: re-stamp the topic being left, then restore
+ * (or scroll to bottom) for the new one. Switching to an uncached topic still
+ * unmounts VirtualizedList behind ChatList's SkeletonList and re-initializes
+ * the hook fresh. The draft → real-id promotion path also flows through the
+ * contextKey-change branch, preserving scroll instead of restoring.
  */
 export const useTopicScrollPersist = ({
   contextKey,
   dataSourceLength,
+  headerOffset = 0,
   virtuaRef,
 }: UseTopicScrollPersistOptions) => {
   const pendingWriteRef = useRef<PendingWrite | null>(null);
@@ -183,7 +192,7 @@ export const useTopicScrollPersist = ({
     const targetOffset = snapshot && !snapshot.atBottom ? snapshot.offset : null;
 
     if (targetOffset === null) {
-      virtuaRef.current.scrollToIndex(dataSourceLength - 1, { align: 'end' });
+      virtuaRef.current.scrollToIndex(headerOffset + dataSourceLength - 1, { align: 'end' });
       finalize(false);
       return;
     }
@@ -211,7 +220,7 @@ export const useTopicScrollPersist = ({
       requestAnimationFrame(tryScroll);
     };
     requestAnimationFrame(tryScroll);
-  }, [contextKey, dataSourceLength, flushNow, virtuaRef]);
+  }, [contextKey, dataSourceLength, flushNow, headerOffset, virtuaRef]);
 
   // One-shot housekeeping: drop expired entries and enforce the cap.
   useEffect(() => {

@@ -1,9 +1,26 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  appendLog,
+  getLogPath,
+  getRunningDaemonPid,
+  isDaemonProcess,
+  isProcessAlive,
+  readPid,
+  readStatus,
+  removePid,
+  removeStatus,
+  rotateLogIfNeeded,
+  stopDaemon,
+  writePid,
+  writeStatus,
+} from './manager';
 
 const tmpDir = path.join(os.tmpdir(), 'daemon-test-' + process.pid);
 const mockDir = path.join(tmpDir, '.lobehub');
@@ -25,26 +42,6 @@ vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
   return { ...actual, execFileSync: vi.fn() };
 });
-
-// eslint-disable-next-line import-x/first
-import { execFileSync } from 'node:child_process';
-
-// eslint-disable-next-line import-x/first
-import {
-  appendLog,
-  getLogPath,
-  getRunningDaemonPid,
-  isDaemonProcess,
-  isProcessAlive,
-  readPid,
-  readStatus,
-  removePid,
-  removeStatus,
-  rotateLogIfNeeded,
-  stopDaemon,
-  writePid,
-  writeStatus,
-} from './manager';
 
 // A command line that matches the daemon signature (`connect … --daemon-child`).
 const DAEMON_COMMAND = '/usr/local/bin/node /path/to/cli.js connect --daemon-child';

@@ -1,30 +1,84 @@
 import type {
+  CreateAssistantMessageOptions,
   MessageTransport,
   QueryMessagesInput,
+  QueryMessagesOptions,
   RuntimeMessageRef,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { parse } from '@lobechat/conversation-flow';
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
 
+import {
+  createConversationParentMissingError,
+  isMidOperationReferenceMissingError,
+} from '../messagePersistErrors';
+import { unwrapPgError } from '../pgError';
+
 /**
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
- *
- * NOTE: DB-error normalization (PG FK-violation → typed user-side error) is a
- * DB-backed-transport concern and will be folded in here when the persisting
- * executors (`resolve_*`, `call_tool`) migrate; today's callers keep their own
- * catch blocks, so this stays a thin delegation.
  */
 export class ServerMessageTransport implements MessageTransport {
-  constructor(private readonly messageModel: MessageModel) {}
+  constructor(
+    private readonly messageModel: MessageModel,
+    private readonly options: {
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
+    } = {},
+  ) {}
 
-  createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.messageModel.create(params);
+  /**
+   * Reuses the first persisted placeholder when an at-least-once step delivery
+   * retries after message creation but before the runtime state is committed.
+   */
+  async createAssistantMessage(
+    params: CreateMessageParams,
+    options?: CreateAssistantMessageOptions,
+  ): Promise<RuntimeMessageRef> {
+    const idempotencyKey = options?.idempotencyKey;
+    const createParams = idempotencyKey ? { ...params, clientId: idempotencyKey } : params;
+
+    try {
+      return await this.messageModel.create(createParams);
+    } catch (error) {
+      const pgError = unwrapPgError(error);
+      const isIdempotencyConflict =
+        idempotencyKey &&
+        pgError?.code === '23505' &&
+        pgError.constraint === 'message_client_id_user_unique';
+
+      if (!isIdempotencyConflict) throw error;
+
+      const existingMessage = await this.messageModel.findByClientId(idempotencyKey);
+      if (!existingMessage) throw error;
+
+      return {
+        agentId: existingMessage.agentId,
+        groupId: existingMessage.groupId,
+        id: existingMessage.id,
+        model: existingMessage.model,
+        parentId: existingMessage.parentId,
+        provider: existingMessage.provider,
+        role: existingMessage.role,
+        threadId: existingMessage.threadId,
+        topicId: existingMessage.topicId,
+      };
+    }
   }
 
-  createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.messageModel.create(params);
+  async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
+    try {
+      return await this.messageModel.create(params);
+    } catch (error) {
+      if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
+        throw createConversationParentMissingError(params.parentId, error);
+      }
+      throw error;
+    }
   }
 
   async deleteMessage(id: string): Promise<void> {
@@ -33,11 +87,33 @@ export class ServerMessageTransport implements MessageTransport {
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
     const message = await this.messageModel.findById(id);
-    return message ? { id: message.id } : undefined;
+    return message
+      ? {
+          agentId: message.agentId,
+          groupId: message.groupId,
+          id: message.id,
+          model: message.model,
+          parentId: message.parentId,
+          provider: message.provider,
+          role: message.role,
+          threadId: message.threadId,
+          topicId: message.topicId,
+        }
+      : undefined;
   }
 
-  query(params?: QueryMessagesInput): Promise<UIChatMessage[]> {
-    return this.messageModel.query(params);
+  async query(
+    params?: QueryMessagesInput,
+    options?: QueryMessagesOptions,
+  ): Promise<UIChatMessage[]> {
+    const messages = await this.messageModel.query(params, {
+      postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
+    });
+
+    if (!options?.flatten) return messages;
+
+    const { flatList } = parse(messages);
+    return flatList;
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
@@ -46,6 +122,10 @@ export class ServerMessageTransport implements MessageTransport {
 
   async updatePluginState(id: string, state: Record<string, any>): Promise<void> {
     await this.messageModel.updatePluginState(id, state);
+  }
+
+  async updateToolIntervention(id: string, intervention: Record<string, any>): Promise<void> {
+    await this.messageModel.updateMessagePlugin(id, { intervention } as any);
   }
 
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {

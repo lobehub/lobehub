@@ -139,3 +139,17 @@ export const formatDate = (date?: Date) => {
 
   return dayjs(date).format('YYYY-MM-DD');
 };
+
+/**
+ * Log-style timestamp: `Jul 12 12:12:32`. The year only shows up when the entry
+ * is not from the current year, so the common case stays short.
+ */
+export const formatSpendTime = (value?: Date | string | null): string => {
+  if (!value) return '--';
+
+  const time = dayjs(value);
+  if (!time.isValid()) return '--';
+
+  const format = time.year() === dayjs().year() ? 'MMM D HH:mm:ss' : 'MMM D, YYYY HH:mm:ss';
+  return time.format(format);
+};

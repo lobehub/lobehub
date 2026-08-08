@@ -1,9 +1,12 @@
-import { formatLinearMcpShortLabel } from '@lobechat/builtin-tool-claude-code/client/labels';
-import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import {
+  formatBrowserMcpShortLabel,
+  formatLinearMcpShortLabel,
+} from '@lobechat/builtin-tool-claude-code/client/labels';
+import type { ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import {
   DURATION_SECONDS_PER_MINUTE,
@@ -27,57 +30,6 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
 };
 
-/**
- * A mixed / post-tool prose block that is just a single short status line
- * (e.g. "先重建 worktree:") stays folded together with its tools. Anything richer —
- * multiple lines, markdown structure, more than one sentence, or a long run-on line —
- * is treated as real prose and lifted out of the fold so it renders inline in reading order.
- */
-export const isFoldableStatusLine = (block: AssistantContentBlock): boolean => {
-  const raw = (block.content ?? '').trim();
-  if (!raw || raw === LOADING_FLAT) return true;
-
-  // A status line is a single line; any newline means paragraphed prose.
-  if (raw.includes('\n')) return false;
-
-  // Markdown heading or list marker → structured deliverable, not a status line.
-  if (
-    new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s`).test(raw) ||
-    /^[-*]\s+\S/.test(raw)
-  )
-    return false;
-
-  // A long run-on line reads as prose even without a second sentence.
-  if (raw.length > WORKFLOW_PROSE_HEADLINE_MAX_CHARS) return false;
-
-  // Fold only a single sentence. Latin .!? count only at a real sentence boundary
-  // (end or whitespace) so dotted tokens like "src/a.ts" or "Node.js" don't inflate it.
-  const sentenceCount = (raw.match(/[。！？]|[.!?](?=\s|$)/g) ?? []).length;
-  return sentenceCount <= 1;
-};
-
-/**
- * While generating, first index at or after {@param lastToolIndex} whose prose-only block reads as
- * real prose rather than a one-line status. Tail from here stays out of the workflow fold. Returns
- * null if tooling reappears or nothing qualifies.
- */
-export const getPostToolAnswerSplitIndex = (
-  blocks: AssistantContentBlock[],
-  lastToolIndex: number,
-  toolsPhaseComplete: boolean,
-  isGenerating: boolean,
-): number | null => {
-  if (!isGenerating || !toolsPhaseComplete || lastToolIndex < 0) return null;
-  if (lastToolIndex >= blocks.length - 1) return null;
-
-  for (let i = lastToolIndex + 1; i < blocks.length; i++) {
-    const b = blocks[i]!;
-    if (b.tools && b.tools.length > 0) return null;
-    if (!isFoldableStatusLine(b)) return i;
-  }
-  return null;
-};
-
 const toTitleCase = (apiName: string): string => {
   return apiName
     .replaceAll(/([A-Z])/g, ' $1')
@@ -88,6 +40,13 @@ const toTitleCase = (apiName: string): string => {
 export const getToolDisplayName = (apiName: string): string => {
   const linearLabel = formatLinearMcpShortLabel(apiName);
   if (linearLabel) return linearLabel;
+
+  // MCP wire names title-case into gibberish ("Mcp  lobe cc  browser navigate"),
+  // so the browser tools resolve to their own labels before the fallback.
+  const browserLabel = formatBrowserMcpShortLabel(apiName, (key, defaultValue) =>
+    t(key, { defaultValue, ns: 'chat' }),
+  );
+  if (browserLabel) return browserLabel;
 
   const defaultValue = toTitleCase(apiName);
   const key = TOOL_API_DISPLAY_NAMES[apiName];

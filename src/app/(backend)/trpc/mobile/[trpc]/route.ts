@@ -2,6 +2,7 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { type NextRequest } from 'next/server';
 
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
+import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
 import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
 import { mobileRouter } from '@/server/routers/mobile';
@@ -19,10 +20,7 @@ const handler = (req: NextRequest) => {
 
     endpoint: '/trpc/mobile',
 
-    onError: ({ error, path, type }) => {
-      console.info(`Error in tRPC handler (mobile) on path: ${path}, type: ${type}`);
-      console.error(error);
-    },
+    onError: createTRPCErrorLogger('mobile'),
 
     req: preparedReq,
     responseMeta: createResponseMeta,

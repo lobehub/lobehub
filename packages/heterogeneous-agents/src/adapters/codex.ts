@@ -7,6 +7,7 @@ import type {
   StreamStartData,
   ToolCallPayload,
   ToolResultData,
+  ToolStateChunkData,
   UsageData,
 } from '../types';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
@@ -45,6 +46,17 @@ interface CodexCommandExecutionItem extends CodexBaseItem {
 interface CodexTodoListEntry {
   completed?: boolean;
   text?: string;
+}
+
+interface TodoListPluginItem {
+  status: 'completed' | 'processing' | 'todo';
+  text: string;
+}
+
+interface StreamedCommandOutput {
+  prefix: string;
+  totalLength: number;
+  truncated: boolean;
 }
 
 interface CodexTodoListItem extends CodexBaseItem {
@@ -136,6 +148,13 @@ const normalizeTodoListItems = (item: CodexTodoListItem) =>
     }))
     .filter((todo) => todo.text.length > 0);
 
+const createTodoListPluginState = (items: TodoListPluginItem[]) => ({
+  todos: {
+    items,
+    updatedAt: new Date().toISOString(),
+  },
+});
+
 /**
  * Codex's `todo_list` only exposes a boolean completed flag. To light up the
  * shared todo progress UI, treat the first incomplete item as the active one
@@ -143,24 +162,18 @@ const normalizeTodoListItems = (item: CodexTodoListItem) =>
  */
 const synthesizeTodoListPluginState = (item: CodexTodoListItem) => {
   const todos = normalizeTodoListItems(item);
-  if (todos.length === 0) return;
 
   let assignedProcessing = false;
-  const items = todos.map((todo) => {
-    if (todo.completed) return { status: 'completed', text: todo.text } as const;
+  const items = todos.map<TodoListPluginItem>((todo) => {
+    if (todo.completed) return { status: 'completed', text: todo.text };
     if (!assignedProcessing) {
       assignedProcessing = true;
-      return { status: 'processing', text: todo.text } as const;
+      return { status: 'processing', text: todo.text };
     }
-    return { status: 'todo', text: todo.text } as const;
+    return { status: 'todo', text: todo.text };
   });
 
-  return {
-    todos: {
-      items,
-      updatedAt: new Date().toISOString(),
-    },
-  };
+  return createTodoListPluginState(items);
 };
 
 const synthesizeFileChangePluginState = (item: CodexFileChangeItem) => {
@@ -513,18 +526,19 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
     };
   }
 
-  const pluginState =
-    isSuccess && isTodoListItem(item)
+  const pluginState = isTodoListItem(item)
+    ? isSuccess
       ? synthesizeTodoListPluginState(item)
-      : isSuccess && isFileChangeItem(item)
-        ? synthesizeFileChangePluginState(item)
-        : isMcpToolCallItem(item)
-          ? synthesizeMcpToolPluginState(item)
-          : isCollabToolCallItem(item)
-            ? synthesizeCollabToolPluginState(item)
-            : isWebSearchItem(item)
-              ? synthesizeWebSearchPluginState(item)
-              : undefined;
+      : createTodoListPluginState([])
+    : isSuccess && isFileChangeItem(item)
+      ? synthesizeFileChangePluginState(item)
+      : isMcpToolCallItem(item)
+        ? synthesizeMcpToolPluginState(item)
+        : isCollabToolCallItem(item)
+          ? synthesizeCollabToolPluginState(item)
+          : isWebSearchItem(item)
+            ? synthesizeWebSearchPluginState(item)
+            : undefined;
 
   return {
     content: output,
@@ -791,10 +805,17 @@ export class CodexAdapter implements AgentEventAdapter {
 
   private hasTextInCurrentStep = false;
   private hasToolActivitySinceAgentMessage = false;
+  private streamedAgentMessageText = new Map<string, string>();
+  private streamedCommandOutput = new Map<string, StreamedCommandOutput>();
+  private deferredTodoCompletions = new Map<string, CodexTodoListItem>();
+  private pendingTodoToolCalls = new Set<string>();
   private pendingToolCalls = new Set<string>();
   private pendingToolCallStepIndex = new Map<string, number>();
+  private pendingTurnStartBoundary = false;
   private stepToolCalls: ToolCallPayload[] = [];
   private stepToolCallIds = new Set<string>();
+  /** Monotonic within this adapter operation, independently per tool call. */
+  private toolStateSnapshotSeqByCallId = new Map<string, number>();
   private started = false;
   private stepIndex = 0;
   private terminalEndEmitted = false;
@@ -829,6 +850,15 @@ export class CodexAdapter implements AgentEventAdapter {
       case 'item.started': {
         return this.handleItemStarted(raw.item);
       }
+      case 'item.updated': {
+        return this.handleItemUpdated(raw.item);
+      }
+      case 'item.agent_message.delta': {
+        return this.handleAgentMessageDelta(raw);
+      }
+      case 'item.command_execution.output_delta': {
+        return this.handleCommandOutputDelta(raw);
+      }
       case 'item.completed': {
         return this.handleItemCompleted(raw.item);
       }
@@ -846,15 +876,18 @@ export class CodexAdapter implements AgentEventAdapter {
     if (this.terminalEndEmitted || this.terminalErrorEmitted) return [];
 
     this.terminalEndEmitted = true;
+    const hadPendingEmptyTurn = this.pendingTurnStartBoundary;
+    this.pendingTurnStartBoundary = false;
     const model = getEventModel(raw) || this.currentModel;
     if (model) this.currentModel = model;
 
     const cumulativeUsage = toCodexUsageData(raw.usage);
     const usage = toTurnUsageFromCumulative(cumulativeUsage, this.lastCumulativeUsage);
     if (cumulativeUsage) this.lastCumulativeUsage = cumulativeUsage;
-    const events = this.drainPendingToolEndEvents();
+    const interrupted = raw.reason === 'interrupted';
+    const events = this.drainPendingToolEndEvents(interrupted ? 'interrupted' : 'success');
 
-    if (usage || model) {
+    if (!hadPendingEmptyTurn && (usage || model)) {
       const data: StepCompleteData = {
         ...(model ? { model } : {}),
         phase: 'turn_metadata',
@@ -865,11 +898,13 @@ export class CodexAdapter implements AgentEventAdapter {
       events.push(this.makeEvent('step_complete', data));
     }
 
-    if (this.started) {
+    if (this.started && !hadPendingEmptyTurn) {
       events.push(this.makeEvent('stream_end', {}));
       events.push(this.makeEvent('visible_output_end', {}));
+    } else if (this.started) {
+      events.push(this.makeEvent('visible_output_end', {}));
     }
-    events.push(this.makeEvent('agent_runtime_end', {}));
+    events.push(this.makeEvent('agent_runtime_end', interrupted ? { reason: 'interrupted' } : {}));
 
     return events;
   }
@@ -895,9 +930,10 @@ export class CodexAdapter implements AgentEventAdapter {
       stderr,
     };
 
-    const events: HeterogeneousAgentEvent[] = this.started
-      ? [this.makeEvent('stream_end', {}), this.makeEvent('visible_output_end', {})]
-      : [];
+    const events = this.drainPendingToolEndEvents();
+    if (this.started) {
+      events.push(this.makeEvent('stream_end', {}), this.makeEvent('visible_output_end', {}));
+    }
     events.push(this.makeEvent('error', data));
 
     return events;
@@ -925,6 +961,8 @@ export class CodexAdapter implements AgentEventAdapter {
     this.currentAgentMessageItemId = undefined;
     this.hasTextInCurrentStep = false;
     this.hasToolActivitySinceAgentMessage = false;
+    this.streamedAgentMessageText.clear();
+    this.streamedCommandOutput.clear();
     this.resetStepToolCalls();
 
     if (!this.started) {
@@ -933,10 +971,8 @@ export class CodexAdapter implements AgentEventAdapter {
     }
 
     this.stepIndex += 1;
-    return [
-      this.makeEvent('stream_end', {}),
-      this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })),
-    ];
+    this.pendingTurnStartBoundary = true;
+    return [this.makeEvent('stream_end', {})];
   }
 
   private handleItemStarted(item: any): HeterogeneousAgentEvent[] {
@@ -948,7 +984,105 @@ export class CodexAdapter implements AgentEventAdapter {
     this.pendingToolCalls.add(tool.id);
     this.pendingToolCallStepIndex.set(tool.id, this.stepIndex);
 
-    return this.emitToolChunk(tool);
+    const events = [...this.consumePendingTurnStart(), ...this.emitToolChunk(tool)];
+    if (isTodoListItem(item)) {
+      this.pendingTodoToolCalls.add(tool.id);
+      events.push(this.createToolStateEvent(item.id, synthesizeTodoListPluginState(item)));
+    }
+
+    return events;
+  }
+
+  private handleItemUpdated(item: any): HeterogeneousAgentEvent[] {
+    if (!item?.id || !this.pendingToolCalls.has(item.id)) return [];
+
+    if (isTodoListItem(item)) {
+      return [this.createToolStateEvent(item.id, synthesizeTodoListPluginState(item))];
+    }
+    if (isFileChangeItem(item)) {
+      const pluginState = synthesizeFileChangePluginState(item);
+      return pluginState ? [this.createToolStateEvent(item.id, pluginState)] : [];
+    }
+
+    return [];
+  }
+
+  private handleAgentMessageDelta(raw: any): HeterogeneousAgentEvent[] {
+    const itemId = getStringValue(raw?.item_id) || getStringValue(raw?.itemId);
+    const delta = typeof raw?.delta === 'string' ? raw.delta : undefined;
+    if (!itemId || !delta) return [];
+
+    this.streamedAgentMessageText.set(
+      itemId,
+      `${this.streamedAgentMessageText.get(itemId) ?? ''}${delta}`,
+    );
+    return this.handleAgentMessageContent(itemId, delta);
+  }
+
+  private handleAgentMessageContent(itemId: string | undefined, content: string) {
+    const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
+    const shouldStartNewStep =
+      this.hasToolActivitySinceAgentMessage &&
+      !!itemId &&
+      itemId !== this.currentAgentMessageItemId;
+
+    if (shouldStartNewStep) {
+      this.stepIndex += 1;
+      this.resetStepToolCalls();
+      this.hasTextInCurrentStep = false;
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
+    }
+
+    const chunk =
+      this.hasTextInCurrentStep && itemId !== this.currentAgentMessageItemId
+        ? `\n\n${content}`
+        : content;
+
+    this.currentAgentMessageItemId = itemId;
+    this.hasTextInCurrentStep = true;
+    this.hasToolActivitySinceAgentMessage = false;
+    events.push(
+      this.makeEvent('stream_chunk', {
+        chunkType: 'text',
+        content: chunk,
+      }),
+    );
+
+    return events;
+  }
+
+  private handleCommandOutputDelta(raw: any): HeterogeneousAgentEvent[] {
+    const itemId = getStringValue(raw?.item_id) || getStringValue(raw?.itemId);
+    const delta = typeof raw?.delta === 'string' ? raw.delta : undefined;
+    if (!itemId || !delta || !this.pendingToolCalls.has(itemId)) return [];
+
+    const previous = this.streamedCommandOutput.get(itemId) ?? {
+      prefix: '',
+      totalLength: 0,
+      truncated: false,
+    };
+    const remaining = Math.max(0, CODEX_COMMAND_OUTPUT_MAX_LENGTH - previous.prefix.length);
+    let appended = delta.slice(0, remaining);
+    const lastCharCode = appended.charCodeAt(appended.length - 1);
+    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) appended = appended.slice(0, -1);
+
+    const prefix = previous.prefix + appended;
+    const totalLength = previous.totalLength + delta.length;
+    const truncated = totalLength > prefix.length;
+    this.streamedCommandOutput.set(itemId, { prefix, totalLength, truncated });
+    if (previous.truncated) return [];
+
+    const snapshot = truncated
+      ? `${prefix}\n\n[Output truncated: ${totalLength - prefix.length} characters omitted. Original length: ${totalLength} characters]`
+      : prefix;
+    return [
+      this.createToolStateEvent(itemId, {
+        isBackground: false,
+        output: snapshot,
+        stdout: snapshot,
+      }),
+    ];
   }
 
   private handleItemCompleted(item: any): HeterogeneousAgentEvent[] {
@@ -957,41 +1091,34 @@ export class CodexAdapter implements AgentEventAdapter {
     if (item.type === 'agent_message') {
       if (!item.text) return [];
 
-      const events: HeterogeneousAgentEvent[] = [];
-      const shouldStartNewStep =
-        this.hasToolActivitySinceAgentMessage &&
-        !!item.id &&
-        item.id !== this.currentAgentMessageItemId;
-
-      if (shouldStartNewStep) {
-        this.stepIndex += 1;
-        this.resetStepToolCalls();
-        this.hasTextInCurrentStep = false;
-        events.push(this.makeEvent('stream_end', {}));
-        events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
+      const streamedText = item.id ? this.streamedAgentMessageText.get(item.id) : undefined;
+      if (item.id) this.streamedAgentMessageText.delete(item.id);
+      if (streamedText !== undefined) {
+        const remainingText = item.text.startsWith(streamedText)
+          ? item.text.slice(streamedText.length)
+          : '';
+        return remainingText ? this.handleAgentMessageContent(item.id, remainingText) : [];
       }
 
-      const content =
-        this.hasTextInCurrentStep && item.id !== this.currentAgentMessageItemId
-          ? `\n\n${item.text}`
-          : item.text;
-
-      this.currentAgentMessageItemId = item.id;
-      this.hasTextInCurrentStep = true;
-      this.hasToolActivitySinceAgentMessage = false;
-      events.push(
-        this.makeEvent('stream_chunk', {
-          chunkType: 'text',
-          content,
-        }),
-      );
-
-      return events;
+      return this.handleAgentMessageContent(item.id, item.text);
     }
 
     if (!item.id) return [];
+    this.streamedCommandOutput.delete(item.id);
 
-    const events: HeterogeneousAgentEvent[] = [];
+    // Codex emits the same status-less todo completion before both a successful
+    // turn completion and an interrupted process exit. Keep it pending until
+    // the turn outcome tells us whether to preserve or clear the Todo state.
+    if (
+      isTodoListItem(item) &&
+      item.status === undefined &&
+      this.pendingTodoToolCalls.has(item.id)
+    ) {
+      this.deferredTodoCompletions.set(item.id, item);
+      return this.consumePendingTurnStart();
+    }
+
+    const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
     const pendingStepIndex = this.pendingToolCallStepIndex.get(item.id);
     const belongsToCurrentStep =
       pendingStepIndex === undefined || pendingStepIndex === this.stepIndex;
@@ -1004,14 +1131,25 @@ export class CodexAdapter implements AgentEventAdapter {
 
     this.pendingToolCalls.delete(item.id);
     this.pendingToolCallStepIndex.delete(item.id);
+    this.pendingTodoToolCalls.delete(item.id);
+    this.deferredTodoCompletions.delete(item.id);
     if (belongsToCurrentStep) this.hasToolActivitySinceAgentMessage = true;
-    const resultData = getToolResultData(item as CodexToolItem);
-    const isSuccess = isSuccessfulToolCompletion(item as CodexToolItem);
-    events.push(this.makeEvent('tool_result', resultData));
+    events.push(...this.createToolCompletionEvents(item as CodexToolItem, toolPayload));
+
+    return events;
+  }
+
+  private createToolCompletionEvents(
+    item: CodexToolItem,
+    toolPayload = toToolPayload(item),
+  ): HeterogeneousAgentEvent[] {
+    const resultData = getToolResultData(item);
+    const isSuccess = isSuccessfulToolCompletion(item);
     // Align tool_end with the server/gateway shape — carry the `{ toolCalling }`
     // payload + a `BuiltinToolResult`-shaped `result` so renderer `onAfterCall`
     // hooks resolve the executor and observe the result, identically to server runs.
-    events.push(
+    return [
+      this.makeEvent('tool_result', resultData),
       this.makeEvent('tool_end', {
         isSuccess,
         payload: { toolCalling: toolPayload },
@@ -1022,22 +1160,61 @@ export class CodexAdapter implements AgentEventAdapter {
         },
         toolCallId: item.id,
       }),
-    );
+    ];
+  }
 
+  private drainPendingToolEndEvents(
+    terminalReason: 'interrupted' | 'success' = 'interrupted',
+  ): HeterogeneousAgentEvent[] {
+    const events = [...this.pendingToolCalls].flatMap((toolCallId) => {
+      const deferredTodoCompletion = this.deferredTodoCompletions.get(toolCallId);
+      if (terminalReason === 'success' && deferredTodoCompletion) {
+        return this.createToolCompletionEvents(deferredTodoCompletion);
+      }
+
+      const toolEnd = this.makeEvent('tool_end', {
+        isSuccess: false,
+        toolCallId,
+      });
+      if (!this.pendingTodoToolCalls.has(toolCallId)) return [toolEnd];
+
+      // A pending Todo has no provider item.completed payload to supersede its
+      // live processing snapshot. Emit an explicit terminal clear before end
+      // so cancellation, process interruption, and truncated streams cannot
+      // leave TodoProgress stuck forever.
+      return [
+        this.makeEvent('tool_result', {
+          content: 'Todo list update interrupted.',
+          isError: true,
+          pluginState: createTodoListPluginState([]),
+          toolCallId,
+        } satisfies ToolResultData),
+        toolEnd,
+      ];
+    });
+
+    this.pendingTodoToolCalls.clear();
+    this.pendingToolCalls.clear();
+    this.pendingToolCallStepIndex.clear();
+    this.deferredTodoCompletions.clear();
+    this.streamedCommandOutput.clear();
     return events;
   }
 
-  private drainPendingToolEndEvents(): HeterogeneousAgentEvent[] {
-    const events = [...this.pendingToolCalls].map((toolCallId) =>
-      this.makeEvent('tool_end', {
-        isSuccess: false,
-        toolCallId,
-      }),
-    );
+  private createToolStateEvent(
+    toolCallId: string,
+    pluginState: Record<string, unknown>,
+  ): HeterogeneousAgentEvent {
+    const snapshotSeq = (this.toolStateSnapshotSeqByCallId.get(toolCallId) ?? 0) + 1;
+    this.toolStateSnapshotSeqByCallId.set(toolCallId, snapshotSeq);
 
-    this.pendingToolCalls.clear();
-    this.pendingToolCallStepIndex.clear();
-    return events;
+    return this.makeEvent('stream_chunk', {
+      chunkType: 'tool_state',
+      pluginState,
+      snapshotMode: 'replace',
+      snapshotSeq,
+      toolCallId,
+    } satisfies ToolStateChunkData);
   }
 
   private emitToolChunk(tool: ToolCallPayload): HeterogeneousAgentEvent[] {
@@ -1060,6 +1237,12 @@ export class CodexAdapter implements AgentEventAdapter {
   private resetStepToolCalls(): void {
     this.stepToolCalls = [];
     this.stepToolCallIds.clear();
+  }
+
+  private consumePendingTurnStart(): HeterogeneousAgentEvent[] {
+    if (!this.pendingTurnStartBoundary) return [];
+    this.pendingTurnStartBoundary = false;
+    return [this.makeEvent('stream_start', this.getStreamStartData({ newStep: true }))];
   }
 
   private getStreamStartData(extra: Record<string, unknown> = {}): StreamStartData {

@@ -10,16 +10,19 @@ import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
-import type {
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  TracePayload,
-  UIChatMessage,
+import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
+import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
+import {
+  ChatErrorType,
+  getDisabledPluginIds,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
+  type TracePayload,
+  TraceTagMap,
+  type UIChatMessage,
 } from '@lobechat/types';
-import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
@@ -30,7 +33,7 @@ import {
   agentChatConfigSelectors,
   agentSelectors,
 } from '@/store/agent/selectors';
-import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -60,7 +63,6 @@ import {
 } from './mecha';
 import { type FetchOptions } from './types';
 
-const defaultProvider = ModelProvider.OpenAI;
 const providersWithDeploymentName = new Set<string>([
   ModelProvider.Azure,
   ModelProvider.AzureAI,
@@ -70,7 +72,7 @@ const providersWithDeploymentName = new Set<string>([
   ModelProvider.Volcengine,
   ModelProvider.VolcengineCodingPlan,
 ]);
-interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
+export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
   groupId?: string;
   messages: UIChatMessage[];
@@ -80,6 +82,11 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
    */
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
+}
+
+export interface PreparedAssistantMessageContext {
+  options: FetchOptions;
+  params: Partial<ChatStreamPayload>;
 }
 
 type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
@@ -125,7 +132,7 @@ class ChatService {
     return targetAgentId || undefined;
   };
 
-  createAssistantMessage = async (
+  buildAssistantMessageContext = async (
     {
       messages,
       agentId,
@@ -135,7 +142,7 @@ class ChatService {
       ...params
     }: GetChatCompletionPayload,
     options?: FetchOptions,
-  ) => {
+  ): Promise<PreparedAssistantMessageContext> => {
     const payload = merge(
       {
         model: DEFAULT_AGENT_CONFIG.model,
@@ -285,6 +292,9 @@ class ChatService {
       agentBuilderContext,
       agentDocuments,
       agentId: targetAgentId,
+      // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
+      // is already pinned-only (resolved upstream in agentConfigResolver).
+      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
       enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
@@ -312,14 +322,36 @@ class ChatService {
 
     // ============  3. process extend params   ============ //
 
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous resolution below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
+
     const extendParams = resolveModelExtendParams({
       chatConfig,
       model: payload.model,
       provider: payload.provider!,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
     });
 
-    return this.getChatCompletion(
-      {
+    // For models governed by the reasoning extend-params family the user-level
+    // model-instance config is the single source of truth, so drop the legacy
+    // per-agent Advanced `params.reasoning_effort` — otherwise a stale agent
+    // value would leak into the payload whenever no instance value overlays it.
+    if (
+      aiModelSelectors.isModelHasReasoningExtendParams(
+        payload.model,
+        payload.provider!,
+      )(getAiInfraStoreState())
+    ) {
+      delete (params as Record<string, unknown>).reasoning_effort;
+    }
+
+    return {
+      options: { ...options, agentId: targetAgentId, topicId },
+      params: {
         ...params,
         ...extendParams,
         enabledSearch: searchConfig.enabledSearch && searchConfig.useModelSearch ? true : undefined,
@@ -328,8 +360,13 @@ class ChatService {
         stream: chatConfig.enableStreaming !== false,
         tools,
       },
-      { ...options, agentId: targetAgentId, topicId },
-    );
+    };
+  };
+
+  createAssistantMessage = async (params: GetChatCompletionPayload, options?: FetchOptions) => {
+    const prepared = await this.buildAssistantMessageContext(params, options);
+
+    return this.getChatCompletion(prepared.params, prepared.options);
   };
 
   createAssistantMessageStream = async ({
@@ -355,9 +392,11 @@ class ChatService {
       metadata,
       signal: abortController?.signal,
       stepContext,
-      trace: this.mapTrace(trace, TraceTagMap.Chat),
+      trace: this.mapChatTrace(trace),
     });
   };
+
+  mapChatTrace = (trace?: TracePayload): TracePayload => this.mapTrace(trace, TraceTagMap.Chat);
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
     const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};

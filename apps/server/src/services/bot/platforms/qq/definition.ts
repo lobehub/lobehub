@@ -1,3 +1,5 @@
+import { channelDocUrl } from '@lobechat/const';
+
 import type { PlatformDefinition } from '../types';
 import { QQClientFactory } from './client';
 import { DEFAULT_QQ_CONNECTION_MODE } from './const';
@@ -10,7 +12,7 @@ export const qq: PlatformDefinition = {
   description: 'Connect a QQ bot',
   documentation: {
     portalUrl: 'https://q.qq.com/',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/qq',
+    setupGuideUrl: channelDocUrl('qq'),
   },
   schema,
   supportsMarkdown: false,

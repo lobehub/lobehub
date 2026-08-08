@@ -10,10 +10,12 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import Loading from '@/components/Loading/BrandTextLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
+import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
+import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
@@ -23,25 +25,22 @@ import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
-import NavPanel from '@/features/NavPanel';
+import NavPanelShell from '@/features/NavPanel/Shell';
+import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
-import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
-import DesktopLayoutContainer from './DesktopLayoutContainer';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
-const GlobalApprovalNotification = dynamic(
-  () => import('@/features/GlobalApprovalNotification'),
-);
+const GlobalApprovalNotification = dynamic(() => import('@/features/GlobalApprovalNotification'));
 
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
@@ -56,6 +55,7 @@ const Layout: FC = () => {
           {isDesktop && <DesktopAutoOidcOnFirstOpen />}
           {isDesktop && <DesktopNavigationBridge />}
           {isDesktop && <DesktopFileMenuBridge />}
+          {isDesktop && <DesktopBrowserGatewayBridge />}
           {isDesktop && <OverlaySnapshotPublisher />}
           {isDesktop && <OverlayCaptureUploader />}
           {isDesktop && <OverlayMessageDispatcher />}
@@ -78,12 +78,12 @@ const Layout: FC = () => {
                   : '100%'
             }
           >
-            <NavPanel />
+            <NavPanelShell />
             <DesktopLayoutContainer>
               <DesktopHomeLayout>
                 <DesktopHome />
               </DesktopHomeLayout>
-              <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
+              <Suspense fallback={<ContentLoading />}>
                 <Outlet />
               </Suspense>
             </DesktopLayoutContainer>

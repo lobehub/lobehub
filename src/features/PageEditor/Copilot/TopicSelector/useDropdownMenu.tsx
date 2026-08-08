@@ -2,11 +2,10 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import {
-  CheckCircle2,
-  Circle,
+  Archive,
+  ArchiveRestore,
   ExternalLink,
   Hash,
   Link2,
@@ -24,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -53,7 +53,7 @@ export const useDropdownMenu = ({
   topicTitle,
 }: UseDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'topic']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -83,7 +83,7 @@ export const useDropdownMenu = ({
 
   const isCompleted = status === 'completed';
   const handleOpenShareModal = useCallback(() => {
-    openShareModal({ context: { threadId: null, topicId } });
+    void openShareModal({ context: { threadId: null, topicId } });
   }, [topicId]);
 
   return useCallback(
@@ -91,7 +91,7 @@ export const useDropdownMenu = ({
       [
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={isCompleted ? Circle : CheckCircle2} />,
+          icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
           key: 'markCompleted',
           label: isCompleted
             ? t('actions.unmarkCompleted', { ns: 'topic' })
@@ -103,6 +103,7 @@ export const useDropdownMenu = ({
               markTopicCompleted(topicId);
             }
           },
+          sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
         },
         {
           type: 'divider' as const,
@@ -117,6 +118,7 @@ export const useDropdownMenu = ({
           onClick: () => {
             favoriteTopic(topicId, !fav);
           },
+          sfSymbol: fav ? 'star.slash' : 'star',
         },
         {
           type: 'divider' as const,
@@ -129,6 +131,7 @@ export const useDropdownMenu = ({
           onClick: () => {
             autoRenameTopicTitle(topicId);
           },
+          sfSymbol: 'wand.and.stars',
         },
         {
           disabled: !canEditTopic,
@@ -145,6 +148,7 @@ export const useDropdownMenu = ({
               title: t('renameModal.title', { ns: 'topic' }),
             });
           },
+          sfSymbol: 'pencil',
         },
         {
           type: 'divider' as const,
@@ -189,7 +193,7 @@ export const useDropdownMenu = ({
           label: t('actions.copySessionId', { ns: 'topic' }),
           onClick: () => {
             void navigator.clipboard.writeText(topicId);
-            message.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
+            toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
           },
         },
         {
@@ -201,7 +205,7 @@ export const useDropdownMenu = ({
             if (!agentId) return;
             const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(agentId, topicId)}`;
             void navigator.clipboard.writeText(url);
-            message.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
+            toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },
         },
         {
@@ -222,6 +226,7 @@ export const useDropdownMenu = ({
           key: 'share',
           label: t('share'),
           onClick: handleOpenShareModal,
+          sfSymbol: 'square.and.arrow.up',
         },
         {
           type: 'divider' as const,
@@ -233,19 +238,16 @@ export const useDropdownMenu = ({
           key: 'delete',
           label: t('delete'),
           onClick: () => {
-            confirmModal({
-              cancelText: t('cancel'),
-              content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
-              okButtonProps: { danger: true },
-              okText: t('delete'),
-              onOk: async () => {
-                await removeTopic(topicId);
+            void confirmRemoveTopic({
+              onConfirm: async (removeFiles) => {
+                await removeTopic(topicId, removeFiles);
                 onDelete?.(topicId);
                 onClose();
               },
-              title: t('delete'),
+              topicIds: [topicId],
             });
           },
+          sfSymbol: 'trash',
         },
       ].filter(Boolean) as MenuProps['items'],
     [
@@ -262,7 +264,6 @@ export const useDropdownMenu = ({
       handleOpenShareModal,
       isCompleted,
       markTopicCompleted,
-      message,
       navigate,
       onClose,
       onDelete,

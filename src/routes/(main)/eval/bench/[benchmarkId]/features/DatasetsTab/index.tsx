@@ -1,8 +1,8 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Card, Skeleton } from 'antd';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Card, Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -53,7 +53,7 @@ interface DatasetsTabProps {
 const DatasetsTab = memo<DatasetsTabProps>(
   ({ benchmarkId, datasets, loading: datasetsLoading, onImport, onRefresh }) => {
     const { t } = useTranslation('eval');
-    const { message } = App.useApp();
+
     const [expandedDs, setExpandedDs] = useState<string | null>(null);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 5 });
     const [search, setSearch] = useState('');
@@ -160,17 +160,17 @@ const DatasetsTab = memo<DatasetsTabProps>(
           onOk: async () => {
             try {
               await agentEvalService.deleteTestCase(testCase.id);
-              message.success(t('testCase.delete.success'));
+              toast.success(t('testCase.delete.success'));
               if (expandedDs) await refreshTestCases(expandedDs);
               onRefresh();
             } catch {
-              message.error(t('testCase.delete.error'));
+              toast.error(t('testCase.delete.error'));
             }
           },
           title: t('common.delete'),
         });
       },
-      [expandedDs, message, onRefresh, refreshTestCases, t],
+      [expandedDs, onRefresh, refreshTestCases, t],
     );
 
     return (
@@ -223,6 +223,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     total={isExpanded ? total : 0}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                     onExpand={() => handleExpand(ds.id)}
                     onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
@@ -235,7 +236,6 @@ const DatasetsTab = memo<DatasetsTabProps>(
                         onSuccess: handleRefreshTestCases,
                       })
                     }
-                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}

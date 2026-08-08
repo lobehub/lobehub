@@ -26,6 +26,7 @@ import type {
 import { useCallback, useMemo } from 'react';
 
 import { useBusinessModelPricing } from '@/business/client/hooks/useBusinessModelPricing';
+import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModelRating';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useGlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
@@ -303,6 +304,12 @@ export const useModelDetailPanel = ({
   const expandedKeys = useGlobalStore(systemStatusSelectors.modelDetailPanelExpandedKeys);
   const updateExpandedKeys = useGlobalStore((s) => s.updateModelDetailPanelExpandedKeys);
   const applyBusinessModelPricing = useBusinessModelPricing();
+  const applyBusinessModelRating = useBusinessModelRating();
+
+  const rating = useMemo(
+    () => applyBusinessModelRating({ model: modelId, provider }),
+    [applyBusinessModelRating, modelId, provider],
+  );
 
   const pricing = model?.pricing;
   const displayPricing = useMemo(
@@ -429,5 +436,6 @@ export const useModelDetailPanel = ({
     isPricingExpanded: expandedKeys.includes('pricing'),
     model,
     pricingGroups,
+    rating,
   };
 };

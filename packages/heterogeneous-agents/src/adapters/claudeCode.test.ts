@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClaudeCodeAdapter } from './claudeCode';
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 
 describe('ClaudeCodeAdapter', () => {
   describe('lifecycle', () => {
@@ -16,6 +16,32 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].type).toBe('stream_start');
       expect(events[0].data.model).toBe('claude-sonnet-4-6');
       expect(adapter.sessionId).toBe('sess_123');
+    });
+
+    // `system init` beta-tags the id; every later event reports it clean. The
+    // renderer stamps the assistant from this event, so the tag must not leak.
+    it('strips the beta marker from the init model id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus-4-8[1m]',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus-4-8');
+    });
+
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
     });
 
     it('emits visible_output_end before agent_runtime_end on success result', () => {
@@ -35,6 +61,186 @@ describe('ClaudeCodeAdapter', () => {
       const events = adapter.adapt({ is_error: true, result: 'boom', type: 'result' });
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
       expect(events[2].data.message).toBe('boom');
+      // agentType marks the payload so the executor persists the WHOLE object
+      // as the error body instead of flattening it to a generic message.
+      expect(events[2].data.agentType).toBe('claude-code');
+    });
+
+    it('surfaces the streamed API error text when an error result carries no message', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const apiError =
+        'API Error: Connection closed mid-response. The response above may be incomplete.';
+
+      adapter.adapt({ session_id: 'sess_net', subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: { content: [{ text: apiError, type: 'text' }], id: 'msg_1' },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        duration_ms: 157_000,
+        is_error: true,
+        num_turns: 2,
+        session_id: 'sess_net',
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      // The streamed line is the only reason available, so it must become the
+      // message — and a dropped connection is transient, so it earns the
+      // retryable `overloaded` code rather than the opaque generic card.
+      expect(errorEvent.data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+        error: apiError,
+        message: apiError,
+      });
+    });
+
+    it('keeps the diagnostic details pane for failures with no recognizable reason', () => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ session_id: 'sess_x', subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        duration_ms: 157_000,
+        is_error: true,
+        num_turns: 2,
+        session_id: 'sess_x',
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'error_during_execution',
+        details: {
+          durationMs: 157_000,
+          numTurns: 2,
+          sessionId: 'sess_x',
+          subtype: 'error_during_execution',
+        },
+      });
+    });
+
+    it('describes error_max_turns results that carry no message', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        num_turns: 50,
+        subtype: 'error_max_turns',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({
+        code: 'error_max_turns',
+        details: { numTurns: 50, subtype: 'error_max_turns' },
+        message: 'Claude Code stopped after reaching its maximum number of turns for this run.',
+      });
+    });
+
+    it('classifies auth failures from streamed API error text when the result is empty', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const apiError =
+        'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: { content: [{ text: apiError, type: 'text' }], id: 'msg_1' },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({ code: 'auth_required', stderr: apiError });
+    });
+
+    it('surfaces the reason CC reports in the result `errors` array', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const reason = 'No conversation found with session ID: 4f3a6a4a-2ac2-4a8e-b513-5cff081f3ae6';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        duration_ms: 0,
+        errors: [reason],
+        is_error: true,
+        num_turns: 0,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data.message).toBe(reason);
+    });
+
+    it('does NOT let a stale streamed API error leak into the next run', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [{ text: 'API Error: Connection closed mid-response.', type: 'text' }],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({ is_error: true, subtype: 'error_during_execution', type: 'result' });
+
+      // Next turn on the same adapter fails without any streamed API error.
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.data.message).toBe(
+        'Claude Code hit an error mid-run and exited without reporting a reason.',
+      );
+      expect(errorEvent.data.details?.lastApiError).toBeUndefined();
+    });
+
+    it('keeps runtime open until transport close in SDK mode', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end']);
+    });
+
+    it('emits stream_retry for Claude Code canary system api_retry 529 events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ model: 'claude-sonnet-4-6', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        api_error_status: 529,
+        attempt: 6,
+        delay_ms: 1000,
+        error: {
+          error: { message: 'Overloaded', type: 'overloaded_error' },
+          type: 'error',
+        },
+        max_attempts: 10,
+        subtype: 'api_retry',
+        type: 'system',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_retry']);
+      expect(events[0].data).toMatchObject({
+        agentType: 'claude-code',
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'claude-code',
+      });
     });
 
     it('classifies auth failures from failed result events', () => {
@@ -56,6 +262,25 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[2].data.message).toBe(
         'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
       );
+    });
+
+    it('classifies a profile with no login at all ("Not logged in · Please run /login") as auth_required', () => {
+      // CC emits this phrasing when the resolved profile (e.g. an isolated
+      // CLAUDE_CONFIG_DIR injected by account routing) has no credentials —
+      // it must render the auth guide card, not the generic error card.
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Not logged in · Please run /login';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'auth_required',
+        stderr: rawError,
+      });
     });
 
     it('classifies overloaded failures from api_error_status 529 result events', () => {
@@ -232,8 +457,9 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       // CC stamps a rate_limit_info onto an *allowed* request — it carries the
       // rolling-window metadata (resetsAt / rateLimitType) even though nothing
-      // was rejected. A later ECONNRESET must surface as a generic error, NOT
-      // inherit this window and render a bogus "usage limit reached" guide.
+      // was rejected. A later ECONNRESET must be classified on its own merits
+      // (a transient transport failure) and must NOT inherit this window and
+      // render a bogus "usage limit reached, resets at X" guide.
       const rawError = 'API Error: Unable to connect to API (ECONNRESET)';
 
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -255,9 +481,237 @@ describe('ClaudeCodeAdapter', () => {
       });
 
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
-      expect(events[2].data).toMatchObject({ error: rawError, message: rawError });
+      expect(events[2].data).toMatchObject({
+        code: 'overloaded',
+        error: rawError,
+        message: rawError,
+      });
       expect(events[2].data).not.toHaveProperty('code', 'rate_limit');
       expect(events[2].data).not.toHaveProperty('rateLimitInfo');
+    });
+
+    // Every case below is taken from a real recorded trace under
+    // `<appStorage>/heteroAgent/tracing/claude-code`, where 53% of all
+    // `is_error` results were landing in the generic fallback card.
+    it.each([
+      ['API Error: Unable to connect to API (ECONNRESET)', null],
+      ['API Error: Unable to connect to API (ConnectionRefused)', null],
+      ['API Error: Connection closed mid-response. The response above may be incomplete.', null],
+      ['API Error: The socket connection was closed unexpectedly.', null],
+      ['API Error: Stream idle timeout - partial response received', null],
+      ['API Error: Response stalled mid-stream. The response above may be incomplete.', null],
+      ['Request timed out', null],
+      ['API Error: 500 Internal server error. This is a server-side issue.', 500],
+    ])('classifies transport/5xx failure %j as overloaded (retryable)', (rawError, status) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: status,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'overloaded', message: rawError });
+    });
+
+    it.each([
+      "You've hit your session limit · resets 6:30pm (Asia/Shanghai)",
+      "You've hit your weekly limit · resets Jul 3 at 1pm (Asia/Shanghai)",
+      "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models.",
+      'API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，2026-06-19 22:00:00 后可继续使用。]',
+    ])('classifies user-quota wording %j as rate_limit without a structured event', (rawError) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      // No rate_limit_event at all: the 429 alone previously routed these real
+      // quota exhaustions to the "server is busy, retry" guide.
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'rate_limit', message: rawError });
+    });
+
+    it('keeps an auth failure that mentions a transport symptom as auth_required', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // Real trace: the transport wording would otherwise win and render a
+      // useless retry card for a credential problem.
+      const rawError =
+        'Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly.';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 401,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'auth_required' });
+    });
+
+    it.each(['aborted_streaming', 'aborted_tools'])(
+      'terminates a stopped run (%s) as interrupted, NOT as an error',
+      (terminalReason) => {
+        const adapter = new ClaudeCodeAdapter();
+
+        adapter.adapt({ subtype: 'init', type: 'system' });
+        // Real shape of a user-initiated stop: is_error, no result text, only
+        // CC's internal diagnostic in `errors`, and the process exits 0.
+        const events = adapter.adapt({
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          num_turns: 4,
+          subtype: 'error_during_execution',
+          terminal_reason: terminalReason,
+          type: 'result',
+        });
+
+        const terminal = events.at(-1)!;
+        // A stop is an outcome, not a fault: no error terminal means no red
+        // card, no `failed` topic status.
+        expect(events.some((e) => e.type === 'error')).toBe(false);
+        expect(terminal.type).toBe('agent_runtime_end');
+        expect(terminal.data).toMatchObject({
+          kind: 'aborted',
+          reason: 'interrupted',
+          terminalReason,
+        });
+        expect(JSON.stringify(terminal.data)).not.toContain('ede_diagnostic');
+      },
+    );
+
+    it('does not fabricate a terminal for a stop under the on-transport-close strategy', () => {
+      // The SDK transport supplies its own terminal when the transport closes;
+      // emitting one here too would double-terminate the run.
+      const adapter = new ClaudeCodeSdkAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+        is_error: true,
+        subtype: 'error_during_execution',
+        terminal_reason: 'aborted_streaming',
+        type: 'result',
+      });
+
+      expect(events.some((e) => e.type === 'error' || e.type === 'agent_runtime_end')).toBe(false);
+    });
+
+    it('keeps a real reason reported during an aborted wind-down', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've hit your session limit · resets 6:30pm (Asia/Shanghai)";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        terminal_reason: 'aborted_tools',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'rate_limit', message: rawError });
+    });
+
+    it('still surfaces a non-diagnostic errors[] entry (stale --resume id)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const resumeError = 'No conversation found with session ID: 0a8e28f6-5ba2-4828-900b-069d77';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        errors: [resumeError],
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'resume_thread_not_found',
+        message: resumeError,
+      });
+    });
+
+    // The long tail has no dedicated guide card, so the value is the taxonomy
+    // kind: it keeps these out of the `agent_failed` catch-all.
+    it.each([
+      ['Claude Fable 5 is currently unavailable. Learn more: …', 'model_unavailable'],
+      ["There's an issue with the selected model (claude-fable-5).", 'model_unavailable'],
+      ['Failed to decode image: The image format Gif is not supported', 'unsupported_attachment'],
+      [
+        'API Error: 400 messages.6.content.2.server_tool_use.id: String should match pattern',
+        'invalid_request',
+      ],
+    ])('classifies tail failure %j as %s', (rawError, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: kind,
+        details: { kind },
+        message: rawError,
+      });
+    });
+
+    it.each([
+      ['API Error: Unable to connect to API (ECONNRESET)', null, 'network_drop'],
+      [
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited',
+        429,
+        'server_throttle',
+      ],
+      ['API Error: 529 Overloaded.', 529, 'server_overloaded'],
+    ])('tags %j with taxonomy kind %s under one overloaded guide code', (msg, status, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: status,
+        is_error: true,
+        result: msg,
+        type: 'result',
+      });
+
+      // One guide code (so auto-retry behavior is unchanged), three kinds.
+      expect(events.at(-1)!.data).toMatchObject({ code: 'overloaded', details: { kind } });
+    });
+
+    it('separates a credit limit from a plan window under the rate_limit guide', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've reached your Fable 5 limit. Run /usage-credits to continue.";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'rate_limit',
+        details: { kind: 'credit_limit' },
+      });
+    });
+
+    it('names error_max_turns as a lifecycle outcome, not the catch-all', () => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_max_turns',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ details: { kind: 'max_turns' } });
     });
 
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
@@ -540,6 +994,197 @@ describe('ClaudeCodeAdapter', () => {
       const result = events.find((e) => e.type === 'tool_result');
       expect(result!.data.isError).toBe(true);
     });
+
+    it('preserves structured WebSearch sources alongside the text fallback', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const content = 'Web search results for query: "TradingView copper futures symbol ticker"';
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'ws1',
+              input: { query: 'TradingView copper futures symbol ticker' },
+              name: 'WebSearch',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content, tool_use_id: 'ws1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          durationSeconds: 2.938580792,
+          query: 'TradingView copper futures symbol ticker',
+          results: [
+            {
+              hostLogo: 'data:image/png;base64,not-persisted',
+              hostname: 'www.tradingview.com',
+              link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+              snippet: 'The current price of Copper Futures is 6.7190 USD',
+              title: 'HG1! Charts and Quotes - Futures',
+            },
+          ],
+        },
+        type: 'user',
+      });
+
+      const result = events.find((event) => event.type === 'tool_result');
+      const end = events.find((event) => event.type === 'tool_end');
+      const pluginState = {
+        durationSeconds: 2.938580792,
+        query: 'TradingView copper futures symbol ticker',
+        results: [
+          {
+            hostname: 'www.tradingview.com',
+            link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+            snippet: 'The current price of Copper Futures is 6.7190 USD',
+            title: 'HG1! Charts and Quotes - Futures',
+          },
+        ],
+      };
+
+      expect(result?.data).toMatchObject({
+        content,
+        isError: false,
+        pluginState,
+        toolCallId: 'ws1',
+      });
+      expect(end?.data.result).toEqual({ content, state: pluginState, success: true });
+    });
+
+    it('bounds and filters structured WebSearch metadata before persistence', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'ws1', input: { query: 'bounded search' }, name: 'WebSearch', type: 'tool_use' },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const validResults = Array.from({ length: 10 }, (_, index) => ({
+        hostname: index === 0 ? 'trusted.example' : `example-${index}.com`,
+        link: index === 0 ? 'https://evil.example/0' : `https://example.com/${index}`,
+        snippet: index === 0 ? 's'.repeat(3000) : `Snippet ${index}`,
+        title: index === 0 ? '😀'.repeat(400) : `Result ${index}`,
+      }));
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'bounded output', tool_use_id: 'ws1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          durationSeconds: -1,
+          query: ` ${'q'.repeat(600)} `,
+          results: [
+            { link: 'javascript:alert(1)', title: 'Unsafe result' },
+            { link: `https://example.com/${'x'.repeat(2048)}`, title: 'Oversized URL' },
+            ...validResults,
+          ],
+        },
+        type: 'user',
+      });
+
+      const pluginState = events.find((event) => event.type === 'tool_result')?.data.pluginState;
+      expect(pluginState.query).toHaveLength(512);
+      expect(pluginState).not.toHaveProperty('durationSeconds');
+      expect(pluginState.results).toHaveLength(8);
+      expect(pluginState.results[0]).toMatchObject({
+        hostname: 'evil.example',
+        link: 'https://evil.example/0',
+        snippet: 's'.repeat(2048),
+      });
+      expect(pluginState.results[0].title).toHaveLength(512);
+      expect(pluginState.results).not.toContainEqual(
+        expect.objectContaining({ title: 'Unsafe result' }),
+      );
+    });
+
+    it('does not synthesize successful WebSearch state for an error result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'ws1', input: { query: 'failing search' }, name: 'WebSearch', type: 'tool_use' },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Unable to connect to search provider',
+              is_error: true,
+              tool_use_id: 'ws1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        tool_use_result: {
+          isHardFailure: true,
+          query: 'failing search',
+          results: [
+            {
+              link: 'https://example.com/should-not-persist',
+              title: 'Stale result',
+            },
+          ],
+        },
+        type: 'user',
+      });
+
+      const result = events.find((event) => event.type === 'tool_result');
+      const end = events.find((event) => event.type === 'tool_end');
+      expect(result?.data).toMatchObject({
+        content: 'Unable to connect to search provider',
+        isError: true,
+      });
+      expect(result?.data.pluginState).toBeUndefined();
+      expect(end?.data.result).not.toHaveProperty('state');
+    });
+
+    it('ignores structured search-shaped metadata for non-WebSearch tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [{ id: 'read1', input: {}, name: 'Read', type: 'tool_use' }],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'file contents', tool_use_id: 'read1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          query: 'spoofed search',
+          results: [{ link: 'https://example.com', title: 'Should not persist' }],
+        },
+        type: 'user',
+      });
+
+      expect(
+        events.find((event) => event.type === 'tool_result')?.data.pluginState,
+      ).toBeUndefined();
+    });
   });
 
   describe('ToolSearch tool_reference content ()', () => {
@@ -706,9 +1351,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.toolCallId).toBe('r1');
       expect(result!.data.content).toBe('[Image: image/png]');
       expect(result!.data.isError).toBe(false);
-      expect(result!.data.pluginState.images).toEqual([
-        { data: 'AAAA', mediaType: 'image/png' },
-      ]);
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image/png' }]);
 
       const end = events.find((e) => e.type === 'tool_end');
       expect(end).toBeDefined();
@@ -2974,6 +3617,46 @@ describe('ClaudeCodeAdapter', () => {
       expect(
         followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();
+    });
+
+    it('treats SDK background Bash completion notification as task-completion lineage', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_bash',
+              input: { command: 'sleep 1 && echo done', run_in_background: true },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
+      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
+
+      const firstResult = adapter.adapt({
+        is_error: false,
+        result: 'Background command started',
+        type: 'result',
+      });
+      expect(firstResult.map((e) => e.type)).toEqual(['stream_end']);
+
+      adapter.adapt(ccTaskNotification('task_1'));
+
+      const completion = adapter.adapt(ccMessageStart('msg_02'));
+      expect(
+        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sourceToolCallId: 'toolu_bash',
+        sourceToolName: 'Bash',
+        type: 'task-completion',
+      });
     });
 
     /**

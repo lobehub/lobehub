@@ -17,10 +17,12 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -95,8 +97,11 @@ const mountedSkillNamespaceSchema = z.literal('agent');
 const agentDocumentToolContextSchema = z.object({
   messageId: z.string(),
   operationId: z.string().optional(),
+  rootOperationId: z.string().optional(),
   taskId: z.string().nullish(),
+  threadId: z.string().nullish(),
   toolCallId: z.string(),
+  toolMessageId: z.string().optional(),
   topicId: z.string().optional(),
 });
 const agentDocumentToolTriggerSchema = z
@@ -166,6 +171,12 @@ const agentDocumentProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       agentDocumentVfsService: new AgentDocumentVfsService(ctx.serverDB, ctx.userId, wsId),
       skillManagementService: new SkillManagementDocumentService(ctx.serverDB, ctx.userId, wsId),
       systemAgentService: new SystemAgentService(ctx.serverDB, ctx.userId, wsId),
+      documentWorkRegistrar: createDocumentWorkRegistrar({
+        db: ctx.serverDB,
+        logPrefix: '[agentDocumentRouter]',
+        userId: ctx.userId,
+        workspaceId: wsId,
+      }),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -1075,6 +1086,62 @@ export const agentDocumentRouter = router({
       }
     }),
 
+  /** Read-only document payload for the standalone Agent Document page. */
+  getReaderDocument: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const grantedPermissions = (ctx as { workspacePermissionCodes?: string[] })
+        .workspacePermissionCodes;
+
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'view',
+          db: ctx.serverDB,
+          grantedPermissions,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      const document = await ctx.agentDocumentService.getReaderDocument(
+        input.agentId,
+        input.documentId,
+      );
+
+      if (!document) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent document not found' });
+      }
+
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'view',
+          db: ctx.serverDB,
+          grantedPermissions,
+          resourceId: input.documentId,
+          resourceType: 'document',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      return {
+        content: document.content,
+        documentId: document.documentId,
+        filename: document.filename,
+        fileType: document.fileType,
+        sourceType: document.sourceType,
+        title: document.title,
+        updatedAt: document.updatedAt,
+      };
+    }),
+
   /**
    * Tool-oriented: read document by id
    */
@@ -1097,18 +1164,22 @@ export const agentDocumentRouter = router({
    */
   modifyNodes: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        operations: z.array(liteXMLOperationSchema).min(1),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          operations: z.array(liteXMLOperationSchema).min(1),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.modifyDocumentNodesById(
+      const doc = await ctx.agentDocumentService.modifyDocumentNodesById(
         input.id,
         input.operations,
         input.agentId,
       );
+
+      return doc;
     }),
 
   /**
@@ -1116,18 +1187,22 @@ export const agentDocumentRouter = router({
    */
   replaceDocumentContent: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        content: z.string(),
-        id: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          content: z.string(),
+          id: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.replaceDocumentContentById(
+      const doc = await ctx.agentDocumentService.replaceDocumentContentById(
         input.id,
         input.content,
         input.agentId,
       );
+
+      return doc;
     }),
 
   /**
@@ -1135,13 +1210,24 @@ export const agentDocumentRouter = router({
    */
   removeDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
+      const doc = await ctx.agentDocumentService.getDocumentById(input.id, input.agentId);
       const deleted = await ctx.agentDocumentService.removeDocumentById(input.id, input.agentId);
+      if (deleted && input.trigger === 'tool') {
+        await ctx.documentWorkRegistrar.deleteDocumentWork({
+          agentDocumentId: input.id,
+          agentId: input.agentId,
+          documentId: doc?.documentId,
+        });
+      }
+
       return { deleted, id: input.id };
     }),
 
@@ -1150,19 +1236,23 @@ export const agentDocumentRouter = router({
    */
   copyDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        newTitle: z.string().optional(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          newTitle: z.string().optional(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentService.copyDocumentById(
+        const doc = await ctx.agentDocumentService.copyDocumentById(
           input.id,
           input.newTitle,
           input.agentId,
         );
+
+        return doc;
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }
@@ -1173,19 +1263,23 @@ export const agentDocumentRouter = router({
    */
   renameDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        newTitle: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          newTitle: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentService.renameDocumentById(
+        const doc = await ctx.agentDocumentService.renameDocumentById(
           input.id,
           input.newTitle,
           input.agentId,
         );
+
+        return doc;
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

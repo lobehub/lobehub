@@ -37,6 +37,7 @@ const TelegramBody = memo<TelegramBodyProps>(
       return (
         <SuccessCard
           openBotUrl={botUsername ? buildTelegramBotUrl(botUsername) : null}
+          platform="telegram"
           platformLabel={platformLabel}
         />
       );

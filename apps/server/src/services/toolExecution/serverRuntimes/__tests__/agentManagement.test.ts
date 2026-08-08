@@ -5,21 +5,38 @@ import { PluginModel } from '@/database/models/plugin';
 
 import { agentManagementRuntime } from '../agentManagement';
 
-const { mockCountAgents, mockGetAssistantList, mockQueryAgents } = vi.hoisted(() => ({
+const {
+  mockCountAgents,
+  mockGetAssistantList,
+  mockQueryAgents,
+  mockGetAgentConfigById,
+  mockUpdateConfig,
+  mockFindById,
+  mockCreatePlugin,
+} = vi.hoisted(() => ({
   mockCountAgents: vi.fn(),
+  mockCreatePlugin: vi.fn(),
+  mockFindById: vi.fn(),
+  mockGetAgentConfigById: vi.fn(),
   mockGetAssistantList: vi.fn(),
   mockQueryAgents: vi.fn(),
+  mockUpdateConfig: vi.fn(),
 }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(() => ({
     countAgents: mockCountAgents,
+    getAgentConfigById: mockGetAgentConfigById,
     queryAgents: mockQueryAgents,
+    updateConfig: mockUpdateConfig,
   })),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn(() => ({})),
+  PluginModel: vi.fn(() => ({
+    create: mockCreatePlugin,
+    findById: mockFindById,
+  })),
 }));
 
 vi.mock('@/server/services/discover', () => ({
@@ -352,6 +369,52 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('Failed to search agents');
+    });
+  });
+
+  describe('installPlugin', () => {
+    it('appends a new pinned entry when the identifier is absent', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['plugin-a'] });
+      mockFindById.mockResolvedValue(undefined);
+
+      const runtime = createRuntime();
+      const result = await runtime.installPlugin({ agentId: 'agent-1', identifier: 'plugin-b' });
+
+      expect(result.success).toBe(true);
+      expect(mockCreatePlugin).toHaveBeenCalledWith({ identifier: 'plugin-b', type: 'plugin' });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+      });
+    });
+
+    it('flips an existing disabled object entry back to pinned in place, without duplicating it', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        id: 'agent-1',
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }],
+      });
+      mockFindById.mockResolvedValue({ identifier: 'plugin-b' });
+
+      const runtime = createRuntime();
+      const result = await runtime.installPlugin({ agentId: 'agent-1', identifier: 'plugin-b' });
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+      });
+    });
+
+    it('is a no-op write when the identifier is already pinned', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        id: 'agent-1',
+        plugins: ['plugin-a', 'plugin-b'],
+      });
+      mockFindById.mockResolvedValue({ identifier: 'plugin-b' });
+
+      const runtime = createRuntime();
+      const result = await runtime.installPlugin({ agentId: 'agent-1', identifier: 'plugin-b' });
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
   });
 });

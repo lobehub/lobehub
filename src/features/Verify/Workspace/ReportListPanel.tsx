@@ -13,9 +13,8 @@ import {
   Text,
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { confirmModal, DropdownMenu } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
@@ -45,6 +44,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useVerifyReportSummariesInfinite } from '../hooks';
+import type { ReportPanelExpand } from './useReportPanelExpand';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
@@ -270,7 +270,7 @@ const ReportListItem = memo<{
   onReportsChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onReportsChanged }) => {
   const { t } = useTranslation(['verify', 'common']);
-  const { message } = App.useApp();
+
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(item.run.title || '');
@@ -311,7 +311,7 @@ const ReportListItem = memo<{
 
     const nextTitle = draftTitle.trim();
     if (!nextTitle) {
-      message.error(t('verify:workspace.renameEmpty'));
+      toast.error(t('verify:workspace.renameEmpty'));
       setDraftTitle(item.run.title || '');
       setEditing(false);
       return;
@@ -327,11 +327,11 @@ const ReportListItem = memo<{
     try {
       await verifyService.updateRunTitle(item.run.id, nextTitle);
       await refreshRelatedReports();
-      message.success(t('verify:workspace.renameSuccess'));
+      toast.success(t('verify:workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[verify:renameReport]', error);
-      message.error(t('verify:workspace.renameError'));
+      toast.error(t('verify:workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -353,10 +353,10 @@ const ReportListItem = memo<{
             onReportsChanged(),
             mutate(verifyKeys.reportBundle(item.run.id), null, { revalidate: false }),
           ]);
-          message.success(t('verify:workspace.deleteSuccess'));
+          toast.success(t('verify:workspace.deleteSuccess'));
         } catch (error) {
           console.error('[verify:deleteReport]', error);
-          message.error(t('verify:workspace.deleteError'));
+          toast.error(t('verify:workspace.deleteError'));
         } finally {
           setMutating(false);
         }
@@ -462,10 +462,9 @@ const ReportListItem = memo<{
 
 ReportListItem.displayName = 'ReportListItem';
 
-const ReportListPanel = memo(() => {
+const ReportListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
   const { t } = useTranslation('verify');
   const { runId } = useParams<{ runId: string }>();
-  const { md = true } = useResponsive();
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -478,8 +477,7 @@ const ReportListPanel = memo(() => {
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useVerifyReportSummariesInfinite(debouncedQuery);
 
-  const [showPanel, panelWidth, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.showVerifyReportPanel(s),
+  const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.verifyReportPanelWidth(s),
     s.updateSystemStatus,
   ]);
@@ -514,13 +512,13 @@ const ReportListPanel = memo(() => {
     <DraggablePanel
       className={styles.panel}
       defaultSize={{ width: tmpWidth }}
-      expand={showPanel}
+      expand={expand}
       maxWidth={PANEL_MAX}
       minWidth={PANEL_MIN}
-      mode={md ? 'fixed' : 'float'}
+      mode={isNarrow ? 'float' : 'fixed'}
       placement={'left'}
       size={{ height: '100%', width: panelWidth }}
-      onExpandChange={(expand) => updateSystemStatus({ showVerifyReportPanel: expand })}
+      onExpandChange={setExpand}
       onSizeChange={handleSizeChange}
     >
       <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
@@ -534,7 +532,7 @@ const ReportListPanel = memo(() => {
               className={styles.collapseBtn}
               title={t('workspace.collapse')}
               type={'button'}
-              onClick={() => updateSystemStatus({ showVerifyReportPanel: false })}
+              onClick={() => setExpand(false)}
             >
               <Icon icon={PanelLeftClose} size={16} />
             </button>

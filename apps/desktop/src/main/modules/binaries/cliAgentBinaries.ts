@@ -1,3 +1,4 @@
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
@@ -7,7 +8,7 @@ import type { BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManag
 import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 
 // The command-resolution + validation logic (which/where lookup, login-shell
-// PATH retry, well-known install fallbacks incl. the Codex.app bundled CLI,
+// PATH retry, well-known install fallbacks incl. app-bundled Codex CLIs,
 // `--version` keyword validation) lives in the shared `@lobechat/heterogeneous-
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
@@ -65,7 +66,7 @@ export const claudeCodeBinary: BinarySpec = {
  * OpenAI Codex CLI
  * @see https://github.com/openai/codex
  *
- * Goes through `detectHeterogeneousCliCommand` so the Codex.app bundled-CLI
+ * Goes through `detectHeterogeneousCliCommand` so the app-bundled CLI
  * fallback applies here too, keeping the manager path and the custom-command
  * path in sync.
  */
@@ -77,6 +78,47 @@ export const codexBinary: BinarySpec = {
 };
 
 /**
+ * Amp CLI
+ * @see https://ampcode.com/manual
+ */
+export const ampBinary: BinarySpec = {
+  description: 'Amp - Sourcegraph agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('amp', 'amp'),
+  name: 'amp',
+  priority: 3,
+};
+
+/**
+ * OpenCode CLI
+ * @see https://opencode.ai/docs
+ */
+export const opencodeBinary: BinarySpec = {
+  description: 'OpenCode - Open source agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('opencode', 'opencode'),
+  name: 'opencode',
+  priority: 4,
+};
+
+/**
+ * Pi coding agent CLI
+ * @see https://github.com/earendil-works/pi
+ */
+export const piBinary: BinarySpec = {
+  description: 'Pi - Minimal coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('pi', 'pi'),
+  name: 'pi',
+  priority: 5,
+};
+
+/** Qoder CLI @see https://docs.qoder.com/cli/install.md */
+export const qoderBinary: BinarySpec = {
+  description: 'Qoder - AI coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('qoder', 'qodercli'),
+  name: 'qodercli',
+  priority: 6,
+};
+
+/**
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
  */
@@ -84,7 +126,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
-  priority: 3,
+  priority: 7,
   validateKeywords: ['gemini'],
 });
 
@@ -96,7 +138,7 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
-  priority: 4,
+  priority: 8,
   validateKeywords: ['qwen'],
 });
 
@@ -108,7 +150,7 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['kimi'],
   description: 'Kimi CLI - Moonshot AI agentic coding CLI',
   name: 'kimi',
-  priority: 5,
+  priority: 9,
   validateKeywords: ['kimi'],
 });
 
@@ -119,17 +161,28 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
  */
 export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
-  priority: 6,
+  priority: 10,
 });
 
 /**
  * All CLI agent binaries
  */
+export const heterogeneousCliAgentBinaries = {
+  'amp': ampBinary,
+  'claude-code': claudeCodeBinary,
+  'codex': codexBinary,
+  'opencode': opencodeBinary,
+  'pi': piBinary,
+  'qoder': qoderBinary,
+} satisfies Record<LocalHeterogeneousAgentType, BinarySpec>;
+
 export const cliAgentBinaries: BinarySpec[] = [
-  claudeCodeBinary,
-  codexBinary,
+  ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
   kimiCliBinary,
   aiderBinary,
 ];
+
+export const listHeterogeneousCliBinaryTypes = (): LocalHeterogeneousAgentType[] =>
+  Object.keys(heterogeneousCliAgentBinaries) as LocalHeterogeneousAgentType[];

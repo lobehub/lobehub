@@ -8,9 +8,13 @@ export class ServerService {
     return lambdaClient.generationTopic.getAllGenerationTopics.query(type ? { type } : undefined);
   }
 
-  async createTopic(type?: 'image' | 'video', visibility?: 'private' | 'public'): Promise<string> {
+  async createTopic(
+    type?: 'image' | 'video',
+    visibility?: 'private' | 'public',
+    title?: string,
+  ): Promise<string> {
     return lambdaClient.generationTopic.createTopic.mutate(
-      type || visibility ? { type, visibility } : undefined,
+      type || visibility || title ? { title, type, visibility } : undefined,
     );
   }
 

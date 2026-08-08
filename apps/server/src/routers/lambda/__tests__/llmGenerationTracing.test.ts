@@ -28,7 +28,7 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
     recordFeedback.mockClear();
     recordFeedback.mockResolvedValueOnce(undefined);
     const caller = llmGenerationTracingRouter.createCaller(mockCtx as any);
-    const tracingId = '00000000-0000-0000-0000-000000000001';
+    const tracingId = '00000000-0000-4000-8000-000000000001';
 
     const result = await caller.recordFeedback({
       data: { accepted_text: 'hello' },
@@ -62,7 +62,7 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
       await caller.recordFeedback({
         signal: 'positive',
         source: 'explicit_thumbs',
-        tracingId: '00000000-0000-0000-0000-000000000001',
+        tracingId: '00000000-0000-4000-8000-000000000001',
       });
       throw new Error('expected mutation to reject');
     } catch (err) {
@@ -81,7 +81,7 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
       await caller.recordFeedback({
         signal: 'positive',
         source: 'explicit_thumbs',
-        tracingId: '00000000-0000-0000-0000-000000000001',
+        tracingId: '00000000-0000-4000-8000-000000000001',
       });
       throw new Error('expected mutation to reject');
     } catch (err) {
@@ -96,7 +96,7 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
       caller.recordFeedback({
         signal: 'meh' as any,
         source: 'explicit_thumbs',
-        tracingId: '00000000-0000-0000-0000-000000000001',
+        tracingId: '00000000-0000-4000-8000-000000000001',
       }),
     ).rejects.toThrow();
   });
@@ -119,7 +119,7 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
         score: 2,
         signal: 'positive',
         source: 'explicit_thumbs',
-        tracingId: '00000000-0000-0000-0000-000000000001',
+        tracingId: '00000000-0000-4000-8000-000000000001',
       }),
     ).rejects.toThrow();
   });

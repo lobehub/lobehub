@@ -1,6 +1,7 @@
 import type {
   CheckpointConfig,
   NewTask,
+  TaskGoalConfig,
   TaskItem,
   TaskVerifyConfig,
   WorkspaceData,
@@ -17,6 +18,7 @@ import {
   isNull,
   ne,
   notInArray,
+  or,
   type SQL,
   sql,
 } from 'drizzle-orm';
@@ -26,7 +28,10 @@ import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
-import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
+import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import { topics } from '../schemas/topic';
+import { acceptances } from '../schemas/verify';
+import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -245,30 +250,41 @@ export class TaskModel {
     return updated[0] || null;
   }
 
+  /**
+   * Delete a task. This does NOT touch the task's Work artifact: the Work
+   * lifecycle is driven by the deleteTask tool call at the tool-execution
+   * dispatch layer (which calls `WorkModel.deleteTaskWork`), so non-tool deletes
+   * (UI / CLI / deleteAll) deliberately leave the Work as an orphan for the UI
+   * to render as "resource deleted" from its version snapshot. See.
+   */
   async delete(id: string): Promise<boolean> {
-    const result = await this.db
+    const deleted = await this.db
       .delete(tasks)
       .where(and(eq(tasks.id, id), this.ownership()))
-      .returning();
+      .returning({ id: tasks.id });
 
-    return result.length > 0;
+    return deleted.length > 0;
   }
 
   /**
-   * Promote a task and its full subtree to a new visibility. The only legal
-   * transition is `private → public` — there is no `public → private` path
-   * (one-way commitment; enforced by the router-level guard).
+   * Move a task and its full subtree to a new visibility (both directions —
+   * added the `public → private` demotion; the router gates who
+   * may call it).
    *
-   * Cascades inside a single transaction across structural rows only:
+   * Cascades inside a single transaction:
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set.
    *
-   * `task_topics` and `task_comments` are deliberately **not** cascaded.
-   * They are event-shaped historical rows whose visibility was fixed at write
-   * time; promoting the task to public must not retroactively expose runs and
-   * discussions that happened while the task was private.
-   * Topics / comments created after promotion inherit the task's then-current
-   * visibility through their own create paths.
+   * `task_topics` and `task_comments` are direction-sensitive. Their
+   * `visibility` column is a write-time mirror of the parent task used as a
+   * JOIN-free authorization proxy, so:
+   *   - `private → public` deliberately does **not** cascade them: promoting
+   *     the task must not retroactively expose runs and discussions that
+   *     happened while it was private. Rows created after promotion inherit
+   *     the task's then-current visibility through their own create paths.
+   *   - `public → private` **does** cascade them: leaving public-era rows
+   *     public would let workspace members keep reading/operating historical
+   *     topics and comments of a task they can no longer see.
    *
    * Returns `null` if the root task is not visible to the current caller
    * (either missing or owned by another workspace member). Callers should
@@ -315,14 +331,135 @@ export class TaskModel {
         .set({ visibility })
         .where(and(inArray(taskDocuments.taskId, taskIds), this.docsOwnership()));
 
+      // Work is a denormalized resource projection. Keep its indexed visibility
+      // mirror in the same transaction as the task subtree so gallery/list
+      // queries cannot observe a stale public row after demotion.
+      await tx
+        .update(works)
+        .set({ visibility })
+        .where(
+          and(
+            eq(works.resourceType, 'task'),
+            inArray(works.resourceId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: works.userId, workspaceId: works.workspaceId },
+            ),
+          ),
+        );
+
+      // Demotion-only cascade for the event-shaped child rows (see docstring):
+      // their visibility mirrors the task, so pulling the task back to private
+      // must also pull public-era topics/comments out of workspace scope.
+      if (visibility === 'private') {
+        await tx
+          .update(taskTopics)
+          .set({ visibility })
+          .where(and(inArray(taskTopics.taskId, taskIds), this.topicsOwnership()));
+
+        await tx
+          .update(taskComments)
+          .set({ visibility })
+          .where(and(inArray(taskComments.taskId, taskIds), this.commentsOwnership()));
+      }
+
       return updated ?? null;
     });
   }
 
-  async deleteAll(): Promise<number> {
-    const result = await this.db.delete(tasks).where(this.ownership()).returning();
+  /**
+   * Count workspace tasks that would break if the given agent were demoted to
+   * private:
+   *   - public tasks assigned to it — a public task must never reference a
+   *     private agent (`assertAgentVisibilityCompat`);
+   *   - tasks created by anyone other than the agent's owner (any visibility)
+   *     — after demotion those creators can no longer resolve the assignee,
+   *     so their runs and assignee updates fail.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private tasks are invisible to the caller but still lose
+   * their assignee. Backs the router-level agent demotion guard.
+   */
+  async countTasksBlockingAgentDemotion(
+    assigneeAgentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, this.workspaceId),
+          eq(tasks.assigneeAgentId, assigneeAgentId),
+          or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
+        ),
+      );
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Whether the subtree rooted at `rootTaskId` (root excluded) contains tasks
+   * created by someone other than `creatorUserId`. Deliberately workspace-wide
+   * and visibility-blind: other members' private subtasks are invisible to the
+   * caller but would still be fractured by a public→private demotion (each row
+   * stays owned by its creator, so the root creator loses those descendants
+   * while their creators keep orphaned children whose parent is hidden).
+   * Backs the router-level task demotion guard.
+   */
+  async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
+    if (!this.workspaceId) return false;
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT id, created_by_user_id FROM tasks
+          WHERE id = ${rootTaskId} AND workspace_id = ${this.workspaceId}
+        UNION ALL
+        SELECT t.id, t.created_by_user_id FROM tasks t
+        JOIN task_tree tt ON t.parent_task_id = tt.id
+      )
+      SELECT 1 AS hit FROM task_tree
+      WHERE id <> ${rootTaskId} AND created_by_user_id <> ${creatorUserId}
+      LIMIT 1
+    `);
+    return result.rows.length > 0;
+  }
+
+  /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
+  async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
+    // `restrictToCreator` narrows the workspace-wide sweep to rows the caller
+    // created (non-owner members); owners/personal mode keep the full scope.
+    const where = options?.restrictToCreator
+      ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
+      : this.ownership();
+    const result = await this.db.delete(tasks).where(where).returning();
 
     return result.length;
+  }
+
+  /** Delete a task and every descendant in one transaction. */
+  async deleteSubtree(rootTaskId: string): Promise<number> {
+    const descendants = await this.findAllDescendants(rootTaskId);
+    const taskIds = [rootTaskId, ...descendants.map(({ id }) => id)];
+
+    return this.db.transaction(async (tx) => {
+      await tx
+        .delete(acceptances)
+        .where(
+          and(
+            eq(acceptances.subjectType, 'task'),
+            inArray(acceptances.subjectId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+            ),
+          ),
+        );
+      const result = await tx
+        .delete(tasks)
+        .where(and(inArray(tasks.id, taskIds), this.ownership()))
+        .returning({ id: tasks.id });
+
+      return result.length;
+    });
   }
 
   // ========== Query ==========
@@ -336,6 +473,8 @@ export class TaskModel {
       statuses: string[];
     }>;
     parentTaskId?: string | null;
+    /** Only return tasks carrying the goal-controller marker in `config.goal`. */
+    hasGoal?: boolean;
     /** Same semantics as `list({ visibility })` — UI narrowing on top of the
      *  already ownership-filtered set. */
     visibility?: 'private' | 'public';
@@ -349,10 +488,12 @@ export class TaskModel {
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, parentTaskId, visibility } = options;
+    const { groups, assigneeAgentId, hasGoal, parentTaskId, visibility } = options;
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
     if (parentTaskId === null) {
       baseConditions.push(isNull(tasks.parentTaskId));
@@ -400,11 +541,65 @@ export class TaskModel {
       }),
     );
 
-    return results;
+    const taskIds = Array.from(
+      new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
+    );
+    const runStats =
+      taskIds.length === 0
+        ? []
+        : (
+            await this.db.execute<{
+              root_id: string;
+              total_run_cost: number;
+              total_run_duration: number;
+            }>(sql`
+              WITH RECURSIVE goal_tree AS (
+                SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
+                FROM ${tasks}
+                WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+                UNION ALL
+                SELECT goal_tree.root_id, child.id
+                FROM ${tasks} child
+                JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
+                WHERE ${this.ownershipSql('child')}
+              )
+              SELECT
+                goal_tree.root_id,
+                coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
+                coalesce(
+                  sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
+                    filter (where ${topics.completedAt} is not null),
+                  0
+                ) AS total_run_duration
+              FROM goal_tree
+              LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = goal_tree.task_id
+              LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
+              GROUP BY goal_tree.root_id
+            `)
+          ).rows;
+    const runStatsByTaskId = new Map(
+      runStats.map((stats) => [
+        stats.root_id,
+        {
+          totalRunCost: Number(stats.total_run_cost),
+          totalRunDuration: Number(stats.total_run_duration),
+        },
+      ]),
+    );
+
+    return results.map((group) => ({
+      ...group,
+      tasks: group.tasks.map((task) => ({
+        ...task,
+        totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
+        totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
+      })),
+    }));
   }
 
   async list(options?: {
     assigneeAgentId?: string;
+    hasGoal?: boolean;
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
@@ -422,6 +617,7 @@ export class TaskModel {
       priorities,
       parentTaskId,
       assigneeAgentId,
+      hasGoal,
       visibility,
       limit = 50,
       offset = 0,
@@ -432,6 +628,8 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
     if (parentTaskId === null) {
@@ -648,6 +846,19 @@ export class TaskModel {
     return this.updateTaskConfig(id, { review });
   }
 
+  // ========== Goal Config ==========
+
+  /**
+   * Read this task's goal-loop config from `config.goal`. Presence marks a
+   * goal-driven task (created via the `createGoal` builtin tool) and enables
+   * the outer verify-driven round loop. No inheritance — a goal belongs to the
+   * exact task it was created on.
+   */
+  getGoalConfig(task: TaskItem): TaskGoalConfig | undefined {
+    const config = task.config as Record<string, any> | undefined;
+    return config?.goal ? (config.goal as TaskGoalConfig) : undefined;
+  }
+
   // ========== Verify Config ==========
 
   /**
@@ -791,7 +1002,24 @@ export class TaskModel {
       workspaceId: taskDependencies.workspaceId,
     });
 
+  /** Only used by the demotion cascade in {@link updateVisibility} — regular
+   *  taskTopics reads/writes live in `TaskTopicModel`. */
+  private topicsOwnership = () =>
+    this.childOwnership({
+      userId: taskTopics.userId,
+      visibility: taskTopics.visibility,
+      workspaceId: taskTopics.workspaceId,
+    });
+
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {
+    const dependencyTasks = await this.findByIds([taskId, dependsOnId]);
+    const task = dependencyTasks.find(({ id }) => id === taskId);
+    const dependsOn = dependencyTasks.find(({ id }) => id === dependsOnId);
+    if (!task || !dependsOn) throw new Error('Task not found');
+    if (task.projectId !== dependsOn.projectId && (task.projectId || dependsOn.projectId)) {
+      throw new Error('Task dependencies cannot cross project boundaries');
+    }
+
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
       .insert(taskDependencies)
@@ -955,7 +1183,16 @@ export class TaskModel {
         title: documents.title,
       })
       .from(taskDocuments)
-      .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
+      // Guard the referenced document too: the junction's visibility column is
+      // a write-time mirror of the TASK, so a document independently switched
+      // back to private would otherwise still leak its title here.
+      .innerJoin(
+        documents,
+        and(
+          eq(taskDocuments.documentId, documents.id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .where(
         and(
           eq(taskDocuments.taskId, taskId),
@@ -979,6 +1216,15 @@ export class TaskModel {
       ? sql`td.workspace_id = ${this.workspaceId}
             AND (td.visibility = 'public' OR td.user_id = ${this.userId})`
       : sql`td.user_id = ${this.userId} AND td.workspace_id IS NULL`;
+    // Guard the referenced document row itself: `td.visibility` is a
+    // write-time mirror of the TASK's visibility, so a document independently
+    // switched back to private would otherwise still leak its title/metadata
+    // through this join. A guarded-out document keeps its junction row but
+    // joins as NULL → surfaced as an inaccessible tombstone node.
+    const documentVisibility = this.workspaceId
+      ? sql`d.workspace_id = ${this.workspaceId}
+            AND (d.visibility IS NULL OR d.visibility = 'public' OR d.user_id = ${this.userId})`
+      : sql`d.user_id = ${this.userId} AND d.workspace_id IS NULL`;
     const result = await this.db.execute(sql`
       WITH RECURSIVE task_tree AS (
         SELECT id, identifier FROM tasks WHERE id = ${rootTaskId} AND ${rootOwnership}
@@ -988,11 +1234,12 @@ export class TaskModel {
         WHERE ${recursiveOwnership}
       )
       SELECT td.*, tt.id as source_task_id, tt.identifier as source_task_identifier,
+             d.id as document_ref_id,
              d.title as document_title, d.file_type as document_file_type, d.parent_id as document_parent_id,
              d.total_char_count as document_char_count, d.updated_at as document_updated_at
       FROM task_documents td
       JOIN task_tree tt ON td.task_id = tt.id
-      LEFT JOIN documents d ON td.document_id = d.id
+      LEFT JOIN documents d ON td.document_id = d.id AND ${documentVisibility}
       WHERE ${docsOwnership}
       ORDER BY td.created_at
     `);
@@ -1004,17 +1251,22 @@ export class TaskModel {
 
     for (const row of result.rows as any[]) {
       const docId = row.document_id;
+      // Join miss = the viewer lost access to the document (switched back to
+      // private) or it was deleted. Emit a titleless tombstone so the UI can
+      // render a no-access placeholder instead of leaking the title.
+      const inaccessible = row.document_ref_id === null;
       docIds.add(docId);
       nodeMap[docId] = {
-        charCount: row.document_char_count,
+        charCount: inaccessible ? null : row.document_char_count,
         createdAt: row.created_at,
-        fileType: row.document_file_type,
-        parentId: row.document_parent_id,
+        fileType: inaccessible ? '' : row.document_file_type,
+        inaccessible: inaccessible || undefined,
+        parentId: inaccessible ? null : row.document_parent_id,
         pinnedBy: row.pinned_by,
         sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
-        title: row.document_title || 'Untitled',
-        updatedAt: row.document_updated_at,
+        title: inaccessible ? '' : row.document_title || 'Untitled',
+        updatedAt: inaccessible ? null : row.document_updated_at,
       };
     }
 
@@ -1175,6 +1427,16 @@ export class TaskModel {
    *   - `currentTopicId` (topic ownership is also moving but the link is
    *     reset to avoid surfacing a stale active topic in the new scope)
    */
+  /**
+   * Whether the task subtree contains rows created by someone else. Transfers
+   * rehome every cascaded row, so non-owner members must not move a task tree
+   * that carries teammates' subtasks.
+   */
+  async subtreeHasForeignRows(taskId: string): Promise<boolean> {
+    const subtree = await this.collectTaskSubtree(taskId, this.db);
+    return subtree.some((task) => task.createdByUserId !== this.userId);
+  }
+
   async transferTo(
     taskId: string,
     targetWorkspaceId: string | null,

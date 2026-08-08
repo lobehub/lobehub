@@ -1,24 +1,29 @@
 'use client';
 
-import { type VerifierType, verifierTypes } from '@lobechat/types';
-import { Button, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
-import { Select, Switch, useModalContext } from '@lobehub/ui/base-ui';
+import { type VerifierType, verifierTypes } from '@lobechat/const/verify';
+import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Button, Select, Switch, useModalContext } from '@lobehub/ui/base-ui';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { VerifyCriterionDraft } from '@/services/verify';
 
-interface VerifyCriterionFormProps {
+interface VerifyCriterionEditorProps {
   initial: VerifyCriterionDraft;
+  onClose: () => void;
   /** Omitted when the criterion is brand-new and not yet committed. */
   onDelete?: () => void;
   onSubmit: (next: VerifyCriterionDraft) => void;
 }
 
-/** Per-criterion editor body: the only place title/notes/verifier/required are edited. */
-const VerifyCriterionForm = ({ initial, onDelete, onSubmit }: VerifyCriterionFormProps) => {
+/** Shared editor body for modal and right-side drawer criterion details. */
+export const VerifyCriterionEditor = ({
+  initial,
+  onClose,
+  onDelete,
+  onSubmit,
+}: VerifyCriterionEditorProps) => {
   const { t } = useTranslation('chat');
-  const { close } = useModalContext();
 
   const [title, setTitle] = useState(initial.title ?? '');
   const [description, setDescription] = useState(initial.description ?? '');
@@ -44,7 +49,7 @@ const VerifyCriterionForm = ({ initial, onDelete, onSubmit }: VerifyCriterionFor
       title: trimmed,
       verifierType,
     });
-    close();
+    onClose();
   };
 
   return (
@@ -104,7 +109,7 @@ const VerifyCriterionForm = ({ initial, onDelete, onSubmit }: VerifyCriterionFor
             type={'text'}
             onClick={() => {
               onDelete();
-              close();
+              onClose();
             }}
           >
             {t('verifyConfig.removeCriterion')}
@@ -113,7 +118,7 @@ const VerifyCriterionForm = ({ initial, onDelete, onSubmit }: VerifyCriterionFor
           <span />
         )}
         <Flexbox horizontal gap={8}>
-          <Button onClick={close}>{t('verifyConfig.cancel')}</Button>
+          <Button onClick={onClose}>{t('verifyConfig.cancel')}</Button>
           <Button disabled={!title.trim()} type={'primary'} onClick={handleSave}>
             {t('verifyConfig.save')}
           </Button>
@@ -121,6 +126,15 @@ const VerifyCriterionForm = ({ initial, onDelete, onSubmit }: VerifyCriterionFor
       </Flexbox>
     </Flexbox>
   );
+};
+
+interface VerifyCriterionFormProps extends Omit<VerifyCriterionEditorProps, 'onClose'> {}
+
+/** Modal adapter retained for the manual-add flow. */
+const VerifyCriterionForm = (props: VerifyCriterionFormProps) => {
+  const { close } = useModalContext();
+
+  return <VerifyCriterionEditor {...props} onClose={close} />;
 };
 
 export default VerifyCriterionForm;

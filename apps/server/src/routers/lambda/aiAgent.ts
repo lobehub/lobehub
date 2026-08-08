@@ -1,11 +1,14 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
-import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
+import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
   UserInterventionConfigSchema,
+  workingDirConfigSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -18,20 +21,79 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { agentOperations, topics } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
+import {
+  assertCanUseMessageTargets,
+  assertCanUseTopicTargets,
+} from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 
-import { workingDirConfigSchema } from './workingDirSchema';
-
 const log = debug('lobe-server:ai-agent-router');
+
+/**
+ * Workspace `use` guard for operation-keyed endpoints: resolve the operation
+ * row to its agent and run the same `use` guard. Operations without an agent
+ * (detached / legacy rows) fall through — there is no resource to guard.
+ * No-op in personal mode (no workspaceId).
+ */
+const assertCanUseOperationAgent = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { db, operationId, userId, workspaceId } = params;
+  if (!workspaceId) return;
+
+  const [row] = await db
+    .select({ agentId: agentOperations.agentId })
+    .from(agentOperations)
+    .where(eq(agentOperations.id, operationId))
+    .limit(1);
+  if (!row?.agentId) return;
+
+  await assertCanUseWorkspaceAgent({
+    agentId: row.agentId,
+    db,
+    userId,
+    workspaceId,
+  });
+};
+
+/**
+ * Resolve client-supplied conversation ids before an agent run writes through
+ * AiAgentService. Checking only the requested agent/group is insufficient: an
+ * existing topic or parent message can belong to a different, view-only
+ * workspace resource.
+ */
+const assertCanUseAgentRunConversation = async (params: {
+  db: LobeChatDatabase;
+  messageIds?: Array<string | null | undefined>;
+  topicId?: string | null;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { db, messageIds = [], topicId, userId, workspaceId } = params;
+  if (!workspaceId) return;
+
+  const uniqueMessageIds = [...new Set(messageIds.filter(Boolean) as string[])];
+  await Promise.all([
+    assertCanUseTopicTargets({ db, userId, workspaceId }, topicId ? [topicId] : []),
+    assertCanUseMessageTargets({ db, userId, workspaceId }, uniqueMessageIds),
+  ]);
+};
 
 const createUiMessageFileUrlResolver = () => {
   return async (path: string | null, file: { fileType: string; id?: string | null }) =>
@@ -166,8 +228,24 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -195,6 +273,31 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * Batch form of `resumeApproval` — one entry per pending tool the user
+     * resolved in a single action ("approve all" on a parallel tool batch).
+     * The op applies every decision, then runs all approved tools in ONE
+     * `call_tools_batch` and continues the LLM once with the full result set.
+     *
+     * Prefer this over firing N `resumeApproval` ops for a parallel batch: each
+     * of those continues the LLM while the not-yet-approved tools are still
+     * empty rows, which forks the parent chain and shows the model blank
+     * results. Mutually exclusive with `resumeApproval`.
+     */
+    resumeApprovals: z
+      .array(
+        z.object({
+          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+          /** ID of the pending `role='tool'` message this decision targets. */
+          parentMessageId: z.string(),
+          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+          rejectionReason: z.string().optional(),
+          /** tool_call_id of the pending tool call being approved/rejected. */
+          toolCallId: z.string(),
+        }),
+      )
+      .min(1)
+      .optional(),
+    /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
      * lobe-agent `askUserQuestion`). When set, the new op writes the
      * human-provided answer as the target tool message's result and resumes from
@@ -209,7 +312,7 @@ const ExecAgentSchema = z
         /** ID of the pending `role='tool'` message this result targets. */
         parentMessageId: z.string(),
         /** Optional plugin state to persist on the tool message. */
-        pluginState: z.record(z.unknown()).optional(),
+        pluginState: z.record(z.string(), z.unknown()).optional(),
         /** tool_call_id of the pending tool call being answered. */
         toolCallId: z.string(),
       })
@@ -284,6 +387,35 @@ const ExecAgentsSchema = z.object({
 });
 
 /**
+ * Schema for scheduleAgentRun - defer an agent run to a future time
+ */
+const ScheduleAgentRunSchema = z
+  .object({
+    /** The agent ID to run (either agentId or slug is required) */
+    agentId: z.string().optional(),
+    /** File IDs of already-uploaded attachments to attach when the run fires */
+    fileIds: z.array(z.string()).optional(),
+    /** Group to file the topic under, when scheduling from a group conversation */
+    groupId: z.string().nullish(),
+    /** Override the agent's default model */
+    model: z.string().optional(),
+    /** The user input/prompt, replayed verbatim when the run comes due */
+    prompt: z.string().min(1),
+    /** Override the agent's default provider */
+    provider: z.string().optional(),
+    /**
+     * When to run. UTC ISO-8601 (`…Z`) — the dispatcher's due query compares it
+     * as text, so a zoned offset would break the ordering.
+     */
+    runAt: z.string().datetime(),
+    /** The agent slug to run (either agentId or slug is required) */
+    slug: z.string().optional(),
+  })
+  .refine((data) => data.agentId || data.slug, {
+    message: 'Either agentId or slug must be provided',
+  });
+
+/**
  * Schema for execSubAgentTask - execute SubAgent task
  * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
  */
@@ -296,6 +428,8 @@ const ExecSubAgentTaskSchema = z.object({
   instruction: z.string(),
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: z.string(),
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId: z.string().optional(),
   /** Timeout in milliseconds (optional) */
   timeout: z.number().optional(),
   /** Task title (shown in UI, used as thread title) */
@@ -425,7 +559,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['claude-code', 'codex']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -442,9 +576,16 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['claude-code', 'codex']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
   error: z
     .object({
+      /**
+       * Structured status-guide error for process-level failures (CLI not
+       * installed, auth required) — the CLI's `classifyHeteroProcessFailure`
+       * output. Persisted verbatim as the `ChatMessageError.body` so the
+       * client renders the dedicated guide.
+       */
+      body: z.record(z.string(), z.unknown()).optional(),
       message: z.string(),
       type: z.string(),
     })
@@ -491,12 +632,28 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
 
+  // Read market accessToken from user_settings.market so server-side agent runtime
+  // can authenticate with the Market API for creds operations.
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB!, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
+
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        marketAccessToken,
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
@@ -535,6 +692,21 @@ export const aiAgentRouter = router({
       log('createClientGroupAgentTaskThread: subAgentId=%s, groupId=%s', subAgentId, groupId);
 
       try {
+        await assertCanUseWorkspaceAgent({
+          agentId: subAgentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [parentMessageId],
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+
         // 1. Create Thread for isolated task execution
         // Use subAgentId as the thread's agentId (the executing agent)
         const startedAt = new Date().toISOString();
@@ -630,6 +802,21 @@ export const aiAgentRouter = router({
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
       try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [parentMessageId],
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+
         // 1. Create Thread for isolated task execution
         const startedAt = new Date().toISOString();
         const thread = await ctx.threadModel.create({
@@ -715,11 +902,13 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       trigger,
@@ -729,11 +918,41 @@ export const aiAgentRouter = router({
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
 
     try {
+      await assertCanUseWorkspaceAgent({
+        agentId,
+        db: ctx.serverDB,
+        groupId: appContext?.groupId,
+        slug,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: [
+          ...existingMessageIds,
+          parentMessageId,
+          resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
+          resumeToolResult?.parentMessageId,
+        ],
+        topicId: appContext?.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
       return await ctx.aiAgentService.execAgent({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
+        // Propagate the originating request's client IP / user agent into the run
+        // so downstream LLM-call metadata can carry them for auditing and spend
+        // attribution. These are server-derived from the tRPC context and are
+        // intentionally not part of the client-passable input schema.
+        clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,
@@ -743,10 +962,12 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
+        userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
     } catch (error: any) {
@@ -756,6 +977,17 @@ export const aiAgentRouter = router({
         throw error;
       }
 
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
+      }
+
       throw new TRPCError({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
@@ -763,6 +995,42 @@ export const aiAgentRouter = router({
       });
     }
   }),
+
+  /**
+   * Defer an agent run to a future time ("send this in 3 hours").
+   *
+   * Kept separate from `execAgent` rather than folded in behind a `runAt` flag:
+   * nothing is executed here, so every run-shaped field of `ExecAgentResult`
+   * (operationId, assistantMessageId, autoStarted) would come back empty and
+   * every caller would have to branch on it.
+   *
+   * Cancelling / rescheduling goes through the ordinary topic update mutations —
+   * those are already ownership-scoped, and a schedule is just topic state.
+   */
+  scheduleAgentRun: aiAgentWriteProcedure
+    .input(ScheduleAgentRunSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('scheduleAgentRun: identifier=%s, runAt=%s', input.agentId || input.slug, input.runAt);
+
+      try {
+        await assertCanUseWorkspaceAgent({
+          agentId: input.agentId,
+          db: ctx.serverDB,
+          slug: input.slug,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        return await ctx.aiAgentService.scheduleAgentRun(input);
+      } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to schedule agent run: ${error.message}`,
+        });
+      }
+    }),
 
   /**
    * Batch execute multiple agents
@@ -798,6 +1066,26 @@ export const aiAgentRouter = router({
       } = task;
 
       try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId: appContext?.groupId,
+          slug,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [
+            ...existingMessageIds,
+            parentMessageId,
+            task.resumeApproval?.parentMessageId,
+            task.resumeToolResult?.parentMessageId,
+          ],
+          topicId: appContext?.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
         const result = await ctx.aiAgentService.execAgent({
           agentId,
           appContext,
@@ -868,6 +1156,20 @@ export const aiAgentRouter = router({
       log('execGroupAgent: agentId=%s, groupId=%s', agentId, groupId);
 
       try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: newTopic?.topicMessageIds,
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
         // Execute group agent
         const result = await ctx.aiAgentService.execGroupAgent({
           agentId,
@@ -917,17 +1219,42 @@ export const aiAgentRouter = router({
   execSubAgentTask: aiAgentWriteProcedure
     .input(ExecSubAgentTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId, timeout } = input;
+      const {
+        agentId,
+        groupId,
+        instruction,
+        parentMessageId,
+        parentOperationId,
+        title,
+        topicId,
+        timeout,
+      } = input;
 
       log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
       try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [parentMessageId],
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+
         // External procedure name stays `execSubAgentTask`; the service method is `execSubAgent`.
         return await ctx.aiAgentService.execSubAgent({
           agentId,
           groupId,
           instruction,
           parentMessageId,
+          ...(parentOperationId && { parentOperationId }),
           timeout,
           title,
           topicId,
@@ -1244,6 +1571,39 @@ export const aiAgentRouter = router({
    * This endpoint interrupts a SubAgent task by threadId or operationId.
    * It updates both operation status and Thread status to cancelled state.
    */
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without executing anything or continuing the model.
+   *
+   * Distinct from `interruptTask`, which only flips runtime state and assumes
+   * a live loop will persist the outcome — a parked run has no loop, so its
+   * tool rows and DB row would both be left behind.
+   */
+  stopPendingApproval: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** Pending `role='tool'` message ids to settle — the active batch. */
+        toolMessageIds: z.array(z.string()).min(1),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Same ownership gate the approval resume uses: every target must belong
+      // to the caller before anything is written.
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.toolMessageIds,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      return ctx.aiAgentService.stopPendingApproval({
+        toolMessageIds: input.toolMessageIds,
+        topicId: input.topicId,
+      });
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {
@@ -1458,7 +1818,7 @@ export const aiAgentRouter = router({
    */
   submitHeteroIntervention: aiAgentWriteProcedure
     .input(SubmitHeteroInterventionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
 
       log(
@@ -1467,6 +1827,13 @@ export const aiAgentRouter = router({
         toolCallId,
         cancelled ?? false,
       );
+
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
 
       const streamEventManager = createStreamEventManager();
       await streamEventManager.publishStreamEvent(operationId, {
@@ -1489,6 +1856,13 @@ export const aiAgentRouter = router({
       const { operationId, action, data, reason, stepIndex, toolMessageId } = input;
 
       log(`Processing ${action} for operation ${operationId}`);
+
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
 
       // Build intervention parameters
       const interventionParams: any = {
@@ -1560,6 +1934,13 @@ export const aiAgentRouter = router({
       const { operationId, context, priority, delay } = input;
 
       log('Starting execution for operation %s', operationId);
+
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
 
       // Start execution using AgentRuntimeService
       const result = await ctx.agentRuntimeService.startExecution({

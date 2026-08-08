@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { markdownElements } from '../Markdown/plugins';
 import { useChatMarkdown } from './useChatMarkdown';
@@ -9,14 +9,20 @@ import { useChatMarkdown } from './useChatMarkdown';
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: any) => selector({ settings: {} }),
 }));
+let mockTransitionMode = 'none';
+
 vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: { config: () => ({ transitionMode: 'none' }) },
+  userGeneralSettingsSelectors: { config: () => ({ transitionMode: mockTransitionMode }) },
 }));
 
 const remarkPluginFor = (tag: string) =>
   markdownElements.find((el) => el.tag === tag)?.remarkPlugin;
 
 describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
+  afterEach(() => {
+    mockTransitionMode = 'none';
+  });
+
   it('excludes user-scoped plugins so echoed <skill>/<tool> tags never become chips', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a1', isGenerating: false }));
 
@@ -50,5 +56,16 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a3', isGenerating: false }));
 
     expect(result.current.markdownProps.showFootnotes).toBe(true);
+  });
+
+  it('keeps animated disabled when streaming is disabled even during generation', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ enableStream: false, id: 'a4', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(false);
+    expect(result.current.markdownProps.enableStream).toBe(false);
   });
 });

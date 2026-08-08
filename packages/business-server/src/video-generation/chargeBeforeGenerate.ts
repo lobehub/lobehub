@@ -23,9 +23,6 @@ interface ChargeBeforeResult {
   prechargeResult?: Record<string, unknown>;
 }
 
-export async function chargeBeforeGenerate(
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  params: ChargeParams,
-): Promise<ChargeBeforeResult> {
+export async function chargeBeforeGenerate(_params: ChargeParams): Promise<ChargeBeforeResult> {
   return {};
 }

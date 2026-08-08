@@ -17,8 +17,7 @@ const execFileMock = vi.mocked(childProcess.execFile);
 const callExecFile = (stdout: string) => {
   execFileMock.mockImplementationOnce(((...args: unknown[]) => {
     const callback = [...args].reverse().find((arg) => typeof arg === 'function') as
-      | ((error: Error | null, stdout: string) => void)
-      | undefined;
+      ((error: Error | null, stdout: string) => void) | undefined;
     callback?.(null, stdout);
     return {} as childProcess.ChildProcess;
   }) as typeof childProcess.execFile);
@@ -182,6 +181,91 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
+  it('spawns Qoder with its stream-json protocol, permission mode, and resume id', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'qoder',
+      operationId: 'op-qoder',
+      prompt: 'continue with Qoder',
+      resumeSessionId: 'qoder-prev-123',
+    });
+    fake.start();
+
+    for await (const _event of handle.events) {
+      // Drain the stream so the adapter captures the session id.
+    }
+    await handle.exit;
+
+    expect(spawnCalls[0]).toMatchObject({
+      command: 'qodercli',
+    });
+    expect(spawnCalls[0].args).toEqual([
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--include-partial-messages',
+      '--permission-mode',
+      'bypass_permissions',
+      '--resume',
+      'qoder-prev-123',
+    ]);
+    expect(JSON.parse(fake.stdinWrites[0].trim())).toEqual({
+      message: {
+        content: [{ text: 'continue with Qoder', type: 'text' }],
+        role: 'user',
+      },
+      parent_tool_use_id: null,
+      type: 'user',
+    });
+  });
+
+  it('spawns AMP with its private headless stream-json protocol', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({ agentType: 'amp', operationId: 'op-amp', prompt: 'hello' });
+
+    const { args, command } = spawnCalls[0];
+    expect(command).toBe('amp');
+    expect(args).toEqual([
+      '--execute',
+      '--stream-json-thinking',
+      '--stream-json-input',
+      '--visibility',
+      'private',
+      '--no-ide',
+      '--no-notifications',
+      '--no-archive-after-execute',
+    ]);
+    expect(JSON.parse((nextFakeProc as any).stdin.write.mock.calls[0][0].trim())).toMatchObject({
+      message: { content: [{ text: 'hello', type: 'text' }], role: 'user' },
+      type: 'user',
+    });
+  });
+
+  it('uses `threads continue <id>` before AMP execution flags on resume', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'amp',
+      operationId: 'op-amp',
+      prompt: 'continue',
+      resumeSessionId: 'T-previous',
+    });
+
+    expect(spawnCalls[0].args.slice(0, 4)).toEqual([
+      'threads',
+      'continue',
+      'T-previous',
+      '--execute',
+    ]);
+    expect(spawnCalls[0].args).toContain('--stream-json-input');
+  });
+
   it('builds codex args with `exec` + json + skip-git-repo-check + bypass approvals/sandbox', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
@@ -241,6 +325,89 @@ describe('spawnAgent', () => {
     expect(args.slice(0, 2)).toEqual(['exec', 'resume']);
     expect(args).toContain('thread_abc');
     expect(args.at(-1)).toBe('-');
+  });
+
+  it('spawns OpenCode fresh with JSON thinking/auto flags and raw stdin', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { OPENCODE_BASE_ARGS, spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'opencode',
+      extraArgs: ['--model', 'anthropic/claude-sonnet-4'],
+      operationId: 'op-open',
+      prompt: 'hello opencode',
+    });
+
+    expect(spawnCalls[0]).toMatchObject({ command: 'opencode' });
+    expect(spawnCalls[0].args).toEqual([
+      ...OPENCODE_BASE_ARGS,
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('hello opencode');
+  });
+
+  it('spawns OpenCode resume with --session and --file before extra args', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-opencode-spawn-'));
+    tempDirs.push(dir);
+    const imagePath = path.join(dir, 'input.png');
+    await writeFile(imagePath, 'image');
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'opencode',
+      extraArgs: ['--model', 'openai/gpt-5'],
+      operationId: 'op-open',
+      prompt: [
+        { text: 'continue', type: 'text' },
+        { source: { path: imagePath, type: 'path' }, type: 'image' },
+      ],
+      resumeSessionId: 'ses_previous',
+    });
+
+    expect(spawnCalls[0].args).toEqual([
+      'run',
+      '--format',
+      'json',
+      '--thinking',
+      '--auto',
+      '--session',
+      'ses_previous',
+      '--file',
+      imagePath,
+      '--model',
+      'openai/gpt-5',
+    ]);
+  });
+
+  it('spawns Pi in JSON mode, resumes its native session, and sends images as @path args', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-pi-spawn-'));
+    tempDirs.push(dir);
+    const imagePath = path.join(dir, 'input.png');
+    await writeFile(imagePath, 'image');
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'pi',
+      extraArgs: ['--provider', 'anthropic'],
+      operationId: 'op-pi',
+      prompt: [
+        { text: 'continue', type: 'text' },
+        { source: { path: imagePath, type: 'path' }, type: 'image' },
+      ],
+      resumeSessionId: 'pi-session-previous',
+    });
+
+    expect(spawnCalls[0]).toMatchObject({ command: 'pi' });
+    expect(spawnCalls[0].args).toEqual([
+      '--mode',
+      'json',
+      '--session-id',
+      'pi-session-previous',
+      `@${imagePath}`,
+      '--provider',
+      'anthropic',
+    ]);
+    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('continue');
   });
 
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
@@ -398,7 +565,7 @@ describe('spawnAgent', () => {
     const { spawnAgent } = await import('./spawnAgent');
     await expect(
       spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow(/unsupported agent type/);
+    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

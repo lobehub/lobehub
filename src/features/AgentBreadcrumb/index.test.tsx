@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import type * as Antd from 'antd';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +22,7 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof Antd>();
+  const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
     ...actual,

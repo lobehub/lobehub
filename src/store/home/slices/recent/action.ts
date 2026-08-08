@@ -5,18 +5,12 @@ import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
-import { recentService } from '@/services/recent';
+import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('recent');
-
-// Mirror the home Daily Brief / task detail polling cadence so users see new
-// items, status transitions (incl. backlog/paused → running which the per-item
-// task.detail poll never caught) without manual refresh. SWR pauses when the
-// tab is backgrounded.
-const RECENTS_REFRESH_INTERVAL = 10_000;
 
 const updateRecentTitleInList = (id: string, title: string) => (items?: RecentItem[]) =>
   items?.map((item) => (item.id === id ? { ...item, title } : item));
@@ -74,7 +68,7 @@ export class RecentActionImpl {
   ): SWRResponse<RecentItem[]> => {
     return useClientDataSWRWithSync<RecentItem[]>(
       isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
-      async () => recentService.getAll(limit + 1),
+      async () => recentService.getAll(limit + 1, RECENT_SIDEBAR_TYPES),
       {
         onData: (data) => {
           if (getCacheScope() !== scope) return;
@@ -91,7 +85,6 @@ export class RecentActionImpl {
             n('useFetchRecents/onData'),
           );
         },
-        refreshInterval: RECENTS_REFRESH_INTERVAL,
       },
     );
   };

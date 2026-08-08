@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
@@ -44,6 +45,11 @@ const AgentUsage = memo(() => {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<AgentUsageGranularity>('day');
 
+  const handleGranularityChange = (nextGranularity: AgentUsageGranularity) => {
+    setGranularity(nextGranularity);
+    if (nextGranularity === 'week' && range === '7d') setRange('30d');
+  };
+
   const { data, isLoading, error, mutate } = useAgentUsageStats(
     activeAgentId ?? '',
     range,
@@ -64,13 +70,18 @@ const AgentUsage = memo(() => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
-        styles={{ left: { paddingInlineStart: 24 } }}
-        left={
-          activeAgentId ? (
-            <AgentBreadcrumb agentId={activeAgentId} title={t('usageStats.title')} />
-          ) : null
-        }
-      />
+        // No section title — the Segmented beside it names the current tab.
+        left={activeAgentId ? <AgentBreadcrumb agentId={activeAgentId} /> : null}
+        // `relative` anchors the absolutely-centered switcher below.
+        style={{ position: 'relative' }}
+        styles={{
+          // Center on the header midpoint (equal gaps), not the leftover track.
+          center: AGENT_PROFILE_TABS_CENTER_STYLE,
+          left: { minWidth: 0, paddingInlineStart: 8 },
+        }}
+      >
+        {activeAgentId && <AgentProfileTabs active={'statistics'} agentId={activeAgentId} />}
+      </NavHeader>
       <Flexbox flex={1} style={styles.body} width={'100%'}>
         <WideScreenContainer>
           <Flexbox gap={16} paddingBlock={16}>
@@ -87,7 +98,7 @@ const AgentUsage = memo(() => {
                       { label: t('usageStats.byDay'), value: 'day' },
                       { label: t('usageStats.byWeek'), value: 'week' },
                     ]}
-                    onChange={(v) => setGranularity(v as AgentUsageGranularity)}
+                    onChange={(v) => handleGranularityChange(v as AgentUsageGranularity)}
                   />
                 </Flexbox>
                 <Flexbox horizontal align={'center'} gap={8}>
@@ -97,11 +108,18 @@ const AgentUsage = memo(() => {
                   <Segmented
                     size={'small'}
                     value={range}
-                    options={[
-                      { label: '7d', value: '7d' },
-                      { label: '30d', value: '30d' },
-                      { label: '90d', value: '90d' },
-                    ]}
+                    options={
+                      granularity === 'week'
+                        ? [
+                            { label: '30d', value: '30d' },
+                            { label: '90d', value: '90d' },
+                          ]
+                        : [
+                            { label: '7d', value: '7d' },
+                            { label: '30d', value: '30d' },
+                            { label: '90d', value: '90d' },
+                          ]
+                    }
                     onChange={(v) => setRange(v as TimeRange)}
                   />
                 </Flexbox>

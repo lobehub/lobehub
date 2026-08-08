@@ -8,11 +8,13 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useClientDataSWR } from '@/libs/swr';
 import { resourceKeys } from '@/libs/swr/keys';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import {
@@ -22,6 +24,7 @@ import {
 import type { AsyncTaskStatus } from '@/types/asyncTask';
 import type { FileListItem } from '@/types/files';
 
+import { useExplorerSelectionEligibility } from './hooks/useExplorerSelection';
 import FileListItemComponent from './ListView/ListItem';
 import { getListViewMinWidth } from './ListView/ListItem/constants';
 import MasonryItemWrapper from './MasonryView/MasonryItem/MasonryItemWrapper';
@@ -34,6 +37,7 @@ const SearchResultsOverlay = memo(() => {
   );
 
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const { isItemSelectable } = useExplorerSelectionEligibility();
 
   const columnWidths = useGlobalStore((s) => ({
     ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
@@ -42,8 +46,11 @@ const SearchResultsOverlay = memo(() => {
   const columnCount = useMasonryColumnCount();
 
   const isActive = !!searchQuery && searchQuery.length > 0;
-  const showUploader = listVisibility !== 'private';
-  const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
+  // Personal account has only one uploader (the user themselves), so hide the
+  // column entirely there — it only makes sense in a workspace with multiple members.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const showUploader = !!activeWorkspaceId && (!!libraryId || listVisibility !== 'private');
+  const visibility = getResourceQueryVisibility(libraryId, listVisibility);
 
   const {
     data: rawData,
@@ -61,7 +68,7 @@ const SearchResultsOverlay = memo(() => {
       : null,
     async ([, params]: [
       string,
-      { category?: string; libraryId?: string; q: string; visibility: 'private' | 'public' },
+      { category?: string; libraryId?: string; q: string; visibility?: 'private' | 'public' },
     ]) => {
       const response = await resourceService.queryResources({
         ...params,
@@ -90,8 +97,12 @@ const SearchResultsOverlay = memo(() => {
 
   const masonryContext = useMemo(
     () => ({
+      isItemSelectable,
       knowledgeBaseId: libraryId ?? undefined,
       onSelectedChange: (id: string, checked: boolean) => {
+        const item = data?.find((entry) => entry.id === id);
+        if (!item || !isItemSelectable(item)) return;
+
         if (checked) {
           setSelectedFileIds((prev) => [...prev, id]);
         } else {
@@ -101,7 +112,7 @@ const SearchResultsOverlay = memo(() => {
       selectAllState: 'loaded' as const,
       selectFileIds: selectedFileIds,
     }),
-    [libraryId, selectedFileIds],
+    [data, isItemSelectable, libraryId, selectedFileIds],
   );
 
   if (!isActive) return null;
@@ -220,14 +231,17 @@ const SearchResultsOverlay = memo(() => {
                 style={{ height: '100%' }}
                 itemContent={(index, item) => {
                   if (!item) return null;
+                  const selectable = isItemSelectable(item);
                   return (
                     <FileListItemComponent
                       columnWidths={columnWidths}
                       index={index}
                       key={item.id}
-                      selected={selectedFileIds.includes(item.id)}
+                      selectable={selectable}
+                      selected={selectable && selectedFileIds.includes(item.id)}
                       showUploader={showUploader}
                       onSelectedChange={(id, checked) => {
+                        if (!selectable) return;
                         if (checked) {
                           setSelectedFileIds((prev) => [...prev, id]);
                         } else {

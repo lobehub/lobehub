@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
 
 import { createMessengerLinkModal } from '../LinkModal';
+import { MessengerPushSection } from './MessengerPush';
 import {
   DetailLayout,
   IntegrationDetailSkeleton,
@@ -81,6 +83,9 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
       headerAction={headerAction}
       name={name}
       platform="telegram"
+      extraSections={
+        hasLinks ? <MessengerPushSection name={name} platform="telegram" /> : undefined
+      }
       onBack={onBack}
     >
       {link ? (

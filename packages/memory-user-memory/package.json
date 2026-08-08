@@ -26,8 +26,7 @@
     "ora": "^9.4.1",
     "unist-builder": "^4.0.0",
     "xast-util-to-xml": "^4.0.0",
-    "xastscript": "^4.0.0",
-    "zod-to-json-schema": "^3.25.2"
+    "xastscript": "^4.0.0"
   },
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
@@ -36,6 +35,6 @@
     "tsx": "^4.22.4"
   },
   "peerDependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   }
 }

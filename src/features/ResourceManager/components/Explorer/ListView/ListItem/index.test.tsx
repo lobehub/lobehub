@@ -20,8 +20,8 @@ vi.mock('@lobehub/ui', () => {
   return {
     Avatar: ({ alt }: { alt: string }) => <span data-testid="avatar">{alt}</span>,
     Center: Box,
-    Checkbox: ({ checked }: { checked?: boolean }) => (
-      <input readOnly checked={checked} type="checkbox" />
+    Checkbox: ({ checked, disabled }: { checked?: boolean; disabled?: boolean }) => (
+      <input readOnly checked={checked} disabled={disabled} type="checkbox" />
     ),
     ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
     Flexbox: Box,
@@ -36,7 +36,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store', () => ({
+vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: any) => unknown) =>
     selector({
       libraryId: undefined,
@@ -47,7 +47,7 @@ vi.mock('@/routes/(main)/resource/features/store', () => ({
     }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store/selectors', () => ({
+vi.mock('@/features/ResourceManager/store/selectors', () => ({
   isExplorerItemSelected: () => false,
 }));
 
@@ -148,5 +148,11 @@ describe('FileListItem', () => {
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
     expect(screen.queryByTestId('avatar')).not.toBeInTheDocument();
     expect(screen.getByText('1.0 KB')).toBeInTheDocument();
+  });
+
+  it('disables selection for rows the workspace member did not upload', () => {
+    render(<FileListItem {...baseProps} selectable={false} />);
+
+    expect(screen.getByRole('checkbox')).toBeDisabled();
   });
 });

@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import VisibilityConfirmContent from './index';
@@ -12,9 +11,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="content-shell">{children}</div>
-  ),
   Icon: ({ size }: { icon: unknown; size?: number }) => (
     <span data-icon-size={size} data-testid="icon" />
   ),
@@ -38,5 +34,13 @@ describe('VisibilityConfirmContent', () => {
     expect(screen.getByText('visibilityConfirm.publish.itemReversible')).toBeTruthy();
     expect(screen.getByText('visibilityConfirm.publish.itemLoaded')).toBeTruthy();
     expect(screen.getAllByText('visibilityConfirm.irreversible')).toHaveLength(1);
+  });
+
+  // LOBE-12543: publishing no longer asks for member permissions up front —
+  // the resource lands on the workspace default and the owner tunes it later
+  // from the resource's own "Member Permissions" entry.
+  it('does not render a member-permission select when publishing', () => {
+    render(<VisibilityConfirmContent variant="publish" />);
+    expect(screen.queryByText('permission.generalAccess.label')).toBeNull();
   });
 });

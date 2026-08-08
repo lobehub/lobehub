@@ -1,8 +1,7 @@
 'use client';
 
-import { Block, Button, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { confirmModal, Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Block, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Button, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -26,6 +25,7 @@ import {
   PERSONAL_SCOPE,
   resolvePersonalScopeLabel,
 } from '../scopeOptions';
+import CommandsSection from './CommandsSection';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   backButton: css`
@@ -68,6 +68,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  rowIdentity: css`
+    min-width: 0;
+  `,
 }));
 
 export interface ConnectionRowProps {
@@ -76,11 +79,12 @@ export interface ConnectionRowProps {
   icon: ReactNode;
   label: string;
   name: string;
+  nameTooltip?: string;
   status: 'connected' | 'pending';
 }
 
 export const ConnectionRow = memo<ConnectionRowProps>(
-  ({ action, children, icon, label, name, status }) => {
+  ({ action, children, icon, label, name, nameTooltip, status }) => {
     const { t } = useTranslation('messenger');
 
     return (
@@ -88,11 +92,13 @@ export const ConnectionRow = memo<ConnectionRowProps>(
         <Flexbox gap={12}>
           <Flexbox horizontal align="center" gap={12}>
             <div className={styles.rowIcon}>{icon}</div>
-            <Flexbox flex={1} gap={2}>
+            <Flexbox className={styles.rowIdentity} flex={1} gap={2}>
               <Text style={{ fontSize: 12 }} type="secondary">
                 {label}
               </Text>
-              <Text strong>{name}</Text>
+              <Text strong ellipsis={{ tooltip: nameTooltip ?? true }}>
+                {name}
+              </Text>
             </Flexbox>
             {status === 'connected' ? (
               <Tag color="success" icon={<Icon icon={CheckCircle2Icon} size="small" />}>
@@ -170,15 +176,28 @@ IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
 
 interface DetailLayoutProps {
   children?: ReactNode;
+  /** Standalone sections (own title + card) rendered between the connections
+   *  section and the commands section. */
+  extraSections?: ReactNode;
   hasConnections: boolean;
   headerAction: ReactNode;
   name: string;
   onBack: () => void;
   platform: MessengerPlatform;
+  sectionTitle?: ReactNode;
 }
 
 export const DetailLayout = memo<DetailLayoutProps>(
-  ({ children, headerAction, hasConnections, name, onBack, platform }) => {
+  ({
+    children,
+    extraSections,
+    headerAction,
+    hasConnections,
+    name,
+    onBack,
+    platform,
+    sectionTitle,
+  }) => {
     const { t } = useTranslation('messenger');
 
     return (
@@ -210,11 +229,15 @@ export const DetailLayout = memo<DetailLayoutProps>(
         {hasConnections && (
           <Flexbox gap={8}>
             <Text strong style={{ fontSize: 15 }}>
-              {t('messenger.detail.connections.title')}
+              {sectionTitle ?? t('messenger.detail.connections.title')}
             </Text>
             <Flexbox gap={12}>{children}</Flexbox>
           </Flexbox>
         )}
+
+        {extraSections}
+
+        <CommandsSection platform={platform} />
       </Flexbox>
     );
   },
@@ -248,7 +271,13 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
         serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
     );
     const handle = formatUserHandle(link);
-    const name = extraLabel ? `${handle} · ${extraLabel}` : handle;
+    const hasReadableHandle = Boolean(link.platformUsername);
+    const name = extraLabel
+      ? hasReadableHandle
+        ? `${handle} · ${extraLabel}`
+        : extraLabel
+      : handle;
+    const nameTooltip = extraLabel && !hasReadableHandle ? handle : undefined;
 
     // First-level "scope" selector — personal plus every workspace the user
     // belongs to. The bot is a single shared bot; which LobeHub context a
@@ -323,6 +352,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
         icon={<Icon icon={UserIcon} size="small" />}
         label={t('messenger.detail.connections.userLabel')}
         name={name}
+        nameTooltip={nameTooltip}
         status="connected"
         action={
           <Button
@@ -357,10 +387,9 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
               {t('messenger.activeAgent')}
             </Text>
             <AgentSelect
-              // Default to the scope's inbox agent when the selected scope has no
-              // agent yet (neither an optimistic pick nor a persisted one),
-              // rather than leaving the dropdown empty.
-              defaultToInbox={canEdit && !pendingForScope && !linkIsActiveScope}
+              // Default to the scope's inbox agent whenever the selected scope has
+              // no active Agent. This also repairs historical agent-less links.
+              defaultToInbox={canEdit && !pendingForScope && !activeAgentId}
               disabled={!canEdit}
               placeholder={t('messenger.activeAgentPlaceholder')}
               value={activeAgentId ?? undefined}
@@ -420,9 +449,14 @@ interface UseLinkActionsArgs {
   platform: MessengerPlatform;
 }
 
-export const useLinkActions = ({ linksMutate, name, platform }: UseLinkActionsArgs) => {
+export const useLinkActions = ({
+  installationsMutate,
+  linksMutate,
+  name,
+  platform,
+}: UseLinkActionsArgs) => {
   const { t } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Returns whether the update succeeded so the caller can roll back its
@@ -437,10 +471,10 @@ export const useLinkActions = ({ linksMutate, name, platform }: UseLinkActionsAr
         tenantId: tenantId || undefined,
       });
       await linksMutate();
-      message.success(t('messenger.setActiveSuccess'));
+      toast.success(t('messenger.setActiveSuccess'));
       return true;
     } catch (error) {
-      message.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
+      toast.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
       return false;
     }
   };
@@ -449,15 +483,20 @@ export const useLinkActions = ({ linksMutate, name, platform }: UseLinkActionsAr
     if (!canEdit) return;
 
     confirmModal({
-      content: t('messenger.unlinkConfirm', { platform: name }),
+      // WeChat links by scanning a QR code — it has no /start command, so the
+      // generic "/start again" copy would point users at a dead end.
+      content:
+        platform === 'wechat'
+          ? t('messenger.unlinkConfirmWechat')
+          : t('messenger.unlinkConfirm', { platform: name }),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
           await messengerService.unlink({ platform, tenantId: tenantId || undefined });
-          await linksMutate();
-          message.success(t('messenger.unlinkSuccess'));
+          await Promise.all([linksMutate(), installationsMutate()]);
+          toast.success(t('messenger.unlinkSuccess'));
         } catch (error) {
-          message.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
+          toast.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
         }
       },
       title: t('messenger.unlinkTitle'),
@@ -496,7 +535,7 @@ export const useDisconnectInstallation = ({
   linksMutate,
 }: UseDisconnectInstallationArgs) => {
   const { t } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   return (id: string, copy: DisconnectInstallationCopy) => {
@@ -510,9 +549,9 @@ export const useDisconnectInstallation = ({
           await messengerService.uninstallInstallation({ installationId: id });
           await installationsMutate();
           await linksMutate();
-          message.success(copy.success);
+          toast.success(copy.success);
         } catch (error) {
-          message.error(getMessengerErrorMessage(error, t, copy.failedKey));
+          toast.error(getMessengerErrorMessage(error, t, copy.failedKey));
         }
       },
       title: copy.title,

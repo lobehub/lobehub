@@ -41,6 +41,11 @@ export interface KnowledgeItem {
   visibility?: 'private' | 'public' | null;
 }
 
+interface KnowledgeQueryParams extends QueryFileListParams {
+  /** Restrict the result set to rows created by a specific workspace member. */
+  creatorUserId?: string;
+}
+
 /**
  * Resources Repository - combines files and documents into a unified interface
  */
@@ -92,6 +97,7 @@ export class KnowledgeRepo {
    */
   async query({
     category,
+    creatorUserId,
     q,
     sortType,
     sorter,
@@ -101,7 +107,7 @@ export class KnowledgeRepo {
     limit = 50,
     offset = 0,
     visibility,
-  }: QueryFileListParams = {}): Promise<KnowledgeItem[]> {
+  }: KnowledgeQueryParams = {}): Promise<KnowledgeItem[]> {
     // If parentId is provided, check if it's a slug and resolve it to an ID
     let resolvedParentId = parentId;
     if (parentId) {
@@ -121,6 +127,7 @@ export class KnowledgeRepo {
     // Build file query
     const fileQuery = this.buildFileQuery({
       category,
+      creatorUserId,
       knowledgeBaseId,
       parentId: resolvedParentId,
       q,
@@ -133,6 +140,7 @@ export class KnowledgeRepo {
     // Build document query (notes)
     const documentQuery = this.buildDocumentQuery({
       category,
+      creatorUserId,
       knowledgeBaseId,
       parentId: resolvedParentId,
       q,
@@ -438,13 +446,18 @@ export class KnowledgeRepo {
 
   private buildFileQuery({
     category,
+    creatorUserId,
     q,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
     visibility,
-  }: QueryFileListParams = {}): ReturnType<typeof sql> {
+  }: KnowledgeQueryParams = {}): ReturnType<typeof sql> {
     const whereConditions: any[] = [this.fileOwnershipSql('f')];
+
+    if (creatorUserId) {
+      whereConditions.push(sql`f.user_id = ${creatorUserId}`);
+    }
 
     // Parent ID filter
     if (parentId !== undefined) {
@@ -485,6 +498,10 @@ export class KnowledgeRepo {
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (f.column instead of files.column)
       const kbWhereConditions: any[] = [this.fileOwnershipSql('f')];
+
+      if (creatorUserId) {
+        kbWhereConditions.push(sql`f.user_id = ${creatorUserId}`);
+      }
 
       // Parent ID filter
       if (parentId !== undefined) {
@@ -602,15 +619,20 @@ export class KnowledgeRepo {
 
   private buildDocumentQuery({
     category,
+    creatorUserId,
     q,
     knowledgeBaseId,
     parentId,
     visibility,
-  }: QueryFileListParams = {}): ReturnType<typeof sql> {
+  }: KnowledgeQueryParams = {}): ReturnType<typeof sql> {
     const whereConditions: any[] = [
       this.documentOwnershipSql('documents'),
       sql`${documents.sourceType} != ${'file'}`,
     ];
+
+    if (creatorUserId) {
+      whereConditions.push(sql`${documents.userId} = ${creatorUserId}`);
+    }
 
     // Parent ID filter
     if (parentId !== undefined) {
@@ -688,6 +710,10 @@ export class KnowledgeRepo {
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (d.column instead of documents.column)
       const kbWhereConditions: any[] = [this.documentOwnershipSql('d')];
+
+      if (creatorUserId) {
+        kbWhereConditions.push(sql`d.user_id = ${creatorUserId}`);
+      }
 
       // Parent ID filter
       if (parentId !== undefined) {

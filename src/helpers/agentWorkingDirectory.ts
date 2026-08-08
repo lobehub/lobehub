@@ -3,7 +3,11 @@ import type {
   WorkingDirConfig,
   WorkingDirConfigValue,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+
+interface ResolveTargetDeviceIdOptions {
+  workspaceScoped?: boolean;
+}
 
 /**
  * The device a run targets: an explicitly bound remote device, this machine,
@@ -14,12 +18,22 @@ import { getWorkingDirEffectivePath } from '@lobechat/types';
 export const resolveTargetDeviceId = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   currentDeviceId: string | undefined,
-): string | undefined =>
-  agencyConfig?.executionTarget === 'device'
+  { workspaceScoped = false }: ResolveTargetDeviceIdOptions = {},
+): string | undefined => {
+  if (workspaceScoped) {
+    return agencyConfig?.executionTarget === 'local' ||
+      agencyConfig?.executionTarget === 'device' ||
+      agencyConfig?.executionTarget === 'auto'
+      ? agencyConfig.boundDeviceId
+      : undefined;
+  }
+
+  return agencyConfig?.executionTarget === 'device'
     ? agencyConfig?.boundDeviceId
     : agencyConfig?.executionTarget === 'local'
       ? currentDeviceId || agencyConfig?.boundDeviceId
       : currentDeviceId;
+};
 
 const toWorkingDirConfig = (
   value: WorkingDirConfigValue | null | undefined,
@@ -48,6 +62,7 @@ export const resolveAgentWorkingDirectoryConfig = (params: {
   legacyAgentWorkingDirectory?: string;
   topicWorkingDirectory?: string;
   topicWorkingDirectoryConfig?: WorkingDirConfig;
+  workspaceScoped?: boolean;
 }): WorkingDirConfig | undefined => {
   const {
     agencyConfig,
@@ -57,18 +72,24 @@ export const resolveAgentWorkingDirectoryConfig = (params: {
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
     topicWorkingDirectoryConfig,
+    workspaceScoped,
   } = params;
   if (topicWorkingDirectoryConfig) return topicWorkingDirectoryConfig;
   if (topicWorkingDirectory) return { path: topicWorkingDirectory };
 
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const agentChoice = toWorkingDirConfig(
     targetDeviceId ? agencyConfig?.workingDirByDevice?.[targetDeviceId] : undefined,
   );
   if (agentChoice) return agentChoice;
-  if (legacyAgentWorkingDirectory) return { path: legacyAgentWorkingDirectory };
+  // Legacy + desktop/home fallbacks belong to the current member's machine.
+  // They are invalid when an unoverridden workspace config routes to a shared
+  // device (or sandbox), where only shared/device-scoped paths are meaningful.
+  if (!workspaceScoped && legacyAgentWorkingDirectory) return { path: legacyAgentWorkingDirectory };
   if (deviceDefaultCwd) return { path: deviceDefaultCwd };
-  if (fallback) return { path: fallback };
+  if (!workspaceScoped && fallback) return { path: fallback };
 };
 
 export const resolveAgentWorkingDirectory = (
@@ -76,4 +97,22 @@ export const resolveAgentWorkingDirectory = (
 ): string | undefined => {
   const config = resolveAgentWorkingDirectoryConfig(params);
   return getWorkingDirEffectivePath(config);
+};
+
+/**
+ * Same precedence as {@link resolveAgentWorkingDirectory}, but resolves to the
+ * SOURCE repo path (`config.path`) — the repo root, ignoring any active
+ * worktree recorded in `config.git.activeWorktree`.
+ *
+ * Use this for the directory-picker DISPLAY, which shows the repo the agent is
+ * bound to. The effective (worktree) path belongs to git status / the worktree
+ * switcher, not the directory label: heterogeneous CLI agents anchor their
+ * session cwd to the source repo (see `conversationLifecycle`), so showing the
+ * worktree here would misrepresent where the run actually executes.
+ */
+export const resolveAgentWorkingDirectorySource = (
+  params: Parameters<typeof resolveAgentWorkingDirectoryConfig>[0],
+): string | undefined => {
+  const config = resolveAgentWorkingDirectoryConfig(params);
+  return getWorkingDirSourcePath(config);
 };

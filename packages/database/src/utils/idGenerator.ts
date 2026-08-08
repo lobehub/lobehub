@@ -8,6 +8,7 @@ export const createNanoId = (size = 8) =>
 const prefixes = {
   agentCronJobs: 'cron',
   agentSkills: 'skl',
+  agentHistoryJobs: 'ahj',
   briefs: 'brf',
   taskComments: 'cmt',
   tasks: 'task',
@@ -29,14 +30,17 @@ const prefixes = {
   messageGroups: 'mg',
   messages: 'msg',
   plugins: 'plg',
+  projects: 'prj',
   sessionGroups: 'sg',
   sessions: 'ssn',
   threads: 'thd',
+  topicComments: 'tcm',
   topics: 'tpc',
   user: 'user',
   workspaceAuditLogs: 'wal',
   workspaceInvitations: 'wsi',
   workspaces: 'ws',
+  works: 'wk',
 } as const;
 
 export const idGenerator = (namespace: keyof typeof prefixes, size = 12) => {

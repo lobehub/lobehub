@@ -32,12 +32,10 @@ describe('parseLobeLink', () => {
   });
 
   it('parses linear issue', () => {
-    expect(parseLobeLink('https://linear.app/lobehub/issue/TST-10001/codex-pptx-preview')).toEqual(
-      {
-        canonicalLabel: 'TST-10001',
-        kind: 'linear',
-      },
-    );
+    expect(parseLobeLink('https://linear.app/lobehub/issue/TST-10001/codex-pptx-preview')).toEqual({
+      canonicalLabel: 'TST-10001',
+      kind: 'linear',
+    });
   });
 
   it('parses github user / org pages with the github icon', () => {
@@ -87,10 +85,16 @@ describe('parseLobeLink', () => {
     );
   });
 
-  it('ignores citation, footnote, relative and non-http hrefs', () => {
+  it('keeps root-relative links for the internal-link renderer', () => {
+    expect(parseLobeLink('/foo/bar')).toEqual({
+      canonicalLabel: '/foo/bar',
+      kind: 'generic',
+    });
+  });
+
+  it('ignores citation, footnote and non-http hrefs', () => {
     expect(parseLobeLink('citation-1')).toBeNull();
     expect(parseLobeLink('#user-content-fn-1')).toBeNull();
-    expect(parseLobeLink('/foo/bar')).toBeNull();
     expect(parseLobeLink(undefined)).toBeNull();
   });
 });

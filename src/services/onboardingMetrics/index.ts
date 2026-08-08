@@ -37,16 +37,23 @@ const emit = (name: string, properties: Record<string, unknown>): void => {
   }
 };
 
-export type OnboardingFlow = 'agent' | 'classic' | 'common';
+export type OnboardingFlow = 'agent' | 'classic' | 'common' | 'web';
 
 export type OnboardingStep =
   | 'agentpicker'
+  | 'chief_agent'
+  | 'connect_apps'
   | 'conversation'
   | 'fullname'
   | 'interests'
+  | 'learn_your_world'
+  | 'messenger'
+  | 'profile'
   | 'prosettings'
   | 'response_language'
-  | 'telemetry';
+  | 'starter_tasks'
+  | 'telemetry'
+  | 'welcome';
 
 export interface OnboardingStepPayload extends Record<string, unknown> {
   flow: OnboardingFlow;
@@ -57,6 +64,7 @@ export interface OnboardingStepPayload extends Record<string, unknown> {
 
 export interface OnboardingCompletedPayload extends Record<string, unknown> {
   flow: Exclude<OnboardingFlow, 'common'>;
+  skipped?: boolean;
   targetUrl?: string;
 }
 

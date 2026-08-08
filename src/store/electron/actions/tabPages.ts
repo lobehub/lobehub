@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import { resolveTabUpdate } from '@/features/Electron/titlebar/TabBar/resolveTabUpdate';
 import {
   isSameTabTarget,
   PERSONAL_TAB_SCOPE,
@@ -23,7 +24,14 @@ const generateTabId = (): string => `tab_${nanoid(8)}`;
 export interface TabPagesState {
   activeTabId: string | null;
   activeTabScope: TabScope;
+  splitView: SplitViewState | null;
   tabs: TabItem[];
+}
+
+export interface SplitViewState {
+  primaryTabId: string;
+  ratio: number;
+  secondaryTabId: string;
 }
 
 // ======== Initial State ======== //
@@ -31,6 +39,7 @@ export interface TabPagesState {
 export const tabPagesInitialState: TabPagesState = {
   activeTabScope: PERSONAL_TAB_SCOPE,
   activeTabId: null,
+  splitView: null,
   tabs: [],
 };
 
@@ -51,10 +60,18 @@ export class TabPagesActionImpl {
   }
 
   activateTab = (id: string): void => {
-    const { tabs } = this.#get();
+    const { activeTabId, splitView, tabs } = this.#get();
     if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id }, false, 'activateTab');
+    this.#set(
+      {
+        activeTabId: id,
+        splitView: this.#replaceFocusedPane(splitView, activeTabId, id),
+        tabs: this.#touch(tabs, id),
+      },
+      false,
+      'activateTab',
+    );
     this.#persist();
   };
 
@@ -65,8 +82,7 @@ export class TabPagesActionImpl {
 
     if (existing) {
       if (activate) {
-        this.#set({ activeTabId: existing.id }, false, 'activateExistingTab');
-        this.#persist();
+        this.activateTab(existing.id);
       }
       return existing.id;
     }
@@ -83,6 +99,72 @@ export class TabPagesActionImpl {
     const { activeTabId, tabs } = this.#get();
     if (!activeTabId) return null;
     return tabs.find((t) => t.id === activeTabId) ?? null;
+  };
+
+  closeSplitView = (): void => {
+    if (!this.#get().splitView) return;
+    this.#set({ splitView: null }, false, 'closeSplitView');
+  };
+
+  focusTabPane = (id: string): void => {
+    const { splitView, tabs } = this.#get();
+    if (!splitView) return;
+    if (id !== splitView.primaryTabId && id !== splitView.secondaryTabId) return;
+
+    this.#set({ activeTabId: id, tabs: this.#touch(tabs, id) }, false, 'focusTabPane');
+    this.#persist();
+  };
+
+  openTabInSplitView = (id: string): string | null => {
+    const { activeTabId, splitView, tabs } = this.#get();
+    const target = tabs.find((tab) => tab.id === id);
+    if (!target || !activeTabId) return null;
+
+    const primaryTabId = splitView?.primaryTabId ?? activeTabId;
+    if (splitView?.secondaryTabId === id) {
+      this.focusTabPane(id);
+      return id;
+    }
+
+    const now = Date.now();
+    const shouldDuplicate = id === primaryTabId;
+    const secondaryTabId = shouldDuplicate ? generateTabId() : id;
+    const nextTabs = shouldDuplicate
+      ? [
+          ...tabs,
+          {
+            ...target,
+            id: secondaryTabId,
+            lastVisited: now,
+            pinned: false,
+          },
+        ]
+      : this.#touch(tabs, id);
+
+    this.#set(
+      {
+        activeTabId: secondaryTabId,
+        splitView: {
+          primaryTabId,
+          ratio: splitView?.ratio ?? 0.5,
+          secondaryTabId,
+        },
+        tabs: nextTabs,
+      },
+      false,
+      'openTabInSplitView',
+    );
+    this.#persist();
+    return secondaryTabId;
+  };
+
+  setSplitRatio = (ratio: number): void => {
+    const { splitView } = this.#get();
+    if (!splitView) return;
+
+    const nextRatio = Math.min(0.75, Math.max(0.25, ratio));
+    if (nextRatio === splitView.ratio) return;
+    this.#set({ splitView: { ...splitView, ratio: nextRatio } }, false, 'setSplitRatio');
   };
 
   loadTabs = (url = '/'): void => {
@@ -107,49 +189,53 @@ export class TabPagesActionImpl {
       }
     }
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'removeTab');
+    const reconciled = this.#reconcileSplitView(newTabs, newActiveId);
+    newActiveId = reconciled.activeTabId;
+
+    this.#set(
+      {
+        activeTabId: newActiveId,
+        splitView: reconciled.splitView,
+        tabs: this.#touch(newTabs, newActiveId),
+      },
+      false,
+      'removeTab',
+    );
     this.#persist();
 
     return newActiveId;
   };
 
   closeLeftTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index <= 0) return;
 
-    const newTabs = tabs.slice(index);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeLeftTabs');
-    this.#persist();
+    this.#closeExcept((_, i) => i >= index, id, 'closeLeftTabs');
   };
 
   closeOtherTabs = (id: string): void => {
     const { tabs } = this.#get();
-    const target = tabs.find((t) => t.id === id);
-    if (!target) return;
+    if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id, tabs: [target] }, false, 'closeOtherTabs');
-    this.#persist();
+    this.#closeExcept((tab) => tab.id === id, id, 'closeOtherTabs');
   };
 
   closeRightTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0 || index >= tabs.length - 1) return;
 
-    const newTabs = tabs.slice(0, index + 1);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeRightTabs');
-    this.#persist();
+    this.#closeExcept((_, i) => i <= index, id, 'closeRightTabs');
   };
 
   reorderTabs = (fromIndex: number, toIndex: number): void => {
     const { tabs } = this.#get();
     if (fromIndex < 0 || fromIndex >= tabs.length) return;
     if (toIndex < 0 || toIndex >= tabs.length) return;
+    // Pinned tabs form a run at the head of the list; a drag across that boundary would
+    // interleave the two groups and desync array order from render order.
+    if (!!tabs[fromIndex].pinned !== !!tabs[toIndex].pinned) return;
 
     const newTabs = [...tabs];
     const [moved] = newTabs.splice(fromIndex, 1);
@@ -157,6 +243,14 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'reorderTabs');
     this.#persist();
+  };
+
+  pinTab = (id: string): void => {
+    this.#setPinned(id, true);
+  };
+
+  unpinTab = (id: string): void => {
+    this.#setPinned(id, false);
   };
 
   updateTab = (id: string, url: string): string => {
@@ -180,6 +274,41 @@ export class TabPagesActionImpl {
     return id;
   };
 
+  // Router→store snapshot taken by TabHost right before a hidden tab's router is
+  // LRU-evicted: a pinned navigation into a hidden tab moves its router but the
+  // hidden reporter can't fire, so persist the latest location for cold restore.
+  // `lastVisited` is intentionally preserved so the snapshot doesn't reshuffle
+  // the LRU ranking (which would re-promote the just-evicted tab).
+  snapshotTabLocation = (id: string, url: string): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return;
+
+    const prev = tabs[index];
+    if (url === prev.url) return;
+
+    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...prev, cached: sameTarget ? prev.cached : undefined, url };
+
+    this.#set({ tabs: newTabs }, false, 'snapshotTabLocation');
+    this.#persist();
+  };
+
+  reportTabLocation = (id: string, url: string): void => {
+    const { activeTabScope, tabs } = this.#get();
+    if (!tabs.some((t) => t.id === id)) return;
+
+    const action = resolveTabUpdate(activeTabScope, url);
+    if (action.type === 'scope-swap') {
+      this.#swapScope(action.scope, action.url);
+      return;
+    }
+
+    this.updateTab(id, url);
+  };
+
   updateTabCache = (id: string, cached: DynamicRouteMeta): void => {
     const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
@@ -195,8 +324,104 @@ export class TabPagesActionImpl {
     this.#persist();
   };
 
-  #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
+  // Pinning is a retention promise, so a bulk close only ever narrows the unpinned run —
+  // a pinned tab leaves solely through removeTab, where the user named that one tab.
+  // Focus therefore stays put unless the close actually took the active tab.
+  #closeExcept = (
+    keep: (tab: TabItem, index: number) => boolean,
+    targetId: string,
+    action: string,
+  ): void => {
     const { tabs, activeTabId } = this.#get();
+    const newTabs = tabs.filter((tab, index) => tab.pinned || keep(tab, index));
+    if (newTabs.length === tabs.length) return;
+
+    const preferredActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
+    const { activeTabId: newActiveId, splitView } = this.#reconcileSplitView(
+      newTabs,
+      preferredActiveId,
+    );
+
+    this.#set(
+      { activeTabId: newActiveId, splitView, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      action,
+    );
+    this.#persist();
+  };
+
+  // Pinning moves the tab to the end of the pinned run, unpinning to the first slot
+  // after it. Array order must equal render order, or Mod+1–9, Ctrl+Tab cycling and drag
+  // reorder would each describe a different sequence.
+  #setPinned = (id: string, pinned: boolean): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0 || !!tabs[index].pinned === pinned) return;
+
+    const target: TabItem = { ...tabs[index], pinned };
+    const rest = tabs.filter((_, i) => i !== index);
+    const firstUnpinned = rest.findIndex((t) => !t.pinned);
+    const position = firstUnpinned < 0 ? rest.length : firstUnpinned;
+
+    this.#set(
+      { tabs: [...rest.slice(0, position), target, ...rest.slice(position)] },
+      false,
+      pinned ? 'pinTab' : 'unpinTab',
+    );
+    this.#persist();
+  };
+
+  // Every path that makes a tab active must refresh its `lastVisited`: TabHost
+  // ranks keep-alive routers by that timestamp, so a tab activated without a
+  // navigation would stay at its stale recency and get its router disposed (and
+  // its in-page state lost) the moment the user switches away again.
+  #touch = (tabs: TabItem[], id: string | null): TabItem[] => {
+    if (!id) return tabs;
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return tabs;
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...newTabs[index], lastVisited: Date.now() };
+    return newTabs;
+  };
+
+  #replaceFocusedPane = (
+    splitView: SplitViewState | null,
+    activeTabId: string | null,
+    nextTabId: string,
+  ): SplitViewState | null => {
+    if (!splitView) return null;
+    if (nextTabId === splitView.primaryTabId || nextTabId === splitView.secondaryTabId) {
+      return splitView;
+    }
+
+    return activeTabId === splitView.secondaryTabId
+      ? { ...splitView, secondaryTabId: nextTabId }
+      : { ...splitView, primaryTabId: nextTabId };
+  };
+
+  #reconcileSplitView = (
+    tabs: TabItem[],
+    preferredActiveId: string | null,
+  ): Pick<TabPagesState, 'activeTabId' | 'splitView'> => {
+    const { splitView } = this.#get();
+    if (!splitView) return { activeTabId: preferredActiveId, splitView: null };
+
+    const tabIds = new Set(tabs.map((tab) => tab.id));
+    const hasPrimary = tabIds.has(splitView.primaryTabId);
+    const hasSecondary = tabIds.has(splitView.secondaryTabId);
+    if (hasPrimary && hasSecondary) return { activeTabId: preferredActiveId, splitView };
+
+    const remainingPaneId = hasPrimary
+      ? splitView.primaryTabId
+      : hasSecondary
+        ? splitView.secondaryTabId
+        : null;
+    return { activeTabId: remainingPaneId ?? preferredActiveId, splitView: null };
+  };
+
+  #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
+    const { tabs, activeTabId, splitView } = this.#get();
     const id = generateTabId();
     const newTab: TabItem = {
       cached,
@@ -206,12 +431,27 @@ export class TabPagesActionImpl {
     };
 
     this.#set(
-      { activeTabId: activate ? id : activeTabId, tabs: [...tabs, newTab] },
+      {
+        activeTabId: activate ? id : activeTabId,
+        splitView: activate ? this.#replaceFocusedPane(splitView, activeTabId, id) : splitView,
+        tabs: [...tabs, newTab],
+      },
       false,
       'addTab',
     );
     this.#persist();
     return id;
+  };
+
+  // Cross-scope in-tab navigation reported by TabLocationReporter: persist the
+  // old scope with the navigating tab still at its pre-nav url (it stays in the
+  // old window), load the target scope, then find-or-add + activate a tab there.
+  // TabHost disposes the old-scope routers once `tabs` swaps (one-way; no router
+  // is ever navigated from here).
+  #swapScope = (scope: TabScope, url: string): void => {
+    this.#persist();
+    this.#loadScope(scope, true);
+    this.addTab(url);
   };
 
   #persist = (): void => {
@@ -232,7 +472,7 @@ export class TabPagesActionImpl {
     if (!force && tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
 
     const { tabs, activeTabId } = getTabPages(scope);
-    this.#set({ activeTabId, activeTabScope: scope, tabs }, false, 'loadTabs');
+    this.#set({ activeTabId, activeTabScope: scope, splitView: null, tabs }, false, 'loadTabs');
   };
 }
 

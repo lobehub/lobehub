@@ -13,6 +13,7 @@ export interface AiGenerationObjectInput {
   model: string;
   provider: string;
   schema?: GenerateObjectSchema;
+  thinking?: GenerateObjectPayload['thinking'];
   tools?: ChatCompletionTool[];
 }
 
@@ -67,6 +68,7 @@ export class AiGenerationService {
         messages: input.messages as GenerateObjectPayload['messages'],
         model: input.model,
         schema: input.schema,
+        thinking: input.thinking,
         tools: input.tools,
       },
       { metadata: options.metadata, signal: options.signal, tracing: options.tracing },

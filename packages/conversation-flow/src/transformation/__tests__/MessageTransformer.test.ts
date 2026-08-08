@@ -61,6 +61,22 @@ describe('MessageTransformer', () => {
       expect(result.usage).toBeUndefined();
       expect(result.performance).toBeUndefined();
     });
+
+    it('should prefer top-level usage over metadata.usage', () => {
+      const message: Message = {
+        content: 'Hello',
+        createdAt: 0,
+        id: 'msg-1',
+        metadata: { usage: { cost: 0.001, totalTokens: 100 } },
+        role: 'assistant',
+        updatedAt: 0,
+        usage: { cost: 0.002, totalTokens: 200 },
+      };
+
+      const result = transformer.messageToContentBlock(message);
+
+      expect(result.usage).toEqual({ cost: 0.002, totalTokens: 200 });
+    });
   });
 
   describe('splitMetadata', () => {
@@ -120,6 +136,19 @@ describe('MessageTransformer', () => {
 
       expect(result.performance).toEqual({
         duration: 1000,
+      });
+    });
+
+    it('should use metadata.usage only as a fallback for missing top-level fields', () => {
+      const result = transformer.splitMetadata(
+        { usage: { cost: 0.001, totalInputTokens: 10, totalTokens: 100 } },
+        { cost: 0.002, totalTokens: 200 },
+      );
+
+      expect(result.usage).toEqual({
+        cost: 0.002,
+        totalInputTokens: 10,
+        totalTokens: 200,
       });
     });
   });

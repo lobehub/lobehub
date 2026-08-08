@@ -50,5 +50,11 @@ export interface NavigationBroadcastEvents {
   /**
    * Ask renderer to navigate within the SPA without reloading the whole page.
    */
-  navigate: (data: { path: string; replace?: boolean }) => void;
+  navigate: (data: { escape?: boolean; path: string; replace?: boolean }) => void;
+
+  /** Ask the renderer to open the all-agents surface. */
+  openAllAgents: () => void;
+
+  /** Ask the renderer to open the Recently Viewed surface. */
+  openRecentlyViewed: () => void;
 }

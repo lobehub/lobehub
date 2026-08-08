@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatCost, formatNumber, printBoxTable } from './format';
+import { formatCost, formatNumber, outputJson, printBoxTable } from './format';
 
 describe('formatNumber', () => {
   it('should format numbers with commas', () => {
@@ -15,6 +15,43 @@ describe('formatCost', () => {
     expect(formatCost(0)).toBe('$0.00');
     expect(formatCost(1.5)).toBe('$1.50');
     expect(formatCost(123.456)).toBe('$123.46');
+  });
+});
+
+describe('outputJson', () => {
+  const capture = () => {
+    const output: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      output.push(args.join(' '));
+    });
+    return output;
+  };
+
+  it('prints full JSON when --json is passed without a value (fields === true)', () => {
+    const output = capture();
+
+    expect(() => outputJson({ id: '1', name: 'a' }, true)).not.toThrow();
+    expect(JSON.parse(output.join('\n'))).toEqual({ id: '1', name: 'a' });
+
+    vi.restoreAllMocks();
+  });
+
+  it('filters fields when --json receives a field list', () => {
+    const output = capture();
+
+    outputJson({ extra: true, id: '1', name: 'a' }, 'id, name');
+    expect(JSON.parse(output.join('\n'))).toEqual({ id: '1', name: 'a' });
+
+    vi.restoreAllMocks();
+  });
+
+  it('prints full JSON when fields is undefined', () => {
+    const output = capture();
+
+    outputJson([{ id: '1' }]);
+    expect(JSON.parse(output.join('\n'))).toEqual([{ id: '1' }]);
+
+    vi.restoreAllMocks();
   });
 });
 

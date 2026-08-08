@@ -39,6 +39,7 @@ import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestErr
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type {
   CreateImageOptions,
@@ -139,6 +140,12 @@ interface RouteAttemptContextValidationParams extends RouteAttemptContext {
   routerId?: string;
 }
 
+export interface SortRouterOptionsParams {
+  model: string;
+  options: RouterOptionItem[];
+  routerId?: string;
+}
+
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
   chatCompletion?: {
@@ -207,6 +214,15 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     model: string;
     optionIndex: number;
   }) => boolean | Promise<boolean>;
+  /**
+   * Reorder fallback options before each request (e.g. demote temporarily
+   * unhealthy channels). Must return a permutation of the input options;
+   * any other result (wrong length, foreign items, thrown error) is ignored
+   * so a misbehaving hook can never reduce availability.
+   */
+  sortRouterOptions?: (
+    params: SortRouterOptionsParams,
+  ) => RouterOptionItem[] | Promise<RouterOptionItem[]>;
 }
 
 export const createRouterRuntime = ({
@@ -408,6 +424,60 @@ export const createRouterRuntime = ({
       return routerOptions;
     }
 
+    private async applySortRouterOptions(
+      router: RouterInstance,
+      model: string,
+      routerOptions: RouterOptionItem[],
+    ): Promise<RouterOptionItem[]> {
+      if (!params.sortRouterOptions || routerOptions.length <= 1) return routerOptions;
+
+      const startedAt = Date.now();
+      try {
+        // Hand the hook a copy: hooks may sort in place (`options.sort(...)`), and the
+        // input can be the shared `router.options` array reused across concurrent
+        // requests. Keeping the original untouched also keeps it a trustworthy
+        // baseline — validating a same-reference return would always pass, even
+        // after mutations like `options.pop()`.
+        const sorted = await params.sortRouterOptions({
+          model,
+          options: [...routerOptions],
+          routerId: router.id,
+        });
+        const isPermutation =
+          Array.isArray(sorted) &&
+          sorted.length === routerOptions.length &&
+          routerOptions.every((optionItem) => sorted.includes(optionItem));
+
+        if (this._id === 'lobehub') {
+          timing(
+            'sortRouterOptions done model=%s routerId=%s durationMs=%d applied=%s',
+            model,
+            router.id,
+            getDurationMs(startedAt),
+            isPermutation,
+          );
+        }
+
+        // Copy again so a hook retaining its returned array cannot mutate the
+        // list while runWithFallback awaits provider calls between attempts.
+        if (isPermutation) return [...sorted];
+
+        log('sortRouterOptions returned a non-permutation result, ignoring');
+        return routerOptions;
+      } catch (error) {
+        if (this._id === 'lobehub') {
+          timing(
+            'sortRouterOptions error model=%s routerId=%s durationMs=%d',
+            model,
+            router.id,
+            getDurationMs(startedAt),
+          );
+        }
+        log('sortRouterOptions callback error: %O', error);
+        return routerOptions;
+      }
+    }
+
     /**
      * Build a runtime instance for a specific option item.
      * Option items can override apiType to switch providers for fallback.
@@ -428,6 +498,12 @@ export const createRouterRuntime = ({
         ...this._params,
         ...this._options,
         ...optionOverrides,
+      };
+      const signatureScopeSource = {
+        apiType: resolvedApiType,
+        channelId,
+        provider: this._id,
+        routerId: router.id ?? this._id,
       };
 
       /**
@@ -461,11 +537,14 @@ export const createRouterRuntime = ({
           );
         }
 
+        const runtime = LobeVertexAI.initFromVertexAI(vertexOptions);
+        setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
+
         return {
           channelId,
           id: resolvedApiType,
           remark,
-          runtime: LobeVertexAI.initFromVertexAI(vertexOptions),
+          runtime,
         };
       }
 
@@ -475,6 +554,7 @@ export const createRouterRuntime = ({
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
+      setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
 
       if (this._id === 'lobehub') {
         timing(
@@ -502,7 +582,11 @@ export const createRouterRuntime = ({
       const totalStartedAt = Date.now();
       const { metadata, toolsCount, user } = routeContext;
       const matchedRouter = await this.resolveMatchedRouter(model);
-      const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const routerOptions = await this.applySortRouterOptions(
+        matchedRouter,
+        model,
+        this.normalizeRouterOptions(matchedRouter),
+      );
       const totalOptions = routerOptions.length;
 
       if (this._id === 'lobehub') {

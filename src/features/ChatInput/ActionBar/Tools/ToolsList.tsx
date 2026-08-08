@@ -63,6 +63,7 @@ interface ToolItemData {
 }
 
 interface ToolsListProps {
+  detailPopoverDisabled?: boolean;
   items: ItemType[];
 }
 
@@ -70,7 +71,11 @@ const DividerItem = memo<{ index: number }>(({ index }) => (
   <Divider key={`divider-${index}`} style={{ margin: '4px 0' }} />
 ));
 
-const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => {
+const RegularItem = memo<{
+  detailPopoverDisabled?: boolean;
+  index: number;
+  item: ToolItemData;
+}>(({ detailPopoverDisabled, item, index }) => {
   const [open, setOpen] = useState(false);
   const suppressUntilRef = useRef(0);
 
@@ -93,10 +98,17 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
     return () => window.removeEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
   }, []);
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen && Date.now() < suppressUntilRef.current) return;
-    setOpen(nextOpen);
-  }, []);
+  useEffect(() => {
+    if (detailPopoverDisabled) setOpen(false);
+  }, [detailPopoverDisabled]);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen && (detailPopoverDisabled || Date.now() < suppressUntilRef.current)) return;
+      setOpen(nextOpen);
+    },
+    [detailPopoverDisabled],
+  );
 
   const iconNode = item.icon ? (
     isValidElement(item.icon) ? (
@@ -126,6 +138,7 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
     <Popover
       arrow={false}
       content={item.popoverContent}
+      disabled={detailPopoverDisabled}
       mouseEnterDelay={0.3}
       open={open}
       placement={'rightTop'}
@@ -138,29 +151,44 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
   );
 });
 
-const GroupItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => (
+const GroupItem = memo<{
+  detailPopoverDisabled?: boolean;
+  index: number;
+  item: ToolItemData;
+}>(({ detailPopoverDisabled, item, index }) => (
   <Fragment key={item.key || `group-${index}`}>
     <Text className={toolsListStyles.groupLabel} fontSize={12} type="secondary">
       {item.label}
     </Text>
     {item.children?.map((child, childIndex) => (
-      <ToolListItem index={childIndex} item={child} key={child.key || `item-${childIndex}`} />
+      <ToolListItem
+        detailPopoverDisabled={detailPopoverDisabled}
+        index={childIndex}
+        item={child}
+        key={child.key || `item-${childIndex}`}
+      />
     ))}
   </Fragment>
 ));
 
-const ToolListItem = memo<{ index: number; item: ToolItemData | null }>(({ item, index }) => {
+const ToolListItem = memo<{
+  detailPopoverDisabled?: boolean;
+  index: number;
+  item: ToolItemData | null;
+}>(({ detailPopoverDisabled, item, index }) => {
   if (!item) return null;
   if (item.type === 'divider') return <DividerItem index={index} />;
-  if (item.type === 'group') return <GroupItem index={index} item={item} />;
-  return <RegularItem index={index} item={item} />;
+  if (item.type === 'group')
+    return <GroupItem detailPopoverDisabled={detailPopoverDisabled} index={index} item={item} />;
+  return <RegularItem detailPopoverDisabled={detailPopoverDisabled} index={index} item={item} />;
 });
 
-const ToolsList = memo<ToolsListProps>(({ items }) => {
+const ToolsList = memo<ToolsListProps>(({ detailPopoverDisabled, items }) => {
   return (
     <Flexbox gap={0} padding={4}>
       {items.map((item, index) => (
         <ToolListItem
+          detailPopoverDisabled={detailPopoverDisabled}
           index={index}
           item={item as ToolItemData | null}
           key={item?.key || `item-${index}`}

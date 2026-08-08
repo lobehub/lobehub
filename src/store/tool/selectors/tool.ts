@@ -67,10 +67,14 @@ const getManifestLoadingStatus = (id: string) => (s: ToolStoreState) => {
 
   if (s.pluginInstallLoading[id]) return 'loading';
 
+  if (s.pluginInstallErrors[id]) return 'error';
+
   if (!manifest) return 'error';
 
   if (!!manifest) return 'success';
 };
+
+const getPluginInstallError = (id: string) => (s: ToolStoreState) => s.pluginInstallErrors[id];
 
 const isToolHasUI = (id: string) => (s: ToolStoreState) => {
   const manifest = getManifestById(id)(s);
@@ -89,10 +93,14 @@ const isToolHasUI = (id: string) => (s: ToolStoreState) => {
  * Only works for builtin tools, plugins don't support this feature yet
  * @param identifier - Tool identifier
  * @param apiName - API name
+ * @param pluginState - The tool_result's plugin state, for APIs whose display
+ *   control depends on what the result carries (e.g. CC `Read` renders a
+ *   thumbnail for an image and source text for anything else). Undefined while
+ *   the call is still in flight.
  * @returns RenderDisplayControl value, defaults to 'collapsed'
  */
 const getRenderDisplayControl =
-  (identifier: string, apiName: string) =>
+  (identifier: string, apiName: string, pluginState?: unknown) =>
   (s: ToolStoreState): RenderDisplayControl => {
     const builtinTool = s.builtinTools.find((t) => t.identifier === identifier);
     const manifestControl = builtinTool?.manifest.api.find(
@@ -102,7 +110,7 @@ const getRenderDisplayControl =
 
     // Fallback for packages that don't ship a LobeChat manifest (e.g. Claude Code —
     // its tools come from Anthropic tool_use blocks at runtime).
-    return getBuiltinRenderDisplayControl(identifier, apiName) ?? 'collapsed';
+    return getBuiltinRenderDisplayControl(identifier, apiName, pluginState) ?? 'collapsed';
   };
 
 export interface AvailableToolForDiscovery {
@@ -188,6 +196,7 @@ export const toolSelectors = {
   discoverableMetaList,
   getManifestById,
   getManifestLoadingStatus,
+  getPluginInstallError,
   getMetaById,
   getRenderDisplayControl,
   isToolHasUI,

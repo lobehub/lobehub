@@ -147,6 +147,26 @@ describe('cliAgentBinaries', () => {
       expect(execFileMock.mock.calls[1]![0]).toBe('C:\\tools\\foo.exe');
     });
 
+    it('preserves PATH order when npm .cmd precedes a later .exe (Vite+ case)', async () => {
+      callExecFile(
+        [
+          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
+          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
+        ].join('\r\n'),
+      );
+      callExec('1.2.3 (Claude Code)');
+
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+      expect(execMock).toHaveBeenCalledTimes(1);
+      expect(execMock.mock.calls[0]![0]).toBe(
+        '"C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd" --version',
+      );
+    });
+
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
       callExecFile(
         [
@@ -168,6 +188,48 @@ describe('cliAgentBinaries', () => {
   describe('on macOS / Linux with a Unix-style claude binary', () => {
     beforeEach(() => {
       platformMock.mockReturnValue('darwin');
+    });
+
+    it('detects OpenCode through the shared command/version probe', async () => {
+      callExecFile('/Users/test/.opencode/bin/opencode\n');
+      callExecFile('1.18.3');
+
+      const { opencodeBinary } = await import('../cliAgentBinaries');
+      const status = await opencodeBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.opencode/bin/opencode',
+        version: '1.18.3',
+      });
+    });
+
+    it('detects Pi through the shared bare-version probe', async () => {
+      callExecFile('/Users/test/.local/bin/pi\n');
+      callExecFile('0.83.0');
+
+      const { piBinary } = await import('../cliAgentBinaries');
+      const status = await piBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/pi',
+        version: '0.83.0',
+      });
+    });
+
+    it('detects Qoder through the shared bare-version probe', async () => {
+      callExecFile('/Users/test/.local/bin/qodercli\n');
+      callExecFile('1.1.15');
+
+      const { qoderBinary } = await import('../cliAgentBinaries');
+      const status = await qoderBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/qodercli',
+        version: '1.1.15',
+      });
     });
 
     it('runs the binary directly via execFile (no shell)', async () => {
@@ -239,7 +301,7 @@ describe('cliAgentBinaries', () => {
       }
     });
 
-    it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
+    it('falls back to the ChatGPT.app bundled CLI when `codex` is not on any PATH', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       // Deterministic env: no SHELL → no login-shell lookup, merged PATH
@@ -255,13 +317,13 @@ describe('cliAgentBinaries', () => {
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
         expect(status.version).toBe('codex-cli 0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
         expect(execFileMock.mock.calls[1]![0]).toBe(
-          '/Applications/Codex.app/Contents/Resources/codex',
+          '/Applications/ChatGPT.app/Contents/Resources/codex',
         );
       } finally {
         process.env.PATH = originalPath;
@@ -278,15 +340,17 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications candidate
-        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(3);
-        expect(execFileMock.mock.calls[2]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(5);
+        expect(execFileMock.mock.calls[4]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {

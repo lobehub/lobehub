@@ -1,7 +1,7 @@
 export const LobeAgentIdentifier = 'lobe-agent';
 
 export const LobeAgentApiName = {
-  analyzeVisualMedia: 'analyzeVisualMedia',
+  analyzeMedia: 'analyzeMedia',
   askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
   clearTodos: 'clearTodos',
@@ -25,21 +25,21 @@ export type {
   AskUserQuestionOption,
 } from '@lobechat/builtin-tool-user-interaction';
 
-export interface AnalyzeVisualMediaParams {
+export interface AnalyzeMediaParams {
   question: string;
   refs?: string[];
   urls?: string[];
 }
 
-export interface AnalyzeVisualMediaFileSummary {
+export interface AnalyzeMediaFileSummary {
   id?: string;
   name: string;
   ref: string;
-  type: 'image' | 'video';
+  type: 'audio' | 'image' | 'video';
 }
 
-export interface AnalyzeVisualMediaState {
-  files?: AnalyzeVisualMediaFileSummary[];
+export interface AnalyzeMediaState {
+  files?: AnalyzeMediaFileSummary[];
   model?: string;
   provider?: string;
   trigger?: string;
@@ -64,6 +64,17 @@ export interface CallSubAgentParams {
 export interface SubAgentRunStats {
   /** Model the sub-agent ran on */
   model?: string;
+  /**
+   * Cost of the sub-agent run. Carried here (rather than only on the child's own
+   * messages) because the parent's usage tray sums per-message usage, and the
+   * sub-agent's messages live in an isolation thread the parent never loads —
+   * this tool message is where the child's spend enters the parent's ledger.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
   /** Total tokens consumed by the sub-agent run */
   totalTokens?: number;
   /** Number of tool calls the sub-agent made */
@@ -78,6 +89,14 @@ export interface SubAgentRunStats {
  * Inspector row.
  */
 export interface CallSubAgentState extends SubAgentRunStats {
+  /**
+   * Live totals streamed from the running sub-agent, patched into the store in
+   * memory only (never persisted). Held in its own key so it can't be mistaken
+   * for the authoritative flat stats, which are written exactly once — by the
+   * completion bridge — when the run finishes.
+   */
+  progress?: SubAgentRunStats;
+  status?: 'pending' | 'completed' | 'error';
   threadId: string;
 }
 

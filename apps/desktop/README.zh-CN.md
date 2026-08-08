@@ -79,6 +79,19 @@ pnpm build:main    # 生产构建（仅 dist）
 pnpm package:local # 本地测试打包
 ```
 
+### React DevTools
+
+渲染进程始终从自定义协议 `app://renderer` 加载，而 Chromium 不允许扩展的 content
+script 匹配自定义协议 —— 因此 React DevTools **浏览器扩展在此永远无法挂载**，无论用
+何种方式安装。请改用 standalone 桥接：
+
+```bash
+pnpm react-devtools # standalone 界面，监听 ws://localhost:8097
+pnpm dev            # 开发模式会自动注入桥接脚本
+```
+
+桥接脚本仅在 dev（`vite serve`）时注入，生产构建绝不包含。
+
 ## 🎯 发布渠道
 
 | 渠道                     | 描述                   | 稳定性 | 自动更新 |

@@ -1,3 +1,4 @@
+import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { Menu } from 'electron';
 
 export interface MenuOptions {
@@ -40,7 +41,7 @@ export interface IMenuPlatform {
   /**
    * Build tray menu
    */
-  buildTrayMenu: () => Menu;
+  buildTrayMenu: (snapshot?: TrayNavigationSnapshot) => Menu;
 
   /**
    * Refresh menu

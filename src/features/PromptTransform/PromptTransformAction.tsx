@@ -1,21 +1,24 @@
 'use client';
 
 import { Languages, Lightbulb, Sparkles } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ActionProps } from '@/features/ChatInput/ActionBar/components/Action';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 
 import { usePromptTransform } from './usePromptTransform';
 
 interface PromptTransformActionProps {
+  ActionComponent?: ComponentType<ActionProps>;
   mode: 'image' | 'video' | 'text';
   onPromptChange: (prompt: string) => void;
   prompt?: string | null;
 }
 
 const PromptTransformAction = memo<PromptTransformActionProps>(
-  ({ mode, onPromptChange, prompt }) => {
+  ({ ActionComponent = Action, mode, onPromptChange, prompt }) => {
     const { t } = useTranslation('common');
 
     const {
@@ -67,7 +70,7 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
     const isActionDisabled = isTransformDisabled || isTransforming;
 
     return (
-      <Action
+      <ActionComponent
         disabled={isActionDisabled}
         dropdown={dropdown}
         icon={primaryIcon}

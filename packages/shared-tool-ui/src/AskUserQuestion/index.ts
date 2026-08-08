@@ -1,4 +1,9 @@
 export {
+  AskUserQuestionResult,
+  type AskUserQuestionResultLabels,
+  type AskUserQuestionResultProps,
+} from './AskUserQuestionResult';
+export {
   type AskUserQuestionLabels,
   AskUserQuestionView,
   type AskUserQuestionViewProps,
@@ -12,7 +17,9 @@ export {
   isQuestionAnswered,
   readDraft,
 } from './draft';
+export { normalizeAskUserQuestions } from './normalize';
 export { default as QuestionPanel } from './QuestionPanel';
+export { type AskUserQuestionResultState, resolveAskUserAnswers } from './result';
 export type {
   AskUserDraft,
   AskUserQuestionArgs,

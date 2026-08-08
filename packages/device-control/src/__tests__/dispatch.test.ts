@@ -140,6 +140,27 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
+  it('routes heterogeneous agent model discovery to the execution host', async () => {
+    const deps = makeDeps();
+    deps.listHeterogeneousAgentModels = vi.fn(async () => ({
+      models: [{ id: 'openai/gpt-5.6', modelId: 'gpt-5.6', providerId: 'openai' }],
+      status: 'success' as const,
+      updatedAt: 1,
+    }));
+    const params = { command: '/custom/opencode', cwd: root, type: 'opencode' as const };
+
+    const result = await executeDeviceRpc('listHeterogeneousAgentModels', params, deps);
+
+    expect(deps.listHeterogeneousAgentModels).toHaveBeenCalledWith(params);
+    expect(result).toMatchObject({ status: 'success' });
+  });
+
+  it('reports model discovery as unsupported when the device client is too old', async () => {
+    await expect(
+      executeDeviceRpc('listHeterogeneousAgentModels', { type: 'opencode' }, makeDeps()),
+    ).rejects.toThrow('does not support heterogeneous agent model discovery');
+  });
+
   it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);

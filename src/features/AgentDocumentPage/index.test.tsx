@@ -5,6 +5,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
 import AgentDocumentPage from './index';
 
 vi.mock('react-router', () => ({
@@ -17,12 +19,19 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
+const pageEditorProps = vi.hoisted(() => ({
+  current: undefined as undefined | Record<string, unknown>,
+}));
+
 vi.mock('@/features/PageEditor', () => ({
-  PageEditor: ({ pageId, header }: { header?: ReactNode; pageId?: string }) => (
-    <div data-page-id={pageId} data-testid="page-editor">
-      {header}
-    </div>
-  ),
+  PageEditor: (props: { header?: ReactNode; pageId?: string }) => {
+    pageEditorProps.current = props;
+    return (
+      <div data-page-id={props.pageId} data-testid="page-editor">
+        {props.header}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/features/WideScreenContainer', () => ({
@@ -68,8 +77,18 @@ const docChatTopicState = vi.hoisted(() => ({
     topicId: 'doc-topic-1' as string | undefined,
   },
 }));
+// Record the params so a test can assert the lookup never fires for a doc this
+// agent doesn't own — `getOrCreateChatTopic` would answer NOT_FOUND.
+const docChatTopicCalls = vi.hoisted(() => ({ current: [] as Record<string, unknown>[] }));
 vi.mock('@/features/FloatingChatPanel/useDocumentChatTopic', () => ({
-  useDocumentChatTopic: () => docChatTopicState.current,
+  // Mirror the real hook's `enabled` gate: with either id missing it never fetches,
+  // so it can only ever return `topicId: undefined`.
+  useDocumentChatTopic: (params: Record<string, unknown>) => {
+    docChatTopicCalls.current.push(params);
+    if (!params.agentId || !params.documentId)
+      return { error: undefined, isLoading: false, topicId: undefined };
+    return docChatTopicState.current;
+  },
 }));
 
 const panelProps = vi.hoisted(() => ({
@@ -83,25 +102,8 @@ vi.mock('@/features/FloatingChatPanel', () => ({
   },
 }));
 
-const mockUserState = vi.hoisted(() => ({
-  current: {
-    preference: { lab: { enableAgentDocumentFloatingChatPanel: false } },
-  },
-}));
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: any) => selector(mockUserState.current),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableAgentDocumentFloatingChatPanel: (s: any) =>
-      s.preference.lab.enableAgentDocumentFloatingChatPanel,
-  },
-}));
-
 describe('AgentDocumentPage', () => {
   beforeEach(() => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     agentDocumentItemState.current = {
       error: undefined,
       isNotFound: false,
@@ -116,6 +118,8 @@ describe('AgentDocumentPage', () => {
     };
     headerProps.current = undefined;
     panelProps.current = undefined;
+    pageEditorProps.current = undefined;
+    docChatTopicCalls.current = [];
     navigateMock.mockClear();
   });
 
@@ -151,13 +155,7 @@ describe('AgentDocumentPage', () => {
     expect(headerProps.current).toMatchObject({ itemError });
   });
 
-  it('does not render FloatingChatPanel when the lab feature is disabled', () => {
-    render(<AgentDocumentPage documentId="docs_abc" />);
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
   it('renders FloatingChatPanel anchored on the URL agent + doc-scoped topic', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     render(<AgentDocumentPage documentId="docs_abc" />);
 
     const container = screen.getByTestId('wide-screen-container');
@@ -169,12 +167,46 @@ describe('AgentDocumentPage', () => {
       documentId: 'docs_abc',
       topicId: 'doc-topic-1',
     });
+    expect(pageEditorProps.current?.askCopilotTarget).toEqual({
+      contextKey: messageMapKey({
+        agentId: 'agent-from-url',
+        documentId: 'docs_abc',
+        scope: 'main',
+        threadId: null,
+        topicId: 'doc-topic-1',
+      }),
+      writable: true,
+    });
   });
 
   it('skips the panel until the doc-anchored topic id resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
     render(<AgentDocumentPage documentId="docs_abc" />);
     expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+  });
+
+  // `item` comes from this agent's own document list, so it doubles as the
+  // ownership proof `getOrCreateChatTopic` requires. Until it resolves, looking up
+  // the topic could only produce a NOT_FOUND.
+  it('does not look up the doc topic before the agent is known to own the document', () => {
+    agentDocumentItemState.current = { ...agentDocumentItemState.current, item: undefined };
+
+    render(<AgentDocumentPage documentId="docs_abc" />);
+
+    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+    expect(docChatTopicCalls.current.length).toBeGreaterThan(0);
+    for (const call of docChatTopicCalls.current) {
+      expect(call.agentId).toBeUndefined();
+      expect(call.documentId).toBeUndefined();
+    }
+  });
+
+  it('looks up the doc topic once the document is resolved on this agent', () => {
+    render(<AgentDocumentPage documentId="docs_abc" />);
+
+    expect(docChatTopicCalls.current.at(-1)).toMatchObject({
+      agentId: 'agent-from-url',
+      documentId: 'docs_abc',
+    });
   });
 });

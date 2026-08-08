@@ -8,12 +8,68 @@
 // Usage: node cdp-capture.cjs --port 9222 --out shot.png [--full] [--target-url <substr>] [--timeout 12000]
 // Prints one line of JSON: {"ok":true,"bytes":N,"ms":N,"targetUrl":"..."} or {"ok":false,"error":"..."}
 // Exit 0 on success, non-zero on failure/timeout.
-
-/* eslint-disable @typescript-eslint/no-require-imports -- standalone CJS tooling script */
+//
+// Requires the `ws` package to be resolvable from this file's own location —
+// Node's require() walks up ancestor node_modules automatically, so this works
+// whether the skill ships inside @lobehub/cli's own node_modules or a hoisted
+// monorepo root; no manual NODE_PATH wiring needed. A `lh verify install`-copied
+// skill dir lives inside a consumer repo's harness skills dir, though, so the
+// ancestor walk from there never reaches @lobehub/cli's node_modules — fall
+// back to the `cliRoot` recorded in the sibling `.skill-meta.json`.
 
 const http = require('node:http');
 const fs = require('node:fs');
-const WebSocket = require('ws');
+const path = require('node:path');
+
+function resolveWs() {
+  const attempted = [];
+  try {
+    return require('ws');
+  } catch {
+    attempted.push('ancestor node_modules walk from ' + __filename);
+  }
+
+  const markerDir = path.join(__dirname, '..');
+  const metaPath = path.join(markerDir, '.skill-meta.json');
+  let cliRoot;
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    cliRoot = meta && meta.cliRoot;
+    if (cliRoot && !path.isAbsolute(cliRoot)) {
+      cliRoot = path.resolve(markerDir, cliRoot);
+    }
+  } catch {
+    attempted.push(metaPath + ' (missing or unreadable)');
+  }
+
+  if (cliRoot) {
+    // createRequire, not a hand-built <cliRoot>/node_modules/ws path: pnpm
+    // links a package's deps NEXT TO it (.pnpm/<pkg>@<v>/node_modules/ws),
+    // so only Node's real resolution walk anchored inside cliRoot finds ws
+    // across both npm and pnpm layouts.
+    try {
+      return require('node:module').createRequire(path.join(cliRoot, 'package.json'))('ws');
+    } catch {
+      attempted.push("createRequire('ws') from " + cliRoot + ' (via .skill-meta.json cliRoot)');
+    }
+  }
+
+  console.log(
+    JSON.stringify({
+      ok: false,
+      error:
+        "Cannot find module 'ws'. Tried: " +
+        attempted.join('; ') +
+        ". This script requires the 'ws' package to be resolvable " +
+        'from its own install location (a dependency of @lobehub/cli, or installed ' +
+        "alongside it). Run 'npm install ws' in the consuming project if using this " +
+        'script standalone.',
+    }),
+  );
+  process.exit(7);
+}
+
+const WebSocket = resolveWs();
 
 const arg = (k, d) => {
   const i = process.argv.indexOf(k);

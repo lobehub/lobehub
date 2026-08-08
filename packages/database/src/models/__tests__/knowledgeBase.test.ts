@@ -1247,7 +1247,109 @@ describe('KnowledgeBaseModel', () => {
       });
     });
 
+    it('should align newly added creator-owned content with the library visibility', async () => {
+      const created = await ownerModel.create({ name: 'Public Library', visibility: 'public' });
+      await serverDB.insert(files).values({
+        id: 'workspace-private-file-to-add',
+        fileType: 'text/plain',
+        name: 'Private file to add',
+        size: 10,
+        url: 'internal://private-file-to-add',
+        userId,
+        visibility: 'private',
+        workspaceId: wsId,
+      });
+
+      await ownerModel.addFilesToKnowledgeBase(created.id, ['workspace-private-file-to-add']);
+
+      const addedFile = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'workspace-private-file-to-add'),
+      });
+      expect(addedFile?.visibility).toBe('public');
+    });
+
     describe('publishToWorkspace', () => {
+      it('should synchronize creator-owned contents without rewriting another member’s file', async () => {
+        const created = await ownerModel.create({ name: 'Shared Contents', visibility: 'private' });
+        await serverDB.insert(files).values([
+          {
+            id: 'workspace-owner-file',
+            fileType: 'text/plain',
+            name: 'Owner file',
+            size: 10,
+            url: 'internal://owner-file',
+            userId,
+            visibility: 'private',
+            workspaceId: wsId,
+          },
+          {
+            id: 'workspace-member-file',
+            fileType: 'text/plain',
+            name: 'Member file',
+            size: 10,
+            url: 'internal://member-file',
+            userId: 'user2',
+            visibility: 'public',
+            workspaceId: wsId,
+          },
+        ]);
+        await serverDB.insert(documents).values({
+          id: 'docs_workspace_owner',
+          content: 'Owner page',
+          fileId: 'workspace-owner-file',
+          fileType: 'custom/document',
+          knowledgeBaseId: created.id,
+          source: 'document',
+          sourceType: 'api',
+          title: 'Owner page',
+          totalCharCount: 10,
+          totalLineCount: 1,
+          userId,
+          visibility: 'private',
+          workspaceId: wsId,
+        });
+        await serverDB.insert(knowledgeBaseFiles).values([
+          {
+            fileId: 'workspace-owner-file',
+            knowledgeBaseId: created.id,
+            userId,
+            workspaceId: wsId,
+          },
+          {
+            fileId: 'workspace-member-file',
+            knowledgeBaseId: created.id,
+            userId: 'user2',
+            workspaceId: wsId,
+          },
+        ]);
+
+        await ownerModel.publishToWorkspace(created.id);
+
+        const publishedOwnerFile = await serverDB.query.files.findFirst({
+          where: eq(files.id, 'workspace-owner-file'),
+        });
+        const publishedOwnerDocument = await serverDB.query.documents.findFirst({
+          where: eq(documents.id, 'docs_workspace_owner'),
+        });
+        expect(publishedOwnerFile?.visibility).toBe('public');
+        expect(publishedOwnerDocument?.visibility).toBe('public');
+
+        await ownerModel.setVisibility(created.id, 'private');
+
+        const privateOwnerFile = await serverDB.query.files.findFirst({
+          where: eq(files.id, 'workspace-owner-file'),
+        });
+        const privateOwnerDocument = await serverDB.query.documents.findFirst({
+          where: eq(documents.id, 'docs_workspace_owner'),
+        });
+        const untouchedMemberFile = await serverDB.query.files.findFirst({
+          where: eq(files.id, 'workspace-member-file'),
+        });
+        expect(privateOwnerFile?.visibility).toBe('private');
+        expect(privateOwnerDocument?.visibility).toBe('private');
+        expect(untouchedMemberFile?.visibility).toBe('public');
+      });
+
       it('should flip the creator’s own private KB to public', async () => {
         const created = await ownerModel.create({ name: 'To Publish', visibility: 'private' });
 
@@ -1259,8 +1361,24 @@ describe('KnowledgeBaseModel', () => {
         expect(row?.visibility).toBe('public');
       });
 
-      it('should be a no-op when the KB is already public', async () => {
+      it('should reconcile stale content without touching an already-public KB timestamp', async () => {
         const created = await ownerModel.create({ name: 'Already Public', visibility: 'public' });
+        await serverDB.insert(files).values({
+          id: 'workspace-stale-private-file',
+          fileType: 'text/plain',
+          name: 'Stale private file',
+          size: 10,
+          url: 'internal://stale-private-file',
+          userId,
+          visibility: 'private',
+          workspaceId: wsId,
+        });
+        await serverDB.insert(knowledgeBaseFiles).values({
+          fileId: 'workspace-stale-private-file',
+          knowledgeBaseId: created.id,
+          userId,
+          workspaceId: wsId,
+        });
         const before = await serverDB.query.knowledgeBases.findFirst({
           where: eq(knowledgeBases.id, created.id),
         });
@@ -1270,8 +1388,12 @@ describe('KnowledgeBaseModel', () => {
         const after = await serverDB.query.knowledgeBases.findFirst({
           where: eq(knowledgeBases.id, created.id),
         });
+        const reconciledFile = await serverDB.query.files.findFirst({
+          where: eq(files.id, 'workspace-stale-private-file'),
+        });
         expect(after?.visibility).toBe('public');
         expect(after?.updatedAt).toEqual(before?.updatedAt);
+        expect(reconciledFile?.visibility).toBe('public');
       });
 
       it('should refuse to publish another member’s private KB', async () => {

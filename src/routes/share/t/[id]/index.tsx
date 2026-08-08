@@ -1,131 +1,45 @@
 'use client';
 
-import { Button, Center, Flexbox } from '@lobehub/ui';
-import { TRPCClientError } from '@trpc/client';
-import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
-import NotFound from '@/components/404';
-import Loading from '@/components/Loading/BrandTextLoading';
-import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import { ShareHero } from '@/business/client/features/ShareShell';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import ActionBar from './features/ActionBar';
+import TopicAvatar from './features/TopicAvatar';
 import SharedMessageList from './SharedMessageList';
 
-const styles = createStaticStyles(({ css }) => ({
-  errorContainer: css`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    height: 80vh;
-    padding: 48px;
-
-    text-align: center;
-  `,
-}));
-
 const ShareTopicPage = memo(() => {
-  const { t } = useTranslation('chat');
   const { id } = useParams<{ id: string }>();
 
-  const { data, error, isLoading } = useSWR(
+  const { data } = useSWR(
     id ? shareKeys.topic(id) : null,
     () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
     { revalidateOnFocus: false },
   );
 
-  if (!error && isLoading) {
-    return (
-      <Center className={styles.errorContainer}>
-        <Loading debugId="share" />
-      </Center>
-    );
-  }
-
-  if (error) {
-    const trpcError = error instanceof TRPCClientError ? error : null;
-    const errorCode = trpcError?.data?.code;
-
-    if (errorCode === 'UNAUTHORIZED') {
-      return (
-        <Center className={styles.errorContainer}>
-          <NotFound
-            desc={t('sharePage.error.unauthorized.subtitle')}
-            status={''}
-            title={t('sharePage.error.unauthorized.title')}
-            extra={
-              <Button
-                href="/signin"
-                type="primary"
-                onClick={(event) => {
-                  event.preventDefault();
-                  void trackLoginOrSignupClicked({
-                    spm: 'share.unauthorized.signin.click',
-                  }).finally(() => {
-                    window.location.href = '/signin';
-                  });
-                }}
-              >
-                {t('sharePage.error.unauthorized.action')}
-              </Button>
-            }
-          />
-        </Center>
-      );
-    }
-
-    if (errorCode === 'FORBIDDEN') {
-      return (
-        <Center className={styles.errorContainer}>
-          <NotFound
-            desc={t('sharePage.error.forbidden.subtitle')}
-            status={403}
-            title={t('sharePage.error.forbidden.title')}
-          />
-        </Center>
-      );
-    }
-
-    // NOT_FOUND or other errors
-    return (
-      <Center className={styles.errorContainer}>
-        <NotFound
-          desc={t('sharePage.error.notFound.subtitle')}
-          title={t('sharePage.error.notFound.title')}
-        />
-      </Center>
-    );
-  }
-
   if (!data) return null;
 
+  const isInboxAgent = !data.groupId && data.agentMeta?.slug === 'inbox';
+  const agentOrGroupTitle =
+    data.groupMeta?.title || (isInboxAgent ? 'Lobe AI' : data.agentMeta?.title);
+
   return (
-    <Flexbox height={'100%'} style={{ position: 'relative' }} width={'100%'}>
-      <SharedMessageList
-        agentId={data.agentId}
-        groupId={data.groupId}
-        shareId={data.shareId}
-        topicId={data.topicId}
-      />
-      <Center
-        paddingBlock={16}
-        style={{
-          bottom: 0,
-          insetInline: 0,
-          pointerEvents: 'none',
-          position: 'absolute',
-        }}
-      >
-        <ActionBar data={data} />
-      </Center>
-    </Flexbox>
+    <SharedMessageList
+      agentId={data.agentId}
+      groupId={data.groupId}
+      shareId={data.shareId}
+      topicId={data.topicId}
+      headerSlot={
+        <ShareHero
+          avatar={<TopicAvatar data={data} size={40} />}
+          byline={agentOrGroupTitle}
+          title={data.title}
+        />
+      }
+    />
   );
 });
 

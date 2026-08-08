@@ -6,6 +6,7 @@ export default {
   'workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'workingDirectory.agentLevel': 'Agent Working Directory',
+  'workingDirectory.branchInWorktree': 'In worktree {{name}}',
   'workingDirectory.branchSearchPlaceholder': 'Search branches',
   'workingDirectory.branchesEmpty': 'No local branches',
   'workingDirectory.branchesHeading': 'Branches',
@@ -17,6 +18,7 @@ export default {
   'workingDirectory.checkoutFailed': 'Checkout failed',
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
   'workingDirectory.clear': 'Reset to default',
+  'workingDirectory.clearDefault': 'Clear default',
   'workingDirectory.clean': 'clean',
   'workingDirectory.createBranchAction': 'Checkout new branch…',
   'workingDirectory.createBranchTitle': 'Create new branch',
@@ -26,6 +28,7 @@ export default {
   'workingDirectory.createWorktreeTitle': 'Create new worktree',
   'workingDirectory.current': 'Current working directory',
   'workingDirectory.defaultBadge': 'Default',
+  'workingDirectory.defaultUpdateFailed': 'Couldn’t update the default working directory',
   'workingDirectory.deleteBranchAction': 'Delete branch',
   'workingDirectory.deleteBranchConfirm':
     'Delete branch “{{name}}”? This permanently removes it, including any unmerged commits.',
@@ -63,7 +66,7 @@ export default {
   'workingDirectory.pushInProgress': 'Pushing…',
   'workingDirectory.pushNoop': 'Everything up-to-date',
   'workingDirectory.pushSuccess': 'Pushed successfully',
-  'workingDirectory.recent': 'Working directories',
+  'workingDirectory.recent': 'Working directory',
   'workingDirectory.refreshGitStatus': 'Refresh branch & PR status',
   'workingDirectory.removeRecent': 'Remove from recent',
   'workingDirectory.removed': 'Removed “{{name}}”',
@@ -90,6 +93,7 @@ export default {
   'workingDirectory.removeWorktreeConfirm':
     'Delete worktree “{{name}}”? This removes the worktree directory but keeps its branch. Git will refuse if it has uncommitted changes.',
   'workingDirectory.removeWorktreeFailed': 'Delete worktree failed',
+  'workingDirectory.removeWorktreePending': 'Deleting worktree “{{name}}”…',
   'workingDirectory.removeWorktreeSuccess': 'Worktree deleted',
   'workingDirectory.removeWorktreeTitle': 'Delete worktree',
   'workingDirectory.worktreeSearchPlaceholder': 'Search worktrees',

@@ -15,13 +15,21 @@ import {
   watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
-import { MAX_DISCORD_HISTORY_LIMIT } from './const';
+import {
+  DISCORD_APPLICATION_ID_PATTERN,
+  DISCORD_BOT_TOKEN_PATTERN,
+  DISCORD_PUBLIC_KEY_PATTERN,
+  MAX_DISCORD_HISTORY_LIMIT,
+} from './const';
 
 export const schema: FieldSchema[] = [
   {
     key: 'applicationId',
     description: 'channel.applicationIdHint',
     label: 'channel.applicationId',
+    pattern: DISCORD_APPLICATION_ID_PATTERN,
+    patternMessage: 'channel.applicationIdInvalid.discord',
+    placeholder: 'channel.applicationIdPlaceholder',
     required: true,
     type: 'string',
   },
@@ -33,6 +41,9 @@ export const schema: FieldSchema[] = [
         key: 'publicKey',
         description: 'channel.publicKeyHint',
         label: 'channel.publicKey',
+        pattern: DISCORD_PUBLIC_KEY_PATTERN,
+        patternMessage: 'channel.publicKeyInvalid',
+        placeholder: 'channel.publicKeyPlaceholder',
         required: true,
         type: 'string',
       },
@@ -40,6 +51,9 @@ export const schema: FieldSchema[] = [
         key: 'botToken',
         description: 'channel.botTokenEncryptedHint',
         label: 'channel.botToken',
+        pattern: DISCORD_BOT_TOKEN_PATTERN,
+        patternMessage: 'channel.botTokenInvalid.discord',
+        placeholder: 'channel.botTokenPlaceholderNew',
         required: true,
         type: 'password',
       },

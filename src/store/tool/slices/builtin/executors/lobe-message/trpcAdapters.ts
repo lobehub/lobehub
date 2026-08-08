@@ -200,6 +200,14 @@ export const trpcBotProvider: BotProviderQuery = {
       tenantId: params.tenantId,
     });
   },
+
+  sendMessengerPush: async (params) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate({
+      content: params.content,
+      platform: params.platform,
+      tenantId: params.tenantId,
+    });
+  },
 };
 
 // ────────────────────────────────────────────────────────────────────────

@@ -13,6 +13,8 @@ const permissionMock = vi.hoisted(() => ({
 
 const CURRENT_USER_ID = vi.hoisted(() => 'user-1');
 
+const useDocumentTransferMenuItemMock = vi.hoisted(() => vi.fn(() => []));
+
 const storeMock = vi.hoisted(() => ({
   activeWorkspaceId: undefined as string | undefined,
   document: undefined as
@@ -111,7 +113,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
-  useDocumentTransferMenuItem: () => [],
+  useDocumentTransferMenuItem: useDocumentTransferMenuItemMock,
 }));
 
 const getMenuItem = (
@@ -121,10 +123,19 @@ const getMenuItem = (
 
 describe('Page list item dropdown menu', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     storeMock.activeWorkspaceId = undefined;
     storeMock.document = undefined;
+  });
+
+  it('labels the page transfer action as Move', () => {
+    renderHook(() => useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }));
+
+    expect(useDocumentTransferMenuItemMock).toHaveBeenCalledWith('page-1', {
+      transferLabel: 'pageEditor.menu.move',
+    });
   });
 
   it('disables page management actions for workspace viewers', () => {

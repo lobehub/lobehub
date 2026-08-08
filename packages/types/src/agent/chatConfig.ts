@@ -4,6 +4,8 @@ import type { SearchMode } from '../search';
 import type { TopicGroupMode } from '../topic';
 import type { UserMemoryEffort } from '../user/settings/memory';
 import type { RuntimeEnvConfig } from './agentConfig';
+import type { ReasoningGraph } from './graph';
+import { ReasoningGraphSchema } from './graph';
 
 export interface WorkingModel {
   model: string;
@@ -70,6 +72,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   enableContextCompression?: boolean;
   enableFollowUpChips?: boolean;
   /**
+   * Whether to route this agent through a graph-style orchestration runtime.
+   * Undefined means the agent uses the default runtime path.
+   */
+  enableGraphMode?: boolean;
+  /**
    * Enable historical message count
    */
   enableHistoryCount?: boolean;
@@ -90,8 +97,15 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  /**
+   * Graph-style orchestration runtime definition. Stored in chat config to avoid
+   * a dedicated agent table column while keeping eval-run snapshots intact.
+   */
+  graph?: null | ReasoningGraph;
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -115,6 +129,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
+  kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
   /**
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
@@ -135,6 +150,10 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   reasoningBudgetToken80k?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * Selects the Responses API reasoning execution mode.
+   */
+  reasoningMode?: 'standard' | 'pro';
   ring2_6ReasoningEffort?: 'high' | 'xhigh';
   /**
    * Runtime environment configuration (desktop only)
@@ -229,7 +248,9 @@ export const AgentChatConfigSchema = z
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
     enableContextCompression: z.boolean().optional(),
+    enableGraphMode: z.boolean().optional(),
     enableFollowUpChips: z.boolean().optional(),
+    graph: ReasoningGraphSchema.nullish(),
     enableHistoryCount: z.boolean().optional(),
     enableMaxTokens: z.boolean().optional(),
     enableReasoning: z.boolean().optional(),
@@ -239,10 +260,13 @@ export const AgentChatConfigSchema = z
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+    gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
     glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+    grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+    kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
@@ -256,6 +280,7 @@ export const AgentChatConfigSchema = z
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    reasoningMode: z.enum(['standard', 'pro']).optional(),
     searchFCModel: z
       .object({
         model: z.string(),

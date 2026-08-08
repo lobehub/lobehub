@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NODE_VERSION="24.11.1"
+BUN_VERSION="1.3.2"
+COREPACK_VERSION="0.34.5"
+TOOLCHAIN_ROOT="${HOME}/.local/share/amp-toolchains"
+LOCAL_BIN="${HOME}/.local/bin"
+
+export DEBIAN_FRONTEND=noninteractive
+export PATH="${LOCAL_BIN}:${PATH}"
+
+echo "==> Checking system prerequisites"
+missing_commands=()
+for command in curl git tar unzip xz python3 make gcc; do
+  command -v "${command}" >/dev/null 2>&1 || missing_commands+=("${command}")
+done
+
+if ((${#missing_commands[@]})); then
+  echo "Installing prerequisites for: ${missing_commands[*]}"
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    python3 \
+    unzip \
+    xz-utils
+fi
+
+case "$(uname -m)" in
+  x86_64)
+    node_arch="x64"
+    bun_arch="x64"
+    ;;
+  aarch64 | arm64)
+    node_arch="arm64"
+    bun_arch="aarch64"
+    ;;
+  *)
+    echo "Unsupported architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "${TOOLCHAIN_ROOT}" "${LOCAL_BIN}"
+
+node_dir="${TOOLCHAIN_ROOT}/node-v${NODE_VERSION}"
+if [[ ! -x "${node_dir}/bin/node" ]]; then
+  echo "==> Installing Node.js ${NODE_VERSION}"
+  archive="$(mktemp)"
+  trap 'rm -f "${archive:-}" "${bun_archive:-}"' EXIT
+  curl --fail --location --retry 3 \
+    "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
+    --output "${archive}"
+  rm -rf "${node_dir}"
+  mkdir -p "${node_dir}"
+  tar -xJf "${archive}" --strip-components=1 -C "${node_dir}"
+  rm -f "${archive}"
+fi
+
+for executable in node npm npx; do
+  ln -sfn "${node_dir}/bin/${executable}" "${LOCAL_BIN}/${executable}"
+done
+hash -r
+
+echo "==> Installing Corepack ${COREPACK_VERSION} and the repository's pinned pnpm"
+"${node_dir}/bin/npm" install --global --prefix "${node_dir}" "corepack@${COREPACK_VERSION}"
+ln -sfn "${node_dir}/bin/corepack" "${LOCAL_BIN}/corepack"
+corepack enable pnpm
+
+package_manager="$(node -p "require('./package.json').packageManager")"
+corepack install --global "${package_manager}"
+ln -sfn "${node_dir}/bin/pnpm" "${LOCAL_BIN}/pnpm"
+hash -r
+
+bun_dir="${TOOLCHAIN_ROOT}/bun-v${BUN_VERSION}"
+if [[ ! -x "${bun_dir}/bun" ]]; then
+  echo "==> Installing Bun ${BUN_VERSION}"
+  bun_archive="$(mktemp)"
+  trap 'rm -f "${bun_archive:-}"' EXIT
+  curl --fail --location --retry 3 \
+    "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip" \
+    --output "${bun_archive}"
+  rm -rf "${bun_dir}"
+  mkdir -p "${bun_dir}"
+  unzip -q "${bun_archive}" -d "${bun_dir}"
+  mv "${bun_dir}/bun-linux-${bun_arch}/bun" "${bun_dir}/bun"
+  rmdir "${bun_dir}/bun-linux-${bun_arch}"
+  rm -f "${bun_archive}"
+fi
+ln -sfn "${bun_dir}/bun" "${LOCAL_BIN}/bun"
+hash -r
+
+echo "==> Toolchain versions"
+node --version
+pnpm --version
+bun --version
+
+if [[ ! -f .env ]]; then
+  echo "==> Creating the local development environment file"
+  cp -- .env.example.development .env
+fi
+
+echo "==> Installing workspace dependencies"
+# This repository intentionally disables lockfile generation, so frozen installs are not possible.
+pnpm install
+
+echo "==> Installing the Chromium runtime used by end-to-end tests"
+pnpm exec playwright install --with-deps chromium
+
+echo "==> Orb setup complete"

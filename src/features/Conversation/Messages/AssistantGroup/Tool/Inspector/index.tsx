@@ -4,6 +4,7 @@ import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
 import type { ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
+import { MessageCircleQuestion } from 'lucide-react';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -71,6 +72,11 @@ const Inspectors = memo<InspectorProps>(
       }
     }
 
+    // askUserQuestion (Claude Code and the builtin user-interaction tool share
+    // the apiName) completes as "a question was asked", not "a task succeeded"
+    // — keep the question-mark glyph instead of the generic tick.
+    const statusSuccessIcon = apiName === 'askUserQuestion' ? MessageCircleQuestion : undefined;
+
     // Check for custom inspector renderer
     const CustomInspector = getBuiltinInspector(identifier, apiName);
 
@@ -83,6 +89,7 @@ const Inspectors = memo<InspectorProps>(
             intervention={intervention}
             isToolExecuting={isToolCalling}
             result={result}
+            successIcon={statusSuccessIcon}
             successVariant={statusSuccessVariant}
           />
           <SafeBoundary minHeight={22} resetKeys={[argsStr, result]}>
@@ -116,6 +123,7 @@ const Inspectors = memo<InspectorProps>(
           intervention={intervention}
           isToolExecuting={isToolCalling}
           result={result}
+          successIcon={statusSuccessIcon}
           successVariant={statusSuccessVariant}
         />
         <ToolTitle

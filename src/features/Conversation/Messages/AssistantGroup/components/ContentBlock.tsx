@@ -11,7 +11,7 @@ import ErrorMessageExtra, {
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
-import Reasoning from '../../components/Reasoning';
+import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
 import type { RenderableAssistantContentBlock } from './types';
@@ -37,12 +37,12 @@ const ContentBlock = memo<ContentBlockProps>(
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
-    const [isReasoning, deleteMessage, continueGeneration, delAndRegenerateMessage] =
+    const [isReasoning, deleteMessage, continueGeneration, continueHeteroAfterError] =
       useConversationStore((s) => [
         messageStateSelectors.isMessageInReasoning(id)(s),
         s.deleteDBMessage,
         s.continueGeneration,
-        s.delAndRegenerateMessage,
+        s.continueHeteroAfterError,
       ]);
     // The group's parent user message id — the stable scope key for auto-retry
     // (survives the delete+recreate a retry performs) and the regenerate target.
@@ -51,21 +51,19 @@ const ContentBlock = memo<ContentBlockProps>(
     );
     const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
-    const showReasoning =
-      (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
     const handleRegenerate = useCallback(async () => {
-      // Hetero CLIs (CC / Codex) have no "continue a cut-off response"
-      // primitive, so `continueGeneration` is a silent no-op for them and the
-      // retry button does nothing. An errored hetero turn must instead be
-      // regenerated from the user message — routed through the GROUP id (the
-      // child block id isn't a top-level displayMessage). Use the delete-first
-      // `delAndRegenerateMessage` so the failed turn is replaced in place rather
-      // than accumulating a sibling branch on every (auto-)retry.
+      // `continueGeneration` is a silent no-op for hetero CLIs (they have no
+      // "continue a cut-off response" primitive), so an errored hetero turn goes
+      // through its own path: drop just the failed step and resume the CLI
+      // session, keeping every step that already succeeded. Routed through the
+      // GROUP id — the child block id isn't a top-level displayMessage. It falls
+      // back to a whole-turn regenerate when there's nothing left to resume.
       if (isHeteroError) {
-        void delAndRegenerateMessage(assistantId);
+        void continueHeteroAfterError(assistantId);
         return;
       }
       await deleteMessage(id);
@@ -73,7 +71,7 @@ const ContentBlock = memo<ContentBlockProps>(
     }, [
       assistantId,
       continueGeneration,
-      delAndRegenerateMessage,
+      continueHeteroAfterError,
       deleteMessage,
       id,
       isHeteroError,
@@ -99,6 +97,15 @@ const ContentBlock = memo<ContentBlockProps>(
     // whole block.
     if (error && (content === LOADING_FLAT || !content)) {
       return errorBlock;
+    }
+
+    // A freshly created step block can mount before anything about it is
+    // renderable — no content/reasoning has streamed yet and the reasoning op
+    // hasn't started. Mounting the wrapper anyway would consume a flex `gap`
+    // slot in the parent block list, visibly pushing the next sibling (e.g. the
+    // message footer) down a beat before the block's content appears.
+    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock) {
+      return null;
     }
 
     return (

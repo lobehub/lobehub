@@ -10,6 +10,10 @@ tags:
 
 # 配置 Keycloak 身份验证服务
 
+<Callout type={'warning'}>
+  NextAuth（Auth.js）已从 LobeHub 中完全移除。下文出现的 `NEXT_AUTH_SSO_PROVIDERS` 和 `AUTH_URL` 等变量现在会导致部署在构建 / 启动阶段失败。本页仅作历史参考保留，请改用 [Better Auth 提供商指南](/zh/docs/self-hosting/auth) 和 [NextAuth 迁移至 Better Auth 指南](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth)。
+</Callout>
+
 [Keycloak](https://www.keycloak.org/) 是一个开源的身份和访问管理解决方案，提供单点登录、身份代理和社交登录等功能，适用于现代应用和服务。
 
 <Callout type={'tip'}>

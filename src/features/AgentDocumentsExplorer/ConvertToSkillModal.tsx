@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
-import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';

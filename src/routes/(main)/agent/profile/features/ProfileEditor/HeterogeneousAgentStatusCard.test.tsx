@@ -19,17 +19,28 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   getHeterogeneousAgentClientConfig: (type: string) =>
     type === 'claude-code'
       ? {
-          command: 'claude',
+          defaultCommand: 'claude',
           icon: () => <span>Claude Code Icon</span>,
           title: 'Claude Code',
         }
-      : {
-          command: 'codex',
-          icon: () => <span>Codex Icon</span>,
-          title: 'Codex',
-        },
-  isRemoteHeterogeneousType: (type: string) =>
-    ['openclaw', 'hermes', 'amp', 'opencode'].includes(type),
+      : type === 'opencode'
+        ? {
+            defaultCommand: 'opencode',
+            icon: () => <span>OpenCode Icon</span>,
+            title: 'OpenCode',
+          }
+        : type === 'pi'
+          ? {
+              defaultCommand: 'pi',
+              icon: () => <span>Pi Icon</span>,
+              title: 'Pi',
+            }
+          : {
+              defaultCommand: 'codex',
+              icon: () => <span>Codex Icon</span>,
+              title: 'Codex',
+            },
+  isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -161,6 +172,58 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('codex Install Guide')).toBeInTheDocument();
     expect(screen.getByText('codex')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('codex')).not.toBeInTheDocument();
+  });
+
+  it('detects OpenCode and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'opencode',
+      type: 'opencode',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'opencode',
+        command: 'opencode',
+      });
+    });
+
+    expect(screen.getByText('OpenCode CLI')).toBeInTheDocument();
+    expect(screen.getByText('OpenCode CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('opencode Install Guide')).toBeInTheDocument();
+  });
+
+  it('detects Pi and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'pi',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'pi',
+        command: 'pi',
+      });
+    });
+
+    expect(screen.getByText('Pi CLI')).toBeInTheDocument();
+    expect(screen.getByText('Pi CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('pi Install Guide')).toBeInTheDocument();
   });
 
   it('shows the embedded Claude Code install guide when the CLI is unavailable', async () => {

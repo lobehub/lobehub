@@ -44,6 +44,9 @@ export const elapsedTimeStyles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
+  errorText: css`
+    color: ${cssVar.colorError};
+  `,
   shinyText: css`
     color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);
 

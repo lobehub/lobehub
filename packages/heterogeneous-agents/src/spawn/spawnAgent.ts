@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
+import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
@@ -10,11 +11,11 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'claude-code'` | `'codex'`). */
+  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'` | `'opencode'` | `'pi'` | `'qoder'`). */
   agentType: string;
   /**
-   * Override the CLI binary name. Defaults to `'claude'` for `claude-code`,
-   * `'codex'` for `codex`. Use this when the binary lives at a non-default
+   * Override the CLI binary name. Defaults to the agent's standard executable.
+   * Use this when the binary lives at a non-default
    * path or is wrapped by a launcher.
    */
   command?: string;
@@ -160,6 +161,35 @@ export const CODEX_EXECUTION_MODE_FLAGS = [
   '-s',
 ] as const;
 
+/**
+ * Headless, private AMP execution flags shared by desktop and `lh hetero exec`.
+ * AMP's stream-json protocol reports terminal failures as JSON even when the
+ * process exits with code 0, so the dedicated adapter owns result validation.
+ */
+export const AMP_BASE_ARGS = [
+  '--execute',
+  '--stream-json-thinking',
+  '--stream-json-input',
+  '--visibility',
+  'private',
+  '--no-ide',
+  '--no-notifications',
+  '--no-archive-after-execute',
+] as const;
+
+export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
+export const PI_BASE_ARGS = ['--mode', 'json'] as const;
+export const QODER_BASE_ARGS = [
+  '-p',
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--include-partial-messages',
+  '--permission-mode',
+  'bypass_permissions',
+] as const;
+
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
@@ -200,21 +230,70 @@ const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArg
     : ['exec', ...optionArgs];
 };
 
+const buildAmpArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
+  const executionArgs = [...AMP_BASE_ARGS, ...inputArgs, ...extraArgs];
+
+  return resumeSessionId
+    ? ['threads', 'continue', resumeSessionId, ...executionArgs]
+    : executionArgs;
+};
+
+const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
+  ...OPENCODE_BASE_ARGS,
+  ...(resumeSessionId ? ['--session', resumeSessionId] : []),
+  ...inputArgs,
+  ...extraArgs,
+];
+
+const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
+  ...PI_BASE_ARGS,
+  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
+  ...inputArgs,
+  ...extraArgs,
+];
+
+export interface QoderSpawnArgsOptions {
+  extraArgs?: string[];
+  inputArgs?: string[];
+  resumeSessionId?: string;
+}
+
+export const buildQoderArgs = ({
+  extraArgs = [],
+  inputArgs = [],
+  resumeSessionId,
+}: QoderSpawnArgsOptions): string[] => [
+  ...QODER_BASE_ARGS,
+  ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+  ...extraArgs,
+  ...inputArgs,
+];
+
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'amp': {
+      return buildAmpArgs(params);
+    }
     case 'claude-code': {
       return buildClaudeCodeArgs(params);
     }
     case 'codex': {
       return buildCodexArgs(params);
     }
+    case 'opencode': {
+      return buildOpenCodeArgs(params);
+    }
+    case 'pi': {
+      return buildPiArgs(params);
+    }
+    case 'qoder': {
+      return buildQoderArgs(params);
+    }
     default: {
       throw new Error(`spawnAgent: unsupported agent type "${params.agentType}"`);
     }
   }
 };
-
-const defaultCommand = (agentType: string): string => (agentType === 'codex' ? 'codex' : 'claude');
 
 const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   if (!proc.pid || proc.killed) return;
@@ -244,7 +323,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Claude Code or Codex) and yield its stream as
+ * Spawn an external agent CLI (Amp, Claude Code, Codex, OpenCode, Pi, or Qoder) and yield its stream as
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
@@ -258,7 +337,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
  * failed image fetch surfaces before the child starts.
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
-  const command = options.command || defaultCommand(options.agentType);
+  const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
   const args = buildSpawnArgs({
     agentType: options.agentType,

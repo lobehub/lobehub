@@ -161,30 +161,45 @@ describe('QueueService', () => {
       delete process.env.QSTASH_TOKEN;
     });
 
-    it('should wait locally for sub-second QStash delays before publishing', async () => {
-      vi.useFakeTimers();
+    it('should round sub-second delays up to 1s for QStash', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 
       const { QStashQueueServiceImpl } = await import('../impls/qstash');
       const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
       const result = impl.scheduleMessage({
         context: { phase: 'user_input' } as any,
-        delay: 50,
+        delay: 500,
         endpoint: 'https://example.com/api/agent/run',
         operationId: 'op-test',
         priority: 'high',
         stepIndex: 0,
       });
 
-      await vi.advanceTimersByTimeAsync(49);
-      expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
+      await expect(result).resolves.toBe('msg-test');
 
-      await vi.advanceTimersByTimeAsync(1);
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(request).toMatchObject({ delay: 1 });
+      expect(request.body.timestamp).toEqual(expect.any(Number));
+    });
+
+    it('should publish zero delay immediately without a QStash delay', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const result = impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
       await expect(result).resolves.toBe('msg-test');
 
       const request = qstashMocks.publishJSON.mock.calls[0][0];
       expect(request).not.toHaveProperty('delay');
-      expect(request.body.timestamp).toEqual(expect.any(Number));
     });
 
     it('should pass second-granularity delays through to QStash', async () => {

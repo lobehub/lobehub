@@ -9,13 +9,13 @@ import Player from './Player';
 
 const FilePlayer = memo<TTSProps>(({ file, id }) => {
   const useFetchTTSFile = useFileStore((s) => s.useFetchTTSFile);
-  const clearTTS = useConversationStore((s) => s.clearTTS);
+  const clearMessageTTS = useConversationStore((s) => s.clearMessageTTS);
   const { data, isLoading: isFileLoading } = useFetchTTSFile(file || null);
   const { isLoading, ...audio } = useAudioPlayer({ src: data ? data.url : '' });
 
   const handleDelete = useCallback(() => {
-    clearTTS(id);
-  }, [id, clearTTS]);
+    clearMessageTTS(id);
+  }, [id, clearMessageTTS]);
 
   if (!audio || isFileLoading) return;
 

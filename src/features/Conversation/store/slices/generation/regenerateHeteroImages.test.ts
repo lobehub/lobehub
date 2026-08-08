@@ -32,22 +32,31 @@ vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
-  operationSelectors: { isMessageProcessing: () => () => false },
+  operationSelectors: {
+    getOperationById: () => () => undefined,
+    isMessageProcessing: () => () => false,
+  },
 }));
 
 vi.mock('@/services/message', () => ({
   messageService: { createMessage: vi.fn(async () => ({ id: 'assistant-new' })) },
 }));
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgentWorkingDirectoryById: () => () => '/work/dir' },
+  agentByIdSelectors: {
+    getAgentById: () => () => undefined,
+    isWorkspaceAgentById: () => () => false,
+  },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {
         executionTarget: 'local',
         heterogeneousProvider: { type: 'claude-code' },
+        workingDirByDevice: { 'device-1': '/work/dir' },
       },
     }),
   },
@@ -75,7 +84,6 @@ vi.mock('@/store/chat', () => ({
       associateMessageWithOperation: noop,
       completeOperation: noop,
       failOperation: noop,
-      internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
       refreshMessages: vi.fn(async () => {}),
       startOperation: vi.fn(() => ({ operationId: 'hetero-op-id' })),

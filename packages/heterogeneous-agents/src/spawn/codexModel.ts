@@ -283,7 +283,10 @@ export const readCodexSessionModel = async (
     try {
       const record = JSON.parse(line);
       const payload = record?.payload;
-      const usage = toCodexUsageData(record?.usage) || toCodexUsageData(payload?.usage);
+      const usage =
+        toCodexUsageData(payload?.info?.total_token_usage) ||
+        toCodexUsageData(record?.usage) ||
+        toCodexUsageData(payload?.usage);
       if (usage) cumulativeUsage = usage;
 
       const payloadModel =

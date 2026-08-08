@@ -15,6 +15,7 @@ import { default as bailiancodingplan } from './bailianCodingPlan';
 import { default as bedrock } from './bedrock';
 import { default as bfl } from './bfl';
 import { default as cerebras } from './cerebras';
+import { default as chatgpt } from './chatGPT';
 import { default as cloudflare } from './cloudflare';
 import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
@@ -65,6 +66,7 @@ import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
+import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
@@ -123,6 +125,7 @@ const staticModelMap: ModelsMap = {
   bedrock,
   bfl,
   cerebras,
+  chatgpt,
   cloudflare,
   cohere,
   cometapi,
@@ -173,6 +176,7 @@ const staticModelMap: ModelsMap = {
   stepfun,
   straico,
   streamlake,
+  supergrok,
   taichu,
   tencentcloud,
   togetherai,
@@ -237,6 +241,7 @@ export { default as bailiancodingplan } from './bailianCodingPlan';
 export { default as bedrock } from './bedrock';
 export { default as bfl } from './bfl';
 export { default as cerebras } from './cerebras';
+export { default as chatgpt } from './chatGPT';
 export { default as cloudflare } from './cloudflare';
 export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
@@ -287,6 +292,7 @@ export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
 export { default as streamlake } from './streamlake';
+export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';

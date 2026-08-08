@@ -1,8 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard, sanitizeSVGContent } from '@lobechat/utils/client';
-import { Button, Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
+import { Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { snapdom } from '@zumer/snapdom';
-import { App, Space } from 'antd';
 import { css, cx } from 'antd-style';
 import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { useMemo } from 'react';
@@ -34,7 +34,6 @@ interface SVGRendererProps {
 
 const SVGRenderer = ({ content }: SVGRendererProps) => {
   const { t } = useTranslation('portal');
-  const { message } = App.useApp();
 
   // Sanitize SVG content to prevent XSS attacks
   const sanitizedContent = useMemo(() => sanitizeSVGContent(content), [content]);
@@ -96,39 +95,37 @@ const SVGRenderer = ({ content }: SVGRendererProps) => {
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         id={DOM_ID}
       />
-      <Flexbox className={cx(actions)}>
-        <Space.Compact>
-          <DropdownMenu
-            items={[
-              {
-                key: 'png',
-                label: t('artifacts.svg.download.png'),
-                onClick: () => downloadImage('png'),
-              },
-              {
-                key: 'svg',
-                label: t('artifacts.svg.download.svg'),
-                onClick: () => downloadImage('svg'),
-              },
-            ]}
-          >
-            <Button icon={DownloadIcon} />
-          </DropdownMenu>
-          <Tooltip title={t('artifacts.svg.copyAsImage')}>
-            <Button
-              icon={CopyIcon}
-              onClick={async () => {
-                const dataUrl = await generatePng();
-                try {
-                  await copyImageToClipboard(dataUrl);
-                  message.success(t('artifacts.svg.copySuccess'));
-                } catch (e) {
-                  message.error(t('artifacts.svg.copyFail', { error: e }));
-                }
-              }}
-            />
-          </Tooltip>
-        </Space.Compact>
+      <Flexbox horizontal className={cx(actions)} gap={4}>
+        <DropdownMenu
+          items={[
+            {
+              key: 'png',
+              label: t('artifacts.svg.download.png'),
+              onClick: () => downloadImage('png'),
+            },
+            {
+              key: 'svg',
+              label: t('artifacts.svg.download.svg'),
+              onClick: () => downloadImage('svg'),
+            },
+          ]}
+        >
+          <Button icon={DownloadIcon} />
+        </DropdownMenu>
+        <Tooltip title={t('artifacts.svg.copyAsImage')}>
+          <Button
+            icon={CopyIcon}
+            onClick={async () => {
+              const dataUrl = await generatePng();
+              try {
+                await copyImageToClipboard(dataUrl);
+                toast.success(t('artifacts.svg.copySuccess'));
+              } catch (e) {
+                toast.error(t('artifacts.svg.copyFail', { error: e }));
+              }
+            }}
+          />
+        </Tooltip>
       </Flexbox>
     </Flexbox>
   );

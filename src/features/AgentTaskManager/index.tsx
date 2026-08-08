@@ -1,6 +1,10 @@
 import { memo } from 'react';
 
+import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -12,6 +16,9 @@ const AgentTaskManager = memo(() => {
     systemStatusSelectors.showTaskAgentPanel(s),
     s.toggleTaskAgentPanel,
   ]);
+  const portalView = useChatStore(chatPortalSelectors.currentViewType);
+  const showAcceptance =
+    portalView === PortalViewType.Acceptance || portalView === PortalViewType.AcceptanceCheck;
 
   return (
     <RightPanel
@@ -19,11 +26,16 @@ const AgentTaskManager = memo(() => {
       expand={expand}
       maxWidth={720}
       minWidth={320}
+      width={portalView === PortalViewType.AcceptanceCheck ? 640 : undefined}
       onExpandChange={(next) => toggleTaskAgentPanel(next)}
     >
-      <TaskAgentProvider>
-        <Conversation />
-      </TaskAgentProvider>
+      {showAcceptance ? (
+        <PortalContent />
+      ) : (
+        <TaskAgentProvider>
+          <Conversation />
+        </TaskAgentProvider>
+      )}
     </RightPanel>
   );
 });

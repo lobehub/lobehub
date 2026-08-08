@@ -361,6 +361,53 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
     });
 
+    it('replaces reasoning snapshots idempotently instead of re-appending on redelivery', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'reasoning',
+            reasoning: 'thinking hard',
+            snapshotMode: 'replace',
+            snapshotSeq: 1,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Redelivery reaching the reducer (a cold replica has an empty
+      // processedKeys map — simulated here with a different timestamp so the
+      // in-memory dedupe does not swallow the event first). A raw delta would
+      // re-append and durably double the reasoning; the snapshot must not.
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'reasoning',
+              reasoning: 'thinking hard',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.reasoning?.content).toBe('thinking hard'); // NOT doubled
+      expect(asst.metadata?.heteroReasoningSnapshotSeq).toBe(1);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -389,6 +436,35 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       // Same event re-ingested → idempotency skips it; no extra tool-message create
       expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
+    });
+
+    it('gates publishing per operation and releases the gate when the operation finishes', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const first = buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' });
+      const second = buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'y' });
+
+      // Without operation state (nothing ingested yet, or a cold replica):
+      // treat everything as unpublished and latch nothing — degraded
+      // republish-all rather than silently dropping events.
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+
+      await h.handler.ingest({ events: [first, second], operationId: 'op-1', topicId: 'topic-1' });
+
+      // Latch per event: only unlatched events remain.
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([second]);
+      h.handler.markEventPublished('op-1', second);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([]);
+
+      // finish() drops the per-operation state — the gate goes with it.
+      await h.handler.finish({ operationId: 'op-1', result: 'success' });
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
     });
 
     it('does NOT collide bursty events sharing (stepIndex, type, timestamp) when their data differs', async () => {
@@ -1248,6 +1324,156 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.content).toBe('partial');
     });
 
+    it('finish() preserves a structured status-guide error body on the assistant', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Register op state without any in-stream error — the process-level
+      // failure (spawn ENOENT) only arrives via the finish payload.
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: '' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'stream_error',
+        },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      // `body` must survive formatErrorForState untouched — the client's
+      // status-guide UI gates on `body.agentType` + `body.code`.
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+        stderr: 'Error: spawn claude ENOENT',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() must not downgrade an in-stream status-guide error with a flat message', async () => {
+      // Remote CC relays an API failure (529 overloaded / rate limit) as an
+      // in-stream `error` event whose data the adapter already classified into
+      // the structured status-guide shape (`agentType` + `code`). Older CLIs
+      // then send a finish error flattened to a bare `{ message }` — writing
+      // that over the persisted structured error would demote the client from
+      // the dedicated guide card to the generic error alert.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const overloadedMessage = 'API Error: 529 Overloaded. This is a server-side issue.';
+      await h.handler.ingest({
+        events: [
+          buildEvent('error', 0, {
+            agentType: 'claude-code',
+            code: 'overloaded',
+            error: overloadedMessage,
+            message: overloadedMessage,
+            stderr: overloadedMessage,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: { message: overloadedMessage, type: 'AgentRuntimeError' },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+      });
+    });
+
+    it('finish() with NO prior ingest bootstraps state and writes the error (spawn-fail path)', async () => {
+      // The real process-level failure shape: spawn ENOENT produces ZERO
+      // stream events, so no ingest ever created an OperationState. finish()
+      // must bootstrap from topic.metadata.runningOperation and write the
+      // error itself — deferring it to CompletionLifecycle (which runs AFTER
+      // the agent_runtime_end publish) races the client's message refetch.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      // The topic's runningOperation belongs to a DIFFERENT operation — a late
+      // finish from a superseded run must not touch the current turn.
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'asst-other',
+            operationId: 'op-OTHER',
+          },
+        },
+      });
+
+      await expect(
+        h.handler.finish({
+          error: { message: 'boom', type: 'AgentRuntimeError' },
+          operationId: 'op-1',
+          result: 'error',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(h.messages.get('asst-1')!.error).toBeUndefined();
+      expect(h.messageModel.update).not.toHaveBeenCalled();
+    });
+
     it('finish() drops the per-operation state so a retry starts fresh', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -1612,7 +1838,13 @@ describe('HeterogeneousPersistenceHandler', () => {
             chunkType: 'tools_calling',
             subagent: subagentCtx,
             toolsCalling: [
-              { apiName: 'Read', arguments: '{}', id: 'inner-tc', identifier: 'read', type: 'default' },
+              {
+                apiName: 'Read',
+                arguments: '{}',
+                id: 'inner-tc',
+                identifier: 'read',
+                type: 'default',
+              },
             ],
           }),
           buildEvent('step_complete', 2, {

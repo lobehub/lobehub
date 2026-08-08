@@ -1,6 +1,6 @@
 'use client';
 
-import { SiGit, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
+import { SiGit, SiGooglechrome, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
 import {
   createGrepContentInspector,
   createReadLocalFileInspector,
@@ -8,11 +8,24 @@ import {
 } from '@lobechat/shared-tool-ui/inspectors';
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
+import {
+  Camera,
+  CodeXml,
+  Eye,
+  Globe,
+  Keyboard,
+  MousePointerClick,
+  ScanText,
+  TextCursorInput,
+  Timer,
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo } from 'react';
 
 import {
+  type AgentBrowserAction,
   type CodexCommandProgram,
+  getAgentBrowserCommandDisplay,
   getCodexCommandProgram,
   getCodexGrepCommandDisplay,
   getCodexReadFileCommandDisplay,
@@ -23,14 +36,35 @@ const GREP_KEY = 'builtins.codex.commandExecution.grep';
 const GREP_NO_RESULTS_KEY = 'builtins.codex.commandExecution.noResults';
 const READ_FILE_KEY = 'builtins.codex.commandExecution.readFile';
 
+const AGENT_BROWSER_DISPLAY: Record<
+  AgentBrowserAction,
+  { icon: ComponentType<{ className?: string; size?: number }>; translationKey: string }
+> = {
+  click: { icon: MousePointerClick, translationKey: 'builtins.codex.agentBrowser.click' },
+  eval: { icon: CodeXml, translationKey: 'builtins.codex.agentBrowser.eval' },
+  fill: { icon: TextCursorInput, translationKey: 'builtins.codex.agentBrowser.fill' },
+  focus: { icon: Eye, translationKey: 'builtins.codex.agentBrowser.focus' },
+  get: { icon: ScanText, translationKey: 'builtins.codex.agentBrowser.get' },
+  navigate: { icon: Globe, translationKey: 'builtins.codex.agentBrowser.navigate' },
+  press: { icon: Keyboard, translationKey: 'builtins.codex.agentBrowser.press' },
+  screenshot: { icon: Camera, translationKey: 'builtins.codex.agentBrowser.screenshot' },
+  snapshot: { icon: ScanText, translationKey: 'builtins.codex.agentBrowser.snapshot' },
+  type: { icon: TextCursorInput, translationKey: 'builtins.codex.agentBrowser.type' },
+  wait: { icon: Timer, translationKey: 'builtins.codex.agentBrowser.wait' },
+};
+
 /** Dedicated label + brand icon per program family. */
 const PROGRAM_DISPLAY: Record<
   CodexCommandProgram,
   { icon: ComponentType<{ className?: string; size?: number }>; translationKey: string }
 > = {
-  git: { icon: SiGit, translationKey: 'builtins.codex.commandExecution.gitOperation' },
-  node: { icon: SiNodedotjs, translationKey: 'builtins.codex.commandExecution.runNode' },
-  python: { icon: SiPython, translationKey: 'builtins.codex.commandExecution.runPython' },
+  'agent-browser': {
+    icon: SiGooglechrome,
+    translationKey: 'builtins.codex.commandExecution.agentBrowser',
+  },
+  'git': { icon: SiGit, translationKey: 'builtins.codex.commandExecution.gitOperation' },
+  'node': { icon: SiNodedotjs, translationKey: 'builtins.codex.commandExecution.runNode' },
+  'python': { icon: SiPython, translationKey: 'builtins.codex.commandExecution.runPython' },
 };
 const SharedGrepInspector = createGrepContentInspector({
   noResultsKey: GREP_NO_RESULTS_KEY,
@@ -117,6 +151,24 @@ const CommandExecutionInspector = memo<
         partialArgs={partialGrepArgs}
         result={result}
         toolCallId={toolCallId}
+      />
+    );
+  }
+
+  const agentBrowserDisplay =
+    getAgentBrowserCommandDisplay(args?.command) ??
+    getAgentBrowserCommandDisplay(partialArgs?.command);
+  if (agentBrowserDisplay) {
+    const { icon, translationKey } = AGENT_BROWSER_DISPLAY[agentBrowserDisplay.action];
+    const description =
+      agentBrowserDisplay.action === 'eval' ? undefined : agentBrowserDisplay.value;
+    return (
+      <RunCommandInspector
+        {...props}
+        args={{ ...args, command: '', description }}
+        icon={icon}
+        partialArgs={undefined}
+        translationKey={translationKey}
       />
     );
   }

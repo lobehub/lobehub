@@ -18,9 +18,9 @@ export interface RuntimeStreamEvent {
 /**
  * Incremental token delta pushed during a step (the other stream channel).
  *
- * NOTE (scaffolding): the exact delta union (text / reasoning / tool-call /
- * grounding / image) firms when the first streaming executor (call_llm, Tier C)
- * migrates onto the port.
+ * The exact delta union remains open until client convergence; server and
+ * client adapters may carry text, reasoning, tool-call, grounding, or image
+ * fields while sharing the stable step scope.
  */
 export interface StreamChunkInput {
   [key: string]: unknown;
@@ -29,11 +29,18 @@ export interface StreamChunkInput {
   text?: string;
 }
 
+export interface StreamErrorInput {
+  error: unknown;
+  phase: string;
+  stepIndex: number;
+}
+
 /**
  * Egress for live streaming. Server adapter forwards to the Redis stream
  * (`IStreamEventManager`); the client adapter dispatches into the UI store.
  */
 export interface StreamSink {
   publishChunk: (chunk: StreamChunkInput) => Promise<void>;
+  publishError?: (input: StreamErrorInput) => Promise<void>;
   publishEvent: (event: RuntimeStreamEvent) => Promise<void>;
 }

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, lt, lte, or } from 'drizzle-orm';
 
 import { workspaceAuditLogs } from '../schemas/workspace';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 
 export type WorkspaceAuditAction =
   | 'workspace.created'
@@ -30,6 +30,9 @@ export type WorkspaceAuditAction =
   | 'budget.member_override_created'
   | 'budget.member_override_updated'
   | 'budget.member_override_removed'
+  | 'budget.pool_created'
+  | 'budget.pool_updated'
+  | 'budget.pool_deleted'
   | 'auto_top_up.enabled'
   | 'auto_top_up.updated'
   | 'auto_top_up.disabled'
@@ -108,8 +111,8 @@ export class WorkspaceAuditLogModel {
     this.db = db;
   }
 
-  create = async (params: CreateAuditLogParams) => {
-    const [row] = await this.db
+  create = async (params: CreateAuditLogParams, trx?: Transaction) => {
+    const [row] = await (trx ?? this.db)
       .insert(workspaceAuditLogs)
       .values({
         action: params.action,

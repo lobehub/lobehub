@@ -1,26 +1,46 @@
-import { and, count, desc, eq, inArray, lt, or } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 
 import type { NewNotification, NewNotificationDelivery } from '../schemas/notification';
 import { notificationDeliveries, notifications } from '../schemas/notification';
 import type { LobeChatDatabase } from '../type';
 
+export interface NotificationModelOptions {
+  /**
+   * Inbox context scope. `null` = personal mode (only rows with
+   * `workspace_id IS NULL`); a workspace id = only that workspace's rows.
+   * Omit for context-free access (write side / ops tooling), where read
+   * queries span both personal and workspace notifications.
+   */
+  workspaceId?: string | null;
+}
+
 export class NotificationModel {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly workspaceId?: string | null;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, options?: NotificationModelOptions) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = options?.workspaceId;
   }
 
   private ownership = () => eq(notifications.userId, this.userId);
+
+  /** Context conditions: ownership plus the workspace/personal scope when set */
+  private scope = (): SQL[] => {
+    const conditions: SQL[] = [this.ownership()];
+    if (this.workspaceId === null) conditions.push(isNull(notifications.workspaceId));
+    else if (this.workspaceId) conditions.push(eq(notifications.workspaceId, this.workspaceId));
+    return conditions;
+  };
 
   async list(
     opts: { category?: string; cursor?: string; limit?: number; unreadOnly?: boolean } = {},
   ) {
     const { cursor, limit = 20, category, unreadOnly } = opts;
 
-    const conditions = [this.ownership(), eq(notifications.isArchived, false)];
+    const conditions = [...this.scope(), eq(notifications.isArchived, false)];
 
     if (unreadOnly) {
       conditions.push(eq(notifications.isRead, false));
@@ -34,7 +54,7 @@ export class NotificationModel {
       const cursorRow = await this.db
         .select({ createdAt: notifications.createdAt, id: notifications.id })
         .from(notifications)
-        .where(and(eq(notifications.id, cursor), this.ownership()))
+        .where(and(eq(notifications.id, cursor), ...this.scope()))
         .limit(1);
 
       if (cursorRow[0]) {
@@ -62,7 +82,7 @@ export class NotificationModel {
       .select({ count: count() })
       .from(notifications)
       .where(
-        and(this.ownership(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
+        and(...this.scope(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
       );
 
     return result?.count ?? 0;
@@ -74,7 +94,7 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isRead: true, updatedAt: new Date() })
-      .where(and(this.ownership(), inArray(notifications.id, ids)));
+      .where(and(...this.scope(), inArray(notifications.id, ids)));
   }
 
   async markAllAsRead() {
@@ -82,7 +102,7 @@ export class NotificationModel {
       .update(notifications)
       .set({ isRead: true, updatedAt: new Date() })
       .where(
-        and(this.ownership(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
+        and(...this.scope(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
       );
   }
 
@@ -90,14 +110,14 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isArchived: true, updatedAt: new Date() })
-      .where(and(eq(notifications.id, id), this.ownership()));
+      .where(and(eq(notifications.id, id), ...this.scope()));
   }
 
   async archiveAll() {
     return this.db
       .update(notifications)
       .set({ isArchived: true, updatedAt: new Date() })
-      .where(and(this.ownership(), eq(notifications.isArchived, false)));
+      .where(and(...this.scope(), eq(notifications.isArchived, false)));
   }
 
   // ─── Write-side (used by NotificationService in cloud) ─────────

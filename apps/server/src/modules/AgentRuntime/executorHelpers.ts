@@ -1,12 +1,17 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
+import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
-import { ModelEmptyError } from '@lobechat/model-runtime';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type LobeAgentConfig,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import debug from 'debug';
 
+import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import {
@@ -15,9 +20,9 @@ import {
   type ToolExecutionResultResponse,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
-import { type LLMErrorKind } from './llmErrorClassification';
 
 export const log = debug('lobe-server:agent-runtime:streaming-executors');
 export const timing = debug('lobe-server:agent-runtime:timing');
@@ -29,33 +34,8 @@ export const TOOL_PRICING: Record<string, number> = {
 };
 
 export const TOOL_MAX_RETRIES = 2;
-const LLM_MAX_RETRIES = 5;
-const LLM_RETRY_BASE_DELAY_MS = 1000;
-const LLM_RETRY_MAX_DELAY_MS = 30_000;
-
-/**
- * Retry budget for empty completions, applied independently of
- * `resolveLLMMaxRetries`. The branded provider gets 0 general retries because
- * its own fallback chain already re-routes failed requests — but an
- * HTTP-200-but-empty turn never triggered that chain, so it must still be
- * re-issued. A small budget is enough: empty turns almost always self-heal on
- * the first retry.
- */
-const EMPTY_COMPLETION_MAX_RETRIES = 2;
 
 export const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
-
-type ToolFailureKind = 'replan' | 'retry' | 'stop';
-
-const getToolFailureKind = (result: ToolExecutionResultResponse): ToolFailureKind | undefined => {
-  if (!result.error || typeof result.error !== 'object') return;
-
-  const { kind } = result.error as { kind?: unknown };
-  return kind === 'replan' || kind === 'retry' || kind === 'stop' ? kind : undefined;
-};
-
-const shouldRetryTool = (kind: ToolFailureKind | undefined, attempt: number, maxRetries: number) =>
-  kind === 'retry' && attempt <= maxRetries;
 
 export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
@@ -92,6 +72,87 @@ export const archiveRuntimeToolResult = async (
   });
 
   return archive.content === result.content ? result : { ...result, content: archive.content };
+};
+
+/**
+ * Persist a Work version from the executor's registration intent, stamping the
+ * tool call's cumulative cost/usage onto the row at insert time. Replaces the
+ * old "register cost-less in the executor, back-fill cost later" two-step: the
+ * executor now only resolves the intent, and the runtime writes it once here,
+ * after `accumulateTool` has computed the cumulative cost.
+ *
+ * Thin server wrapper around the shared {@link dispatchWorkRegistrationIntent}:
+ * builds `WorkModel`-backed ports (all five, incl. `deleteDocumentWork`) and
+ * per-call provenance, then delegates all branch logic.
+ *
+ * Best-effort: any failure is swallowed so Work bookkeeping never breaks the
+ * tool result. Runs AFTER `tool_end` publishes (cost is known only then), so
+ * the Work row becomes durable slightly later than the tool_end event — the
+ * conversation view self-heals from the tool message metadata; the works
+ * sidebar refresh gap is tracked as a follow-up.
+ */
+export const registerWorkFromIntent = async ({
+  agentId,
+  intent,
+  rootOperationId,
+  serverDB,
+  sourceMessageId,
+  sourceToolCallId,
+  sourceToolIdentifier,
+  sourceToolName,
+  state,
+  threadId,
+  topicId,
+  userId,
+  workspaceId,
+}: {
+  agentId?: string | null;
+  intent: WorkRegistrationIntent;
+  rootOperationId?: string;
+  serverDB: LobeChatDatabase;
+  sourceMessageId?: string;
+  sourceToolCallId?: string;
+  /** Tool/plugin identifier supplied by the runtime event that produced this version. */
+  sourceToolIdentifier: string;
+  /** Runtime event's concrete tool name; skills may override it with their own toolName. */
+  sourceToolName: string;
+  state: Pick<AgentState, 'cost' | 'usage'>;
+  threadId?: string | null;
+  topicId?: string;
+  userId?: string;
+  workspaceId?: string;
+}) => {
+  if (!userId) return;
+
+  const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
+
+  try {
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
+        deleteTaskWork: (params) => workModel.deleteTaskWork(params),
+        handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerDocument: (params) => workModel.registerDocument(params),
+        registerTask: (params) => workModel.registerTask(params),
+      },
+      {
+        agentId,
+        ...cumulative,
+        messageId: sourceMessageId,
+        rootOperationId,
+        threadId,
+        toolCallId: sourceToolCallId,
+        toolIdentifier: sourceToolIdentifier,
+        toolName: sourceToolName,
+        topicId,
+      },
+    );
+  } catch (error) {
+    log('registerWorkFromIntent failed for toolCallId=%s: %O', sourceToolCallId, error);
+  }
 };
 
 // Builds a postProcessUrl callback that resolves keys in file-backed fields
@@ -143,8 +204,35 @@ export const buildServerVirtualSubAgentRunner = (
   const topicId = ctx.topicId ?? state.metadata?.topicId;
   if (!agentId || !topicId) return undefined;
 
+  const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  // enough: when a run continues a topic whose model was switched, execAgent
+  // keeps the topic-pinned model only in `modelRuntimeConfig` while the
+  // metadata config retains the agent default.
+  const parentEffectiveModel =
+    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
+
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+      // This runner serves two tools, and only one of them may swap the model:
+      //   - `callSubAgent` names no agent, so the child is an anonymous clone of
+      //     the parent — it takes the parent's `agencyConfig.subagent` override,
+      //     or follows the parent's effective (topic-pinned) model when none is
+      //     configured.
+      //   - `callAgent` names an existing agent, which carries a model the user
+      //     configured on it. Overriding that would discard a deliberate choice,
+      //     the same way forcing a group member onto the sub-agent default would.
+      // Resolved here at the spawn site so the execution side never has to
+      // re-derive it from the parent config.
+      const subAgentModel = targetAgentId
+        ? undefined
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
+      // Thinking / reasoning-effort overrides configured for the sub-agent
+      // model; same callSubAgent-only carve-out as the model above.
+      const subAgentChatConfig = targetAgentId
+        ? undefined
+        : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
+
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
@@ -166,16 +254,18 @@ export const buildServerVirtualSubAgentRunner = (
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        chatConfig: subAgentChatConfig,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
+        model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
+        provider: subAgentModel?.provider,
         timeout,
         title: description,
         topicId,
       })) as
-        | { error?: string; operationId?: string; success?: boolean; threadId?: string }
-        | undefined;
+        { error?: string; operationId?: string; success?: boolean; threadId?: string } | undefined;
 
       // 3. If the child op never started, no completion bridge will fire — parking
       //    the parent on it would hang forever. Drop the placeholder and signal
@@ -203,6 +293,7 @@ export const buildServerVirtualSubAgentRunner = (
         started: true,
         subOperationId: result?.operationId,
         threadId: result?.threadId ?? '',
+        toolMessageId: placeholder.id,
       };
     },
   };
@@ -367,32 +458,6 @@ export const buildServerAgentMemberRunner = (
   };
 };
 
-export const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
-  kind === 'retry' && attempt <= maxRetries;
-
-const resolveLLMMaxRetries = (provider: string) =>
-  // The branded provider already routes through its own fallback chain. Retrying
-  // again here multiplies the same failed routed request across every channel.
-  provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
-
-/**
- * Retry budget for a *specific* failed attempt. This is provider policy +
- * error-type override, so it can only be resolved once the error exists (in the
- * catch) — unlike {@link resolveLLMMaxRetries}, which runs before the request.
- *
- * Empty completions bypass the per-provider policy: the branded
- * provider's 0-retry rule exists to avoid re-routing its own already-failed
- * requests, but an HTTP-200-but-empty turn never hit that fallback chain, so it
- * must still be re-issued. Folding this into `resolveLLMMaxRetries` would wrongly
- * grant the floor to *every* branded error.
- */
-export const resolveLLMRetryBudget = (provider: string, error: unknown) =>
-  error instanceof ModelEmptyError ? EMPTY_COMPLETION_MAX_RETRIES : resolveLLMMaxRetries(provider);
-
-/** Loop bound — must accommodate the largest budget any error kind can request. */
-export const resolveLLMMaxAttempts = (provider: string) =>
-  Math.max(resolveLLMMaxRetries(provider), EMPTY_COMPLETION_MAX_RETRIES) + 1;
-
 export const resolveRuntimeHistoryCount = (historyCount?: number) => {
   if (historyCount === undefined) return undefined;
 
@@ -405,9 +470,6 @@ export const resolveRuntimeHistoryCount = (historyCount?: number) => {
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export const getLLMRetryDelayMs = (attempt: number) =>
-  Math.min(LLM_RETRY_BASE_DELAY_MS * 2 ** Math.max(attempt - 1, 0), LLM_RETRY_MAX_DELAY_MS);
-
 export const isOperationInterrupted = async (ctx: RuntimeExecutorContext) => {
   if (!ctx.loadAgentState) return false;
 
@@ -418,46 +480,6 @@ export const isOperationInterrupted = async (ctx: RuntimeExecutorContext) => {
     console.error('[RuntimeExecutors] Failed to load operation state for retry guard:', error);
     return false;
   }
-};
-
-export const executeToolWithRetry = async (
-  execute: () => Promise<ToolExecutionResultResponse>,
-  params: {
-    isInterrupted?: () => Promise<boolean>;
-    maxRetries: number;
-    operationLogId: string;
-    toolName: string;
-  },
-): Promise<{ attempts: number; result: ToolExecutionResultResponse }> => {
-  const maxAttempts = params.maxRetries + 1;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = await execute();
-
-    if (result.success) return { attempts: attempt, result };
-
-    const kind = getToolFailureKind(result);
-
-    if (shouldRetryTool(kind, attempt, params.maxRetries)) {
-      if (await params.isInterrupted?.()) {
-        return { attempts: attempt, result };
-      }
-
-      log(
-        '[%s] Tool %s failed with kind=%s (attempt %d/%d), retrying ...',
-        params.operationLogId,
-        params.toolName,
-        kind,
-        attempt,
-        maxAttempts,
-      );
-      continue;
-    }
-
-    return { attempts: attempt, result };
-  }
-
-  throw new Error('Tool execution retry loop exited unexpectedly');
 };
 
 export const buildToolDiscoveryConfig = (

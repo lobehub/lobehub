@@ -1,9 +1,10 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar, Checkbox, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
-import { List as AntdList, Switch } from 'antd';
+import { List as AntdList } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { type ChangeEvent } from 'react';
@@ -31,7 +32,7 @@ const AvailableAgentItem = memo<{
   const isHovering = useHover(ref);
 
   const _agentId = agent.config?.id;
-  const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
+  const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
   const description = agent.meta?.description || '';
   const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
   const avatarBackground = agent.meta?.backgroundColor;
@@ -258,7 +259,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
       if (!searchTerm.trim()) return availableAgents;
 
       return availableAgents.filter((agent) => {
-        const title = agent.meta?.title || '';
+        const title = agentDisplayName(agent.meta) ?? '';
         const description = agent.meta?.description || '';
         const searchLower = searchTerm.toLowerCase();
 
@@ -275,7 +276,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
           const agent = agentSessions.find((session) => session.config.id === agentId);
           if (!agent) return null;
 
-          const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
+          const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
           const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
           const avatarBackground = agent.meta?.backgroundColor;
           const description = agent.meta?.description || '';

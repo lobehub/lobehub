@@ -1,3 +1,4 @@
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -11,6 +12,7 @@ import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -31,7 +33,11 @@ const agentNotifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -143,6 +149,16 @@ export const agentNotifyRouter = router({
         message: `Topic ${topicId} has no associated agent and no agentId was provided`,
       });
     }
+
+    // Workspace guard: notify executes the resolved agent (directly in user
+    // mode, via `continue` in assistant mode) — require `use` before any write.
+    await assertCanUseWorkspaceAgent({
+      agentId,
+      db: ctx.serverDB,
+      groupId: topic.groupId,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
 
     /**
      * Publish a stream event for remote hetero agents (openclaw / hermes).

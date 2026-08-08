@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import PublishedShell from '@/business/client/features/PageShare/PublishedShell';
 import ReadOnlyPageViewer from '@/business/client/features/PageShare/ReadOnlyPageViewer';
 import Loading from '@/components/Loading/BrandTextLoading';
+import { RouteMetaBridge } from '@/features/RouteMeta';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { getIdFromIdentifier } from '@/utils/identifier';
@@ -31,9 +32,12 @@ const SharePagePage = memo(() => {
   }
 
   return (
-    <PublishedShell data={data} error={error}>
-      {data ? <ReadOnlyPageViewer data={data} /> : null}
-    </PublishedShell>
+    <>
+      <RouteMetaBridge />
+      <PublishedShell data={data} error={error}>
+        {data ? <ReadOnlyPageViewer data={data} /> : null}
+      </PublishedShell>
+    </>
   );
 });
 

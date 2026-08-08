@@ -7,6 +7,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
@@ -84,13 +85,47 @@ describe('Generation Actions', () => {
 
       expect(mockCancelOperations).toHaveBeenCalledWith(
         {
-          type: INPUT_LOADING_OPERATION_TYPES,
-          status: 'running',
           agentId: 'session-1',
+          groupId: undefined,
+          isNew: undefined,
+          scope: undefined,
+          status: 'running',
+          threadId: null,
           topicId: 'topic-1',
+          type: INPUT_LOADING_OPERATION_TYPES,
         },
         expect.any(String),
       );
+    });
+
+    it('should isolate a creating thread from the main conversation in the same topic', () => {
+      const editor = { setJSONState: vi.fn() };
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        isNew: true,
+        scope: 'thread',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+
+      const store = createStore({ context });
+      store.setState({ editor });
+
+      act(() => {
+        store.getState().stopGenerating();
+      });
+
+      expect(mockCancelOperations).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'session-1',
+          isNew: true,
+          scope: 'thread',
+          threadId: null,
+          topicId: 'topic-1',
+        }),
+        expect.any(String),
+      );
+      expect(mockCancelSendMessageInServer).toHaveBeenCalledWith(context, editor);
     });
 
     it('should call onGenerationStop hook', () => {
@@ -608,6 +643,211 @@ describe('Generation Actions', () => {
       expect(mockStartOperation).not.toHaveBeenCalled();
       expect(mockDeleteMessage).not.toHaveBeenCalled();
     });
+
+    it('completes the retry even if a Stop cancels the outer op during delete (best-effort Stop)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      // The outer op is whitelisted (shows Stop); simulate a Stop landing while
+      // deleteMessage is in flight by flipping the op to cancelled inside it.
+      // The old message is already deleted, so bailing here would be destructive
+      // data loss — regeneration must proceed regardless (Stop is best-effort in
+      // this sub-second window and applies to the fresh run instead).
+      let operationCount = 0;
+      const chatState: any = {
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: vi.fn(() => {
+          const operationId = operationCount++ === 0 ? 'outer-op-id' : 'inner-op-id';
+          chatState.operations[operationId] = { id: operationId, status: 'running' };
+          return { operationId };
+        }),
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      chatState.deleteMessage = vi.fn().mockImplementation(async () => {
+        chatState.operations['outer-op-id'] = { id: 'outer-op-id', status: 'cancelled' };
+      });
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+        groupId: 'group-1',
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().delAndRegenerateMessage('msg-2');
+      });
+
+      // Delete ran, and regeneration completes atomically despite the cancelled
+      // outer op — no orphaned deletion.
+      expect(chatState.deleteMessage).toHaveBeenCalledWith('msg-2', {
+        operationId: 'outer-op-id',
+      });
+      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          parentMessageId: 'msg-1',
+          parentOperationId: 'inner-op-id',
+        }),
+      );
+      expect(mockCompleteOperation).toHaveBeenCalledWith('inner-op-id');
+      expect(mockCompleteOperation).toHaveBeenCalledWith('outer-op-id');
+    });
+
+    it('regenerates in the originating conversation when the context switches during deletion', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      const oldContext: ConversationContext = {
+        agentId: 'session-1',
+        groupId: 'group-1',
+        threadId: null,
+        topicId: 'topic-old',
+      };
+      const currentContext: ConversationContext = {
+        agentId: 'session-1',
+        groupId: 'group-1',
+        threadId: null,
+        topicId: 'topic-current',
+      };
+      const oldUserMessage = { content: 'old prompt', id: 'user-old', role: 'user' };
+      const oldAssistantMessage = {
+        content: 'old response',
+        id: 'assistant-old',
+        parentId: 'user-old',
+        role: 'assistant',
+      };
+      const currentMessages = [{ content: 'current prompt', id: 'user-current', role: 'user' }];
+      const oldContextKey = messageMapKey(oldContext);
+      let resolveDelete!: () => void;
+      const deleteGate = new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      });
+      const chatState: any = {
+        dbMessagesMap: { [oldContextKey]: [oldUserMessage, oldAssistantMessage] },
+        messagesMap: { [oldContextKey]: [oldUserMessage, oldAssistantMessage] },
+        operations: {},
+        operationsByMessage: {},
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        completeOperation: mockCompleteOperation,
+        deleteMessage: vi.fn().mockImplementation(async () => {
+          await deleteGate;
+          chatState.dbMessagesMap[oldContextKey] = [oldUserMessage];
+          chatState.messagesMap[oldContextKey] = [oldUserMessage];
+        }),
+        executeClientAgent: mockExecuteClientAgent,
+        failOperation: mockFailOperation,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        startOperation: mockStartOperation,
+        switchMessageBranch: mockSwitchMessageBranch,
+      };
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const store = createStore({ context: oldContext });
+      store.setState({
+        dbMessages: [oldUserMessage, oldAssistantMessage],
+        displayMessages: [oldUserMessage, oldAssistantMessage],
+      } as any);
+
+      const regeneratePromise = store.getState().delAndRegenerateMessage('assistant-old');
+
+      act(() => {
+        store.setState({
+          context: currentContext,
+          dbMessages: currentMessages,
+          displayMessages: currentMessages,
+        } as any);
+      });
+
+      await act(async () => {
+        resolveDelete();
+        await regeneratePromise;
+      });
+
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-old', 0, {
+        operationId: 'test-op-id',
+      });
+      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: oldContext,
+          messages: [oldUserMessage],
+          parentMessageId: 'user-old',
+          parentMessageType: 'user',
+        }),
+      );
+      expect(store.getState().context).toEqual(currentContext);
+      expect(store.getState().dbMessages).toEqual(currentMessages);
+    });
+
+    it('settles the wrapper op via failOperation when regeneration throws (no stuck loading)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      let operationCount = 0;
+      const executeClientAgent = vi.fn().mockRejectedValue(new Error('boom'));
+      const chatState: any = {
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: vi.fn().mockResolvedValue(undefined),
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: vi.fn(() => {
+          const operationId = operationCount++ === 0 ? 'outer-op-id' : 'inner-op-id';
+          chatState.operations[operationId] = { id: operationId, status: 'running' };
+          return { operationId };
+        }),
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+        groupId: 'group-1',
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await expect(store.getState().delAndRegenerateMessage('msg-2')).rejects.toThrow('boom');
+      });
+
+      expect(mockFailOperation).toHaveBeenCalledWith(
+        'outer-op-id',
+        expect.objectContaining({ type: 'RegenerateError' }),
+      );
+      expect(mockCompleteOperation).not.toHaveBeenCalledWith('outer-op-id');
+    });
   });
 
   describe('delAndResendThreadMessage', () => {
@@ -770,6 +1010,104 @@ describe('Generation Actions', () => {
           parentOperationId: 'test-op-id',
         }),
       );
+    });
+
+    it('should bail out if the interim op was cancelled during preflight (Stop pressed)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        // Simulate the user hitting Stop during the preflight awaits: stopGenerating
+        // has already flipped the interim regenerate op to 'cancelled'.
+        operations: { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } },
+        operationsByMessage: {},
+
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // The interim op is still created up front (so the input shows loading
+      // instantly)...
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'msg-1' },
+        type: 'regenerate',
+      });
+      // ...but because Stop cancelled it during preflight, the run must NOT start.
+      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+    });
+
+    it('should bail out if the interim op was cancelled during switchMessageBranch (Stop pressed)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      // The op passes the preflight guard as 'running', then a Stop lands while
+      // switchMessageBranch is awaiting — flip it to cancelled inside the mock.
+      const chatState: any = {
+        messagesMap: {},
+        operations: { 'test-op-id': { id: 'test-op-id', status: 'running' } },
+        operationsByMessage: {},
+        dbMessages: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      chatState.switchMessageBranch = vi.fn().mockImplementation(async () => {
+        chatState.operations = { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } };
+      });
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // The branch switch ran (preflight passed), but the Stop during it must
+      // stop the runtime from starting.
+      expect(chatState.switchMessageBranch).toHaveBeenCalled();
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
 
     it('should restore mention-based initialContext when regenerating a user message', async () => {
@@ -1048,7 +1386,6 @@ describe('Generation Actions', () => {
 
     const setupHeteroChatStore = async (overrides: Record<string, any> = {}) => {
       const mockRefreshMessages = vi.fn().mockResolvedValue(undefined);
-      const mockInternalUpdateTopicLoading = vi.fn();
       const mockAssociateMessageWithOperation = vi.fn();
       const mockHeteroStartOperation = vi
         .fn()
@@ -1070,7 +1407,6 @@ describe('Generation Actions', () => {
         isGatewayModeEnabled: vi.fn(() => false),
         switchMessageBranch: mockSwitchMessageBranch,
         refreshMessages: mockRefreshMessages,
-        internal_updateTopicLoading: mockInternalUpdateTopicLoading,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
@@ -1080,7 +1416,6 @@ describe('Generation Actions', () => {
       return {
         mockAssociateMessageWithOperation,
         mockHeteroStartOperation,
-        mockInternalUpdateTopicLoading,
         mockRefreshMessages,
       };
     };

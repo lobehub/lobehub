@@ -6,6 +6,7 @@ import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
+import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 /**
@@ -17,6 +18,8 @@ export interface AgentRankItem {
   backgroundColor: string | null;
   count: number;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 
@@ -51,6 +54,14 @@ export interface LobeAgentConfig {
   model: string;
 
   /**
+   * The agent's personal name (e.g. "Alice", "小艾") — the identity it is
+   * addressed by. Distinct from {@link LobeAgentConfig.title}, which describes
+   * the role it plays ("Health Assistant" / "健康助手"). Optional: agents
+   * created before this field existed have no name.
+   */
+  name?: string;
+
+  /**
    * Opening message
    */
   openingMessage?: string;
@@ -64,9 +75,13 @@ export interface LobeAgentConfig {
    */
   params: LLMParams;
   /**
-   * Enabled plugins
+   * Enabled plugins. Each entry is either a legacy bare identifier string
+   * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
+   * `AgentPluginEntry` / `parsePluginEntry`. Prefer the read helpers
+   * (`getActivePluginIds`, `getPinnedPluginIds`, `getDisabledPluginIds`,
+   * `getPluginMode`) over reading this field directly.
    */
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
 
   /**
    *  Model provider
@@ -79,7 +94,8 @@ export interface LobeAgentConfig {
   systemRole: string;
 
   /**
-   * Agent title/name
+   * The role the agent plays, shown as its display label across the app
+   * (see {@link LobeAgentConfig.name} for the personal name).
    */
   title?: string;
 
@@ -111,10 +127,11 @@ export const CreateAgentSchema = z.object({
   fewShots: z.unknown().optional(),
   marketIdentifier: z.string().nullish(),
   model: z.string().nullish(),
+  name: z.string().nullish(),
   openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
-  params: z.record(z.unknown()).optional(),
-  plugins: z.array(z.string()).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  plugins: z.array(AgentPluginEntrySchema).optional(),
   provider: z.string().nullish(),
   sessionGroupId: z.string().nullish(),
   systemRole: z.string().nullish(),
@@ -147,10 +164,12 @@ export interface AgentItem {
   /** Market agent identifier for published agents */
   marketIdentifier?: string | null;
   model?: string | null;
+  /** Personal name of the agent — see {@link LobeAgentConfig.name}. */
+  name?: string | null;
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
   provider?: string | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;

@@ -8,8 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { VList } from 'virtua';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useFileStore } from '@/store/file';
 import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';

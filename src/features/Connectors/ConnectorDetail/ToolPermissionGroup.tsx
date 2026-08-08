@@ -1,5 +1,4 @@
-import { DropdownMenu } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -53,6 +52,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface ToolPermissionGroupProps {
+  /** Read-only mode — the caller lacks the manage permission for this connector. */
+  disabled?: boolean;
   label: string;
   onBatchPermission: (toolIds: string[], permission: ConnectorToolPermission) => void;
   onPermissionChange: (toolId: string, permission: ConnectorToolPermission) => void;
@@ -60,7 +61,7 @@ interface ToolPermissionGroupProps {
 }
 
 const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
-  ({ label, tools, onPermissionChange, onBatchPermission }) => {
+  ({ disabled, label, tools, onPermissionChange, onBatchPermission }) => {
     const { t } = useTranslation('tool');
     const [expanded, setExpanded] = useState(true);
 
@@ -95,23 +96,26 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
             <span className={styles.badge}>{tools.length}</span>
           </div>
 
-          <DropdownMenu items={batchItems}>
-            <Button
-              size="small"
-              style={{ fontSize: 12, height: 26 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontalIcon size={12} />
-              {t('connector.permission.custom', 'Custom')}
-              <ChevronDownIcon size={12} />
-            </Button>
-          </DropdownMenu>
+          {!disabled && (
+            <DropdownMenu items={batchItems}>
+              <Button
+                size="small"
+                style={{ fontSize: 12, height: 26 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontalIcon size={12} />
+                {t('connector.permission.custom', 'Custom')}
+                <ChevronDownIcon size={12} />
+              </Button>
+            </DropdownMenu>
+          )}
         </div>
 
         {expanded && (
           <div>
             {tools.map((tool) => (
               <ToolPermissionRow
+                disabled={disabled}
                 key={tool.id}
                 tool={tool}
                 onPermissionChange={onPermissionChange}

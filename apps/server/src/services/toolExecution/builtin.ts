@@ -1,14 +1,20 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  isWorkSkillProvider,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
 const log = debug('lobe-server:builtin-tools-executor');
 
@@ -44,12 +50,32 @@ const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
 };
 
 export class BuiltinToolsExecutor implements IToolExecutor {
-  private marketService: MarketService;
-  private composioService: ComposioService;
+  private db: LobeChatDatabase;
+  private userId: string;
+  private _marketService?: MarketService;
 
   constructor(db: LobeChatDatabase, userId: string) {
-    this.marketService = new MarketService({ userInfo: { userId } });
-    this.composioService = new ComposioService({ db, userId });
+    this.db = db;
+    this.userId = userId;
+  }
+
+  private async getMarketService(): Promise<MarketService> {
+    if (this._marketService) return this._marketService;
+
+    let accessToken: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      accessToken = (settings?.market as any)?.accessToken;
+    } catch {
+      // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    this._marketService = new MarketService({
+      accessToken,
+      userInfo: { userId: this.userId },
+    });
+    return this._marketService;
   }
 
   async execute(
@@ -100,19 +126,51 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      return this.marketService.executeLobehubSkill({
+      const marketService = await this.getMarketService();
+      const result = await marketService.executeLobehubSkill({
         args,
         context: {
           topicId: context.topicId,
         },
         provider: identifier,
+        timeoutMs: context.executionTimeoutMs,
         toolName: apiName,
       });
+
+      if (result.success && isWorkSkillProvider(identifier)) {
+        // Defer Work registration to the agent runtime so the version is written
+        // ONCE with its cumulative cost (known only after execution). Carry the
+        // UNTRUNCATED payload here: the runtime only sees the truncated
+        // `content`, but skill identity (issue/PR url, number, …) lives
+        // exclusively in the raw result.
+        return {
+          ...result,
+          workRegistration: {
+            args,
+            data: safeParseJSON(result.content) ?? result.content,
+            provider: identifier,
+            toolName: apiName,
+            type: 'skill',
+          },
+        };
+      }
+
+      return result;
     }
 
-    // Route Composio tools to ComposioService
+    // Route Composio tools to ComposioService. Build it request-scoped: agentId
+    // and workspaceId live on the per-call context (not known at construction),
+    // so a workspace run resolves workspace connectors and a
+    // service-account agent runs off its own Composio account
+    // (Agent > Workspace/Personal).
     if (source === 'composio') {
-      return this.composioService.executeComposioTool({
+      const composioService = new ComposioService({
+        db: this.db,
+        userId: this.userId,
+        workspaceId: context.workspaceId,
+      });
+      return composioService.executeComposioTool({
+        agentId: context.agentId,
         args,
         identifier,
         toolSlug: apiName,
@@ -155,7 +213,41 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     }
 
     try {
-      return await runtime[apiName](args, context);
+      // Install a sink for runtimes whose Work registration is a side-effect
+      // decoupled from the returned result (the agentDocuments runtime emits its
+      // intent here instead of writing the version directly).
+      let collectedWorkIntent: WorkRegistrationIntent | undefined;
+      context.onWorkRegistration = (intent) => {
+        collectedWorkIntent = intent;
+      };
+
+      const result = await runtime[apiName](args, context);
+
+      // Manifest-driven Work registration: resolve the intent from the API's
+      // declarative `work` config + result/args and hand it to the agent
+      // runtime, which persists the Work version ONCE with its cumulative cost.
+      // Falls back to the intent a runtime emitted via `onWorkRegistration`
+      // (documents). No-op unless the API declares a `work` config or emits one.
+      //
+      // Best-effort: Work-intent resolution is post-hoc bookkeeping over an
+      // already-successful tool call, so a bug in the resolver must not turn a
+      // succeeded mutation into a reported tool failure. Isolate it from the
+      // execution try/catch below and swallow-and-log instead.
+      let workRegistration: WorkRegistrationIntent | undefined;
+      try {
+        workRegistration =
+          resolveBuiltinToolWorkIntent(identifier, apiName, { args, result }) ??
+          collectedWorkIntent;
+      } catch (workError) {
+        log(
+          'Work registration intent resolution failed for %s:%s: %O',
+          identifier,
+          apiName,
+          workError,
+        );
+      }
+
+      return workRegistration ? { ...result, workRegistration } : result;
     } catch (e) {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);

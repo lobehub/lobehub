@@ -141,6 +141,38 @@ describe('LobeMinimaxAI', () => {
       );
     });
 
+    it.each([
+      ['the default runtime', undefined, undefined, 'https://api.minimaxi.com/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.minimaxi.com/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://minimax-proxy.example.com/v1/messages',
+        'anthropic',
+        'https://minimax-proxy.example.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'MiniMax-M3' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+
+        try {
+          await createRuntime({ baseURL, sdkType }).models();
+          const [request] = fetchSpy.mock.calls[0]!;
+          const requestURL = request instanceof Request ? request.url : String(request);
+
+          expect(fetchSpy).toHaveBeenCalledTimes(1);
+          expect(requestURL).toBe(expectedURL);
+        } finally {
+          fetchSpy.mockRestore();
+        }
+      },
+    );
+
     it('should pass modelIdMapping to the OpenAI-compatible runtime', async () => {
       const modelIdMapping = { 'minimax-public': 'MiniMax-M3' };
       const chatSpy = vi
@@ -418,6 +450,44 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.messages[0].content).toBe(content);
   });
 
+  it('omits rejected image detail "auto" to use MiniMax default behavior', () => {
+    const imagePart = {
+      image_url: { detail: 'auto', url: 'https://example.com/image.png' },
+      type: 'image_url',
+    };
+    const content = [{ text: 'describe this image', type: 'text' }, imagePart];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect((result.messages[0].content as any)[1].image_url).toEqual({
+      url: 'https://example.com/image.png',
+    });
+    // Original payload must not be mutated in place.
+    expect(imagePart.image_url.detail).toBe('auto');
+  });
+
+  it('leaves supported image detail values untouched', () => {
+    const content = [
+      { image_url: { detail: 'low', url: 'https://example.com/image.png' }, type: 'image_url' },
+      {
+        image_url: { detail: 'default', url: 'https://example.com/image.png' },
+        type: 'image_url',
+      },
+      { image_url: { detail: 'high', url: 'https://example.com/image.png' }, type: 'image_url' },
+      { image_url: { url: 'https://example.com/image.png' }, type: 'image_url' },
+    ];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect(result.messages[0].content).toBe(content);
+  });
+
   it('keeps reasoning_split enabled for non-M3 MiniMax models', () => {
     const result = handlePayload({
       messages: [{ content: 'hi', role: 'user' }],
@@ -470,5 +540,52 @@ describe('LobeMinimaxAnthropicAI - handlePayload', () => {
       ],
       role: 'assistant',
     });
+  });
+
+  // Regression: context-engine history may carry Claude-signed (or
+  // signature-only) thinking parts inside array content. Foreign signatures
+  // must be stripped, parts without thinking text dropped, and no duplicate
+  // block prepended from `reasoning`.
+  it('sanitizes context-engine thinking parts in assistant array content', async () => {
+    const result = await handleAnthropicPayload(
+      {
+        max_tokens: 4096,
+        messages: [
+          {
+            content: [
+              { signature: 'claude-signature', type: 'thinking' },
+              { text: 'first answer', type: 'text' },
+            ],
+            reasoning: { signature: 'claude-signature' },
+            role: 'assistant',
+          },
+          { content: 'next', role: 'user' },
+          {
+            content: [
+              { signature: 'claude-signature-2', thinking: 'claude thoughts', type: 'thinking' },
+              { text: 'second answer', type: 'text' },
+            ],
+            reasoning: { content: 'claude thoughts', signature: 'claude-signature-2' },
+            role: 'assistant',
+          },
+          { content: 'continue', role: 'user' },
+        ],
+        model: 'MiniMax-M3',
+      } as any,
+      {} as any,
+    );
+
+    expect(result.messages[0]).toEqual({
+      content: [{ text: 'first answer', type: 'text' }],
+      role: 'assistant',
+    });
+    expect(result.messages[2]).toEqual({
+      content: [
+        { thinking: 'claude thoughts', type: 'thinking' },
+        { text: 'second answer', type: 'text' },
+      ],
+      role: 'assistant',
+    });
+    expect(JSON.stringify(result.messages)).not.toContain('claude-signature');
   });
 });

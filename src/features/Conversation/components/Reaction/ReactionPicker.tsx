@@ -13,6 +13,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
+import { useConversationResourceAccess } from '../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../store';
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '😄', '😂', '😅', '🎉', '😢', '🤔', '🚀'];
@@ -72,12 +73,15 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
   const { t } = useTranslation('chat');
   const theme = useTheme();
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { canUseResource } = useConversationResourceAccess();
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const addReaction = useConversationStore((s) => s.addReaction);
   const [open, setOpen] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
-  if (!canEdit) return null;
+  // Reactions write to the shared conversation — view-only members don't get
+  // the affordance (same absent-when-not-applicable rule as message actions).
+  if (!canEdit || !canUseResource) return null;
 
   const handleSelect = (emoji: string) => {
     addReaction(messageId, emoji);

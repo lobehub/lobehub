@@ -2,37 +2,20 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheHydration } from '@/libs/swr/cacheHydration';
+import { getAppPainted, setAppPainted, setAppReady } from '@/spa/atoms/app';
 
 // Import after mocks are registered.
 import CacheHydrationGate from './CacheHydrationGate';
 
 // --- controllable inputs -----------------------------------------------------
 let mockScope = 'anon:personal';
-let mockIsAuthLoaded = true;
-let mockIsUserStateInit = true;
-let mockIsDesktop = false;
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   useCacheScope: () => mockScope,
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (s: any) => unknown) =>
-    selector({ isLoaded: mockIsAuthLoaded, isUserStateInit: mockIsUserStateInit }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  authSelectors: { isLoaded: (s: any) => s.isLoaded },
-}));
-
 vi.mock('@/libs/bootTiming', () => ({
   bootTiming: { mark: vi.fn() },
-}));
-
-vi.mock('@lobechat/const', () => ({
-  get isDesktop() {
-    return mockIsDesktop;
-  },
 }));
 
 const ALL_SCOPES = ['anon:personal', 'u1:personal', 'u2:personal'];
@@ -49,37 +32,33 @@ const renderGate = () =>
 
 beforeEach(() => {
   mockScope = 'anon:personal';
-  mockIsAuthLoaded = true;
-  mockIsUserStateInit = true;
-  mockIsDesktop = false;
   resetHydration();
-  // A loading-screen node so the gate's removal side-effect has a target.
-  const el = document.createElement('div');
-  el.id = 'loading-screen';
-  document.body.appendChild(el);
+  setAppPainted(false);
+  setAppReady(true);
 });
 
 afterEach(() => {
+  window.history.replaceState(null, '', '/');
   resetHydration();
-  document.getElementById('loading-screen')?.remove();
+  setAppPainted(false);
+  setAppReady(false);
   vi.useRealTimers();
 });
 
 describe('CacheHydrationGate', () => {
-  it('blocks first paint (renders nothing) until the initial scope is ready', () => {
-    // web path (isDesktop=false): released needs isAuthLoaded && ready
+  it('blocks first paint (renders nothing) until the active scope is hydrated', () => {
     renderGate();
     // not ready yet → blocked
     expect(screen.queryByTestId('app')).toBeNull();
-    expect(document.getElementById('loading-screen')).not.toBeNull();
+    expect(getAppPainted()).toBe(false);
 
     act(() => {
       cacheHydration.markReady('anon:personal');
     });
 
     expect(screen.queryByTestId('app')).not.toBeNull();
-    // loading-screen removed once released
-    expect(document.getElementById('loading-screen')).toBeNull();
+    // signals the boot shell to tear down once the real app has committed
+    expect(getAppPainted()).toBe(true);
   });
 
   it('CORE: after first release, a scope change does NOT unmount the app (no white-screen)', () => {
@@ -89,61 +68,103 @@ describe('CacheHydrationGate', () => {
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
 
-    // Simulate login: scope flips to the signed-in user, whose cache is NOT yet
-    // hydrated (markPending / never marked ready). The old key={scope} remount
-    // would blank the whole tree here.
+    // Simulate the session resolving a different scope whose cache is NOT yet
+    // hydrated. The old key={scope} remount would blank the whole tree here.
     act(() => {
       mockScope = 'u1:personal';
       cacheHydration.markPending('u1:personal'); // new scope not ready
-      // force a re-render through the hydration store subscription
-      cacheHydration.markReady('anon:personal');
+      cacheHydration.markReady('anon:personal'); // force a re-render via the store
     });
 
-    // App stays mounted throughout the scope change — this is the invariant that
-    // prevents the reported full-screen white flash on login.
+    // App stays mounted throughout the scope change.
     expect(screen.queryByTestId('app')).not.toBeNull();
 
-    // Even after the new scope finishes hydrating, still mounted (never blanked).
     act(() => {
       cacheHydration.markReady('u1:personal');
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
-  it('desktop first paint waits for isUserStateInit even when cache is ready', () => {
-    mockIsDesktop = true;
-    mockIsUserStateInit = false;
+  it('releases the moment the active scope is ready — no identity round-trip wait', () => {
+    // The persisted activeScopeKey means the hydrated scope is already the real
+    // user partition, so the gate must not wait for auth/userId — only `ready`.
     renderGate();
+    expect(screen.queryByTestId('app')).toBeNull();
 
     act(() => {
       cacheHydration.markReady('anon:personal');
     });
-    // cache ready + auth loaded, but identity round-trip not done → still blocked
-    expect(screen.queryByTestId('app')).toBeNull();
-
-    // Flip identity to resolved and drive a genuine hydration snapshot change so
-    // the gate re-renders and re-evaluates the release condition.
-    act(() => {
-      mockIsUserStateInit = true;
-      cacheHydration.markPending('anon:personal'); // ready: true → false (re-render, still !ready)
-    });
-    expect(screen.queryByTestId('app')).toBeNull();
-
-    act(() => {
-      cacheHydration.markReady('anon:personal'); // ready: false → true → release
-    });
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
-  it('timeout backstop releases the app even if hydration never becomes ready', () => {
+  it('does NOT paint early while hydration is still in flight (no empty-chat + CLS)', () => {
+    // A heavy account's hydration outruns the former 1500ms window; painting then
+    // orphans any consumer that subscribes against the still-empty Map.
     vi.useFakeTimers();
-    mockIsDesktop = true;
-    mockIsUserStateInit = false; // would otherwise block forever on desktop
     renderGate();
     expect(screen.queryByTestId('app')).toBeNull();
 
     act(() => {
-      vi.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(2500); // well past 1500ms, still not ready
+    });
+    expect(screen.queryByTestId('app')).toBeNull();
+
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+    expect(screen.queryByTestId('app')).not.toBeNull();
+  });
+
+  it('tears down the static loading screen for entries that mount no boot shell', () => {
+    // The Electron popup entry renders no `BootShell`, and `popup.html` ships an
+    // opaque z-index 99999 `#loading-screen`. `useBootShell` is what normally
+    // removes it, so the gate has to be the backstop or the popup stays covered
+    // forever after hydration.
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
+  });
+
+  it('holds the static loading screen until the app can actually paint', () => {
+    // Hydration can finish before initialization. In that window `AppLayer`
+    // renders null and the boot shell's phase is still `hidden` (it needs BOTH
+    // signals, and the 200ms timer has not fired), so tearing the splash down on
+    // release alone leaves the window blank.
+    setAppReady(false);
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      setAppReady(true);
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
+  });
+
+  it('hung-hydration backstop still releases if ready never fires', () => {
+    vi.useFakeTimers();
+    renderGate();
+    expect(screen.queryByTestId('app')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(8000);
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
   });

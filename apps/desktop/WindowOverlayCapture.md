@@ -358,7 +358,7 @@
 | 方案               | 优点                             | 缺点                             | 建议             |
 | ------------------ | -------------------------------- | -------------------------------- | ---------------- |
 | 独立静态 HTML 页面 | 轻量、与业务隔离、最接近 demo    | 与现有 React/i18n / 业务状态脱节 | 仅适合 spike     |
-| 独立桌面 SPA 路由  | 可复用现有构建、i18n、业务事件链 | 需要维护 desktop router 双配置   | **推荐生产使用** |
+| 独立桌面 SPA 路由  | 可复用现有构建、i18n、业务事件链 | 需要声明清晰的平台差分           | **推荐生产使用** |
 
 若采用 SPA 路由，建议新增：
 
@@ -366,15 +366,15 @@
 | ------------------------------------------------------- | ------------------------------------ |
 | `src/routes/(desktop)/screen-capture-overlay/index.tsx` | overlay 页面入口；仅负责挂载 UI 组件 |
 | `src/features/DesktopScreenCaptureOverlay/*`            | 业务组件、hooks、样式                |
-| `src/spa/router/desktopRouter.config.tsx`               | 动态路由配置                         |
-| `src/spa/router/desktopRouter.config.desktop.tsx`       | 同步路由配置                         |
+| `src/spa/router/desktopRouter.shared.tsx`               | Web/Electron 共用路由定义            |
+| `src/spa/router/desktopRouter.config.desktop.tsx`       | Electron 独有路由差分                |
 
 必须注意：
 
-| 规则                             | 说明                                 |
-| -------------------------------- | ------------------------------------ |
-| 两份 desktop router 必须同时更新 | 否则 Electron 本地构建可能出现空白页 |
-| overlay route 应保持极薄         | 不在 route 文件中堆叠业务逻辑        |
+| 规则                         | 说明                          |
+| ---------------------------- | ----------------------------- |
+| 共用路由只在 shared 文件注册 | 避免 Web/Electron 路由树漂移  |
+| overlay route 应保持极薄     | 不在 route 文件中堆叠业务逻辑 |
 
 ## 14. 托盘入口的真实接入点
 

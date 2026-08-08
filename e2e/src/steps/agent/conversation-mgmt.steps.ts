@@ -11,6 +11,7 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
+import { llmMockManager } from '../../mocks/llm';
 import type { CustomWorld } from '../../support/world';
 
 // ============================================
@@ -52,6 +53,11 @@ Given('用户已有一个对话', async function (this: CustomWorld) {
 
 Given('用户有多个对话历史', async function (this: CustomWorld) {
   console.log('   📍 Step: 创建多个对话...');
+
+  // Keep the search fixture self-contained. Without a deterministic title,
+  // the generic mock response becomes the topic title and the search scenario
+  // only passes when another scenario happened to rename a topic on this worker.
+  llmMockManager.setResponseContaining('测试对话内容', '测试对话');
 
   // Create first conversation
   const chatInputs = this.page.locator('[data-testid="chat-input"]');
@@ -427,9 +433,11 @@ When('用户选择删除选项', async function (this: CustomWorld) {
 When('用户确认删除', async function (this: CustomWorld) {
   console.log('   📍 Step: 确认删除...');
 
+  // `Delete Topic` / `删除话题`: the topic delete flow confirms through the
+  // DeleteTopicConfirm modal (#16030) instead of a generic ok/删除 button.
   const confirmButton = this.page
     .getByRole('dialog')
-    .getByRole('button', { name: /^(ok|delete|删除|确认|确定)$/i });
+    .getByRole('button', { name: /^(ok|delete( topic)?|删除(话题)?|确认|确定)$/i });
 
   await expect(confirmButton).toBeVisible({ timeout: 5000 });
   await confirmButton.click();

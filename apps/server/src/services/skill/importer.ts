@@ -30,14 +30,38 @@ export class SkillImporter {
   private fileService: FileService;
   private github: GitHub;
   private userId: string;
+  private workspaceId?: string;
+  private workspaceRole?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: { workspaceRole?: string },
+  ) {
     this.skillModel = new AgentSkillModel(db, userId, workspaceId);
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.github = new GitHub({ userAgent: 'LobeHub-Skill-Importer' });
     this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.workspaceRole = options?.workspaceRole;
+  }
+
+  /**
+   * Re-importing an identifier that resolves to a teammate's shared skill is
+   * an overwrite — same creator/owner rule as the explicit update procedure.
+   */
+  private assertCanOverwrite(existing: { userId?: string | null }) {
+    if (!this.workspaceId) return;
+    if (this.workspaceRole === 'owner') return;
+    if (existing.userId !== this.userId) {
+      throw new SkillImportError(
+        'Only the creator or a workspace owner can update this skill',
+        'FORBIDDEN',
+      );
+    }
   }
 
   /**
@@ -248,6 +272,7 @@ export class SkillImporter {
 
     // 9. Update existing skill or create new
     if (existing) {
+      this.assertCanOverwrite(existing);
       log('importFromGitHub: skill exists but content changed, updating id=%s', existing.id);
       const skill = await this.skillModel.update(existing.id, {
         content,
@@ -446,6 +471,7 @@ export class SkillImporter {
         return { skill: existing, status: 'unchanged' };
       }
 
+      this.assertCanOverwrite(existing);
       log('importFromUrl: skill exists but content changed, updating id=%s', existing.id);
       const skill = await this.skillModel.update(existing.id, {
         content: skillContent,

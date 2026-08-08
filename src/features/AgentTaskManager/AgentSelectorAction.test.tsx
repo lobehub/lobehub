@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     isAgentListInit: true,
     pinnedAgents: [] as any[],
     privateAgentGroups: [] as any[],
+    privatePinnedAgents: [] as any[],
     privateUngroupedAgents: [] as any[],
     ungroupedAgents: [
       { id: 'agt_custom', title: 'Custom Agent', type: 'agent' },
@@ -71,6 +72,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('lucide-react', () => ({
   ChevronsUpDownIcon: () => <span data-testid="chevron" />,
+  Circle: () => <span data-testid="circle" />,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -111,11 +113,11 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => mocks.fetchAgentList(),
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar', () => ({
+vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar', () => ({
   default: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} data-testid="avatar" />,
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
+vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   AgentModalProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 

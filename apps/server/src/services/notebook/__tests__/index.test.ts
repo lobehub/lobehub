@@ -182,7 +182,7 @@ describe('NotebookRuntimeService', () => {
       await service.deleteDocument('doc-1');
 
       expect(mockTopicDocumentModel.deleteByDocumentId).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1');
+      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1', undefined);
     });
   });
 

@@ -19,6 +19,15 @@ tags:
 - 一个拥有有效订阅的 LobeHub 账户
 - 一个拥有创建企业应用权限的 Lark 账户
 
+## 连接模式
+
+LobeHub 支持两种 Lark 机器人连接模式：
+
+- **WebSocket（推荐）** — 使用 Lark 官方的长连接客户端建立持久连接。事件实时推送，无需配置公网可访问的 Webhook 地址，即使没有公网服务器也能开箱即用。这是新机器人的默认模式。
+- **Webhook** — 基于事件订阅 URL 的 HTTP 回调。如果您倾向于无状态的回调方式，或应用已在 Lark 开放平台配置了事件订阅 URL，可使用此模式。
+
+> **注意：** 下文第四步中在 Lark 开放平台配置 **Event Subscription URL** 的步骤仅适用于 **Webhook 模式**。如果您使用默认的 **WebSocket** 模式，请跳过这些步骤。
+
 ## 第一步：创建 Lark 应用
 
 <Steps>
@@ -100,16 +109,25 @@ tags:
   - **App ID** — 来自 Lark 应用的 App ID
   - **App Secret** — 来自 Lark 应用的 App Secret
 
-  > 此时您不需要填写 **Verification Token** 或 **Encrypt Key** —— 可以在完成第四步配置事件订阅后再设置。
+  ### 选择连接模式
 
-  ### 保存并复制 Webhook URL
+  在 **Advanced Settings** 中，选择 **Connection Mode**：
 
-  点击 **Save Configuration**。保存后，将显示一个 **Event Subscription URL**。复制此 URL —— 您将在下一步中需要它。
+  - **WebSocket**（默认）— 推荐新机器人使用，可直接跳到第五步。
+  - **Webhook** — 适用于已在 Lark 开放平台配置了 Event Subscription URL 的应用，请继续下面的步骤。
+
+  > 此时您不需要填写 **Verification Token** 或 **Encrypt Key** —— 可以在完成第四步（仅 Webhook 模式需要）配置事件订阅后再设置。
+
+  ### 保存配置（仅 Webhook 模式）
+
+  点击 **Save Configuration**。在 **Webhook 模式** 下，保存后将显示一个 **Event Subscription URL**，复制此 URL —— 您将在下一步中需要它。在 **WebSocket 模式** 下，机器人会自动连接，不会生成该 URL。
 
   ![](/blog/assets0a25d3ffb02d35f6f28cdfa9da2dccd8.webp)
 </Steps>
 
-## 第四步：在 Lark 中设置事件订阅
+## 第四步：在 Lark 中设置事件订阅（仅 Webhook 模式）
+
+> 如果您使用的是 WebSocket 模式（默认），请跳过此步骤。
 
 <Steps>
   ### 打开事件订阅设置
@@ -209,9 +227,10 @@ tags:
 | -------------------------- | ---- | ---------------------------------------------------------- |
 | **App ID**                 | 是    | 您的 Lark 应用的 App ID（`cli_xxx`）                              |
 | **App Secret**             | 是    | 您的 Lark 应用的 App Secret                                     |
+| **Connection Mode**        | 否    | `websocket`（默认）或 `webhook`，根据应用是否能接收公网 Webhook 请求来选择       |
 | **Verification Token**     | 否    | 验证 webhook 事件来源（推荐）                                        |
-| **Encrypt Key**            | 否    | 解密加密事件负载                                                   |
-| **Event Subscription URL** | —    | 保存后自动生成；粘贴到 Lark 开发者门户                                     |
+| **Encrypt Key**            | 否    | 解密加密事件负载（仅 Webhook 模式使用）                                   |
+| **Event Subscription URL** | —    | Webhook 模式下保存后自动生成；粘贴到 Lark 开发者门户                          |
 | **允许的用户 ID**               | 否    | 逗号或空格分隔的 Lark `open_id`。全局闸门 — 私信和群聊 @ 都受其约束               |
 | **私信策略**                   | 否    | `open`（默认）、`allowlist`、`pairing` 或 `disabled` — 控制谁可以私信机器人 |
 | **群组策略**                   | 否    | `open`（默认）、`allowlist` 或 `disabled` — 控制机器人在哪些群中响应         |
@@ -219,7 +238,8 @@ tags:
 
 ## 故障排除
 
-- **Event Subscription URL 验证失败：** 确保您已在 LobeHub 中保存配置，并正确复制了 URL。
+- **机器人无法连接（WebSocket 模式）：** 验证 App ID 和 App Secret 是否正确，并确认机器人功能已启用且已注册 `im.message.receive_v1` 事件。
+- **Event Subscription URL 验证失败（Webhook 模式）：** 确保您已在 LobeHub 中保存配置，并正确复制了 URL。
 - **机器人未响应：** 验证应用已发布并获得批准，机器人功能已启用，并订阅了 `im.message.receive_v1` 事件。
 - **机器人不回私信：** 在 LobeHub 的 **高级设置** 检查 **私信策略**。如果是 `Disabled`，改成 `Open` 或 `Allowlist`；如果是 `Allowlist`，确认发起方的 `open_id` 已加入 **允许的用户 ID**。
 - **权限错误：** 确保所有所需权限已在开发者门户中添加并获得批准。

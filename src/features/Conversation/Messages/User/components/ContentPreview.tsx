@@ -1,4 +1,5 @@
-import { Button, Flexbox, MaskShadow } from '@lobehub/ui';
+import { Flexbox, MaskShadow } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
@@ -22,9 +23,8 @@ const ContentPreview = ({ content, id }: ContentPreviewProps) => {
       <Flexbox padding={4}>
         <Button
           block
-          color={'default'}
           size={'small'}
-          variant={'filled'}
+          type={'fill'}
           onClick={() => {
             openMessageDetail(id);
           }}

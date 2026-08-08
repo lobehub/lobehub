@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -48,9 +49,15 @@ export const useProjectSkillResolver = (
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
     isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;

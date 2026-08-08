@@ -1,7 +1,8 @@
+import { AskUserQuestionInspector } from '@lobechat/builtin-tool-user-interaction/client';
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { LobeAgentApiName } from '../../types';
-import { AnalyzeVisualMediaInspector } from './AnalyzeVisualMedia';
+import { AnalyzeMediaInspector } from './AnalyzeMedia';
 import { CallSubAgentInspector } from './CallSubAgent';
 import { ClearTodosInspector } from './ClearTodos';
 import { CreatePlanInspector } from './CreatePlan';
@@ -16,7 +17,8 @@ import { UpdateTodosInspector } from './UpdateTodos';
  * of tool calls in the conversation UI.
  */
 export const LobeAgentInspectors: Record<string, BuiltinInspector> = {
-  [LobeAgentApiName.analyzeVisualMedia]: AnalyzeVisualMediaInspector as BuiltinInspector,
+  [LobeAgentApiName.analyzeMedia]: AnalyzeMediaInspector as BuiltinInspector,
+  [LobeAgentApiName.askUserQuestion]: AskUserQuestionInspector as BuiltinInspector,
   [LobeAgentApiName.callSubAgent]: CallSubAgentInspector as BuiltinInspector,
   [LobeAgentApiName.clearTodos]: ClearTodosInspector as BuiltinInspector,
   [LobeAgentApiName.createPlan]: CreatePlanInspector as BuiltinInspector,

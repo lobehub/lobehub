@@ -1,7 +1,7 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,6 +38,12 @@ const styles = createStaticStyles(({ css }) => {
     `,
     behindStat: css`
       color: ${cssVar.colorError};
+    `,
+    branchGroup: css`
+      display: flex;
+      flex: none;
+      gap: 2px;
+      align-items: center;
     `,
     branchLabel: css`
       overflow: hidden;
@@ -308,14 +314,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
 
   const branchTrigger = (
     <div className={styles.trigger}>
-      <Icon icon={GitBranchIcon} size={12} />
       <span className={styles.branchLabel}>{branch}</span>
     </div>
   );
 
-  const hasMultipleWorktrees = worktrees.length > 1;
+  const hasWorktreeMenu = worktrees.length > 0;
 
-  const branchNode = hasMultipleWorktrees ? (
+  const worktreeNode = hasWorktreeMenu ? (
     <WorktreeSwitcher
       agentId={agentId}
       currentBranch={branch}
@@ -327,16 +332,22 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       worktrees={worktrees}
       onWorktreesChange={mutateWorktrees}
     />
-  ) : detached ? (
+  ) : null;
+
+  const branchNode = detached ? (
     // Detached HEAD → plain branch label (nothing to switch to).
     <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
   ) : (
     // Local switches over IPC; a remote device switches over RPC (deviceId set).
     <BranchSwitcher
+      agentId={agentId}
       currentBranch={branch}
       deviceId={deviceId}
+      isGithub={isGithub}
       open={switcherOpen}
       path={path}
+      sourcePath={sourcePath ?? path}
+      worktrees={worktrees}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
       onOptimisticCheckout={handleOptimisticCheckout}
@@ -423,7 +434,12 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   return (
     <>
       <div className={styles.separator} />
-      {branchNode}
+      {/* The worktree icon and the branch name name one thing — which checkout
+       * you're on — so they sit closer to each other than to their neighbours. */}
+      <div className={styles.branchGroup}>
+        {worktreeNode}
+        {branchNode}
+      </div>
       {pullNode}
       {pushNode}
       {diffNode}

@@ -1,4 +1,8 @@
-import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
+  OFFICIAL_URL,
+} from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -164,7 +168,7 @@ export class CredsExecutionRuntime {
       // Get the authorization URL
       // Note: In background execution, we cannot use window.location.origin
       // Normalize APP_URL by removing trailing slash to avoid double-slash in redirectUri
-      const appUrl = (process.env.APP_URL || 'https://app.lobehub.com').replace(/\/+$/, '');
+      const appUrl = (process.env.APP_URL || OFFICIAL_URL).replace(/\/+$/, '');
       const redirectUri = `${appUrl}/oauth/callback/success?provider=${provider}`;
       const response = await this.credsService.getOAuthAuthorizeUrl(provider, redirectUri);
 

@@ -18,6 +18,8 @@ export const UserInteractionManifest: BuiltinToolManifest = {
                 header: { type: 'string' },
                 multiSelect: { type: 'boolean' },
                 options: {
+                  description:
+                    'Provide 2-4 mutually exclusive choices. To recommend one option, put it first and append the exact marker "(Recommended)" to its label — always in English regardless of the conversation language; the client strips the marker and renders a localized badge.',
                   items: {
                     properties: {
                       description: { type: 'string' },

@@ -13,6 +13,6 @@
     "@lobechat/const": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   }
 }

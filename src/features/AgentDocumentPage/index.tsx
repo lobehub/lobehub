@@ -4,13 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 
+import { type ComposerTarget, createComposerTarget } from '@/features/Conversation/types';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import { PageEditor } from '@/features/PageEditor';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import Header from './Header';
 import { buildAgentDocumentsPath } from './navigation';
@@ -40,17 +40,33 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     skillBundle,
   } = useAgentDocumentItem(agentId, documentId);
 
-  const enableFloatingChatPanel = useUserStore(
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
-  );
   // The route owns the agent — `useChatStore.activeAgentId` can be a different
   // agent (the user's main chat context). Pulling that one would 404 the
   // doc-anchored topic lookup whenever the active agent doesn't own this doc.
   const chatAgentId = agentId;
+  // `item` is resolved out of *this agent's* document list, so its presence is the
+  // ownership proof `getOrCreateChatTopic` demands. Waiting for it keeps a bad deep
+  // link from firing a guaranteed-NOT_FOUND lookup before the redirect kicks in.
+  const ownsDocument = !!item;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
-    agentId: enableFloatingChatPanel ? chatAgentId : undefined,
-    documentId: enableFloatingChatPanel ? documentId : undefined,
+    agentId: ownsDocument ? chatAgentId : undefined,
+    documentId: ownsDocument ? documentId : undefined,
   });
+  const askCopilotTarget = useMemo<ComposerTarget>(
+    () =>
+      chatAgentId && docChatTopicId
+        ? createComposerTarget(
+            messageMapKey({
+              agentId: chatAgentId,
+              documentId,
+              scope: 'main',
+              threadId: null,
+              topicId: docChatTopicId,
+            }),
+          )
+        : { reason: 'no-composer', writable: false },
+    [chatAgentId, docChatTopicId, documentId],
+  );
 
   const backToChat = useCallback(
     () => navigate(agentId ? `/agent/${agentId}` : '/agent'),
@@ -106,6 +122,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
       <Flexbox flex={1} style={{ minHeight: 0 }} width={'100%'}>
         <PageEditor
           fullWidthHeader
+          askCopilotTarget={askCopilotTarget}
           header={header}
           key={documentId}
           // A skill index's visible name is the bundle title; renaming must go
@@ -122,7 +139,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
           onTitleChange={() => mutate()}
         />
       </Flexbox>
-      {enableFloatingChatPanel && chatAgentId && docChatTopicId && (
+      {chatAgentId && docChatTopicId && (
         <WideScreenContainer>
           <FloatingChatPanel
             agentDocumentId={item?.id}

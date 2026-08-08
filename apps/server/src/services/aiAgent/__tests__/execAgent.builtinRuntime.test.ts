@@ -1,3 +1,4 @@
+import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
 import { RequestTrigger } from '@lobechat/types';
@@ -5,6 +6,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import { AiAgentService } from '../index';
 
@@ -28,8 +30,8 @@ const {
   mockMessageQuery: vi.fn(),
   mockResolveTask: vi.fn(),
   mockToolsEnv: {
-    VISUAL_UNDERSTANDING_MODEL: undefined as string | undefined,
-    VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
+    MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
+    MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
   },
 }));
 
@@ -46,6 +48,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -92,6 +96,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
     queryByIdentifiers: vi.fn().mockResolvedValue([]),
+    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -106,6 +111,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+    findById: vi.fn().mockResolvedValue(null),
   })),
 }));
 
@@ -175,17 +181,17 @@ vi.mock('model-bank', async (importOriginal) => {
     ...actual,
     LOBE_DEFAULT_MODEL_LIST: [
       {
-        abilities: { functionCall: true, video: false, vision: true },
+        abilities: { audio: false, functionCall: true, video: false, vision: true },
         id: 'gpt-4',
         providerId: 'openai',
       },
       {
-        abilities: { functionCall: true, video: false, vision: false },
+        abilities: { audio: false, functionCall: true, video: false, vision: false },
         id: 'text-only',
         providerId: 'openai',
       },
       {
-        abilities: { functionCall: true, video: true, vision: true },
+        abilities: { audio: true, functionCall: true, video: true, vision: true },
         id: 'gemini-3.1-flash-lite-preview',
         providerId: 'google',
       },
@@ -197,6 +203,13 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   let service: AiAgentService;
   const mockDb = {} as any;
   const userId = 'test-user-id';
+  const minimalGraph = {
+    edges: [{ from: '__root__', instruction: 'Answer with the graph runtime.', to: 'answer' }],
+    fields: {},
+    name: 'answer-graph',
+    nodes: { answer: { type: 'llm' } },
+    terminal: 'answer',
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -208,8 +221,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       responseLanguage: 'en-US',
       userName: 'Test User',
     });
-    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
-    mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -218,6 +231,73 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockGetBuiltinAgent.mockResolvedValue(null);
     service = new AiAgentService(mockDb, userId);
+  });
+
+  describe('graph runtime factory', () => {
+    const getLatestAgentFactory = () => {
+      const options = vi.mocked(AgentRuntimeService).mock.calls.at(-1)?.[2] as any;
+      const agentFactory = options?.agentFactory;
+
+      expect(agentFactory).toEqual(expect.any(Function));
+
+      return agentFactory as (config: any) => unknown;
+    };
+
+    it('creates GraphAgent when graph mode is enabled with a valid graph snapshot', () => {
+      service = new AiAgentService(mockDb, userId);
+
+      const agent = getLatestAgentFactory()({
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: minimalGraph,
+          },
+        },
+        operationId: 'op-graph',
+      });
+
+      expect(agent).toBeInstanceOf(GraphAgent);
+    });
+
+    it('falls back to GeneralChatAgent when the graph snapshot is invalid', () => {
+      service = new AiAgentService(mockDb, userId);
+
+      const agent = getLatestAgentFactory()({
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: { ...minimalGraph, edges: [] },
+          },
+        },
+        operationId: 'op-invalid-graph',
+      });
+
+      expect(agent).toBeInstanceOf(GeneralChatAgent);
+    });
+
+    it('keeps an upstream runtime agent factory authoritative', () => {
+      const upstreamAgent = { runner: vi.fn() };
+      const upstreamFactory = vi.fn(() => upstreamAgent);
+      service = new AiAgentService(mockDb, userId, {
+        runtimeOptions: {
+          agentFactory: upstreamFactory,
+        },
+      } as any);
+
+      const config = {
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: minimalGraph,
+          },
+        },
+        operationId: 'op-upstream',
+      };
+      const agent = getLatestAgentFactory()(config);
+
+      expect(agent).toBe(upstreamAgent);
+      expect(upstreamFactory).toHaveBeenCalledWith(config);
+    });
   });
 
   it('materializes a builtin agent addressed by slug when no row exists yet', async () => {
@@ -393,6 +473,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
         metadata: { trigger: RequestTrigger.Onboarding },
         role: 'user',
       }),
+      undefined,
     );
   });
 
@@ -539,7 +620,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     );
   });
 
-  it('should inject lobe-agent when history has visual media and model lacks vision', async () => {
+  it('should inject lobe-agent when history has audio and model lacks native audio support', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-custom',
@@ -550,8 +631,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockMessageQuery.mockResolvedValue([
       {
-        id: 'history-image',
-        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+        audioList: [{ alt: 'audio.mp3', id: 'file-audio', url: 'https://example.com/audio.mp3' }],
+        id: 'history-audio',
         role: 'user',
       },
     ]);
@@ -559,7 +640,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent({
       agentId: 'agent-custom',
       appContext: { topicId: 'topic-1' },
-      prompt: 'What is in the previous image?',
+      prompt: 'What is said in the previous audio?',
     });
 
     expect(createServerAgentToolsEngine).toHaveBeenCalledWith(
@@ -572,7 +653,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     );
   });
 
-  it('should not inject lobe-agent when the LobeHub routed model supports visual media natively', async () => {
+  it('should not inject lobe-agent when the LobeHub routed model supports audio natively', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-custom',
@@ -583,16 +664,16 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockMessageQuery.mockResolvedValue([
       {
-        id: 'history-video',
+        audioList: [{ id: 'file-audio', url: 'https://example.com/audio.mp3' }],
+        id: 'history-audio',
         role: 'user',
-        videoList: [{ id: 'file-video', url: 'https://example.com/video.mp4' }],
       },
     ]);
 
     await service.execAgent({
       agentId: 'agent-custom',
       appContext: { topicId: 'topic-1' },
-      prompt: 'What is in the previous video?',
+      prompt: 'What is said in the previous audio?',
     });
 
     const callArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];

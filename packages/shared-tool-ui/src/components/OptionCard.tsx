@@ -53,6 +53,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  // Keyboard cursor — a ring instead of a fill so it stays legible when
+  // stacked on the hover tint or the selected fill.
+  optionHighlighted: css`
+    box-shadow: inset 0 0 0 1px ${cssVar.colorBorder};
+  `,
   optionLabel: css`
     font-weight: 500;
   `,
@@ -63,14 +68,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFill};
     }
   `,
+  recommendedBadge: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-size: 11px;
+    line-height: 18px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
 }));
 
 export interface OptionCardProps {
   description?: string;
   disabled?: boolean;
+  /** Keyboard cursor (↑/↓) — independent from `selected`, which is the pick. */
+  highlighted?: boolean;
   index: number;
   label: string;
   onToggle: () => void;
+  /** Badge text rendered after the label for a model-recommended option. */
+  recommendedText?: string;
   selected: boolean;
 }
 
@@ -85,21 +107,28 @@ export interface OptionCardProps {
  * everywhere.
  */
 export const OptionCard = memo<OptionCardProps>(
-  ({ index, label, description, selected, disabled, onToggle }) => (
+  ({ index, label, description, highlighted, recommendedText, selected, disabled, onToggle }) => (
     <Flexbox
       horizontal
       align="center"
       aria-selected={selected}
-      className={cx(styles.option, selected && styles.optionSelected)}
       gap={12}
       role="option"
+      className={cx(
+        styles.option,
+        selected && styles.optionSelected,
+        highlighted && styles.optionHighlighted,
+      )}
       onClick={() => {
         if (!disabled) onToggle();
       }}
     >
       <span className={styles.optionIndex}>{index}</span>
       <Flexbox flex={1} gap={2}>
-        <Text className={styles.optionLabel}>{label}</Text>
+        <Flexbox horizontal align="center" gap={8}>
+          <Text className={styles.optionLabel}>{label}</Text>
+          {recommendedText && <span className={styles.recommendedBadge}>{recommendedText}</span>}
+        </Flexbox>
         {description && <span className={styles.optionDescription}>{description}</span>}
       </Flexbox>
       {selected && <Icon className={styles.optionCheck} icon={Check} size={16} />}

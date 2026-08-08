@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -5,7 +6,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 
 import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessSignup';
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
-import { message } from '@/components/AntdStaticMethods';
 import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
@@ -85,19 +85,19 @@ export const useSignUp = () => {
           signUpError.details?.cause?.code === '23505';
 
         if (isEmailDuplicate) {
-          message.error(t('betterAuth.errors.emailExists'));
+          toast.error(t('betterAuth.errors.emailExists'));
           return;
         }
 
         if (signUpError.code === 'INVALID_EMAIL' || signUpError.message === 'Invalid email') {
-          message.error(t('betterAuth.errors.emailInvalid'));
+          toast.error(t('betterAuth.errors.emailInvalid'));
           return;
         }
 
         const translated = signUpError.code
           ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' })
           : '';
-        message.error(translated || signUpError.message || t('betterAuth.signup.error'));
+        toast.error(translated || signUpError.message || t('betterAuth.signup.error'));
         return;
       }
 
@@ -110,7 +110,7 @@ export const useSignUp = () => {
         window.location.href = redirectUrl;
       }
     } catch {
-      message.error(t('betterAuth.signup.error'));
+      toast.error(t('betterAuth.signup.error'));
     } finally {
       setLoading(false);
     }

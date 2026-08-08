@@ -1,7 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { copyToClipboard, createRawModal, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
   BookMinusIcon,
@@ -24,6 +24,7 @@ import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -31,8 +32,9 @@ import { useTreeStore } from '@/store/tree';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
-import MoveToFolderModal from '../MoveToFolderModal';
+import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
@@ -47,8 +49,10 @@ interface UseFileItemDropdownParams {
   visibility?: 'private' | 'public' | null;
 }
 
+type FileMenuItem = ItemType & { sfSymbol?: SFSymbol };
+
 interface UseFileItemDropdownReturn {
-  menuItems: () => ItemType[];
+  menuItems: () => FileMenuItem[];
 }
 
 /**
@@ -66,10 +70,13 @@ export const useFileItemDropdown = ({
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  // Row-level ownership: only the creator or a workspace owner may rename or
+  // delete a shared resource — mirrors the server-side enforcement.
+  const canManage = useResourceManageable(userId);
 
   const {
     deleteResource,
@@ -133,7 +140,7 @@ export const useFileItemDropdown = ({
         domEvent.stopPropagation();
         try {
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(
+          toast.success(
             t('addToKnowledgeBase.addSuccess', {
               count: 1,
               ns: 'knowledgeBase',
@@ -146,9 +153,9 @@ export const useFileItemDropdown = ({
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -171,15 +178,15 @@ export const useFileItemDropdown = ({
           await moveResource(id, null);
           // Then add to target library
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
+          toast.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
         } catch (e: any) {
           console.error(e);
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -215,7 +222,7 @@ export const useFileItemDropdown = ({
                     onOk: async () => {
                       await removeFilesFromKnowledgeBase(libraryId, [id]);
 
-                      message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                      toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
                     },
                     title: t('FileManager.actions.removeFromLibrary'),
                   });
@@ -269,10 +276,10 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await publishFileToWorkspace(id);
-                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                    toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                    toast.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
                   }
                 },
               });
@@ -295,10 +302,10 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await setFileVisibility(id, 'private');
-                    message.success(t('makePrivate.success', { ns: 'common' }));
+                    toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('makePrivate.error', { ns: 'common' }));
+                    toast.error(t('makePrivate.error', { ns: 'common' }));
                   }
                 },
               });
@@ -317,7 +324,7 @@ export const useFileItemDropdown = ({
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
 
-              createRawModal(MoveToFolderModal, {
+              openMoveToFolderModal({
                 fileId: id,
                 knowledgeBaseId: libraryId,
               });
@@ -325,13 +332,22 @@ export const useFileItemDropdown = ({
           },
         canEditResources &&
           isFolder && {
+            disabled: !canManage,
             icon: <Icon icon={PencilIcon} />,
             key: 'rename',
-            label: t('FileManager.actions.rename'),
+            label: canManage ? (
+              t('FileManager.actions.rename')
+            ) : (
+              <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
+                <span>{t('FileManager.actions.rename')}</span>
+              </Tooltip>
+            ),
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
+              if (!canManage) return;
               onRenameStart?.();
             },
+            sfSymbol: 'pencil',
           },
         {
           icon: <Icon icon={LinkIcon} />,
@@ -351,21 +367,18 @@ export const useFileItemDropdown = ({
             }
 
             await copyToClipboard(urlToCopy);
-            message.success(t('FileManager.actions.copyUrlSuccess'));
+            toast.success(t('FileManager.actions.copyUrlSuccess'));
           },
+          sfSymbol: 'doc.on.doc',
         },
         !isFolder && {
           icon: <Icon icon={DownloadIcon} />,
           key: 'download',
           label: t('download', { ns: 'common' }),
+          sfSymbol: 'square.and.arrow.down',
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            const key = 'file-downloading';
-            message.loading({
-              content: t('FileManager.actions.downloading'),
-              duration: 0,
-              key,
-            });
+            const downloadingToast = toast.loading(t('FileManager.actions.downloading'));
 
             if (isPage) {
               // For pages, download as markdown
@@ -386,18 +399,18 @@ export const useFileItemDropdown = ({
                   await downloadFile(blobUrl, mdFilename);
                   URL.revokeObjectURL(blobUrl);
                 } else {
-                  message.error('Failed to download page: no content available');
+                  toast.error('Failed to download page: no content available');
                 }
               } catch (error) {
                 console.error('Failed to download page:', error);
-                message.error('Failed to download page');
+                toast.error('Failed to download page');
               }
             } else {
               // For regular files, download from URL
               await downloadFile(url, filename);
             }
 
-            message.destroy(key);
+            downloadingToast.close();
           },
         },
         canEditResources && {
@@ -405,11 +418,19 @@ export const useFileItemDropdown = ({
         },
         canEditResources && {
           danger: true,
+          disabled: !canManage,
           icon: <Icon icon={Trash} />,
           key: 'delete',
-          label: t('delete', { ns: 'common' }),
+          label: canManage ? (
+            t('delete', { ns: 'common' })
+          ) : (
+            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
+              <span>{t('delete', { ns: 'common' })}</span>
+            </Tooltip>
+          ),
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
+            if (!canManage) return;
             confirmModal({
               content: isFolder
                 ? t('FileManager.actions.confirmDeleteFolder')
@@ -417,26 +438,36 @@ export const useFileItemDropdown = ({
               okButtonProps: { danger: true },
               title: t('delete', { ns: 'common' }),
               onOk: async () => {
-                // Use optimistic delete - instant UI update, sync in background
-                await deleteResource(id);
+                try {
+                  // Use optimistic delete - instant UI update, sync in background
+                  await deleteResource(id);
 
-                // Revalidate tree for the parent folder
-                const { queryParams } = useFileStore.getState();
-                const parentId = queryParams?.parentId ?? '';
-                void useTreeStore.getState().revalidate(parentId);
-                await refreshFileList({ revalidateResources: false });
+                  // Revalidate tree for the parent folder
+                  const { queryParams } = useFileStore.getState();
+                  const parentId = queryParams?.parentId ?? '';
+                  void useTreeStore.getState().revalidate(parentId);
+                  await refreshFileList({ revalidateResources: false });
 
-                message.success(t('FileManager.actions.deleteSuccess'));
+                  toast.success(t('FileManager.actions.deleteSuccess'));
+                } catch (error) {
+                  toast.error(
+                    isForbiddenError(error)
+                      ? t('manageOnlyCreator', { ns: 'common' })
+                      : t('operationFailed', { ns: 'common' }),
+                  );
+                }
               },
             });
           },
+          sfSymbol: 'trash',
         },
-      ] as ItemType[]
+      ] as FileMenuItem[]
     ).filter(Boolean);
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
     canEditResources,
+    canManage,
     currentUserId,
     deleteResource,
     filename,
@@ -446,7 +477,6 @@ export const useFileItemDropdown = ({
     isPage,
     libraries,
     libraryId,
-    message,
     moveResource,
     onRenameStart,
     publishFileToWorkspace,

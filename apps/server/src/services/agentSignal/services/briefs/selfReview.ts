@@ -305,7 +305,7 @@ export class AgentSignalSelfReviewBriefService {
         // Root cause summary: approve is a user-triggered HTTP path and can be clicked twice or
         // race across workers.
         // Source/context: mirrors `reserveSelfIterationOperation` in
-        // `src/server/services/agentSignal/services/selfIteration/review/server.ts`.
+        // `apps/server/src/services/agentSignal/services/selfIteration/review/server.ts`.
         // Removal condition: replace with a database-backed self-iteration operation ledger.
         const reserved = await redisSourceEventStore.tryDedupe(
           selfIterationOperationReserveKey(idempotencyKey),

@@ -68,6 +68,42 @@ export class DeviceActionImpl {
     }
   };
 
+  /** Clear a device's default cwd without removing it from the recent directory list. */
+  clearDeviceDefaultCwd = async (deviceId: string): Promise<void> => {
+    const device = this.#get().devices.find((d) => d.deviceId === deviceId);
+    if (!device?.defaultCwd) return;
+
+    const previousDefaultCwd = device.defaultCwd;
+
+    this.#set(
+      {
+        devices: this.#get().devices.map((d) =>
+          d.deviceId === deviceId ? { ...d, defaultCwd: null } : d,
+        ) as DeviceListItem[],
+      },
+      false,
+      'clearDeviceDefaultCwd',
+    );
+
+    try {
+      await deviceService.updateDevice({ defaultCwd: null, deviceId });
+    } catch (error) {
+      // Preserve the prior default if the optimistic write cannot be persisted.
+      this.#set(
+        {
+          devices: this.#get().devices.map((d) =>
+            d.deviceId === deviceId ? { ...d, defaultCwd: previousDefaultCwd } : d,
+          ) as DeviceListItem[],
+        },
+        false,
+        'clearDeviceDefaultCwd/error',
+      );
+      throw error;
+    } finally {
+      await mutate(deviceKeys.listDevices());
+    }
+  };
+
   /**
    * Merge legacy recent dirs (read from localStorage by the caller — the store
    * stays out of feature-layer storage) into a device's `device.workingDirs`.

@@ -1,7 +1,8 @@
 'use client';
 
 import { type TopicPopupInfo } from '@lobechat/electron-client-ipc';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';

@@ -1,5 +1,5 @@
+import { verifyRunStatuses } from '@lobechat/const/verify';
 import type { VerifyCheckItem } from '@lobechat/types';
-import { verifyRunStatuses } from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
@@ -84,7 +84,7 @@ export const agentOperations = pgTable(
     // longer read or written by the verify pipeline and are dropped in a later
     // cleanup migration.
     // Denormalized rollup of the verify (delivery checker) state. Shares the
-    // single `verifyRunStatuses` set from `@lobechat/types` so it can't drift
+    // single `verifyRunStatuses` set from `@lobechat/const/verify` so it can't drift
     // from `verify_runs.status`.
     /** @deprecated read from verify_runs.status */
     verifyStatus: text('verify_status', { enum: verifyRunStatuses }),

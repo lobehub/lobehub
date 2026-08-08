@@ -35,6 +35,7 @@ interface ListItemRendererProps {
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
@@ -48,6 +49,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     isModelRestricted,
     item,
     newLabel,
+    onBeforeModelSelect,
     onModelChange,
     onClose,
     onRestrictedModelClick,
@@ -59,6 +61,13 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     const activeSlug = useActiveWorkspaceSlug();
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
     const [detailOpen, setDetailOpen] = useState(false);
+
+    const selectModel = async (modelId: string, providerId: string) => {
+      onClose();
+      if ((await onBeforeModelSelect?.(modelId, providerId)) === false) return;
+
+      onModelChange(modelId, providerId);
+    };
 
     useEffect(() => {
       return subscribeScroll?.(() => setDetailOpen(false));
@@ -161,8 +170,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                     onClose();
                     return;
                   }
-                  onClose();
-                  onModelChange(item.model.id, item.provider.id);
+                  void selectModel(item.model.id, item.provider.id);
                 }}
               >
                 <ModelItemRender
@@ -205,8 +213,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                     onClose();
                     return;
                   }
-                  onClose();
-                  onModelChange(item.data.model.id, singleProvider.id);
+                  void selectModel(item.data.model.id, singleProvider.id);
                 }}
               >
                 <SingleProviderModelItem
@@ -238,6 +245,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               newLabel={newLabel}
               proLabel={proLabel}
               showInfoTag={isDevMode}
+              onBeforeModelSelect={onBeforeModelSelect}
               onClose={onClose}
               onModelChange={onModelChange}
               onRestrictedModelClick={onRestrictedModelClick}

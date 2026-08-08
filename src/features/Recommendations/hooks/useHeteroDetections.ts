@@ -9,7 +9,7 @@ import { binaryService } from '@/services/electron/binary';
 import type { HeteroDetectionMap } from '../actions/types';
 
 /**
- * Probe local Claude Code / Codex CLIs in parallel and cache the result.
+ * Probe local heterogeneous agent CLIs in parallel and cache the result.
  *
  * Returns an empty map on non-desktop runtimes so callers can skip without a
  * branch on every read. The Electron tool detector caches its own results, so
@@ -24,7 +24,7 @@ export const useHeteroDetections = (): HeteroDetectionMap => {
           try {
             const status = await binaryService.detectHeterogeneousAgentCommand({
               agentType: config.type,
-              command: config.command,
+              command: config.defaultCommand,
             });
             return [config.type, status] as const;
           } catch (error) {

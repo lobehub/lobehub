@@ -1,7 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { MessageApiName, MessageToolIdentifier } from './types';
+import { MessageApiName, MessageToolIdentifier, MESSENGER_PUSH_CONTENT_MAX_LENGTH } from './types';
 
 const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
 
@@ -160,7 +160,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Direct Messaging ====================
     {
       description:
-        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message". Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
+        'Send a direct/private message to ANOTHER user by their platform user ID. Creates a DM channel automatically. To reach the CURRENT user themselves ("DM me", "send me a message"), use `sendMessengerPush` instead — it needs no user id. Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
       name: MessageApiName.sendDirectMessage,
       parameters: {
         additionalProperties: false,
@@ -855,7 +855,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== System Bot Messenger Management ====================
     {
       description:
-        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about their connected workspaces, or as the fallback when `listBots` has no entry for the target platform.",
+        "List the current user's LobeHub System Bot connections (Slack workspaces, Discord guilds, Telegram, and user-owned WeChat accounts). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about connected messengers, or as the fallback when `listBots` has no entry for the target platform.",
       name: MessageApiName.listMessengers,
       parameters: {
         additionalProperties: false,
@@ -865,13 +865,13 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Get detailed metadata about a single System Bot installation. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant info in the confirmation prompt.',
+        'Get detailed metadata about a single System Bot connection. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant or account info in the confirmation prompt.',
       name: MessageApiName.getMessengerDetail,
       parameters: {
         additionalProperties: false,
         properties: {
           installationId: {
-            description: 'Stable installation id from `listMessengers`.',
+            description: 'Stable connection id from `listMessengers`.',
             type: 'string',
           },
         },
@@ -881,13 +881,13 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Revoke a System Bot workspace install. **This affects every user in that workspace** — for Slack it freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account (not the whole workspace), use `unlinkMessenger` instead.",
+        "Disconnect a System Bot connection. **Workspace installs affect every user in that workspace**; a WeChat account connection affects only its owner. For Slack this freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account from a workspace install, use `unlinkMessenger` instead.",
       name: MessageApiName.uninstallMessenger,
       parameters: {
         additionalProperties: false,
         properties: {
           installationId: {
-            description: 'Installation id to revoke.',
+            description: 'Connection id to disconnect.',
             type: 'string',
           },
         },
@@ -897,7 +897,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List the platforms where the user can install the LobeHub System Bot. Returns `appId` / `botUsername` for deep-link install URLs. Use when guiding the user through `Settings → Messenger` install for a new platform — note the actual install flow requires browser OAuth and cannot be initiated from this tool.',
+        'List the platforms where the user can connect the LobeHub System Bot. Returns `appId` / `botUsername` when relevant. Use when guiding the user through `Settings → Messenger`; browser OAuth and QR setup flows cannot be initiated from this tool.',
       name: MessageApiName.listMessengerPlatforms,
       parameters: {
         additionalProperties: false,
@@ -917,7 +917,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram (global bot).',
+        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram and WeChat.',
       name: MessageApiName.setMessengerActiveAgent,
       parameters: {
         additionalProperties: false,
@@ -959,6 +959,35 @@ export const MessageManifest: BuiltinToolManifest = {
           },
         },
         required: ['platform'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Proactively push a message to the CURRENT USER\'s own DM with the LobeHub System Bot — THE api for "send me a message on <platform>", "DM me", "notify me when done". Unlike `sendDirectMessage` it needs no bot discovery, channel id, or platform user id: the server resolves the user\'s own account link. Availability comes from that account link, NOT from `listBots` / `listMessengers` — a platform missing there can still be pushable, so never refuse based on those lists. Call `listMessengerLinks` when unsure which platforms are linked; when the user named one, just push and let an `unlinked` status tell you. Telegram / Discord deliver immediately. Slack with several linked workspaces returns `needs_workspace_selection` — ask the user to pick, then retry with that `tenantId`. WeChat can only deliver inside the send window opened by the user\'s last inbound message; outside it the push is `queued` and you must tell the user to message the LobeHub WeChat bot first so the queued push gets delivered.',
+      name: MessageApiName.sendMessengerPush,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          content: {
+            description:
+              'Message content to deliver (plain text, max 2000 characters). Longer content is rejected, not truncated — summarize or split it yourself.',
+            maxLength: MESSENGER_PUSH_CONTENT_MAX_LENGTH,
+            minLength: 1,
+            type: 'string',
+          },
+          platform: {
+            description: 'Platform to push to — must be one the user has linked.',
+            enum: ['telegram', 'slack', 'discord', 'wechat'],
+            type: 'string',
+          },
+          tenantId: {
+            description:
+              'Slack-only: workspace (team) id when the user linked several workspaces. Omit elsewhere.',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'content'],
         type: 'object',
       },
     },

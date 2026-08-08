@@ -2,15 +2,13 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Minimize2, Paperclip, UserCircle2, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { message } from '@/components/AntdStaticMethods';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -30,6 +28,8 @@ import { useAgentVisibility } from '../shared/useAgentVisibility';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /** Create a persistent goal root backed by the existing task + verify config. */
+  goal?: boolean;
   /**
    * Locks the assignee to `agentId` and hides the agent picker. Used on the
    * agent-scoped task list where every task belongs to that agent.
@@ -44,7 +44,7 @@ export interface CreateTaskContentProps {
 }
 
 const CreateTaskContent = memo<CreateTaskContentProps>(
-  ({ agentId, lockAssignee, onCreated, showInlineToggle = true }) => {
+  ({ agentId, goal = false, lockAssignee, onCreated, showInlineToggle = true }) => {
     const { t } = useTranslation('chat');
     const { close } = useModalContext();
     const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -104,6 +104,16 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       try {
         const result = await createTask({
           assigneeAgentId,
+          config: goal
+            ? {
+                goal: { maxIterations: 10 },
+                verify: {
+                  enabled: true,
+                  maxIterations: 10,
+                  requirement: instruction || title.trim(),
+                },
+              }
+            : undefined,
           editorData: editorJson,
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
@@ -120,7 +130,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           });
         }
       } catch {
-        message.error(t('createTask.createFailed'));
+        toast.error(t('createTask.createFailed'));
       }
     }, [
       activeWorkspaceId,
@@ -129,6 +139,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       close,
       createTask,
       editor,
+      goal,
       onCreated,
       priority,
       t,

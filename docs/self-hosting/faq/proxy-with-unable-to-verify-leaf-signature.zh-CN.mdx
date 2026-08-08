@@ -46,7 +46,7 @@ tags:
 要解决这个问题，可以在启动应用时添加环境变量，跳过 Node.js 的证书验证。具体做法是在启动命令中加入 `NODE_TLS_REJECT_UNAUTHORIZED=0`。例如：
 
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0 npm run start
+NODE_TLS_REJECT_UNAUTHORIZED=0 bun run start
 ```
 
 或者在 Docker 容器中运行时，可以在 Dockerfile 或者 docker-compose.yml 中设置环境变量：

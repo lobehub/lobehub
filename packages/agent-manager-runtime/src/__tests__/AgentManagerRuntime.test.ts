@@ -1,7 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAgentStoreState } from '@/store/agent';
+
 import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
+
+/**
+ * The `@/store/agent` mock below recreates a fresh object (with fresh
+ * `vi.fn()`s) on every `getAgentStoreState()` call, so a write made through
+ * one call's `optimisticUpdateAgentConfig` isn't visible on another call's
+ * returned object. This finds whichever of this test's calls actually wrote.
+ */
+const getLastOptimisticConfigUpdateCall = () => {
+  for (const result of [...vi.mocked(getAgentStoreState).mock.results].reverse()) {
+    const calls = (result.value.optimisticUpdateAgentConfig as ReturnType<typeof vi.fn>).mock.calls;
+    if (calls.length > 0) return calls.at(-1);
+  }
+  return undefined;
+};
+
+const getOptimisticConfigUpdateCalls = () =>
+  vi.mocked(getAgentStoreState).mock.results.flatMap((result) => {
+    const updateMock = result.value.optimisticUpdateAgentConfig as ReturnType<typeof vi.fn>;
+    return updateMock.mock.calls;
+  });
+
+const getAgentStoreActionCalls = (
+  action: 'appendStreamingSystemRole' | 'finishStreamingSystemRole' | 'startStreamingSystemRole',
+) =>
+  vi.mocked(getAgentStoreState).mock.results.flatMap((result) => {
+    const actionMock = result.value[action] as ReturnType<typeof vi.fn>;
+    return actionMock.mock.calls;
+  });
 
 // Create mock services
 const mockAgentService: IAgentService = {
@@ -37,7 +67,7 @@ vi.mock('@/store/agent', () => ({
     internal_dispatchAgentMap: vi.fn(),
     optimisticUpdateAgentConfig: vi.fn(),
     optimisticUpdateAgentMeta: vi.fn(),
-    startStreamingSystemRole: vi.fn(),
+    startStreamingSystemRole: vi.fn(() => 7),
   })),
 }));
 
@@ -201,6 +231,35 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toBe('No fields to update.');
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        'plugin-1',
+        { identifier: 'plugin-2', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        // Also pass `config.model` so the code populates `state.config.newValues`
+        // (it's otherwise omitted when only `togglePlugin` is set), letting this
+        // test inspect the actual computed plugins array.
+        const result = await runtime.updateAgentConfig('agent-id', {
+          config: { model: 'gpt-4o' },
+          togglePlugin: { pluginId: 'plugin-2', enabled: true },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state).toMatchObject({
+          config: {
+            newValues: {
+              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+            },
+          },
+        });
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
     });
   });
 
@@ -507,6 +566,70 @@ describe('AgentManagerRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('Successfully cleared system prompt');
     });
+
+    it('should thread the stream owner and generation through every streaming action', async () => {
+      const result = await runtime.updatePrompt('agent-id', {
+        prompt: 'Hello',
+        streaming: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(getAgentStoreActionCalls('startStreamingSystemRole')).toContainEqual(['agent-id']);
+      expect(getAgentStoreActionCalls('appendStreamingSystemRole')).toContainEqual([
+        'agent-id',
+        7,
+        'Hello',
+      ]);
+      expect(getAgentStoreActionCalls('finishStreamingSystemRole')).toContainEqual(['agent-id', 7]);
+      expect(getOptimisticConfigUpdateCalls()).toContainEqual([
+        'agent-id',
+        { editorData: null, systemRole: 'Hello' },
+      ]);
+    });
+
+    it('should persist concurrent streams to each explicit agent target', async () => {
+      const agentAUpdate = runtime.updatePrompt('agent-a', {
+        prompt: 'Agent A prompt',
+        streaming: true,
+      });
+      const agentBUpdate = runtime.updatePrompt('agent-b', {
+        prompt: 'Agent B prompt',
+        streaming: true,
+      });
+
+      const results = await Promise.all([agentAUpdate, agentBUpdate]);
+
+      expect(results.every((result) => result.success)).toBe(true);
+      expect(getOptimisticConfigUpdateCalls()).toEqual(
+        expect.arrayContaining([
+          ['agent-a', { editorData: null, systemRole: 'Agent A prompt' }],
+          ['agent-b', { editorData: null, systemRole: 'Agent B prompt' }],
+        ]),
+      );
+    });
+
+    it('should preserve invocation order for concurrent updates to the same agent', async () => {
+      const secondRuntime = new AgentManagerRuntime({
+        agentService: mockAgentService,
+        discoverService: mockDiscoverService,
+      });
+      const firstUpdate = runtime.updatePrompt('agent-id', {
+        prompt: 'First prompt is intentionally longer',
+        streaming: true,
+      });
+      const secondUpdate = secondRuntime.updatePrompt('agent-id', {
+        prompt: 'Second prompt',
+        streaming: false,
+      });
+
+      const results = await Promise.all([firstUpdate, secondUpdate]);
+
+      expect(results.every((result) => result.success)).toBe(true);
+      expect(getOptimisticConfigUpdateCalls()).toEqual([
+        ['agent-id', { editorData: null, systemRole: 'First prompt is intentionally longer' }],
+        ['agent-id', { editorData: null, systemRole: 'Second prompt' }],
+      ]);
+    });
   });
 
   describe('searchMarketTools', () => {
@@ -680,6 +803,28 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        { identifier: 'lobe-web-browsing', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        const result = await runtime.installPlugin('agent-id', {
+          identifier: 'lobe-web-browsing',
+          source: 'official',
+        });
+
+        expect(result.success).toBe(true);
+        expect(getLastOptimisticConfigUpdateCall()).toEqual([
+          'agent-id',
+          { plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }] },
+        ]);
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
     });
 
     it('should install market plugin', async () => {

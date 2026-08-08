@@ -10,6 +10,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { GenerationService } from '@/server/services/generation';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const generationTopicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -43,19 +45,29 @@ export const generationTopicRouter = router({
     .input(
       z
         .object({
+          title: z.string().trim().min(1).max(100).optional(),
           type: z.enum(['image', 'video']).optional(),
           visibility: z.enum(['private', 'public']).optional(),
         })
         .optional(),
     )
     .mutation(async ({ ctx, input }) => {
-      const data = await ctx.generationTopicModel.create('', input?.type, input?.visibility);
+      const data = await ctx.generationTopicModel.create(
+        input?.title ?? '',
+        input?.type,
+        input?.visibility,
+      );
       return data.id;
     }),
   deleteTopic: generationTopicProcedure
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const topic = await ctx.generationTopicModel.findById(input.id);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!topic) return;
+      assertWorkspaceRowManageable(ctx, topic.userId, 'generation topic');
+
       // 1. Delete database records and get file URLs to clean
       const result = await ctx.generationTopicModel.delete(input.id);
 
@@ -90,12 +102,24 @@ export const generationTopicRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(updateTopicSchema)
     .mutation(async ({ ctx, input }) => {
+      const topic = await ctx.generationTopicModel.findById(input.id);
+      if (!topic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Generation topic not found' });
+      }
+      assertWorkspaceRowManageable(ctx, topic.userId, 'generation topic');
+
       return ctx.generationTopicModel.update(input.id, input.value as Partial<GenerationTopicItem>);
     }),
   updateTopicCover: generationTopicProcedure
     .use(withScopedPermission('topic:update'))
     .input(updateTopicCoverSchema)
     .mutation(async ({ ctx, input }) => {
+      const topic = await ctx.generationTopicModel.findById(input.id);
+      if (!topic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Generation topic not found' });
+      }
+      assertWorkspaceRowManageable(ctx, topic.userId, 'generation topic');
+
       // Process the cover image and get key
       const newCoverKey = await ctx.generationService.createCoverFromUrl(input.coverUrl);
 

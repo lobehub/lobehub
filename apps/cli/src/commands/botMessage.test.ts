@@ -117,7 +117,7 @@ describe('bot message send --attachment', () => {
     const call = mockTrpcClient.botMessage.sendMessage.mutate.mock.calls[0][0];
     expect(call.attachments).toHaveLength(1);
     expect(call.attachments[0]).toMatchObject({
-      mimeType: 'text/plain',
+      mimeType: 'text/plain; charset=utf-8',
       name: 'tiny.txt',
       type: 'file',
     });

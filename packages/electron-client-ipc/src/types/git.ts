@@ -1,8 +1,22 @@
+/**
+ * The remote ref a local branch publishes to — the only branch identity that means
+ * anything off this machine. A worktree's generated branch name or a push with an
+ * explicit refspec makes the local name differ from the remote one.
+ */
+export interface GitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name */
+  branch: string;
+  /** Remote name (`origin`) */
+  remote: string;
+}
+
 export interface GitBranchInfo {
   /** Branch short name, or short SHA when in detached HEAD state */
   branch?: string;
   /** True when HEAD is detached (no branch ref) */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable */
+  upstream?: GitUpstreamRef;
 }
 
 export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
@@ -23,12 +37,14 @@ export interface GitLinkedPullRequest {
 export type GitLinkedPullRequestLookupStatus = 'ok' | 'gh-missing' | 'error';
 
 export interface GitLinkedPullRequestResult {
-  /** Additional open PRs targeting the same head branch, beyond the primary one */
+  /** Additional PRs targeting the same head branch, beyond the primary one */
   extraCount?: number;
-  /** Null when no open PR is linked to the branch */
+  /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
   status: GitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found */
+  upstream?: GitUpstreamRef;
 }
 
 export interface GitBranchListItem {

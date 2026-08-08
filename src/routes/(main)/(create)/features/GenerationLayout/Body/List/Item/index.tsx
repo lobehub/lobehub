@@ -1,9 +1,8 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { type MenuProps } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, Trash, UsersIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useState } from 'react';
@@ -11,9 +10,11 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { type ImageGenerationTopic } from '@/types/generation';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { useGenerationTopicContext } from '../StoreContext';
 import GridItem from './GridItem';
@@ -28,7 +29,7 @@ interface TopicItemProps {
 const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
   const { useStore, namespace } = useGenerationTopicContext();
   const { t } = useTranslation([namespace, 'common']);
-  const { message } = App.useApp();
+
   const activeWorkspaceId = useActiveWorkspaceId();
   const [isUpdating, setIsUpdating] = useState(false);
   const isLoading = useStore((s) => s.loadingGenerationTopicIds.includes(topic.id));
@@ -46,17 +47,30 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
   const canPublish = Boolean(activeWorkspaceId && isOwnTopic && topic.visibility === 'private');
   const canMakePrivate = Boolean(activeWorkspaceId && isOwnTopic && topic.visibility === 'public');
 
+  // Row-level ownership: only the creator or a workspace owner may delete a
+  // shared generation topic — mirrors the server-side enforcement.
+  const canManage = useResourceManageable(topic.creator?.id);
+
+  const notifyDeleteError = (error: unknown) => {
+    console.error('Delete topic failed:', error);
+    toast.error(
+      isForbiddenError(error)
+        ? t('manageOnlyCreator', { ns: 'common' })
+        : t('operationFailed', { ns: 'common' }),
+    );
+  };
+
   const flipVisibility = async (next: 'private' | 'public') => {
     try {
       await setGenerationTopicVisibility(topic.id, next);
-      message.success(
+      toast.success(
         next === 'private'
           ? t('makePrivate.success', { ns: 'common' })
           : t('resources.publishToWorkspace.success', { ns: 'chat' }),
       );
     } catch (error) {
       console.error('Failed to change topic visibility:', error);
-      message.error(
+      toast.error(
         next === 'private'
           ? t('makePrivate.error', { ns: 'common' })
           : t('resources.publishToWorkspace.error', { ns: 'chat' }),
@@ -74,6 +88,11 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
     e.stopPropagation();
     e.preventDefault();
 
+    if (!canManage) {
+      toast.warning(t('manageOnlyCreator', { ns: 'common' }));
+      return;
+    }
+
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t('topic.deleteConfirmDesc'),
@@ -84,7 +103,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
         try {
           await removeGenerationTopic(topic.id);
         } catch (error) {
-          console.error('Delete topic failed:', error);
+          notifyDeleteError(error);
         }
         setIsUpdating(false);
       },
@@ -134,10 +153,18 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
       : []),
     {
       danger: true,
+      disabled: !canManage,
       icon: <Icon icon={Trash} />,
       key: 'delete',
-      label: t('delete', { ns: 'common' }),
+      label: canManage ? (
+        t('delete', { ns: 'common' })
+      ) : (
+        <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
+          <span>{t('delete', { ns: 'common' })}</span>
+        </Tooltip>
+      ),
       onClick: () => {
+        if (!canManage) return;
         confirmModal({
           cancelText: t('cancel', { ns: 'common' }),
           content: t('topic.deleteConfirmDesc'),
@@ -147,7 +174,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
             try {
               await removeGenerationTopic(topic.id);
             } catch (error) {
-              console.error('Delete topic failed:', error);
+              notifyDeleteError(error);
             }
           },
           title: t('topic.deleteConfirm'),

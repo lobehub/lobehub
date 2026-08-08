@@ -48,6 +48,31 @@ export const skillRouter = router({
       }
     }),
 
+  getSkillComments: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        order: z.enum(['asc', 'desc']).optional(),
+        page: z.number().optional(),
+        pageSize: z.number().optional(),
+        sort: z.enum(['createdAt', 'upvotes']).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getSkillComments input: %O', input);
+
+      try {
+        const { identifier, ...params } = input;
+        return await ctx.marketService.getSkillComments(identifier, params);
+      } catch (error) {
+        log('Error fetching skill comments: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill comments',
+        });
+      }
+    }),
+
   getSkillDetail: marketProcedure
     .input(
       z.object({
@@ -60,10 +85,19 @@ export const skillRouter = router({
       log('getSkillDetail input: %O', input);
 
       try {
-        return await ctx.marketService.getSkillDetail(input.identifier, {
+        // Keep this path lean: it also backs per-skill icon/metadata lookups
+        // (e.g. the chat tools panel renders one detail query per installed
+        // skill), so it must stay a single upstream request. Related skills
+        // are composed client-side from getSkillList (useFetchRelatedSkills).
+        const detail = await ctx.marketService.getSkillDetail(input.identifier, {
           locale: input.locale,
           version: input.version,
         });
+
+        return {
+          ...detail,
+          downloadUrl: ctx.marketService.getSkillDownloadUrl(input.identifier, input.version),
+        };
       } catch (error) {
         log('Error fetching skill detail: %O', error);
         throw new TRPCError({
@@ -97,6 +131,22 @@ export const skillRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch skill list',
+        });
+      }
+    }),
+
+  getSkillRatingDistribution: marketProcedure
+    .input(z.object({ identifier: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('getSkillRatingDistribution input: %O', input);
+
+      try {
+        return await ctx.marketService.getSkillRatingDistribution(input.identifier);
+      } catch (error) {
+        log('Error fetching skill rating distribution: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill rating distribution',
         });
       }
     }),

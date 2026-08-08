@@ -64,8 +64,9 @@ const Read = memo<BuiltinRenderProps<ReadArgs, ReadPluginState>>(
               <Image
                 alt={filePath || image.mediaType || ''}
                 key={image.fileId || image.url || index}
+                maxHeight={600}
                 src={image.url}
-                style={{ borderRadius: 8, maxHeight: 240, objectFit: 'contain' }}
+                style={{ borderRadius: 8 }}
               />
             ))}
           </Flexbox>

@@ -2,12 +2,14 @@ import type {
   ExecAgentAppContext,
   ExecAgentResult,
   RuntimeMentionedAgent,
+  ScheduleAgentRunParams,
+  ScheduleAgentRunResult,
   UserInterventionConfig,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
-export type { ExecAgentResult };
+export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /**
  * Resume instruction for an operation that hit `human_approve_required`. When
@@ -55,10 +57,18 @@ export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
+  /**
+   * Client-minted ids for the rows this run creates, honoured verbatim by the
+   * server — the gateway counterpart of `sendMessageInServer`'s
+   * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
+   * sends only; resume / regeneration must not replay them.
+   */
+  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  localDeviceId?: string;
   /**
    * Agents the user @-mentioned in this message (multi-mention). The server
    * enables the callAgent tool and injects the mentioned-agents delegation
@@ -70,6 +80,12 @@ export interface ExecAgentTaskParams {
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /**
+   * Batch form of `resumeApproval` — one entry per pending tool resolved in a
+   * single "approve all" action. The server applies every decision, runs all
+   * approved tools as ONE `call_tools_batch`, and continues the LLM once.
+   */
+  resumeApprovals?: ResumeApprovalParam[];
   /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
   resumeToolResult?: ResumeToolResultParam;
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
@@ -173,6 +189,14 @@ class AiAgentService {
   }
 
   /**
+   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
+   * the backend cron fires once `runAt` passes; nothing runs now.
+   */
+  async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
+    return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
+  }
+
+  /**
    * Execute a sub-agent task (supports both Group and Single Agent mode)
    *
    * - Group mode: pass groupId, Thread will be associated with the Group
@@ -202,6 +226,17 @@ class AiAgentService {
    */
   async interruptTask(params: InterruptTaskParams) {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without running anything or continuing the model.
+   *
+   * Not `interruptTask` — that one assumes a live loop will persist the
+   * outcome, which a parked run does not have.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }) {
+    return await lambdaClient.aiAgent.stopPendingApproval.mutate(params);
   }
 
   /**

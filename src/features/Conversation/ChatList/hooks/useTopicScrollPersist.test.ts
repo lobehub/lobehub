@@ -65,6 +65,24 @@ describe('useTopicScrollPersist', () => {
       expect(handle.scrollTo).not.toHaveBeenCalled();
     });
 
+    it('translates the restore target by headerOffset when a header slot row is present', async () => {
+      const handle = createFakeVList({ scrollSize: 5000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          headerOffset: 1,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(2);
+
+      // Last message sits at virtua row 50 (header row 0 + 50 messages).
+      expect(handle.scrollToIndex).toHaveBeenCalledTimes(1);
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(50, { align: 'end' });
+    });
+
     it('falls back to scrollToIndex(last, end) when snapshot.atBottom is true', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: true,
@@ -294,6 +312,69 @@ describe('useTopicScrollPersist', () => {
       await vi.advanceTimersByTimeAsync(300);
 
       expect(loadScrollSnapshot('main_agt_1_tpc_a')?.offset).toBe(7777);
+    });
+  });
+
+  describe('in-place context switch', () => {
+    it('re-stamps the topic being left and restores the new topic snapshot', async () => {
+      const fixedNow = 1_000_000_000_000;
+      vi.setSystemTime(fixedNow);
+      saveScrollSnapshot('main_agt_1_tpc_b', {
+        atBottom: false,
+        offset: 3000,
+        savedAt: fixedNow,
+      });
+      const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
+      handle.scrollTo.mockImplementation((offset: number) => {
+        handle.scrollOffset = offset;
+      });
+
+      const { result, rerender } = renderHook(
+        ({ contextKey, length }: { contextKey: string; length: number }) =>
+          useTopicScrollPersist({
+            contextKey,
+            dataSourceLength: length,
+            virtuaRef: refOf(handle),
+          }),
+        { initialProps: { contextKey: 'main_agt_1_tpc_a', length: 50 } },
+      );
+
+      await advanceFrames(4);
+      act(() => {
+        result.current.recordScroll(1200, false);
+      });
+      await vi.advanceTimersByTimeAsync(300);
+
+      vi.setSystemTime(fixedNow + 60_000);
+      rerender({ contextKey: 'main_agt_1_tpc_b', length: 30 });
+      await advanceFrames(6);
+
+      const persistedA = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persistedA?.offset).toBe(1200);
+      expect(persistedA?.savedAt).toBe(fixedNow + 60_000);
+      expect(handle.scrollTo).toHaveBeenCalledWith(3000);
+    });
+
+    it('falls back to the bottom when the new topic has no snapshot', async () => {
+      const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
+
+      const { rerender } = renderHook(
+        ({ contextKey, length }: { contextKey: string; length: number }) =>
+          useTopicScrollPersist({
+            contextKey,
+            dataSourceLength: length,
+            virtuaRef: refOf(handle),
+          }),
+        { initialProps: { contextKey: 'main_agt_1_tpc_a', length: 50 } },
+      );
+
+      await advanceFrames(4);
+      handle.scrollToIndex.mockClear();
+
+      rerender({ contextKey: 'main_agt_1_tpc_b', length: 30 });
+      await advanceFrames(4);
+
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(29, { align: 'end' });
     });
   });
 

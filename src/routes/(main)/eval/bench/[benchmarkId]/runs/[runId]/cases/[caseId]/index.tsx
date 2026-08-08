@@ -108,9 +108,7 @@ const CaseDetail = memo(() => {
           <CaseHeader
             caseNumber={(caseResult.testCase?.sortOrder ?? 0) + 1}
             evalResult={displayEvalResult}
-            passed={displayPassed}
             runName={runDetail?.name || runId!.slice(0, 8)}
-            score={displayScore}
             onBack={() => navigate(`/eval/bench/${benchmarkId}/runs/${runId}`)}
             onNext={nextCaseId ? () => navigate(`${basePath}/${nextCaseId}`) : undefined}
             onPrev={prevCaseId ? () => navigate(`${basePath}/${prevCaseId}`) : undefined}

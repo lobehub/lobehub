@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { CalendarClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

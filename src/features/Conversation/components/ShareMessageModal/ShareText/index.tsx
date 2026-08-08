@@ -1,6 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Button, copyToClipboard, Flexbox } from '@lobehub/ui';
-import { App } from 'antd';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -21,7 +21,6 @@ interface ShareTextProps {
 
 const ShareText = memo<ShareTextProps>(({ item }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
 
   const messages = [item];
   const topic = useChatStore(topicSelectors.currentActiveTopic, isEqual);
@@ -42,7 +41,7 @@ const ShareText = memo<ShareTextProps>(({ item }) => {
         type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
-          message.success(t('copySuccess', { ns: 'common' }));
+          toast.success(t('copySuccess', { ns: 'common' }));
         }}
       >
         {t('copy', { ns: 'common' })}

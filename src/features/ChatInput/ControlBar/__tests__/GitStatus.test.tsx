@@ -179,4 +179,19 @@ describe('GitStatus', () => {
       expect(screen.getByText('#123')).toBeInTheDocument();
     });
   });
+
+  it('keeps branch switching visible when worktrees are available', () => {
+    gitHookMocks.useFetchGitWorktrees.mockReturnValue({
+      data: [
+        { branch: 'fix/remote-review', current: true, path: '/repo' },
+        { branch: 'canary', current: false, path: '/repo-canary' },
+      ],
+      mutate: gitHookMocks.mutateWorktrees,
+    });
+
+    render(<GitStatus isGithub agentId="agent-1" path="/repo" sourcePath="/repo" />);
+
+    expect(screen.getByTestId('worktree-switcher')).toBeInTheDocument();
+    expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
+  });
 });

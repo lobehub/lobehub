@@ -3,6 +3,7 @@ import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/co
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
+  getActivePluginIds,
   getWorkingDirEffectivePath,
   type LobeAgentAgencyConfig,
   type LobeAgentTTSConfig,
@@ -30,10 +31,16 @@ const getAgentModelProviderById =
   (s: AgentStoreState): string =>
     agentSelectors.getAgentConfigById(agentId)(s)?.provider || DEFAULT_PROVIDER;
 
+/**
+ * Pinned plugin identifiers for the agent — disabled entries are excluded.
+ * Every current consumer (token estimation, share-image preview, auth alerts,
+ * the Skills panel) wants "what's actually configured/active", matching the
+ * pre-tri-state semantics where array-membership meant pinned.
+ */
 const getAgentPluginsById =
   (agentId: string) =>
   (s: AgentStoreState): string[] =>
-    agentSelectors.getAgentConfigById(agentId)(s)?.plugins || [];
+    getActivePluginIds(agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
 
 const getAgentSystemRoleById =
   (agentId: string) =>
@@ -61,8 +68,20 @@ const getAgentFilesById = (agentId: string) => (s: AgentStoreState) =>
 const getAgentKnowledgeBasesById = (agentId: string) => (s: AgentStoreState) =>
   agentSelectors.getAgentConfigById(agentId)(s)?.knowledgeBases || [];
 
+/**
+ * The config fetch settled on `null` — the agent doesn't exist or the caller
+ * lost access (e.g. a workspace agent switched back to private). Render a
+ * 404 / no-access card, not a skeleton.
+ */
+const isAgentNotFoundById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!agentId && !!s.agentNotFoundMap[agentId];
+
 const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
-  !agentId || !s.agentMap[agentId];
+  // A not-found agent never lands in `agentMap`; without this guard the
+  // data-presence check would report "loading" forever.
+  !agentId || (!s.agentMap[agentId] && !s.agentNotFoundMap[agentId]);
 
 /**
  * Get agent mode by agentId.
@@ -147,7 +166,9 @@ const getAgentBuilderContextById =
         openingMessage: config?.openingMessage,
         openingQuestions: config?.openingQuestions,
         params: config?.params,
-        plugins: config?.plugins,
+        // Pinned identifiers only — AgentBuilderContext.config.plugins is a
+        // display DTO (still string[]); a disabled plugin isn't "enabled".
+        plugins: getActivePluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: config?.systemRole,
       },
@@ -178,6 +199,16 @@ const isAgentHeterogeneousById =
  */
 const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
 
+/**
+ * Workspace-scoped agent: shared across workspace members, so it executes on
+ * the workspace device pool / sandbox — never on the current member's own
+ * client. Feed this into `resolveExecutionTarget`'s `workspaceScoped` option.
+ */
+const isWorkspaceAgentById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!s.agentMap[agentId]?.workspaceId;
+
 export const agentByIdSelectors = {
   getAgencyConfigById,
   getAgentBuilderContextById,
@@ -198,4 +229,6 @@ export const agentByIdSelectors = {
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
+  isAgentNotFoundById,
+  isWorkspaceAgentById,
 };

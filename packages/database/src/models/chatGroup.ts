@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -7,7 +7,7 @@ import type {
   NewChatGroup,
   NewChatGroupAgent,
 } from '../schemas';
-import { agents, chatGroups, chatGroupsAgents } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -34,6 +34,37 @@ export class ChatGroupModel {
     );
 
   /**
+   * Visibility predicate on the member's `agents` row itself. Group membership
+   * (the junction row) does not grant access to the agent: when a member agent
+   * is switched back to private by its owner, every roster read must drop it
+   * for other members — otherwise the join would keep leaking the agent's
+   * config/meta through group surfaces.
+   */
+  private memberAgentVisibility = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+        visibility: agents.visibility,
+      },
+    );
+
+  /**
+   * Same guard as an EXISTS subquery, for junction queries that don't join
+   * `agents`. The subquery is spelled with raw identifiers (not drizzle column
+   * refs) because the relational query builder rebinds every referenced column
+   * in `where` to the primary table's alias, which would corrupt the subquery.
+   * Semantics mirror `buildWorkspaceWhere`.
+   */
+  private memberAgentVisibleExists = () => {
+    if (!this.workspaceId) {
+      return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."user_id" = ${this.userId} AND "ma"."workspace_id" IS NULL)`;
+    }
+    return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."workspace_id" = ${this.workspaceId} AND ("ma"."visibility" IS NULL OR "ma"."visibility" = 'public' OR ("ma"."visibility" = 'private' AND "ma"."user_id" = ${this.userId})))`;
+  };
+
+  /**
    * Get member avatar metas (avatar + backgroundColor) grouped by chatGroupId,
    * ordered by member order. Inbox members fall back to the default avatar.
    */
@@ -52,8 +83,8 @@ export class ChatGroupModel {
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      .where(inArray(chatGroupsAgents.chatGroupId, groupIds))
-      .orderBy(chatGroupsAgents.order);
+      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.memberAgentVisibility()))
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
       const list = map.get(chatGroupId) ?? [];
@@ -105,7 +136,11 @@ export class ChatGroupModel {
     const groupIds = groups.map((g) => g.id);
 
     const groupAgents = await this.db.query.chatGroupsAgents.findMany({
-      where: and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.agentsOwnership()),
+      where: and(
+        inArray(chatGroupsAgents.chatGroupId, groupIds),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
       with: { agent: true },
     });
 
@@ -133,8 +168,12 @@ export class ChatGroupModel {
     if (!group) return null;
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
     });
 
     return { agents, group };
@@ -181,10 +220,66 @@ export class ChatGroupModel {
 
   // ******* Update Methods ******* //
 
+  /**
+   * A move target must be a folder the caller can see, and a workspace-public
+   * group may only sit in a public folder. `chat_groups.groupId` is read by
+   * every member's sidebar now, and the foreign key only proves the folder
+   * exists — another workspace's folder, or another member's private one,
+   * satisfies it and then renders as Ungrouped for everyone who cannot see it.
+   * Mirrors `AgentModel.assertSessionGroupAssignable`.
+   */
+  private async assertFolderAssignable(id: string, groupId: string) {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, groupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${groupId} not found in current scope`);
+
+    if (!this.workspaceId) return;
+
+    const [group] = await this.db
+      .select({ visibility: chatGroups.visibility })
+      .from(chatGroups)
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+
+    // Same exact-match rule as agents: the render path resolves a private
+    // item's folder only against private folders and a public item's only
+    // against public ones, so either mismatch lands it in Ungrouped.
+    if (group && group.visibility !== folder.visibility)
+      throw new Error(
+        `A ${group.visibility} chat group cannot be moved into a ${folder.visibility} folder`,
+      );
+  }
+
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
+    if (value.groupId) await this.assertFolderAssignable(id, value.groupId);
+
+    // Scope columns never travel through the generic update. The router hands
+    // this a partial insert schema, so without stripping them a member could
+    // re-scope another member's group now that the ownership predicate spans
+    // every visible workspace row. Ignored rather than rejected so a client
+    // that sends an extra field still gets its real edit applied. Publishing
+    // has its own path and writes `visibility` directly.
+    const { userId: _userId, visibility: _visibility, workspaceId: _workspaceId, ...safe } = value;
+
     const [result] = await this.db
       .update(chatGroups)
-      .set(value)
+      .set(safe)
       .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
@@ -201,9 +296,26 @@ export class ChatGroupModel {
    * `private`. Restricted to the creator's own still-private group.
    */
   async publishToWorkspace(id: string): Promise<ChatGroupItem> {
+    // Rehome exactly as `setVisibility` does. A folder cannot mix
+    // visibilities, so publishing out of a private Category has to release the
+    // folder too — left in place, the group would be public while its folder
+    // is not, and the sidebar would show it in Ungrouped rather than where the
+    // user published it from.
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const clearFolder = current?.folderVisibility != null && current.folderVisibility !== 'public';
+
     const [result] = await this.db
       .update(chatGroups)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearFolder ? { groupId: null } : {}),
+      })
       .where(
         and(
           eq(chatGroups.id, id),
@@ -218,7 +330,87 @@ export class ChatGroupModel {
       throw new Error('Chat group not found, already published, or access denied');
     }
 
+    // The synthetic supervisor mirrors the group's visibility at creation
+    // (private group → private supervisor). Publish it together with the
+    // group, otherwise other members would receive a `supervisorAgentId`
+    // whose agent row their roster reads filter out.
+    await this.db
+      .update(agents)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(agents.visibility, 'private'),
+          inArray(
+            agents.id,
+            this.db
+              .select({ id: chatGroupsAgents.agentId })
+              .from(chatGroupsAgents)
+              .where(
+                and(eq(chatGroupsAgents.chatGroupId, id), eq(chatGroupsAgents.role, 'supervisor')),
+              ),
+          ),
+        ),
+      );
+
     return result;
+  }
+
+  /**
+   * Bidirectional visibility switch for the Permission panel. Router-level
+   * guards decide who may call this (creator-only demotion, manager/owner
+   * promotion) — this method only applies the ownership-scoped write.
+   *
+   * Mirrors AgentModel.setVisibility: a sidebar folder cannot mix
+   * visibilities, so the group is rehomed to the ungrouped section of its new
+   * scope when its folder no longer matches.
+   */
+  async setVisibility(id: string, visibility: 'private' | 'public'): Promise<ChatGroupItem | null> {
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const folderVisibility = current?.folderVisibility as 'private' | 'public' | null | undefined;
+    const clearFolder = folderVisibility != null && folderVisibility !== visibility;
+
+    const [updated] = await this.db
+      .update(chatGroups)
+      .set({
+        updatedAt: new Date(),
+        visibility,
+        ...(clearFolder ? { groupId: null } : {}),
+      })
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .returning();
+
+    if (updated) {
+      // Keep the synthetic supervisor's visibility in lockstep (mirrors
+      // publishToWorkspace): a promoted group must expose its supervisor to
+      // members, a demoted group must not leave the supervisor public.
+      await this.db
+        .update(agents)
+        .set({ updatedAt: new Date(), visibility })
+        .where(
+          and(
+            ne(agents.visibility, visibility),
+            inArray(
+              agents.id,
+              this.db
+                .select({ id: chatGroupsAgents.agentId })
+                .from(chatGroupsAgents)
+                .where(
+                  and(
+                    eq(chatGroupsAgents.chatGroupId, id),
+                    eq(chatGroupsAgents.role, 'supervisor'),
+                  ),
+                ),
+            ),
+          ),
+        );
+    }
+
+    return updated ?? null;
   }
 
   async addAgentToGroup(
@@ -313,10 +505,18 @@ export class ChatGroupModel {
       return { added: [], existing: existingIds };
     }
 
-    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId) => ({
+    // Append new members after the current highest order so an incremental add
+    // never collapses everyone to the default `order = 0` (which would make the
+    // roster re-shuffle on every refetch). Supervisor rows sit at `order = -1`,
+    // so a group holding only a supervisor yields maxOrder = -1 → the first
+    // member gets order 0.
+    const maxOrder = existingAgents.reduce((max, agent) => Math.max(max, agent.order ?? 0), -1);
+
+    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId, index) => ({
       agentId,
       chatGroupId: groupId,
       enabled: true,
+      order: maxOrder + 1 + index,
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     }));
@@ -403,8 +603,12 @@ export class ChatGroupModel {
 
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
     });
   }
 
@@ -433,6 +637,7 @@ export class ChatGroupModel {
       .select({
         agentId: chatGroupsAgents.agentId,
         description: agents.description,
+        name: agents.name,
         role: chatGroupsAgents.role,
         title: agents.title,
       })
@@ -443,20 +648,80 @@ export class ChatGroupModel {
           eq(chatGroupsAgents.chatGroupId, groupId),
           eq(chatGroupsAgents.enabled, true),
           this.agentsOwnership(),
+          this.memberAgentVisibility(),
         ),
       )
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
+  }
+
+  /**
+   * Count still-private member agents of a group — the publish guard uses
+   * this to reject sharing a group whose members would leak on publish.
+   */
+  async countPrivateGroupAgents(groupId: string): Promise<number> {
+    const rows = await this.db
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(agents.visibility, 'private'),
+          // The synthetic supervisor mirrors the group's own visibility, so a
+          // private group always owns one private agent. Counting it makes the
+          // publish guard unsatisfiable — every private group would look like
+          // it still holds private members and could never be shared. Only
+          // real members can block a publish.
+          ne(chatGroupsAgents.role, 'supervisor'),
+          this.agentsOwnership(),
+        ),
+      );
+
+    return rows.length;
   }
 
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         eq(chatGroupsAgents.enabled, true),
         this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
       ),
     });
+  }
+
+  /**
+   * Count workspace groups that would break if the given agent were demoted to
+   * private: groups where it is the **supervisor** and the group is visible to
+   * someone else (public, or owned by another member). A private supervisor is
+   * unresolvable for every other viewer, which makes the whole group unusable —
+   * so demotion is rejected at the source (mirrors
+   * `countTasksBlockingAgentDemotion`). Regular members are deliberately NOT
+   * counted: roster reads drop a non-visible member per viewer instead.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private groups are invisible to the caller but their
+   * supervisor would still break.
+   */
+  async countGroupsBlockingAgentDemotion(
+    agentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(chatGroupsAgents)
+      .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
+      .where(
+        and(
+          eq(chatGroups.workspaceId, this.workspaceId),
+          eq(chatGroupsAgents.agentId, agentId),
+          eq(chatGroupsAgents.role, 'supervisor'),
+          or(eq(chatGroups.visibility, 'public'), ne(chatGroups.userId, agentOwnerUserId)),
+        ),
+      );
+    return Number(row?.count ?? 0);
   }
 
   async getGroupsWithAgents(agentIds?: string[]): Promise<ChatGroupItem[]> {
@@ -468,7 +733,13 @@ export class ChatGroupModel {
     const groupIds = await this.db
       .selectDistinct({ chatGroupId: chatGroupsAgents.chatGroupId })
       .from(chatGroupsAgents)
-      .where(and(this.agentsOwnership(), inArray(chatGroupsAgents.agentId, agentIds)));
+      .where(
+        and(
+          this.agentsOwnership(),
+          inArray(chatGroupsAgents.agentId, agentIds),
+          this.memberAgentVisibleExists(),
+        ),
+      );
 
     if (groupIds.length === 0) return [];
 

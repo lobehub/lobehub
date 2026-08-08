@@ -1,13 +1,15 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
-import { resolve } from 'node:path';
+import path from 'node:path';
+
+import { createTestOidcJwks } from './oidcTestKey';
 
 let serverProcess: ChildProcess | null = null;
 let serverStartPromise: Promise<void> | null = null;
 
 // File-based lock to coordinate between parallel workers
-const LOCK_FILE = resolve(__dirname, '../../.server-starting.lock');
+const LOCK_FILE = path.resolve(__dirname, '../../.server-starting.lock');
 
 export async function stopWebServer(): Promise<void> {
   if (serverProcess) {
@@ -129,7 +131,7 @@ export async function startWebServer(options: WebServerOptions): Promise<void> {
     console.log(`🚀 Starting web server: ${command}`);
 
     // Get the project root directory (parent of e2e folder)
-    const projectRoot = resolve(__dirname, '../../..');
+    const projectRoot = path.resolve(__dirname, '../../..');
 
     const serverEnv = {
       ...process.env,
@@ -142,6 +144,7 @@ export async function startWebServer(options: WebServerOptions): Promise<void> {
       // E2E test secret keys
       AUTH_SECRET: 'e2e-test-secret-key-for-better-auth-32chars!',
 
+      JWKS_KEY: process.env.JWKS_KEY || createTestOidcJwks(),
       KEY_VAULTS_SECRET: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
       NODE_OPTIONS: '--max-old-space-size=6144',
       PORT: String(port),

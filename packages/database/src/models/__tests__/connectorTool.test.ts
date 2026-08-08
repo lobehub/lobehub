@@ -336,6 +336,45 @@ describe('ConnectorToolModel', () => {
     });
   });
 
+  describe('deleteToolsNotIn', () => {
+    it('deletes rows whose toolName is not in the keep list', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [
+        tool({ toolName: 'keep_a' }),
+        tool({ toolName: 'keep_b' }),
+        tool({ toolName: 'stale' }),
+      ]);
+
+      await model.deleteToolsNotIn(connectorId, ['keep_a', 'keep_b']);
+
+      const rows = await model.queryAllByConnectorIds([connectorId]);
+      expect(rows.map((r) => r.toolName).sort()).toEqual(['keep_a', 'keep_b']);
+    });
+
+    it('deletes all tools for the connector when the keep list is empty', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'a' }), tool({ toolName: 'b' })]);
+
+      await model.deleteToolsNotIn(connectorId, []);
+
+      expect(await model.queryAllByConnectorIds([connectorId])).toHaveLength(0);
+    });
+
+    it("does not touch another user's tools with the same name", async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'shared' })]);
+
+      const otherModel = new ConnectorToolModel(serverDB, otherUserId);
+      await otherModel.upsertMany(otherConnectorId, [tool({ toolName: 'shared' })]);
+
+      // Pruning to empty for our connector must not affect the other user's row.
+      await model.deleteToolsNotIn(connectorId, []);
+
+      const theirs = await otherModel.queryAllByConnectorIds([otherConnectorId]);
+      expect(theirs.map((r) => r.toolName)).toEqual(['shared']);
+    });
+  });
+
   describe('ownership in workspace mode', () => {
     it('isolates personal-mode tools from workspace-scoped queries', async () => {
       // personal tool (workspaceId IS NULL)

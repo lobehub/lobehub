@@ -31,7 +31,7 @@ The same change must work across every surface this product ships to. Authors (a
 - Serverless-hostile code: local file writes, in-memory state expected to survive requests, long-running work beyond function limits
 - Workspace-blind logic: new data reads/writes, permission checks, or list scoping that silently assume the personal context — must respect the active workspace scope (`useActiveWorkspaceId` / `workspaceSlug`) or be explicitly personal-only by design
 - Cloud-only assumption: logic that only works when a business slot has its cloud override — must still function against the slot's open-source no-op default (feature hidden or gracefully degraded, not broken)
-- Renamed backend route paths (`src/app/(backend)/webapi/...`) or SSR page paths (`src/app/[variants]/(auth)/...`), or changed `@lobechat/business-*` exports — downstream deployments override/extend these paths; flag so they can adapt
+- Renamed backend route paths (`src/app/(backend)/webapi/...`) or auth surfaces (`src/app/spa-auth/...`, `src/routes/auth/...`), or changed `@lobechat/business-*` exports — downstream deployments override/extend these paths; flag so they can adapt
 - Dependency major bumps (`next`, `drizzle-orm`, ...) — downstream lockstep required; call out in the PR description
 
 ## Rule sources (deep mode: read before reviewing)

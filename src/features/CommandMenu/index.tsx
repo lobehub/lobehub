@@ -6,8 +6,8 @@ import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
 
 import AskAgentCommands from './AskAgentCommands';
@@ -132,10 +132,16 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
 
           <Command.List ref={listRef}>
             {/* Hide cmdk's Empty when we have search results or are loading them,
-               since force-mounted items aren't counted by cmdk's internal filter */}
-            {!(hasSearch && (searchResults.length > 0 || isSearching)) && (
-              <Command.Empty>{t('cmdk.noResults')}</Command.Empty>
-            )}
+               since force-mounted items aren't counted by cmdk's internal filter.
+               The unfiltered search view also renders the marketplace fallback
+               entries whenever the search settles with no results, so it is
+               never truly empty. */}
+            {!(
+              hasSearch &&
+              (searchResults.length > 0 ||
+                isSearching ||
+                (!page && !selectedAgent && !typeFilter && !search.trimStart().startsWith('@')))
+            ) && <Command.Empty>{t('cmdk.noResults')}</Command.Empty>}
 
             {/* Show send command when agent is selected */}
             {selectedAgent && (
@@ -202,7 +208,7 @@ const CommandMenu = memo(() => {
   const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const location = useLocation();
+  const location = useActiveLocation();
   const pathname = location.pathname;
 
   // Ensure we're mounted on the client

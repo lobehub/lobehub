@@ -4,15 +4,27 @@ import { SkillsManifest } from './manifest';
 import { SkillsApiName } from './types';
 
 /**
- * The exec-class APIs whose runtime is the server-side cloud sandbox
- * (`apps/server/.../serverRuntimes/skills.ts`), regardless of the run's
- * execution target. Their static descriptions never say where they run, so a
- * desktop user who picked "local device" can have commands silently land in
- * the sandbox — most damagingly when the bound device is judged offline and
- * `lobe-local-system` is not injected at all (plan kind `device-unrouted`).
+ * The exec-class APIs. Their runtime target follows the run's execution plan
+ * (`apps/server/.../serverRuntimes/skills.ts`): a routed device
+ * (`executionEnv: 'device'`) runs `execScript` ON the device; every other
+ * environment runs in the server-side cloud sandbox. Descriptions are resolved
+ * per plan below so the model is never told a location the runtime won't honor.
  */
 const EXEC_API_NAMES = new Set<string>([
   SkillsApiName.execScript,
+  SkillsApiName.exportFile,
+  SkillsApiName.runCommand,
+]);
+
+/**
+ * APIs hidden when a device is routed — the sandbox-oriented surface makes no
+ * sense there. `runCommand` duplicates `lobe-local-system` runCommand on the
+ * device, and `exportFile` exists to pull artifacts OUT of the sandbox; device
+ * runs leave artifacts on the user's machine, where they already are. This
+ * also restores the original desktop manifest shape, which only ever exposed
+ * `execScript` (see `manifest.desktop.ts`).
+ */
+const DEVICE_HIDDEN_API_NAMES = new Set<string>([
   SkillsApiName.exportFile,
   SkillsApiName.runCommand,
 ]);
@@ -22,9 +34,10 @@ const EXEC_API_NAMES = new Set<string>([
  * carry tool semantics only (where it runs, what credentials it has);
  * cross-tool arbitration lives in `EXEC_ENV_FACTS`.
  *
- * - `device`: a local device is online — the sandbox is the FALLBACK.
- *   Credential fact: `injectCredsToSandbox` only injects into the sandbox;
- *   devices deliberately get nothing.
+ * - `device`: a device is routed — `execScript` runs ON it: the skill archive
+ *   is downloaded/extracted device-side and the command runs in the skill
+ *   directory. LobeHub-managed credentials are deliberately NOT injected into
+ *   devices (`injectCredsToSandbox` only targets the sandbox).
  * - `device-unrouted`: the user chose local-device execution but no device is
  *   routed this run — the model must disclose that instead of silently
  *   running machine-specific commands in the sandbox. Wording varies by
@@ -38,7 +51,7 @@ const EXEC_ENV_PREAMBLES: Partial<
   Record<NonNullable<BuiltinToolResolveContext['executionEnv']>, string>
 > = {
   'device':
-    "Fallback execution environment: an isolated cloud sandbox, not the user's machine (LobeHub-managed credentials injected, e.g. `GITHUB_TOKEN`).",
+    "Execution environment: the user's selected device, not a cloud sandbox. The skill archive is auto-extracted on the device and the command runs in the skill directory. LobeHub-managed credentials (e.g. `GITHUB_TOKEN`) are NOT injected.",
   'device-unrouted':
     'Fallback execution environment: an isolated cloud sandbox. The user chose local-device execution but no device is routed this run — say so before running commands that assume their machine.',
   'sandbox': "Execution environment: an isolated cloud sandbox, not the user's machine.",
@@ -55,7 +68,7 @@ const EXEC_ENV_FACTS: Partial<
   Record<NonNullable<BuiltinToolResolveContext['executionEnv']>, string>
 > = {
   'device':
-    'A local device is online. Default shell execution to `lobe-local-system` runCommand; use the skills exec APIs only when the local run lacks a required tool, the task needs LobeHub-managed credentials, or the task needs isolation.',
+    'A local device is routed: `execScript` runs skill scripts on the device (archive auto-extracted, cwd = skill directory); use `lobe-local-system` runCommand for other shell commands. LobeHub-managed credentials are not available on the device.',
   'device-unrouted':
     'No local device is routed; shell commands execute in the cloud sandbox this run.',
 };
@@ -98,12 +111,14 @@ const resolveUnroutedTexts = (
 /**
  * Context-aware manifest for the lobe-skills tool: prefixes the exec-class API
  * descriptions with where they actually run, derived from the resolved
- * execution plan (see `BuiltinToolResolveContext.executionEnv`).
+ * execution plan (see `BuiltinToolResolveContext.executionEnv`). Device runs
+ * additionally drop the sandbox-only APIs (`runCommand` / `exportFile`).
  */
 export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
   const basePreamble = context.executionEnv && EXEC_ENV_PREAMBLES[context.executionEnv];
   if (!basePreamble) return SkillsManifest;
 
+  const isDeviceRun = context.executionEnv === 'device';
   const unrouted =
     context.executionEnv === 'device-unrouted'
       ? resolveUnroutedTexts(context.executionEnvUnroutedReason)
@@ -113,11 +128,13 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
 
   return {
     ...SkillsManifest,
-    api: SkillsManifest.api.map((api) =>
-      EXEC_API_NAMES.has(api.name)
-        ? { ...api, description: `${preamble} ${api.description}` }
-        : api,
-    ),
+    api: SkillsManifest.api
+      .filter((api) => !isDeviceRun || !DEVICE_HIDDEN_API_NAMES.has(api.name))
+      .map((api) =>
+        EXEC_API_NAMES.has(api.name)
+          ? { ...api, description: `${preamble} ${api.description}` }
+          : api,
+      ),
     ...(fact && {
       systemRole: `${SkillsManifest.systemRole}\n<execution_environment>\n${fact}\n</execution_environment>\n`,
     }),

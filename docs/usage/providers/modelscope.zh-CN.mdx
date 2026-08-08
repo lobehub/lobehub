@@ -43,7 +43,7 @@ ENABLED_MODELSCOPE=1
 MODELSCOPE_API_KEY=your_modelscope_api_token
 
 # 可选：自定义模型列表（逗号分隔）
-MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3.2,Qwen/Qwen3-235B-A22B
 
 # 可选：代理 URL（如需要）
 MODELSCOPE_PROXY_URL=https://your-proxy-url
@@ -57,16 +57,15 @@ MODELSCOPE_PROXY_URL=https://your-proxy-url
 environment:
   - ENABLED_MODELSCOPE=1
   - MODELSCOPE_API_KEY=your_modelscope_api_token
-  - MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+  - MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3.2,Qwen/Qwen3-235B-A22B
 ```
 
 ## 可用模型
 
 ModelScope 提供各种模型的访问，包括：
 
-- **DeepSeek 模型**：DeepSeek-V3、DeepSeek-R1 系列
-- **Qwen 模型**：Qwen3 系列、Qwen2.5 系列
-- **Llama 模型**：Meta-Llama-3 系列
+- **DeepSeek 模型**：DeepSeek-V3.2、DeepSeek-V3.1 系列
+- **Qwen 模型**：Qwen3 系列（包含 Qwen3-Next）
 - **其他模型**：各种开源模型
 
 ## 故障排除
@@ -121,8 +120,8 @@ DEBUG_MODELSCOPE_CHAT_COMPLETION=1
 ModelScope 使用命名空间前缀格式的模型 ID，例如：
 
 ```
-deepseek-ai/DeepSeek-V3-0324
-deepseek-ai/DeepSeek-R1-0528
+deepseek-ai/DeepSeek-V3.2
+deepseek-ai/DeepSeek-V3.1
 Qwen/Qwen3-235B-A22B
 Qwen/Qwen3-32B
 ```

@@ -1,43 +1,20 @@
 /**
  * Builtin Tool Executor Registry
  *
- * Central registry for builtin tool executors.
- * Executor modules are registered by explicit app bootstrap registration, not
- * by importing this registry module.
+ * Lightweight registry shell for builtin tool executors. Executor
+ * implementations live behind one asynchronous catalog boundary so importing
+ * the store does not pull every tool runtime into the initial SPA graph.
  */
 
-import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/executor';
-import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management/executor';
-import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
-import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
-import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
-import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
-import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
-import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client/executor';
-import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
-import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/client/executor';
-import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
-import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
-
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
-import { claudeCodeExecutor, codexExecutor } from './heteroCli';
-import { activatorExecutor } from './lobe-activator';
-import { agentDocumentsExecutor } from './lobe-agent-documents';
-import { messageExecutor } from './lobe-message';
-import { notebookExecutor } from './lobe-notebook';
-import { pageAgentExecutor } from './lobe-page-agent';
-import { skillStoreExecutor } from './lobe-skill-store';
-import { skillsExecutor } from './lobe-skills';
-import { topicReferenceExecutor } from './lobe-topic-reference';
-import { userInteractionExecutor } from './lobe-user-interaction';
-import { webBrowsing } from './lobe-web-browsing';
-import { webOnboardingExecutor } from './lobe-web-onboarding';
+import { stashBuiltinToolWorkIntent } from './workRegistration';
 
 /**
  * Registry structure: Map<identifier, executor instance>
  */
 const executorRegistry = new Map<string, IBuiltinToolExecutor>();
 let executorsRegistered = false;
+let registrationPromise: Promise<void> | undefined;
 
 /**
  * Get a builtin tool executor by identifier
@@ -56,7 +33,9 @@ export const getExecutor = (identifier: string): IBuiltinToolExecutor | undefine
  * @param apiName - The API name
  * @returns Whether the executor exists and supports the API
  */
-export const hasExecutor = (identifier: string, apiName: string): boolean => {
+export const hasExecutor = async (identifier: string, apiName: string): Promise<boolean> => {
+  await registerBuiltinToolExecutors();
+
   const executor = executorRegistry.get(identifier);
   return executor?.hasApi(apiName) ?? false;
 };
@@ -120,7 +99,15 @@ export const invokeExecutor = async (
     };
   }
 
-  return executor.invoke(apiName, params, ctx);
+  const result = await executor.invoke(apiName, params, ctx);
+
+  // Manifest-driven Work registration (best-effort; a no-op unless the API
+  // declares a `work` config). Only STASH the intent here — `call_tool` drains
+  // it and writes the Work version once the tool call's cumulative cost is known
+  // (write-once instead of register-then-backfill).
+  stashBuiltinToolWorkIntent(identifier, apiName, params, ctx, result);
+
+  return result;
 };
 
 /**
@@ -134,38 +121,18 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
   }
 };
 
-export const registerBuiltinToolExecutors = (): void => {
+export const registerBuiltinToolExecutors = async (): Promise<void> => {
   if (executorsRegistered) return;
 
-  registerExecutors([
-    // Hook-only executors for heterogeneous CLI agents (Claude Code / Codex) —
-    // observe their shell tool results via `onAfterCall` (never invoked).
-    claudeCodeExecutor,
-    codexExecutor,
-    agentBuilderExecutor,
-    agentDocumentsExecutor,
-    agentManagementExecutor,
-    calculatorExecutor,
-    cloudSandboxExecutor,
-    credsExecutor,
-    groupAgentBuilderExecutor,
-    groupManagementExecutor,
-    knowledgeBaseExecutor,
-    localSystemExecutor,
-    memoryExecutor,
-    messageExecutor,
-    notebookExecutor,
-    pageAgentExecutor,
-    skillStoreExecutor,
-    skillsExecutor,
-    taskExecutor,
-    activatorExecutor,
-    topicReferenceExecutor,
-    userInteractionExecutor,
-    lobeAgentExecutor,
-    webOnboardingExecutor,
-    webBrowsing,
-  ]);
+  registrationPromise ??= import('./catalog').then(({ builtinToolExecutors }) => {
+    registerExecutors(builtinToolExecutors);
+    executorsRegistered = true;
+  });
 
-  executorsRegistered = true;
+  try {
+    await registrationPromise;
+  } catch (error) {
+    registrationPromise = undefined;
+    throw error;
+  }
 };

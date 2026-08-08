@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installConnectService, readConnectServiceStatus, startConnectService } from './connect';
+
 const tmpDir = path.join(os.tmpdir(), `lobehub-connect-service-test-${process.pid}`);
 const unitDir = path.join(tmpDir, 'systemd-user');
 const entryPath = path.join(tmpDir, 'lh.js');
@@ -36,15 +38,14 @@ vi.mock('../daemon/manager', () => ({
   getRunningDaemonPid: getRunningDaemonPidMock,
 }));
 
-// eslint-disable-next-line import-x/first
-import { installConnectService, readConnectServiceStatus, startConnectService } from './connect';
-
 describe('connect service', () => {
   const originalArgv1 = process.argv[1];
   const originalEnv = { ...process.env };
   let systemctlCalls: string[][];
 
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+
     systemctlCalls = [];
     fs.rmSync(tmpDir, { force: true, recursive: true });
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -59,6 +60,8 @@ describe('connect service', () => {
     delete process.env.LOBEHUB_CLI_HOME;
     delete process.env.LOBEHUB_CLI_API_KEY;
     delete process.env.LOBEHUB_JWT;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
 
     getRunningDaemonPidMock.mockReturnValue(null);
     loadCredentialsMock.mockReturnValue({ accessToken: 'jwt' });
@@ -88,6 +91,7 @@ describe('connect service', () => {
     process.argv[1] = originalArgv1;
     process.env = { ...originalEnv };
     fs.rmSync(tmpDir, { force: true, recursive: true });
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -97,7 +101,10 @@ describe('connect service', () => {
     const unitPath = path.join(unitDir, 'lobehub-connect.service');
     expect(fs.existsSync(unitPath)).toBe(true);
     expect(fs.readFileSync(unitPath, 'utf8')).toContain(
-      `"${process.execPath}" "${entryPath}" "connect" "--service-child"`,
+      `"${process.execPath}" "${fs.realpathSync(entryPath)}" "connect" "--service-child"`,
+    );
+    expect(fs.readFileSync(unitPath, 'utf8')).toContain(
+      `EnvironmentFile=${path.join(tmpDir, '.lobehub', 'connect-service.env')}`,
     );
     expect(systemctlCalls).toContainEqual(['--user', 'daemon-reload']);
     expect(systemctlCalls).toContainEqual(['--user', 'enable', '--now', 'lobehub-connect.service']);
@@ -131,18 +138,23 @@ describe('connect service', () => {
     ]);
   });
 
-  it('imports the current environment by name and clears stale service env', () => {
+  it('writes the current environment to a service-scoped env file', () => {
+    process.env.ANTHROPIC_API_KEY = 'anthropic-key';
+    process.env.AWS_SECRET_ACCESS_KEY = 'aws-secret';
     process.env.LOBEHUB_CLI_API_KEY = 'test-key';
-    delete process.env.LOBEHUB_CLI_HOME;
+    process.env.QUOTED_ENV = 'value with "quotes", \\slashes, and $dollars';
 
     installConnectService();
 
-    expect(systemctlCalls).toContainEqual(
-      expect.arrayContaining(['--user', 'unset-environment', 'LOBEHUB_CLI_HOME']),
-    );
-    expect(systemctlCalls).toContainEqual(
-      expect.arrayContaining(['--user', 'import-environment', 'LOBEHUB_CLI_API_KEY']),
-    );
+    const envFilePath = path.join(tmpDir, '.lobehub', 'connect-service.env');
+    const envFile = fs.readFileSync(envFilePath, 'utf8');
+    expect(fs.statSync(envFilePath).mode & 0o777).toBe(0o600);
+    expect(envFile).toContain('ANTHROPIC_API_KEY="anthropic-key"');
+    expect(envFile).toContain('AWS_SECRET_ACCESS_KEY="aws-secret"');
+    expect(envFile).toContain('LOBEHUB_CLI_API_KEY="test-key"');
+    expect(envFile).toContain('QUOTED_ENV="value with \\"quotes\\", \\\\slashes, and \\$dollars"');
+    expect(systemctlCalls.some((call) => call.includes('import-environment'))).toBe(false);
+    expect(systemctlCalls.some((call) => call.includes('unset-environment'))).toBe(false);
     expect(systemctlCalls).not.toContainEqual(['--user', 'import-environment']);
   });
 
@@ -153,9 +165,13 @@ describe('connect service', () => {
   it('starts an installed service after preflight checks pass', () => {
     installConnectService();
     systemctlCalls = [];
+    process.env.LOBEHUB_CLI_API_KEY = 'rotated-key';
 
     expect(startConnectService()).toBe(true);
 
+    expect(fs.readFileSync(path.join(tmpDir, '.lobehub', 'connect-service.env'), 'utf8')).toContain(
+      'LOBEHUB_CLI_API_KEY="rotated-key"',
+    );
     expect(systemctlCalls).toContainEqual(['--user', 'start', 'lobehub-connect.service']);
   });
 });

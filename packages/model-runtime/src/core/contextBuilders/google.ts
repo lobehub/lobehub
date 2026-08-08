@@ -8,6 +8,7 @@ import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/util
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 
 const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
@@ -31,7 +32,12 @@ const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is 
  */
 export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 
-const getGeminiMajorVersion = (model?: string) => {
+interface GoogleMessageBuildOptions {
+  model?: string;
+  thoughtSignatureScope?: SignatureScope;
+}
+
+const getGeminiVersion = (model?: string) => {
   if (!model) return null;
 
   // Examples:
@@ -41,7 +47,9 @@ const getGeminiMajorVersion = (model?: string) => {
   if (!match?.[1]) return null;
 
   const major = Number.parseInt(match[1], 10);
-  return Number.isFinite(major) ? major : null;
+  const minor = match[2] ? Number.parseInt(match[2], 10) : 0;
+
+  return Number.isFinite(major) && Number.isFinite(minor) ? { major, minor } : null;
 };
 
 /**
@@ -51,14 +59,25 @@ const getGeminiMajorVersion = (model?: string) => {
  * Returns false for unversioned model IDs (e.g. gemini-pro) to avoid request failures.
  */
 const supportsExternalUrlFileData = (model?: string) => {
-  const major = getGeminiMajorVersion(model);
-  if (major === null) return false;
-  return major >= 3;
+  const version = getGeminiVersion(model);
+  if (!version) return false;
+  return version.major >= 3;
+};
+
+/**
+ * Gemini 3.5+ requires the model-generated function call ID on the matching response.
+ * @see https://ai.google.dev/gemini-api/docs/generate-content/function-calling
+ */
+const supportsFunctionCallId = (model?: string) => {
+  const version = getGeminiVersion(model);
+  if (!version) return false;
+
+  return version.major > 3 || (version.major === 3 && version.minor >= 5);
 };
 
 const buildExternalUrlFileDataPart = async (
   url: string,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Part | undefined> => {
   if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
 
@@ -90,7 +109,7 @@ const buildExternalUrlFileDataPart = async (
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Part | undefined> => {
   switch (content.type) {
     default: {
@@ -219,7 +238,7 @@ export const buildGooglePart = async (
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content> => {
   const content = message.content as string | UserMessageContentPart[];
 
@@ -265,8 +284,16 @@ export const buildGoogleMessage = async (
           );
         }
         return {
-          functionCall: { args, name: tool.function.name },
-          thoughtSignature: tool.thoughtSignature,
+          functionCall: {
+            args,
+            id: supportsFunctionCallId(options?.model) ? tool.id : undefined,
+            name: tool.function.name,
+          },
+          thoughtSignature: resolveScopedSignature(
+            tool.thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          ),
         };
       }),
       role: 'model',
@@ -281,6 +308,7 @@ export const buildGoogleMessage = async (
         parts: [
           {
             functionResponse: {
+              id: supportsFunctionCallId(options?.model) ? message.tool_call_id : undefined,
               name: functionName,
               response: { result: message.content },
             },
@@ -310,7 +338,7 @@ export const buildGoogleMessage = async (
  */
 export const buildGoogleMessages = async (
   messages: OpenAIChatMessage[],
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content[]> => {
   const toolCallNameMap = new Map<string, string>();
 

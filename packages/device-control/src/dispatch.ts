@@ -1,3 +1,4 @@
+import { moveLocalFiles, renameLocalFile, writeLocalFile } from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
   checkoutGitBranch,
@@ -12,23 +13,26 @@ import {
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
-  moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
-  renameLocalFile,
   revertGitFile,
-  writeLocalFile,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/git';
 
+import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
+import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
+  EnrollWorkspaceParams,
   InitWorkspaceParams,
+  ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
+  PrepareSkillDirectoryParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  UnenrollWorkspaceParams,
 } from './types';
 import { initWorkspace, listProjectSkills, statPath } from './workspace';
 
@@ -39,8 +43,13 @@ import { initWorkspace, listProjectSkills, statPath } from './workspace';
  * handler, with no per-method gateway route.
  */
 export const DEVICE_RPC_METHODS = [
+  'enrollWorkspace',
+  'unenrollWorkspace',
   'initWorkspace',
+  'listHeterogeneousAgentModels',
+  'getClaudeCodeQuota',
   'listProjectSkills',
+  'prepareSkillDirectory',
   'statPath',
   'getProjectFileIndex',
   'searchProjectFiles',
@@ -87,12 +96,42 @@ export const executeDeviceRpc = async (
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
   switch (method) {
+    // Remote workspace share: the host owns the gateway connections, so both
+    // handlers are host-injected. A host that can't manage a second connection
+    // rejects with a stable reason the server surfaces to the user.
+    case 'enrollWorkspace': {
+      if (!deps.enrollWorkspace)
+        throw new Error('This device client does not support workspace sharing');
+      return deps.enrollWorkspace(params as EnrollWorkspaceParams);
+    }
+
+    case 'unenrollWorkspace': {
+      if (!deps.unenrollWorkspace)
+        throw new Error('This device client does not support workspace sharing');
+      return deps.unenrollWorkspace(params as UnenrollWorkspaceParams);
+    }
+
     case 'initWorkspace': {
       return initWorkspace(params as InitWorkspaceParams, deps);
     }
 
+    case 'listHeterogeneousAgentModels': {
+      if (!deps.listHeterogeneousAgentModels) {
+        throw new Error('This device client does not support heterogeneous agent model discovery');
+      }
+      return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
+    }
+
+    case 'getClaudeCodeQuota': {
+      return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    }
+
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
+    }
+
+    case 'prepareSkillDirectory': {
+      return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
     }
 
     case 'statPath': {
@@ -128,7 +167,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'getLinkedPullRequest': {
-      return getLinkedPullRequest(params as { branch: string; path: string });
+      return getLinkedPullRequest(
+        params as { branch: string; path: string; pullRequestNumber?: number },
+      );
     }
 
     case 'getGitWorkingTreeStatus': {

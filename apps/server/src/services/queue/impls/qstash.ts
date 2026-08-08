@@ -7,13 +7,16 @@ import { type QueueServiceImpl } from './type';
 
 const log = debug('lobe-server:service:queue:qstash');
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
+/**
+ * QStash's `delay` option is second-granularity — the `Duration` string form
+ * (`10s`, `1m`, `2h`, `1d`) has no millisecond unit, and a bare number is
+ * treated as seconds (so `100` would mean 100s, not 100ms). Positive
+ * sub-second delays are rounded up to 1s.
+ */
 const toQStashDelaySeconds = (delayMs: number): number | undefined => {
   if (delayMs <= 0) return undefined;
-  if (delayMs < 1000) return undefined;
 
-  return Math.round(delayMs / 1000);
+  return Math.max(1, Math.round(delayMs / 1000));
 };
 
 /**
@@ -44,14 +47,6 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
     } = message;
 
     try {
-      // QStash publish delays are second-granularity (`10s`, `1m`, or numeric
-      // seconds). Preserve the runtime's small settling windows, such as the
-      // initial 50ms, by waiting before publishing instead of collapsing them to
-      // immediate delivery.
-      if (delay > 0 && delay < 1000) {
-        await sleep(delay);
-      }
-
       log('Initialized QStash queue service');
       const qstashClient = new OtelQstashClient({ token: this.config.qstashToken });
       const qstashDelay = toQStashDelaySeconds(delay);

@@ -1,17 +1,55 @@
 import { describe, expect, it } from 'vitest';
 
+import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   codexModelSupportsFastSpeed,
+  codexModelSupportsReasoningEffort,
+  getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
+  resolveAgencyConfig,
+  resolveAgentAgencyConfig,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
 } from './agencyConfig';
+
+describe('normalizeHeterogeneousProviderConfig', () => {
+  it('recovers a legacy adapterType before considering the command', () => {
+    const legacyConfig = {
+      adapterType: 'codex',
+      command: 'claude',
+    } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyConfig)).toEqual({
+      command: 'claude',
+      type: 'codex',
+    });
+  });
+
+  it('infers legacy Claude Code and Codex identities from their commands', () => {
+    const legacyClaudeConfig = {
+      command: '/usr/local/bin/custom-claude',
+    } as unknown as HeterogeneousProviderConfig;
+    const legacyCodexConfig = {
+      command: '/usr/local/bin/custom-codex',
+    } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyClaudeConfig).type).toBe('claude-code');
+    expect(normalizeHeterogeneousProviderConfig(legacyCodexConfig).type).toBe('codex');
+  });
+
+  it('preserves the legacy Claude Code default when no identity can be recovered', () => {
+    const legacyConfig = { command: 'custom-agent' } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyConfig).type).toBe('claude-code');
+  });
+});
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
   it('deletes keys whose patch value is undefined', () => {
@@ -67,6 +105,98 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
+  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+    const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
+  });
+
+  it('forwards Qoder native args and model while leaving effort to the CLI default', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--verbose'],
+      effort: 'high',
+      model: 'qoder-model',
+      type: 'qoder',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--verbose', '--model', 'qoder-model']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--verbose',
+      '--model',
+      'qoder-model',
+    ]);
+  });
+
+  it('preserves a Qoder model from native args and does not inject Default', () => {
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-m', 'native-model'],
+        model: 'selector-model',
+        type: 'qoder',
+      }),
+    ).toEqual(['-m', 'native-model']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--model=native-model'],
+        model: 'selector-model',
+        type: 'qoder',
+      }),
+    ).toEqual(['--agent-arg=--model=native-model']);
+    expect(
+      buildHeteroSpawnArgs({
+        model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        type: 'qoder',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('forwards OpenCode native args and an explicit provider/model selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--variant', 'high'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--variant',
+      'high',
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--variant',
+      '--agent-arg=high',
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+  });
+
+  it('does not duplicate an OpenCode model already present in native args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
+  });
+
+  it('honors the OpenCode short model flag in native args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m', 'google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['-m', 'google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=-m',
+      '--agent-arg=google/gemini-2.5-pro',
+    ]);
+  });
+
   it('preserves Claude Code defaults when model/effort have not been selected', () => {
     expect(buildHeteroSpawnArgs({ type: 'claude-code' })).toBeUndefined();
     expect(buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code' })).toEqual([
@@ -95,6 +225,37 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'codex',
       }),
     ).toBeUndefined();
+  });
+
+  it('forwards Pi native args and an explicit provider/model selection', () => {
+    const provider = {
+      args: ['--offline'],
+      effort: 'high',
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+  });
+
+  it('does not duplicate a Pi model already present in native args', () => {
+    const provider = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
   });
 
   it('appends --model and --effort for claude-code', () => {
@@ -163,6 +324,10 @@ describe('buildHeteroSpawnArgs', () => {
         effort: 'low',
       }),
     ).toBe('xhigh');
+    expect(resolveCodexReasoningEffort({ effort: 'max' })).toBe('max');
+    expect(resolveCodexReasoningEffort({ args: ['-c', 'model_reasoning_effort="ultra"'] })).toBe(
+      'ultra',
+    );
   });
 
   it('appends --model and model_reasoning_effort config for Codex', () => {
@@ -171,6 +336,21 @@ describe('buildHeteroSpawnArgs', () => {
       'gpt-5.5',
       '-c',
       'model_reasoning_effort="high"',
+    ]);
+  });
+
+  it('passes extended Codex reasoning efforts through spawn and exec args', () => {
+    expect(buildHeteroSpawnArgs({ effort: 'ultra', model: 'gpt-5.6-sol', type: 'codex' })).toEqual([
+      '--model',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort="ultra"',
+    ]);
+    expect(buildHeteroExecArgs({ effort: 'max', model: 'gpt-5.6-luna', type: 'codex' })).toEqual([
+      '--model',
+      'gpt-5.6-luna',
+      '--effort',
+      'max',
     ]);
   });
 
@@ -247,6 +427,36 @@ describe('buildHeteroSpawnArgs', () => {
   });
 });
 
+describe('codex reasoning effort capabilities', () => {
+  const commonLevels = ['low', 'medium', 'high', 'xhigh'];
+  const maxLevels = [...commonLevels, 'max'];
+  const ultraLevels = [...maxLevels, 'ultra'];
+
+  it('returns the extended levels supported by each GPT-5.6 model', () => {
+    expect(getCodexReasoningEffortLevels('gpt-5.6')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-sol')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-terra')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
+  });
+
+  it('reports model-specific Max and Ultra support', () => {
+    expect(codexModelSupportsReasoningEffort('gpt-5.6', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-sol', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-terra', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'max')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'ultra')).toBe(false);
+  });
+
+  it('uses conservative common levels for old, unknown, and default models', () => {
+    expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels('custom-codex-model')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toEqual(
+      commonLevels,
+    );
+  });
+});
+
 describe('codex speed mode', () => {
   it('resolves missing / default selections to Default', () => {
     expect(resolveCodexSpeedMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
@@ -271,6 +481,10 @@ describe('codex speed mode', () => {
 
   it('reports fast support for catalog models and the default selection', () => {
     expect(codexModelSupportsFastSpeed(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-sol')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-terra')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-luna')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.5')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.4')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.4-mini')).toBe(false);
@@ -322,5 +536,168 @@ describe('codex speed mode', () => {
       }),
     ).toEqual(['--agent-arg=-c', '--agent-arg=service_tier="priority"']);
     expect(buildHeteroExecArgs({ speed: 'fast', type: 'claude-code' })).toBeUndefined();
+  });
+});
+
+describe('resolveAgencyConfig', () => {
+  it('normalizes a legacy persisted heterogeneous provider before applying overrides', () => {
+    const shared = {
+      executionTarget: 'device',
+      heterogeneousProvider: { command: 'codex' },
+    } as unknown as Parameters<typeof resolveAgencyConfig>[0];
+
+    expect(resolveAgencyConfig(shared, { executionTarget: 'local' })).toEqual({
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'codex', type: 'codex' },
+    });
+  });
+
+  it('ignores a member override when the shared execution target is fixed', () => {
+    const shared = {
+      boundDeviceId: 'fixed-device',
+      executionTargetSelectionPolicy: 'fixed' as const,
+      executionTarget: 'device' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'sandbox',
+      }),
+    ).toEqual(shared);
+  });
+
+  it('keeps a fixed non-device target when a member requests a device', () => {
+    const shared = {
+      executionTarget: 'sandbox' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'device',
+      }),
+    ).toEqual(shared);
+  });
+
+  it('returns the shared config unchanged when override is null / undefined', () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, undefined)).toEqual(shared);
+    expect(resolveAgencyConfig(shared, null)).toEqual(shared);
+  });
+
+  it('returns the shared config unchanged when override has neither field set', () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, {})).toEqual(shared);
+  });
+
+  it("override's executionTarget wins over the shared value", () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, { executionTarget: 'sandbox' })).toEqual({
+      boundDeviceId: 'ws-device',
+      executionTarget: 'sandbox',
+    });
+  });
+
+  it("override's boundDeviceId wins over the shared value", () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, { boundDeviceId: 'my-mac' })).toEqual({
+      boundDeviceId: 'my-mac',
+      executionTarget: 'device',
+    });
+  });
+
+  it("override's local + boundDeviceId sets both together (workspace-mode `local` case)", () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(
+      resolveAgencyConfig(shared, { boundDeviceId: 'my-mac', executionTarget: 'local' }),
+    ).toEqual({ boundDeviceId: 'my-mac', executionTarget: 'local' });
+  });
+
+  it('does NOT touch heterogeneousProvider / workingDirByDevice — those are shared', () => {
+    const shared = {
+      boundDeviceId: 'ws-device',
+      executionTarget: 'device' as const,
+      heterogeneousProvider: { type: 'claude-code' as const },
+      workingDirByDevice: { 'ws-device': '/workspace' },
+    };
+    const merged = resolveAgencyConfig(shared, {
+      boundDeviceId: 'my-mac',
+      executionTarget: 'local',
+    });
+    expect(merged?.heterogeneousProvider).toEqual({ type: 'claude-code' });
+    expect(merged?.workingDirByDevice).toEqual({ 'ws-device': '/workspace' });
+    expect(merged?.boundDeviceId).toBe('my-mac');
+    expect(merged?.executionTarget).toBe('local');
+  });
+
+  it('coerces null shared config to undefined', () => {
+    expect(resolveAgencyConfig(null, undefined)).toBeUndefined();
+    expect(resolveAgencyConfig(undefined, undefined)).toBeUndefined();
+  });
+
+  it('an override with only executionTarget leaves the shared boundDeviceId in place', () => {
+    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, { executionTarget: 'sandbox' })).toEqual({
+      boundDeviceId: 'ws-device',
+      executionTarget: 'sandbox',
+    });
+  });
+
+  it('an override that unsets executionTarget by setting it to a defined value replaces the shared', () => {
+    // Merge semantics: `undefined` in the override is treated as "not overriding".
+    // Only *defined* values in the override win. Test both branches.
+    const shared = { executionTarget: 'device' as const };
+    expect(resolveAgencyConfig(shared, { executionTarget: undefined })).toEqual(shared);
+    expect(resolveAgencyConfig(shared, { executionTarget: 'none' })).toEqual({
+      executionTarget: 'none',
+    });
+  });
+});
+
+describe('resolveAgentAgencyConfig', () => {
+  it('applies the fixed member policy to a public Workspace Agent', () => {
+    const shared = {
+      boundDeviceId: 'shared-device',
+      executionTarget: 'device' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgentAgencyConfig(
+        shared,
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual(shared);
+  });
+
+  it('ignores member policy and overrides while a Workspace Agent is private', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
+  });
+
+  it('ignores member policy and overrides for an author or Workspace admin', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
   });
 });

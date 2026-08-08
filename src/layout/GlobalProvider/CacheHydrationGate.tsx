@@ -1,43 +1,57 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import type { PropsWithChildren } from 'react';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 
 import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+import { setAppPainted, useAppReady } from '@/spa/atoms/app';
+import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 
 // first-write-wins: only the very first paint records the boot timing mark.
 let firstPaintMarked = false;
 
-const HYDRATION_TIMEOUT = 1500;
+// Pure hung-hydration backstop — NOT a "boot is slow, paint anyway" timer.
+// `loadIdb` always signals `ready` from its `finally` (even on an IndexedDB
+// error), so legitimate hydration — however large the cached partition —
+// resolves `ready` on its own and releases the gate before this fires; the only
+// thing it catches is IndexedDB never responding, where there is no cache to
+// wait for. A short window (the former 1500ms) misfires on a heavy account whose
+// hydration outruns it: the gate paints an EMPTY app before the cache is in the
+// Map, and a consumer that subscribes to its key then is orphaned forever (SWR
+// does not observe the later direct Map insert), so it waits for the network —
+// the sustained cold-open skeleton. See `coldHydrationGate.integration.test.tsx`
+// (BUG→FIX) and `libs/swr/coldHydrationRace.test.tsx`.
+const HYDRATION_TIMEOUT = 8000;
 
 /**
- * Blocks the first paint until the initial identity scope's IndexedDB cache has
- * hydrated, so the app never flashes empty on cold boot — the static
- * `loading-screen` overlay covers exactly this window.
+ * Blocks the first paint until the active scope's IndexedDB cache has hydrated,
+ * so the app never flashes empty on cold boot — the static `loading-screen`
+ * overlay and then `BootShell` cover exactly this window, and releasing here is
+ * what signals `appPainted` to tear them down.
  *
  * This is a one-way latch: once released it never blanks again. A later scope
  * change (anonymous → signed-in, or workspace switch) re-hydrates the SWR cache
  * *in place* via `Query.tsx`'s `reloadScope()`, keeping the current tree mounted
- * while the new scope's data swaps in underneath. Re-blocking here (as the old
- * `key={scope}` remount did) would unmount the whole app and expose a
- * full-screen white flash on login.
+ * while the new scope's data swaps in underneath.
  *
- * On desktop the first paint additionally waits for `isUserStateInit` — the
- * `getUserState()` identity round-trip that populates `userId`. Without it the
- * cold boot would paint the anonymous scope first and then flip to the signed-in
- * scope, briefly flashing the logged-out shell. Anonymous desktop still resolves
- * (the round-trip completes with a null cloud `userId`), and the 1500ms timeout
- * is a hard backstop so a hung round-trip never keeps the app blank.
+ * The active scope is known synchronously at boot from the persisted
+ * `activeScopeKey` (the last-known `${userId}:${workspace}`), so the provider
+ * hydrates the *real* user partition in parallel with the session check — the
+ * gate only waits for that hydration (`ready`), not for the identity
+ * round-trip. That parallelism is what restores instant-from-cache first paint.
+ * Writes made before the session confirms the scope are quarantined by the
+ * cache provider (`isEphemeralScope`), so the optimistic window can't orphan or
+ * pollute a partition. The timeout is a pure hung-hydration backstop (see
+ * `HYDRATION_TIMEOUT`): the gate otherwise waits for real `ready`, so a heavy
+ * account pays a slightly longer loading-screen ONCE at boot and then every
+ * agent/topic it opens is served straight from the fully-hydrated in-memory
+ * cache — no per-topic skeleton, no layout shift.
  */
 const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
-  const isAuthLoaded = Boolean(useUserStore(authSelectors.isLoaded));
-  const isUserStateInit = useUserStore((s) => s.isUserStateInit);
+  const appReady = useAppReady();
 
   const ready = useSyncExternalStore(
     cacheHydration.subscribe,
@@ -57,18 +71,11 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     if (released) return;
-    // Hard backstop: never stay blank past the timeout, whatever is pending.
-    if (timedOut) {
-      setReleased(true);
-      return;
-    }
-    if (!isAuthLoaded) return;
-    // Desktop paints against the final identity scope, not the anonymous one.
-    if (isDesktop && !isUserStateInit) return;
-    if (!ready) return;
-
-    setReleased(true);
-  }, [isAuthLoaded, isUserStateInit, ready, released, timedOut]);
+    // Release the moment the active scope's cache has hydrated — the persisted
+    // activeScopeKey means that's already the real user partition, so this paints
+    // straight from cache. The timeout backstop guards a hung hydration only.
+    if (ready || timedOut) setReleased(true);
+  }, [ready, timedOut, released]);
 
   useLayoutEffect(() => {
     if (!released) return;
@@ -77,8 +84,29 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
       firstPaintMarked = true;
       bootTiming.mark('first-paint');
     }
-    document.getElementById('loading-screen')?.remove();
+    // Runs after `children` have committed, so the boot shell only tears down
+    // once the real app is already in the DOM.
+    setAppPainted(true);
   }, [released]);
+
+  // Backstop for entries that mount no `BootShell` (the Electron popup window,
+  // whose `popup.html` ships a z-index 99999 scrim with `pointer-events: auto`):
+  // the shell normally owns this removal, so without a backstop the popup stays
+  // dimmed AND swallows every click.
+  //
+  // `appReady` is part of the condition, not decoration. Hydration can finish
+  // before initialization, and in that window `AppLayer` still renders null while
+  // `resolveBootShellPhase` is `hidden` (it needs BOTH signals for `done`, and
+  // the 200ms timer has not fired) — so the shell is not up either. Removing the
+  // splash on `released` alone blanks the window until whichever lands first,
+  // and the shell timer has been measured arriving 1153ms late on an Electron
+  // cold boot. Gating on `appReady` means `AppLayer` is rendering the outlet, so
+  // the route's own fallback is guaranteed to be on screen.
+  useLayoutEffect(() => {
+    if (!released || !appReady) return;
+
+    removeStaticLoadingScreen();
+  }, [released, appReady]);
 
   if (!released) return null;
 

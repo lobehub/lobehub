@@ -3,8 +3,11 @@ import { homedir, platform } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import type { LocalHeterogeneousAgentType } from '../config';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
+
 /**
- * Shared resolver for the external CLI-agent binaries (Claude Code / Codex).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi / Qoder).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +23,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'claude-code' | 'codex';
+export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -43,7 +46,8 @@ export interface CliCommandStatus {
 
 interface ValidateOptions {
   validateFlag?: string;
-  validateKeywords: string[];
+  validateKeywords?: string[];
+  validatePattern?: RegExp;
 }
 
 interface ResolvedCommand {
@@ -59,18 +63,23 @@ let shellPathPromise: Promise<string | undefined> | undefined;
 // User-supplied custom commands flow through here via `detectHeterogeneousCliCommand`.
 const WINDOWS_SHELL_METAS = /[&|;<>^`!"]/;
 
-// Extensions we can actually execute on Windows, in preference order:
+// Extensions we can actually execute on Windows.
 // `.exe` runs directly via `execFile`, `.cmd` / `.bat` runs via `cmd.exe`.
 // `.ps1` and extensionless wrappers (npm sometimes drops a Unix shell script
 // next to the `.cmd` shim) are deliberately excluded — we can't run them.
+//
+// IMPORTANT: pick by PATH order (the order `where` returns), not by extension
+// rank. Preferring every `.exe` over every `.cmd` would skip an earlier npm
+// `claude.cmd` in favour of a later `claude.exe` from Vite+ (see #17376).
 const WINDOWS_RUNNABLE_EXTS = ['.exe', '.cmd', '.bat'] as const;
 
+const isWindowsRunnablePath = (line: string): boolean => {
+  const lower = line.toLowerCase();
+  return WINDOWS_RUNNABLE_EXTS.some((ext) => lower.endsWith(ext));
+};
+
 const pickWindowsRunnable = (lines: string[]): string | undefined => {
-  for (const ext of WINDOWS_RUNNABLE_EXTS) {
-    const match = lines.find((line) => line.toLowerCase().endsWith(ext));
-    if (match) return match;
-  }
-  return undefined;
+  return lines.find(isWindowsRunnablePath);
 };
 
 const getLoginShellPath = async (): Promise<string | undefined> => {
@@ -166,8 +175,8 @@ const resolveCommandPath = async (command: string): Promise<ResolvedCommand | un
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships
   // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
-  // the first line can land us on something we can't execute, so prefer a
-  // runnable extension and bail otherwise.
+  // the first line can land us on something we can't execute, so walk the
+  // PATH-ordered list and take the first runnable extension.
   if (isWindows()) {
     const runnablePath = pickWindowsRunnable(lines);
     return runnablePath ? { path: runnablePath } : undefined;
@@ -178,8 +187,8 @@ const resolveCommandPath = async (command: string): Promise<ResolvedCommand | un
 
 /**
  * Resolve a command via which/where, then confirm it's the binary we expect by
- * matching `--version` output against a keyword (avoids collisions with an
- * unrelated executable of the same name).
+ * matching `--version` output against a keyword or output pattern (avoids
+ * collisions with an unrelated executable of the same name).
  */
 export const detectValidatedCommand = async (
   command: string,
@@ -189,7 +198,7 @@ export const detectValidatedCommand = async (
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
-  const { validateFlag = '--version', validateKeywords } = options;
+  const { validateFlag = '--version', validateKeywords, validatePattern } = options;
 
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
@@ -214,8 +223,12 @@ export const detectValidatedCommand = async (
         });
     const output = `${stdout}\n${stderr}`.trim();
     const loweredOutput = output.toLowerCase();
+    const matchesKeyword = validateKeywords?.some((keyword) =>
+      loweredOutput.includes(keyword.toLowerCase()),
+    );
+    const matchesPattern = validatePattern?.test(output);
 
-    if (!validateKeywords.some((keyword) => loweredOutput.includes(keyword.toLowerCase()))) {
+    if (!matchesKeyword && !matchesPattern) {
       return { available: false };
     }
 
@@ -235,28 +248,55 @@ export const detectValidatedCommand = async (
 };
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'amp': {
+    validateFlag: '--help',
+    validateKeywords: ['Amp CLI'],
+  },
   'claude-code': {
     validateKeywords: ['claude code'],
   },
   'codex': {
     validateKeywords: ['codex'],
   },
+  'opencode': {
+    // OpenCode prints only a bare version (for example `1.18.3`) for
+    // `--version`, without a product-name prefix.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'pi': {
+    // Pi prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'qoder': {
+    // Qoder prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
 
 // The default (bare) command each agent type is shipped to run. The well-known
 // fallback locations below hold *this* binary, so they may only be probed when
 // the requested command is the default — never for a custom command.
-export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> = {
-  'claude-code': 'claude',
-  'codex': 'codex',
-};
+export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
+  HETEROGENEOUS_AGENT_CONFIGS.map(({ defaultCommand, type }) => [type, defaultCommand]),
+) as Record<HeterogeneousCliAgentType, string>;
 
 // Well-known absolute install locations probed when a bare command isn't on
 // PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's
 // official installer can put `claude` under ~/.local/bin, while the Codex
-// desktop app bundles a functional CLI inside Codex.app without symlinking it.
+// desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'amp': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'amp'),
+        path.join(homedir(), '.amp', 'bin', 'amp'),
+        path.join(homedir(), '.bun', 'bin', 'amp'),
+        path.join(homedir(), '.npm-global', 'bin', 'amp'),
+        path.join(homedir(), 'Library', 'pnpm', 'amp'),
+      ];
+    }
     case 'claude-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
@@ -270,10 +310,45 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
     case 'codex': {
       if (platform() !== 'darwin') return [];
 
-      const bundledCli = path.join('Codex.app', 'Contents', 'Resources', 'codex');
+      // Codex.app was renamed to ChatGPT.app. Prefer the current bundle name,
+      // while keeping Codex.app as a fallback for older installations.
+      return ['ChatGPT.app', 'Codex.app'].flatMap((appBundleName) => {
+        const bundledCli = path.join(appBundleName, 'Contents', 'Resources', 'codex');
+
+        return [
+          path.join('/Applications', bundledCli),
+          path.join(homedir(), 'Applications', bundledCli),
+        ];
+      });
+    }
+    case 'opencode': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
       return [
-        path.join('/Applications', bundledCli),
-        path.join(homedir(), 'Applications', bundledCli),
+        path.join(homedir(), '.opencode', 'bin', 'opencode'),
+        path.join(homedir(), '.local', 'bin', 'opencode'),
+        path.join(homedir(), '.bun', 'bin', 'opencode'),
+        path.join(homedir(), '.npm-global', 'bin', 'opencode'),
+        path.join(homedir(), 'Library', 'pnpm', 'opencode'),
+      ];
+    }
+    case 'pi': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'pi'),
+        path.join(homedir(), '.npm-global', 'bin', 'pi'),
+        path.join(homedir(), 'Library', 'pnpm', 'pi'),
+      ];
+    }
+    case 'qoder': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'qodercli'),
+        path.join(homedir(), '.bun', 'bin', 'qodercli'),
+        path.join(homedir(), '.npm-global', 'bin', 'qodercli'),
+        path.join(homedir(), 'Library', 'pnpm', 'qodercli'),
       ];
     }
     default: {
@@ -330,8 +405,8 @@ export interface ResolvedHeteroCommand {
  * to the requested command, preserving the prior PATH-trusting behavior.
  *
  * Resolution only kicks in for the DEFAULT bare command (`codex` / `claude`) —
- * the case that benefits from the well-known-path fallback (e.g. the Codex.app
- * bundled CLI when a broken `codex` shim shadows PATH). A custom command or an
+ * the case that benefits from the well-known-path fallback (e.g. an app-bundled
+ * Codex CLI when a broken `codex` shim shadows PATH). A custom command or an
  * explicit path is used verbatim, unchanged from before. This mirrors the
  * desktop controller, which resolves the default via the binary manager and
  * leaves custom commands to the caller.

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -59,6 +59,7 @@ export interface CriterionDraft {
   instruction?: string;
   onFail?: VerifyCheckItem['onFail'];
   required?: boolean;
+  requiredEvidence?: RequiredEvidenceSpec[];
   title: string;
   /** Verifier knobs (e.g. `requiredEvidence`) — attached when the user adds them. */
   verifierConfig?: Record<string, unknown>;
@@ -96,7 +97,10 @@ const criterionToCheckItem = (
 ): VerifyCheckItem => ({
   description: criterion.description ?? undefined,
   documentId: criterion.documentId ?? undefined,
-  id: randomUUID(),
+  // A criterion is the stable logical acceptance check. Reuse its id for every
+  // run snapshot so independent task re-runs converge onto one Acceptance row;
+  // the verify run still scopes each immutable snapshot and result.
+  id: criterion.id,
   index,
   onFail: criterion.onFail,
   required: criterion.required,
@@ -186,13 +190,17 @@ export class VerifyPlanGeneratorService {
         documentId = doc.id;
       }
 
+      const verifierConfig = {
+        ...draft.verifierConfig,
+        ...(draft.requiredEvidence ? { requiredEvidence: draft.requiredEvidence } : {}),
+      };
       const criterion = await this.criterionModel.create({
         description: draft.description,
         documentId,
         onFail,
         required,
         title: draft.title,
-        verifierConfig: {},
+        verifierConfig,
         verifierType,
       });
 
@@ -200,14 +208,14 @@ export class VerifyPlanGeneratorService {
       items.push({
         description: draft.description,
         documentId,
-        id: randomUUID(),
+        id: criterion.id,
         index,
         onFail,
         required,
         sourceCriterionId: criterion.id,
         sourceRubricId: rubric.id,
         title: draft.title,
-        verifierConfig: {},
+        verifierConfig,
         verifierType,
       });
     }
@@ -260,6 +268,7 @@ export class VerifyPlanGeneratorService {
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
       },
       {
         tracing: {
@@ -279,6 +288,7 @@ export class VerifyPlanGeneratorService {
       description: c.description,
       instruction: c.instruction,
       onFail: c.onFail ?? 'manual',
+      requiredEvidence: c.requiredEvidence,
       required: c.required ?? true,
       title: c.title,
       verifierType: c.verifierType,
@@ -316,7 +326,10 @@ export class VerifyPlanGeneratorService {
         onFail: draft.onFail ?? 'manual',
         required: draft.required ?? true,
         title: draft.title,
-        verifierConfig: draft.verifierConfig ?? {},
+        verifierConfig: {
+          ...draft.verifierConfig,
+          ...(draft.requiredEvidence ? { requiredEvidence: draft.requiredEvidence } : {}),
+        },
         verifierType: draft.verifierType ?? 'llm',
       });
       ids.push(criterion.id);
@@ -411,6 +424,7 @@ export class VerifyPlanGeneratorService {
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
       },
       {
         tracing: {
@@ -455,7 +469,7 @@ export class VerifyPlanGeneratorService {
           sourceCriterionId: null,
           sourceRubricId: null,
           title: c.title,
-          verifierConfig: {},
+          verifierConfig: { requiredEvidence: c.requiredEvidence },
           verifierType: c.verifierType,
         };
       }),

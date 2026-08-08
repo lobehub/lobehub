@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -89,15 +90,18 @@ export function defineConfig() {
       locale,
     });
 
-    // Share pages are responsive on their own; always serve the desktop bundle
+    // These pages are responsive on their own; always serve the desktop bundle
     // so mobile UA does not land on mobile-specific routes.
-    const isSharePath = url.pathname === '/share' || url.pathname.startsWith('/share/');
+    const desktopOnlyPaths = ['/share', '/verify', '/acceptance'];
+    const isDesktopOnlyPath = desktopOnlyPaths.some(
+      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
+    );
 
     const safeLocale = toSafeLocale(locale);
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isSharePath && device.type === 'mobile',
+      isMobile: !isDesktopOnlyPath && device.type === 'mobile',
       locale: safeLocale,
     });
 
@@ -126,13 +130,26 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
-    const isAuthSpaRoute = authSpaRoutes.some((r) => url.pathname.startsWith(r));
+    const isAuthSpaRoute = authSpaRoutes.some(
+      (route) => url.pathname === route || url.pathname.startsWith(`${route}/`),
+    );
 
     // Auth SPA routes: rewrite to /spa-auth/[locale]/[[...path]] catch-all
     if (isAuthSpaRoute) {
       const authSpaPath = `/spa-auth/${safeLocale}${url.pathname}`;
       logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
       url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    if (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname)) {
+      const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
+      logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
+      url.pathname = workbenchPath;
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);
@@ -220,6 +237,10 @@ export function defineConfig() {
     // standalone verification report viewer — the run id in the URL is the
     // read-only capability for viewing the report without a signed-in session.
     '/verify/(.*)',
+    // acceptance decision page — same shape as /verify/:id: the id is the
+    // capability; the tRPC layer enforces the aggregate's `visibility` (a
+    // private aggregate 404s for anyone but the owner / workspace members).
+    '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
     // session-protected access at the middleware layer.

@@ -1,13 +1,13 @@
 # LobeHub Development Guidelines
 
-Guidelines for using AI coding agents in this LobeHub repository.
+Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 ## Tech Stack
 
 - Next.js 16 + React 19 + TypeScript
 - SPA inside Next.js with `react-router-dom`
 - `@lobehub/ui`, antd for components; antd-style for CSS-in-JS — **prefer `createStaticStyles` with `cssVar.*`** (zero-runtime); only fall back to `createStyles` + `token` when styles genuinely need runtime computation. See `.cursor/docs/createStaticStyles_migration_guide.md`.
-- **Component priority**: `@lobehub/ui/base-ui` (headless primitives) **first**, then `@lobehub/ui` root, then antd as last resort. When the component exists in base-ui, use it — never reach for the root or antd counterpart. Base-ui covers `Select`, `Modal` / `createModal` / `confirmModal`, `DropdownMenu`, `ContextMenu`, `Popover`, `ScrollArea`, `Switch`, `Toast`, `FloatingSheet`. Prefer `@lobehub/ui/base-ui` for new code and migrate root-package call sites opportunistically.
+- **Component priority**: `@lobehub/ui/base-ui` (headless primitives) **first**, then `@lobehub/ui` root, then antd as last resort. When the component exists in base-ui, use it — never reach for the root or antd counterpart. Base-ui covers `Select`, `Modal` / `createModal` / `confirmModal`, `DropdownMenu`, `ContextMenu`, `Popover`, `ScrollArea`, `Switch`, `Toast`, `FloatingSheet`, `Drawer`. Prefer `@lobehub/ui/base-ui` for new code and migrate root-package call sites opportunistically.
 - react-i18next for i18n; zustand for state management
 - SWR for data fetching; TRPC for type-safe backend
 - Drizzle ORM with PostgreSQL; Vitest for testing
@@ -19,32 +19,28 @@ lobehub/
 ├── apps/
 │   ├── desktop/            # Electron desktop app
 │   ├── cli/                # LobeHub CLI
-│   └── server/             # Server service
+│   └── server/             # Backend service (Hono app + server routers/services)
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
 │   ├── agent-runtime/      # Agent runtime
+│   ├── locales/            # i18n source: packages/locales/src/default/
+│   ├── env/                # env schemas (@/envs/* → packages/env/src/*)
 │   └── ...
 ├── src/
-│   ├── app/                # Next.js App Router (backend API + auth)
-│   │   ├── (backend)/     # API routes (trpc, webapi, etc.)
+│   ├── app/                # Next.js App Router (route shell + auth)
+│   │   ├── (backend)/      # Backend route shells
 │   │   ├── spa/            # SPA HTML template service
-│   │   └── [variants]/(auth)/  # Auth pages (SSR required)
-│   ├── routes/             # SPA page components (Vite)
-│   │   ├── (main)/         # Desktop pages
-│   │   ├── (mobile)/       # Mobile pages
-│   │   ├── (desktop)/      # Desktop-specific pages
-│   │   ├── (popup)/        # Popup window pages
-│   │   ├── onboarding/     # Onboarding pages
-│   │   └── share/          # Share pages
+│   │   └── spa-auth/       # Auth HTML shell (SSR)
+│   ├── routes/             # SPA page segments (thin — delegate to features/)
+│   │   ├── (main)/ (mobile)/ (desktop)/ (popup)/
+│   │   ├── auth/           # Auth page segments (signin, signup, …)
+│   │   ├── onboarding/ share/
 │   ├── spa/                # SPA entry points and router config
-│   │   ├── entry.web.tsx   # Web entry
-│   │   ├── entry.mobile.tsx
-│   │   ├── entry.desktop.tsx
-│   │   ├── entry.popup.tsx
+│   │   ├── entry.{web,mobile,desktop,popup}.tsx
 │   │   └── router/         # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
-│   ├── server/             # Server services and routers
+│   ├── libs/               # Shared client/server helpers for the app shell
 │   └── ...
 └── e2e/                    # E2E tests (Cucumber + Playwright)
 ```
@@ -66,9 +62,9 @@ When adding or changing SPA routes:
 1. In `src/routes/`, add only the route segment files (layout + page) that delegate to features.
 2. Implement layout and page content under `src/features/<Domain>/` and export from there.
 3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
-4. **Register the desktop route tree in both configs:** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` must stay in sync (same paths and nesting). Updating only one can cause **blank screens** if the other build path expects the route. `desktopRouter.sync.test.tsx` guards this invariant — keep it passing.
+4. **Register shared desktop content routes once:** add common Web/Electron paths, nesting, metadata, lazy loaders, and `preloadId` values in `src/spa/router/desktopRouter.shared.tsx`. The thin `desktopRouter.config.tsx` and `desktopRouter.config.desktop.tsx` files contain only runtime differences: Web mounts the content tree directly, while Electron keeps slim root stubs and mounts the same tree in per-tab memory routers through `src/spa/router/tabRouter.tsx`. Add code to a platform adapter only when the route is genuinely platform-specific. `desktopRouter.sync.test.tsx` guards the shared behavior and explicit differences — keep it passing.
 
-See the **spa-routes** skill (`.agents/skills/spa-routes/SKILL.md`) for the full convention and file-division rules.
+See the **spa-routes** skill for the full convention and file-division rules.
 
 ## Development
 
@@ -80,7 +76,16 @@ bun run dev:spa
 
 # Full-stack dev (Next.js + Vite SPA concurrently)
 bun run dev
+
+# Standalone Hono backend service
+pnpm --filter @lobechat/server dev
 ```
+
+### Backend Architecture
+
+- Backend runtime code lives under `apps/server/src` and is imported through `@/server/*`.
+- `src/app/(backend)` contains Next.js route shells. Do not add backend business logic there.
+- Web shell helpers belong under `src/libs/*` or the relevant `src/app` segment, not under `src/server`.
 
 After `dev:spa` starts, the terminal prints a **Debug Proxy** URL:
 
@@ -107,23 +112,22 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 ### Quality Check
 
 ```bash
-# Lint (with autofix) + related tests for changed files, or explicit paths
-bun run check [files...] [--lint] [--test] [--type]
+bun run check [changed-files...]
 ```
 
-- `--lint` / `--test` / `--type` are composable selectors; no selector = lint + test. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
-- Tests are auto-routed to the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages. `--type` runs the full type-check.
-- NEVER run `bun run test` — the full suite takes \~10 minutes.
-- Prefer `vi.spyOn` over `vi.mock`
-- Manual fallback when you need unusual flags or a single tool: `bunx vitest run --silent='passed-only' '[file-path]'` from the owning package directory, `bun run type-check` for types.
-- The implementation lives in `.agents/scripts/check/` as a reusable engine. A superproject that vendors this repo as a submodule can ship its own `check` entry that mounts this repo's pipelines; when this repo is checked out as such a submodule, `bun run check` here detects that and delegates to the superproject's entry automatically.
+- Every bug fix must include a corresponding regression test that fails before the fix and passes after it.
+- No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
+- `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
+- `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
+- `--type` runs the full type-check. NEVER run `bun run test` — the full suite takes \~10 minutes.
+- To run tests manually (e.g. a single file or unusual flags), `cd` into the owning package first: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
 
 ### i18n
 
-- Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
-- Ship en-US and zh-CN by hand in the same PR: write the English source in `src/locales/default/*.ts` and mirror it to `locales/en-US/`; hand-translate `locales/zh-CN/`. Leave all other locales to CI.
-- Don't run `pnpm i18n` manually by default — a daily CI workflow (`auto-i18n.yml`) runs it and opens an automated translation PR for any missing keys.
-- Run `pnpm i18n` manually only when your branch needs the translated locales immediately, instead of waiting for the daily job (slow; requires `OPENAI_API_KEY`). Note it only fills keys missing from other locales — value-only edits never need it.
+- Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
+- Ship en-US and zh-CN by hand in the same PR: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
+- Leave all other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Missing locale keys fall back to English until that PR is merged.
+- Run `bun run i18n` manually only when the translated locales are needed immediately instead of waiting for the daily workflow. It is slow and requires `OPENAI_API_KEY`; don't hand-translate the generated locales.
 
 ### Code Style
 
@@ -131,16 +135,6 @@ bun run check [files...] [--lint] [--test] [--type]
 
 ### Code Review
 
-Before reviewing a PR / diff / branch change, read the **deep-review** skill (`.agents/skills/deep-review/SKILL.md`). Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
+Before reviewing a PR / diff / branch change, read the **deep-review** skill. Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
 When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).
-
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-
-**Keep this block, including in commits.** It is part of the project's agent setup, maintained by `next dev` for every agent that works here. If it appears as an uncommitted change, that is intentional — commit it as-is. Do not remove it to clean up a diff; it will be regenerated.
-
-<!-- END:nextjs-agent-rules -->

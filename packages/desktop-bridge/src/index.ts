@@ -8,6 +8,17 @@ export {
   RouteVariants,
 } from './routeVariants';
 
+/**
+ * Marks an anchor whose click the renderer handles itself (Portal / SPA navigation).
+ *
+ * The desktop renderer runs on the `app://renderer` origin, so the preload click
+ * interceptor cannot tell an internal LobeHub URL from a third-party one by origin
+ * alone. The renderer — which owns the route semantics, including runtime-only data
+ * like workspace slugs — declares ownership with this attribute, and the interceptor
+ * leaves those clicks untouched so the React `onClick` can run.
+ */
+export const RENDERER_HANDLED_LINK_ATTR = 'data-lobe-renderer-link';
+
 // Desktop window constants
 export const TITLE_BAR_HEIGHT = 38;
 

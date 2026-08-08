@@ -18,14 +18,20 @@ import {
   SkillResourceService,
 } from '@/server/services/skill';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 // ===== Error Handling =====
 
 const skillImportErrorToTRPCCode = (
   code: SkillImportError['code'],
-): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' => {
+): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' | 'FORBIDDEN' => {
   switch (code) {
     case 'CONFLICT': {
       return 'CONFLICT';
+    }
+
+    case 'FORBIDDEN': {
+      return 'FORBIDDEN';
     }
 
     case 'NOT_FOUND':
@@ -79,7 +85,21 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 // workspaceId). Replaces the legacy `requireWorkspaceRoleWhenScoped('owner')`
 // which was overly restrictive (member should be able to manage skills they
 // own, per the role-permission matrix in @lobechat/const/rbac).
-const skillWriteProcedure = skillProcedure.use(withScopedPermission('agent:update'));
+const skillWriteProcedure = skillProcedure
+  .use(withScopedPermission('agent:update'))
+  // Rebuild the importer AFTER the RBAC middleware so it sees the resolved
+  // workspaceRole — the base-procedure instance is constructed before the
+  // role exists on ctx and would wrongly block owners in assertCanOverwrite.
+  .use(async (opts) => {
+    const { ctx } = opts;
+    return opts.next({
+      ctx: {
+        skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
+          workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
+        }),
+      },
+    });
+  });
 
 const skillResourceProcedure = skillProcedure.use(async (opts) => {
   const { ctx } = opts;
@@ -128,6 +148,10 @@ export const agentSkillsRouter = router({
   delete: skillWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const target = await ctx.skillModel.findById(input.id);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!target) return;
+      assertWorkspaceRowManageable(ctx, target.userId, 'skill');
       return ctx.skillModel.delete(input.id);
     }),
 
@@ -285,6 +309,10 @@ export const agentSkillsRouter = router({
   // ===== Update =====
 
   update: skillWriteProcedure.input(updateSkillSchema).mutation(async ({ ctx, input }) => {
+    const target = await ctx.skillModel.findById(input.id);
+    if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Skill not found' });
+    assertWorkspaceRowManageable(ctx, target.userId, 'skill');
+
     const { id, content, manifest } = input;
     return ctx.skillModel.update(id, {
       content,

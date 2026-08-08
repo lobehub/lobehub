@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import type { FileListItem } from '@/types/files';
 
 import { useExplorerSelectionActions } from '../hooks/useExplorerSelection';
@@ -33,6 +33,7 @@ const VirtualizedFileList = ({
 }: VirtualizedFileListProps) => {
   const {
     clearSelectAllState,
+    isItemSelectable,
     selectAllState,
     selectedFileIds,
     setSelectedFileIds,
@@ -70,7 +71,10 @@ const VirtualizedFileList = ({
         const currentSelected = useResourceManagerStore.getState().selectedFileIds;
         const start = Math.min(lastSelectedIndexRef.current, clickedIndex);
         const end = Math.max(lastSelectedIndexRef.current, clickedIndex);
-        const rangeIds = dataRef.current.slice(start, end + 1).map((item) => item.id);
+        const rangeIds = dataRef.current
+          .slice(start, end + 1)
+          .filter(isItemSelectable)
+          .map((item) => item.id);
         const nextSelected = new Set(currentSelected);
 
         for (const rangeId of rangeIds) {
@@ -84,7 +88,7 @@ const VirtualizedFileList = ({
 
       lastSelectedIndexRef.current = clickedIndex;
     },
-    [clearSelectAllState, setSelectedFileIds, toggleItemSelection],
+    [clearSelectAllState, isItemSelectable, setSelectedFileIds, toggleItemSelection],
   );
 
   return (
@@ -102,23 +106,36 @@ const VirtualizedFileList = ({
         (index: number, item: FileListItem) => {
           if (!item) return null;
 
+          const selectable = isItemSelectable(item);
+
           return (
             <FileListItemComponent
               columnWidths={columnWidths}
               index={index}
               key={item.id}
+              selectable={selectable}
               showUploader={showUploader}
-              selected={isExplorerItemSelected({
-                id: item.id,
-                selectAllState,
-                selectedIds: selectedFileIds,
-              })}
+              selected={
+                selectable &&
+                isExplorerItemSelected({
+                  id: item.id,
+                  selectAllState,
+                  selectedIds: selectedFileIds,
+                })
+              }
               onSelectedChange={handleSelectionChange}
               {...item}
             />
           );
         },
-        [columnWidths, handleSelectionChange, selectAllState, selectedFileIds, showUploader],
+        [
+          columnWidths,
+          handleSelectionChange,
+          isItemSelectable,
+          selectAllState,
+          selectedFileIds,
+          showUploader,
+        ],
       )}
     />
   );

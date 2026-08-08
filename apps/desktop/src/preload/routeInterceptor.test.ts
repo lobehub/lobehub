@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { invoke } from './invoke';
@@ -120,6 +121,45 @@ describe('setupRouteInterceptors', () => {
 
       expect(preventDefaultSpy).not.toHaveBeenCalled();
       expect(invoke).not.toHaveBeenCalledWith('windows.interceptRoute', expect.anything());
+    });
+
+    it('should leave renderer-handled links alone so their onClick can run', async () => {
+      setupRouteInterceptors();
+
+      // An absolute LobeHub URL: a different origin than `app://renderer`, but the
+      // renderer has claimed it and will open it in the portal itself.
+      const link = document.createElement('a');
+      link.href = 'https://app.lobehub.com/verify/run-1';
+      link.setAttribute(RENDERER_HANDLED_LINK_ATTR, 'true');
+      document.body.append(link);
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+      const stopPropagationSpy = vi.spyOn(clickEvent, 'stopPropagation');
+
+      link.dispatchEvent(clickEvent);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(invoke).not.toHaveBeenCalled();
+      expect(preventDefaultSpy).not.toHaveBeenCalled();
+      expect(stopPropagationSpy).not.toHaveBeenCalled();
+    });
+
+    it('should still intercept unclaimed links pointing at the same host', async () => {
+      setupRouteInterceptors();
+
+      const link = document.createElement('a');
+      link.href = 'https://app.lobehub.com/api/webhooks';
+      document.body.append(link);
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      link.dispatchEvent(clickEvent);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(invoke).toHaveBeenCalledWith(
+        'system.openExternalLink',
+        'https://app.lobehub.com/api/webhooks',
+      );
     });
 
     it('should handle non-HTTP link protocols as external links', async () => {

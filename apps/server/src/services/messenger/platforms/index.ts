@@ -2,6 +2,7 @@ import { discord } from './discord';
 import { MessengerPlatformRegistry } from './registry';
 import { slack } from './slack';
 import { telegram } from './telegram';
+import { wechat } from './wechat';
 
 export { MessengerDiscordBinder } from './discord';
 export { MessengerPlatformRegistry } from './registry';
@@ -13,6 +14,7 @@ export type {
   MessengerWebhookContext,
   SerializedMessengerPlatformDefinition,
 } from './types';
+export { MessengerWechatBinder, wechatWebhookGate } from './wechat';
 
 /**
  * Singleton registry — one per process. Each platform definition lives
@@ -21,4 +23,5 @@ export type {
 export const messengerPlatformRegistry = new MessengerPlatformRegistry()
   .register(slack)
   .register(telegram)
-  .register(discord);
+  .register(discord)
+  .register(wechat);

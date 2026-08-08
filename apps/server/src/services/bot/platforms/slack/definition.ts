@@ -1,3 +1,5 @@
+import { channelDocUrl } from '@lobechat/const';
+
 import type { PlatformDefinition } from '../types';
 import { SlackClientFactory } from './client';
 import { DEFAULT_SLACK_CONNECTION_MODE } from './const';
@@ -10,7 +12,7 @@ export const slack: PlatformDefinition = {
   description: 'Connect a Slack bot',
   documentation: {
     portalUrl: 'https://api.slack.com/apps',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/slack',
+    setupGuideUrl: channelDocUrl('slack'),
   },
   schema,
   clientFactory: new SlackClientFactory(),

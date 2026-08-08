@@ -1,10 +1,15 @@
-import { BRANDING_LOGO_URL, BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
+import {
+  APPLE_APP_STORE_ID,
+  BRANDING_LOGO_URL,
+  BRANDING_NAME,
+  ORG_NAME,
+} from '@lobechat/business-const';
 import { OG_URL } from '@lobechat/const';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { OFFICIAL_URL } from '@/const/url';
 import { isCustomBranding, isCustomORG } from '@/const/version';
-import { translation } from '@/server/translation';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
@@ -30,6 +35,7 @@ export const generateMetadata = async (props: DynamicLayoutProps) => {
           icon: isDev ? '/favicon-dev.ico' : '/favicon.ico?v=1',
           shortcut: isDev ? '/favicon-32x32-dev.ico' : '/favicon-32x32.ico?v=1',
         },
+    ...(APPLE_APP_STORE_ID ? { itunes: { appId: APPLE_APP_STORE_ID } } : {}),
     manifest: '/manifest.json',
     metadataBase: new URL(OFFICIAL_URL),
     openGraph: {

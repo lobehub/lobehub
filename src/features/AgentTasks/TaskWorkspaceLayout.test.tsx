@@ -5,9 +5,11 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetNavPanel } from '@/features/NavPanel';
-
 import TaskWorkspaceLayout from './TaskWorkspaceLayout';
+
+const mocks = vi.hoisted(() => ({
+  isMobile: false,
+}));
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
@@ -29,24 +31,31 @@ vi.mock('@/features/AgentTaskManager', () => ({
   default: () => <div data-testid="task-agent-manager" />,
 }));
 
-vi.mock('@/features/NavPanel', () => ({
-  resetNavPanel: vi.fn(),
+vi.mock('@/features/Portal/Mobile', () => ({
+  default: () => <div data-testid="mobile-task-portal" />,
 }));
-
 vi.mock('@/hooks/useIsMobile', () => ({
-  useIsMobile: () => false,
+  useIsMobile: () => mocks.isMobile,
 }));
 
 describe('TaskWorkspaceLayout', () => {
   beforeEach(() => {
-    vi.mocked(resetNavPanel).mockClear();
+    mocks.isMobile = false;
   });
 
-  it('resets the nav panel to the home sidebar fallback', () => {
+  it('renders the task workspace without mutating global NavPanel state', () => {
     render(<TaskWorkspaceLayout />);
 
-    expect(resetNavPanel).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('task-workspace-outlet')).toBeInTheDocument();
     expect(screen.getByTestId('task-agent-manager')).toBeInTheDocument();
+  });
+
+  it('mounts the Portal surface instead of the desktop task manager on mobile', () => {
+    mocks.isMobile = true;
+
+    render(<TaskWorkspaceLayout />);
+
+    expect(screen.getByTestId('mobile-task-portal')).toBeInTheDocument();
+    expect(screen.queryByTestId('task-agent-manager')).not.toBeInTheDocument();
   });
 });

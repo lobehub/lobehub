@@ -2,17 +2,14 @@ import type { BaseSignUpFormValues } from '@/features/Auth/SignUp/types';
 
 export interface BusinessSignupFomData {}
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export const useBusinessSignup = (form: any) => {
+export const useBusinessSignup = (_form: any) => {
   return {
     businessElement: null,
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    getCaptchaTokenOnError: async (error: unknown) => undefined as string | null | undefined,
+    getCaptchaTokenOnError: async (_error: unknown) => undefined as string | null | undefined,
     getFetchOptions: async () => {
       return {};
     },
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    preSocialSignupCheck: async (values: BusinessSignupFomData & BaseSignUpFormValues) => {
+    preSocialSignupCheck: async (_values: BusinessSignupFomData & BaseSignUpFormValues) => {
       return true;
     },
   };

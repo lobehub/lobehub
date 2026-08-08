@@ -43,6 +43,8 @@ let serverDB: LobeChatDatabase;
 let userId: string;
 let testAgentWithToolsId: string;
 
+const MULTI_ROUND_AGENT_TEST_TIMEOUT = 15_000;
+
 const createTestContext = () => ({
   jwtPayload: { userId },
   userId,
@@ -101,7 +103,7 @@ const createMockResponseWithMultipleTools = (roundNum: number) => {
       item: {
         type: 'function_call',
         call_id: toolCallId2,
-        name: 'lobe-web-browsing____crawl',
+        name: 'lobe-web-browsing____crawlSinglePage',
         arguments: JSON.stringify({ url: `https://example.com/page${roundNum}` }),
       },
     },
@@ -135,7 +137,7 @@ const createMockResponseWithMultipleTools = (roundNum: number) => {
           {
             type: 'function_call',
             call_id: toolCallId2,
-            name: 'lobe-web-browsing____crawl',
+            name: 'lobe-web-browsing____crawlSinglePage',
             arguments: JSON.stringify({ url: `https://example.com/page${roundNum}` }),
           },
         ],
@@ -334,7 +336,7 @@ describe('Multi-Round Tool Execution', () => {
     expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
 
     mockExecuteTool.mockRestore();
-  });
+  }, MULTI_ROUND_AGENT_TEST_TIMEOUT);
 
   it('should maintain correct state.messages structure in AgentState across tool rounds', async () => {
     let callCount = 0;
@@ -405,5 +407,5 @@ describe('Multi-Round Tool Execution', () => {
     expect(totalToolCalls).toBe(4);
 
     mockExecuteTool.mockRestore();
-  });
+  }, MULTI_ROUND_AGENT_TEST_TIMEOUT);
 });

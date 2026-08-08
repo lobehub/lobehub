@@ -1,14 +1,81 @@
-import { buildTaskRunPrompt } from '@lobechat/prompts';
+import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
 import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
 
+import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
+import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
+
+/** Cap on unresolved checks carried into the next round's prompt. */
+const MAX_GOAL_FAILED_CHECKS = 8;
+
+/**
+ * For a goal task that already ran at least one round, collect what the next
+ * round must know: the previous round's unresolved checks (with the verifier's
+ * why/suggestion) and the user's reject comment, both read off the task's
+ * acceptance aggregate. Best-effort — any lookup failure degrades to the bare
+ * round counters so prompt building never blocks a run.
+ */
+const resolveGoalLoopContext = async (
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+): Promise<TaskRunPromptGoalLoop | undefined> => {
+  const { db, taskModel, userId, workspaceId } = deps;
+  const goal = taskModel.getGoalConfig(task);
+  if (!goal || !task.totalTopics) return undefined;
+
+  const budget = resolveGoalRoundBudget(goal);
+  const context: TaskRunPromptGoalLoop = {
+    maxRounds: Number.isFinite(budget) ? budget : null,
+    round: (task.totalTopics || 0) + 1,
+  };
+
+  try {
+    const acceptance = await new AcceptanceModel(db, userId, workspaceId).findBySubject(
+      'task',
+      task.id,
+    );
+    if (!acceptance) return context;
+
+    const runs = await new VerifyRunModel(db, userId, workspaceId).listByAcceptance(acceptance.id);
+    const last = runs.at(-1);
+    if (!last) return context;
+
+    if (last.userDecision === 'reject') {
+      const comment = (last.decisionDetail as { comment?: string } | null)?.comment;
+      if (comment) context.rejectComment = comment;
+    }
+
+    const plan = (last.plan ?? []) as Array<{ id: string; title: string }>;
+    const results = await new VerifyCheckResultModel(db, userId, workspaceId).listByRun(last.id);
+    const byItem = new Map(results.map((r) => [r.checkItemId, r]));
+    const failed = plan
+      .filter((item) => {
+        const r = byItem.get(item.id);
+        return (
+          !!r &&
+          r.status !== 'errored' &&
+          (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain')
+        );
+      })
+      .map((item) => {
+        const r = byItem.get(item.id);
+        return { title: item.title, why: r?.suggestion || r?.toulmin?.reasoning || undefined };
+      });
+    if (failed.length > 0) context.failedChecks = failed.slice(0, MAX_GOAL_FAILED_CHECKS);
+    return context;
+  } catch {
+    return context;
+  }
+};
 
 export interface BuildTaskPromptDeps {
   briefModel: BriefModel;
@@ -194,7 +261,10 @@ export async function buildTaskPrompt(
       });
   }
 
+  const goalLoop = await resolveGoalLoopContext(task, deps);
+
   const prompt = buildTaskRunPrompt({
+    ...(goalLoop ? { goalLoop } : {}),
     activities: {
       briefs: briefs.map((b: any) => ({
         createdAt: b.createdAt,
@@ -240,12 +310,14 @@ export async function buildTaskPrompt(
     parentTask: parentTaskContext,
     task: {
       assigneeAgentId: task.assigneeAgentId,
+      automationMode: task.automationMode,
       dependencies: dependencies.map((d: any) => ({
         dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
         type: d.type,
       })),
       description: task.description,
       ...(taskFiles.length > 0 ? { files: taskFiles } : {}),
+      heartbeatInterval: task.heartbeatInterval,
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
@@ -253,6 +325,8 @@ export async function buildTaskPrompt(
       parentIdentifier,
       priority: task.priority,
       review: taskModel.getReviewConfig(task) as any,
+      schedulePattern: task.schedulePattern,
+      scheduleTimezone: task.scheduleTimezone,
       status: task.status,
       verify: verifyEnabled
         ? {

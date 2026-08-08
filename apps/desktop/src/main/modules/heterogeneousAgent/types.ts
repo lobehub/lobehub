@@ -1,3 +1,5 @@
+import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
+
 export interface HeterogeneousAgentImageAttachment {
   id: string;
   url: string;
@@ -9,27 +11,20 @@ export interface HeterogeneousAgentBuildPlan {
 }
 
 export interface HeterogeneousAgentBuildPlanHelpers {
-  buildClaudeStreamJsonInput: (
-    prompt: string,
-    imageList: HeterogeneousAgentImageAttachment[],
-    systemContext?: string,
-  ) => Promise<string>;
-  resolveCliImagePaths: (imageList: HeterogeneousAgentImageAttachment[]) => Promise<string[]>;
+  buildAgentInput: (agentType: string, input: AgentPromptInput) => Promise<AgentInputPlan>;
 }
 
 export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
   helpers: HeterogeneousAgentBuildPlanHelpers;
-  imageList: HeterogeneousAgentImageAttachment[];
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for
    * the local `lobe_cc` AskUserQuestion server). Drivers that recognize the
    * field append `--mcp-config <path>`; others ignore it.
    */
   mcpConfigPath?: string;
-  prompt: string;
+  promptInput: AgentPromptInput;
   resumeSessionId?: string;
-  systemContext?: string;
 }
 
 /**

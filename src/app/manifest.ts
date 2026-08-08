@@ -25,7 +25,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
     await Promise.all([
       import('@lobechat/business-const'),
       import('es-toolkit/compat'),
-      import('@/server/manifest'),
+      import('@/libs/metadata/manifest'),
     ]);
 
   // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties

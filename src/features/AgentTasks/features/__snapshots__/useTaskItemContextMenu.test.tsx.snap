@@ -1,0 +1,8 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`menu ownership > must stay web because the status/priority submenus depend on number-shortcut extra badges 1`] = `
+{
+  "menu": "AgentTasks/taskItem",
+  "native": false,
+}
+`;

@@ -141,7 +141,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Return special state recognized by AgentRuntime's legacy exec_sub_agent executor.
+      // Return special state recognized by AgentRuntime's exec_sub_agent executor.
       // callAgent keeps this alias until it is redesigned as an explicit agent invocation.
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,

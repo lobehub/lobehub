@@ -22,10 +22,12 @@ import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { usePermission } from '@/hooks/usePermission';
+import { useSingleton } from '@/hooks/useSingleton';
 import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -37,6 +39,8 @@ import {
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import {
   INSERT_ACTION_TAG_COMMAND,
@@ -75,10 +79,12 @@ type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
 const InputEditor = memo<{
   defaultRows?: number;
+  initialContent?: string;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
-}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+}>(({ defaultRows = 2, initialContent = '', placeholder, placeholderVariant }) => {
   const { t } = useTranslation('chat');
+  const mobile = useServerConfigStore((s) => s.isMobile);
   const [
     editor,
     slashMenuRef,
@@ -108,6 +114,9 @@ const InputEditor = memo<{
   const restoredDraftEditorRef = useRef<IEditor | null>(null);
   const state = useEditorState(editor);
   const { allowed: canCreateContent } = usePermission('create_content');
+  // view-level General access on the bound agent/group = full read-only input,
+  // matching the workspace-viewer treatment (ChatInputNotice explains why).
+  const { canUseResource } = useChatInputResourceAccess();
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const userId = useUserStore(userProfileSelectors.userId);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -133,8 +142,7 @@ const InputEditor = memo<{
   const categories = useMentionCategories();
 
   // Get agent's model info for vision support check and handle paste upload
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
   const heterogeneousType = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
@@ -156,7 +164,9 @@ const InputEditor = memo<{
   const fuse = useMemo(
     () =>
       new Fuse(allMentionItems, {
-        keys: ['key', 'label', 'metadata.topicTitle'],
+        // Agent labels are ReactNodes (name + role + description), which Fuse
+        // skips — their searchable text lives in `metadata.label`/`searchText`.
+        keys: ['key', 'label', 'metadata.label', 'metadata.searchText', 'metadata.topicTitle'],
         threshold: 0.3,
       }),
     [allMentionItems],
@@ -262,18 +272,20 @@ const InputEditor = memo<{
     storeApi.getState().clearInputCompletionError();
   }, [inputCompletionConfig.model, inputCompletionConfig.provider, storeApi]);
 
-  const getMessagesRef = useRef(storeApi.getState().getMessages);
+  const getMessagesRef = useSingleton(() => ({
+    current: storeApi.getState().getMessages,
+  }));
   useEffect(() => {
     return storeApi.subscribe((s) => {
       getMessagesRef.current = s.getMessages;
     });
-  }, [storeApi]);
+  }, [getMessagesRef, storeApi]);
 
   // Map each in-flight suggestion to its tracing row so the Tab/Esc/typing
   // callbacks below can report `recordFeedback` against the correct id.
   // Keyed by editor-provided `suggestionId`; entries are dropped on
   // accept/reject (the plugin guarantees one of those eventually fires).
-  const tracingIdBySuggestionRef = useRef<Map<string, string>>(new Map());
+  const tracingIdBySuggestion = useSingleton(() => new Map<string, string>());
 
   const handleAutoComplete = useCallback(
     async ({
@@ -348,11 +360,11 @@ const InputEditor = memo<{
       if (!completion) return null;
 
       if (suggestionId && envelope?.tracingId) {
-        tracingIdBySuggestionRef.current.set(suggestionId, envelope.tracingId);
+        tracingIdBySuggestion.set(suggestionId, envelope.tracingId);
       }
       return completion;
     },
-    [isComposingRef, storeApi, agentId],
+    [agentId, getMessagesRef, isComposingRef, storeApi, tracingIdBySuggestion],
   );
 
   const handleSuggestionAccepted = useCallback(
@@ -365,9 +377,9 @@ const InputEditor = memo<{
       suggestionId: string;
       visibleMs: number;
     }) => {
-      const tracingId = tracingIdBySuggestionRef.current.get(suggestionId);
+      const tracingId = tracingIdBySuggestion.get(suggestionId);
       if (!tracingId) return;
-      tracingIdBySuggestionRef.current.delete(suggestionId);
+      tracingIdBySuggestion.delete(suggestionId);
       aiChatService
         .recordTracingFeedback({
           data: { acceptedText, visibleMs },
@@ -379,7 +391,7 @@ const InputEditor = memo<{
           console.warn('[InputCompletion] recordFeedback (accepted) failed', err);
         });
     },
-    [],
+    [tracingIdBySuggestion],
   );
 
   const handleSuggestionRejected = useCallback(
@@ -392,9 +404,9 @@ const InputEditor = memo<{
       suggestionId: string;
       visibleMs: number;
     }) => {
-      const tracingId = tracingIdBySuggestionRef.current.get(suggestionId);
+      const tracingId = tracingIdBySuggestion.get(suggestionId);
       if (!tracingId) return;
-      tracingIdBySuggestionRef.current.delete(suggestionId);
+      tracingIdBySuggestion.delete(suggestionId);
       // IME composition starts by dispatching KEY_ESCAPE_COMMAND from this
       // component (see onCompositionStart below); that arrives here with
       // reason='esc' but it isn't a real reject — recode as neutral so the
@@ -414,7 +426,7 @@ const InputEditor = memo<{
           console.warn('[InputCompletion] recordFeedback (rejected) failed', err);
         });
     },
-    [isComposingRef],
+    [isComposingRef, tracingIdBySuggestion],
   );
 
   const autoCompletePlugin = useMemo(
@@ -461,8 +473,10 @@ const InputEditor = memo<{
         path: String(option.metadata.path ?? ''),
       });
     } else {
+      // Agent options carry a ReactNode label; the chip needs the plain name
+      // kept in `metadata.label`. Other types (member) still use `label` itself.
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-        label: String(option.label),
+        label: String(option.metadata?.label ?? option.label),
         metadata: option.metadata,
       });
     }
@@ -536,8 +550,8 @@ const InputEditor = memo<{
         autoFocus
         pasteAsPlainText
         className={className}
-        content={''}
-        editable={canCreateContent}
+        content={initialContent}
+        editable={canCreateContent && canUseResource}
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
         {...{ slashPlacement }}
@@ -560,6 +574,7 @@ const InputEditor = memo<{
           )
         }
         style={{
+          fontSize: mobile ? 16 : undefined,
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}

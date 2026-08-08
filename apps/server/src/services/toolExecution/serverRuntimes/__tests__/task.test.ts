@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime } from '../task';
 
+const verifyMocks = vi.hoisted(() => ({ createCriteriaFromDrafts: vi.fn() }));
+
 vi.mock('@/server/routers/lambda/task', () => ({
   taskRouter: { createCaller: () => ({}) },
 }));
@@ -21,7 +23,114 @@ vi.mock('@/server/services/task', () => ({
   TaskService: vi.fn(),
 }));
 
+vi.mock('@/server/services/verify/planGenerator', () => ({
+  VerifyPlanGeneratorService: vi.fn().mockImplementation(() => verifyMocks),
+}));
+
 describe('createTaskRuntime', () => {
+  describe('createGoal', () => {
+    it('leaves an omitted round budget unset so the default cap applies', async () => {
+      verifyMocks.createCriteriaFromDrafts.mockResolvedValueOnce(['criterion-1']);
+      const taskCaller = {
+        run: vi.fn().mockResolvedValue({ operationId: 'op-1', topicId: 'topic-1' }),
+        updateVerifyConfig: vi.fn().mockResolvedValue(undefined),
+      };
+      const taskModel = { updateTaskConfig: vi.fn().mockResolvedValue(undefined) };
+      const taskService = {
+        createTask: vi.fn().mockResolvedValue({
+          id: 'task-db-1',
+          identifier: 'T-1',
+          name: 'Ship homepage',
+          priority: 0,
+          status: 'backlog',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentId: 'agt-1',
+        agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
+        db: {} as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+        topicId: 'origin-topic',
+        userId: 'user-1',
+      });
+
+      await runtime.createGoal({
+        criteria: [{ title: 'LCP under two seconds' }],
+        instruction: 'Make the homepage fast.',
+        name: 'Ship homepage',
+      });
+
+      // `null` means "uncapped"; coercing an omitted budget into it would let a
+      // failing goal spawn rounds forever.
+      const [, config] = taskModel.updateTaskConfig.mock.calls[0];
+      expect(config.goal.maxIterations).toBeUndefined();
+    });
+
+    it('creates, configures, and starts one verified task', async () => {
+      verifyMocks.createCriteriaFromDrafts.mockResolvedValueOnce(['criterion-1']);
+      const taskCaller = {
+        run: vi.fn().mockResolvedValue({ operationId: 'op-1', topicId: 'topic-1' }),
+        updateVerifyConfig: vi.fn().mockResolvedValue(undefined),
+      };
+      const taskModel = { updateTaskConfig: vi.fn().mockResolvedValue(undefined) };
+      const taskService = {
+        createTask: vi.fn().mockResolvedValue({
+          id: 'task-db-1',
+          identifier: 'T-1',
+          name: 'Ship homepage',
+          priority: 0,
+          status: 'backlog',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentId: 'agt-1',
+        agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
+        db: {} as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+        topicId: 'origin-topic',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.createGoal({
+        criteria: [{ title: 'LCP under two seconds' }],
+        instruction: 'Redesign and ship the homepage',
+        maxIterations: 3,
+        maxTotalCost: 12,
+        name: 'Ship homepage',
+      });
+
+      expect(result.success).toBe(true);
+      expect(verifyMocks.createCriteriaFromDrafts).toHaveBeenCalledWith([
+        expect.objectContaining({ onFail: 'auto_repair', required: true }),
+      ]);
+      expect(taskCaller.updateVerifyConfig).toHaveBeenCalledWith({
+        id: 'task-db-1',
+        verify: expect.objectContaining({
+          enabled: true,
+          maxIterations: 3,
+          verifyCriteriaIds: ['criterion-1'],
+        }),
+      });
+      expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-db-1', {
+        goal: { maxIterations: 3, maxTotalCost: 12, originTopicId: 'origin-topic' },
+      });
+      expect(taskCaller.run).toHaveBeenCalledWith({ id: 'task-db-1' });
+      expect(taskModel.updateTaskConfig.mock.invocationCallOrder[0]).toBeLessThan(
+        taskCaller.updateVerifyConfig.mock.invocationCallOrder[0],
+      );
+      // The success branch is the only one carrying `state`; narrow to it so
+      // this asserts the shape rather than the union.
+      expect(result).toHaveProperty('state');
+      expect((result as { state: unknown }).state).toEqual(
+        expect.objectContaining({ identifier: 'T-1', success: true, taskId: 'task-db-1' }),
+      );
+    });
+  });
+
   describe('task comments', () => {
     it('adds a comment to the current task with agent attribution', async () => {
       const taskCaller = {
@@ -190,6 +299,36 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('[T-1](https://app.lobehub.com/acme/task/T-1)');
+    });
+
+    it('surfaces the created task identity in state (the dispatch-layer registration source)', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        assistantMessageId: 'msg-assistant',
+        operationId: 'op-1',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+        threadId: 'thread-1',
+        toolCallId: 'tool-call-1',
+        toolMessageId: 'msg-tool',
+        topicId: 'topic-1',
+      });
+
+      const result = await runtime.createTask({
+        instruction: 'Do something',
+        name: 'Test',
+      });
+
+      // Work registration now happens at the tool-execution dispatch layer, which
+      // reads the created task's identity from `result.state`.
+      expect(result.success).toBe(true);
+      expect(result).toMatchObject({
+        state: { identifier: 'T-1', success: true, taskId: 'task-1' },
+      });
     });
 
     it('leaves createdByAgentId undefined when no agentId in context', async () => {
@@ -445,6 +584,46 @@ describe('createTaskRuntime', () => {
       expect(deps.taskModel.update).not.toHaveBeenCalled();
       expect(result.content).toContain('parent cleared');
     });
+
+    it('applies an edit and succeeds (identity flows to dispatch-layer registration via args)', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-manager',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+        toolCallId: 'tool-call-edit',
+      });
+
+      const result = await runtime.editTask({
+        identifier: 'T-1',
+        name: 'Edited',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('name → "Edited"');
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', name: 'Edited' });
+    });
+
+    it('returns failure when no fields are provided', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-manager',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.editTask({ identifier: 'T-1' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe('No fields provided; nothing to update.');
+      expect(deps.taskCaller.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('listTasks', () => {
@@ -493,7 +672,7 @@ describe('createTaskRuntime', () => {
       };
     };
 
-    it('creates each task and aggregates a header line + per-item summary', async () => {
+    it('creates each task and aggregates a header line + per-item summary + state', async () => {
       const deps = makeDeps();
       const runtime = createTaskRuntime({
         agentModel: deps.agentModel as any,
@@ -517,6 +696,18 @@ describe('createTaskRuntime', () => {
       // clickable when the message is delivered to IM / mobile.
       expect(result.content).toContain('[T-A](https://app.lobehub.com/task/T-A)');
       expect(result.content).toContain('[T-B](https://app.lobehub.com/task/T-B)');
+      expect(result.content).toContain('T-A');
+      expect(result.content).toContain('T-B');
+      // State parity with the client executor: the dispatch-layer registration
+      // reads per-item identity + success from `state.results`.
+      expect(result.state).toEqual({
+        failed: 0,
+        results: [
+          { error: undefined, identifier: 'T-A', name: 'A', success: true },
+          { error: undefined, identifier: 'T-B', name: 'B', success: true },
+        ],
+        succeeded: 2,
+      });
     });
 
     it('continues past per-item failures and reports them in the summary', async () => {
@@ -565,6 +756,88 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(deps.taskService.createTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setTaskSchedule / setTaskVerify / updateTaskStatus', () => {
+    it('applies schedule changes and succeeds', async () => {
+      const taskCaller = {
+        update: vi.fn().mockResolvedValue({}),
+        updateConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        automationMode: 'schedule',
+        identifier: 'T-1',
+        schedulePattern: '0 9 * * *',
+      });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.update).toHaveBeenCalledWith(
+        expect.objectContaining({ automationMode: 'schedule', id: 'task-1' }),
+      );
+    });
+
+    it('applies verify config changes and succeeds', async () => {
+      const taskCaller = {
+        updateVerifyConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-verify',
+      });
+
+      const result = await runtime.setTaskVerify({
+        enabled: true,
+        identifier: 'T-1',
+        requirement: 'The output must include a working demo.',
+      });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.updateVerifyConfig).toHaveBeenCalledWith({
+        id: 'task-1',
+        verify: {
+          enabled: true,
+          requirement: 'The output must include a working demo.',
+        },
+      });
+    });
+
+    it('handles status-only updates', async () => {
+      const taskCaller = {
+        updateStatus: vi.fn().mockResolvedValue({ data: { identifier: 'T-1' } }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: {} as any,
+        taskService: {} as any,
+      });
+
+      const result = await runtime.updateTaskStatus({ identifier: 'T-1', status: 'completed' });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.updateStatus).toHaveBeenCalledWith({
+        error: undefined,
+        id: 'T-1',
+        status: 'completed',
+      });
     });
   });
 
