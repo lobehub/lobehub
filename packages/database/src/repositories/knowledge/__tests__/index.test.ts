@@ -288,6 +288,20 @@ describe('KnowledgeRepo', () => {
     });
 
     it('should filter by category - Files returns raw data files only', async () => {
+      // Document-table rows (agent instructions, derived docs) must never leak
+      // into the Files category even when their fileType matches no other bucket.
+      await serverDB.insert(documents).values([
+        {
+          id: 'doc-verify-instruction',
+          userId,
+          title: 'Verification checklist',
+          fileType: 'verify/instruction',
+          sourceType: 'agent',
+          source: 'internal://verify/doc-verify-instruction',
+          totalCharCount: 100,
+          totalLineCount: 5,
+        },
+      ]);
       await serverDB.insert(files).values([
         {
           id: 'file-raw-json',
@@ -320,6 +334,9 @@ describe('KnowledgeRepo', () => {
             item.fileType !== 'application/pdf',
         ),
       ).toBe(true);
+      // no documents-table rows at all, whatever their fileType
+      expect(ids).not.toContain('doc-verify-instruction');
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
     });
 
     it('should search by query', async () => {

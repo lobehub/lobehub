@@ -652,9 +652,14 @@ export class KnowledgeRepo {
       );
     }
 
-    // Category filter - match documents by fileType
+    // Category filter - match documents by fileType. The Files category means
+    // raw uploaded data files, which never live in the documents table — treat
+    // it like the other excluded categories below.
     if (category && category !== FilesTabs.All) {
-      const categoryFilter = buildFileTypeCategoryFilter(documents.fileType, category as FilesTabs);
+      const categoryFilter =
+        category === FilesTabs.Files
+          ? undefined
+          : buildFileTypeCategoryFilter(documents.fileType, category as FilesTabs);
       if (categoryFilter) {
         whereConditions.push(categoryFilter);
       } else {
@@ -718,12 +723,12 @@ export class KnowledgeRepo {
         kbWhereConditions.push(sql`(d.visibility = 'public' OR d.visibility IS NULL)`);
       }
 
-      // Category filter
+      // Category filter (Files never matches document rows — see above)
       if (category && category !== FilesTabs.All) {
-        const categoryFilter = buildFileTypeCategoryFilter(
-          sql.raw('d.file_type'),
-          category as FilesTabs,
-        );
+        const categoryFilter =
+          category === FilesTabs.Files
+            ? undefined
+            : buildFileTypeCategoryFilter(sql.raw('d.file_type'), category as FilesTabs);
         if (categoryFilter) {
           kbWhereConditions.push(categoryFilter);
         } else {
