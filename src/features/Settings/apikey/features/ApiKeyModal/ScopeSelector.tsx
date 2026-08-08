@@ -4,6 +4,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { Checkbox } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { Check } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,6 +35,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+  `,
+  grantCheck: css`
+    flex: none;
+    color: ${cssVar.colorSuccess};
+  `,
+  /* Granted-only list: one row per domain the key actually reaches. Hairline
+     separators, no card-in-card — the surrounding card is the container. */
+  grantList: css`
+    padding-block: 4px;
+    padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+  `,
+  grantRow: css`
+    padding-block: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    &:last-child {
+      border-block-end: none;
+    }
   `,
   groupTitle: css`
     font-size: 12px;
@@ -82,6 +103,54 @@ const SCOPE_GROUPS = [
   },
   { key: 'user', label: 'apikey.scopes.groups.user', read: 'user:read', write: 'user:write' },
 ] as const satisfies { key: string; label: string; read: ApiKeyScope; write: ApiKeyScope }[];
+
+export interface ScopeOverviewProps {
+  scopes: string[];
+}
+
+/**
+ * What the key can actually do, one row per granted domain.
+ *
+ * Deliberately NOT the creation grid frozen read-only: creation must offer
+ * every option because you are choosing, but inspection answers "what does
+ * this key reach", and a 15-cell grid with 4 ticks buries that answer in the
+ * 11 it doesn't have. Granted scopes are rendered verbatim from storage (no
+ * write→read derivation), so the list stays an honest mirror of the database.
+ */
+export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
+  const { t } = useTranslation('auth');
+  const scopeSet = new Set(scopes);
+  const separator = t('apikey.scopes.separator');
+
+  const grants = SCOPE_GROUPS.flatMap((group) => {
+    const actions = [
+      scopeSet.has(group.read) && t('apikey.scopes.read'),
+      scopeSet.has(group.write) && t('apikey.scopes.write'),
+      group.key === 'model' && scopeSet.has('model:invoke') && t('apikey.scopes.invoke'),
+    ].filter(Boolean) as string[];
+
+    return actions.length > 0 ? [{ actions, key: group.key, label: t(group.label) }] : [];
+  });
+
+  // A restricted key always carries at least one scope, but never render an
+  // empty bordered box if that invariant ever breaks.
+  if (grants.length === 0) return <Text type={'secondary'}>{t('apikey.scopes.none')}</Text>;
+
+  return (
+    <Flexbox className={styles.grantList}>
+      {grants.map((grant) => (
+        <Flexbox horizontal align={'center'} className={styles.grantRow} gap={10} key={grant.key}>
+          <Check className={styles.grantCheck} size={16} />
+          <span style={{ fontSize: 13 }}>
+            <strong>{grant.label}</strong>
+            {t('apikey.scopes.grantJoin')}
+            {grant.actions.join(separator)}
+          </span>
+        </Flexbox>
+      ))}
+    </Flexbox>
+  );
+};
 
 export interface ScopeSelectorProps {
   fullAccess: boolean;
