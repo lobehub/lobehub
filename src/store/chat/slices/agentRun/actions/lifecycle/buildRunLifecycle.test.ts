@@ -41,15 +41,10 @@ const CONTEXT: ConversationContext = {
 } as ConversationContext;
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
-  // Stands in for `messageService.removeMessage` — the one server-side delete both
-  // delete paths funnel into. Asserting on it (rather than on whichever store
-  // action was called) is what makes the topic-switch test below non-tautological:
-  // the active-scoped path can be called and still never reach the server.
+  // Shared server-side delete both paths funnel into — asserting on this rather
+  // than on the store action is what makes the topic-switch test non-tautological.
   const removeMessage = vi.fn(async (_id: string, _context: unknown) => {});
 
-  // Stands in for `internal_getConversationContext`: both delete paths resolve the
-  // conversation from the operation before hitting the service, so the only thing
-  // that differs between them is WHETHER they get that far.
   const resolveContext = (context?: { operationId?: string }) =>
     context?.operationId
       ? store.operations[context.operationId as keyof typeof store.operations]?.context
@@ -61,12 +56,8 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
-    // Faithful to publicApi.deleteMessage: it resolves the target through the
-    // REAL `getDisplayMessageById` selector (active conversation only) and
-    // early-returns when that misses — the #17723 topic-switch hole. No test
-    // asserts on it directly; it is the contrast path, and modelling it honestly
-    // is what makes the topic-switch test below fail if the cleanup is ever
-    // pointed back at the active-scoped delete.
+    // Contrast path: resolves via the REAL getDisplayMessageById selector
+    // (active conversation only), so it misses after a topic switch (#17723).
     deleteMessage: vi.fn(async (id: string, context?: { operationId?: string }) => {
       const message = displayMessageSelectors.getDisplayMessageById(id)(store as any);
       if (!message) return;
@@ -77,9 +68,8 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
-    // Faithful to optimisticUpdate.optimisticDeleteMessage: it resolves the
-    // conversation from the OPERATION's context, so it is independent of whichever
-    // topic happens to be active.
+    // Resolves the conversation from the operation's context, independent of
+    // whichever topic is active.
     optimisticDeleteMessage: vi.fn(async (id: string, context?: { operationId?: string }) => {
       await removeMessage(id, resolveContext(context));
     }),
@@ -298,11 +288,6 @@ describe('buildRunLifecycle.completeRun — client resets a viewed topic out of 
   });
 });
 
-// A cancelled run can leave its assistant placeholder empty (aborted before it
-// produced anything — e.g. Stop during TTFT or provider-retry backoff). Nothing
-// on the cancel path finalizes it, so it renders as a perpetually-"generating"
-// empty bubble that survives reloads in server DB mode (#17723). completeRun
-// drops such a placeholder on the cancelled disposition.
 describe('buildRunLifecycle.completeRun — removes the orphan empty placeholder on cancel', () => {
   const KEY = messageMapKey(CONTEXT);
   const emptyAssistant = { content: '', id: 'a-empty', parentId: 'u1', role: 'assistant' } as any;
@@ -389,19 +374,12 @@ describe('buildRunLifecycle.completeRun — removes the orphan empty placeholder
     expect(store.optimisticDeleteMessage).not.toHaveBeenCalled();
   });
 
-  // Regression for the review finding on #17864: the cleanup used to go through
-  // `deleteMessage`, which resolves its target with
-  // `displayMessageSelectors.getDisplayMessageById` — the ACTIVE conversation only.
-  // Stop, then switch topic before the cleanup lands, and that lookup misses, the
-  // delete silently no-ops, and the orphan row this fix exists to remove survives.
-  // The operation-scoped path resolves the run's own conversation instead.
+  // Regression for #17864: deleteMessage resolves via the active conversation
+  // only, so it must not be the one used once the user has switched topics.
   it('still deletes the placeholder when the user switched topics before the cleanup ran', async () => {
     const { get, removeMessage, store } = makeStore();
 
-    // The run's placeholder lives under the RUN's conversation key...
     store.messagesMap = { [KEY]: [emptyAssistant] } as any;
-    // ...while the user has already moved to a DIFFERENT topic, which is what the
-    // active-conversation lookup would search (and miss).
     store.activeTopicId = 't2';
     expect(displayMessageSelectors.getDisplayMessageById('a-empty')(store as any)).toBeUndefined();
 
@@ -409,10 +387,6 @@ describe('buildRunLifecycle.completeRun — removes the orphan empty placeholder
       completeEvent('client', { runtimeStatus: 'interrupted' }),
     );
 
-    // The server-side delete actually fired, resolved against the RUN's own
-    // conversation rather than the now-active one. This is the assertion that
-    // catches the bug: the active-scoped path reaches its store action too, then
-    // silently drops the delete on the missed lookup and never gets here.
     expect(removeMessage).toHaveBeenCalledWith('a-empty', CONTEXT);
     expect(store.optimisticDeleteMessage).toHaveBeenCalledWith('a-empty', { operationId: OP });
   });

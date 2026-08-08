@@ -247,10 +247,6 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
   });
 });
 
-// The retry loop only re-checks for cancellation AFTER `waitForRetry` resolves,
-// so the backoff wait must be abort-aware: a Stop landing mid-backoff has to
-// resolve it immediately instead of blocking for the full exponential delay,
-// during which the topic stays `running` and can be stranded there (#17723).
 describe('ClientLLMTransport.retryPolicy.waitForRetry · abort-aware backoff', () => {
   const createRetryPolicy = () => {
     const abortController = new AbortController();

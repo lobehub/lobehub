@@ -187,13 +187,8 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
     // Already stopped before the backoff even began — don't wait at all.
     if (signal?.aborted) return;
 
-    // Race the backoff delay against the operation's abort signal. The retry
-    // loop (packages/agent-runtime `call_llm`) only re-checks for cancellation
-    // AFTER `waitForRetry` resolves, so a plain `sleep` here swallows a Stop that
-    // lands mid-backoff until the full (exponential) delay elapses — during which
-    // the topic stays `running` and, if the tab is closed in that window, is
-    // stranded there until the 2h stale watchdog fires (#17723). Resolving as
-    // soon as the signal aborts lets the cancellation be observed immediately.
+    // Race the backoff delay against the operation's abort signal so a Stop
+    // mid-backoff is observed immediately instead of after the full delay (#17723).
     await new Promise<void>((resolve) => {
       const settle = () => {
         clearTimeout(timer);
