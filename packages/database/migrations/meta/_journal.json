@@ -973,6 +973,13 @@
       "when": 1786169920581,
       "tag": "0138_aico_openrouter_model_sync_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786200000000,
+      "tag": "0139_aico_pin_openrouter_auto",
+      "breakpoints": true
     }
   ],
   "version": "6"

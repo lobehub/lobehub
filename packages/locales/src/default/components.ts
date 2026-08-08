@@ -246,9 +246,11 @@ export default {
   'ModelSwitchPanel.title': 'Model',
   'ModelSwitchPanel.useModelFrom': 'Use this model from:',
   'ModelSwitchPanel.addModel.button': '+ Add model',
-  'ModelSwitchPanel.addModel.title': 'Add models',
-  'ModelSwitchPanel.addModel.empty': 'No more models to enable.',
+  'ModelSwitchPanel.addModel.title': 'Manage models',
+  'ModelSwitchPanel.addModel.empty': 'No models match your search.',
   'ModelSwitchPanel.addModel.loading': 'Loading models...',
+  'ModelSwitchPanel.addModel.hint':
+    'Enable or disable models for the chat picker. Same catalog as Settings → AI Provider.',
   'ModelSwitchPanel.addModel.loadMore': 'Load more',
   'MultiImagesUpload.actions.uploadMore': 'Click or drag to upload more',
   'MultiImagesUpload.modal.complete': 'Done',

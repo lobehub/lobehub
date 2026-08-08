@@ -2,7 +2,7 @@
 
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { Flexbox, SearchBar, Text } from '@lobehub/ui';
-import { Button, createModal, Switch } from '@lobehub/ui/base-ui';
+import { Switch, createModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { type AiProviderModelListItem } from 'model-bank';
@@ -10,10 +10,10 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
+import { formatBrandedModelId } from '@/components/Branding/brandedModelId';
 import { aiModelService } from '@/services/aiModel';
 import { useAiInfraStore } from '@/store/aiInfra';
 
-const PAGE_SIZE = 40;
 const MANAGED_PROVIDER_ID = DEFAULT_PROVIDER;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -22,10 +22,15 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
+  hint: css`
+    margin-block-start: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextTertiary};
+  `,
   list: css`
     overflow: auto;
     flex: 1;
-
     min-height: 0;
     max-height: min(60vh, 480px);
     margin-block-start: 12px;
@@ -54,61 +59,61 @@ const EnableModelsContent = memo(() => {
 
   const [keyword, setKeyword] = useState('');
   const [models, setModels] = useState<AiProviderModelListItem[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [enablingIds, setEnablingIds] = useState<Set<string>>(() => new Set());
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(() => new Set());
 
-  const loadPage = useCallback(async (nextOffset: number, append: boolean) => {
-    if (append) setLoadingMore(true);
-    else setLoading(true);
-
+  const loadModels = useCallback(async () => {
+    setLoading(true);
     try {
-      const page = await aiModelService.getAiProviderModelList(MANAGED_PROVIDER_ID, {
-        enabled: false,
-        limit: PAGE_SIZE,
-        offset: nextOffset,
-        type: 'chat',
-      });
-
-      setModels((prev) => (append ? [...prev, ...page] : page));
-      setOffset(nextOffset + page.length);
-      setHasMore(page.length >= PAGE_SIZE);
+      // Same as Settings → Provider: full managed catalog (no enabled filter).
+      const list = await aiModelService.getAiProviderModelList(MANAGED_PROVIDER_ID);
+      setModels(list.filter((model) => (model.type || 'chat') === 'chat'));
     } finally {
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadPage(0, false);
-  }, [loadPage]);
+    void loadModels();
+  }, [loadModels]);
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
     if (!q) return models;
     return models.filter((model) => {
       const name = (model.displayName || model.id).toLowerCase();
-      return name.includes(q) || model.id.toLowerCase().includes(q);
+      const brandedId = formatBrandedModelId(model.id).toLowerCase();
+      return (
+        name.includes(q) || model.id.toLowerCase().includes(q) || brandedId.includes(q)
+      );
     });
   }, [keyword, models]);
 
-  const handleEnable = useCallback(
-    async (modelId: string) => {
-      setEnablingIds((prev) => new Set(prev).add(modelId));
+  const handleToggle = useCallback(
+    async (model: AiProviderModelListItem, enabled: boolean) => {
+      setTogglingIds((prev) => new Set(prev).add(model.id));
+      // Optimistic update so the switch matches Settings behavior immediately.
+      setModels((prev) =>
+        prev.map((item) => (item.id === model.id ? { ...item, enabled } : item)),
+      );
       try {
         await toggleProviderModelEnabled({
-          enabled: true,
-          id: modelId,
+          enabled,
+          id: model.id,
           providerId: MANAGED_PROVIDER_ID,
-          type: 'chat',
+          source: model.source,
+          type: model.type || 'chat',
         });
-        setModels((prev) => prev.filter((m) => m.id !== modelId));
+      } catch {
+        setModels((prev) =>
+          prev.map((item) =>
+            item.id === model.id ? { ...item, enabled: model.enabled } : item,
+          ),
+        );
       } finally {
-        setEnablingIds((prev) => {
+        setTogglingIds((prev) => {
           const next = new Set(prev);
-          next.delete(modelId);
+          next.delete(model.id);
           return next;
         });
       }
@@ -126,6 +131,7 @@ const EnableModelsContent = memo(() => {
         variant="filled"
         onChange={(e) => setKeyword(e.target.value)}
       />
+      <div className={styles.hint}>{t('ModelSwitchPanel.addModel.hint')}</div>
 
       <Flexbox className={styles.list}>
         {loading ? (
@@ -134,7 +140,7 @@ const EnableModelsContent = memo(() => {
           <div className={styles.empty}>{t('ModelSwitchPanel.addModel.empty')}</div>
         ) : (
           filtered.map((model) => {
-            const enabling = enablingIds.has(model.id);
+            const toggling = togglingIds.has(model.id);
             return (
               <Flexbox horizontal className={styles.row} justify="space-between" key={model.id}>
                 <Flexbox horizontal align="center" gap={10} style={{ minWidth: 0 }}>
@@ -142,34 +148,21 @@ const EnableModelsContent = memo(() => {
                   <Flexbox style={{ minWidth: 0 }}>
                     <Text ellipsis>{model.displayName || model.id}</Text>
                     <Text ellipsis fontSize={12} type="secondary">
-                      {model.id}
+                      {formatBrandedModelId(model.id)}
                     </Text>
                   </Flexbox>
                 </Flexbox>
                 <Switch
-                  checked={false}
-                  loading={enabling}
+                  checked={Boolean(model.enabled)}
+                  loading={toggling}
                   size="small"
                   onChange={(checked) => {
-                    if (checked) void handleEnable(model.id);
+                    void handleToggle(model, checked);
                   }}
                 />
               </Flexbox>
             );
           })
-        )}
-
-        {!loading && hasMore && !keyword.trim() && (
-          <Flexbox padding={8}>
-            <Button
-              block
-              loading={loadingMore}
-              variant="filled"
-              onClick={() => void loadPage(offset, true)}
-            >
-              {t('ModelSwitchPanel.addModel.loadMore')}
-            </Button>
-          </Flexbox>
         )}
       </Flexbox>
     </Flexbox>
