@@ -236,6 +236,7 @@ export interface CreateGoalContentProps {
   initialRoundBudget?: number;
   initialTitle?: string;
   onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  projectId?: string;
 }
 
 /**
@@ -247,7 +248,8 @@ export interface CreateGoalContentProps {
  * hardcoded), so this form asks for them outright.
  */
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
-  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated } = props;
+  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
+    props;
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -414,6 +416,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         editorData,
         instruction,
         name: plan.name.trim() || undefined,
+        projectId,
         visibility: activeWorkspaceId ? visibility : undefined,
       });
 
@@ -438,6 +441,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     editor,
     onCreated,
     plan,
+    projectId,
     requirement,
     t,
     visibility,
