@@ -250,7 +250,12 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const orgA = await ownerA.create({ name: 'Tenant Org A' });
     const orgB = await ownerB.create({ name: 'Tenant Org B' });
 
-    await ownerB.mockOrgTopup({ amountToman: 1_000_000, orgId: orgB.id });
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    await platformCaller.addManualCredit({
+      amountToman: 1_000_000,
+      description: 'tenant isolation seed',
+      orgId: orgB.id,
+    });
 
     const invite = await ownerB.inviteMember({
       identifierType: 'email',
