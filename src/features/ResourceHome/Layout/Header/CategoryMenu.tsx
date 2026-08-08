@@ -3,7 +3,9 @@
 import { Flexbox } from '@lobehub/ui';
 import {
   ClipboardListIcon,
+  FilesIcon,
   FileText,
+  HouseIcon,
   ImageIcon,
   LayoutPanelTopIcon,
   Mic2,
@@ -34,34 +36,46 @@ const CategoryMenu = memo(() => {
   const items = useMemo(
     () => [
       {
+        icon: HouseIcon,
+        key: FilesTabs.Home,
+        title: t('tab.home'),
+        url: '/resource',
+      },
+      {
         icon: LayoutPanelTopIcon,
         key: FilesTabs.All,
         title: t('tab.all'),
-        url: '/resource',
+        url: '/resource/all',
       },
       {
         icon: FileText,
         key: FilesTabs.Documents,
         title: t('tab.documents'),
-        url: '/resource?category=documents',
+        url: '/resource/documents',
       },
       {
         icon: ImageIcon,
         key: FilesTabs.Images,
         title: t('tab.images'),
-        url: '/resource?category=images',
+        url: '/resource/images',
       },
       {
         icon: Mic2,
         key: FilesTabs.Audios,
         title: t('tab.audios'),
-        url: '/resource?category=audios',
+        url: '/resource/audios',
       },
       {
         icon: SquarePlay,
         key: FilesTabs.Videos,
         title: t('tab.videos'),
-        url: '/resource?category=videos',
+        url: '/resource/videos',
+      },
+      {
+        icon: FilesIcon,
+        key: FilesTabs.Files,
+        title: t('tab.files'),
+        url: '/resource/files',
       },
       // Single Works entry (no sub-categories this iteration): switches the
       // content area to the topic-grouped Work gallery via `?works=all`.
@@ -73,6 +87,7 @@ const CategoryMenu = memo(() => {
       },
       ...businessCategories.map((category) => ({
         icon: category.icon,
+        isBusiness: true,
         key: category.key,
         // Business categories carry a chat-namespace key but the type narrows to a
         // string at this seam; cast so t() accepts the dynamic key.
@@ -86,12 +101,13 @@ const CategoryMenu = memo(() => {
   return (
     <Flexbox gap={1} paddingInline={4}>
       {items.map((item) => {
-        const isBusinessRoute = item.url.startsWith('/resource/');
         const isActive =
           item.key === 'works'
             ? worksActive
             : !worksActive &&
-              (isBusinessRoute ? location.pathname === item.url : activeKey === item.key);
+              ('isBusiness' in item && item.isBusiness
+                ? location.pathname === item.url
+                : activeKey === item.key);
         return (
           <Link
             key={item.key}

@@ -479,6 +479,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
             index: true,
           },
           ...BusinessResourceRoutes,
+          // Category views share the home page: /resource/documents, /resource/images, …
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Category',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: ':category',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),

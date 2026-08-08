@@ -35,6 +35,7 @@ import {
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { buildFileTypeCategoryFilter } from '../utils/fileTypeCategory';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -342,15 +343,9 @@ export class FileModel {
       visibility ? eq(files.visibility, visibility) : undefined,
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-      const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-      if (Array.isArray(fileTypePrefix)) {
-        // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        whereClause = and(
-          whereClause,
-          or(...fileTypePrefix.map((prefix) => ilike(files.fileType, `${prefix}%`))),
-        );
-      } else {
-        whereClause = and(whereClause, ilike(files.fileType, `${fileTypePrefix}%`));
+      const categoryFilter = buildFileTypeCategoryFilter(files.fileType, category as FilesTabs);
+      if (categoryFilter) {
+        whereClause = and(whereClause, categoryFilter);
       }
     }
 
@@ -612,32 +607,6 @@ export class FileModel {
           eq(files.visibility, fromVisibility),
         ),
       );
-  };
-
-  /**
-   * get the corresponding file type prefix according to FilesTabs
-   */
-  private getFileTypePrefix = (category: FilesTabs): string | string[] => {
-    switch (category) {
-      case FilesTabs.Audios: {
-        return 'audio';
-      }
-      case FilesTabs.Documents: {
-        return ['application', 'custom'];
-      }
-      case FilesTabs.Images: {
-        return 'image';
-      }
-      case FilesTabs.Videos: {
-        return 'video';
-      }
-      case FilesTabs.Websites: {
-        return 'text/html';
-      }
-      default: {
-        return '';
-      }
-    }
   };
 
   findByNames = async (fileNames: string[]) =>
