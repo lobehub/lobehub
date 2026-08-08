@@ -110,56 +110,8 @@ export class AicoBillingModel {
     });
   };
 
-  mockTopupUser = async (params: {
-    amountMicroUsd: number;
-    amountToman: number;
-    createdByUserId: string;
-    fxRateTomanPerUsd: number;
-    gatewayRefId?: string;
-    userId: string;
-  }) => {
-    if (!Number.isInteger(params.amountToman) || params.amountToman <= 0) {
-      throw new Error('AMOUNT_TOMAN_MUST_BE_POSITIVE_INTEGER');
-    }
-    if (!Number.isInteger(params.amountMicroUsd) || params.amountMicroUsd <= 0) {
-      throw new Error('AMOUNT_MICRO_USD_MUST_BE_POSITIVE_INTEGER');
-    }
-
-    return this.db.transaction(async (tx) => {
-      await tx.insert(userWallets).values({ userId: params.userId }).onConflictDoNothing({
-        target: userWallets.userId,
-      });
-
-      const [txRow] = await tx
-        .insert(walletTransactions)
-        .values({
-          amountMicroUsd: params.amountMicroUsd,
-          amountToman: params.amountToman,
-          createdByUserId: params.createdByUserId,
-          description: 'Mock topup',
-          fxRateTomanPerUsd: params.fxRateTomanPerUsd,
-          gatewayRefId: params.gatewayRefId ?? `mock_${Date.now()}`,
-          type: 'topup',
-          userId: params.userId,
-        })
-        .returning();
-
-      const [wallet] = await tx
-        .update(userWallets)
-        .set({
-          balanceMicroUsd: sql`${userWallets.balanceMicroUsd} + ${params.amountMicroUsd}`,
-          balanceToman: sql`${userWallets.balanceToman} + ${params.amountToman}`,
-          isActive: true,
-        })
-        .where(eq(userWallets.userId, params.userId))
-        .returning();
-
-      return { transaction: txRow, wallet };
-    });
-  };
-
   /**
-   * Platform-admin manual credit onto a B2C user wallet (not mock topup).
+   * Platform-admin manual credit onto a B2C user wallet.
    * Amounts must be positive integers; FX rate is stored for audit.
    */
   manualCreditUser = async (params: {

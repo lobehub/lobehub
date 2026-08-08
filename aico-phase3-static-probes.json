@@ -1,34 +1,38 @@
 {
+  "bundleHits": [
+    "public/_spa/assets/src-CKlOQTmM.js",
+    "public/_spa/assets/src-DbOhPHCi.js",
+    "dist/desktop/assets/src-DbOhPHCi.js"
+  ],
+  "migrationsTail": [
+    "0134_agents_add_name_column",
+    "0135_aico_openrouter_model_catalog",
+    "0136_aico_final_remediation"
+  ],
   "probes": {
-    "managementSilentMock": true,
+    "managementSilentMock": false,
     "migration0132HasDefault": false,
-    "mockOrgHasProdGate": false,
-    "mockTopupHasProdGate": false,
+    "mockOrgTopupRemoved": true,
+    "mockTopupRemoved": true,
     "smsDebugFallback": true,
     "twinPaths": {
       "wallet": {
-        "desk": true,
-        "web": true
+        "desk": false,
+        "web": false
       },
       "platform": {
-        "desk": true,
+        "desk": false,
         "web": true
       },
       "invite/:token": {
-        "desk": true,
-        "web": true
+        "desk": false,
+        "web": false
       },
       "org": {
-        "desk": true,
-        "web": true
+        "desk": false,
+        "web": false
       }
     },
-    "walletUiGated": false
-  },
-  "bundleHits": [],
-  "migrationsTail": [
-    "0130_notifications_add_context",
-    "0131_fixed_mathemanic",
-    "0132_shocking_blizzard"
-  ]
+    "walletMockTopupRemoved": true
+  }
 }

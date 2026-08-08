@@ -11,11 +11,6 @@ import { aicoEnv } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
-import { assertMockTopupAllowed, isMockTopupUiEnabled } from '@/server/services/aico/mockTopupGate';
-import {
-  resolveTopupAmount,
-  topupAmountInputSchema,
-} from '@/server/services/aico/resolveTopupAmount';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -76,7 +71,6 @@ export const aicoBillingRouter = router({
       balanceUsd: microUsdToDecimalString(balanceMicroUsd),
       hasManagedKey: Boolean(wallet.openrouterKeyId),
       isActive: wallet.isActive,
-      mockTopupEnabled: isMockTopupUiEnabled(),
       preferredBillingSource: wallet.preferredBillingSource as 'personal' | 'organization',
       preferredOrganizationId: wallet.preferredOrganizationId,
       publicCode,
@@ -236,32 +230,6 @@ export const aicoBillingRouter = router({
         preferredOrganizationId: wallet.preferredOrganizationId,
       };
     }),
-
-  mockTopup: billingProcedure.input(topupAmountInputSchema).mutation(async ({ ctx, input }) => {
-    assertMockTopupAllowed();
-
-    const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
-
-    const { wallet, transaction } = await ctx.billingModel.mockTopupUser({
-      amountMicroUsd,
-      amountToman,
-      createdByUserId: ctx.userId,
-      fxRateTomanPerUsd,
-      userId: ctx.userId,
-    });
-
-    await ctx.keyService.ensureUserKey(ctx.userId);
-
-    return {
-      amountMicroUsd: String(amountMicroUsd),
-      amountUsd: microUsdToDecimalString(amountMicroUsd),
-      balanceMicroUsd: String(wallet.balanceMicroUsd),
-      balanceToman: String(wallet.balanceToman),
-      balanceUsd: microUsdToDecimalString(wallet.balanceMicroUsd),
-      fxRateTomanPerUsd,
-      transactionId: transaction.id,
-    };
-  }),
 
   getMyTrial: billingProcedure.query(async ({ ctx }) => {
     const [trial, config, active] = await Promise.all([

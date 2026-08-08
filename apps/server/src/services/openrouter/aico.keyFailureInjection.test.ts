@@ -169,17 +169,17 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     client.mode = 'http500';
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: userId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId,
     });
 
     await expect(keys.ensureUserKey(userId)).rejects.toThrow(/500|OpenRouter/);
     const wallet = await billing.getUserWallet(userId);
-    expect(Number(wallet?.balanceUsd)).toBe(10);
+    expect(Number(wallet?.balanceMicroUsd) / 1_000_000).toBe(10);
     expect(wallet?.openrouterKeyId).toBeFalsy();
   });
 
@@ -188,11 +188,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: userId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId,
     });
 
@@ -233,11 +233,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: userId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId,
     });
 
@@ -254,11 +254,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
 
   it('ciphertext corruption: decrypt fails closed (null or throw, never garbage key)', async () => {
     const billing = new AicoBillingModel(db);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: userId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId,
     });
     await billing.updateUserOpenRouterKey({
@@ -353,11 +353,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     const billing = new AicoBillingModel(db);
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: userId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId,
     });
     const result = await keys.ensureUserKey(userId);
