@@ -218,6 +218,7 @@
   "connectAgent.providerDesc.qoder": "Qoder coding agent CLI",
   "createGoal.addCriterion": "Add criterion",
   "createGoal.back": "Back",
+  "createGoal.budgetTitle": "Budget",
   "createGoal.contextHint": "Add constraints, source material, or anything the Agent should know",
   "createGoal.contextLabel": "Context for the Agent",
   "createGoal.costBudgetHint": "Stops once total spend reaches this amount; leave blank for no cap.",

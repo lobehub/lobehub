@@ -218,6 +218,7 @@
   "connectAgent.providerDesc.qoder": "Qoder 编码助理 CLI",
   "createGoal.addCriterion": "添加验收标准",
   "createGoal.back": "返回",
+  "createGoal.budgetTitle": "预算",
   "createGoal.contextHint": "补充约束、参考资料或 Agent 开始前需要知道的信息",
   "createGoal.contextLabel": "给 Agent 的补充背景",
   "createGoal.costBudgetHint": "累计花费达到这个金额就停下，留空表示不限。",

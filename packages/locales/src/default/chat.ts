@@ -1435,6 +1435,7 @@ export default {
   'createGoal.costBudgetPlaceholder': 'No cap',
   'createGoal.createFailed': 'Failed to create goal',
   'createGoal.back': 'Back',
+  'createGoal.budgetTitle': 'Budget',
   'createGoal.contextLabel': 'Context for the Agent',
   'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
