@@ -60,7 +60,7 @@ describe('agentBuilderKeys', () => {
   // must route to a persisted tier so revisits hydrate the last batch instead.
   it('routes the builder suggestions key to a persisted cache tier', () => {
     const serialized = unstable_serialize(
-      agentBuilderKeys.suggestions('agentBuilder', 'builder-1', 'target-1'),
+      agentBuilderKeys.suggestions('agentBuilder', 'builder-1', 'target-1', 'zh-CN'),
     );
     const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
       serialized.includes(pattern),

@@ -122,6 +122,7 @@ describe('useBuilderSuggestions', () => {
         baseParams.mode,
         baseParams.builderAgentId,
         baseParams.targetId,
+        baseParams.locale,
       ),
     );
     cache.set(key, {
@@ -142,6 +143,30 @@ describe('useBuilderSuggestions', () => {
     await waitForNextTick();
 
     expect(aiChatService.generateJSON).not.toHaveBeenCalled();
+  });
+
+  // Persisted entries are generated in the UI language, so a language switch
+  // must miss the cache and regenerate instead of serving old-locale chips.
+  it('regenerates when the UI locale changes', async () => {
+    vi.mocked(aiChatService.generateJSON)
+      .mockResolvedValueOnce(makeEnvelope('first'))
+      .mockResolvedValueOnce(makeEnvelope('second'));
+
+    const { rerender, result } = renderHook((props) => useBuilderSuggestions(props), {
+      initialProps: baseParams,
+      wrapper: createSWRWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.suggestions[0]?.title).toBe('first title');
+    });
+
+    rerender({ ...baseParams, locale: 'en-US' });
+
+    await waitFor(() => {
+      expect(aiChatService.generateJSON).toHaveBeenCalledTimes(2);
+    });
+    expect(result.current.suggestions[0]?.title).toBe('second title');
   });
 
   it('regenerates when the edited target changes', async () => {

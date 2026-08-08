@@ -196,15 +196,18 @@ export const agentLabelKeys = {
 // the LLM generation instead of paying a skeleton + a generateJSON call every
 // page load. `contextSummary` is intentionally NOT part of the key so config
 // autosaves for the same target don't refetch; manual refresh revalidates the
-// same key in place (see `useBuilderSuggestions`).
+// same key in place (see `useBuilderSuggestions`). `locale` IS part of the key:
+// chips are generated in the UI language, so a persisted entry must not be
+// served after a language switch.
 export const agentBuilderKeys = {
   suggestions: def(
     'agentBuilder:suggestions',
-    (mode: string, builderAgentId: string, targetId: string | undefined) => [
+    (mode: string, builderAgentId: string, targetId: string | undefined, locale?: string) => [
       'agentBuilder:suggestions',
       mode,
       builderAgentId,
       targetId,
+      locale ?? null,
     ],
   ),
 };

@@ -53,14 +53,15 @@ export const useBuilderSuggestions = ({
 }: UseBuilderSuggestionsParams): BuilderSuggestionsResult => {
   const markRegenerated = useBuilderSuggestionFeedbackStore((s) => s.markRegenerated);
 
-  // Key on target identity only — the context summary is deliberately kept out of
-  // the key so config autosaves (which stream in new summaries for the same target)
-  // don't refetch. Only a target switch or a manual refresh regenerates; the
+  // Key on target identity (+ locale, since chips are generated in the UI
+  // language) — the context summary is deliberately kept out of the key so
+  // config autosaves (which stream in new summaries for the same target) don't
+  // refetch. Only a target/locale switch or a manual refresh regenerates; the
   // fetcher closure reads the current summary, which is always the latest value
   // on the render that changes the key.
   const key =
     enabled && contextSummary && model && provider
-      ? swrKeys.agentBuilder.suggestions(mode, builderAgentId, targetId)
+      ? swrKeys.agentBuilder.suggestions(mode, builderAgentId, targetId, locale)
       : null;
 
   const { data, isLoading, error, mutate } = useSWR(
