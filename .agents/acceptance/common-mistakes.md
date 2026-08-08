@@ -230,6 +230,26 @@ and intermediate flex sizing can hide the intended inner scrollbars.
 independent scroll regions to navigation and detail, and verify scroll ownership with
 DOM measurements as well as visual evidence.
 
+### L-D7 — Treating a route-driven Segmented's selected segment as a clickable affordance
+
+**Wrong approach:** put a `Segmented` in a page header, have `onChange` write the URL, and
+then rely on clicking the already-selected segment to reach that section's own index route —
+typically to get back to a list from a `:param` detail route nested under it. Removing the
+breadcrumb's section link on the strength of that assumption is the usual companion move.
+
+**Why it fails:** `Segmented` fires only on a _change_, so the active segment dispatches
+nothing. On the detail route the segment is still highlighted, so it reads as the obvious way
+back while being completely inert — the click is silent, the URL does not move, and nothing
+errors. A grouped route family makes this easy to miss, because the switcher works perfectly
+on every sibling index route and fails only one level deeper.
+
+**Correct approach:** treat a route-driven Segmented as a switcher between sibling sections,
+never as navigation _within_ the selected section. Whenever a section owns deeper routes,
+keep a separate ancestor affordance for them — the breadcrumb's section link is the natural
+one. Where that link would otherwise duplicate the segment's own label, render it only on the
+deeper routes and let the segment name the section on the index route. Verify the deepest
+route of every section, not just the index: an index-only pass cannot see this failure.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone

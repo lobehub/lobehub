@@ -1172,6 +1172,7 @@ export default {
   'tab.groupProfile': 'Group Profile',
   'tab.integration': 'Channels',
   'tab.profile': 'Agent Profile',
+  'tab.profileBasic': 'Profile',
   'tab.search': 'Search',
   'tab.tasks': 'Tasks',
   'task.activity.calling': 'Calling Skill...',
