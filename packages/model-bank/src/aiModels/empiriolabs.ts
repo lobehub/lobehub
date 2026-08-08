@@ -1336,13 +1336,13 @@ export const qwenImage20ParamsSchema: ModelParamsSchema = {
 
 export const qwenImage30ParamsSchema: ModelParamsSchema = {
   aspectRatio: {
-    default: '1:1',
+    default: 'auto',
     enum: ['auto', '1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5'],
   },
   imageUrl: { default: null },
   prompt: { default: '' },
   promptExtend: { default: true },
-  resolution: { default: '1K', enum: ['auto', '1K', '2K'] },
+  resolution: { default: '2K', enum: ['auto', '1K', '2K'] },
   seed: { default: null },
   watermark: { default: false },
 };
@@ -1525,7 +1525,7 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Premium Seedream image model for detailed text-to-image, single-image edits, and multi-reference fusion with 1K, 1.5K, and 2K output.',
+      'Premium Seedream image model for text-to-image, edits, and multi-reference fusion with 1K, 1.5K, and 2K output plus Standard or Fast prompt optimization.',
     displayName: 'Seedream 5.0 Pro',
     enabled: true,
     id: 'seedream-5-0-pro',
