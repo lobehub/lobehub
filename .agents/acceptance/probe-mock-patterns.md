@@ -565,6 +565,7 @@ agent-browser --session "$RUN_SESSION" \
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
+
 ### Agent-browser navigation hangs after an orphaned Next child keeps the port
 
 **Situation:** an isolated full-stack dev launcher exits, but its Next child
@@ -1079,6 +1080,44 @@ the "correct" (assumed-tz) window.
 every `[startAt, endAt)` from that. When a day view comes back empty, diff the
 client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
+
+### An `ActionIcon` is not a `<button>` — select it by its lucide class, click through agent-browser
+
+**Situation:** driving an icon-only affordance inside a popover or panel (`ActionIcon`
+from `@lobehub/ui`: refresh, calendar, more, …).
+
+**Doesn't work:** three separate near-misses, each of which reads as "the affordance
+does not exist" rather than as a driving error:
+
+- `pop.querySelectorAll('button')` misses it. `ActionIcon` renders a `div`/`span`
+  wrapper (`class="lobe-flex …"` around `span.anticon`), so a button-only sweep of a
+  popover reports zero controls and invites the wrong conclusion that the entry was
+  never rendered.
+- `el.click()` on that wrapper `div` resolves and returns, but no handler runs — the
+  React `onClick` sits on an inner node, so the tab-clicking recipe above does not
+  transfer to icon buttons.
+- `agent-browser click --x <n> --y <n>` is not a thing; `click` only takes a CSS
+  selector, XPath, or an `@eN` snapshot ref, and coordinates fail with the generic
+  `Element not found`, which reads as a missing element rather than a bad invocation.
+
+**Works:** find the icon by its lucide class, tag it, and let agent-browser do the
+real click:
+
+```bash
+agent-browser --cdp 9222 eval '(() => {
+  const pop = [...document.querySelectorAll("[role=dialog]")].pop();
+  pop.querySelector("svg.lucide-calendar-days").setAttribute("data-qc", "entry");
+  return "tagged";
+})()'
+agent-browser --cdp 9222 click "[data-qc=entry]"
+```
+
+Enumerate candidates with `pop.querySelectorAll("button,[role=button],span[role]")`
+and read each node's `svg` class when the icon's identity is unknown. Two follow-ons
+worth knowing: a stray click on a tagged text node can dismiss the popover (re-open
+and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped cell
+needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
+dispatched `pointerover`+`mouseover` pair) before its content mounts.
 
 ## Detailed references
 

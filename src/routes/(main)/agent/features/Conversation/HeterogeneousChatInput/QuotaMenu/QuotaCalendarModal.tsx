@@ -6,7 +6,7 @@ import { createModal, type ModalInstance, Segmented } from '@lobehub/ui/base-ui'
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { t as i18nT } from 'i18next';
-import { ChevronLeftIcon, ChevronRightIcon, RotateCcwIcon, ZapIcon } from 'lucide-react';
+import { BanIcon, ChevronLeftIcon, ChevronRightIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,12 +15,21 @@ import { agentQuotaService } from '@/services/agentQuota';
 import {
   buildBurnSeries,
   buildDailyBurn,
+  buildDailySpend,
   buildMonthGrid,
-  burnLevelOf,
-  currentWeeklyWindow,
+  currentWindow,
   dayKeyOf,
+  type DaySpend,
+  formatCost,
+  formatTokens,
+  heatLevelOf,
   projectBurnout,
-  type WeeklyWindowSpan,
+  type QuotaSeriesKey,
+  type QuotaWindowSpan,
+  seriesId,
+  SESSION_SERIES,
+  spendInWindow,
+  type UsageTurn,
 } from './quotaCalendarModel';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -31,10 +40,18 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   chartFrame: css`
     padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
+  cost: css`
+    font-size: 10px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  /**
+   * Heat is a fill ramp only. An outline on the busiest tier read as an alarm
+   * state rather than as "more", so the scale stays purely tonal and the
+   * outline is reserved for the one cell that IS an alarm (rate limited).
+   */
   dayCell: css`
     position: relative;
 
@@ -42,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-direction: column;
     justify-content: space-between;
 
-    height: 56px;
+    height: 58px;
     padding-block: 4px;
     padding-inline: 6px;
     border-radius: ${cssVar.borderRadius};
@@ -55,37 +72,39 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0.35;
     }
 
-    &[data-today='true'] {
-      box-shadow: inset 0 0 0 1.5px ${cssVar.colorPrimary};
-    }
-
-    &[data-burn-level='1'] {
+    &[data-heat='1'] {
       background: ${cssVar.colorSuccessBg};
     }
 
-    &[data-burn-level='2'] {
+    &[data-heat='2'] {
       background: ${cssVar.colorSuccessBgHover};
     }
 
-    &[data-burn-level='3'] {
+    &[data-heat='3'] {
       background: ${cssVar.colorSuccessBorder};
     }
 
-    &[data-burn-level='4'] {
-      background: ${cssVar.colorWarningBg};
-      box-shadow: inset 0 0 0 1px ${cssVar.colorWarningBorder};
+    &[data-heat='4'] {
+      background: ${cssVar.colorSuccessBorderHover};
+    }
+
+    /* Rate limited: the provider refused work that day — an error state, not heat. */
+    &[data-rate-limited='true'] {
+      color: ${cssVar.colorErrorText};
+      background: ${cssVar.colorErrorBg};
+    }
+
+    &[data-today='true'] {
+      box-shadow: inset 0 0 0 1.5px ${cssVar.colorPrimary};
     }
   `,
   dayFooter: css`
     display: flex;
     gap: 4px;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
 
     min-height: 14px;
-
-    font-size: 10px;
-    color: ${cssVar.colorTextSecondary};
   `,
   legendSwatch: css`
     width: 10px;
@@ -93,28 +112,53 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 3px;
     background: ${cssVar.colorFillQuaternary};
 
-    &[data-burn-level='1'] {
+    &[data-heat='1'] {
       background: ${cssVar.colorSuccessBg};
     }
 
-    &[data-burn-level='2'] {
+    &[data-heat='2'] {
       background: ${cssVar.colorSuccessBgHover};
     }
 
-    &[data-burn-level='3'] {
+    &[data-heat='3'] {
       background: ${cssVar.colorSuccessBorder};
     }
 
-    &[data-burn-level='4'] {
-      background: ${cssVar.colorWarningBg};
-      box-shadow: inset 0 0 0 1px ${cssVar.colorWarningBorder};
+    &[data-heat='4'] {
+      background: ${cssVar.colorSuccessBorderHover};
+    }
+
+    &[data-rate-limited='true'] {
+      background: ${cssVar.colorErrorBg};
     }
   `,
-  statusExhaust: css`
-    color: ${cssVar.colorError};
+  /** The headline number of the panel — readable at a glance, not a caption. */
+  ratio: css`
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    color: ${cssVar.colorText};
+  `,
+  ratioExhausted: css`
+    color: ${cssVar.colorErrorText};
+  `,
+  statusExhausted: css`
+    font-size: 12px;
+    color: ${cssVar.colorErrorText};
+  `,
+  /* A forecast is a warning, not a failure — the quota has not run out yet. */
+  statusForecast: css`
+    font-size: 12px;
+    color: ${cssVar.colorWarningText};
   `,
   statusSafe: css`
+    font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+  `,
+  tokens: css`
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   `,
   weekday: css`
     font-size: 11px;
@@ -128,52 +172,49 @@ type WindowRow = Awaited<ReturnType<typeof agentQuotaService.getWindows>>[number
 const toMs = (value: Date | number | string | null | undefined): number | null =>
   value == null ? null : new Date(value).getTime();
 
-interface NormalizedWindow extends WeeklyWindowSpan {
-  scopeKey: string;
+interface NormalizedWindow extends QuotaWindowSpan {
+  seriesId: string;
 }
 
-const normalizeWeeklyWindows = (rows: WindowRow[]): NormalizedWindow[] =>
-  rows
-    .filter((row) => row.limitType.startsWith('weekly'))
-    .map((row) => ({
-      peakUtilization: row.peakUtilization,
-      rateLimitedAt: toMs(row.rateLimitedAt),
-      resetsAt: toMs(row.resetsAt)!,
-      scopeKey: row.scopeKey || '',
-      windowStartAt: toMs(row.windowStartAt)!,
-    }));
+const normalizeWindows = (rows: WindowRow[]): NormalizedWindow[] =>
+  rows.map((row) => ({
+    peakUtilization: row.peakUtilization,
+    rateLimitedAt: toMs(row.rateLimitedAt),
+    resetsAt: toMs(row.resetsAt)!,
+    seriesId: row.limitType.startsWith('weekly') ? `weekly:${row.scopeKey || ''}` : 'session:',
+    windowStartAt: toMs(row.windowStartAt)!,
+  }));
 
 const CHART_W = 640;
-const CHART_H = 132;
+const CHART_H = 120;
 
-const xOf = (time: number, window: WeeklyWindowSpan) =>
+const xOf = (time: number, window: QuotaWindowSpan) =>
   ((time - window.windowStartAt) / (window.resetsAt - window.windowStartAt)) * CHART_W;
 const yOf = (utilization: number) => CHART_H * (1 - utilization / 100);
 
 /**
- * Burn-down curve for one weekly window: actual utilization polyline against
- * the even-pace diagonal, extended by a dashed projection at the current pace
- * — the "burn out" read at a glance.
+ * Burn-down curve for one window: actual utilization against the even-pace
+ * diagonal, extended by a dashed projection at the current pace, plus what the
+ * window actually cost in tokens and dollars.
  */
 const BurnChart = memo<{
   now: number;
   readings: QuotaLimitReading[];
-  scopeKey: string;
-  window: WeeklyWindowSpan;
-}>(({ now, readings, scopeKey, window }) => {
+  series: QuotaSeriesKey;
+  turns: UsageTurn[];
+  window: QuotaWindowSpan;
+}>(({ now, readings, series, turns, window }) => {
   const { t } = useTranslation('chat');
 
   const points = useMemo(
-    () => buildBurnSeries(readings, scopeKey, window),
-    [readings, scopeKey, window],
+    () => buildBurnSeries(readings, series, window),
+    [readings, series, window],
   );
   const isLive = window.resetsAt > now;
   const projection = useMemo(() => projectBurnout(points, window), [points, window]);
+  const spend = useMemo(() => spendInWindow(turns, window), [turns, window]);
 
   const last = points.at(-1)!;
-  const daysElapsed = Math.max((last.time - window.windowStartAt) / 86_400_000, 1 / 24);
-  const dailyAverage = last.utilization / daysElapsed;
-
   const polyline = points.map((p) => `${xOf(p.time, window)},${yOf(p.utilization)}`).join(' ');
   const area = `M0,${CHART_H} L${polyline.replaceAll(' ', ' L')} L${xOf(last.time, window)},${CHART_H} Z`;
 
@@ -184,40 +225,55 @@ const BurnChart = memo<{
         ? { time: window.resetsAt, utilization: projection.projectedEndUtilization }
         : null;
   const willExhaust = projection.kind === 'exhaust';
+  const exhausted = projection.kind === 'exhausted';
+  const timeFormat = series.type === 'session' ? 'HH:mm' : 'M/D HH:mm';
 
   const statusText = !isLive
     ? t('heteroAgent.claudeQuota.calendar.pastWindow')
-    : projection.kind === 'exhausted'
+    : exhausted
       ? t('heteroAgent.claudeQuota.calendar.burnout.exhausted', {
-          time: dayjs(window.resetsAt).format('M/D HH:mm'),
+          time: dayjs(window.resetsAt).format(timeFormat),
         })
       : willExhaust
         ? t('heteroAgent.claudeQuota.calendar.burnout.willExhaust', {
-            time: dayjs(projection.exhaustAt).format('M/D HH:mm'),
+            time: dayjs(projection.exhaustAt).format(timeFormat),
           })
         : t('heteroAgent.claudeQuota.calendar.burnout.safe', {
             percent: Math.round(projection.projectedEndUtilization),
           });
 
   return (
-    <Flexbox gap={6}>
-      <Flexbox horizontal align={'baseline'} gap={8} justify={'space-between'}>
-        <Text style={{ fontSize: 12 }} type={'secondary'}>
-          {t('heteroAgent.claudeQuota.calendar.usedSoFar', {
-            daily: Math.round(dailyAverage),
-            percent: Math.round(last.utilization),
-          })}
-        </Text>
-        <Text
-          style={{ fontSize: 12 }}
-          className={cx(
-            willExhaust || projection.kind === 'exhausted'
-              ? styles.statusExhaust
-              : styles.statusSafe,
-          )}
+    <Flexbox gap={8}>
+      <Flexbox horizontal align={'flex-end'} gap={12} justify={'space-between'}>
+        <Flexbox gap={2}>
+          <Flexbox horizontal align={'baseline'} gap={6}>
+            <span className={cx(styles.ratio, exhausted && styles.ratioExhausted)}>
+              {Math.round(last.utilization)}%
+            </span>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {t('heteroAgent.claudeQuota.calendar.usedOfWindow')}
+            </Text>
+          </Flexbox>
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {spend.tokens > 0
+              ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
+                  cost: formatCost(spend.cost),
+                  tokens: formatTokens(spend.tokens),
+                })
+              : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
+          </Text>
+        </Flexbox>
+        <span
+          className={
+            exhausted
+              ? styles.statusExhausted
+              : willExhaust
+                ? styles.statusForecast
+                : styles.statusSafe
+          }
         >
           {statusText}
-        </Text>
+        </span>
       </Flexbox>
 
       <div className={styles.chartFrame}>
@@ -253,7 +309,7 @@ const BurnChart = memo<{
           <polyline fill={'none'} points={polyline} stroke={cssVar.colorSuccess} strokeWidth={2} />
           {isLive && projectionEnd && (
             <line
-              stroke={willExhaust ? cssVar.colorError : cssVar.colorTextTertiary}
+              stroke={willExhaust ? cssVar.colorWarning : cssVar.colorTextTertiary}
               strokeDasharray={'4 4'}
               strokeWidth={1.5}
               x1={xOf(last.time, window)}
@@ -266,7 +322,7 @@ const BurnChart = memo<{
             <circle
               cx={xOf(projection.exhaustAt, window)}
               cy={yOf(100)}
-              fill={cssVar.colorError}
+              fill={cssVar.colorWarning}
               r={3.5}
             />
           )}
@@ -281,13 +337,13 @@ const BurnChart = memo<{
 
       <Flexbox horizontal align={'center'} justify={'space-between'}>
         <Text style={{ fontSize: 11 }} type={'secondary'}>
-          {dayjs(window.windowStartAt).format('M/D HH:mm')}
+          {dayjs(window.windowStartAt).format(timeFormat)}
         </Text>
         <Text style={{ color: cssVar.colorTextQuaternary, fontSize: 11 }}>
           {t('heteroAgent.claudeQuota.calendar.pace')}
         </Text>
         <Text style={{ fontSize: 11 }} type={'secondary'}>
-          {dayjs(window.resetsAt).format('M/D HH:mm')}
+          {dayjs(window.resetsAt).format(timeFormat)}
         </Text>
       </Flexbox>
     </Flexbox>
@@ -304,8 +360,9 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   const { t } = useTranslation('chat');
   const [loading, setLoading] = useState(true);
   const [readings, setReadings] = useState<QuotaLimitReading[]>([]);
+  const [turns, setTurns] = useState<UsageTurn[]>([]);
   const [windows, setWindows] = useState<NormalizedWindow[]>([]);
-  const [scopeKey, setScopeKey] = useState('');
+  const [series, setSeries] = useState<QuotaSeriesKey>(SESSION_SERIES);
   const [month, setMonth] = useState(() => dayjs().startOf('month'));
   const now = Date.now();
 
@@ -317,13 +374,15 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
       const account = claude.find((a) => a.externalAccountId === externalAccountId) ?? claude[0];
       if (!account) return;
 
-      const [windowRows, series] = await Promise.all([
-        agentQuotaService.getWindows(account.id, 80).catch(() => [] as WindowRow[]),
+      const [windowRows, snapshotSeries, usageTurns] = await Promise.all([
+        agentQuotaService.getWindows(account.id, 200).catch(() => [] as WindowRow[]),
         agentQuotaService.listSnapshots(account.id, 42).catch(() => [] as QuotaLimitReading[]),
+        agentQuotaService.listUsageTurns(account.id, 42).catch(() => [] as UsageTurn[]),
       ]);
       if (cancelled) return;
-      setWindows(normalizeWeeklyWindows(windowRows));
-      setReadings(series);
+      setWindows(normalizeWindows(windowRows));
+      setReadings(snapshotSeries);
+      setTurns(usageTurns);
     })().finally(() => setLoading(false));
 
     return () => {
@@ -331,7 +390,9 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     };
   }, [externalAccountId]);
 
-  const scopeOptions = useMemo(() => {
+  // The 5-hour session window comes first: it is the window an agent actually
+  // works inside, and the one that stops a run mid-task.
+  const seriesOptions = useMemo(() => {
     const scoped = [
       ...new Set(
         readings
@@ -341,52 +402,58 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     ].sort();
 
     return [
-      { label: t('heteroAgent.quota.weekly'), value: '' },
+      { label: t('heteroAgent.claudeQuota.calendar.sessionWindow'), value: 'session:' },
+      { label: t('heteroAgent.quota.weekly'), value: 'weekly:' },
       ...scoped.map((key) => ({
         label: t('heteroAgent.claudeQuota.scopedWeekly', { model: key }),
-        value: key,
+        value: `weekly:${key}`,
       })),
     ];
   }, [readings, t]);
 
-  const dailyBurn = useMemo(() => buildDailyBurn(readings, scopeKey), [readings, scopeKey]);
+  const dailySpend = useMemo(() => buildDailySpend(turns), [turns]);
+  const dailyBurn = useMemo(() => buildDailyBurn(readings, series), [readings, series]);
+  const hasLedger = turns.length > 0;
 
-  // Chart window: the live one from the newest reading, else the most recently
-  // observed window from the projection table so the chart never goes blank.
+  // Heat ranks each day against the busiest day in view, so the ramp reads as
+  // relative intensity instead of flagging every working day at once.
+  const heatBy = hasLedger
+    ? new Map([...dailySpend].map(([key, spend]) => [key, spend.tokens]))
+    : dailyBurn;
+  const heatMax = Math.max(0, ...heatBy.values());
+
   const chartWindow = useMemo(() => {
-    const live = currentWeeklyWindow(readings, scopeKey, now);
+    const live = currentWindow(readings, series, now);
     if (live) return live;
-    const past = windows.filter((w) => w.scopeKey === scopeKey);
+    const past = windows.filter((w) => w.seriesId === seriesId(series));
     return past.length > 0 ? past.reduce((a, b) => (a.resetsAt > b.resetsAt ? a : b)) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readings, scopeKey, windows]);
+  }, [readings, series, windows]);
 
-  // Reset badges: every observed window boundary of this series, plus the live
-  // window's upcoming reset (which has no projection row yet).
+  // A 5-hour window resets several times a day, so a per-day reset badge would
+  // fire on every cell — only the weekly windows get one.
   const resetsByDay = useMemo(() => {
-    const map = new Map<string, { peakUtilization: number; resetsAt: number }>();
+    if (series.type === 'session') return new Map<string, number>();
+    const map = new Map<string, number>();
     for (const w of windows) {
-      if (w.scopeKey !== scopeKey) continue;
-      map.set(dayKeyOf(w.resetsAt), { peakUtilization: w.peakUtilization, resetsAt: w.resetsAt });
+      if (w.seriesId !== seriesId(series)) continue;
+      map.set(dayKeyOf(w.resetsAt), w.resetsAt);
     }
     if (chartWindow && chartWindow.resetsAt > now) {
-      map.set(dayKeyOf(chartWindow.resetsAt), {
-        peakUtilization: chartWindow.peakUtilization,
-        resetsAt: chartWindow.resetsAt,
-      });
+      map.set(dayKeyOf(chartWindow.resetsAt), chartWindow.resetsAt);
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windows, scopeKey, chartWindow]);
+  }, [windows, series, chartWindow]);
 
   const rateLimitedDays = useMemo(
     () =>
       new Set(
         windows
-          .filter((w) => w.scopeKey === scopeKey && w.rateLimitedAt != null)
+          .filter((w) => w.seriesId === seriesId(series) && w.rateLimitedAt != null)
           .map((w) => dayKeyOf(w.rateLimitedAt!)),
       ),
-    [windows, scopeKey],
+    [windows, series],
   );
 
   const grid = useMemo(() => buildMonthGrid(month), [month]);
@@ -404,7 +471,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   if (loading)
     return (
       <Flexbox gap={12}>
-        <Skeleton.Button active block style={{ height: 160 }} />
+        <Skeleton.Button active block style={{ height: 170 }} />
         <Skeleton.Button active block style={{ height: 320 }} />
       </Flexbox>
     );
@@ -416,20 +483,34 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
       </Text>
     );
 
+  const dayLabel = (spend: DaySpend | undefined, burn: number) => {
+    if (spend && spend.tokens > 0) return formatTokens(spend.tokens);
+    // No ledger row (usage burned outside LobeHub) but the meter still moved.
+    if (!hasLedger && burn > 0) return `${Math.round(burn)}%`;
+    return '';
+  };
+
   return (
     <Flexbox gap={16}>
-      {scopeOptions.length > 1 && (
-        <Segmented
-          options={scopeOptions}
-          size={'small'}
-          style={{ alignSelf: 'flex-start' }}
-          value={scopeKey}
-          onChange={(value) => setScopeKey(value as string)}
-        />
-      )}
+      <Segmented
+        options={seriesOptions}
+        size={'small'}
+        style={{ alignSelf: 'flex-start' }}
+        value={seriesId(series)}
+        onChange={(value) => {
+          const [type, scopeKey = ''] = String(value).split(':');
+          setSeries({ scopeKey, type: type === 'session' ? 'session' : 'weekly' });
+        }}
+      />
 
       {chartWindow && (
-        <BurnChart now={now} readings={readings} scopeKey={scopeKey} window={chartWindow} />
+        <BurnChart
+          now={now}
+          readings={readings}
+          series={series}
+          turns={turns}
+          window={chartWindow}
+        />
       )}
 
       <Flexbox gap={8}>
@@ -458,16 +539,23 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             </div>
           ))}
           {grid.map((cell) => {
+            const spend = dailySpend.get(cell.key);
             const burn = dailyBurn.get(cell.key) ?? 0;
-            const reset = resetsByDay.get(cell.key);
+            const resetsAt = resetsByDay.get(cell.key);
             const rateLimited = rateLimitedDays.has(cell.key);
+            const label = dayLabel(spend, burn);
             const tooltipParts = [
+              spend &&
+                spend.tokens > 0 &&
+                t('heteroAgent.claudeQuota.calendar.dayTokens', {
+                  cost: formatCost(spend.cost),
+                  tokens: formatTokens(spend.tokens),
+                }),
               burn > 0 &&
-                t('heteroAgent.claudeQuota.calendar.dayBurn', { percent: Math.round(burn) }),
-              reset &&
+                t('heteroAgent.claudeQuota.calendar.dayShare', { percent: Math.round(burn) }),
+              resetsAt &&
                 t('heteroAgent.claudeQuota.calendar.resetAt', {
-                  percent: reset.peakUtilization,
-                  time: dayjs(reset.resetsAt).format('HH:mm'),
+                  time: dayjs(resetsAt).format('HH:mm'),
                 }),
               rateLimited && t('heteroAgent.claudeQuota.calendar.rateLimited'),
             ].filter(Boolean) as string[];
@@ -475,21 +563,25 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             const day = (
               <div
                 className={styles.dayCell}
-                data-burn-level={burnLevelOf(burn)}
+                data-heat={heatLevelOf(heatBy.get(cell.key) ?? 0, heatMax)}
                 data-in-month={cell.inMonth}
+                data-rate-limited={rateLimited}
                 data-today={cell.key === todayKey}
                 key={cell.key}
               >
                 <span>{cell.date.date()}</span>
                 <span className={styles.dayFooter}>
-                  <span>{burn > 0 ? `${Math.round(burn)}%` : ''}</span>
-                  <span style={{ display: 'inline-flex', gap: 2 }}>
-                    {rateLimited && <Icon color={cssVar.colorError} icon={ZapIcon} size={11} />}
-                    {reset && (
+                  <span className={styles.tokens}>{label}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                    {rateLimited && <Icon color={cssVar.colorError} icon={BanIcon} size={12} />}
+                    {resetsAt && (
                       <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
                     )}
                   </span>
                 </span>
+                {spend && spend.cost > 0 && (
+                  <span className={styles.cost}>{formatCost(spend.cost)}</span>
+                )}
               </div>
             );
 
@@ -508,25 +600,28 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             <Text style={{ fontSize: 11 }} type={'secondary'}>
               {t('heteroAgent.claudeQuota.calendar.legendLess')}
             </Text>
-            {[1, 2, 3].map((level) => (
-              <span className={styles.legendSwatch} data-burn-level={level} key={level} />
+            {[1, 2, 3, 4].map((level) => (
+              <span className={styles.legendSwatch} data-heat={level} key={level} />
             ))}
             <Text style={{ fontSize: 11 }} type={'secondary'}>
               {t('heteroAgent.claudeQuota.calendar.legendMore')}
             </Text>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
-            <span className={styles.legendSwatch} data-burn-level={4} />
+            <span className={styles.legendSwatch} data-rate-limited={'true'} />
+            <Icon color={cssVar.colorError} icon={BanIcon} size={11} />
             <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {t('heteroAgent.claudeQuota.calendar.legendOverPace')}
+              {t('heteroAgent.claudeQuota.calendar.rateLimited')}
             </Text>
           </Flexbox>
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
-            <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {t('heteroAgent.claudeQuota.calendar.legendReset')}
-            </Text>
-          </Flexbox>
+          {series.type !== 'session' && (
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
+              <Text style={{ fontSize: 11 }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.legendReset')}
+              </Text>
+            </Flexbox>
+          )}
         </Flexbox>
       </Flexbox>
     </Flexbox>

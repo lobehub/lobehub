@@ -42,6 +42,10 @@ class AgentQuotaService {
   listSnapshots = async (accountId: string, sinceDays?: number) =>
     lambdaClient.agentQuota.listSnapshots.query({ accountId, sinceDays });
 
+  /** Per-turn token + cost spend (oldest first) for the calendar's daily totals. */
+  listUsageTurns = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listUsageTurns.query({ accountId, sinceDays });
+
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 
   /** UI "switch account": pin one account for an agent (Manual mode). */
