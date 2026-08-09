@@ -26,7 +26,7 @@ const STYLE_DIRECTIONS: Record<AgentArtworkStyle, string> = {
   clay: 'Render it as a soft 3D clay-style figure with rounded forms, matte materials, subtle hand-made charm, gentle studio lighting, and warm pastel colors.',
   geometric:
     'Render it as flat geometric illustration built from bold simple shapes, crisp edges, and a confident limited palette in the spirit of mid-century poster design.',
-  lobe: "Render it as a single 3D cartoon character in the spirit of a collectible designer figure: smooth rounded shapes, expressive finely-crafted features with big lively eyes, balanced natural proportions (not an oversized baby head), soft studio lighting, and one vivid saturated solid background color. Frame it as a tight head-and-shoulders close-up: the head fills roughly two thirds of the frame height, crop just below the shoulders — no chest, no torso. Express the identity through the character's outfit and accessories — do not draw scenes, maps, or diagrams on the character's body.",
+  lobe: "Render it as a bold mascot-style 3D emoji character: a single oversized head filling most of the frame, skin in one saturated color from the palette (not realistic human skin), graphic simplified facial features with an expression that matches the agent's personality (a knowing wink, a curious smile, a confident smirk — full of attitude, never blank or babyish), glossy candy-like materials with soft studio lighting, and one vivid contrasting solid background color. Show at most a hint of shoulders. Express the identity through a hat and one or two small floating accessory props beside the head — do not draw scenes, maps, or diagrams on the character.",
   pixel:
     'Render it as crisp retro pixel art with chunky readable pixels, a limited bright palette, and clean shading in the spirit of classic 16-bit games.',
   sticker:
@@ -107,13 +107,16 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
 
   const styleReferenceCount =
     input.styleReferenceImageUrls?.filter((url) => url.trim()).length ?? 0;
-  // "Match … exactly" measurably drags the references' PROPORTIONS into the
-  // result (the official mascots are big-headed, which infantilizes every
-  // generated character), so the wording scopes the borrowing to surface
-  // qualities and explicitly fences proportions off.
+  // For avatars the references define the TARGET character feel (the official
+  // mascot look), so the wording asks for that same energy while fencing off
+  // the literal faces / hats / subjects — copying those would make every agent
+  // look like the same mascot. Covers must not inherit the character wording
+  // (they forbid portraits), so they only borrow surface qualities.
   const styleReferenceDirection =
     styleReferenceCount > 0
-      ? `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} only as a rendering-style reference — match ${styleReferenceCount === 1 ? 'its' : 'their'} materials, lighting, color saturation, and level of finish. Do NOT copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects, compositions, or proportions — invent a new subject from the agent described above.`
+      ? input.kind === 'avatar'
+        ? `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} as the target character style — the same mascot-like head-dominant look, single-color skin, material, lighting, and color energy. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} exact faces, hats, or subjects — invent a new character for the agent described above.`
+        : `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} only as a rendering-style reference — match ${styleReferenceCount === 1 ? 'its' : 'their'} materials, lighting, color saturation, and level of finish. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects or compositions.`
       : '';
   const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
 

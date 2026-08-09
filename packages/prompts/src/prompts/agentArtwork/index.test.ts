@@ -57,10 +57,9 @@ describe('buildAgentArtworkPrompt', () => {
   it('defaults to the lobe mascot style direction', () => {
     const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar' });
 
-    expect(prompt).toContain('one vivid saturated solid background color');
-    expect(prompt).toContain('outfit and accessories');
-    expect(prompt).toContain('head-and-shoulders close-up');
-    expect(prompt).toContain('not an oversized baby head');
+    expect(prompt).toContain('one vivid contrasting solid background color');
+    expect(prompt).toContain('mascot-style 3D emoji character');
+    expect(prompt).toContain('never blank or babyish');
   });
 
   it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
@@ -77,8 +76,8 @@ describe('buildAgentArtworkPrompt', () => {
       styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
     });
 
-    expect(prompt).toContain('only as a rendering-style reference');
-    expect(prompt).toContain('Do NOT copy their subjects, compositions, or proportions');
+    expect(prompt).toContain('as the target character style');
+    expect(prompt).toContain('Do not copy their exact faces, hats, or subjects');
   });
 
   it('uses singular wording for a single style reference', () => {
@@ -88,7 +87,7 @@ describe('buildAgentArtworkPrompt', () => {
       styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
     });
 
-    expect(prompt).toContain('Use the attached image only as a rendering-style reference');
+    expect(prompt).toContain('only as a rendering-style reference');
   });
 
   it('lets style references suppress the counterpart artwork reference', () => {
@@ -99,7 +98,7 @@ describe('buildAgentArtworkPrompt', () => {
       styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
     });
 
-    expect(prompt).toContain('only as a rendering-style reference');
+    expect(prompt).toContain('as the target character style');
     expect(prompt).not.toContain('attached existing profile background');
   });
 
