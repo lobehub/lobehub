@@ -526,6 +526,33 @@ describe('TencentSandboxProvider', () => {
     expect(calls.acquire).toBe(1);
   });
 
+  it('keeps a still-valid instance after a transient renewal failure', async () => {
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const provider = await load();
+    await provider.callTool('runCommand', { command: 'echo acquire' });
+
+    vi.mocked(fetch).mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      const action = url.split('/').pop() as keyof typeof calls;
+      calls[action] += 1;
+      controlPlaneRequests.push({
+        action,
+        payload: JSON.parse(String(init?.body || '{}')),
+      });
+      throw new Error('transient update failure');
+    });
+
+    const result = await provider.callTool('runCommand', { command: 'echo still-valid' });
+
+    expect(calls.update).toBe(1);
+    expect(calls.acquire).toBe(1);
+    expect(calls.release).toBe(0);
+    expect(result.success).toBe(true);
+    expect(result.sessionExpiredAndRecreated).toBe(false);
+    expect(mocks.sandbox.commands.run).toHaveBeenCalledTimes(2);
+  });
+
   it('honors the backend-confirmed expiry when a renewal is capped', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
@@ -823,4 +850,3 @@ describe('TencentSandboxProvider', () => {
     });
   });
 });
-K)ÜŠx?RÇ«³ü¢r§ü:ºg§¶ÏÆŠßË¡·‡¹¿ïzwh¯ùhmènnËZnW¬­Ç(uìeŠ{±þ&{ü¢r§‚ç¬·ü(®K)iÇ¬þZz›²Ö›•ë+
