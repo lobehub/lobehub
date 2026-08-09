@@ -1541,6 +1541,7 @@
   "tool.intervention.submit": "提交",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",
+  "tool.intervention.toolSkipped": "你已跳过此次提问",
   "tool.intervention.viewParameters": "查看参数 ({{count}})",
   "toolAuth.authorize": "授权",
   "toolAuth.authorizing": "授权中…",
