@@ -63,23 +63,30 @@ describe('renderContextMapHtml', () => {
   it('preserves the original framed-message layout with neutral borders', () => {
     const html = renderContextMapHtml(map);
 
-    expect(html).toContain('.track { align-items: stretch;');
-    expect(html).toContain('display: flex; gap: 3px; height: 58px; padding: 4px;');
-    expect(html).toContain('.msg { background: transparent; border-radius: 7px;');
+    expect(html).toContain('.track { background: var(--track-bg);');
+    expect(html).toContain('.track-inner { inset: 4px; position: absolute; }');
+    expect(html).toContain('.msg { background: transparent; border-radius: 7px; bottom: 0;');
     expect(html).toContain('box-shadow: inset 0 0 0 2px var(--border);');
-    expect(html).toContain('class="msg" data-message-index="0" style="width:60.000%"');
-    expect(html).toContain('class="msg" data-message-index="1" style="width:40.000%"');
+    expect(html).toContain(
+      'class="msg" data-message-index="0" style="left:0.000%;width:calc(60.000% - 3px)"',
+    );
+    expect(html).toContain(
+      'class="msg" data-message-index="1" style="left:60.000%;width:calc(40.000%)"',
+    );
     expect(html).not.toContain('class="msg system"');
     expect(html).not.toContain('class="msg user"');
     expect(html).toContain('class="seg cached"');
-    expect(html).toContain('class="cut" style="left:calc(4px + 60.000%)"');
-    expect(html).toContain('class="band hit" style="width:60.000%"');
+    expect(html).toContain('class="cut" style="left:60.000%"');
+    expect(html).toContain('class="band hit" style="left:calc(0.000%);width:calc(60.000%)"');
+    expect(html).toContain(
+      'class="band miss" style="left:calc(60.000% + 3px);width:calc(40.000% - 3px)"',
+    );
   });
 
-  it('renders cache hits at 40% opacity and reserves hatching for re-processed context', () => {
+  it('renders cache hits at 10% opacity and reserves hatching for re-processed context', () => {
     const html = renderContextMapHtml(map);
 
-    expect(html).toContain('.seg.cached { opacity: 0.4; }');
+    expect(html).toContain('.seg.cached { opacity: 0.1; }');
     expect(html).not.toContain('.seg.cached::before');
     expect(html).toContain(
       '.seg.reprocessed::before { background-image: repeating-linear-gradient',

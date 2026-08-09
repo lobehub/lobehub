@@ -80,14 +80,16 @@ const STYLE = `
   .label .tokens { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
   .lanes { flex: 1; min-width: 0; }
 
-  .track { align-items: stretch; background: var(--track-bg); border: 1.5px solid var(--border); border-radius: 8px; display: flex; gap: 3px; height: 58px; padding: 4px; position: relative; }
-  /* Preserve the original message geometry: the frame's padding and the track gap make each
-     payload message read as a distinct object. Every role uses the same neutral frame. */
-  .msg { background: transparent; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--border); display: flex; gap: 1px; padding: 3px; position: relative; }
+  .track { background: var(--track-bg); border: 1.5px solid var(--border); border-radius: 8px; height: 58px; position: relative; }
+  .track-inner { inset: 4px; position: absolute; }
+  /* Every message uses the same neutral frame. Absolute token coordinates keep the same
+     boundary aligned across calls; the visual gap is deducted from the preceding message
+     instead of accumulating and stretching rows that contain more messages. */
+  .msg { background: transparent; border-radius: 7px; bottom: 0; box-shadow: inset 0 0 0 2px var(--border); display: flex; gap: 1px; padding: 3px; position: absolute; top: 0; }
   .seg { border-radius: 3px; min-width: 1px; position: relative; }
   /* Cache hits recede through opacity alone. Hatching is reserved for context the model had
      to re-process after a prefix break, so the two cache states never compete visually. */
-  .seg.cached { opacity: 0.4; }
+  .seg.cached { opacity: 0.1; }
   .seg.reprocessed::before { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); content: ''; inset: 0; position: absolute; }
   .inject-mark { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); display: flex; font-size: 7px; font-weight: 700; height: 13px; justify-content: center; letter-spacing: -0.02em; position: absolute; right: -5px; top: -7px; width: 13px; z-index: 12; }
   .seg .tip { background: var(--tip-bg); border-radius: 6px; bottom: calc(100% + 10px); color: var(--tip-text); display: none; font-size: 12px; left: 0; line-height: 1.5; max-width: 460px; padding: 8px 10px; position: absolute; width: max-content; z-index: 20; }
@@ -95,13 +97,13 @@ const STYLE = `
   .seg .tip b { color: var(--kind-injected); }
 
   /* Break marker: a full-bleed rule through the track with the reason anchored to it. */
-  .cut { border-left: 2px solid var(--lane-miss); bottom: -7px; position: absolute; top: -7px; z-index: 10; }
-  .cut::before { border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 7px solid var(--lane-miss); content: ''; left: -7px; position: absolute; top: -7px; }
+  .cut { border-left: 2px solid var(--lane-miss); bottom: -11px; position: absolute; top: -11px; z-index: 10; }
+  .cut::before { border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 7px solid var(--lane-miss); content: ''; left: -7px; position: absolute; top: 0; }
 
   /* Cache lane: bands carry the geometry only — the figures live on the line below, where
      no amount of proportional narrowing can clip them. */
-  .lane { display: flex; gap: 3px; height: 9px; margin-top: 5px; }
-  .band { border-radius: 3px; }
+  .lane { height: 9px; margin-top: 5px; position: relative; }
+  .band { border-radius: 3px; bottom: 0; position: absolute; top: 0; }
   .band.hit { background: var(--lane-hit); }
   .band.miss { background: var(--lane-miss); }
   .band.cold { background: var(--lane-cold); }
@@ -122,7 +124,7 @@ const STYLE = `
   .family .items span.num { color: var(--text-dim); }
   .swatch { border-radius: 4px; display: inline-block; height: 14px; width: 26px; }
   .swatch.frame { background: transparent; border: 2px solid var(--border); }
-  .swatch.cached { opacity: 0.4; }
+  .swatch.cached { opacity: 0.1; }
   .swatch.hatch { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); }
   .swatch.injected { position: relative; }
   .swatch.injected::after { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); content: 'I'; display: flex; font-size: 6px; font-weight: 700; height: 10px; justify-content: center; position: absolute; right: -4px; top: -5px; width: 10px; }
@@ -171,8 +173,10 @@ export function renderContextMapHtml(
     .map((call) => {
       let offset = 0;
       let cutLeft: number | undefined;
-      const messages = groupByMessage(call)
-        .map((message) => {
+      const messageGroups = groupByMessage(call);
+      const messages = messageGroups
+        .map((message, messagePosition) => {
+          const messageLeft = offset;
           if (
             cutLeft === undefined &&
             call.breakMessageIndex !== undefined &&
@@ -204,23 +208,24 @@ export function renderContextMapHtml(
           const injectedMark = isInjected
             ? '<span class="inject-mark" title="Framework injected">I</span>'
             : '';
-          return `<div class="msg" data-message-index="${message.messageIndex}" style="width:${pct(message.tokens).toFixed(3)}%">${segments}${injectedMark}</div>`;
+          const messageWidth = `${pct(message.tokens).toFixed(3)}%${messagePosition < messageGroups.length - 1 ? ' - 3px' : ''}`;
+          return `<div class="msg" data-message-index="${message.messageIndex}" style="left:${messageLeft.toFixed(3)}%;width:calc(${messageWidth})">${segments}${injectedMark}</div>`;
         })
         .join('');
 
       const cut =
-        cutLeft === undefined
-          ? ''
-          : `<div class="cut" style="left:calc(4px + ${cutLeft.toFixed(3)}%)"></div>`;
+        cutLeft === undefined ? '' : `<div class="cut" style="left:${cutLeft.toFixed(3)}%"></div>`;
 
       // The lane restates the row as cache economics: what was reused, what was paid for.
       const restTone: LaneTone =
         call.callIndex === 0 ? 'cold' : call.breakMessageIndex === undefined ? 'new' : 'miss';
-      const band = (tone: LaneTone, tokens: number) =>
+      const band = (tone: LaneTone, tokens: number, left: number, hasLeadingGap = false) =>
         tokens > 0
-          ? `<div class="band ${tone}" style="width:${pct(tokens).toFixed(3)}%"></div>`
+          ? `<div class="band ${tone}" style="left:calc(${pct(left).toFixed(3)}%${hasLeadingGap ? ' + 3px' : ''});width:calc(${pct(tokens).toFixed(3)}%${hasLeadingGap ? ' - 3px' : ''})"></div>`
           : '';
-      const lane = band('hit', call.cachedTokens) + band(restTone, call.reprocessedTokens);
+      const lane =
+        band('hit', call.cachedTokens, 0) +
+        band(restTone, call.reprocessedTokens, call.cachedTokens, call.cachedTokens > 0);
 
       const sep = '<span class="sep">·</span>';
       const hitText =
@@ -245,7 +250,7 @@ export function renderContextMapHtml(
         <div class="tokens">step ${call.stepIndex} · ${fmtTokens(call.totalTokens)} tok${share}</div>
       </div>
       <div class="lanes">
-        <div class="track">${messages}${cut}</div>
+        <div class="track"><div class="track-inner">${messages}${cut}</div></div>
         <div class="lane">${lane}</div>
         <div class="lanetext">${laneText}</div>
       </div>
