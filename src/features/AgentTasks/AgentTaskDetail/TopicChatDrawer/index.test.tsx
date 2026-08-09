@@ -1,9 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
+import type { TaskDetailActivity } from '@lobechat/types';
 import { render } from '@testing-library/react';
 import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 
 import TopicChatDrawer from './index';
 
@@ -39,7 +42,7 @@ const mocks = vi.hoisted(() => ({
             title: 'Topic 1',
             type: 'topic',
           },
-        ],
+        ] as TaskDetailActivity[],
         agentId: 'agt_assignee',
         identifier: 'T-1',
         instruction: 'Do the task',
@@ -248,8 +251,38 @@ describe('TopicChatDrawer', () => {
     mocks.chatState.replaceMessages.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    mocks.taskState.taskDetailMap['T-1'].activities[0] = {
+      id: 'topic-1',
+      status: 'completed',
+      time: '2026-04-29T00:00:00.000Z',
+      title: 'Topic 1',
+      type: 'topic',
+    };
     mocks.permission.allowed = true;
     mocks.serverConfigState.serverConfig.enableBusinessFeatures = false;
+    vi.mocked(useGatewayReconnect).mockClear();
+  });
+
+  // The run drawer also mounts on the home inbox, where the chat store has no
+  // active agent — reconnecting against it would stream the run into a bucket
+  // this panel never reads, so the run's own agent has to be passed down.
+  it('reconnects a running topic against the drawer agent', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0] = {
+      id: 'topic-1',
+      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      status: 'running',
+      time: '2026-04-29T00:00:00.000Z',
+      title: 'Topic 1',
+      type: 'topic',
+    };
+
+    render(<TopicChatDrawer />);
+
+    expect(useGatewayReconnect).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ operationId: 'op-1' }),
+      'agt_assignee',
+    );
   });
 
   it('hydrates the task assignee agent config for drawer messages', () => {

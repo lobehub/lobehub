@@ -6,12 +6,11 @@ import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
-import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
+import GoalModeChip from '@/features/ChatInput/ActionBar/GoalModeChip';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
@@ -86,7 +85,6 @@ const HeterogeneousChatInput = memo(() => {
   // the global (hijack-prone) active agent.
   const agentId = useConversationStore(contextSelectors.agentId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
-  const params = useParams<{ aid: string }>();
   const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
@@ -130,6 +128,7 @@ const HeterogeneousChatInput = memo(() => {
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () => [
       { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
+      { alwaysDisplay: true, children: <GoalModeChip />, key: 'goalModeChip' },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
     [],
@@ -152,7 +151,7 @@ const HeterogeneousChatInput = memo(() => {
   const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 
   const goToAgentProfile = () => {
-    if (params.aid) navigate(urlJoin('/agent', params.aid, 'profile'));
+    if (agentId) navigate(`/agent/${agentId}/profile`);
   };
 
   const deviceBlocked =

@@ -12,19 +12,31 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
+import { chatGroups } from './chatGroup';
 import { topics } from './topic';
 
 /**
- * `copy`-job payload. Fields are required: the column itself is nullable, and
- * NULL is what encodes "this job type carries no payload" — so a payload that
- * exists at all must be complete.
+ * `copy`-job payload. The column itself is nullable, and NULL is what encodes
+ * "this job type carries no payload" — so a payload that exists at all must
+ * carry its `agents` map.
  */
 export interface AgentHistoryJobPayload {
   /** Agents duplicated by this job, for guards that only need the id map. */
   agents: { newAgentId: string; sourceAgentId: string }[];
+  /**
+   * Present only for a chat-group copy. Its presence is the discriminator the
+   * drain uses to pick the group remap (every member agent maps through
+   * `agents` above, and copied rows are re-parented onto `newGroupId`) instead
+   * of the single-agent remap.
+   */
+  group?: { newGroupId: string; sourceGroupId: string };
 }
 
-/** `copy` queue-row payload. Required for the same reason as above. */
+/**
+ * `copy` queue-row payload. Required for the same reason as above: the drain
+ * treats a unit missing any coordinate as unrecoverable and drops it, so a
+ * row that exists at all must be complete.
+ */
 export interface AgentHistoryJobTopicPayload {
   /** Agent owning the target topic shell. */
   newAgentId: string;
@@ -153,6 +165,41 @@ export const agentHistoryJobAgents = pgTable(
 );
 
 export type AgentHistoryJobAgentItem = typeof agentHistoryJobAgents.$inferSelect;
+
+/**
+ * Chat groups covered by a job — the group-side twin of
+ * `agent_history_job_agents`, and the only reliable handle a group has on its
+ * job:
+ *
+ * - the progress badge polls every few seconds, and `agent_history_jobs.group_ids`
+ *   is an unindexed jsonb array that completed jobs keep accumulating into;
+ * - the member-agent junction is not a substitute. A group whose roster is
+ *   empty registers no agent rows at all, leaving the "already migrating"
+ *   guard with nothing to match on.
+ *
+ * Same shape rules as the agents junction: cascade on group delete (the
+ * pending work dies with the group), and no unique constraint on `group_id`
+ * alone — history keeps completed jobs, and single-pending-job-per-group is
+ * enforced by the entry guard inside the transfer/copy transaction.
+ */
+export const agentHistoryJobGroups = pgTable(
+  'agent_history_job_groups',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => agentHistoryJobs.id, { onDelete: 'cascade' }),
+    groupId: text('group_id')
+      .notNull()
+      .references(() => chatGroups.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('agent_history_job_groups_job_id_group_id_unique').on(t.jobId, t.groupId),
+    index('agent_history_job_groups_group_id_idx').on(t.groupId),
+  ],
+);
+
+export type AgentHistoryJobGroupItem = typeof agentHistoryJobGroups.$inferSelect;
 
 /**
  * Per-topic work queue of a job. A row means "this topic's messages (and

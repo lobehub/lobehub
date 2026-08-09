@@ -5,7 +5,7 @@ exists. When it doesn't — a standalone delivery, a task run without
 `$LOBE_OPERATION_ID`, or any run where **you** author the checks — publish a
 **structured report round** instead: a self-contained directory that
 `lh acceptance run ingest` uploads as one immutable verification round. The
-verify page renders itself from `result.json`: provenance, the overall
+acceptance page renders itself from `result.json`: provenance, the overall
 conclusion, and the check list from `plan[]` paired with `cases[]`, each with
 its evidence inline — **images render as figures, before/after pairs render
 under tinted comparison bands**. A chat-only summary or a bare markdown report
@@ -32,7 +32,8 @@ the checks and use one of these first-class paths:
 REPORT_DIR=./acceptance-report
 
 # A. first external-project round — creates a standalone acceptance automatically
-lh acceptance run ingest "$REPORT_DIR" --json
+lh acceptance run ingest "$REPORT_DIR" \
+  --requirement "<one-sentence business goal>" --json
 
 # Re-verification — append a new immutable round to the same acceptance
 lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
@@ -58,6 +59,18 @@ history is the point, not something to hide. Reuse the same `--subject` across
 rounds for a LobeHub object, or pass `--acceptance <acceptanceId>` after an
 external project's first standalone round.
 
+Before composing a repair round, read the aggregate:
+
+```bash
+lh acceptance view "$ACCEPTANCE_ID" --json
+```
+
+- Omit checks whose latest `userReview.action` is `accept` unless the repair can
+  regress them.
+- Address non-stale rejects and reuse their exact stable check ids.
+- A semantic replacement declares `supersedes: ["old-id"]`; every later round
+  reusing the successor id repeats its full `supersedes` chain.
+
 ## Directory layout
 
 Any directory works — no repo convention required:
@@ -72,7 +85,8 @@ Any directory works — no repo convention required:
 ## Workflow
 
 1. **Write `plan[]` BEFORE you run anything.** Each item is
-   `{ id, title, category, verifier, method, expected, requiredEvidence }`.
+   `{ id, title, category, verifier, method, expected, requiredEvidence,
+supersedes? }`.
    A planned item that never produces a case renders as **未执行** rather than
    vanishing — cut coverage in the open.
 2. **Collect evidence into `assets/` as you test.** Screenshots/charts must be
@@ -96,13 +110,18 @@ Any directory works — no repo convention required:
    lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
    ```
 
+   On the first ingest, add `--requirement "<one-sentence business goal>"`.
+   Describe the durable goal of the whole acceptance, not this round's narrower
+   implementation scope.
+
    Inside a LobeHub topic, the command groups the round under the current topic.
    Outside one, it creates a standalone acceptance automatically; no Task ID is
    required. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and prints
-   `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>` — include the full
-   URLs in your final reply. Never update a prior round after a fix; publish the
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form. Include
+   only the full acceptance URL in your final reply; never expose local paths or
+   internal run-page paths. Never update a prior round after a fix; publish the
    re-verification as the next round.
 
 ## result.json schema
@@ -196,6 +215,13 @@ flow are ordinary ordered evidence with captions, not a pair.
 
 - **No evidence, no claim** — every `pass`/`fail` in `cases[]` links at least
   one asset.
+- **Non-visual behavioral claims need dual text evidence** — attach a concise
+  reviewer-facing reasoning document and a separate audit-facing execution
+  artifact containing the exact command/request and observed values. Neither
+  unsupported prose nor an unexplained log dump is sufficient.
+- **Final handoff exposes only Acceptance** — use `/acceptance/<acceptanceId>` or
+  its `?r=<roundIndex>` snapshot. Never include images, local paths, local file
+  links, or internal run-page paths in chat.
 - **Report failures faithfully** — a failing case with clear evidence is a good
   report; a vague green one is not.
 - If coverage was cut, say so in `report.md` — silent truncation reads as

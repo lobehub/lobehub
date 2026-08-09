@@ -187,6 +187,15 @@ export class FlatListBuilder {
       const message = this.messageMap.get(childId);
       if (!message) continue;
 
+      // Internal dispatch envelopes remain in the context tree so the target
+      // assistant keeps its parent chain, but they are not user-authored turns
+      // and therefore do not render as standalone bubbles.
+      if (message.metadata?.agentDispatch?.visibility === 'internal') {
+        processedIds.add(message.id);
+        this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        continue;
+      }
+
       // Priority 1: Compare message group
       const messageGroup = message.groupId ? this.messageGroupMap.get(message.groupId) : undefined;
 

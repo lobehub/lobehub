@@ -18,6 +18,19 @@ instructions merely to learn how to submit an artifact.
 The declared `requiredEvidence` type is binding. Do not replace a required video
 with a final screenshot or a required DOM snapshot with prose.
 
+## Dual text evidence for non-visual behavior
+
+CLI, API, backend, policy, security, and migration claims normally need two
+separate `text` artifacts on the same check:
+
+1. A reasoning artifact: claim, setup or threat model, method, pass criteria,
+   interpretation, and limitations.
+2. An execution artifact: exact command or request, relevant raw observations,
+   exit/status values, and a short mapping back to the pass criteria.
+
+Keep both artifacts in the current immutable round. Do not ask a reviewer to
+join an explanation from an older round with fresh execution output.
+
 ## File versus inline content
 
 - Use `--file` for binary artifacts and larger text/DOM/transcript files.

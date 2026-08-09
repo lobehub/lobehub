@@ -776,6 +776,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
       cwd: options.cwd || process.cwd(),
       env: commandEnv,
       extraArgs,
+      // Device and sandbox executions are observed through the same gateway
+      // stream as native server agents. Ask Claude Code for content-block
+      // deltas so the current conversation receives text while the process is
+      // running instead of seeing only the terminal assistant snapshot.
+      includePartialMessages: options.type === 'claude-code',
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -808,6 +813,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         cwd: options.cwd || process.cwd(),
         env: commandEnv,
         extraArgs,
+        includePartialMessages: options.type === 'claude-code',
         operationId,
         prompt: resolved.prompt,
         uploadImage,

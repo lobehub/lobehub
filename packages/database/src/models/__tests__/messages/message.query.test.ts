@@ -3297,6 +3297,63 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
+  describe('isMessageDescendantOf', () => {
+    it('distinguishes a newer callback sibling from an advancement of the active branch', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        { id: 'shell', userId, topicId: 'topic1', role: 'assistant', content: '' },
+        {
+          id: 'tool',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          content: 'result',
+          parentId: 'shell',
+        },
+        {
+          id: 'active',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'main',
+          parentId: 'tool',
+        },
+        {
+          id: 'callback',
+          userId,
+          topicId: 'topic1',
+          role: 'taskCallback',
+          content: 'done',
+          parentId: 'shell',
+        },
+        {
+          id: 'callback-reply',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'reactive',
+          parentId: 'callback',
+        },
+      ]);
+
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'active',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(false);
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'callback',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(true);
+    });
+  });
+
   // Fallback anchor used when `getLatestSpineMessageId` comes back empty. Without
   // it a new user turn is persisted as a second root and the renderer emits the
   // newest reply above older messages.

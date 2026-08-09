@@ -21,7 +21,7 @@ export const AcceptanceIdentifier = 'acceptance';
 
 /**
  * Portable builder-side acceptance skill. Unlike the repo-local `agent-testing`
- * skill (macOS scripts + local report dirs + LobeHub-specific probes), this one
+ * skill (macOS scripts + project-specific working artifacts and probes), this one
  * keeps its acceptance contract independent of repository-local scripts, so any
  * external builder (Claude Code / Codex) can run it from a task's working
  * directory, with or without a LobeHub operation/topic: discover or author the

@@ -1,4 +1,5 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
@@ -201,6 +202,7 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        conversationAgentId: z.string().optional(),
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
@@ -445,6 +447,8 @@ const ExecSubAgentTaskSchema = z.object({
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
   agentId: z.string(),
+  /** Optional assistant placeholder for transports that stream into an existing row. */
+  assistantMessage: z.object({ provider: z.string() }).optional(),
   /** The Group ID (optional, only for Group mode) */
   groupId: z.string().optional(),
   /** Initial user message content (task instruction) */
@@ -797,7 +801,8 @@ export const aiAgentRouter = router({
   createClientTaskThread: aiAgentWriteProcedure
     .input(CreateClientTaskThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+      const { agentId, assistantMessage, groupId, instruction, parentMessageId, title, topicId } =
+        input;
 
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -852,6 +857,19 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
+        const assistantMessageRecord = assistantMessage
+          ? await ctx.messageModel.create({
+              agentId,
+              content: LOADING_FLAT,
+              groupId,
+              parentId: userMessage.id,
+              provider: assistantMessage.provider,
+              role: 'assistant',
+              threadId: thread.id,
+              topicId,
+            })
+          : undefined;
+
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
           postProcessUrl: createUiMessageFileUrlResolver(),
@@ -872,6 +890,7 @@ export const aiAgentRouter = router({
 
         // 4. Return Thread, userMessageId, threadMessages and messages
         return {
+          assistantMessageId: assistantMessageRecord?.id,
           messages,
           startedAt,
           success: true,

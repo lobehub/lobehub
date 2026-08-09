@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -27,6 +27,16 @@ import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
+
+const MessageAuthorConfigLoader = memo<{ agentId: string; isLogin: boolean | undefined }>(
+  ({ agentId, isLogin }) => {
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    useFetchAgentConfig(isLogin, agentId);
+    return null;
+  },
+);
+
+MessageAuthorConfigLoader.displayName = 'MessageAuthorConfigLoader';
 
 export interface ChatListProps {
   /**
@@ -143,6 +153,13 @@ const ChatList = memo<ChatListProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
     useFetchAgentConfig(isLogin, context.agentId);
+    const messageAuthorAgentIds = useMemo(
+      () =>
+        [...new Set(displayMessages.map((message) => message.agentId).filter(Boolean))].filter(
+          (agentId) => agentId !== context.agentId,
+        ) as string[],
+      [context.agentId, displayMessages],
+    );
 
     // Fetch conversation context data when a conversation is visible (skip for share pages).
     // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
@@ -234,6 +251,9 @@ const ChatList = memo<ChatListProps>(
 
     return (
       <Flexbox style={{ height: '100%', minHeight: 0 }}>
+        {messageAuthorAgentIds.map((agentId) => (
+          <MessageAuthorConfigLoader agentId={agentId} isLogin={isLogin} key={agentId} />
+        ))}
         <Flexbox flex={1} style={{ minHeight: 0 }}>
           {content}
         </Flexbox>
