@@ -154,6 +154,33 @@ describe('TencentSandboxProvider', () => {
     expect(launch).toContain(`${commandId}.pid`);
   });
 
+  // A command carrying its own quotes must survive the launcher untouched —
+  // interpolating it into `sh -c '...'` would terminate the wrapper's quoting.
+  it('runs a quoted background command without mangling it', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const command = `printf '%s\\n' 'hello world'`;
+    const result = await (
+      await load()
+    ).callTool('runCommand', {
+      background: true,
+      command,
+      timeout: 5000,
+    });
+
+    const { commandId } = result.result as Record<string, string>;
+    // The command travels as a file, so the launcher never sees its quotes.
+    expect(mocks.sandbox.files.write).toHaveBeenCalledWith(
+      expect.stringContaining(`${commandId}.sh`),
+      command,
+    );
+
+    const [launch] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(launch).not.toContain('hello world');
+    // The detached process gets the timeout, not just the launcher.
+    expect(launch).toContain('timeout 5s');
+  });
+
   // The tool contract polls for new output while the process keeps running, so
   // this must never block on completion.
   it('reports background progress without waiting for the process to exit', async () => {
@@ -285,5 +312,30 @@ describe('TencentSandboxProvider', () => {
     mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
 
     expect((await load()).capabilities.persistentSession).toBe(false);
+  });
+
+  // Reading the artifact into the Node process first would let a large export
+  // exhaust server memory, so the upload has to happen inside the sandbox.
+  it('uploads exported files from inside the sandbox', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(
+      okCommand(JSON.stringify({ size: 4096, status: 200, success: true })),
+    );
+
+    const result = await (
+      await load()
+    ).exportFileToUploadUrl({
+      filename: 'chart.png',
+      path: '/mnt/data/chart.png',
+      uploadHeaders: { 'x-cos-acl': 'private' },
+      uploadUrl: 'https://example.com/upload',
+    });
+
+    expect(result).toMatchObject({ size: 4096, success: true });
+    expect(mocks.sandbox.files.read).not.toHaveBeenCalled();
+    expect(scriptArgs(mocks.sandbox.commands.run.mock.calls[0][0])).toEqual({
+      headers: { 'x-cos-acl': 'private' },
+      path: '/mnt/data/chart.png',
+      uploadUrl: 'https://example.com/upload',
+    });
   });
 });

@@ -90,6 +90,36 @@ def main(encoded):
     })
 `;
 
+/**
+ * Uploads a sandbox file straight to the presigned URL from inside the
+ * sandbox. Reading the artifact into the Node process first would let a large
+ * export exhaust server memory and disturb unrelated requests.
+ */
+const uploadFileScript = `${scriptPrelude}
+import urllib.request
+
+def main(encoded):
+    args = load_args(encoded)
+    path = Path(args.get('path') or '')
+    if not path.exists():
+        emit({'success': False, 'error': 'file not found: %s' % path})
+        return
+
+    size = path.stat().st_size
+    with path.open('rb') as body:
+        request = urllib.request.Request(
+            args.get('uploadUrl'), data=body, method='PUT',
+            headers={**(args.get('headers') or {}), 'Content-Length': str(size)})
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                status = response.status
+        except Exception as error:
+            emit({'success': False, 'error': str(error)})
+            return
+
+    emit({'success': True, 'size': size, 'status': status})
+`;
+
 const killBackgroundScript = `${scriptPrelude}
 import signal
 
@@ -198,14 +228,13 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     try {
       const sandbox = await this.connect();
-      const content = await sandbox.files.read(path, { format: 'bytes' });
-      const body = new Uint8Array(content);
+      const uploaded = await this.runScript(sandbox, uploadFileScript, {
+        headers: uploadHeaders ?? {},
+        path,
+        uploadUrl,
+      });
 
-      const response = await fetch(uploadUrl, { body, headers: uploadHeaders, method: 'PUT' });
-
-      if (!response.ok) throw new Error(`Upload failed with status ${response.status}`);
-
-      return { size: body.byteLength, success: true };
+      return { size: Number(uploaded.size ?? 0), success: true };
     } catch (error) {
       log('Tencent sandbox export failed: %O', error);
 
@@ -247,6 +276,12 @@ export class TencentSandboxProvider implements SandboxProvider {
             stdout,
           },
           success: !execution.error,
+          // The runtime builds the model-visible content from the outer error
+          // on failure; without it the model sees `undefined` and cannot tell
+          // what went wrong.
+          ...(execution.error
+            ? { error: { message: String(execution.error.value), name: 'ExecutionError' } }
+            : {}),
         };
       }
 
@@ -338,16 +373,21 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (params.background === true) {
       const id = randomUUID();
       const base = `${BACKGROUND_DIR}/${id}`;
-      // Detach through the shell so the caller is not tied to the process, and
-      // persist stdout, the pid, and the exit code so later polls can report
-      // progress without waiting for completion.
-      // `setsid` puts the command in its own process group and the inner
-      // shell records that group id. Signalling the wrapper pid alone would
-      // leave the real child (node, python, sleep…) running.
+      const timeoutSec = Math.max(1, Math.ceil(this.timeoutMs(params) / 1000));
+
+      // The command is written to a file rather than interpolated into the
+      // launcher: anything with quotes — `printf '%s' 'hello world'` — would
+      // otherwise terminate the wrapper's own quoting and break or mutate it.
+      await sandbox.files.write(`${base}.sh`, String(params.command ?? ''));
+
+      // `setsid` gives the command its own process group so kill reaches the
+      // real child, and `timeout` bounds the detached process itself — the
+      // launcher's own timeout would only cover the few milliseconds it runs.
       const launch =
         `mkdir -p ${BACKGROUND_DIR}; ` +
         `setsid sh -c 'echo $$ > ${base}.pgid; ` +
-        `{ ${command} ; } > ${base}.log 2>&1; echo $? > ${base}.exit' & ` +
+        `timeout ${timeoutSec}s sh ${base}.sh > ${base}.log 2>&1; ` +
+        `echo $? > ${base}.exit' & ` +
         `echo $! > ${base}.pid`;
 
       const result = await sandbox.commands.run(launch, {
