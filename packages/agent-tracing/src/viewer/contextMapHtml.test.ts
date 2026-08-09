@@ -69,7 +69,7 @@ describe('renderContextMapHtml', () => {
     expect(html).toContain(
       '.msg::before { border-radius: inherit; box-shadow: inset 0 0 0 2px var(--border);',
     );
-    expect(html).toContain('.msg.cached-message::before { opacity: 0.1; }');
+    expect(html).toContain('.msg.cached-message::before { opacity: 0.3; }');
     expect(html).toContain(
       'class="msg cached-message" data-message-index="0" style="left:0.000%;width:calc(60.000% - 3px)"',
     );
@@ -86,10 +86,10 @@ describe('renderContextMapHtml', () => {
     );
   });
 
-  it('renders cache hits at 10% opacity and reserves hatching for re-processed context', () => {
+  it('renders cache hits at 30% opacity and reserves hatching for re-processed context', () => {
     const html = renderContextMapHtml(map);
 
-    expect(html).toContain('.seg.cached { opacity: 0.1; }');
+    expect(html).toContain('.seg.cached { opacity: 0.3; }');
     expect(html).not.toContain('.seg.cached::before');
     expect(html).toContain(
       '.seg.reprocessed::before { background-image: repeating-linear-gradient',
@@ -123,5 +123,13 @@ describe('renderContextMapHtml', () => {
   it('uses a neutral gray for tool results', () => {
     expect(HTML_THEME.light.kind.tool_result).toBe('#a4a6a8');
     expect(HTML_THEME.dark.kind.tool_result).toBe('#595b5e');
+  });
+
+  it('aligns the cache lane to the track inset and uses a bright system orange', () => {
+    const html = renderContextMapHtml(map);
+
+    expect(html).toContain('.lane { height: 9px; margin: 5px 4px 0; position: relative; }');
+    expect(HTML_THEME.light.kind.system).toBe('#f88c13');
+    expect(HTML_THEME.dark.kind.system).toBe('#ff9927');
   });
 });

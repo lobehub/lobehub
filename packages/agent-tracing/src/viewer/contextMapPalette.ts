@@ -47,7 +47,7 @@ export const KINDS_BY_FAMILY: Record<SegmentFamily, SegmentKind[]> = {
  * ascend it, so "most prominent member of the family" holds either way.
  */
 const KIND_STEPS: Record<SegmentKind, { dark: number; light: number; scale: ColorScale }> = {
-  system: { dark: 9, light: 10, scale: orange },
+  system: { dark: 9, light: 9, scale: orange },
   injected: { dark: 6, light: 7, scale: orange },
   user: { dark: 8, light: 9, scale: green },
   reasoning: { dark: 10, light: 6, scale: blue },
@@ -136,7 +136,7 @@ export const HTML_THEME: Record<'light' | 'dark', ThemeColors> = {
  * light scales — saturated enough to read on a dark background, dark enough on a light one.
  */
 export const TERMINAL_KIND_COLOR: Record<SegmentKind, string> = {
-  system: orange.light[10],
+  system: orange.light[9],
   injected: orange.light[7],
   user: green.light[9],
   reasoning: blue.light[6],

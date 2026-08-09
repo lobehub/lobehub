@@ -87,11 +87,11 @@ const STYLE = `
      instead of accumulating and stretching rows that contain more messages. */
   .msg { background: transparent; border-radius: 7px; bottom: 0; display: flex; gap: 1px; padding: 3px; position: absolute; top: 0; }
   .msg::before { border-radius: inherit; box-shadow: inset 0 0 0 2px var(--border); content: ''; inset: 0; pointer-events: none; position: absolute; z-index: 1; }
-  .msg.cached-message::before { opacity: 0.1; }
+  .msg.cached-message::before { opacity: 0.3; }
   .seg { border-radius: 3px; min-width: 1px; position: relative; }
   /* Cache hits recede through opacity alone. Hatching is reserved for context the model had
      to re-process after a prefix break, so the two cache states never compete visually. */
-  .seg.cached { opacity: 0.1; }
+  .seg.cached { opacity: 0.3; }
   .seg.reprocessed::before { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); content: ''; inset: 0; position: absolute; }
   .inject-mark { align-items: center; background: var(--kind-system); border: 1px solid var(--kind-system); border-radius: 999px; color: var(--surface); display: flex; font-size: 7px; font-weight: 700; height: 13px; justify-content: center; letter-spacing: -0.02em; position: absolute; right: -5px; top: -7px; width: 13px; z-index: 12; }
   .seg .tip { background: var(--tip-bg); border-radius: 6px; bottom: calc(100% + 10px); color: var(--tip-text); display: none; font-size: 12px; left: 0; line-height: 1.5; max-width: 460px; padding: 8px 10px; position: absolute; width: max-content; z-index: 20; }
@@ -104,7 +104,7 @@ const STYLE = `
 
   /* Cache lane: bands carry the geometry only — the figures live on the line below, where
      no amount of proportional narrowing can clip them. */
-  .lane { height: 9px; margin-top: 5px; position: relative; }
+  .lane { height: 9px; margin: 5px 4px 0; position: relative; }
   .band { border-radius: 3px; bottom: 0; position: absolute; top: 0; }
   .band.hit { background: var(--lane-hit); }
   .band.miss { background: var(--lane-miss); }
@@ -126,7 +126,7 @@ const STYLE = `
   .family .items span.num { color: var(--text-dim); }
   .swatch { border-radius: 4px; display: inline-block; height: 14px; width: 26px; }
   .swatch.frame { background: transparent; border: 2px solid var(--border); }
-  .swatch.cached { opacity: 0.1; }
+  .swatch.cached { opacity: 0.3; }
   .swatch.hatch { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); }
   .swatch.injected { position: relative; }
   .swatch.injected::after { align-items: center; background: var(--kind-system); border: 1px solid var(--kind-system); border-radius: 999px; color: var(--surface); content: 'I'; display: flex; font-size: 6px; font-weight: 700; height: 10px; justify-content: center; position: absolute; right: -4px; top: -5px; width: 10px; }
