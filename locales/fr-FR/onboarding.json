@@ -107,6 +107,8 @@
   "interests.title2": "Cela m'aidera à mieux vous connaître",
   "interests.title3": "Prenez votre temps, j'apprendrai à mieux vous connaître",
   "next": "Suivant",
+  "proSettings.connectors.connectFailed": "Impossible de démarrer la connexion. Veuillez réessayer.",
+  "proSettings.connectors.popupBlocked": "La fenêtre de connexion a été bloquée. Autorisez les pop-ups dans votre navigateur pour continuer.",
   "proSettings.connectors.title": "Connectez vos outils préférés",
   "responseLanguage.hint": "Après avoir sélectionné une langue, les réponses de l’IA utiliseront cette langue, et l’interface s’y adaptera également",
   "responseLanguage.saveFailed": "Échec de l'enregistrement. Veuillez réessayer.",

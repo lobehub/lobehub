@@ -284,6 +284,7 @@
   "platform.userCreditTargetRequired": "ایمیل کاربر یا انتخاب از فهرست کیف پول الزامی است.",
   "platform.userCredited": "اعتبار کاربر افزوده شد",
   "platform.userEmail": "ایمیل کاربر",
+  "platform.userEmailPlaceholder": "user@example.com",
   "platform.userId": "شناسه کاربر",
   "platform.userIdPlaceholder": "از فهرست کیف پول انتخاب کنید",
   "provider.managed.desc": "مدل‌ها توسط {{brandName}} ارائه می‌شوند. مصرف از کیف پول یا اعتبار سازمان کسر می‌شود — نیازی به تنظیم کلید API نیست.",
