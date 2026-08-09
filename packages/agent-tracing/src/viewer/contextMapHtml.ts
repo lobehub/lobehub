@@ -99,8 +99,8 @@ const STYLE = `
   .seg .tip b { color: var(--kind-injected); }
 
   /* Break marker: a full-bleed rule through the track with the reason anchored to it. */
-  .cut { border-left: 2px solid var(--lane-miss); bottom: -11px; position: absolute; top: -11px; z-index: 10; }
-  .cut::before { border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 7px solid var(--lane-miss); content: ''; left: -7px; position: absolute; top: 0; }
+  .cut { background: var(--lane-miss); bottom: -11px; position: absolute; top: -11px; transform: translateX(-50%); width: 2px; z-index: 10; }
+  .cut::before { background: var(--lane-miss); clip-path: polygon(0 0, 100% 0, 50% 100%); content: ''; height: 7px; left: 50%; position: absolute; top: 0; transform: translateX(-50%); width: 12px; }
 
   /* Cache lane: bands carry the geometry only — the figures live on the line below, where
      no amount of proportional narrowing can clip them. */

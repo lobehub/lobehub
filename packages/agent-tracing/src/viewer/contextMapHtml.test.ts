@@ -80,6 +80,12 @@ describe('renderContextMapHtml', () => {
     expect(html).not.toContain('class="msg user"');
     expect(html).toContain('class="seg cached"');
     expect(html).toContain('class="cut" style="left:60.000%"');
+    expect(html).toContain(
+      '.cut { background: var(--lane-miss); bottom: -11px; position: absolute; top: -11px; transform: translateX(-50%); width: 2px;',
+    );
+    expect(html).toContain(
+      '.cut::before { background: var(--lane-miss); clip-path: polygon(0 0, 100% 0, 50% 100%);',
+    );
     expect(html).toContain('class="band hit" style="left:calc(0.000%);width:calc(60.000%)"');
     expect(html).toContain(
       'class="band miss" style="left:calc(60.000% + 3px);width:calc(40.000% - 3px)"',
