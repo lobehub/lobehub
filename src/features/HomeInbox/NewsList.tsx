@@ -6,7 +6,6 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHomeBrief } from '@/client-data';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { type BriefItem } from '@/features/DailyBrief/types';

@@ -23,6 +23,7 @@ import { useClientDataStore } from '@/client-data/store';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from '@/libs/swr/localStorageProvider';
+import { setAppPainted, setAppReady } from '@/spa/atoms/app';
 import { useUserStore } from '@/store/user';
 
 import AppBootstrapGate, { isAppBootstrapReady } from './AppBootstrapGate';
@@ -112,6 +113,9 @@ describe('CacheHydrationGate + provider + consumer', () => {
   });
   afterEach(async () => {
     vi.restoreAllMocks();
+    document.getElementById('loading-screen')?.remove();
+    setAppReady(false);
+    setAppPainted(false);
     cacheHydration.markPending(SCOPE);
     useUserStore.setState({
       isLoaded: false,
@@ -143,6 +147,13 @@ describe('CacheHydrationGate + provider + consumer', () => {
   it('keeps private consumers unmounted until auth settles, then serves hydrated cache on their first render', async () => {
     await seedDisk();
     const provider = makeProvider();
+
+    // The static HTML shell ships `#loading-screen`; CacheHydrationGate's
+    // removal backstop only fires once `appReady` is set.
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+    setAppReady(true);
 
     render(
       createElement(
