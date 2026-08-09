@@ -11,13 +11,13 @@ import { useTranslation } from 'react-i18next';
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { useChatMarkdown } from '@/features/Conversation/Messages/useChatMarkdown';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';
+import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
 import { type InboxTopic } from './useHomeInboxTopics';
 
 const DOT_WIDTH = 14;
@@ -109,11 +109,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
     const sendMessage = useChatStore((s) => s.sendMessage);
     const prefetchMessages = useChatStore((s) => s.prefetchMessages);
-    const { drawer, markdownProps } = useChatMarkdown({
-      enableStream: false,
-      id: topic.id,
-      isGenerating: false,
-    });
+    const markdownProps = useHomeInboxMarkdown(topic.id);
 
     const [expanded, setExpanded] = useState(false);
     const [read, setRead] = useState(false);
@@ -215,8 +211,6 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
                 {topic.lastAssistantMessage}
               </MarkdownMessage>
             )}
-
-            {drawer}
 
             {replying ? (
               <Flexbox onClick={stopPropagation}>
