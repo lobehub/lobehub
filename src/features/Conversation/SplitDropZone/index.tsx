@@ -26,6 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
     position: relative;
     flex: 1;
     min-height: 0;
+    margin-block-end: 8px;
   `,
 }));
 
