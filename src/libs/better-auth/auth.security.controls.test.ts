@@ -66,7 +66,7 @@ vi.mock('@/envs/app', () => ({
 vi.mock('@/envs/auth', () => ({
   authEnv: {
     AUTH_DISABLE_EMAIL_PASSWORD: false,
-    AUTH_EMAIL_VERIFICATION: false,
+    AUTH_EMAIL_VERIFICATION: true,
     AUTH_ENABLE_MAGIC_LINK: false,
     AUTH_SECRET: 'test-secret',
     AUTH_SSO_PROVIDERS: '',
@@ -163,6 +163,7 @@ describe('AICO-102 authentication security controls', () => {
         emailAndPassword: expect.objectContaining({
           maxPasswordLength: 64,
           minPasswordLength: 10,
+          requireEmailVerification: true,
           revokeSessionsOnPasswordReset: true,
         }),
         plugins: expect.arrayContaining([
