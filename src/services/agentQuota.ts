@@ -34,6 +34,14 @@ class AgentQuotaService {
   getLatestReadings = async (accountId: string) =>
     lambdaClient.agentQuota.getLatestReadings.query({ accountId });
 
+  /** Recent concrete windows (weekly + session), newest reset first — calendar read model. */
+  getWindows = async (accountId: string, limit?: number) =>
+    lambdaClient.agentQuota.getWindows.query({ accountId, limit });
+
+  /** Full reading series (oldest first) for the burn-down chart / calendar heat. */
+  listSnapshots = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listSnapshots.query({ accountId, sinceDays });
+
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 
   /** UI "switch account": pin one account for an agent (Manual mode). */

@@ -268,6 +268,25 @@ export class AgentQuotaService {
     }));
   };
 
+  /**
+   * The full reading series since `since`, oldest first — the burn-down /
+   * usage-calendar read model. Same plain-number mapping as
+   * `listLatestReadings`.
+   */
+  listSnapshotSeries = async (accountId: string, since: Date): Promise<QuotaLimitReading[]> => {
+    const rows = await this.snapshots.listRange(accountId, since);
+
+    return rows.map((row) => ({
+      capturedAt: row.capturedAt.getTime(),
+      isActive: row.isActive ?? undefined,
+      limitType: row.limitType,
+      resetsAt: row.resetsAt?.getTime() ?? null,
+      scopeKey: row.scopeKey,
+      severity: row.severity ?? undefined,
+      utilization: row.utilization,
+    }));
+  };
+
   /** Build the LB load view for a set of accounts from their latest readings. */
   resolveAccountLoads = async (
     accountIds: string[],

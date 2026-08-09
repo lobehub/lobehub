@@ -316,6 +316,20 @@ export class AgentQuotaSnapshotModel {
       .returning();
   };
 
+  /** Full reading series for an account since an instant, oldest first. */
+  listRange = async (accountId: string, since: Date) =>
+    this.db
+      .select()
+      .from(agentQuotaSnapshots)
+      .where(
+        and(
+          this.mine(),
+          eq(agentQuotaSnapshots.accountId, accountId),
+          gte(agentQuotaSnapshots.capturedAt, since),
+        ),
+      )
+      .orderBy(agentQuotaSnapshots.capturedAt);
+
   /** The most recent reading per (limitType, scopeKey) for an account. */
   latestPerBucket = async (accountId: string) =>
     this.db
