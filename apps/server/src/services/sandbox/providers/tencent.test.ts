@@ -339,12 +339,15 @@ describe('TencentSandboxProvider', () => {
       });
 
       const provider = await load();
-      const startedAt = Date.now();
       const result = await provider.callTool('runCommand', {
         background: true,
         command: `sleep 60 & echo $! > ${childPidFile}; wait`,
         timeout: 250,
       });
+      const [launch] = mocks.sandbox.commands.run.mock.calls.at(-1)!;
+      expect(launch).toContain('timeout --kill-after=5s 0.25s');
+      expect(launch).not.toContain('timeout --kill-after=5s 1s');
+
       const { commandId } = result.result as Record<string, string>;
       const base = `/tmp/lobe-background/${commandId}`;
 
@@ -360,10 +363,6 @@ describe('TencentSandboxProvider', () => {
           name.endsWith('.exit'),
         );
         expect(completionMarkers).toHaveLength(1024);
-
-        // A rounded-up implementation waits a full second. Leave ample CI
-        // scheduling headroom while still distinguishing the 250 ms deadline.
-        expect(Date.now() - startedAt).toBeLessThan(900);
 
         const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
         await vi.waitFor(
@@ -417,6 +416,82 @@ describe('TencentSandboxProvider', () => {
           ),
         );
         await rm(childPidFile, { force: true });
+        await rm('/tmp/lobe-background', { force: true, recursive: true });
+      }
+    },
+  );
+
+  it.runIf(process.platform === 'linux')(
+    'drains completed background output in bounded chunks before cleanup',
+    async () => {
+      await rm('/tmp/lobe-background', { force: true, recursive: true });
+      await mkdir('/tmp/lobe-background', { recursive: true });
+
+      mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
+        await writeFile(path, content);
+      });
+      mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
+        const { stderr, stdout } = await execFileAsync('sh', ['-c', command], {
+          encoding: 'utf8',
+        });
+
+        return { exitCode: 0, stderr, stdout };
+      });
+
+      const provider = await load();
+      const result = await provider.callTool('runCommand', {
+        background: true,
+        command: `python3 -c "import sys; sys.stdout.write('€' * 100000)"`,
+        timeout: 5000,
+      });
+      const { commandId } = result.result as Record<string, string>;
+      const base = `/tmp/lobe-background/${commandId}`;
+
+      try {
+        await vi.waitFor(
+          async () => {
+            expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('0');
+          },
+          { interval: 50, timeout: 5000 },
+        );
+
+        const first = await provider.callTool('getCommandOutput', { commandId });
+        const firstOutput = (first.result as Record<string, unknown>).newOutput;
+        expect(first.result).toMatchObject({
+          exitCode: null,
+          hasMore: true,
+          running: true,
+          success: true,
+        });
+        expect(firstOutput).toBe('€'.repeat(87_381));
+        await expect(readFile(`${base}.log`, 'utf8')).resolves.toHaveLength(100_000);
+        await expect(readFile(`${base}.off`, 'utf8')).resolves.toBe('262143');
+
+        const second = await provider.callTool('getCommandOutput', { commandId });
+        const secondOutput = (second.result as Record<string, unknown>).newOutput;
+        expect(second.result).toMatchObject({
+          exitCode: 0,
+          hasMore: false,
+          running: false,
+          success: true,
+        });
+        expect(secondOutput).toBe('€'.repeat(12_619));
+
+        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off']) {
+          await expect(readFile(`${base}.${suffix}`, 'utf8')).rejects.toMatchObject({
+            code: 'ENOENT',
+          });
+        }
+        expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('0');
+
+        const repeated = await provider.callTool('getCommandOutput', { commandId });
+        expect(repeated.result).toMatchObject({
+          exitCode: 0,
+          hasMore: false,
+          newOutput: '',
+          running: false,
+        });
+      } finally {
         await rm('/tmp/lobe-background', { force: true, recursive: true });
       }
     },
@@ -553,16 +628,85 @@ describe('TencentSandboxProvider', () => {
     expect(firstId).not.toContain(options.topicId);
   });
 
-  it('renews a persistent instance that is close to expiring', async () => {
-    expiresInSec = 10;
+  it('renews a persistent instance for the upcoming operation lifetime', async () => {
+    expiresInSec = 90;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     const provider = await load();
-    await provider.callTool('runCommand', { command: 'echo 1' });
-    await provider.callTool('runCommand', { command: 'echo 2' });
+    await provider.callTool('runCommand', { command: 'echo short', timeout: 1000 });
+
+    // Ninety seconds remaining is outside the old 60-second renewal window,
+    // but cannot cover a 120-second command plus the lifecycle headroom.
+    expiresInSec = 300;
+    await provider.callTool('runCommand', { command: 'echo long', timeout: 120_000 });
 
     expect(calls.update).toBe(1);
     expect(calls.acquire).toBe(1);
+    expect(controlPlaneRequests.find(({ action }) => action === 'update')?.payload.Timeout).toBe(
+      300,
+    );
+  });
+
+  it('requests enough instance lifetime for an explicit long command timeout', async () => {
+    expiresInSec = 360;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const result = await (
+      await load()
+    ).callTool('runCommand', {
+      command: 'echo long',
+      timeout: 300_000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(controlPlaneRequests[0]).toMatchObject({
+      action: 'acquire',
+      payload: { Timeout: 360 },
+    });
+  });
+
+  it('re-evaluates lifetime after sharing an in-flight acquisition', async () => {
+    expiresInSec = 180;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const provider = await load();
+    const shortOperation = provider.callTool('runCommand', {
+      command: 'echo short',
+      timeout: 1000,
+    });
+
+    // The longer caller arrives while the short caller owns the shared
+    // acquisition. Its required lifetime must be checked after that promise
+    // settles instead of blindly reusing the 180-second credential.
+    expiresInSec = 300;
+    const longOperation = provider.callTool('runCommand', {
+      command: 'echo long',
+      timeout: 240_000,
+    });
+
+    const results = await Promise.all([shortOperation, longOperation]);
+    expect(results.every(({ success }) => success)).toBe(true);
+    expect(calls.acquire).toBe(1);
+    expect(calls.update).toBe(1);
+    expect(controlPlaneRequests.find(({ action }) => action === 'update')?.payload.Timeout).toBe(
+      300,
+    );
+  });
+
+  it('rejects an operation timeout that cannot fit in the control-plane lifetime', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const result = await (
+      await load()
+    ).callTool('runCommand', {
+      command: 'echo should-not-run',
+      timeout: 3_540_001,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('timeout must not exceed 3,540,000 milliseconds');
+    expect(calls.acquire).toBe(0);
+    expect(mocks.sandbox.commands.run).not.toHaveBeenCalled();
   });
 
   it('keeps a still-valid instance after a transient renewal failure', async () => {
@@ -570,7 +714,7 @@ describe('TencentSandboxProvider', () => {
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     const provider = await load();
-    await provider.callTool('runCommand', { command: 'echo acquire' });
+    await provider.callTool('runCommand', { command: 'echo acquire', timeout: 1000 });
 
     vi.mocked(fetch).mockImplementationOnce(
       async (input: string | URL | Request, init?: RequestInit) => {
@@ -584,7 +728,10 @@ describe('TencentSandboxProvider', () => {
       },
     );
 
-    const result = await provider.callTool('runCommand', { command: 'echo still-valid' });
+    const result = await provider.callTool('runCommand', {
+      command: 'echo still-valid',
+      timeout: 1000,
+    });
 
     expect(calls.update).toBe(1);
     expect(calls.acquire).toBe(1);
@@ -592,6 +739,44 @@ describe('TencentSandboxProvider', () => {
     expect(result.success).toBe(true);
     expect(result.sessionExpiredAndRecreated).toBe(false);
     expect(mocks.sandbox.commands.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not start an operation when renewal fails with too little lifetime remaining', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    expiresInSec = 6;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      await provider.callTool('runCommand', { command: 'echo acquire', timeout: 100 });
+      vi.advanceTimersByTime(5500);
+
+      vi.mocked(fetch).mockImplementationOnce(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const action = fetchUrl(input).split('/').pop() as keyof typeof calls;
+          calls[action] += 1;
+          controlPlaneRequests.push({
+            action,
+            payload: JSON.parse(String(init?.body || '{}')),
+          });
+          throw new Error('transient update failure');
+        },
+      );
+
+      const result = await provider.callTool('runCommand', {
+        command: 'echo should-not-run',
+        timeout: 800,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('remaining instance lifetime is shorter');
+      expect(calls.update).toBe(1);
+      expect(calls.acquire).toBe(1);
+      expect(mocks.sandbox.commands.run).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('honors the backend-confirmed expiry when a renewal is capped', async () => {
@@ -602,13 +787,16 @@ describe('TencentSandboxProvider', () => {
 
     try {
       const provider = await load();
-      await provider.callTool('runCommand', { command: 'echo acquire' });
-      await provider.callTool('runCommand', { command: 'echo renew' });
+      await provider.callTool('runCommand', { command: 'echo acquire', timeout: 100 });
+      await provider.callTool('runCommand', { command: 'echo renew', timeout: 100 });
 
       expect(calls.update).toBe(1);
 
       vi.advanceTimersByTime(11_000);
-      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+      const result = await provider.callTool('runCommand', {
+        command: 'echo reacquire',
+        timeout: 100,
+      });
 
       expect(calls.acquire).toBe(2);
       expect(result.sessionExpiredAndRecreated).toBe(true);
@@ -620,13 +808,13 @@ describe('TencentSandboxProvider', () => {
   it('reacquires without release when renewal has an ambiguous outcome', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
-    expiresInSec = 1;
+    expiresInSec = 6;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     try {
       const provider = await load();
-      await provider.callTool('runCommand', { command: 'echo acquire' });
-      vi.advanceTimersByTime(900);
+      await provider.callTool('runCommand', { command: 'echo acquire', timeout: 100 });
+      vi.advanceTimersByTime(5900);
 
       vi.mocked(fetch).mockImplementation(
         async (input: string | URL | Request, init?: RequestInit) => {
@@ -657,7 +845,10 @@ describe('TencentSandboxProvider', () => {
         },
       );
 
-      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+      const result = await provider.callTool('runCommand', {
+        command: 'echo reacquire',
+        timeout: 100,
+      });
 
       expect(calls.update).toBe(1);
       expect(calls.acquire).toBe(2);
@@ -684,12 +875,18 @@ describe('TencentSandboxProvider', () => {
       const { TencentSandboxProvider } = await import('./tencent');
       const providerB = new TencentSandboxProvider({ ...options, topicId: 'topic-2' });
 
-      await providerA.callTool('runCommand', { command: 'echo A' });
-      await providerB.callTool('runCommand', { command: 'echo B' });
+      await providerA.callTool('runCommand', { command: 'echo A', timeout: 100 });
+      await providerB.callTool('runCommand', { command: 'echo B', timeout: 100 });
       vi.advanceTimersByTime(11_000);
 
-      const recreatedA = await providerA.callTool('runCommand', { command: 'echo A2' });
-      const recreatedB = await providerB.callTool('runCommand', { command: 'echo B2' });
+      const recreatedA = await providerA.callTool('runCommand', {
+        command: 'echo A2',
+        timeout: 100,
+      });
+      const recreatedB = await providerB.callTool('runCommand', {
+        command: 'echo B2',
+        timeout: 100,
+      });
 
       expect(recreatedA.sessionExpiredAndRecreated).toBe(true);
       expect(recreatedB.sessionExpiredAndRecreated).toBe(true);
@@ -702,13 +899,13 @@ describe('TencentSandboxProvider', () => {
   it('recognizes a cross-replica renewal after the local expiry passes', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
-    expiresInSec = 1;
+    expiresInSec = 6;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     try {
       const provider = await load();
-      await provider.callTool('runCommand', { command: 'echo acquire' });
-      vi.advanceTimersByTime(1100);
+      await provider.callTool('runCommand', { command: 'echo acquire', timeout: 100 });
+      vi.advanceTimersByTime(6100);
 
       vi.mocked(fetch).mockImplementation(
         async (input: string | URL | Request, init?: RequestInit) => {
@@ -730,7 +927,10 @@ describe('TencentSandboxProvider', () => {
         },
       );
 
-      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+      const result = await provider.callTool('runCommand', {
+        command: 'echo reacquire',
+        timeout: 100,
+      });
 
       expect(calls.update).toBe(0);
       expect(calls.acquire).toBe(2);

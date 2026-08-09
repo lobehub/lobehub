@@ -34,13 +34,15 @@ const DEFAULT_TIMEOUT_SEC = 300;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const CONTROL_PLANE_TIMEOUT_MS = 30_000;
 const BACKGROUND_LAUNCH_TIMEOUT_MS = 10_000;
+const BACKGROUND_OUTPUT_CHUNK_BYTES = 256 * 1024;
 const BACKGROUND_KILL_GRACE_SEC = 1;
 const BACKGROUND_COMPLETED_LIMIT = 1024;
 const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
 const TSX_VERSION = '4.22.4';
-/** Renew a persistent instance once it is within this window of expiring. */
-const RENEW_THRESHOLD_MS = 60_000;
+const INSTANCE_OPERATION_HEADROOM_MS = 60_000;
+const INSTANCE_OPERATION_START_MARGIN_MS = 5000;
+const MAX_INSTANCE_TIMEOUT_SEC = 3600;
 const BACKGROUND_DIR = '/tmp/lobe-background';
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INSTANCE_CACHE_LIMIT = 1024;
@@ -82,6 +84,7 @@ def main(encoded):
  * Progress is tracked with an offset file next to the log.
  */
 const backgroundStatusScript = `${scriptPrelude}
+import codecs
 def main(encoded):
     args = load_args(encoded)
     base = Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')
@@ -93,20 +96,36 @@ def main(encoded):
         return
 
     offset = int(off_file.read_text()) if off_file.exists() else 0
-    chunk = b''
-    if log.exists():
-        try:
-            with log.open('rb') as handle:
-                handle.seek(offset)
-                chunk = handle.read()
-                off_file.write_text(str(handle.tell()))
-        except FileNotFoundError:
-            pass
-
     exit_code = None
     if exit_file.exists():
         text = exit_file.read_text().strip()
         exit_code = int(text) if text else None
+
+    output = ''
+    has_more = False
+    if log.exists():
+        try:
+            with log.open('rb') as handle:
+                handle.seek(offset)
+                chunk = handle.read(${BACKGROUND_OUTPUT_CHUNK_BYTES})
+                handle.seek(0, os.SEEK_END)
+                log_size = handle.tell()
+
+                # Keep a partial UTF-8 sequence for the next poll rather than
+                # replacing a valid character merely because it crosses the
+                # byte chunk boundary. Invalid completed bytes still decode
+                # with replacement, preserving the existing text contract.
+                decoder = codecs.getincrementaldecoder('utf-8')('replace')
+                output = decoder.decode(
+                    chunk,
+                    final=exit_code is not None and offset + len(chunk) >= log_size,
+                )
+                pending, _ = decoder.getstate()
+                next_offset = offset + len(chunk) - len(pending)
+                has_more = next_offset < log_size
+                off_file.write_text(str(next_offset))
+        except FileNotFoundError:
+            pass
 
     running = False
     pgid_file = base.with_suffix('.pgid')
@@ -122,8 +141,7 @@ def main(encoded):
         except (OSError, ValueError):
             running = False
 
-    output = chunk.decode(errors='replace')
-    if exit_code is not None:
+    if exit_code is not None and not has_more:
         # Once the final bytes have been consumed, retain only the tiny exit
         # marker so repeated polls stay idempotent without keeping commands,
         # logs, offsets, or stale process identifiers forever.
@@ -133,13 +151,16 @@ def main(encoded):
             except FileNotFoundError:
                 pass
 
+    reported_running = running or has_more
+    reported_exit_code = None if has_more else exit_code
     emit({
-        'exitCode': exit_code,
+        'exitCode': reported_exit_code,
+        'hasMore': has_more,
         'newOutput': output,
         'output': output,
-        'running': running,
+        'running': reported_running,
         'stderr': '',
-        'success': running or exit_code == 0,
+        'success': reported_running or reported_exit_code == 0,
     })
 `;
 
@@ -321,7 +342,8 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return configError;
 
     try {
-      const { sandbox, sessionExpiredAndRecreated } = await this.connect();
+      const operationTimeoutMs = this.timeoutMs(params);
+      const { sandbox, sessionExpiredAndRecreated } = await this.connect(operationTimeoutMs);
       const { error, result, success } = await this.dispatch(sandbox, toolName, params);
 
       // `error` has to survive: the runtime builds the model-visible failure
@@ -348,7 +370,7 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return { error: configError.error, success: false };
 
     try {
-      const { sandbox } = await this.connect();
+      const { sandbox } = await this.connect(DEFAULT_COMMAND_TIMEOUT_MS);
       const uploaded = await this.runScript(sandbox, uploadFileScript, {
         headers: uploadHeaders ?? {},
         path,
@@ -678,8 +700,10 @@ export class TencentSandboxProvider implements SandboxProvider {
    * acquires a fresh one afterwards, which bounds cost without breaking
    * multi-call flows such as file bootstrapping or background commands.
    */
-  private async connect(): Promise<ResolvedInstance & { sandbox: Sandbox }> {
-    const resolved = await this.acquireForSession();
+  private async connect(
+    operationTimeoutMs: number,
+  ): Promise<ResolvedInstance & { sandbox: Sandbox }> {
+    const resolved = await this.acquireForSession(operationTimeoutMs);
 
     return {
       ...resolved,
@@ -691,26 +715,54 @@ export class TencentSandboxProvider implements SandboxProvider {
    * The local promise only coalesces calls in this process. Cross-process
    * ownership and deduplication are provided by acquire's ConversationId.
    */
-  private async acquireForSession(): Promise<ResolvedInstance> {
+  private async acquireForSession(operationTimeoutMs: number): Promise<ResolvedInstance> {
     const key = this.sessionKey();
     const inFlight = pending.get(key);
 
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      const shared = await inFlight;
 
-    const promise = this.resolveInstance(key).finally(() => pending.delete(key));
+      // A concurrent short operation may have started the acquisition. Once it
+      // settles, re-evaluate a longer caller instead of inheriting credentials
+      // that do not cover its requested lifetime.
+      if (
+        sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand' ||
+        this.hasRequiredLifetime(shared.instance, operationTimeoutMs)
+      ) {
+        return shared;
+      }
+
+      const resolved = await this.acquireForSession(operationTimeoutMs);
+      return {
+        ...resolved,
+        sessionExpiredAndRecreated:
+          shared.sessionExpiredAndRecreated || resolved.sessionExpiredAndRecreated,
+      };
+    }
+
+    const promise = this.resolveInstance(key, operationTimeoutMs).finally(() =>
+      pending.delete(key),
+    );
     pending.set(key, promise);
 
     return promise;
   }
 
-  private async resolveInstance(key: string): Promise<ResolvedInstance> {
+  private async resolveInstance(
+    key: string,
+    operationTimeoutMs: number,
+  ): Promise<ResolvedInstance> {
     this.compactInstanceCache(key);
 
     const cached = instances.get(key);
+    const persistent = sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand';
+    const requestedTimeoutSec = persistent
+      ? this.requestedInstanceTimeoutSec(operationTimeoutMs)
+      : this.timeoutSec();
 
     if (cached) {
       if (cached.expiresAt <= Date.now()) {
-        return this.reacquireExpired(key, cached);
+        return this.reacquireExpired(key, cached, operationTimeoutMs, requestedTimeoutSec);
       }
 
       // On-demand instances are not renewed, so they stay usable right up to
@@ -721,14 +773,15 @@ export class TencentSandboxProvider implements SandboxProvider {
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
-      if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) {
+      if (this.hasRequiredLifetime(cached, operationTimeoutMs)) {
         this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
-      const renewed = await this.renew(cached);
+      const renewed = await this.renew(cached, requestedTimeoutSec);
       if (renewed) {
         this.rememberInstance(key, renewed);
+        this.assertOperationLifetime(renewed, operationTimeoutMs, 'renewed');
 
         return { instance: renewed, sessionExpiredAndRecreated: false };
       }
@@ -736,9 +789,15 @@ export class TencentSandboxProvider implements SandboxProvider {
       // A failed renewal says nothing about the instance itself. Keep using it
       // while it is still valid and retry on the next call rather than
       // discarding the topic's files and background processes.
-      if (cached.expiresAt > Date.now()) {
+      if (this.hasOperationLifetime(cached, operationTimeoutMs)) {
         this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
+      }
+
+      if (cached.expiresAt > Date.now()) {
+        throw new Error(
+          'Sandbox renewal failed and the remaining instance lifetime is shorter than the requested operation timeout',
+        );
       }
 
       // The update result is ambiguous: it may have succeeded server-side
@@ -746,11 +805,12 @@ export class TencentSandboxProvider implements SandboxProvider {
       // renewed this deterministic conversation. Never release based only on
       // our stale timestamp. Reacquire by ConversationId and let the control
       // plane return the live owner (or create a replacement).
-      return this.reacquireExpired(key, cached);
+      return this.reacquireExpired(key, cached, operationTimeoutMs, requestedTimeoutSec);
     }
 
     const previousInstanceId = instanceHistory.get(key);
-    const instance = await this.acquire();
+    const instance = await this.acquire(requestedTimeoutSec);
+    if (persistent) this.assertOperationLifetime(instance, operationTimeoutMs, 'acquired');
     this.rememberInstance(key, instance);
 
     return {
@@ -768,8 +828,13 @@ export class TencentSandboxProvider implements SandboxProvider {
   private async reacquireExpired(
     key: string,
     previous: AcquiredInstance,
+    operationTimeoutMs: number,
+    requestedTimeoutSec: number,
   ): Promise<ResolvedInstance> {
-    const instance = await this.acquire();
+    const instance = await this.acquire(requestedTimeoutSec);
+    if (sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand') {
+      this.assertOperationLifetime(instance, operationTimeoutMs, 'reacquired');
+    }
     this.rememberInstance(key, instance);
 
     return {
@@ -812,11 +877,52 @@ export class TencentSandboxProvider implements SandboxProvider {
     }
   }
 
-  private async renew(instance: AcquiredInstance): Promise<AcquiredInstance | undefined> {
+  private requiredLifetimeMs(operationTimeoutMs: number): number {
+    return operationTimeoutMs + INSTANCE_OPERATION_HEADROOM_MS;
+  }
+
+  private requestedInstanceTimeoutSec(operationTimeoutMs: number): number {
+    const requiredTimeoutSec = Math.ceil(this.requiredLifetimeMs(operationTimeoutMs) / 1000);
+
+    if (requiredTimeoutSec > MAX_INSTANCE_TIMEOUT_SEC) {
+      throw new Error(
+        `timeout must not exceed ${(MAX_INSTANCE_TIMEOUT_SEC * 1000 - INSTANCE_OPERATION_HEADROOM_MS).toLocaleString('en-US')} milliseconds for Tencent persistent sandboxes`,
+      );
+    }
+
+    return Math.max(this.timeoutSec(), requiredTimeoutSec);
+  }
+
+  private hasOperationLifetime(instance: AcquiredInstance, operationTimeoutMs: number): boolean {
+    return (
+      instance.expiresAt - Date.now() >= operationTimeoutMs + INSTANCE_OPERATION_START_MARGIN_MS
+    );
+  }
+
+  private hasRequiredLifetime(instance: AcquiredInstance, operationTimeoutMs: number): boolean {
+    return instance.expiresAt - Date.now() >= this.requiredLifetimeMs(operationTimeoutMs);
+  }
+
+  private assertOperationLifetime(
+    instance: AcquiredInstance,
+    operationTimeoutMs: number,
+    action: string,
+  ) {
+    if (this.hasOperationLifetime(instance, operationTimeoutMs)) return;
+
+    throw new Error(
+      `Sandbox ${action} instance lifetime is shorter than the requested operation timeout`,
+    );
+  }
+
+  private async renew(
+    instance: AcquiredInstance,
+    requestedTimeoutSec: number,
+  ): Promise<AcquiredInstance | undefined> {
     try {
       const data = await this.request('update', {
         InstanceId: instance.instanceId,
-        Timeout: this.timeoutSec(),
+        Timeout: requestedTimeoutSec,
       });
 
       const expiresAt = this.parseExpirationTime(data.InstanceExpiresAt);
@@ -839,18 +945,18 @@ export class TencentSandboxProvider implements SandboxProvider {
     }
   }
 
-  private async acquire(): Promise<AcquiredInstance> {
+  private async acquire(requestedTimeoutSec: number): Promise<AcquiredInstance> {
     const data = await this.request('acquire', {
       ConversationId: this.sessionKey(),
       Region: sandboxEnv.TENCENT_SANDBOX_REGION || DEFAULT_REGION,
-      Timeout: this.timeoutSec(),
+      Timeout: requestedTimeoutSec,
     });
 
     return {
       domain: this.requiredString(data, 'SandboxDomain'),
       envdVersion: (data.EnvdVersion as string) || ENVD_FALLBACK_VERSION,
       expiresAt:
-        this.parseExpirationTime(data.InstanceExpiresAt) ?? Date.now() + this.timeoutSec() * 1000,
+        this.parseExpirationTime(data.InstanceExpiresAt) ?? Date.now() + requestedTimeoutSec * 1000,
       instanceId: this.requiredString(data, 'InstanceId'),
       token: this.requiredString(data, 'Token'),
       trafficToken: data.TrafficToken as string | undefined,
