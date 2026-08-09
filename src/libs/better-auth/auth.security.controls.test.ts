@@ -99,7 +99,7 @@ vi.mock('@/libs/better-auth/plugins/force-change-password-revoke', () => ({
 }));
 
 vi.mock('@/libs/better-auth/plugins/password-policy', () => ({
-  PASSWORD_MIN_LENGTH: 10,
+  PASSWORD_MIN_LENGTH: 8,
   passwordPolicy: vi.fn(() => ({ id: 'aico-password-policy' })),
 }));
 
@@ -162,7 +162,7 @@ describe('AICO-102 authentication security controls', () => {
       expect.objectContaining({
         emailAndPassword: expect.objectContaining({
           maxPasswordLength: 64,
-          minPasswordLength: 10,
+          minPasswordLength: 8,
           requireEmailVerification: true,
           revokeSessionsOnPasswordReset: true,
         }),

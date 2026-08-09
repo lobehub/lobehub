@@ -25,7 +25,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AUTH-001** | `/api/auth/check-user` no longer returns `hasPassword`; IP sliding-window rate limit (10/60s); sign-in always uses password step for existing users |
 | **AUTH-002** | Server `getSession` calls use `query: { disableCookieCache: true }` on TRPC, chat middleware, proxy, utils auth, trusted-client, messenger install  |
-| **AUTH-003** | `minPasswordLength: 10` + server `passwordPolicy` (letter + digit) on sign-up / change / reset                                                      |
+| **AUTH-003** | `minPasswordLength: 8` + server `passwordPolicy` (letter + digit) on sign-up / change / reset                                                       |                                                 |
 | **AUTH-004** | Email verification required by default (`AUTH_EMAIL_VERIFICATION !== '0'`); opt out with `=0` for local/e2e                                         |
 | **AUTH-005** | `forceChangePasswordRevoke` plugin always sets `revokeOtherSessions: true` on `/change-password`                                                    |
 | **MON-001**  | Debug SMS no longer `console.info`s OTPs; `AUTH_SMS_DEBUG_OTP` ignored in production                                                                |
@@ -41,7 +41,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 | #   | Check                                  | Result                  | Evidence                                                                                               |
 | --- | -------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | Password policy                        | Pass                    | `minPasswordLength: 10` + letter/digit server policy — AUTH-003 Fixed                                  |
+| 1   | Password policy                        | Pass                    | `minPasswordLength: 8` + letter/digit server policy — AUTH-003 Fixed                                   |
 | 2   | Password hashing                       | Pass                    | Better Auth scrypt + bcrypt verify for `$2a$`/`$2b$`                                                   |
 | 3   | OTP expiration                         | Pass                    | `OTP_EXPIRES_IN = 300` — `auth.security.controls.test.ts`                                              |
 | 4   | OTP invalidate after use               | Pass                    | Better Auth phone/email OTP delete-on-success                                                          |
@@ -170,7 +170,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Impact:** Higher success rate for slow/distributed password guessing.
 
-- **Recommendation / Fix:** Raised `minPasswordLength` to 10; added `passwordPolicy` plugin requiring letter + digit on sign-up / change-password / reset-password; UI validators aligned.
+- **Recommendation / Fix:** Kept `minPasswordLength` at 8 (UX); added `passwordPolicy` plugin requiring letter + digit on sign-up / change-password / reset-password; UI validators aligned to shared `PASSWORD_MIN_LENGTH`.
 
 - **Retest Result:** Pass — `password-policy.test.ts`, `auth.security.controls.test.ts`
 

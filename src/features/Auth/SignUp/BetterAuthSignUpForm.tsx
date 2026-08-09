@@ -12,6 +12,7 @@ import AuthSocialButtons from '@/features/Auth/AuthSocialButtons';
 import { AuthCard } from '@/features/AuthCard';
 import { AuthAgreement, useAuthAgreement, useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import { PASSWORD_MIN_LENGTH } from '@/libs/better-auth/plugins/password-policy';
 
 import { useSignUp } from './useSignUp';
 
@@ -159,7 +160,7 @@ const BetterAuthSignUpForm = () => {
           name="password"
           rules={[
             { message: t('betterAuth.errors.passwordRequired'), required: true },
-            { message: t('betterAuth.errors.passwordMinLength'), min: 10 },
+            { message: t('betterAuth.errors.passwordMinLength'), min: PASSWORD_MIN_LENGTH },
             { max: 64, message: t('betterAuth.errors.passwordMaxLength') },
             {
               message: t('betterAuth.errors.passwordFormat'),

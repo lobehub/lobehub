@@ -4,6 +4,8 @@ import { Form } from 'antd';
 import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { PASSWORD_MIN_LENGTH } from '@/libs/better-auth/plugins/password-policy';
+
 import { useResetPassword } from './useResetPassword';
 
 interface ResetPasswordContentProps {
@@ -40,7 +42,7 @@ export const ResetPasswordContent = ({
         name="newPassword"
         rules={[
           { message: t('betterAuth.errors.passwordRequired'), required: true },
-          { message: t('betterAuth.errors.passwordMinLength'), min: 10 },
+          { message: t('betterAuth.errors.passwordMinLength'), min: PASSWORD_MIN_LENGTH },
           { max: 64, message: t('betterAuth.errors.passwordMaxLength') },
           {
             message: t('betterAuth.errors.passwordFormat'),
