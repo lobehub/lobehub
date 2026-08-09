@@ -17,6 +17,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';
+import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
 import { type InboxTopic } from './useHomeInboxTopics';
 
@@ -110,6 +111,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     const sendMessage = useChatStore((s) => s.sendMessage);
     const prefetchMessages = useChatStore((s) => s.prefetchMessages);
     const markdownProps = useHomeInboxMarkdown(topic.id);
+    const assistantPreview = sanitizeInboxPreview(topic.lastAssistantMessage ?? '');
 
     const [expanded, setExpanded] = useState(false);
     const [read, setRead] = useState(false);
@@ -206,9 +208,9 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
 
         {expanded && (
           <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
-            {topic.lastAssistantMessage && (
+            {assistantPreview && (
               <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
-                {topic.lastAssistantMessage}
+                {assistantPreview}
               </MarkdownMessage>
             )}
 
