@@ -75,6 +75,31 @@ describe('ChatInput store actions', () => {
     expect(getInputHistory()).toEqual([]);
   });
 
+  it('adds the hidden /goal prefix only when sending in goal mode', () => {
+    const onSend = vi.fn(({ clearContent, getMarkdownContent }) => {
+      expect(getMarkdownContent()).toBe('/goal Ship the homepage');
+      clearContent();
+    });
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) =>
+        type === 'markdown' ? 'Ship the homepage' : { root: {} },
+      ),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+    });
+
+    store.getState().setGoalMode(true);
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(editor.cleanDocument).toHaveBeenCalledOnce();
+    expect(store.getState().goalMode).toBe(false);
+  });
+
   it('does not record history when the input history feature is disabled', () => {
     const editor = {
       cleanDocument: vi.fn(),

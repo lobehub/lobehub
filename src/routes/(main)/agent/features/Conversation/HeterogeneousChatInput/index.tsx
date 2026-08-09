@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
+import GoalModeChip from '@/features/ChatInput/ActionBar/GoalModeChip';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
@@ -127,6 +128,7 @@ const HeterogeneousChatInput = memo(() => {
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () => [
       { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
+      { alwaysDisplay: true, children: <GoalModeChip />, key: 'goalModeChip' },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
     [],
