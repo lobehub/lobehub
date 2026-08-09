@@ -61,11 +61,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   optionLabel: css`
     font-weight: 500;
   `,
+  // One step above the hover tint is enough — the checkmark carries the
+  // selection signal, so a heavy fill just reads as a muddy block.
   optionSelected: css`
-    background: ${cssVar.colorFillSecondary};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      background: ${cssVar.colorFill};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   recommendedBadge: css`
