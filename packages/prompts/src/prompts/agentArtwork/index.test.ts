@@ -60,6 +60,8 @@ describe('buildAgentArtworkPrompt', () => {
     expect(prompt).toContain('one vivid contrasting solid background color');
     expect(prompt).toContain('mascot-style 3D emoji character');
     expect(prompt).toContain('never blank or babyish');
+    expect(prompt).toContain('friendly likeable color');
+    expect(prompt).not.toContain('smirk');
   });
 
   it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
