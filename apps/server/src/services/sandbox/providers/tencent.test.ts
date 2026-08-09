@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import nodePath from 'node:path';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,6 +75,23 @@ const scriptArgs = (command: string) => {
 
 const okCommand = (stdout = '') => ({ exitCode: 0, stderr: '', stdout });
 
+const isLinuxProcessTerminated = async (pid: number) => {
+  try {
+    const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
+    const nameEnd = stat.lastIndexOf(')');
+    const state = stat.slice(nameEnd + 2, nameEnd + 3);
+
+    // A zombie has exited and cannot execute any more code. It may remain in
+    // /proc until the container's PID 1 reaps it, so kill(pid, 0) alone is not
+    // a portable termination check inside CI containers.
+    return state === 'Z';
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return true;
+
+    throw error;
+  }
+};
+
 describe('TencentSandboxProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -108,6 +124,47 @@ describe('TencentSandboxProvider', () => {
 
     expect(result.success).toBe(true);
     expect(result.result).toMatchObject({ output: '42\n', stdout: '42\n' });
+  });
+
+  it('maps JavaScript to the E2B js kernel', async () => {
+    mocks.sandbox.runCode.mockResolvedValue({
+      logs: { stderr: [], stdout: ['42\n'] },
+      results: [],
+    });
+
+    await (
+      await load()
+    ).callTool('executeCode', {
+      code: 'console.log(42)',
+      language: 'javascript',
+    });
+
+    expect(mocks.sandbox.runCode).toHaveBeenCalledWith('console.log(42)', { language: 'js' });
+  });
+
+  it('executes TypeScript with the pinned tsx runner', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand('42\n'));
+    const code = 'const answer: number = 42; console.log(answer);';
+
+    const result = await (
+      await load()
+    ).callTool('executeCode', {
+      code,
+      language: 'typescript',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({ output: '42\n', stdout: '42\n' });
+    expect(mocks.sandbox.runCode).not.toHaveBeenCalled();
+    expect(mocks.sandbox.files.write).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/home\/user\/\.lobe-execute-.+\.mts$/),
+      code,
+    );
+
+    const [command, options] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(command).toContain('npx --yes tsx@4.22.4');
+    expect(command).not.toContain(code);
+    expect(options).toEqual({ timeoutMs: 120_000 });
   });
 
   it('fails the call when the executed code raises', async () => {
@@ -157,7 +214,7 @@ describe('TencentSandboxProvider', () => {
 
     // Output has to be captured on disk, otherwise later polls have nothing to
     // read without waiting for the process to finish.
-    const [launch] = mocks.sandbox.commands.run.mock.calls[0];
+    const [launch] = mocks.sandbox.commands.run.mock.calls.at(-1)!;
     expect(launch).toContain(`${commandId}.log`);
     expect(launch).toContain(`${commandId}.pid`);
   });
@@ -183,7 +240,14 @@ describe('TencentSandboxProvider', () => {
       command,
     );
 
-    const [launch] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(1, 'mkdir -p /tmp/lobe-background', {
+      timeoutMs: 5000,
+    });
+    expect(mocks.sandbox.commands.run.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sandbox.files.write.mock.invocationCallOrder[0],
+    );
+
+    const [launch] = mocks.sandbox.commands.run.mock.calls.at(-1)!;
     expect(launch).not.toContain('hello world');
     // The detached process gets the timeout, not just the launcher, and
     // timeout's own pid/group is the one we record and later kill.
@@ -197,9 +261,11 @@ describe('TencentSandboxProvider', () => {
     'kills the entire background process group when it times out',
     async () => {
       const childPidFile = `/tmp/lobe-background/test-child-${process.pid}-${Date.now()}.pid`;
+      await rm('/tmp/lobe-background', { force: true, recursive: true });
 
+      // Plain writeFile rejects a missing parent, so this test also enforces
+      // that production creates the background directory before files.write.
       mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
-        await mkdir(nodePath.dirname(path), { recursive: true });
         await writeFile(path, content);
       });
       mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
@@ -230,8 +296,8 @@ describe('TencentSandboxProvider', () => {
 
         const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
         await vi.waitFor(
-          () => {
-            expect(() => process.kill(childPid, 0)).toThrow();
+          async () => {
+            expect(await isLinuxProcessTerminated(childPid)).toBe(true);
           },
           { interval: 50, timeout: 2000 },
         );
@@ -256,6 +322,7 @@ describe('TencentSandboxProvider', () => {
           ),
         );
         await rm(childPidFile, { force: true });
+        await rm('/tmp/lobe-background', { force: true, recursive: true });
       }
     },
   );

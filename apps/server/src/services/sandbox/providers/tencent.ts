@@ -34,6 +34,7 @@ const DEFAULT_TIMEOUT_SEC = 300;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
+const TSX_VERSION = '4.22.4';
 /** Renew a persistent instance once it is within this window of expiring. */
 const RENEW_THRESHOLD_MS = 60_000;
 const BACKGROUND_DIR = '/tmp/lobe-background';
@@ -261,8 +262,46 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     switch (toolName) {
       case 'executeCode': {
-        const execution = await sandbox.runCode(String(params.code ?? ''), {
-          language: (params.language as string) ?? 'python',
+        const code = String(params.code ?? '');
+        const language = String(params.language ?? 'python');
+
+        // EdgeOne's E2B-compatible Jupyter service uses `js` for its
+        // JavaScript kernel and does not expose a TypeScript kernel. Execute
+        // TypeScript with a pinned runner instead of advertising support and
+        // then forwarding an invalid kernel identifier.
+        if (language === 'typescript') {
+          const scriptPath = `/home/user/.lobe-execute-${randomUUID()}.mts`;
+          await sandbox.files.write(scriptPath, code);
+
+          const execution = await sandbox.commands.run(
+            `npx --yes tsx@${TSX_VERSION} ${scriptPath}; ` +
+              `status=$?; rm -f ${scriptPath}; exit $status`,
+            { timeoutMs: this.timeoutMs(params) },
+          );
+          const executionError =
+            execution.exitCode === 0
+              ? undefined
+              : execution.stderr ||
+                execution.error ||
+                `TypeScript exited with code ${execution.exitCode}`;
+
+          return {
+            result: {
+              error: executionError,
+              output: execution.stdout,
+              results: [],
+              stderr: execution.stderr,
+              stdout: execution.stdout,
+            },
+            success: !executionError,
+            ...(executionError
+              ? { error: { message: executionError, name: 'ExecutionError' } }
+              : {}),
+          };
+        }
+
+        const execution = await sandbox.runCode(code, {
+          language: language === 'javascript' ? 'js' : language,
         });
 
         const stdout = execution.logs.stdout.join('');
@@ -376,7 +415,16 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (params.background === true) {
       const id = randomUUID();
       const base = `${BACKGROUND_DIR}/${id}`;
-      const timeoutSec = Math.max(1, Math.ceil(this.timeoutMs(params) / 1000));
+      const timeoutMs = this.timeoutMs(params);
+      const timeoutSec = Math.max(1, Math.ceil(timeoutMs / 1000));
+
+      // Create the parent before files.write. Besides making the ordering
+      // explicit for E2B-compatible implementations, this avoids relying on
+      // an SDK-specific implicit recursive-directory behavior.
+      const directory = await sandbox.commands.run(`mkdir -p ${BACKGROUND_DIR}`, { timeoutMs });
+      if (directory.exitCode !== 0) {
+        throw new Error(directory.stderr || 'Failed to prepare background command directory');
+      }
 
       // The command is written to a file rather than interpolated into the
       // launcher: anything with quotes — `printf '%s' 'hello world'` — would
@@ -392,7 +440,6 @@ export class TencentSandboxProvider implements SandboxProvider {
       // The launcher also has to detach every fd, otherwise the caller's
       // `commands.run` waits for the detached process to close stdout.
       const launch =
-        `mkdir -p ${BACKGROUND_DIR}; ` +
         `setsid sh -c 'timeout --kill-after=5s ${timeoutSec}s sh ${base}.sh ` +
         `> ${base}.log 2>&1 & command_pgid=$!; ` +
         `echo $command_pgid > ${base}.pgid; ` +
@@ -402,7 +449,7 @@ export class TencentSandboxProvider implements SandboxProvider {
 
       const result = await sandbox.commands.run(launch, {
         cwd: params.cwd as string | undefined,
-        timeoutMs: this.timeoutMs(params),
+        timeoutMs,
       });
 
       if (result.exitCode !== 0) {
