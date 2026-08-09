@@ -94,11 +94,17 @@ const hostnameOf = (url?: string): string | null => {
 const excerptOf = (content?: string | null): string =>
   (content ?? '')
     .replace(/^\s*---[\s\S]*?---\s*/, '')
-    .replaceAll(/!\[[^\]]*\]\([^)>]*>?\)/g, '')
-    .replaceAll(/\[\s*\]\([^)>]*>?\)/g, '')
-    .replaceAll(/\[([^\]]*)\]\([^)>]*>?\)/g, '$1')
+    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replaceAll(/<\/?[a-z][^>]*>/gi, '')
+    // markdown table rulers (|:---|---|) survive as long dash runs once the
+    // pipes are stripped — drop them together with any leftover link shells
+    .replaceAll(/:?-{3,}:?/g, ' ')
+    .replaceAll(/\[\s*\]/g, '')
     .replaceAll(/[#*>`_\\|]/g, '')
+    .replaceAll(/\(\s*\)/g, '')
+    // nested-link leftovers surface as stray bracket runs like `(]`
+    .replaceAll(/[()[\]]{2,}/g, ' ')
     .replaceAll(/\s+/g, ' ')
     .trim()
     .slice(0, 240);
