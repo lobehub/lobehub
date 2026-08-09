@@ -64,19 +64,13 @@ const CategoryMenu = memo(() => {
           url: '/resource/all',
         },
       ],
-      // file-based categories
+      // file-based categories — Files (the misc raw-data bucket) sits last
       [
         {
           icon: FileText,
           key: FilesTabs.Documents,
           title: t('tab.documents'),
           url: '/resource/documents',
-        },
-        {
-          icon: FilesIcon,
-          key: FilesTabs.Files,
-          title: t('tab.files'),
-          url: '/resource/files',
         },
         {
           icon: ImageIcon,
@@ -95,6 +89,12 @@ const CategoryMenu = memo(() => {
           key: FilesTabs.Audios,
           title: t('tab.audios'),
           url: '/resource/audios',
+        },
+        {
+          icon: FilesIcon,
+          key: FilesTabs.Files,
+          title: t('tab.files'),
+          url: '/resource/files',
         },
       ],
       // LobeHub business entities

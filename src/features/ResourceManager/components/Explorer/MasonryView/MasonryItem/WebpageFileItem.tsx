@@ -86,12 +86,19 @@ const hostnameOf = (url?: string): string | null => {
   }
 };
 
-/** Strip markdown noise (images, links, emphasis) down to readable excerpt text. */
+/**
+ * Strip clipping noise down to readable excerpt text: YAML frontmatter,
+ * markdown images/links (including the `(<url>)` angle-bracket form and
+ * empty-text link shells), html tags and markdown punctuation.
+ */
 const excerptOf = (content?: string | null): string =>
   (content ?? '')
-    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replaceAll(/[#*>`_\\]/g, '')
+    .replace(/^\s*---[\s\S]*?---\s*/, '')
+    .replaceAll(/!\[[^\]]*\]\([^)>]*>?\)/g, '')
+    .replaceAll(/\[\s*\]\([^)>]*>?\)/g, '')
+    .replaceAll(/\[([^\]]*)\]\([^)>]*>?\)/g, '$1')
+    .replaceAll(/<\/?[a-z][^>]*>/gi, '')
+    .replaceAll(/[#*>`_\\|]/g, '')
     .replaceAll(/\s+/g, ' ')
     .trim()
     .slice(0, 240);
