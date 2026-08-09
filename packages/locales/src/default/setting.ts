@@ -746,6 +746,7 @@ export default {
   'settingAgent.avatar.sizeExceeded': 'Image size exceeds 1MB limit, please choose a smaller image',
   'settingAgent.avatar.title': 'Avatar',
   'settingAgent.artwork.avatar.generating': 'Creating an avatar that matches this Agent…',
+  'settingAgent.artwork.avatar.image': 'AI avatar',
   'settingAgent.artwork.background.empty': 'Add a background to give this Agent a visual identity',
   'settingAgent.artwork.background.emptyHint': 'Add a cover image',
   'settingAgent.artwork.background.generate': 'Generate background',
@@ -761,6 +762,7 @@ export default {
   'settingAgent.artwork.studio.diyHint':
     'Upload your own image (under 1 MB), or click the avatar on the profile to pick an emoji.',
   'settingAgent.artwork.studio.diyTitle': 'Make your own',
+  'settingAgent.artwork.studio.enableModel': 'Enable a model',
   'settingAgent.artwork.studio.generate': 'Generate avatar',
   'settingAgent.artwork.studio.generateHint':
     "Pick a style and we'll create an avatar from this Agent's profile.",
@@ -770,6 +772,7 @@ export default {
   'settingAgent.artwork.studio.noModel':
     'Enable an image generation model to use one-click generation.',
   'settingAgent.artwork.studio.open': 'Customize appearance',
+  'settingAgent.artwork.studio.openAction': 'Open the avatar studio',
   'settingAgent.artwork.studio.recommended': 'Recommended',
   'settingAgent.artwork.studio.title': 'Agent Appearance',
   'settingAgent.artwork.studio.upload': 'Upload image',
