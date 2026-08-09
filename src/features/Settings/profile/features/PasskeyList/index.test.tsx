@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   addPasskey: vi.fn(),
   deletePasskey: vi.fn(),
+  disableEmailPassword: false,
   enableMagicLink: false,
+  hasPasswordAccount: false,
+  linkedProviders: [] as string[],
+  ssoProviders: [] as string[],
   isError: false,
   passkeys: [] as { createdAt?: string; id: string; name?: string }[],
   refetch: vi.fn(),
@@ -30,11 +34,19 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => k
 
 vi.mock('@/store/user', () => ({ useUserStore: (fn: any) => fn({}) }));
 vi.mock('@/store/user/selectors', () => ({
-  authSelectors: { authProviders: () => [], hasPasswordAccount: () => false, isLogin: () => true },
+  authSelectors: {
+    authProviders: () => mocks.linkedProviders,
+    hasPasswordAccount: () => mocks.hasPasswordAccount,
+    isLogin: () => true,
+  },
 }));
 vi.mock('@/store/serverConfig', () => ({ useServerConfigStore: (fn: any) => fn({}) }));
 vi.mock('@/store/serverConfig/selectors', () => ({
-  serverConfigSelectors: { enableMagicLink: () => mocks.enableMagicLink },
+  serverConfigSelectors: {
+    disableEmailPassword: () => mocks.disableEmailPassword,
+    enableMagicLink: () => mocks.enableMagicLink,
+    oAuthSSOProviders: () => mocks.ssoProviders,
+  },
 }));
 
 const PasskeyList = (await import('./index')).default;
@@ -44,6 +56,10 @@ describe('PasskeyList', () => {
     vi.clearAllMocks();
     mocks.isError = false;
     mocks.enableMagicLink = false;
+    mocks.disableEmailPassword = false;
+    mocks.hasPasswordAccount = false;
+    mocks.linkedProviders = [];
+    mocks.ssoProviders = [];
     mocks.passkeys = [];
   });
 
@@ -96,5 +112,34 @@ describe('PasskeyList', () => {
     render(<PasskeyList />);
 
     expect(screen.getAllByText('profile.passkey.delete.forbidden').length).toBeGreaterThan(0);
+  });
+
+  // A credential row survives AUTH_DISABLE_EMAIL_PASSWORD=1, but the sign-in
+  // form is gone — counting it would strand the user outside their account.
+  it('does not count a password that can no longer be used', () => {
+    mocks.hasPasswordAccount = true;
+    mocks.disableEmailPassword = true;
+    mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
+    render(<PasskeyList />);
+
+    expect(screen.getAllByText('profile.passkey.delete.forbidden').length).toBeGreaterThan(0);
+  });
+
+  it('does not count a provider the server no longer offers', () => {
+    mocks.linkedProviders = ['github'];
+    mocks.ssoProviders = [];
+    mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
+    render(<PasskeyList />);
+
+    expect(screen.getAllByText('profile.passkey.delete.forbidden').length).toBeGreaterThan(0);
+  });
+
+  it('counts a provider that is still configured', () => {
+    mocks.linkedProviders = ['github'];
+    mocks.ssoProviders = ['github'];
+    mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
+    render(<PasskeyList />);
+
+    expect(screen.queryByText('profile.passkey.delete.forbidden')).not.toBeInTheDocument();
   });
 });

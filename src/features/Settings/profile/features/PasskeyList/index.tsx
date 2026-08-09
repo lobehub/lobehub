@@ -26,6 +26,8 @@ export const PasskeyList = memo(() => {
   const hasPasswordAccount = useUserStore(authSelectors.hasPasswordAccount);
   const providers = useUserStore(authSelectors.authProviders);
   const enableMagicLink = useServerConfigStore(serverConfigSelectors.enableMagicLink);
+  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
+  const ssoProviders = useServerConfigStore(serverConfigSelectors.oAuthSSOProviders);
   const { t } = useTranslation('auth');
 
   const { passkeys, isError, isLoading, addPasskey, deletePasskey, renamePasskey, refetch } =
@@ -35,12 +37,16 @@ export const PasskeyList = memo(() => {
   // showing several indistinguishable entries until the user can name them.
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Never let users lock themselves out: a passkey may only be removed while
-  // some other way to sign in remains. Magic link counts — `handleCheckUser`
-  // signs an account in that way once it finds no password — so excluding it
-  // would force a second credential before a lost passkey could be revoked.
+  // Never let users lock themselves out: the last passkey may only be removed
+  // while another way to sign in is *currently usable*. A credential row still
+  // exists after `AUTH_DISABLE_EMAIL_PASSWORD=1` hides the form, and an account
+  // can stay linked to a provider the server no longer offers — counting either
+  // would strand the user outside their account.
+  const canUsePassword = hasPasswordAccount && !disableEmailPassword;
+  const usableProviders = providers.filter((provider) => (ssoProviders ?? []).includes(provider));
+
   const allowDelete =
-    passkeys.length > 1 || hasPasswordAccount || providers.length > 0 || !!enableMagicLink;
+    passkeys.length > 1 || canUsePassword || usableProviders.length > 0 || enableMagicLink;
   const enableActions = !isDesktop && isLogin;
 
   const handleAdd = async () => {
