@@ -19,7 +19,7 @@ import {
  * would open off the seed → orphan sibling forks.
  *
  * The phase 2 rewrite anchors the chain to the run's latest NON-tool / NON-signal
- * main-thread message (`getLastMainThreadSpineMessageId`), read straight from the
+ * scoped message (`getLatestSpineMessageId`), read straight from the
  * DB and ordered by createdAt — independent of `currentAssistantId`. So step 2
  * chains off step 1's assistant even though the in-memory pointer regressed.
  *
@@ -103,19 +103,21 @@ const createHarness = () => {
         return [...messages.values()].filter((m) => m.threadId === params.threadId);
       return [...messages.values()].filter((m) => !m.threadId && m.topicId === params?.topicId);
     }),
-    getLastMainThreadSpineMessageId: vi.fn(async (topicId: string) => {
-      // Most recent main-thread, non-tool, non-signal message — the spine anchor.
-      const match = [...messages.values()]
-        .filter(
-          (m) =>
-            m.topicId === topicId &&
-            m.role !== 'tool' &&
-            !m.threadId &&
-            !(m as any).metadata?.signal,
-        )
-        .sort((a, b) => b.seq - a.seq)[0];
-      return match?.id;
-    }),
+    getLatestSpineMessageId: vi.fn(
+      async ({ threadId, topicId }: { threadId?: string | null; topicId: string }) => {
+        // Most recent main-thread, non-tool, non-signal message — the spine anchor.
+        const match = [...messages.values()]
+          .filter(
+            (m) =>
+              m.topicId === topicId &&
+              m.role !== 'tool' &&
+              m.threadId === (threadId ?? null) &&
+              !(m as any).metadata?.signal,
+          )
+          .sort((a, b) => b.seq - a.seq)[0];
+        return match?.id;
+      },
+    ),
     listMessagePluginsByTopic: vi.fn(async () =>
       [...messages.values()]
         .filter((m) => m.role === 'tool' && m.tool_call_id)

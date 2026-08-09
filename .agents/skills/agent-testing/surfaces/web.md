@@ -21,7 +21,7 @@ the methodology.
 
 ## Option A — agent-browser with seeded auth (recommended)
 
-Seed/verify the web session per `PROJECT.md` §3, then drive it. Use one named
+Seed and validate the web session per `PROJECT.md` §3, then drive it. Use one named
 session as the single evidence source:
 
 ```bash

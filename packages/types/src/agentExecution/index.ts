@@ -68,6 +68,11 @@ export interface ExecAgentAppContext {
    * Forwarded into the operation so the completion path can project receipts.
    */
   agentSignal?: AgentSignalOperationMarker;
+  /**
+   * Agent that owns the conversation when it differs from the agent executing
+   * this run (for example, a single explicit @Agent direct route).
+   */
+  conversationAgentId?: string;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
@@ -91,6 +96,16 @@ export interface ExecAgentAppContext {
     workingDirectory?: string;
     workingDirectoryConfig?: WorkingDirConfig;
   };
+  /**
+   * Whether this operation runs inside an isolation thread spawned by another
+   * operation on the same topic (callAgent / callSubAgent / group member).
+   *
+   * Such a run is a guest on its parent's topic: it must not claim or clear the
+   * topic's `runningOperation` mark, which is the parent run's gateway reconnect
+   * anchor. Broader than `isSubAgent` on purpose — the `execSubAgent` (callAgent)
+   * path passes `isSubAgent: false` yet is just as much a guest.
+   */
+  isolationThread?: boolean;
   /**
    * Whether this operation is an isolated sub-agent execution. Used to disable
    * recursive sub-agent dispatch.

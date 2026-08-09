@@ -130,6 +130,9 @@ export class TaskConfigSliceActionImpl {
     } catch (error) {
       console.error('[TaskStore] Failed to update verify config:', error);
       await this.#get().internal_refreshTaskDetail(id);
+      // Rethrow so multi-step callers (e.g. acceptance removal) can abort
+      // instead of proceeding as if the config write landed.
+      throw error;
     }
   };
 

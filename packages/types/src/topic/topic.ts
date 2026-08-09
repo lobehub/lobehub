@@ -225,6 +225,17 @@ export interface ChatTopicMetadata {
    * `runningOperation`); every reader treats a nullish value as "not scheduled".
    */
   scheduledRun?: TopicScheduledRun | null;
+  /**
+   * Short-lived ownership marker used while a task result is being appended
+   * and its continuation is being dispatched. Callback deliveries acquire
+   * this only when `runningOperation` is empty, which serializes callback
+   * bursts behind the foreground turn without holding a database transaction
+   * open while the agent operation starts.
+   */
+  taskCallbackReservation?: {
+    messageId: string;
+    reservedAt: string;
+  } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
@@ -451,6 +462,13 @@ export const chatTopicMetadataUpdateSchema = z.object({
       operationId: z.string(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
+    })
+    .nullable()
+    .optional(),
+  taskCallbackReservation: z
+    .object({
+      messageId: z.string(),
+      reservedAt: z.string(),
     })
     .nullable()
     .optional(),

@@ -6,6 +6,7 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -296,9 +297,11 @@ export class HeterogeneousAgentService {
 
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
+    let isolationThreadId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
       serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
+      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
@@ -337,6 +340,40 @@ export class HeterogeneousAgentService {
         lastAssistantContent = msg?.content as string | undefined;
       } catch (err) {
         log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
+      }
+    }
+
+    // Heterogeneous device callbacks can finish on a different server instance
+    // from the one that registered the in-memory thread hooks. Finalize the
+    // isolation thread durably here as well, and project its terminal answer
+    // back onto the source assistant in the main conversation.
+    if (isolationThreadId) {
+      try {
+        const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
+        const thread = await threadModel.findById(isolationThreadId);
+        if (thread) {
+          if (lastAssistantContent && thread.sourceMessageId) {
+            await this.messageModel.update(thread.sourceMessageId, {
+              content: lastAssistantContent,
+            });
+          }
+
+          const completedAt = new Date().toISOString();
+          const startedAt =
+            typeof thread.metadata?.startedAt === 'string' ? thread.metadata.startedAt : undefined;
+          await threadModel.update(isolationThreadId, {
+            metadata: {
+              ...thread.metadata,
+              completedAt,
+              ...(error ? { error } : {}),
+              ...(startedAt ? { duration: Date.now() - new Date(startedAt).getTime() } : undefined),
+              operationId,
+            },
+            status: result === 'success' ? ThreadStatus.Completed : ThreadStatus.Failed,
+          });
+        }
+      } catch (err) {
+        log('heteroFinish: failed to finalize isolation thread (non-fatal): %O', err);
       }
     }
 

@@ -4,9 +4,11 @@ import debug from 'debug';
 import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
+import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
 
 const log = debug('lobe-server:taskResultBridge');
 
@@ -144,50 +146,71 @@ export class TaskResultBridgeService {
     // ownership predicate — a personal-mode model (workspace_id IS NULL) finds
     // no leaf and the callback would be created parentless.
     const messageModel = new MessageModel(this.db, this.userId, this.workspaceId);
+    const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
 
-    // Anchor the callback on the creator topic's CURRENT leaf at delivery time —
-    // NOT origin.messageId (the assistant turn that called createTask). A task
-    // runs for minutes while the creator agent keeps talking, so origin.messageId
-    // is a stale mid-conversation node; parenting there forks a hidden sibling
-    // branch the linear UI never follows, so the user never sees the result
-    //
-    const parentId = await messageModel.getLastMainThreadSpineMessageId(origin.topicId);
-
-    try {
-      await messageModel.create(
-        {
-          agentId: origin.agentId,
-          content,
-          metadata: {
-            taskCallback: { identifier: taskIdentifier, reason, taskId, topicId },
-          },
-          parentId,
-          role: 'taskCallback',
-          topicId: origin.topicId,
-        },
-        messageId,
-      );
-    } catch (error) {
-      if (isDuplicateKeyError(error)) {
-        log('task-callback %s already delivered, skipping', messageId);
-        return;
-      }
-      throw error;
+    // A callback can arrive while the creator is still finishing the tool
+    // turn that spawned it. Reading the live leaf immediately is not enough:
+    // both the callback and the later tool result would parent to the same
+    // assistant shell and start competing continuations. Atomically wait for
+    // the current run to clear, then reserve the topic so callback bursts are
+    // delivered one at a time. `execAgent` installs `runningOperation` before
+    // this reservation is released, making the next callback wait for this
+    // continuation too.
+    const reserved = await acquireTopicStartReservation({
+      reservationId: messageId,
+      topicId: origin.topicId,
+      topicModel,
+    });
+    if (!reserved) {
+      log('origin topic %s no longer exists, skipping bridge', origin.topicId);
+      return;
     }
 
-    // Run the creator agent off history (no new user turn): the context engine
-    // surfaces the task-callback card as a `<task_result>` user turn via
-    // TaskCallbackMessageProcessor, so the agent reads it and continues.
-    await new AiAgentService(this.db, this.userId, { workspaceId: this.workspaceId }).execAgent({
-      agentId: origin.agentId,
-      appContext: { topicId: origin.topicId },
-      autoStart: true,
-      parentMessageId: messageId,
-      prompt: `Task ${taskIdentifier} ${reason}`,
-      suppressUserMessage: true,
-      trigger: RequestTrigger.AgentSignal,
-      userInterventionConfig: { approvalMode: 'headless' },
-    });
+    try {
+      // Resolve the anchor only AFTER winning the idle-topic reservation. This
+      // preserves the LOBE-10784 live-tail fix while closing the in-flight tool
+      // continuation window described by LOBE-12497.
+      const parentId = await messageModel.getLastMainThreadSpineMessageId(origin.topicId);
+
+      try {
+        await messageModel.create(
+          {
+            agentId: origin.agentId,
+            content,
+            metadata: {
+              taskCallback: { identifier: taskIdentifier, reason, taskId, topicId },
+            },
+            parentId,
+            role: 'taskCallback',
+            topicId: origin.topicId,
+          },
+          messageId,
+        );
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          log('task-callback %s already delivered, skipping', messageId);
+          return;
+        }
+        throw error;
+      }
+
+      // Run the creator agent off history (no new user turn): the context engine
+      // surfaces the task-callback card as a `<task_result>` user turn via
+      // TaskCallbackMessageProcessor, so the agent reads it and continues.
+      await new AiAgentService(this.db, this.userId, { workspaceId: this.workspaceId }).execAgent({
+        agentId: origin.agentId,
+        appContext: { topicId: origin.topicId },
+        autoStart: true,
+        parentMessageId: messageId,
+        prompt: `Task ${taskIdentifier} ${reason}`,
+        suppressUserMessage: true,
+        topicStartReservationId: messageId,
+        trigger: RequestTrigger.AgentSignal,
+        userInterventionConfig: { approvalMode: 'headless' },
+      });
+    } finally {
+      await topicModel.releaseTaskCallbackReservation(origin.topicId, messageId);
+    }
 
     log('bridged task %s result into topic %s (%s)', taskIdentifier, origin.topicId, reason);
   }

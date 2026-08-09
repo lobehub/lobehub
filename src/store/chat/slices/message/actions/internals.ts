@@ -35,7 +35,7 @@ export class MessageInternalsActionImpl {
 
   internal_dispatchMessage = (
     payload: MessageDispatch,
-    context?: { operationId?: string },
+    context?: Parameters<ChatStore['internal_getConversationContext']>[0],
   ): void => {
     // Get full conversation context (including scope) from operation or global state
     const ctx = this.#get().internal_getConversationContext(context);

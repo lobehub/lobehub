@@ -31,7 +31,7 @@ Execution outputs remain in the round directory's `assets/`. See
 `scripts/fixture.mjs` and the skill's fixture workflow.
 
 **`result.json` is the report — `report.md` is just its tail.** The published
-verify page (`/verify/<id>`) renders itself from `result.json`: one line of
+acceptance page renders itself from `result.json`: one line of
 provenance (PR / branch / commit / date / surfaces), the overall conclusion from
 `summary.conclusion` directly under the title, and the check list from `plan[]`
 paired with `cases[]`. So `report.md` must NOT repeat the scope block or a case
@@ -100,7 +100,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
      usual slip, and it does not pair: `role` is read from inside `comparison`,
      never from the evidence item itself.
 
-     The verify page renders a complete pair with each screenshot under its own
+     The acceptance page renders a complete pair with each screenshot under its own
      tinted band — red for `before`, green for `after`. A group contains exactly one
      `before` and one `after`, and **both halves need the same string `id`**; a half
      without an `id` can never pair. Incomplete groups render as ordinary evidence.
@@ -204,7 +204,7 @@ from the current one.
    the final chat reply.
 
 6. **Publish** (SKILL.md Step 6) — upload the finished session so it's viewable on
-   the verify platform, not just on disk. **Publish to PRODUCTION defaults with the
+   LobeHub Acceptance, not just on disk. **Publish to PRODUCTION defaults with the
    user's real login, NOT a local-dev CLI override** — strip the local dev overrides
    so `lh` uses its production defaults. Clearing an override profile looks like:
 
@@ -216,8 +216,9 @@ from the current one.
    This creates a new immutable verification run, attaches it to the required
    subject acceptance, uploads the cases, evidence, and report body, then prints
    `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` round-snapshot form.
-   Include the full production acceptance link (never a `/verify/<id>` one) in the
-   final reply alongside the local report dir — with whitespace after the URL, so
+   Include only the full production acceptance link in the final reply. Never
+   expose local paths, local file links, or internal run-page paths. Leave
+   whitespace after the URL, so
    an autolinker can't swallow adjacent CJK punctuation into the href. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the

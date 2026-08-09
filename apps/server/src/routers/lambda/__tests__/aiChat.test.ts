@@ -33,6 +33,7 @@ describe('aiChatRouter', () => {
     // spine head returned by the server-authoritative parentId resolution;
     // undefined keeps the client-provided parentId unchanged
     latestSpineMessageId?: string,
+    resolvedHeadDescendsFromClient = true,
   ) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
@@ -62,6 +63,7 @@ describe('aiChatRouter', () => {
           createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
           // server-authoritative parentId resolution for existing-topic appends
           getLatestSpineMessageId: vi.fn().mockResolvedValue(latestSpineMessageId),
+          isMessageDescendantOf: vi.fn().mockResolvedValue(resolvedHeadDescendsFromClient),
         }) as any,
     );
 
@@ -267,6 +269,34 @@ describe('aiChatRouter', () => {
       expect.objectContaining({
         content: 'hi',
         parentId: 'server-head',
+        role: 'user',
+      }),
+    );
+  });
+
+  it('should keep the client branch when the newest spine row belongs to a callback sibling', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    mockMessageModel(mockCreateMessage, 'callback-branch-head', false);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi', parentId: 'active-main-head' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        parentId: 'active-main-head',
         role: 'user',
       }),
     );

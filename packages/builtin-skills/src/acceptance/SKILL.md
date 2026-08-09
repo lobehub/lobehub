@@ -68,6 +68,10 @@ means "skip the acceptance"** — it only means you author the plan instead of
 discovering it. On a later repair round, pass the previously printed
 `--acceptance <acceptanceId>` so the new snapshot joins the same history.
 
+On the first ingest, always supply `--requirement "<one-sentence business goal>"`.
+The requirement describes what the whole acceptance judges, not the narrower
+scope of one round. It is immutable once recorded.
+
 ## Rounds are immutable — repair means a NEW round
 
 A published round is a permanent record of what was true at that moment. **Never
@@ -76,11 +80,18 @@ re-verification as the next round, and let the acceptance page show the
 progression. Correcting a typo in the same session's report is fine; passing off
 post-fix evidence as the original round is not.
 
+Before a repair round, read the current acceptance with
+`lh acceptance view <acceptanceId | type:id> --json`. Omit checks whose latest
+`userReview.action` is `accept`; address non-stale rejects and reuse their exact
+stable check ids. When one check semantically replaces another, declare
+`supersedes: ['old-id']` and repeat the complete lineage in every later round
+that reuses the successor id.
+
 The **acceptance** (`/acceptance/<acceptanceId>`) is the stable cross-round
-decision surface that aggregates every round for a subject; each **round**
-(`/verify/<verifyRunId>`) is one immutable snapshot with its evidence. Lead your
-final reply with the acceptance link when one exists; the round link follows as
-the record of this attempt.
+decision surface that aggregates every immutable round for a subject. In the
+final reply, expose only the acceptance page. A fixed snapshot of the current
+round uses that same path with `?r=<roundIndex>`; implementation-level run pages
+stay internal.
 
 ## Prerequisites
 
@@ -179,7 +190,8 @@ lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_
 call; call again for each additional one (same `--item` reuses the row). Leave the
 pass/fail **verdict** to the review step — only add `--verdict` if your task
 explicitly asks you to self-assert the outcome. Every successful submit prints the
-full `/verify/<verifyRunId>` report URL. Preserve that URL for the final handoff.
+an internal run URL. Keep the returned run id only for coverage checks; never
+expose that URL in the final handoff.
 
 ## Step 4 — Self-check coverage (do not skip)
 
@@ -201,17 +213,17 @@ how good the work is.
 
 ### Final handoff (mandatory)
 
-The final response MUST include the published URLs, together with the explicit
-coverage result. Do not finish with only a check-result id, local artifact path,
-or prose claim.
+The final response MUST include the published acceptance URL when the round is
+attached to an acceptance, together with the explicit coverage result. Do not
+finish with only a check-result id or prose claim.
 
-Lead with the **acceptance** link when the command printed one — it is the stable
-cross-round decision surface; the **round** link follows as this attempt's
-immutable record. Put no images or local file links in the chat reply.
+Expose only the **acceptance** link — it is the stable cross-round decision
+surface. For this round's fixed snapshot, append `?r=<roundIndex>` to that same
+URL. Put no images, local paths, local file links, or internal run-page paths in
+the chat reply.
 
 ```text
 Acceptance:   https://app.lobehub.com/acceptance/<acceptanceId>
-This round:   https://app.lobehub.com/verify/<verifyRunId>
 Coverage: 2/2 criteria, all required evidence uploaded
 ```
 

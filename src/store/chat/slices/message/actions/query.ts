@@ -164,7 +164,7 @@ export class MessageQueryActionImpl {
     }
     // Priority 2: Get full context from operation if operationId is provided (deprecated)
     else if (params?.operationId) {
-      ctx = this.#get().internal_getConversationContext(params);
+      ctx = this.#get().internal_getConversationContext({ operationId: params.operationId });
     }
     // Priority 3: Fallback to global state
     else {

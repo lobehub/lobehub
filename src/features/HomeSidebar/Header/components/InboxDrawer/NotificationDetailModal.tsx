@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import { memo } from 'react';
@@ -31,7 +31,9 @@ const NotificationDetailContent = memo<Omit<NotificationDetailParams, 'title'>>(
             {context}
           </Text>
         )}
-        <Text style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</Text>
+        <Markdown fontSize={14} variant={'chat'}>
+          {content}
+        </Markdown>
         {onAction && (
           <Flexbox horizontal justify="flex-end">
             <Button

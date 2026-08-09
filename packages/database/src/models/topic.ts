@@ -63,6 +63,7 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  * text is one click away in the topic itself.
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -1343,6 +1344,77 @@ export class TopicModel {
         .set({ metadata: mergedMetadata })
         .where(and(eq(topics.id, id), this.ownership()))
         .returning();
+    });
+  };
+
+  /**
+   * Atomically reserve an idle topic for one task-callback delivery.
+   *
+   * The topic row lock closes the check/set race between callback workers:
+   * only one callback can observe both `runningOperation` and the reservation
+   * as empty. Foreground/tool continuations clear `runningOperation` before a
+   * callback can claim the topic, so the callback always re-anchors on the
+   * completed turn's latest spine.
+   */
+  tryReserveTaskCallback = async (id: string, messageId: string): Promise<boolean | null> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (!existing) return null;
+
+      const reservation = existing.metadata?.taskCallbackReservation;
+      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
+      const hasLiveReservation =
+        reservation &&
+        Number.isFinite(reservedAt) &&
+        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+
+      if (reservation?.messageId === messageId && hasLiveReservation) return true;
+      if (existing.metadata?.runningOperation || hasLiveReservation) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            taskCallbackReservation: {
+              messageId,
+              reservedAt: new Date().toISOString(),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return true;
+    });
+
+  /**
+   * Release only the caller's reservation. The ownership check prevents a
+   * delayed finally block from clearing a newer callback's claim.
+   */
+  releaseTaskCallbackReservation = async (id: string, messageId: string): Promise<void> => {
+    await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (existing?.metadata?.taskCallbackReservation?.messageId !== messageId) return;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            taskCallbackReservation: null,
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
     });
   };
 

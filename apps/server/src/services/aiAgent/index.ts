@@ -186,6 +186,7 @@ import {
   resolveDeviceWorkingDirectoryConfig,
 } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
+import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -495,6 +496,11 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * When undefined, falls back to prompt.slice(0, 50).
    */
   title?: string;
+  /**
+   * Re-enter a topic-start reservation already acquired by an upstream caller,
+   * such as TaskResultBridgeService.
+   */
+  topicStartReservationId?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
@@ -1227,6 +1233,34 @@ export class AiAgentService {
    *   → AgentRuntimeService.createOperation(...)
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
+    const topicId = params.appContext?.topicId;
+    // Thread runs are isolated under an explicit parent message and do not
+    // advance the topic's main spine. They may start while their parent
+    // operation owns `runningOperation` (for example callAgent/callSubAgent),
+    // so making them wait for the topic-start claim deadlocks the child start.
+    if (!topicId || params.appContext?.threadId) return this.execAgentWithReservation(params);
+
+    const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
+    const reserved = await acquireTopicStartReservation({
+      reservationId,
+      topicId,
+      topicModel: this.topicModel,
+    });
+
+    if (!reserved) {
+      throw new Error(`Topic not found: ${topicId}`);
+    }
+
+    try {
+      return await this.execAgentWithReservation(params);
+    } finally {
+      await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
+    }
+  }
+
+  private async execAgentWithReservation(
+    params: InternalExecAgentParams,
+  ): Promise<ExecAgentResult> {
     const {
       additionalPluginIds,
       agentId,
@@ -1427,6 +1461,8 @@ export class AiAgentService {
     // fall back to the executing agent. Tools / systemRole / skills / agent
     // documents stay keyed on `resolvedAgentId`.
     const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    const conversationAgentId = appContext?.conversationAgentId ?? persistAgentId;
+    const assistantAgentId = appContext?.conversationAgentId ? resolvedAgentId : persistAgentId;
 
     // Resolve the final model once, keeping per-call task / sub-agent overrides
     // above the caller's personal workspace choice and the shared Agent default.
@@ -1972,10 +2008,14 @@ export class AiAgentService {
     // consume the same records. Keeping it in one place is what guarantees the
     // hetero path can't drift from the standard path again (the bot-image bug
     // came from the hetero branch re-implementing — and skipping — this step).
-    const requestTriggerMetadata =
-      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+    const requestTriggerMetadata = {
+      ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
         ? { trigger: trigger as RequestTrigger }
-        : undefined;
+        : undefined),
+      ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
+        ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
+        : undefined),
+    };
 
     // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
     // `attachedFileIds` → signed URLs + classification.
@@ -2023,7 +2063,7 @@ export class AiAgentService {
       ? undefined
       : await this.messageModel.create(
           {
-            agentId: persistAgentId,
+            agentId: conversationAgentId,
             content: prompt,
             files: runAttachments.fileIds,
             // Group reads filter on messages.groupId (MessageModel.query group
@@ -2064,7 +2104,7 @@ export class AiAgentService {
     // run seeds model + provider as usual.
     const assistantMessageRecord = await this.messageModel.create(
       {
-        agentId: persistAgentId,
+        agentId: assistantAgentId,
         content: LOADING_FLAT,
         // Stamp groupId so the assistant turn is visible in the group read path
         // (MessageModel.query filters group chats by messages.groupId).
@@ -4475,15 +4515,26 @@ export class AiAgentService {
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
-      // Persist running operation to topic metadata for reconnect after page reload
-      await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      });
+      // Persist running operation to topic metadata for reconnect after page reload.
+      //
+      // Skipped for isolation-thread children (callAgent / callSubAgent / group
+      // members): they run on the SPAWNER's topic and finish long before it does,
+      // so claiming the mark would first point every client reconnect at the
+      // child's thread stream, and then — once the child finished and cleared it —
+      // leave the still-running parent with no mark at all, i.e. no gateway
+      // WebSocket for the rest of the run. The parent's mark stays authoritative;
+      // a child's live progress already rides down the parent channel via
+      // `appContext.subAgentProgress`.
+      if (!appContext?.isolationThread) {
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: {
+            assistantMessageId: assistantMessageRecord.id,
+            operationId,
+            scope: appContext?.scope ?? undefined,
+            threadId: appContext?.threadId ?? undefined,
+          },
+        });
+      }
 
       // Generate a short-lived JWT for Gateway WebSocket authentication
       let gatewayToken: string | undefined;
@@ -4981,6 +5032,10 @@ export class AiAgentService {
 
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
+      // Every run spawned here executes in an isolation thread on the SPAWNER's
+      // topic, so it must not touch that topic's `runningOperation` mark — that
+      // mark is the main run's reconnect anchor (see execAgent).
+      isolationThread: true,
       isSubAgent: options.isSubAgent,
       orchestrationRole: options.orchestrationRole,
       subAgentProgress,

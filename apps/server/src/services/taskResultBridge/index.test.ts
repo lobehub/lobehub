@@ -4,20 +4,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 
 import { TaskResultBridgeService } from './index';
 
 // `MessageModel.create` is a class-field arrow (instance prop, not on the
 // prototype) and `AiAgentService`'s constructor builds many sub-services — mock
 // both modules so we observe the calls without standing up the real graph.
-const { createMsg, execAgent, getLastLeaf } = vi.hoisted(() => ({
+const { createMsg, execAgent, getLastLeaf, releaseReservation, tryReserve } = vi.hoisted(() => ({
   createMsg: vi.fn(),
   execAgent: vi.fn(),
   getLastLeaf: vi.fn(),
+  releaseReservation: vi.fn(),
+  tryReserve: vi.fn(),
 }));
 
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(() => ({ create: createMsg, getLastMainThreadSpineMessageId: getLastLeaf })),
+}));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn(() => ({
+    releaseTaskCallbackReservation: releaseReservation,
+    tryReserveTaskCallback: tryReserve,
+  })),
 }));
 
 vi.mock('../aiAgent', () => ({
@@ -54,6 +64,8 @@ describe('TaskResultBridgeService.deliver', () => {
     // The creator topic's current leaf at delivery time — the live tail of the
     // conversation, NOT origin.messageId (the stale create-task message).
     getLastLeaf.mockReset().mockResolvedValue('msg-current-leaf');
+    tryReserve.mockReset().mockResolvedValue(true);
+    releaseReservation.mockReset().mockResolvedValue(undefined);
     execAgent
       .mockReset()
       .mockResolvedValue({ operationId: 'op-new', topicId: 'topic-origin' } as any);
@@ -104,6 +116,7 @@ describe('TaskResultBridgeService.deliver', () => {
       parentMessageId: 'task-cb-task-1-topic-done',
       suppressUserMessage: true,
     });
+    expect(releaseReservation).toHaveBeenCalledWith('topic-origin', 'task-cb-task-1-topic-done');
   });
 
   it('scopes the MessageModel to the bridge workspace so workspace tasks find their leaf', async () => {
@@ -112,6 +125,7 @@ describe('TaskResultBridgeService.deliver', () => {
     // Personal-mode model (workspace_id IS NULL) would miss the team topic's
     // leaf and create the callback parentless — the lookup must be ws-scoped.
     expect(MessageModel).toHaveBeenCalledWith(db, TEST_USER, 'ws-1');
+    expect(TopicModel).toHaveBeenCalledWith(db, TEST_USER, 'ws-1');
   });
 
   it('skips tasks with no origin (e.g. API-created)', async () => {
@@ -119,6 +133,16 @@ describe('TaskResultBridgeService.deliver', () => {
 
     await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
 
+    expect(createMsg).not.toHaveBeenCalled();
+    expect(execAgent).not.toHaveBeenCalled();
+  });
+
+  it('skips delivery when the origin topic was deleted', async () => {
+    tryReserve.mockResolvedValue(null);
+
+    await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+
+    expect(getLastLeaf).not.toHaveBeenCalled();
     expect(createMsg).not.toHaveBeenCalled();
     expect(execAgent).not.toHaveBeenCalled();
   });
@@ -131,6 +155,68 @@ describe('TaskResultBridgeService.deliver', () => {
     await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
 
     expect(execAgent).not.toHaveBeenCalled();
+    expect(releaseReservation).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the in-flight tool turn before resolving the callback parent', async () => {
+    vi.useFakeTimers();
+    try {
+      tryReserve.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const delivery = new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+      await vi.waitFor(() => expect(tryReserve).toHaveBeenCalledTimes(1));
+
+      expect(getLastLeaf).not.toHaveBeenCalled();
+      expect(createMsg).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(100);
+      await delivery;
+
+      expect(tryReserve).toHaveBeenCalledTimes(2);
+      expect(getLastLeaf).toHaveBeenCalledTimes(1);
+      expect(createMsg.mock.calls[0][0]).toMatchObject({ parentId: 'msg-current-leaf' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the reservation until the callback continuation is dispatched', async () => {
+    let finishDispatch: (() => void) | undefined;
+    execAgent.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDispatch = () => resolve({ operationId: 'op-new', topicId: 'topic-origin' } as any);
+        }),
+    );
+
+    const delivery = new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+    await vi.waitFor(() => expect(execAgent).toHaveBeenCalledTimes(1));
+
+    expect(releaseReservation).not.toHaveBeenCalled();
+
+    finishDispatch?.();
+    await delivery;
+
+    expect(releaseReservation).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting after bounded retries so QStash can redeliver the callback', async () => {
+    vi.useFakeTimers();
+    try {
+      tryReserve.mockResolvedValue(false);
+
+      const delivery = new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+      const expectation = expect(delivery).rejects.toThrow('Topic topic-origin remained busy');
+
+      await vi.runAllTimersAsync();
+      await expectation;
+
+      expect(tryReserve).toHaveBeenCalledTimes(6);
+      expect(createMsg).not.toHaveBeenCalled();
+      expect(execAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('bridges a failed run with the error text and reason', async () => {

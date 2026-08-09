@@ -99,7 +99,7 @@ const Conversation = memo(() => {
       ? topicSelectors.getTopicById(context.topicId)(s)?.metadata?.runningOperation
       : undefined,
   );
-  useGatewayReconnect(context.topicId, runningOperation);
+  useGatewayReconnect(context.topicId, runningOperation, context.agentId);
 
   // While the topic is parked as `scheduled`, pull the cron dispatch into the
   // store when `runAt` passes — nothing pushes it, and the reconnect above
