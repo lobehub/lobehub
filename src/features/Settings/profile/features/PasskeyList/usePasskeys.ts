@@ -22,7 +22,9 @@ export interface PasskeyItem {
  */
 export const usePasskeys = () => {
   const { t } = useTranslation('auth');
-  const { data, isPending, refetch } = useListPasskeys();
+  // A failed query must not look like an empty list: claiming "no passkeys"
+  // while credentials merely failed to load invites a pointless re-enrol.
+  const { data, error, isPending, refetch } = useListPasskeys();
 
   const addPasskey = useCallback(async () => {
     const { passkey } = await import('@/libs/better-auth/auth-client');
@@ -91,6 +93,7 @@ export const usePasskeys = () => {
     addPasskey,
     deletePasskey,
     renamePasskey,
+    isError: !!error,
     isLoading: isPending,
     passkeys: (data ?? []) as PasskeyItem[],
     refetch,

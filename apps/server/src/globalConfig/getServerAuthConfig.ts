@@ -7,13 +7,25 @@ import { type GlobalServerConfig } from '@/types/serverConfig';
 
 /**
  * `appEnv.APP_URL` always resolves — it falls back to `http://localhost:3210`
- * outside Vercel — so a plain truthiness check would advertise passkeys on
- * deployments whose rpID cannot match the host they are served from.
- *
- * An explicitly set APP_URL counts, and so does the URL Vercel derives from
- * its own platform variables. Only the implicit localhost fallback does not.
+ * outside Vercel — and it is only validated as a plain string, so it can be
+ * malformed or a plain-HTTP public origin. WebAuthn needs a secure context,
+ * and `getPasskeyRpID()` silently gives up when the URL cannot be parsed, so
+ * the flag has to reject anything a ceremony could not actually use.
  */
-const hasConfiguredAppUrl = () => !!process.env.APP_URL || process.env.VERCEL === '1';
+const hasUsableAppOrigin = () => {
+  if (!process.env.APP_URL && process.env.VERCEL !== '1') return false;
+
+  try {
+    const { hostname, protocol } = new URL(appEnv.APP_URL);
+
+    // Loopback is a secure context even over plain HTTP.
+    const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
+    return protocol === 'https:' || isLoopback;
+  } catch {
+    return false;
+  }
+};
 
 const getBetterAuthSSOProviders = () => {
   return parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
@@ -29,7 +41,7 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    enablePasskey: hasConfiguredAppUrl(),
+    enablePasskey: hasUsableAppOrigin(),
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     telemetry: {},
   };

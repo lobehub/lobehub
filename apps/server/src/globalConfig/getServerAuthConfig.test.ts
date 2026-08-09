@@ -16,40 +16,50 @@ vi.mock('@/envs/auth', () => ({
 vi.mock('@lobechat/business-const', () => ({ ENABLE_BUSINESS_FEATURES: false }));
 vi.mock('@/libs/better-auth/utils/server', () => ({ parseSSOProviders: () => [] }));
 
-// APP_URL always resolves to a value (it falls back to localhost), so the
-// flag keys off explicit configuration.
-// Passkeys derive their rpID from APP_URL. Without it the WebAuthn ceremony
-// cannot complete, so the client must not advertise passkeys at all — a visible
-// but non-functional button is worse than no button.
+// APP_URL always resolves to a value (it falls back to localhost) and is only
+// validated as a plain string, so the flag has to check that the origin is one
+// a WebAuthn ceremony could actually use — HTTPS, or loopback.
 describe('getServerAuthConfig / enablePasskey', () => {
-  it('disables passkeys when APP_URL is not configured', async () => {
-    delete process.env.APP_URL;
+  const load = async (appUrl?: string, vercel = false) => {
+    if (appUrl) process.env.APP_URL = appUrl;
+    else delete process.env.APP_URL;
+    if (vercel) process.env.VERCEL = '1';
+    else delete process.env.VERCEL;
+
+    // The helper reads the resolved value, which app.ts derives from both.
+    mocks.appEnv.APP_URL = appUrl ?? (vercel ? 'https://preview.vercel.app' : undefined);
     vi.resetModules();
 
     const { getServerAuthConfig } = await import('./getServerAuthConfig');
 
-    expect(getServerAuthConfig().enablePasskey).toBe(false);
+    return getServerAuthConfig();
+  };
+
+  it('disables passkeys when APP_URL is not configured', async () => {
+    expect((await load()).enablePasskey).toBe(false);
   });
 
   // Vercel derives a real public URL from its own variables, so those
   // deployments must not be treated as the implicit localhost fallback.
   it('enables passkeys on Vercel without an explicit APP_URL', async () => {
-    delete process.env.APP_URL;
-    process.env.VERCEL = '1';
-    vi.resetModules();
-
-    const { getServerAuthConfig } = await import('./getServerAuthConfig');
-
-    expect(getServerAuthConfig().enablePasskey).toBe(true);
-    delete process.env.VERCEL;
+    expect((await load(undefined, true)).enablePasskey).toBe(true);
   });
 
   it('enables passkeys once APP_URL is set', async () => {
-    process.env.APP_URL = 'https://chat.example.com';
-    vi.resetModules();
+    expect((await load('https://chat.example.com')).enablePasskey).toBe(true);
+  });
 
-    const { getServerAuthConfig } = await import('./getServerAuthConfig');
+  // A plain-HTTP public origin is not a secure context, so every ceremony
+  // would fail even though the variable is set.
+  it('rejects a plain-http public origin', async () => {
+    expect((await load('http://chat.example.com')).enablePasskey).toBe(false);
+  });
 
-    expect(getServerAuthConfig().enablePasskey).toBe(true);
+  it('allows loopback, which is a secure context', async () => {
+    expect((await load('http://localhost:3210')).enablePasskey).toBe(true);
+  });
+
+  it('rejects a malformed APP_URL', async () => {
+    expect((await load('not a url')).enablePasskey).toBe(false);
   });
 });

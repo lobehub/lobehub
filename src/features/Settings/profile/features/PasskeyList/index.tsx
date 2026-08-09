@@ -25,7 +25,8 @@ export const PasskeyList = memo(() => {
   const providers = useUserStore(authSelectors.authProviders);
   const { t } = useTranslation('auth');
 
-  const { passkeys, isLoading, addPasskey, deletePasskey, renamePasskey } = usePasskeys();
+  const { passkeys, isError, isLoading, addPasskey, deletePasskey, renamePasskey, refetch } =
+    usePasskeys();
   const [pending, setPending] = useState(false);
   // Authenticators frequently register without a label, which leaves the list
   // showing several indistinguishable entries until the user can name them.
@@ -65,6 +66,26 @@ export const PasskeyList = memo(() => {
       title: t('profile.passkey.delete.title'),
     });
   };
+
+  // A load failure must not be shown as an empty list — that would invite the
+  // user to enrol another credential when they may already have several.
+  if (isError) {
+    return (
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Text fontSize={11} type="danger">
+          {t('profile.passkey.loadError')}
+        </Text>
+        <Text
+          fontSize={11}
+          style={{ cursor: 'pointer' }}
+          type="secondary"
+          onClick={() => refetch()}
+        >
+          {t('profile.passkey.retry')}
+        </Text>
+      </Flexbox>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -304,6 +304,8 @@ export default {
   'profile.passkey.deleteError': 'Passkey could not be removed',
   'profile.passkey.deleteSuccess': 'Passkey removed',
   'profile.passkey.empty': 'No passkeys yet. Add one to sign in without a password.',
+  'profile.passkey.loadError': 'Could not load your passkeys.',
+  'profile.passkey.retry': 'Retry',
   'profile.passkey.loading': 'Loading passkeys',
   'profile.passkey.title': 'Passkeys',
   'profile.passkey.unnamed': 'Unnamed passkey',

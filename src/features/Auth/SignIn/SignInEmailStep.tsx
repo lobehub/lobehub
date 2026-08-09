@@ -173,9 +173,14 @@ export const SignInEmailStep = ({
           {showEmailForm && divider}
         </Flexbox>
       )}
-      {serverConfigInit && disableEmailPassword && oAuthSSOProviders.length === 0 && (
-        <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
-      )}
+      {/* Passkeys count as a configured method: telling an enrolled user to
+          contact an administrator would contradict the button above. */}
+      {serverConfigInit &&
+        disableEmailPassword &&
+        oAuthSSOProviders.length === 0 &&
+        !enablePasskey && (
+          <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
+        )}
       {showEmailForm && (
         <Form
           form={form}
