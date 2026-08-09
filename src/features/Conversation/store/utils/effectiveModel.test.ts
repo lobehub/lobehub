@@ -78,6 +78,32 @@ describe('getEffectiveConversationModel', () => {
     expect(getEffectiveConversationModel({ agentId: AGENT_ID })).toBe('claude-opus-5');
   });
 
+  it('applies the member override on a collaborative builtin the caller created', () => {
+    // The workspace Agent Builder row is provisioned by whichever member opened
+    // it first; being that member must not turn their pick into everyone's.
+    useAgentStore.setState({
+      agentMap: {
+        [AGENT_ID]: {
+          chatConfig: {},
+          model: 'glm-5.2',
+          slug: 'group-agent-builder',
+          userId: 'user_self',
+          virtual: true,
+          visibility: 'public',
+          workspaceId: 'ws_1',
+        },
+      },
+    } as any);
+    useUserStore.setState({
+      user: { id: 'user_self' },
+      workspaceUserPreference: {
+        agentModelOverrides: { [AGENT_ID]: { model: 'claude-opus-5', provider: 'anthropic' } },
+      },
+    } as any);
+
+    expect(getEffectiveConversationModel({ agentId: AGENT_ID })).toBe('claude-opus-5');
+  });
+
   it('falls back to the agent default without a topic', () => {
     useAgentStore.setState({
       agentMap: { [AGENT_ID]: { chatConfig: {}, model: 'gpt-5.2' } },

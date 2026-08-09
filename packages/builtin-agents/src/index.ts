@@ -15,6 +15,7 @@ import { WEB_ONBOARDING } from './agents/web-onboarding';
 import type { BuiltinAgentDefinition, BuiltinAgentSlug, RuntimeContext } from './types';
 import { BUILTIN_AGENT_SLUGS } from './types';
 
+export * from './collaborative';
 export * from './types';
 
 // Agent exports

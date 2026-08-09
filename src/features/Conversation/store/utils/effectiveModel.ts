@@ -1,3 +1,4 @@
+import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import { resolveAgentModelConfig } from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -44,8 +45,12 @@ export const getEffectiveConversationModel = (context: {
   const userState = useUserStore.getState();
   const currentUserId = userProfileSelectors.userId(userState);
   const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  // Collaborative builtins have no author to speak of — the row belongs to
+  // whoever opened the feature first — so their model stays personal for every
+  // member (see `AgentModelConfig.personalModelSelection`).
+  const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+    !!agent?.workspaceId && agent.visibility !== 'private' && (personalModelSelection || !isAuthor);
   const memberOverride = usesWorkspaceMemberSelection
     ? userState.workspaceUserPreference?.agentModelOverrides?.[context.agentId]
     : undefined;
@@ -54,6 +59,7 @@ export const getEffectiveConversationModel = (context: {
     {
       ...sharedConfig,
       canManage: isAuthor,
+      personalModelSelection,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     },

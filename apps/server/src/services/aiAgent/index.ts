@@ -9,7 +9,11 @@ import {
   GeneralChatAgent,
   GraphAgent,
 } from '@lobechat/agent-runtime';
-import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import {
+  BUILTIN_AGENT_SLUGS,
+  getAgentRuntimeConfig,
+  isCollaborativeBuiltinAgentRow,
+} from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
@@ -1471,7 +1475,19 @@ export class AiAgentService {
     // The callSubAgent spawn site resolves the sub-agent default and passes it
     // explicitly, so this path never has to special-case sub-agents.
     const effectiveModel = resolveAgentModelConfig(
-      { ...agentConfig, canManage: canManageAgent, workspaceId: agentWorkspaceId },
+      {
+        ...agentConfig,
+        canManage: canManageAgent,
+        // A collaborative builtin is Workspace infrastructure with no author and
+        // no config page, so its model is personal for every caller — being its
+        // creator or an admin must not pin the whole Workspace to one model.
+        // Device / mode overrides keep the ordinary author rule above.
+        personalModelSelection: isCollaborativeBuiltinAgentRow({
+          ...agentConfig,
+          workspaceId: agentWorkspaceId,
+        }),
+        workspaceId: agentWorkspaceId,
+      },
       memberModelOverride,
       {
         ...(modelOverride ? { model: modelOverride } : {}),
