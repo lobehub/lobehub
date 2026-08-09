@@ -831,7 +831,7 @@ export const PlatformAdminPanel = () => {
                     rules={[{ type: 'email' }]}
                     style={{ flex: 1, minWidth: 220 }}
                   >
-                    <Input placeholder="user@example.com" />
+                    <Input placeholder={t('platform.userEmailPlaceholder')} />
                   </Form.Item>
                   <Form.Item
                     label={t('platform.userId')}
