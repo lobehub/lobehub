@@ -154,7 +154,9 @@ describe('TencentSandboxProvider', () => {
   });
 
   it('executes TypeScript with the pinned tsx runner', async () => {
-    mocks.sandbox.commands.run.mockResolvedValue(okCommand('42\n'));
+    mocks.sandbox.commands.run
+      .mockResolvedValueOnce(okCommand('42\n'))
+      .mockResolvedValueOnce(okCommand());
     const code = 'const answer: number = 42; console.log(answer);';
 
     const result = await (
@@ -172,10 +174,35 @@ describe('TencentSandboxProvider', () => {
       code,
     );
 
+    const [scriptPath] = mocks.sandbox.files.write.mock.calls[0];
     const [command, options] = mocks.sandbox.commands.run.mock.calls[0];
     expect(command).toContain('npx --yes tsx@4.22.4');
     expect(command).not.toContain(code);
+    expect(command).not.toContain('rm -f');
     expect(options).toEqual({ timeoutMs: 120_000 });
+    expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(2, `rm -f ${scriptPath}`, {
+      timeoutMs: 10_000,
+    });
+  });
+
+  it('cleans up the TypeScript temp file when execution rejects', async () => {
+    mocks.sandbox.commands.run
+      .mockRejectedValueOnce(new Error('execution timed out'))
+      .mockResolvedValueOnce(okCommand());
+
+    const result = await (
+      await load()
+    ).callTool('executeCode', {
+      code: 'await new Promise(() => {});',
+      language: 'typescript',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('execution timed out');
+    const [scriptPath] = mocks.sandbox.files.write.mock.calls[0];
+    expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(2, `rm -f ${scriptPath}`, {
+      timeoutMs: 10_000,
+    });
   });
 
   it('fails the call when the executed code raises', async () => {
@@ -1158,6 +1185,7 @@ describe('TencentSandboxProvider', () => {
   // Reading the artifact into the Node process first would let a large export
   // exhaust server memory, so the upload has to happen inside the sandbox.
   it('uploads exported files from inside the sandbox', async () => {
+    expiresInSec = 360;
     mocks.sandbox.commands.run.mockResolvedValue(
       okCommand(JSON.stringify({ size: 4096, status: 200, success: true })),
     );
@@ -1178,5 +1206,41 @@ describe('TencentSandboxProvider', () => {
       path: '/mnt/data/chart.png',
       uploadUrl: 'https://example.com/upload',
     });
+    expect(controlPlaneRequests[0]).toMatchObject({
+      action: 'acquire',
+      payload: { Timeout: 360 },
+    });
+    const [command, commandOptions] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(command).toContain('urlopen(request, timeout=300)');
+    expect(commandOptions).toEqual({ timeoutMs: 300_000 });
+  });
+
+  it('keeps exports alive beyond the default 120-second command timeout', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    expiresInSec = 360;
+    mocks.sandbox.commands.run.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120_001));
+
+      return okCommand(JSON.stringify({ size: 4096, status: 200, success: true }));
+    });
+
+    try {
+      const provider = await load();
+      const exportPromise = provider.exportFileToUploadUrl({
+        filename: 'large-chart.png',
+        path: '/mnt/data/large-chart.png',
+        uploadUrl: 'https://example.com/upload',
+      });
+
+      await vi.advanceTimersByTimeAsync(120_001);
+
+      await expect(exportPromise).resolves.toMatchObject({ size: 4096, success: true });
+      expect(mocks.sandbox.commands.run).toHaveBeenCalledWith(expect.any(String), {
+        timeoutMs: 300_000,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

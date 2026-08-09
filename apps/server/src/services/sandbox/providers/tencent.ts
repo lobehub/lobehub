@@ -32,8 +32,10 @@ const DEFAULT_API_BASE = 'https://pages-api.cloud.tencent.com/v1/sandbox';
 const DEFAULT_REGION = 'ap-beijing';
 const DEFAULT_TIMEOUT_SEC = 300;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
+const EXPORT_TIMEOUT_MS = 300_000;
 const CONTROL_PLANE_TIMEOUT_MS = 30_000;
 const BACKGROUND_LAUNCH_TIMEOUT_MS = 10_000;
+const TEMP_FILE_CLEANUP_TIMEOUT_MS = 10_000;
 const BACKGROUND_OUTPUT_CHUNK_BYTES = 256 * 1024;
 const BACKGROUND_KILL_GRACE_SEC = 1;
 const BACKGROUND_COMPLETED_LIMIT = 1024;
@@ -185,7 +187,7 @@ def main(encoded):
             args.get('uploadUrl'), data=body, method='PUT',
             headers={**(args.get('headers') or {}), 'Content-Length': str(size)})
         try:
-            with urllib.request.urlopen(request, timeout=300) as response:
+            with urllib.request.urlopen(request, timeout=${EXPORT_TIMEOUT_MS / 1000}) as response:
                 status = response.status
         except Exception as error:
             emit({'success': False, 'error': str(error)})
@@ -370,12 +372,17 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return { error: configError.error, success: false };
 
     try {
-      const { sandbox } = await this.connect(DEFAULT_COMMAND_TIMEOUT_MS);
-      const uploaded = await this.runScript(sandbox, uploadFileScript, {
-        headers: uploadHeaders ?? {},
-        path,
-        uploadUrl,
-      });
+      const { sandbox } = await this.connect(EXPORT_TIMEOUT_MS);
+      const uploaded = await this.runScript(
+        sandbox,
+        uploadFileScript,
+        {
+          headers: uploadHeaders ?? {},
+          path,
+          uploadUrl,
+        },
+        { timeoutMs: EXPORT_TIMEOUT_MS },
+      );
 
       return { size: Number(uploaded.size ?? 0), success: true };
     } catch (error) {
@@ -412,11 +419,28 @@ export class TencentSandboxProvider implements SandboxProvider {
           const scriptPath = `/home/user/.lobe-execute-${randomUUID()}.mts`;
           await sandbox.files.write(scriptPath, code);
 
-          const execution = await sandbox.commands.run(
-            `npx --yes tsx@${TSX_VERSION} ${scriptPath}; ` +
-              `status=$?; rm -f ${scriptPath}; exit $status`,
-            { timeoutMs: this.timeoutMs(params) },
-          );
+          const execution = await (async () => {
+            try {
+              return await sandbox.commands.run(`npx --yes tsx@${TSX_VERSION} ${scriptPath}`, {
+                timeoutMs: this.timeoutMs(params),
+              });
+            } finally {
+              // A command-level timeout or transport rejection prevents any
+              // shell suffix from running, so cleanup must be a separate call.
+              // Never mask the original execution result if cleanup itself
+              // fails; the generated path contains only a trusted UUID.
+              try {
+                const cleanup = await sandbox.commands.run(`rm -f ${scriptPath}`, {
+                  timeoutMs: TEMP_FILE_CLEANUP_TIMEOUT_MS,
+                });
+                if (cleanup.exitCode !== 0) {
+                  log('Failed to clean up TypeScript temp file %s: %s', scriptPath, cleanup.stderr);
+                }
+              } catch (error) {
+                log('Failed to clean up TypeScript temp file %s: %O', scriptPath, error);
+              }
+            }
+          })();
           const executionError =
             execution.exitCode === 0
               ? undefined
