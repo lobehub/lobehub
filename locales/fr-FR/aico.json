@@ -284,6 +284,7 @@
   "platform.userCreditTargetRequired": "Fournissez un e-mail utilisateur ou sélectionnez un utilisateur portefeuille.",
   "platform.userCredited": "Crédit utilisateur ajouté",
   "platform.userEmail": "E-mail utilisateur",
+  "platform.userEmailPlaceholder": "user@example.com",
   "platform.userId": "Portefeuille utilisateur",
   "platform.userIdPlaceholder": "Sélectionner parmi les portefeuilles B2C (optionnel si e-mail renseigné)",
   "provider.managed.desc": "Les modèles sont fournis par {{brandName}}. L'usage est facturé sur votre portefeuille ou le crédit de l'organisation — aucune configuration de clé API n'est requise.",

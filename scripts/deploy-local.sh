@@ -9,6 +9,7 @@
 #   ./scripts/deploy-local.sh -r|--restart # restart containers
 #   ./scripts/deploy-local.sh -i|--info    # containers / HTTP / migrations
 #   ./scripts/deploy-local.sh -k|--kill    # stop containers
+#   ./scripts/deploy-local.sh -B|--backup  # DB + uploads backup (no deploy)
 
 set -euo pipefail
 
@@ -27,6 +28,7 @@ STOP=0
 STATUS=0
 RESTART=0
 START_IF_NEEDED=0
+BACKUP_ONLY=0
 
 if [[ $# -eq 0 ]]; then
   START_IF_NEEDED=1
@@ -37,6 +39,7 @@ for arg in "$@"; do
     -u|--up|--ship|up) BUILD=1; DEPLOY=1; START_IF_NEEDED=0 ;;
     -d|--deploy|--deploy-only|deploy) DEPLOY=1; START_IF_NEEDED=0 ;;
     -b|--build|--build-only|build) BUILD=1; DEPLOY=0; START_IF_NEEDED=0 ;;
+    -B|--backup|backup) BACKUP_ONLY=1; START_IF_NEEDED=0 ;;
     -r|--restart|restart) RESTART=1; START_IF_NEEDED=0 ;;
     -i|--info|info|status|--status) STATUS=1; BUILD=0; DEPLOY=0; STOP=0; RESTART=0; START_IF_NEEDED=0 ;;
     -k|--kill|kill|stop|--stop|--down) STOP=1; BUILD=0; DEPLOY=0; RESTART=0; START_IF_NEEDED=0 ;;
@@ -45,6 +48,7 @@ for arg in "$@"; do
       echo "  moz -i   info / status" >&2
       echo "  moz -k   kill / stop containers" >&2
       echo "  moz -r   restart containers" >&2
+      echo "  moz -B   backup DB + uploads" >&2
       exit 2
       ;;
     -t)
@@ -62,6 +66,7 @@ Options (each has a distinct one-letter flag):
   -u, --up, up          Build from source, then force-deploy
   -d, --deploy, deploy  Force redeploy / recreate (no build)
   -b, --build, build    Build and tag the image only (skip deploy)
+  -B, --backup, backup  Backup Postgres + RustFS (no deploy)
   -r, --restart, restart  Restart running containers (start if stopped)
   -i, --info, info      Show containers, HTTP, image, and DB migration status
   -k, --kill, kill      Stop the deployment containers
@@ -76,10 +81,17 @@ Aliases (same actions):
 
 Environment:
   PANACHAT_DATA_DIR       Host data root (default: ~/.local/share/panachat-data)
+  PANACHAT_BACKUP_DIR     Backup root (default: ~/.local/share/panachat-backups)
+  MOZ_SKIP_BACKUP=1       Skip automatic pre-deploy backup on -u / -d
   MOZ_ALLOW_EMPTY_DB=1    Allow starting Postgres when data dir has no cluster
                           (intentional wipe / first bootstrap after delete)
   MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
                           the last known good snapshot (users dropped, etc.)
+
+Backups:
+  moz -B                  Manual backup now
+  moz -u / moz -d         Auto pre-deploy backup (unless MOZ_SKIP_BACKUP=1)
+  Daily cron:             ./scripts/panachat-backup.sh --install-cron
 EOF
       exit 0
       ;;
@@ -159,6 +171,20 @@ docker compose version >/dev/null 2>&1 || {
 [[ $BUILD -eq 1 ]] && require_cmd bun
 [[ $DEPLOY -eq 1 || $STATUS -eq 1 || $START_IF_NEEDED -eq 1 || $RESTART -eq 1 ]] && require_cmd curl
 
+run_panachat_backup() {
+  local reason="${1:-manual}"
+  local script="$ROOT/scripts/panachat-backup.sh"
+  if [[ ! -x "$script" ]]; then
+    if [[ -f "$script" ]]; then
+      chmod +x "$script"
+    else
+      echo "Error: missing backup script: $script" >&2
+      return 1
+    fi
+  fi
+  "$script" --reason "$reason"
+}
+
 app_url() {
   local app_port
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
@@ -176,7 +202,14 @@ load_panachat_data_dir() {
     if [[ -n "$from_env" ]]; then
       PANACHAT_DATA_DIR="$from_env"
     fi
+    from_env="$(grep -E '^PANACHAT_BACKUP_DIR=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -n "$from_env" ]]; then
+      PANACHAT_BACKUP_DIR="$from_env"
+      export PANACHAT_BACKUP_DIR
+    fi
   fi
+  : "${PANACHAT_BACKUP_DIR:=$HOME/.local/share/panachat-backups}"
+  export PANACHAT_BACKUP_DIR
 }
 
 ensure_panachat_data_env() {
@@ -478,6 +511,7 @@ show_status() {
   echo "------------------"
   printf "App URL:     %s\n" "$app_url"
   printf "Data dir:    %s\n" "$PANACHAT_DATA_DIR"
+  printf "Backup dir:  %s\n" "${PANACHAT_BACKUP_DIR:-$HOME/.local/share/panachat-backups}"
   printf "Repo HEAD:   %s\n" "$TAG"
   printf "Image:       %s\n" "$IMAGE"
 
@@ -598,11 +632,27 @@ if [[ $STATUS -eq 1 ]]; then
   exit $?
 fi
 
+if [[ $BACKUP_ONLY -eq 1 ]]; then
+  load_panachat_data_dir
+  run_panachat_backup manual
+  exit 0
+fi
+
 if [[ $STOP -eq 1 ]]; then
   echo "==> Stopping deployment from $DEPLOY_DIR"
   compose_in_deploy_dir down
   echo "==> Deployment stopped"
   exit 0
+fi
+
+# Pre-deploy safety net: dump before rebuild/recreate can touch data.
+if [[ $DEPLOY -eq 1 && "${MOZ_SKIP_BACKUP:-}" != "1" ]]; then
+  load_panachat_data_dir
+  echo "==> Pre-deploy backup"
+  run_panachat_backup pre-deploy || {
+    echo "Error: pre-deploy backup failed. Fix the backup error, or set MOZ_SKIP_BACKUP=1 to continue." >&2
+    exit 1
+  }
 fi
 
 if [[ $BUILD -eq 1 ]]; then

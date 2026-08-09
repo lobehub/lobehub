@@ -284,6 +284,7 @@
   "platform.userCreditTargetRequired": "请填写用户邮箱或选择钱包用户。",
   "platform.userCredited": "用户入账成功",
   "platform.userEmail": "用户邮箱",
+  "platform.userEmailPlaceholder": "user@example.com",
   "platform.userId": "用户钱包",
   "platform.userIdPlaceholder": "从 B2C 钱包选择（若已填邮箱可留空）",
   "provider.managed.desc": "模型由 {{brandName}} 提供。用量从你的钱包或组织额度扣费，无需配置 API Key。",

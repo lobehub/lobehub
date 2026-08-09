@@ -29,7 +29,8 @@ SPA / CDN
 - [ ] verify-deployment.sh passes
 
 Operations
-- [ ] Automated DB backup cron
+- [ ] Automated DB backup cron (`./scripts/panachat-backup.sh --install-cron`)
+- [ ] Pre-deploy backup via `moz -u` / `moz -d` (default on)
 - [ ] Image tag pinned (not bare :latest in prod)
 - [ ] Disk alert configured
 - [ ] Update runbook documented
@@ -213,7 +214,57 @@ lobe:
 
 ## 5. Backups & monitoring
 
-### Automated DB backup (cron)
+### Automated DB backup (cron + pre-deploy)
+
+Aico ships `scripts/panachat-backup.sh` (also `moz -B`). It dumps Postgres via
+`pg_dump` (safe while running) and optionally archives RustFS uploads. Redis is
+skipped (cache/sessions).
+
+**Recommended combo**
+
+| Trigger                 | Command                          | Why                      |
+| ----------------------- | -------------------------------- | ------------------------ |
+| Before rebuild/redeploy | automatic on `moz -u` / `moz -d` | Highest wipe risk        |
+| Daily 03:00             | cron via `--install-cron`        | Quiet safety net         |
+| Manual                  | `moz -B`                         | Before risky experiments |
+
+**Retention** (one nightly dump; keepers from the same files): last **14** days
+daily, **Sunday** dumps up to **56** days, **1st-of-month** dumps up to **365**
+days, plus the last **5** `pre-deploy` dumps.
+
+```bash
+# Manual / list
+moz -B
+./scripts/panachat-backup.sh --list
+
+# Install user crontab (daily 03:00 → ~/.local/share/panachat-backups/)
+./scripts/panachat-backup.sh --install-cron
+
+# Skip auto pre-deploy backup once
+MOZ_SKIP_BACKUP=1 moz -u
+```
+
+**WSL note:** user crontab only runs if the cron service is up
+(`sudo service cron start`, or enable cron in your WSL distro). Prefer relying on
+pre-deploy backups (`moz -u` / `moz -d`) if cron is unreliable on your machine.
+
+Default dirs:
+
+- Data: `~/.local/share/panachat-data` (`PANACHAT_DATA_DIR`)
+- Backups: `~/.local/share/panachat-backups` (`PANACHAT_BACKUP_DIR`)
+
+**Restore (SQL)** — stop app, restore into empty/known-good cluster, restart:
+
+```bash
+moz -k
+# optional: wipe cluster only if intentionally replacing
+# rm -rf "$PANACHAT_DATA_DIR/postgres" && MOZ_ALLOW_EMPTY_DB=1 moz   # init empty, then:
+gunzip -c ~/.local/share/panachat-backups/panachat-YYYYMMDD-HHMMSS-*.sql.gz \
+  | docker exec -i lobe-postgres psql -U postgres -d lobechat
+moz -r
+```
+
+Upstream-style one-liner (standalone `setup.sh` folder, not Aico `moz`):
 
 ```bash
 # /etc/cron.daily/lobehub-backup

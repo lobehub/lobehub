@@ -9,7 +9,7 @@
 | **Plane**             | [AICO-102](https://plane.panafor.com/panaforai/browse/AICO-102)                         |
 | **Date**              | 2026-08-08                                                                              |
 | **Method**            | Static review + practical Vitest attack/control suites (defensive; no exploit payloads) |
-| **Retest**            | AUTH-001…005 closed in this pass (AUTH-004 Accepted Risk); MON-001/005 Fixed            |
+| **Retest**            | AUTH-001…005 Fixed (AUTH-004: email verification on by default); MON-001/005 Fixed      |
 
 ---
 
@@ -25,14 +25,15 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AUTH-001** | `/api/auth/check-user` no longer returns `hasPassword`; IP sliding-window rate limit (10/60s); sign-in always uses password step for existing users |
 | **AUTH-002** | Server `getSession` calls use `query: { disableCookieCache: true }` on TRPC, chat middleware, proxy, utils auth, trusted-client, messenger install  |
-| **AUTH-003** | `minPasswordLength: 8` + server `passwordPolicy` (letter + digit) on sign-up / change / reset                                                       |
+| **AUTH-003** | `minPasswordLength: 8` + server `passwordPolicy` (letter + digit) on sign-up / change / reset                                                       |                                                 |
+| **AUTH-004** | Email verification required by default (`AUTH_EMAIL_VERIFICATION !== '0'`); opt out with `=0` for local/e2e                                         |
 | **AUTH-005** | `forceChangePasswordRevoke` plugin always sets `revokeOtherSessions: true` on `/change-password`                                                    |
 | **MON-001**  | Debug SMS no longer `console.info`s OTPs; `AUTH_SMS_DEBUG_OTP` ignored in production                                                                |
 | **MON-005**  | OTP send failure logs redact phone to last 4 digits                                                                                                 |
 
-**Remaining:** AUTH-004 (Medium, Accepted Risk — email verification off by default). MON-002/003 still Open (auth abuse alerting; owned by monitoring phase).
+**Remaining:** MON-002/003 still Open (auth abuse alerting; owned by monitoring phase).
 
-**Verdict:** No open Critical/High in auth/session scope. Mediums either Fixed or Accepted Risk. Suitable for pilot from an auth-control perspective pending product acceptance of AUTH-004 and monitoring gaps (MON-002/003).
+**Verdict:** No open Critical/High/Medium in auth/session scope. Suitable for pilot from an auth-control perspective pending monitoring gaps (MON-002/003).
 
 ---
 
@@ -59,7 +60,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | 17  | OAuth redirect abuse                   | Pass                    | `trustedOrigins` + `sanitizeRedirectPath` tests                                                        |
 | 18  | Account linking takeover               | Pass (caveats)          | BA local email verify for link; `allowDifferentEmails: true` for logged-in link                        |
 | 19  | Phone verification bypass              | Pass                    | `requireVerifiedPhone` + `phone-login-gate` + RBAC tests                                               |
-| 20  | Email verification / API before verify | Accepted Risk           | Default `AUTH_EMAIL_VERIFICATION=false` — AUTH-004                                                     |
+| 20  | Email verification / API before verify | Pass                    | Default `AUTH_EMAIL_VERIFICATION` on (`!== '0'`); opt out with `=0` — AUTH-004 Fixed                   |
 
 ---
 
@@ -76,7 +77,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | OAuth callback manipulation           | Pass                          | Trusted origins / origin checks (static + BA)                                                                 |
 | Open Redirect in OAuth                | Pass                          | `onboardingRedirect.test.ts` (17 cases) + controls test                                                       |
 | Phone Verification bypass             | Pass                          | `phone-login-gate.test.ts` (6) + org `PHONE_VERIFICATION_REQUIRED` in `aico.rbacIdor.test.ts`                 |
-| Email Verification bypass             | Accepted Risk                 | Default config off — AUTH-004 documented                                                                      |
+| Email Verification bypass             | Pass                          | Default require email verification — AUTH-004 Fixed                                                           |
 | Direct API access before verification | Partial / Pass for Aico spend | Org create / convert / trial blocked without phone; chat allowed with session by design                       |
 
 **Suite run (this pass):** `check-user` route + rateLimit, `auth.security.controls`, `phone-login-gate`, `onboardingRedirect`, `useSignIn`, TRPC context, auth middleware — **72+ related tests passed** (full related `bun run check` slice: **121 passed**).
@@ -183,22 +184,22 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Severity:** Medium
 
-- **Status:** Accepted Risk
+- **Status:** Fixed
 
-- **Affected Component:** `packages/env/src/auth.ts`; `authedProcedure` / chat auth
+- **Affected Component:** `packages/env/src/auth.ts`; Better Auth `requireEmailVerification`; signup/sign-in `/verify-email` UX
 
 - **Description:**\
-  `AUTH_EMAIL_VERIFICATION` defaults false. Phone verification is the spend/org trust anchor.
+  Previously `AUTH_EMAIL_VERIFICATION` defaulted off (`=== '1'` opt-in). Unverified email sessions could use non-phone-gated APIs.
 
-- **Attack Scenario:** Register with victim’s email (unverified) and use non-phone-gated APIs until phone gates apply.
+- **Attack Scenario:** Register with victim’s email (unverified) and use APIs until phone gates apply.
 
-- **Reproduction Steps:** Confirm default env + no `emailVerified` check on `authedProcedure`.
+- **Reproduction Steps (pre-fix):** Confirm unset env → `requireEmailVerification: false`.
 
-- **Impact:** Email is not a strong identity control; org/trial/spend paths still require phone.
+- **Impact:** Email was not a strong identity control without the flag.
 
-- **Recommendation:** Keep Accepted Risk with product sign-off; or enable `AUTH_EMAIL_VERIFICATION=1` in production.
+- **Recommendation / Fix:** Default on — Zod `.default(true)` and runtime `process.env.AUTH_EMAIL_VERIFICATION !== '0'`. Opt out with `=0` for local/e2e without SMTP. Phone remains additional org/spend trust anchor.
 
-- **Retest Result:** N/A (Accepted Risk)
+- **Retest Result:** Pass — env default + `requireEmailVerification` wired through `define-config` / server global config
 
 ---
 
@@ -259,32 +260,32 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 ## Finding rollup
 
-| Severity | Count | IDs                                                    |
-| -------- | ----- | ------------------------------------------------------ |
-| Critical | 0     | —                                                      |
-| High     | 0     | —                                                      |
-| Medium   | 3     | AUTH-001 Fixed; AUTH-002 Fixed; AUTH-004 Accepted Risk |
-| Low      | 2     | AUTH-003 Fixed; AUTH-005 Fixed                         |
+| Severity | Count | IDs                                            |
+| -------- | ----- | ---------------------------------------------- |
+| Critical | 0     | —                                              |
+| High     | 0     | —                                              |
+| Medium   | 3     | AUTH-001 Fixed; AUTH-002 Fixed; AUTH-004 Fixed |
+| Low      | 2     | AUTH-003 Fixed; AUTH-005 Fixed                 |
 
-| Status        | Findings                                                 |
-| ------------- | -------------------------------------------------------- |
-| Fixed         | AUTH-001, AUTH-002, AUTH-003, AUTH-005, MON-001, MON-005 |
-| Accepted Risk | AUTH-004                                                 |
-| Open          | — (auth scope); MON-002/003 monitoring                   |
+| Status        | Findings                                                           |
+| ------------- | ------------------------------------------------------------------ |
+| Fixed         | AUTH-001, AUTH-002, AUTH-003, AUTH-004, AUTH-005, MON-001, MON-005 |
+| Accepted Risk | —                                                                  |
+| Open          | — (auth scope); MON-002/003 monitoring                             |
 
 ---
 
 ## Definition of Done checklist
 
-| Item                                     | Done?                                 |
-| ---------------------------------------- | ------------------------------------- |
-| All Authentication Flows reviewed/tested | Yes                                   |
-| Session Management reviewed              | Yes (+ AUTH-002 Fixed)                |
-| OAuth reviewed                           | Yes                                   |
-| Verification bypass tested               | Yes (phone Pass; email Accepted Risk) |
-| Brute-force scenarios tested             | Yes (config + rate-limit tests)       |
-| All Findings documented (`AUTH-xxx`)     | Yes                                   |
-| Report at required path                  | Yes                                   |
+| Item                                     | Done?                                         |
+| ---------------------------------------- | --------------------------------------------- |
+| All Authentication Flows reviewed/tested | Yes                                           |
+| Session Management reviewed              | Yes (+ AUTH-002 Fixed)                        |
+| OAuth reviewed                           | Yes                                           |
+| Verification bypass tested               | Yes (phone Pass; email Pass — AUTH-004 Fixed) |
+| Brute-force scenarios tested             | Yes (config + rate-limit tests)               |
+| All Findings documented (`AUTH-xxx`)     | Yes                                           |
+| Report at required path                  | Yes                                           |
 
 ---
 

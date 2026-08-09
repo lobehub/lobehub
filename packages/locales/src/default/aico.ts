@@ -292,6 +292,7 @@ export default {
   'platform.userCreditTargetRequired': 'Provide a user email or select a wallet user.',
   'platform.userCredited': 'User credit added',
   'platform.userEmail': 'User email',
+  'platform.userEmailPlaceholder': 'user@example.com',
   'platform.userId': 'User wallet',
   'platform.userIdPlaceholder': 'Select from B2C wallets (optional if email set)',
 
