@@ -5,6 +5,8 @@ import { KeyRound, PencilLine, Plus, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -23,6 +25,7 @@ export const PasskeyList = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const hasPasswordAccount = useUserStore(authSelectors.hasPasswordAccount);
   const providers = useUserStore(authSelectors.authProviders);
+  const enableMagicLink = useServerConfigStore(serverConfigSelectors.enableMagicLink);
   const { t } = useTranslation('auth');
 
   const { passkeys, isError, isLoading, addPasskey, deletePasskey, renamePasskey, refetch } =
@@ -33,8 +36,11 @@ export const PasskeyList = memo(() => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Never let users lock themselves out: a passkey may only be removed while
-  // some other way to sign in remains (password, SSO, or another passkey).
-  const allowDelete = passkeys.length > 1 || hasPasswordAccount || providers.length > 0;
+  // some other way to sign in remains. Magic link counts — `handleCheckUser`
+  // signs an account in that way once it finds no password — so excluding it
+  // would force a second credential before a lost passkey could be revoked.
+  const allowDelete =
+    passkeys.length > 1 || hasPasswordAccount || providers.length > 0 || !!enableMagicLink;
   const enableActions = !isDesktop && isLogin;
 
   const handleAdd = async () => {
