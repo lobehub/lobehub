@@ -98,22 +98,49 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
   `,
   inputShell: css`
+    position: relative;
+
     overflow: hidden;
+
     min-height: 208px;
     border-block: 1px solid ${cssVar.colorBorderSecondary};
+
     background: ${cssVar.colorBgElevated};
   `,
   inputShellLoading: css`
     border-color: transparent;
-    background: linear-gradient(
-      90deg,
-      ${cssVar.colorPrimary},
-      ${cssVar.colorInfo},
-      ${cssVar.colorSuccess},
-      ${cssVar.colorPrimary}
-    );
-    background-size: 300% 100%;
-    animation: goal-input-flow 1.4s linear infinite;
+    background: ${cssVar.colorBgElevated};
+
+    &::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+
+      padding: 1px;
+
+      background: linear-gradient(
+        90deg,
+        ${cssVar.colorBorderSecondary} 0%,
+        ${cssVar.colorBorderSecondary} 24%,
+        ${cssVar.colorPrimary} 42%,
+        ${cssVar.colorInfo} 50%,
+        ${cssVar.colorSuccess} 58%,
+        ${cssVar.colorBorderSecondary} 76%,
+        ${cssVar.colorBorderSecondary} 100%
+      );
+      background-size: 300% 100%;
+
+      mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+
+      animation: goal-input-flow 1.2s linear infinite;
+
+      mask-composite: exclude;
+    }
 
     @keyframes goal-input-flow {
       from {
@@ -126,7 +153,9 @@ const styles = createStaticStyles(({ css }) => ({
     }
 
     @media (prefers-reduced-motion: reduce) {
-      animation: none;
+      &::after {
+        animation: none;
+      }
     }
   `,
   instructionEditor: css`
@@ -286,7 +315,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     }));
     instructionRef.current = instruction;
     setStep('preparing');
-    prepareTimerRef.current = setTimeout(() => setStep('review'), 700);
+    prepareTimerRef.current = setTimeout(() => setStep('review'), 1200);
   }, [canCreate, initialRequirement, plan.instruction]);
 
   const handleCreateBlank = useCallback(() => {
