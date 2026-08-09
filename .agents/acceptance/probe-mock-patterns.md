@@ -1115,3 +1115,28 @@ timestamps before suspecting the query.
   work / Works and evidence for every mechanism claim.
 - Promote product-independent findings to the generic skill layer rather than
   duplicating them here.
+
+### Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+
+**Situation:** capturing light- and dark-mode evidence in the seeded `agent-browser`
+web session (settings UI navigation is slow and the theme control moved between
+releases; an earlier round wrongly concluded the web session "cannot switch to
+dark").
+
+**Doesn't work:** driving the settings UI to flip appearance, or editing user
+settings server-side (the provider is `next-themes` with `defaultTheme="system"` —
+the server does not own it).
+
+**Works:** set the next-themes key directly, then reload the target route in the
+same session:
+
+```bash
+agent-browser --session lobehub-dev eval "localStorage.setItem('theme','dark')"
+agent-browser --session lobehub-dev open "$SERVER_URL/<route>" # re-render applies html[data-theme]
+```
+
+`'light'` / removal (`localStorage.removeItem('theme')` → back to system) work the
+same way. Restore BEFORE stopping the dev server — once the server is down the
+document becomes sourceless and `localStorage` access throws SecurityError, so the
+override stays behind for the next run. Assert the applied theme via
+`document.documentElement.dataset.theme`, not the storage value.
