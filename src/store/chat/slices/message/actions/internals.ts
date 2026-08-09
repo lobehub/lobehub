@@ -39,10 +39,7 @@ export class MessageInternalsActionImpl {
     this.#get = get;
   }
 
-  internal_dispatchMessage = (
-    payload: MessageDispatch,
-    context?: MessageDispatchContext,
-  ): void => {
+  internal_dispatchMessage = (payload: MessageDispatch, context?: MessageDispatchContext): void => {
     // Get full conversation context (including scope) from operation or global state
     const ctx =
       context?.conversationContext ?? this.#get().internal_getConversationContext(context);

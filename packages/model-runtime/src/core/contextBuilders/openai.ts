@@ -21,17 +21,6 @@ export type ExtendedChatCompletionContentPart = {
   };
 };
 
-type InternalAudioContentPart = {
-  audio_url: {
-    durationMs?: number;
-    url: string;
-  };
-  type: 'audio_url';
-};
-
-type ConvertibleMessageContentPart =
-  ExtendedChatCompletionContentPart | InternalAudioContentPart | OpenAI.ChatCompletionContentPart;
-
 type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
