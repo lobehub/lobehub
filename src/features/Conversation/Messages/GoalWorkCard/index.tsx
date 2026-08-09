@@ -59,6 +59,7 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const { progress } = useGoalWorkStatus({
     criteriaCount: goal.criteriaCount,
+    goalKnown: true,
     identifier: goal.identifier,
     maxRounds: goal.maxRounds,
     taskId: goal.taskId,

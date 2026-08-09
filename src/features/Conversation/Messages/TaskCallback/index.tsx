@@ -38,12 +38,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // Full-bleed clickable Goal header inside the card: negative margins undo the
   // card padding so the hover surface reaches the card edges.
   goalHeader: css`
-    cursor: pointer;
-
     margin-block: -12px 0;
     margin-inline: -16px;
     padding-block: 12px 10px;
     padding-inline: 16px;
+  `,
+  goalHeaderMain: css`
+    cursor: pointer;
+    min-width: 0;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
@@ -117,8 +119,9 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
 
   const callback = item?.metadata?.taskCallback;
-  // Hooks stay unconditional — both fetchers no-op on absent ids.
-  const { hasAcceptance, progress, taskName } = useGoalWorkStatus({
+  // Hooks stay unconditional; the status hook waits for Goal classification
+  // before enabling acceptance polling.
+  const { isGoal, progress, taskName } = useGoalWorkStatus({
     identifier: callback?.identifier,
     taskId: callback?.taskId,
   });
@@ -130,49 +133,44 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const openTask = () => openTaskDetail(callback.identifier);
 
   const viewTaskButton = (
-    <Button
-      icon={SquareArrowOutUpRight}
-      size={'small'}
-      type={'text'}
-      onClick={(event) => {
-        event.stopPropagation();
-        openTask();
-      }}
-    >
+    <Button icon={SquareArrowOutUpRight} size={'small'} type={'text'} onClick={openTask}>
       {t('taskCallback.viewTask')}
     </Button>
   );
 
   return (
     <Flexbox paddingBlock={8}>
-      <Flexbox className={styles.card} gap={hasAcceptance ? 12 : 8}>
-        {hasAcceptance ? (
+      <Flexbox className={styles.card} gap={isGoal ? 12 : 8}>
+        {isGoal ? (
           <>
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.goalHeader}
-              gap={10}
-              role={'button'}
-              tabIndex={0}
-              onClick={openTask}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                event.preventDefault();
-                openTask();
-              }}
-            >
-              <Center className={styles.goalIcon}>
-                <Icon icon={TargetIcon} size={20} />
-              </Center>
-              <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text ellipsis className={styles.goalTitle}>
-                    {taskName ?? callback.identifier}
-                  </Text>
-                  <span className={styles.goalIdentifier}>{callback.identifier}</span>
+            <Flexbox horizontal align={'center'} className={styles.goalHeader} gap={10}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={styles.goalHeaderMain}
+                flex={1}
+                gap={10}
+                role={'button'}
+                tabIndex={0}
+                onClick={openTask}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  openTask();
+                }}
+              >
+                <Center className={styles.goalIcon}>
+                  <Icon icon={TargetIcon} size={20} />
+                </Center>
+                <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text ellipsis className={styles.goalTitle}>
+                      {taskName ?? callback.identifier}
+                    </Text>
+                    <span className={styles.goalIdentifier}>{callback.identifier}</span>
+                  </Flexbox>
+                  <GoalStatusLine {...progress} />
                 </Flexbox>
-                <GoalStatusLine {...progress} />
               </Flexbox>
               {viewTaskButton}
             </Flexbox>
