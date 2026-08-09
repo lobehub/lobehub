@@ -142,4 +142,15 @@ describe('PasskeyList', () => {
 
     expect(screen.queryByText('profile.passkey.delete.forbidden')).not.toBeInTheDocument();
   });
+
+  // The only magic-link call site sits behind the email form, which is hidden
+  // when email/password is disabled — an enabled-but-unreachable fallback.
+  it('does not count magic link when the email form is hidden', () => {
+    mocks.enableMagicLink = true;
+    mocks.disableEmailPassword = true;
+    mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
+    render(<PasskeyList />);
+
+    expect(screen.getAllByText('profile.passkey.delete.forbidden').length).toBeGreaterThan(0);
+  });
 });

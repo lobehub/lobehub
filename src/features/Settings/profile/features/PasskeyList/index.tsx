@@ -43,10 +43,14 @@ export const PasskeyList = memo(() => {
   // can stay linked to a provider the server no longer offers — counting either
   // would strand the user outside their account.
   const canUsePassword = hasPasswordAccount && !disableEmailPassword;
+  // The only `signIn.magicLink` call site is behind the email form, which
+  // `SignInEmailStep` hides when email/password is disabled — so an enabled
+  // magic link is unreachable there and cannot justify deleting the last key.
+  const canUseMagicLink = enableMagicLink && !disableEmailPassword;
   const usableProviders = providers.filter((provider) => (ssoProviders ?? []).includes(provider));
 
   const allowDelete =
-    passkeys.length > 1 || canUsePassword || usableProviders.length > 0 || enableMagicLink;
+    passkeys.length > 1 || canUsePassword || usableProviders.length > 0 || canUseMagicLink;
   const enableActions = !isDesktop && isLogin;
 
   const handleAdd = async () => {
