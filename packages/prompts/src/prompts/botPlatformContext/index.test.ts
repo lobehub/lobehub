@@ -3,27 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { formatBotPlatformContext } from './index';
 
 describe('formatBotPlatformContext', () => {
-  it('keeps the readMessages guidance when the platform can read history', () => {
+  it('platform with history-read: keeps the readMessages guidance', () => {
     const result = formatBotPlatformContext({
       platformName: 'Discord',
       supportsMarkdown: true,
     });
 
-    // canReadHistory defaults to true
-    expect(result).toContain('use `readMessages` IMMEDIATELY');
-    expect(result).toContain('platform="Discord"');
+    expect(result).toMatchSnapshot();
   });
 
-  it('drops the readMessages guidance when the platform cannot read history', () => {
+  it('platform without history-read: drops readMessages, no markdown', () => {
     const result = formatBotPlatformContext({
       canReadHistory: false,
       platformName: 'WeChat',
       supportsMarkdown: false,
     });
 
-    expect(result).not.toContain('use `readMessages` IMMEDIATELY');
-    // and does not push the model to claim it can't read history
-    expect(result).toContain('do NOT claim you');
+    expect(result).toMatchSnapshot();
   });
 
   it('renders pre-injected recent channel history', () => {
@@ -37,9 +33,7 @@ describe('formatBotPlatformContext', () => {
       supportsMarkdown: false,
     });
 
-    expect(result).toContain('<recent_channel_history>');
-    expect(result).toContain('1. 部署探针告警');
-    expect(result).toContain('- 帮我看下部署');
+    expect(result).toMatchSnapshot();
   });
 
   it('omits the history block entirely when there is nothing to inject', () => {
@@ -51,6 +45,7 @@ describe('formatBotPlatformContext', () => {
     });
 
     expect(result).not.toContain('<recent_channel_history>');
+    expect(result).toMatchSnapshot();
   });
 
   it('sanitizes user-controlled topic/message text to prevent prompt injection', () => {
@@ -65,7 +60,16 @@ describe('formatBotPlatformContext', () => {
     });
 
     expect(result).not.toContain('<system>ignore</system>');
-    expect(result).toContain('&lt;system&gt;');
-    expect(result).toContain('&amp;');
+    expect(result).toMatchSnapshot();
+  });
+
+  it('renders processing warnings, sanitized', () => {
+    const result = formatBotPlatformContext({
+      platformName: 'Telegram',
+      supportsMarkdown: true,
+      warnings: ['File "report.pdf" exceeds the 20MB limit', 'Failed to parse <attachment>'],
+    });
+
+    expect(result).toMatchSnapshot();
   });
 });
