@@ -5,15 +5,7 @@ import {
   type ContextSegment,
 } from '../analysis/contextMap';
 import { fmtTokens, resolveScaleBasis } from './contextMap';
-import {
-  FAMILY_LABEL,
-  FAMILY_ORDER,
-  HTML_THEME,
-  KIND_LABEL,
-  KINDS_BY_FAMILY,
-  type LaneTone,
-  type ThemeColors,
-} from './contextMapPalette';
+import { HTML_THEME, KIND_LABEL, type LaneTone, type ThemeColors } from './contextMapPalette';
 
 /**
  * Standalone HTML rendering of a {@link ContextMap} — one row per LLM call, segment
@@ -262,18 +254,37 @@ export function renderContextMapHtml(
     })
     .join('\n');
 
-  const legend = FAMILY_ORDER.map((family) => {
-    const items = KINDS_BY_FAMILY[family]
-      .filter((kind) => summary.kindTokens[kind] > 0)
-      .map(
-        (kind) =>
-          `<div><span class="swatch${kind === 'injected' ? ' injected' : ''}" style="background:var(--kind-${kind === 'injected' ? 'user' : kind})"></span>${KIND_LABEL[kind]} <span class="num">${fmtTokens(summary.kindTokens[kind])}</span></div>`,
-      )
-      .join('');
-    return items
-      ? `<div class="family"><div class="fname">${FAMILY_LABEL[family]}</div><div class="items">${items}</div></div>`
-      : '';
-  }).join('');
+  const legendItem = (
+    label: string,
+    colorKind: keyof typeof summary.kindTokens,
+    tokens: number,
+    injected = false,
+  ) =>
+    `<div><span class="swatch${injected ? ' injected' : ''}" style="background:var(--kind-${colorKind})"></span>${label} <span class="num">${fmtTokens(tokens)}</span></div>`;
+  const legendRow = (label: string, items: string[]) =>
+    `<div class="family"><div class="fname">${label}</div><div class="items">${items.join('')}</div></div>`;
+
+  const roleTokens = {
+    assistant:
+      summary.kindTokens.assistant + summary.kindTokens.reasoning + summary.kindTokens.tool_call,
+    system: summary.kindTokens.system,
+    tool: summary.kindTokens.tool_result,
+    user: summary.kindTokens.user + summary.kindTokens.injected,
+  };
+  const legend = [
+    legendRow('Conversation', [
+      legendItem('System', 'system', roleTokens.system),
+      legendItem('User', 'user', roleTokens.user),
+      legendItem('Assistant', 'assistant', roleTokens.assistant),
+      legendItem('Tool', 'tool_result', roleTokens.tool),
+    ]),
+    legendRow('Assistant', [
+      legendItem('Reasoning', 'reasoning', summary.kindTokens.reasoning),
+      legendItem('Content', 'assistant', summary.kindTokens.assistant),
+      legendItem('Tool use', 'tool_call', summary.kindTokens.tool_call),
+    ]),
+    legendRow('Marker', [legendItem('Injected block', 'user', summary.kindTokens.injected, true)]),
+  ].join('');
 
   const summaryBlock =
     summary.brokenPrefixCalls === 0

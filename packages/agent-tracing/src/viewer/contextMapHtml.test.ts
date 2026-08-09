@@ -138,4 +138,20 @@ describe('renderContextMapHtml', () => {
     expect(HTML_THEME.light.kind.system).toBe('#f88c13');
     expect(HTML_THEME.dark.kind.system).toBe('#ff9927');
   });
+
+  it('organizes the legend by conversation role before assistant details', () => {
+    const html = renderContextMapHtml(map);
+
+    expect(html).toContain('<div class="fname">Conversation</div>');
+    expect(html).toContain('System <span class="num">60</span>');
+    expect(html).toContain('User <span class="num">40</span>');
+    expect(html).toContain('Assistant <span class="num">0</span>');
+    expect(html).toContain('Tool <span class="num">0</span>');
+    expect(html).toContain('<div class="fname">Assistant</div>');
+    expect(html).toContain('Reasoning <span class="num">0</span>');
+    expect(html).toContain('Content <span class="num">0</span>');
+    expect(html).toContain('Tool use <span class="num">0</span>');
+    expect(html).toContain('<div class="fname">Marker</div>');
+    expect(html).toContain('Injected block <span class="num">40</span>');
+  });
 });
