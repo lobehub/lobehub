@@ -113,9 +113,11 @@ export const getServerGlobalConfig = async () => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    // Passkeys are bound to the rpID derived from APP_URL. Without it the
-    // ceremony cannot complete, so the UI must not offer passkeys at all.
-    enablePasskey: !!appEnv.APP_URL,
+    // APP_URL always resolves to something — it falls back to localhost —
+    // so the flag has to key off explicit configuration. An implicit
+    // localhost origin would advertise passkeys whose rpID cannot match
+    // the host the deployment is actually served from.
+    enablePasskey: !!process.env.APP_URL,
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL

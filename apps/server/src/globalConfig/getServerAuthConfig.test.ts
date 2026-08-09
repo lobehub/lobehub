@@ -16,12 +16,14 @@ vi.mock('@/envs/auth', () => ({
 vi.mock('@lobechat/business-const', () => ({ ENABLE_BUSINESS_FEATURES: false }));
 vi.mock('@/libs/better-auth/utils/server', () => ({ parseSSOProviders: () => [] }));
 
+// APP_URL always resolves to a value (it falls back to localhost), so the
+// flag keys off explicit configuration.
 // Passkeys derive their rpID from APP_URL. Without it the WebAuthn ceremony
 // cannot complete, so the client must not advertise passkeys at all — a visible
 // but non-functional button is worse than no button.
 describe('getServerAuthConfig / enablePasskey', () => {
   it('disables passkeys when APP_URL is not configured', async () => {
-    mocks.appEnv.APP_URL = undefined;
+    delete process.env.APP_URL;
     vi.resetModules();
 
     const { getServerAuthConfig } = await import('./getServerAuthConfig');
@@ -30,7 +32,7 @@ describe('getServerAuthConfig / enablePasskey', () => {
   });
 
   it('enables passkeys once APP_URL is set', async () => {
-    mocks.appEnv.APP_URL = 'https://chat.example.com';
+    process.env.APP_URL = 'https://chat.example.com';
     vi.resetModules();
 
     const { getServerAuthConfig } = await import('./getServerAuthConfig');

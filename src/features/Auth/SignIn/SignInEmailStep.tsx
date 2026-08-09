@@ -113,7 +113,9 @@ export const SignInEmailStep = ({
           variant="filled"
         />
       )}
-      {serverConfigInit && oAuthSSOProviders.length > 0 && (
+      {/* Passkeys are an independent method: an email/password-only
+          deployment with passkeys enabled still needs this block. */}
+      {serverConfigInit && (oAuthSSOProviders.length > 0 || enablePasskey) && (
         <Flexbox gap={12}>
           {oAuthSSOProviders.map((provider) => {
             const button = (

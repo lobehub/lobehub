@@ -81,9 +81,11 @@ export const PasskeyList = memo(() => {
           <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
             <KeyRound size={16} />
             <EditableText
+              // Let the name take the slack so the date is not squeezed onto a
+              // second line when it grows.
               editing={editingId === item.id}
               showEditIcon={false}
-              style={{ height: 24 }}
+              style={{ flex: 1, height: 24, minWidth: 0 }}
               value={item.name || t('profile.passkey.unnamed')}
               onEditingChange={(next) => setEditingId(next ? item.id : null)}
               onChangeEnd={async (input) => {
@@ -93,7 +95,7 @@ export const PasskeyList = memo(() => {
               }}
             />
             {item.createdAt && (
-              <Text fontSize={11} type="secondary">
+              <Text fontSize={11} style={{ flex: 'none', whiteSpace: 'nowrap' }} type="secondary">
                 · {new Date(item.createdAt).toLocaleDateString()}
               </Text>
             )}

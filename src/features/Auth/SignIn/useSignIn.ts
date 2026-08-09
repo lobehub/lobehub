@@ -311,8 +311,10 @@ export const useSignIn = () => {
 
       if (result && 'error' in result && result.error) throw result.error;
 
-      // Unlike OAuth there is no provider redirect, so navigate ourselves.
-      navigate(callbackUrl);
+      // callbackUrl targets the main app, outside this auth SPA — a client-side
+      // navigation leaves the user on a blank shell until they reload, so this
+      // needs a full page load just like the password flow.
+      window.location.href = sanitizeRedirectPath(callbackUrl);
     } catch (error) {
       // Dismissing the platform prompt raises NotAllowedError/AbortError.
       // That is the user changing their mind, not a failure worth reporting.

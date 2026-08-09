@@ -245,6 +245,8 @@ describe('getServerGlobalConfig', () => {
 describe('getServerGlobalConfig / enablePasskey', () => {
   const loadConfig = async (appUrl?: string) => {
     vi.resetModules();
+    if (appUrl) process.env.APP_URL = appUrl;
+    else delete process.env.APP_URL;
     mockGlobalConfigDependencies(false, appUrl ? { appUrl } : {});
     const { getServerGlobalConfig } = await import('./index');
 
