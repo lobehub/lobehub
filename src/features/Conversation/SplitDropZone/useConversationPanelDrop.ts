@@ -8,6 +8,9 @@ import { useChatStore } from '@/store/chat';
 
 export type PanelDragKind = 'topic' | 'thread';
 
+export const isChatInputDropTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element && Boolean(target.closest('[data-testid="chat-input"]'));
+
 const resolveDragKind = (types: readonly string[]): PanelDragKind | null => {
   if (types.includes(TOPIC_DRAG_MIME)) return 'topic';
   if (types.includes(THREAD_DRAG_MIME)) return 'thread';
@@ -71,7 +74,7 @@ export const useConversationPanelDrop = (): UseConversationPanelDropResult => {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       const kind = resolveDragKind(event.dataTransfer.types);
-      if (!kind) return;
+      if (!kind || isChatInputDropTarget(event.target)) return;
 
       event.preventDefault();
       event.stopPropagation();
