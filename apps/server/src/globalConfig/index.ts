@@ -25,6 +25,16 @@ import { parseFilesConfig } from './parseFilesConfig';
 import { getPublicMemoryExtractionConfig } from './parseMemoryExtractionConfig';
 
 /**
+ * `appEnv.APP_URL` always resolves — it falls back to `http://localhost:3210`
+ * outside Vercel — so a plain truthiness check would advertise passkeys on
+ * deployments whose rpID cannot match the host they are served from.
+ *
+ * An explicitly set APP_URL counts, and so does the URL Vercel derives from
+ * its own platform variables. Only the implicit localhost fallback does not.
+ */
+const hasConfiguredAppUrl = () => !!process.env.APP_URL || process.env.VERCEL === '1';
+
+/**
  * Get Better-Auth SSO providers list
  * Parses AUTH_SSO_PROVIDERS and returns enabled providers
  */
@@ -113,11 +123,7 @@ export const getServerGlobalConfig = async () => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    // APP_URL always resolves to something — it falls back to localhost —
-    // so the flag has to key off explicit configuration. An implicit
-    // localhost origin would advertise passkeys whose rpID cannot match
-    // the host the deployment is actually served from.
-    enablePasskey: !!process.env.APP_URL,
+    enablePasskey: hasConfiguredAppUrl(),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL

@@ -5,6 +5,16 @@ import { authEnv } from '@/envs/auth';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 
+/**
+ * `appEnv.APP_URL` always resolves — it falls back to `http://localhost:3210`
+ * outside Vercel — so a plain truthiness check would advertise passkeys on
+ * deployments whose rpID cannot match the host they are served from.
+ *
+ * An explicitly set APP_URL counts, and so does the URL Vercel derives from
+ * its own platform variables. Only the implicit localhost fallback does not.
+ */
+const hasConfiguredAppUrl = () => !!process.env.APP_URL || process.env.VERCEL === '1';
+
 const getBetterAuthSSOProviders = () => {
   return parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 };
@@ -19,11 +29,7 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    // APP_URL always resolves to something — it falls back to localhost —
-    // so the flag has to key off explicit configuration. An implicit
-    // localhost origin would advertise passkeys whose rpID cannot match
-    // the host the deployment is actually served from.
-    enablePasskey: !!process.env.APP_URL,
+    enablePasskey: hasConfiguredAppUrl(),
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     telemetry: {},
   };

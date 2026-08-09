@@ -31,6 +31,19 @@ describe('getServerAuthConfig / enablePasskey', () => {
     expect(getServerAuthConfig().enablePasskey).toBe(false);
   });
 
+  // Vercel derives a real public URL from its own variables, so those
+  // deployments must not be treated as the implicit localhost fallback.
+  it('enables passkeys on Vercel without an explicit APP_URL', async () => {
+    delete process.env.APP_URL;
+    process.env.VERCEL = '1';
+    vi.resetModules();
+
+    const { getServerAuthConfig } = await import('./getServerAuthConfig');
+
+    expect(getServerAuthConfig().enablePasskey).toBe(true);
+    delete process.env.VERCEL;
+  });
+
   it('enables passkeys once APP_URL is set', async () => {
     process.env.APP_URL = 'https://chat.example.com';
     vi.resetModules();
