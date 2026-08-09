@@ -742,16 +742,22 @@ export class AgentBridgeService {
     } = opts;
 
     // For platforms that can't read history at runtime, surface a compact
-    // cross-session summary of this channel (recent topics + last few user
-    // messages) so a fresh topic still knows what was just discussed. Scoped to
-    // the channel via `platformThreadId`; best-effort — never block the reply.
-    if (botPlatformContext && !canReadHistory && botContext?.platformThreadId) {
+    // cross-session summary of this channel (recent topics, each with its last
+    // user message) so a fresh topic still knows what was just discussed.
+    //
+    // Only injected when this run OPENS a new topic (`topicId` is absent —
+    // a fresh mention, or a follow-up whose topic went stale). Once the
+    // conversation continues inside that topic, its own messages are the
+    // context; re-injecting prior sessions every turn just burns tokens and
+    // competes with the live history. Scoped to the channel via
+    // `platformThreadId`; best-effort — never block the reply.
+    if (botPlatformContext && !canReadHistory && !topicId && botContext?.platformThreadId) {
       try {
         botPlatformContext.recentChannelHistory = await buildRecentChannelHistory(
           this.db,
           this.userId,
           this.workspaceId,
-          { excludeTopicId: topicId, platformThreadId: botContext.platformThreadId },
+          { platformThreadId: botContext.platformThreadId },
         );
       } catch (error) {
         log('executeWithWebhooks: buildRecentChannelHistory failed (non-fatal): %O', error);

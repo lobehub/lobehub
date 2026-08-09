@@ -729,16 +729,16 @@ export class TopicModel {
   };
 
   /**
-   * Recent topics from the same IM channel, most-recent first, excluding the
-   * current topic. Matches the channel via the `metadata.bot.platformThreadId`
-   * path written at topic creation (see `ChatTopicBotContext`). Used to
-   * pre-inject cross-session history on platforms that can't read chat history
-   * at runtime (e.g. WeChat, whose `readMessages` throws), so a fresh topic
-   * still knows what the channel was just talking about.
+   * Recent topics from the same IM channel, most-recent first. Matches the
+   * channel via the `metadata.bot.platformThreadId` path written at topic
+   * creation (see `ChatTopicBotContext`). Used to pre-inject cross-session
+   * history on platforms that can't read chat history at runtime (e.g. WeChat,
+   * whose `readMessages` throws), so a fresh topic still knows what the channel
+   * was just talking about.
    */
   findRecentByBotThread = async (
     platformThreadId: string,
-    { excludeTopicId, limit = 5 }: { excludeTopicId?: string; limit?: number } = {},
+    { limit = 3 }: { limit?: number } = {},
   ): Promise<TopicItem[]> => {
     if (!platformThreadId) return [];
 
@@ -749,7 +749,6 @@ export class TopicModel {
         and(
           this.ownership(),
           sql`${topics.metadata} -> 'bot' ->> 'platformThreadId' = ${platformThreadId}`,
-          excludeTopicId ? ne(topics.id, excludeTopicId) : undefined,
         ),
       )
       .orderBy(desc(topics.updatedAt))
