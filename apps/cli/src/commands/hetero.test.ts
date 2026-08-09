@@ -788,6 +788,38 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('preserves a working-directory error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockRejectedValue(
+      Object.assign(new Error('Working directory does not exist: /deleted/worktree'), {
+        code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { code: 'working_directory_not_found' },
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('finishes server-ingest runs with error when the agent event stream fails', async () => {
     mockSpawnAgent.mockReturnValue(
       createFakeHandle({ eventsError: new Error('adapter choked on malformed JSONL') }),

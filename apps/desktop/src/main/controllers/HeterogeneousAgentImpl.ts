@@ -404,13 +404,20 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
-  private buildWorkingDirectoryMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+  private resolveSessionWorkingDirectory(session: AgentSession): string {
+    return session.cwd || electronApp.getPath('desktop');
+  }
+
+  private buildWorkingDirectoryMissingError(
+    session: AgentSession,
+    workingDirectory: string,
+  ): HeterogeneousAgentSessionError {
     return {
       agentType: session.agentType,
       code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
       command: this.resolveSessionCommand(session),
-      message: `Working directory does not exist: ${session.cwd}`,
-      workingDirectory: session.cwd,
+      message: `Working directory does not exist: ${workingDirectory}`,
+      workingDirectory,
     };
   }
 
@@ -502,7 +509,10 @@ export default class HeterogeneousAgentCtr {
 
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
-      if (!existsSync(session.cwd)) return this.buildWorkingDirectoryMissingError(session);
+      const workingDirectory = this.resolveSessionWorkingDirectory(session);
+      if (!existsSync(workingDirectory)) {
+        return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+      }
 
       const cliMissingError = this.buildCliMissingError(session);
       if (cliMissingError) return cliMissingError;
@@ -563,7 +573,10 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    if (!existsSync(session.cwd)) return this.buildWorkingDirectoryMissingError(session);
+    const workingDirectory = this.resolveSessionWorkingDirectory(session);
+    if (!existsSync(workingDirectory)) {
+      return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+    }
 
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 

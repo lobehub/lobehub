@@ -898,6 +898,27 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('validates the default desktop directory when the session cwd is omitted', async () => {
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate === FAKE_DESKTOP_PATH);
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
+
+      expect(existsSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH);
+      expect(detect).toHaveBeenCalledWith('codex', true);
+    });
+
     it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
       const missingCwd = '/tmp/lobehub-deleted-worktree';
       vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
