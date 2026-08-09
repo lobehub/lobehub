@@ -57,7 +57,15 @@ describe('buildAgentArtworkPrompt', () => {
   it('defaults to the lobe mascot style direction', () => {
     const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar' });
 
-    expect(prompt).toContain('one bold saturated dominant color filling the frame');
+    expect(prompt).toContain('one vivid saturated solid background color');
+    expect(prompt).toContain('outfit and accessories');
+  });
+
+  it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
+    const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'background', style: 'lobe' });
+
+    expect(prompt).toContain('soft 3D cartoon world');
+    expect(prompt).not.toContain('big lively glossy eyes');
   });
 
   it('describes attached style references and forbids copying their subjects', () => {
@@ -100,7 +108,8 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
     expect(prompts.find((p) => p.includes('watercolor'))).toBeTruthy();
-    expect(prompts.find((p) => p.includes('risograph'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('pixel art'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('die-cut sticker'))).toBeTruthy();
   });
 
   it('applies the chosen style to both avatar and background prompts', () => {
@@ -111,8 +120,8 @@ describe('buildAgentArtworkPrompt', () => {
       style: 'clay',
     });
 
-    expect(avatar).toContain('clay-style scene');
-    expect(background).toContain('clay-style scene');
+    expect(avatar).toContain('clay-style figure');
+    expect(background).toContain('clay-style figure');
   });
 
   it('steers the motif away from generic technology clichés in every prompt', () => {

@@ -48,7 +48,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   galleryGrid: css`
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+
+    /* One row of five, per review: the set is curated to exactly five styles. */
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
   `,
   galleryItem: css`

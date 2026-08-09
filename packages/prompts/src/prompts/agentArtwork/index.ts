@@ -4,30 +4,45 @@ export type AgentArtworkKind = 'avatar' | 'background';
 
 export const AGENT_ARTWORK_STYLES = [
   'lobe',
-  'editorial',
-  'geometric',
   'clay',
   'watercolor',
-  'riso',
-  'photographic',
+  'geometric',
+  'pixel',
+  'sticker',
 ] as const;
 
 export type AgentArtworkStyle = (typeof AGENT_ARTWORK_STYLES)[number];
 
 export const DEFAULT_AGENT_ARTWORK_STYLE: AgentArtworkStyle = 'lobe';
 
+/**
+ * Wording here is A/B-tested against real Nano Banana output. Two phrasings
+ * that measurably ruin the lobe style: "inflated" (produces a puffy relief
+ * carving instead of a character) and letting the domain motif land ON the
+ * character (maps / diagrams embossed on the body) — identity must flow
+ * through outfit and accessories instead.
+ */
 const STYLE_DIRECTIONS: Record<AgentArtworkStyle, string> = {
-  clay: 'Render it as a soft 3D clay-style scene with rounded forms, matte materials, gentle studio lighting, and warm pastel colors.',
-  lobe: 'Render it as a soft 3D render with rounded, inflated clay-like forms, playful proportions, oversized friendly details, smooth matte materials with gentle subsurface glow, soft studio lighting, and one bold saturated dominant color filling the frame.',
-  editorial:
-    'Render it as polished editorial illustration with a calm premium color palette and high contrast.',
+  clay: 'Render it as a soft 3D clay-style figure with rounded forms, matte materials, subtle hand-made charm, gentle studio lighting, and warm pastel colors.',
   geometric:
     'Render it as flat geometric illustration built from bold simple shapes, crisp edges, and a confident limited palette in the spirit of mid-century poster design.',
-  photographic:
-    'Render it as a minimalist still-life photograph of tangible objects and materials with soft natural light and a restrained color palette.',
-  riso: 'Render it as a retro risograph print with two or three flat ink colors, visible grain, slight misregistration, and bold graphic shapes.',
+  lobe: "Render it as a single 3D cartoon character with smooth rounded shapes, big lively glossy eyes, simple friendly features, soft studio lighting, and one vivid saturated solid background color. Express the identity through the character's outfit and accessories — do not draw scenes, maps, or diagrams on the character's body.",
+  pixel:
+    'Render it as crisp retro pixel art with chunky readable pixels, a limited bright palette, and clean shading in the spirit of classic 16-bit games.',
+  sticker:
+    'Render it as a glossy die-cut sticker illustration with bold clean outlines, flat vivid colors, a thick white sticker border, and a simple bright solid background.',
   watercolor:
     'Render it as a hand-painted watercolor piece with visible paper texture, soft pigment washes, and loose organic edges.',
+};
+
+/**
+ * The avatar directions above are subject-shaped (the lobe one literally asks
+ * for a character), which contradicts the cover prompt's "abstract environment,
+ * no person portrait" frame. Cover generation swaps in these style-only
+ * variants where the avatar wording would fight the cover composition.
+ */
+const BACKGROUND_STYLE_OVERRIDES: Partial<Record<AgentArtworkStyle, string>> = {
+  lobe: 'Render it as a soft 3D cartoon world with smooth rounded matte forms, playful proportions, and one vivid saturated dominant color filling the frame.',
 };
 
 /**
@@ -84,7 +99,11 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
     systemRole: input.systemRole?.slice(0, 1200),
     title: input.title,
   });
-  const styleDirection = STYLE_DIRECTIONS[input.style ?? DEFAULT_AGENT_ARTWORK_STYLE];
+  const style = input.style ?? DEFAULT_AGENT_ARTWORK_STYLE;
+  const styleDirection =
+    input.kind === 'background'
+      ? (BACKGROUND_STYLE_OVERRIDES[style] ?? STYLE_DIRECTIONS[style])
+      : STYLE_DIRECTIONS[style];
 
   const styleReferenceCount =
     input.styleReferenceImageUrls?.filter((url) => url.trim()).length ?? 0;
