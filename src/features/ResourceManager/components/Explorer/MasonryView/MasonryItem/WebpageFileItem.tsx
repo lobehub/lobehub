@@ -109,6 +109,25 @@ const excerptOf = (content?: string | null): string =>
     .trim()
     .slice(0, 240);
 
+/**
+ * Clippings without a real page title store the URL in `name`. A raw URL as a
+ * bold card title reads broken — fall back to the last path segment (the
+ * document name, e.g. `SKILL.md`) or the hostname; the full source stays on
+ * the domain row and the open-link button.
+ */
+const displayTitle = (name: string): string => {
+  if (!/^https?:\/\//.test(name.trim())) return name;
+  try {
+    const parsed = new URL(name.trim());
+    const lastSegment = decodeURIComponent(
+      parsed.pathname.split('/').findLast(Boolean) ?? '',
+    ).trim();
+    return lastSegment || parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return name;
+  }
+};
+
 interface WebpageFileItemProps {
   content?: string | null;
   name: string;
@@ -122,6 +141,7 @@ interface WebpageFileItemProps {
 const WebpageFileItem = memo<WebpageFileItemProps>(({ content, name, url }) => {
   const hostname = hostnameOf(url);
   const excerpt = excerptOf(content);
+  const title = displayTitle(name);
 
   return (
     <>
@@ -131,7 +151,7 @@ const WebpageFileItem = memo<WebpageFileItemProps>(({ content, name, url }) => {
         </div>
       )}
       <Flexbox className={styles.info} gap={8}>
-        <span className={styles.title}>{name}</span>
+        <span className={styles.title}>{title}</span>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <div className={styles.domain}>
             <Icon icon={GlobeIcon} size={13} />
