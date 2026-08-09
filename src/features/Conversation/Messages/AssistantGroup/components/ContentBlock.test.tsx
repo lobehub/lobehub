@@ -212,7 +212,7 @@ describe('AssistantGroup ContentBlock', () => {
   it('does not render an empty reasoning card for signature-only reasoning', () => {
     // Some providers (e.g. DeepSeek over the Anthropic protocol) emit a thinking
     // block with only a signature_delta and zero thinking text. The signature is
-    // persisted for multi-turn replay but must not render a card. See LOBE-12829.
+    // persisted for multi-turn replay but must not render a card.
     render(
       <ContentBlock
         assistantId="assistant-1"
