@@ -17,13 +17,10 @@ describe('TaskRecommendationConfigurator', () => {
     expect(new TaskRecommendationConfigurator().recommendationsPerProvider(0)).toBe(0);
   });
 
-  /** @example Runtime collection limits remain paired with prompt-package provider guides. */
-  it('combines operational provider settings with prompt guides', () => {
-    const { providers, writing } = new TaskRecommendationConfigurator();
+  /** @example Shared writing policy stays independent from provider-owned collectors and guides. */
+  it('exposes the shared recommendation writing policy', () => {
+    const { writing } = new TaskRecommendationConfigurator();
 
-    expect(providers.github).toMatchObject({ maxContextLength: 24_000, maxSignals: 24 });
-    expect(providers.github.examples.length).toBeGreaterThan(0);
-    expect(providers.gmail.queries).toHaveLength(3);
     expect(writing.maxSourcesPerRecommendation).toBe(4);
   });
 });

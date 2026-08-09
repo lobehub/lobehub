@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createGitHubComposioClient: vi.fn(),
   createGitHubOAuthClient: vi.fn(),
   createGmailClient: vi.fn(),
+  createNotionClient: vi.fn(),
   ensureFreshConnectorToken: vi.fn(),
   findById: vi.fn(),
   getAccount: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('@lobechat/connector-data/github', () => ({
 
 vi.mock('@lobechat/connector-data/gmail', () => ({
   createGmailConnectorClient: mocks.createGmailClient,
+}));
+
+vi.mock('@lobechat/connector-data/notion', () => ({
+  createNotionConnectorClient: mocks.createNotionClient,
 }));
 
 vi.mock('@/database/models/connector', () => ({
@@ -80,6 +85,7 @@ describe('ConnectorDataService', () => {
     mocks.markComposioUnavailable.mockResolvedValue(false);
     mocks.getAccount.mockResolvedValue({ externalAccountId: 'gmail-account', scopes: [] });
     mocks.createGmailClient.mockReturnValue({ getAccount: mocks.getAccount, kind: 'gmail-client' });
+    mocks.createNotionClient.mockReturnValue({ kind: 'notion-client' });
     mocks.queryReferences.mockResolvedValue([]);
     mocks.queryComposioReferences.mockResolvedValue([]);
   });
@@ -382,6 +388,32 @@ describe('ConnectorDataService', () => {
     expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
   });
 
+  /** @example An ACTIVE Notion connection resolves through the registry-backed provider client. */
+  it('creates Notion from the first active Composio connector', async () => {
+    mocks.queryComposioReferences.mockResolvedValue([
+      {
+        composio: {
+          appSlug: 'notion',
+          connectedAccountId: 'notion-account',
+          ownerUserId: 'notion-owner',
+          status: 'ACTIVE',
+        },
+        id: 'notion-a',
+        isEnabled: true,
+        status: 'connected',
+      },
+    ]);
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').getNotionClient(),
+    ).resolves.toEqual({ kind: 'notion-client' });
+    expect(mocks.createNotionClient).toHaveBeenCalledWith({
+      composio: expect.objectContaining({ kind: 'composio' }),
+      connectedAccountId: 'notion-account',
+      userId: 'notion-owner',
+    });
+  });
+
   it('lists only providers whose connector client can currently be resolved', async () => {
     /** @example A stale Gmail connection is excluded while GitHub OAuth remains available. */
     const service = new ConnectorDataService(
@@ -389,7 +421,7 @@ describe('ConnectorDataService', () => {
       'user-1',
     );
 
-    await expect(service.listAvailableProviderIds(['github', 'gmail'])).resolves.toEqual([
+    await expect(service.listAvailableProviderIds(['github', 'gmail', 'notion'])).resolves.toEqual([
       'github',
     ]);
   });
