@@ -129,13 +129,20 @@ describe('userRouter', () => {
     const workspaceCtx = { ...mockCtx, workspaceId: 'workspace-1' };
 
     it('returns supported apps separately from currently available sources', async () => {
-      /** @example Gmail remains connectable while only GitHub is currently usable. */
+      /** @example Gmail and Notion remain connectable while only GitHub is currently usable. */
       mockUnderstandingService.listSourceProviderIds.mockResolvedValueOnce(['github']);
 
+      // ROOT CAUSE:
+      //
+      // The supported-provider expectation still listed only GitHub and Gmail after Notion was
+      // registered, so the router correctly returned one more provider than the stale assertion.
+      //
+      // We keep the expectation aligned with the provider registry while preserving the separate
+      // sourceProviderIds assertion for providers that are currently usable by this user.
       await expect(
         userRouter.createCaller(scopedCtx).getSupportedUnderstandingProviders(),
       ).resolves.toEqual({
-        providerIds: ['github', 'gmail'],
+        providerIds: ['github', 'gmail', 'notion'],
         sourceProviderIds: ['github'],
       });
     });
