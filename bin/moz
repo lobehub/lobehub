@@ -6,9 +6,10 @@
 #
 # Usage:
 #   moz             # start if not running
-#   moz -u          # build + deploy
-#   moz -d          # force redeploy
+#   moz -u          # build + deploy (auto pre-deploy backup)
+#   moz -d          # force redeploy (auto pre-deploy backup)
 #   moz -b          # build only
+#   moz -B          # backup DB + uploads now
 #   moz -r          # restart
 #   moz -i          # info
 #   moz -k          # kill (stop)
