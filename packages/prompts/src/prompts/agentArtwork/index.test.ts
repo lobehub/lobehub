@@ -59,7 +59,8 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(prompt).toContain('one vivid saturated solid background color');
     expect(prompt).toContain('outfit and accessories');
-    expect(prompt).toContain('balanced head-to-body proportions');
+    expect(prompt).toContain('upper-body bust portrait');
+    expect(prompt).toContain('not an oversized baby head');
   });
 
   it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
