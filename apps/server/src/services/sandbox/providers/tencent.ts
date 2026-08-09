@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 
 import { Sandbox } from '@e2b/code-interpreter';
 import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -32,12 +32,16 @@ const DEFAULT_API_BASE = 'https://pages-api.cloud.tencent.com/v1/sandbox';
 const DEFAULT_REGION = 'ap-beijing';
 const DEFAULT_TIMEOUT_SEC = 300;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
+const CONTROL_PLANE_TIMEOUT_MS = 30_000;
+const BACKGROUND_LAUNCH_TIMEOUT_MS = 10_000;
+const BACKGROUND_KILL_GRACE_SEC = 1;
 const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
 const TSX_VERSION = '4.22.4';
 /** Renew a persistent instance once it is within this window of expiring. */
 const RENEW_THRESHOLD_MS = 60_000;
 const BACKGROUND_DIR = '/tmp/lobe-background';
+const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Reads whatever a background command has produced since the previous check.
@@ -75,7 +79,11 @@ def main(encoded):
     probe = pgid_file if pgid_file.exists() else pid_file
     if exit_code is None and probe.exists():
         try:
-            os.kill(int(probe.read_text().strip()), 0)
+            process_id = int(probe.read_text().strip())
+            if pgid_file.exists():
+                os.killpg(process_id, 0)
+            else:
+                os.kill(process_id, 0)
             running = True
         except (OSError, ValueError):
             running = False
@@ -122,7 +130,7 @@ def main(encoded):
 `;
 
 const killBackgroundScript = `${scriptPrelude}
-import signal
+import signal, time
 
 def main(encoded):
     args = load_args(encoded)
@@ -133,17 +141,65 @@ def main(encoded):
         emit({'success': False, 'error': 'unknown commandId'})
         return
 
-    # Signal the whole group so the wrapper and the command itself both stop.
+    # The launcher normally publishes the command pgid before returning. Wait
+    # briefly as a compatibility fallback for jobs started by older versions.
+    deadline = time.monotonic() + 1
+    while not pgid_file.exists() and pid_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+
     try:
         if pgid_file.exists():
-            os.killpg(int(pgid_file.read_text().strip()), signal.SIGTERM)
+            process_id = int(pgid_file.read_text().strip())
+            signal_target = lambda sig: os.killpg(process_id, sig)
         else:
-            os.kill(int(pid_file.read_text().strip()), signal.SIGTERM)
+            process_id = int(pid_file.read_text().strip())
+            signal_target = lambda sig: os.kill(process_id, sig)
     except (OSError, ValueError) as error:
         emit({'success': False, 'error': str(error)})
         return
 
-    emit({'success': True})
+    def is_alive():
+        try:
+            signal_target(0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    if not is_alive():
+        emit({'forced': False, 'success': True})
+        return
+
+    # Manual cancellation must own the same bounded escalation as the timeout
+    # path. Killing only the timeout group leader leaves TERM-resistant
+    # descendants running after their watchdog is gone.
+    try:
+        signal_target(signal.SIGTERM)
+    except ProcessLookupError:
+        emit({'forced': False, 'success': True})
+        return
+    except OSError as error:
+        emit({'success': False, 'error': str(error)})
+        return
+
+    deadline = time.monotonic() + ${BACKGROUND_KILL_GRACE_SEC}
+    while time.monotonic() < deadline:
+        if not is_alive():
+            emit({'forced': False, 'success': True})
+            return
+        time.sleep(0.05)
+
+    try:
+        signal_target(signal.SIGKILL)
+    except ProcessLookupError:
+        emit({'forced': False, 'success': True})
+        return
+    except OSError as error:
+        emit({'success': False, 'error': str(error)})
+        return
+
+    emit({'forced': True, 'success': True})
 `;
 
 interface DispatchResult {
@@ -161,18 +217,25 @@ interface AcquiredInstance {
   trafficToken?: string;
 }
 
+interface ResolvedInstance {
+  instance: AcquiredInstance;
+  sessionExpiredAndRecreated: boolean;
+}
+
 /**
- * Instances are keyed by session. A provider is constructed per request, but a
- * single tool call can fan out into several `callTool` invocations — file
- * bootstrapping runs a command before the requested tool — so the instance has
- * to outlive the provider for those to land in the same container.
+ * A local connection cache avoids repeated control-plane calls in one server
+ * process. It is not the session source of truth: `acquire` receives a stable,
+ * opaque ConversationId, and Tencent's control plane owns the one-conversation /
+ * one-instance mapping. A replica or cold-started process therefore reacquires
+ * connection credentials for the existing instance instead of depending on
+ * this map for persistence.
  */
 const instances = new Map<string, AcquiredInstance>();
 /**
  * In-flight acquisitions, so two concurrent tool calls for one session share a
  * container instead of racing and leaking the loser.
  */
-const pending = new Map<string, Promise<AcquiredInstance>>();
+const pending = new Map<string, Promise<ResolvedInstance>>();
 
 export class TencentSandboxProvider implements SandboxProvider {
   readonly capabilities = {
@@ -204,12 +267,12 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return configError;
 
     try {
-      const sandbox = await this.connect();
+      const { sandbox, sessionExpiredAndRecreated } = await this.connect();
       const { error, result, success } = await this.dispatch(sandbox, toolName, params);
 
       // `error` has to survive: the runtime builds the model-visible failure
       // content from it, and dropping it here left the model with `undefined`.
-      return { error, result, sessionExpiredAndRecreated: false, success };
+      return { error, result, sessionExpiredAndRecreated, success };
     } catch (error) {
       log('Tencent sandbox tool %s failed: %O', toolName, error);
 
@@ -231,7 +294,7 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return { error: configError.error, success: false };
 
     try {
-      const sandbox = await this.connect();
+      const { sandbox } = await this.connect();
       const uploaded = await this.runScript(sandbox, uploadFileScript, {
         headers: uploadHeaders ?? {},
         path,
@@ -421,7 +484,9 @@ export class TencentSandboxProvider implements SandboxProvider {
       // Create the parent before files.write. Besides making the ordering
       // explicit for E2B-compatible implementations, this avoids relying on
       // an SDK-specific implicit recursive-directory behavior.
-      const directory = await sandbox.commands.run(`mkdir -p ${BACKGROUND_DIR}`, { timeoutMs });
+      const directory = await sandbox.commands.run(`mkdir -p ${BACKGROUND_DIR}`, {
+        timeoutMs: BACKGROUND_LAUNCH_TIMEOUT_MS,
+      });
       if (directory.exitCode !== 0) {
         throw new Error(directory.stderr || 'Failed to prepare background command directory');
       }
@@ -445,11 +510,18 @@ export class TencentSandboxProvider implements SandboxProvider {
         `echo $command_pgid > ${base}.pgid; ` +
         `wait $command_pgid; echo $? > ${base}.exit' ` +
         `< /dev/null > /dev/null 2>&1 & ` +
-        `echo $! > ${base}.pid`;
+        `monitor_pid=$!; echo $monitor_pid > ${base}.pid; ` +
+        `attempts=0; ` +
+        `while [ ! -s ${base}.pgid ] && kill -0 $monitor_pid 2>/dev/null && ` +
+        `[ $attempts -lt 100 ]; do ` +
+        `attempts=$((attempts + 1)); sleep 0.01; ` +
+        `done; test -s ${base}.pgid`;
 
       const result = await sandbox.commands.run(launch, {
         cwd: params.cwd as string | undefined,
-        timeoutMs,
+        // Starting and publishing the process group is control work. A tiny
+        // command timeout must not interrupt it and leave an untracked job.
+        timeoutMs: BACKGROUND_LAUNCH_TIMEOUT_MS,
       });
 
       if (result.exitCode !== 0) {
@@ -519,7 +591,9 @@ export class TencentSandboxProvider implements SandboxProvider {
   private commandId(params: Record<string, unknown>): string {
     const id = String(params.commandId ?? params.shell_id ?? '').trim();
 
-    if (!id) throw new Error('commandId is required');
+    if (!COMMAND_ID_PATTERN.test(id)) {
+      throw new Error('commandId must be a sandbox-issued UUID');
+    }
 
     return id;
   }
@@ -527,7 +601,13 @@ export class TencentSandboxProvider implements SandboxProvider {
   private timeoutMs(params: Record<string, unknown>): number {
     const value = params.timeout ?? params.timeout_ms;
 
-    return typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_COMMAND_TIMEOUT_MS;
+    if (value === undefined) return DEFAULT_COMMAND_TIMEOUT_MS;
+
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw new Error('timeout must be a positive finite number of milliseconds');
+    }
+
+    return value;
   }
 
   // ---------------------------------------------------------------------------
@@ -543,11 +623,20 @@ export class TencentSandboxProvider implements SandboxProvider {
    * acquires a fresh one afterwards, which bounds cost without breaking
    * multi-call flows such as file bootstrapping or background commands.
    */
-  private async connect(): Promise<Sandbox> {
-    return connect(await this.acquireForSession());
+  private async connect(): Promise<ResolvedInstance & { sandbox: Sandbox }> {
+    const resolved = await this.acquireForSession();
+
+    return {
+      ...resolved,
+      sandbox: connect(resolved.instance),
+    };
   }
 
-  private async acquireForSession(): Promise<AcquiredInstance> {
+  /**
+   * The local promise only coalesces calls in this process. Cross-process
+   * ownership and deduplication are provided by acquire's ConversationId.
+   */
+  private async acquireForSession(): Promise<ResolvedInstance> {
     const key = this.sessionKey();
     const inFlight = pending.get(key);
 
@@ -559,8 +648,9 @@ export class TencentSandboxProvider implements SandboxProvider {
     return promise;
   }
 
-  private async resolveInstance(key: string): Promise<AcquiredInstance> {
-    this.evictExpired();
+  private async resolveInstance(key: string): Promise<ResolvedInstance> {
+    const expiredSessions = this.evictExpired();
+    let sessionExpiredAndRecreated = expiredSessions.has(key);
 
     const cached = instances.get(key);
 
@@ -568,51 +658,76 @@ export class TencentSandboxProvider implements SandboxProvider {
       // On-demand instances are not renewed, so they stay usable right up to
       // their real expiry — dropping them early would strand files and
       // background processes mid-session.
-      if (sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand') return cached;
+      if (sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand') {
+        return { instance: cached, sessionExpiredAndRecreated: false };
+      }
 
-      if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) return cached;
+      if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) {
+        return { instance: cached, sessionExpiredAndRecreated: false };
+      }
 
       const renewed = await this.renew(cached);
       if (renewed) {
         instances.set(key, renewed);
 
-        return renewed;
+        return { instance: renewed, sessionExpiredAndRecreated: false };
       }
 
       // A failed renewal says nothing about the instance itself. Keep using it
       // while it is still valid and retry on the next call rather than
       // discarding the topic's files and background processes.
-      if (cached.expiresAt > Date.now()) return cached;
+      if (cached.expiresAt > Date.now()) {
+        return { instance: cached, sessionExpiredAndRecreated: false };
+      }
 
       instances.delete(key);
       await this.release(cached.instanceId);
+      sessionExpiredAndRecreated = true;
     }
 
     const instance = await this.acquire();
     instances.set(key, instance);
 
-    return instance;
+    return { instance, sessionExpiredAndRecreated };
   }
 
   /** Keeps the module-level map from growing with abandoned sessions. */
-  private evictExpired(): void {
+  private evictExpired(): Set<string> {
     const now = Date.now();
+    const expiredSessions = new Set<string>();
 
     for (const [key, instance] of instances) {
-      if (instance.expiresAt <= now) instances.delete(key);
+      if (instance.expiresAt <= now) {
+        instances.delete(key);
+        expiredSessions.add(key);
+      }
     }
+
+    return expiredSessions;
   }
 
   private async renew(instance: AcquiredInstance): Promise<AcquiredInstance | undefined> {
     try {
-      await this.request('update', {
+      const data = await this.request('update', {
         InstanceId: instance.instanceId,
         Timeout: this.timeoutSec(),
       });
 
-      return { ...instance, expiresAt: Date.now() + this.timeoutSec() * 1000 };
+      const expiresAt = this.parseExpirationTime(data.InstanceExpiresAt);
+      if (expiresAt === undefined) {
+        throw new Error('Sandbox update response missing a valid InstanceExpiresAt');
+      }
+
+      // The service may cap a requested extension. Its returned expiry is the
+      // authority; locally adding the requested timeout can keep a dead client
+      // cached after the backend has already reclaimed it.
+      return { ...instance, expiresAt };
     } catch (error) {
-      log('Failed to renew instance %s, will acquire a new one: %O', instance.instanceId, error);
+      log(
+        'Failed to renew instance %s; retaining it until its known expiry: %O',
+        instance.instanceId,
+        error,
+      );
 
       return undefined;
     }
@@ -625,18 +740,21 @@ export class TencentSandboxProvider implements SandboxProvider {
       Timeout: this.timeoutSec(),
     });
 
-    const expiresAt = data.InstanceExpiresAt
-      ? new Date(data.InstanceExpiresAt as string).getTime()
-      : Date.now() + this.timeoutSec() * 1000;
-
     return {
-      domain: data.SandboxDomain as string,
+      domain: this.requiredString(data, 'SandboxDomain'),
       envdVersion: (data.EnvdVersion as string) || ENVD_FALLBACK_VERSION,
-      expiresAt,
-      instanceId: data.InstanceId as string,
-      token: data.Token as string,
+      expiresAt:
+        this.parseExpirationTime(data.InstanceExpiresAt) ?? Date.now() + this.timeoutSec() * 1000,
+      instanceId: this.requiredString(data, 'InstanceId'),
+      token: this.requiredString(data, 'Token'),
       trafficToken: data.TrafficToken as string | undefined,
     };
+  }
+
+  private parseExpirationTime(value: unknown): number | undefined {
+    const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private async release(instanceId: string): Promise<void> {
@@ -661,6 +779,7 @@ export class TencentSandboxProvider implements SandboxProvider {
         'Content-Type': 'application/json',
       },
       method: 'POST',
+      signal: AbortSignal.timeout(CONTROL_PLANE_TIMEOUT_MS),
     });
 
     if (!response.ok) throw new Error(`Sandbox ${action} failed with status ${response.status}`);
@@ -668,22 +787,38 @@ export class TencentSandboxProvider implements SandboxProvider {
     const body = (await response.json()) as {
       Code?: number;
       Data?: Record<string, unknown>;
+      Message?: string;
       message?: string;
     };
 
     if (body.Code !== 0 || !body.Data) {
-      throw new Error(body.message || `Sandbox ${action} returned an error`);
+      throw new Error(body.Message || body.message || `Sandbox ${action} returned an error`);
     }
 
     return body.Data;
   }
 
   private sessionKey(): string {
-    return `${this.options.userId}:${this.options.topicId}`;
+    // Makers conversation ids are limited to 6–36 characters from a restricted
+    // alphabet. Hashing also prevents account/topic identifiers from leaving
+    // LobeHub and avoids delimiter collisions.
+    const digest = createHmac('sha256', sandboxEnv.TENCENT_SANDBOX_API_TOKEN || '')
+      .update(JSON.stringify([this.options.userId, this.options.topicId]))
+      .digest('hex');
+
+    return `lobe_${digest.slice(0, 31)}`;
   }
 
   private timeoutSec(): number {
     return sandboxEnv.TENCENT_SANDBOX_TIMEOUT_SEC || DEFAULT_TIMEOUT_SEC;
+  }
+
+  private requiredString(data: Record<string, unknown>, field: string): string {
+    const value = data[field];
+
+    if (typeof value !== 'string' || !value) throw new Error(`Sandbox response missing ${field}`);
+
+    return value;
   }
 
   private checkConfig(): SandboxCallToolResult | undefined {

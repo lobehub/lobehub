@@ -99,7 +99,7 @@ Supported values:
 ### `TENCENT_SANDBOX_MODE`
 
 - Type: Optional
-- Description: Controls the instance lifecycle. `persistent` keeps one container per topic and renews it before expiry, so state such as variables and files survives for as long as the topic is active. `on-demand` lets the container lapse when `TENCENT_SANDBOX_TIMEOUT_SEC` elapses instead of renewing it, which bounds idle cost at the price of a cold start after each idle period. Both modes reuse one container across the calls that make up a single tool invocation.
+- Description: Controls the instance lifecycle. `persistent` keeps one container per topic and renews it before expiry, so state such as variables and files survives for as long as the topic is active. `on-demand` lets the container lapse when `TENCENT_SANDBOX_TIMEOUT_SEC` elapses instead of renewing it, which bounds idle cost at the price of a cold start after each idle period. Both modes use an opaque, deterministic conversation ID in Tencent's control plane, so the same live container is reacquired across server replicas, cold starts, and all calls that make up a tool invocation.
 - Default: `persistent`
 - Example: `on-demand`
 

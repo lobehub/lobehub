@@ -27,7 +27,9 @@ vi.mock('@e2b/code-interpreter', () => ({ Sandbox: vi.fn(() => mocks.sandbox) })
 const options = { marketService: {} as never, topicId: 'topic-1', userId: 'user-1' };
 
 const execFileAsync = promisify(execFile);
+const TEST_COMMAND_ID = '123e4567-e89b-42d3-a456-426614174000';
 const calls = { acquire: 0, release: 0, update: 0 };
+const controlPlaneRequests: { action: keyof typeof calls; payload: Record<string, unknown> }[] = [];
 /** Seconds until the acquired instance expires; drives the renewal path. */
 let expiresInSec = 300;
 
@@ -35,12 +37,17 @@ const installFetch = () => {
   calls.acquire = 0;
   calls.release = 0;
   calls.update = 0;
+  controlPlaneRequests.length = 0;
 
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       const action = url.split('/').pop() as keyof typeof calls;
       calls[action] += 1;
+      controlPlaneRequests.push({
+        action,
+        payload: JSON.parse(String(init?.body || '{}')),
+      });
 
       return {
         json: async () => ({
@@ -240,8 +247,10 @@ describe('TencentSandboxProvider', () => {
       command,
     );
 
+    // Directory setup and process-group publication use a bounded control
+    // timeout independent of the command's own lifetime.
     expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(1, 'mkdir -p /tmp/lobe-background', {
-      timeoutMs: 5000,
+      timeoutMs: 10_000,
     });
     expect(mocks.sandbox.commands.run.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sandbox.files.write.mock.invocationCallOrder[0],
@@ -334,7 +343,11 @@ describe('TencentSandboxProvider', () => {
       okCommand(JSON.stringify({ newOutput: 'tick\n', running: true, success: true })),
     );
 
-    const result = await (await load()).callTool('getCommandOutput', { commandId: 'abc' });
+    const result = await (
+      await load()
+    ).callTool('getCommandOutput', {
+      commandId: TEST_COMMAND_ID,
+    });
 
     expect(result.result).toMatchObject({ newOutput: 'tick\n', running: true });
     expect(mocks.sandbox.commands.connect).not.toHaveBeenCalled();
@@ -351,13 +364,44 @@ describe('TencentSandboxProvider', () => {
     );
   });
 
+  it('rejects non-positive command timeouts before starting work', async () => {
+    const result = await (
+      await load()
+    ).callTool('runCommand', {
+      command: 'echo should-not-run',
+      timeout: 0,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('positive finite number');
+    expect(mocks.sandbox.commands.run).not.toHaveBeenCalled();
+  });
+
   it('kills a background command by its identifier', async () => {
     mocks.sandbox.commands.run.mockResolvedValue(okCommand(JSON.stringify({ success: true })));
 
-    const result = await (await load()).callTool('killCommand', { commandId: 'abc' });
+    const result = await (
+      await load()
+    ).callTool('killCommand', {
+      commandId: TEST_COMMAND_ID,
+    });
 
     expect(result.success).toBe(true);
-    expect(scriptArgs(mocks.sandbox.commands.run.mock.calls[0][0])).toEqual({ commandId: 'abc' });
+    expect(scriptArgs(mocks.sandbox.commands.run.mock.calls[0][0])).toEqual({
+      commandId: TEST_COMMAND_ID,
+    });
+  });
+
+  it('rejects command ids that could escape the background directory', async () => {
+    const result = await (
+      await load()
+    ).callTool('killCommand', {
+      commandId: '../../proc/1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('sandbox-issued UUID');
+    expect(mocks.sandbox.commands.run).not.toHaveBeenCalled();
   });
 
   // The shared tool contract uses `directoryPath`, not `path`.
@@ -407,6 +451,22 @@ describe('TencentSandboxProvider', () => {
     }
   });
 
+  it('reacquires the same control-plane conversation after a process-local cache reset', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    await (await load()).callTool('runCommand', { command: 'echo first' });
+    await (await load()).callTool('runCommand', { command: 'echo after-cold-start' });
+
+    const acquireRequests = controlPlaneRequests.filter(({ action }) => action === 'acquire');
+    expect(acquireRequests).toHaveLength(2);
+
+    const firstId = String(acquireRequests[0].payload.ConversationId);
+    expect(acquireRequests[1].payload.ConversationId).toBe(firstId);
+    expect(firstId).toMatch(/^[\w.-]{6,36}$/);
+    expect(firstId).not.toContain(options.userId);
+    expect(firstId).not.toContain(options.topicId);
+  });
+
   it('renews a persistent instance that is close to expiring', async () => {
     expiresInSec = 10;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
@@ -417,6 +477,29 @@ describe('TencentSandboxProvider', () => {
 
     expect(calls.update).toBe(1);
     expect(calls.acquire).toBe(1);
+  });
+
+  it('honors the backend-confirmed expiry when a renewal is capped', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      await provider.callTool('runCommand', { command: 'echo acquire' });
+      await provider.callTool('runCommand', { command: 'echo renew' });
+
+      expect(calls.update).toBe(1);
+
+      vi.advanceTimersByTime(11_000);
+      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+
+      expect(calls.acquire).toBe(2);
+      expect(result.sessionExpiredAndRecreated).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Dropping a still-valid instance early would strand uploaded files and
@@ -446,6 +529,78 @@ describe('TencentSandboxProvider', () => {
 
     expect(calls.acquire).toBe(1);
   });
+
+  it.runIf(process.platform === 'linux')(
+    'escalates manual cancellation for a TERM-resistant process group',
+    async () => {
+      const childPidFile = `/tmp/lobe-background/test-kill-${process.pid}-${Date.now()}.pid`;
+      await rm('/tmp/lobe-background', { force: true, recursive: true });
+
+      mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
+        await writeFile(path, content);
+      });
+      mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
+        const { stderr, stdout } = await execFileAsync('sh', ['-c', command], {
+          encoding: 'utf8',
+        });
+
+        return { exitCode: 0, stderr, stdout };
+      });
+
+      const provider = await load();
+      const started = await provider.callTool('runCommand', {
+        background: true,
+        command: `trap '' TERM; echo $$ > ${childPidFile}; while :; do sleep 1; done`,
+        timeout: 30_000,
+      });
+      const { commandId } = started.result as Record<string, string>;
+      const base = `/tmp/lobe-background/${commandId}`;
+
+      try {
+        await vi.waitFor(
+          async () => {
+            expect(Number((await readFile(childPidFile, 'utf8')).trim())).toBeGreaterThan(1);
+            expect(Number((await readFile(`${base}.pgid`, 'utf8')).trim())).toBeGreaterThan(1);
+          },
+          { interval: 25, timeout: 2000 },
+        );
+
+        const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
+        const killed = await provider.callTool('killCommand', { commandId });
+
+        expect(killed.success).toBe(true);
+        expect(killed.result).toMatchObject({ forced: true, success: true });
+        await vi.waitFor(
+          async () => {
+            expect(await isLinuxProcessTerminated(childPid)).toBe(true);
+          },
+          { interval: 50, timeout: 3000 },
+        );
+      } finally {
+        try {
+          const pgid = Number((await readFile(`${base}.pgid`, 'utf8')).trim());
+          process.kill(-pgid, 'SIGKILL');
+        } catch {
+          // The expected path: killCommand removed the complete group.
+        }
+
+        try {
+          const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
+          process.kill(childPid, 'SIGKILL');
+        } catch {
+          // The expected path: the TERM-resistant process is already gone.
+        }
+
+        await Promise.all(
+          ['sh', 'log', 'pid', 'pgid', 'exit', 'off'].map((suffix) =>
+            rm(`${base}.${suffix}`, { force: true }),
+          ),
+        );
+        await rm(childPidFile, { force: true });
+        await rm('/tmp/lobe-background', { force: true, recursive: true });
+      }
+    },
+  );
 
   it('reports unsupported tools as a failed call', async () => {
     const result = await (await load()).callTool('notARealTool', {});
