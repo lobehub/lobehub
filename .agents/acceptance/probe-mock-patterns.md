@@ -565,6 +565,7 @@ agent-browser --session "$RUN_SESSION" \
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
+
 ### Agent-browser navigation hangs after an orphaned Next child keeps the port
 
 **Situation:** an isolated full-stack dev launcher exits, but its Next child
@@ -1174,3 +1175,22 @@ before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEA
 restores the user's branch and leaves their working tree as it was (verify against
 the session-start `gitStatus` snapshot); nothing needs force-pushing because the
 wrong-branch push was a no-op.
+
+### Electron dev 的 BackendProxy 指向登录快照里持久化的 server 端口 — 铸会话 + CDP 注入 cookie
+
+**Situation:** worktree 里起 Electron surface 验证纯前端改动，renderer 一切正常但
+`app-probe.sh server-auth` 返回 502，用户状态 `isUserStateInit` 一直 false（受它门控的
+UI—— 如 Labs 分栏 —— 静默不渲染，store 状态看起来 "设置了但没生效"）。
+
+**Doesn't work:** 把 dev server 起在 3010 或 test-env.sh 解析出的动态端口。桌面主进程的
+BackendProxy 目标端口持久化在登录快照的 userData 里（`/tmp/electron-dev.log` 里
+`BackendProxy upstream fetch failed ... http://localhost:<port>` 是唯一真相），与当前
+ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已失效 —— 重启 Electron 重种快照
+也救不回来。
+
+**Works:** 三步：① 从日志读出 BackendProxy 的目标端口，`PORT=<该端口>` 起 dev server；
+② 用 web-seed 同款 curl 铸 better-auth 会话（`POST /api/auth/sign-in/email`，seeded 用户；
+从 renderer 内 fetch 会因 app\://origin 被 403，必须 curl）；③ 把 `better-auth.session_data`
+/ `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
+`http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
+server-auth 200、`isUserStateInit` true。
