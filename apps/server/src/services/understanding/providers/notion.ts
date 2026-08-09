@@ -39,6 +39,7 @@ const serializeContext = (items: NotionItemContent[]): string =>
  * - A bounded source brief that remains usable when individual page reads fail
  */
 export const notionUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'notion',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getNotionClient();
@@ -53,7 +54,9 @@ export const notionUnderstandingProvider: UnderstandingProvider = {
 
     const contentCandidates = items
       .filter(({ kind }) => kind === 'page')
-      .toSorted((left, right) => editTime(right) - editTime(left) || left.id.localeCompare(right.id))
+      .toSorted(
+        (left, right) => editTime(right) - editTime(left) || left.id.localeCompare(right.id),
+      )
       .slice(0, MAX_CONTENT_PAGES);
     const settledContent = await Promise.allSettled(
       contentCandidates.map(({ id }) => client.getPageMarkdown(id)),
@@ -70,8 +73,7 @@ export const notionUnderstandingProvider: UnderstandingProvider = {
           message: 'Notion page content enrichment failed',
           operation: 'page_content',
           provider: 'notion',
-          retryable:
-            result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+          retryable: result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
         },
       ];
     });
@@ -93,8 +95,7 @@ export const notionUnderstandingProvider: UnderstandingProvider = {
         errors,
         evidenceCount: sourceCount,
         failedCount: errors.length,
-        succeededCount:
-          1 + settledContent.filter(({ status }) => status === 'fulfilled').length,
+        succeededCount: 1 + settledContent.filter(({ status }) => status === 'fulfilled').length,
       },
       sourceCount,
     };

@@ -142,7 +142,13 @@ describe('userRouter', () => {
       await expect(
         userRouter.createCaller(scopedCtx).getSupportedUnderstandingProviders(),
       ).resolves.toEqual({
-        providerIds: ['github', 'gmail', 'notion'],
+        connectionSources: {
+          github: 'composio',
+          gmail: 'composio',
+          notion: 'composio',
+          twitter: 'lobehub',
+        },
+        providerIds: ['github', 'gmail', 'notion', 'twitter'],
         sourceProviderIds: ['github'],
       });
     });

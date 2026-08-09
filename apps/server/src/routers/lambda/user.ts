@@ -397,8 +397,17 @@ export const userRouter = router({
     }),
 
   getSupportedUnderstandingProviders: understandingServiceProcedure.query(
-    async ({ ctx }): Promise<{ providerIds: string[]; sourceProviderIds: string[] }> => {
+    async ({
+      ctx,
+    }): Promise<{
+      connectionSources: Record<string, 'composio' | 'lobehub'>;
+      providerIds: string[];
+      sourceProviderIds: string[];
+    }> => {
       return {
+        connectionSources: Object.fromEntries(
+          understandingProviders.map((provider) => [provider.id, provider.connectionSource]),
+        ),
         providerIds: understandingProviders.map((provider) => provider.id),
         sourceProviderIds: await ctx.understandingService.listSourceProviderIds(),
       };

@@ -59,4 +59,14 @@ describe('chainOnboardingTaskRecommendation', () => {
       'Never claim that newer or unauthorized pages exist',
     );
   });
+
+  /** @example X guidance separates authorship and keeps public social actions user-approved. */
+  it('keeps X recommendations read-only by default', () => {
+    const twitter = DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.twitter;
+    const principles = twitter.principles.join('\n');
+
+    expect(principles).toContain('Keep authored posts distinct from third-party mentions');
+    expect(principles).toContain('Never post, reply, like, repost');
+    expect(twitter.examples.join('\n')).toContain('private prioritized shortlist');
+  });
 });

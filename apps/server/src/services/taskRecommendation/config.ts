@@ -61,6 +61,12 @@ export interface NotionTaskRecommendationProviderConfig extends TaskRecommendati
   staleWorkspacePrinciples: readonly string[];
 }
 
+/** X collection policy for recent public post and mention signals. */
+export interface TwitterTaskRecommendationProviderConfig extends TaskRecommendationProviderConfig {
+  /** Maximum deduplicated recent X records serialized into one recommendation call. */
+  maxSignals: number;
+}
+
 /** Complete configurable policy for onboarding task generation. */
 export interface TaskRecommendationConfig {
   /** Cross-provider recommendation allocation policy. */

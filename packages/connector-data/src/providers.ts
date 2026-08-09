@@ -1,5 +1,5 @@
 /** Provider identifiers with a first-party Connector Data client. */
-export const CONNECTOR_DATA_PROVIDER_IDS = ['github', 'gmail', 'notion'] as const;
+export const CONNECTOR_DATA_PROVIDER_IDS = ['github', 'gmail', 'notion', 'twitter'] as const;
 
 /** Provider identifier accepted by Connector Data errors and client resolution. */
 export type ConnectorDataProvider = (typeof CONNECTOR_DATA_PROVIDER_IDS)[number];

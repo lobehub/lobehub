@@ -12,6 +12,8 @@ import type { GmailConnectorClient } from '@lobechat/connector-data/gmail';
 import { createGmailConnectorClient } from '@lobechat/connector-data/gmail';
 import type { NotionConnectorClient } from '@lobechat/connector-data/notion';
 import { createNotionConnectorClient } from '@lobechat/connector-data/notion';
+import type { TwitterConnectorClient } from '@lobechat/connector-data/twitter';
+import { createTwitterMarketConnectorClient } from '@lobechat/connector-data/twitter';
 import { and, eq } from 'drizzle-orm';
 
 import { ConnectorModel } from '@/database/models/connector';
@@ -20,6 +22,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getComposioClient, isComposioConnectedAccountLookupNotFoundError } from '@/libs/composio';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { MarketService } from '@/server/services/market';
 
 const TOKEN_EXPIRY_SKEW_MS = 60_000;
 
@@ -77,7 +80,7 @@ const isTokenUsable = (expiresAt: Date | number | null | undefined) =>
  * - The database and user scope come from an authenticated server context
  *
  * Returns:
- * - Provider clients backed by Composio, connector OAuth, or supported account fallback
+ * - Provider clients backed by Composio, LobeHub Market, connector OAuth, or account fallback
  */
 export class ConnectorDataService {
   constructor(
@@ -91,6 +94,7 @@ export class ConnectorDataService {
       github: () => this.getGitHubClient(),
       gmail: () => this.getGmailClient(),
       notion: () => this.getNotionClient(),
+      twitter: () => this.getTwitterClient(),
     };
     return resolvers[providerId]();
   };
@@ -283,5 +287,38 @@ export class ConnectorDataService {
       }
     }
     throw unavailable('notion');
+  };
+
+  /**
+   * Resolves the current user's LobeHub Market X connection.
+   *
+   * Use when:
+   * - An onboarding collector needs read-only public X profile and recent-post evidence
+   *
+   * Expects:
+   * - Trusted Client authentication is configured for the Market service
+   * - The current Market user has connected the `twitter` provider
+   *
+   * Returns:
+   * - A user-scoped X connector client backed by Market skill tools
+   */
+  getTwitterClient = async (): Promise<TwitterConnectorClient> => {
+    const market = new MarketService({
+      userInfo: { userId: this.userId, workspaceId: this.workspaceId },
+    }).market;
+    const status = await market.skills.getStatus('twitter');
+    if (!status.success || !status.connected) throw unavailable('twitter');
+
+    return createTwitterMarketConnectorClient({
+      market: {
+        callTool: async (toolName, arguments_) => {
+          const response = await market.skills.callTool('twitter', {
+            args: arguments_,
+            tool: toolName,
+          });
+          return { data: response.data, success: response.success };
+        },
+      },
+    });
   };
 }

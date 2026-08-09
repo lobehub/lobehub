@@ -121,6 +121,19 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
         'Describe incomplete authorization only as a possibility. Never claim that newer or unauthorized pages exist, and never ask the agent to bypass Notion access controls.',
       ],
     },
+    twitter: {
+      examples: [
+        'Title: Prepare a reply shortlist for recent X questions. Instruction: Review the linked public mentions in the background, group genuine questions and useful feedback by topic, and return a private prioritized shortlist with concise draft replies and uncertainty called out. Do not post, reply, like, repost, follow, or send direct messages.',
+        'Title: Analyze discussion around the recent product launch post. Instruction: Compare the linked authored post with its supplied public discussion signals, summarize recurring reactions and unanswered questions, and return a private response brief plus suggested follow-up themes. Treat engagement as attention rather than approval, and do not perform any X action.',
+        'Title: Prepare the next X content brief from recent engineering posts. Instruction: Synthesize the linked authored posts into a private brief of recurring themes, audience questions, and two differentiated draft directions. Preserve the user’s demonstrated voice without inventing opinions, and leave publishing for explicit user approval.',
+      ],
+      principles: [
+        'Use only supplied authored posts and public mentions from the recent-search window; missing activity is not evidence that a topic or audience interest does not exist.',
+        'Keep authored posts distinct from third-party mentions, replies, and quotes. Never attribute another account’s statement or intent to the user.',
+        'Treat likes, reposts, replies, quotes, and view counts as attention signals rather than approval, urgency, or an obligation to respond.',
+        'Prefer private analysis, response triage, content briefs, and draft replies that can be reviewed later. Never post, reply, like, repost, quote, follow, unfollow, mute, block, bookmark, or send a direct message without later explicit user approval.',
+      ],
+    },
   },
   writing: {
     instructionPrinciples: [
@@ -130,7 +143,7 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
       'Preserve uncertainty from the evidence and state any user approval boundary explicitly.',
       'Prefer tasks that can finish asynchronously without interrupting the user: gather evidence, analyze activity, summarize, compare, prioritize, or prepare a draft, checklist, report, or patch plan.',
       'Minimize clarification requests by making conservative assumptions and recording them in the result. Ask the user only when a consequential choice or new authorization is required.',
-      'Do not perform external side effects by default. Email sends, deletion, unsubscribe, archive, label changes, GitHub comments, review submission, approval, merge, close, label, and push operations require a later explicit user-approved action.',
+      'Do not perform external side effects by default. Email sends, deletion, unsubscribe, archive, label changes, GitHub comments, review submission, approval, merge, close, label, push, and X posting, replying, liking, reposting, following, or direct messaging require a later explicit user-approved action.',
     ],
     maxSourcesPerRecommendation: 4,
     titlePrinciples: [
