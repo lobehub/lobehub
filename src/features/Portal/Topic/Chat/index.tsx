@@ -81,7 +81,7 @@ const TopicChat = memo(() => {
   // backfill shows a placeholder instead of an empty history and blocks
   // sending — the server could not assemble the missing context anyway.
   const { job: migrationJob, topicPending } = useTopicMigrationPending(
-    activeAgentId,
+    { agentId: activeAgentId },
     portalTopicId,
   );
 
