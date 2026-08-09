@@ -199,8 +199,95 @@ describe('BriefCardActions', () => {
     );
     fireEvent.click(container.querySelector('.brief-comment-btn')!);
     fireEvent.click(screen.getByTitle('Submit feedback'));
-    await waitFor(() => expect(mockSubmitFeedback).toHaveBeenCalledWith('brief-1', 'task-1', 'my feedback'));
+    await waitFor(() =>
+      expect(mockSubmitFeedback).toHaveBeenCalledWith('brief-1', 'task-1', 'my feedback'),
+    );
     await waitFor(() => expect(onAfterAddComment).toHaveBeenCalled());
+  });
+
+  it('should show resolved state when resolvedAction is set', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-1"
+        briefType="decision"
+        resolvedAction="approve"
+      />,
+    );
+
+    expect(screen.getByText('Marked as resolved')).toBeInTheDocument();
+    expect(screen.queryByText('Approve')).not.toBeInTheDocument();
+  });
+
+  it('should fallback to DEFAULT_BRIEF_ACTIONS when actions prop is null', () => {
+    renderWithRouter(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
+
+    expect(screen.getByText('✅ Confirm')).toBeInTheDocument();
+  });
+
+  it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
+        briefId="brief-3"
+        briefType="result"
+      />,
+    );
+
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.queryByText('✅ Custom approve')).not.toBeInTheDocument();
+  });
+
+  it('should always show the Edit button for result briefs when taskId is set', () => {
+    const { container } = renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: '✅ Custom', type: 'resolve' }]}
+        briefId="brief-4"
+        briefType="result"
+        taskId="task-1"
+      />,
+    );
+
+    expect(container.querySelector('.brief-comment-btn')).toBeInTheDocument();
+  });
+
+  it('should render the View run button when taskId and topicId are both set', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-5"
+        briefType="decision"
+        taskId="task-5"
+        topicId="topic-5"
+      />,
+    );
+    expect(screen.getByText('View run')).toBeInTheDocument();
+  });
+
+  it('should not render the View run button when topicId is missing', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-6"
+        briefType="decision"
+        taskId="task-6"
+      />,
+    );
+    expect(screen.queryByText('View run')).not.toBeInTheDocument();
+  });
+
+  it('should label the result action "Confirm complete" when the parent task is not parked at scheduled', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
+        briefId="brief-7"
+        briefType="result"
+        taskId="task-7"
+        taskStatus={'paused'}
+      />,
+    );
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm', { exact: true })).not.toBeInTheDocument();
   });
 
   // Brief permission errors: the tRPC client only console.errors non-401 failures, so a
