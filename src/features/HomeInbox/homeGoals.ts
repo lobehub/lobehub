@@ -41,29 +41,15 @@ const isOpenGoalStatus = (statusKey: string): statusKey is GoalStatusKey =>
 /** Actionable first: a delivered goal is blocked on the user, a running one isn't. */
 const BUCKET_ORDER: HomeGoalBucket[] = ['review', 'running'];
 
-interface AcceptanceSubjectRow {
-  status: string;
-  subjectId: string;
-  subjectType: string;
-}
-
 /**
- * Acceptance status per goal task, from the one list read the home rail makes.
- * Per-goal `getBySubject` calls would be one request per row; the list is newest
- * first, so the first row seen for a subject is the one that counts.
+ * Acceptance status per goal task, from the one batched read the home rail
+ * makes. One acceptance per subject is a scope invariant, so this is a plain
+ * index — no recency tie-break to get wrong.
  */
 export const indexAcceptanceStatuses = (
-  acceptances: AcceptanceSubjectRow[] = [],
-): Record<string, string> => {
-  const byTaskId: Record<string, string> = {};
-
-  for (const { status, subjectId, subjectType } of acceptances) {
-    if (subjectType !== 'task' || subjectId in byTaskId) continue;
-    byTaskId[subjectId] = status;
-  }
-
-  return byTaskId;
-};
+  acceptances: Array<{ status: string; subjectId: string }> = [],
+): Record<string, string> =>
+  Object.fromEntries(acceptances.map(({ status, subjectId }) => [subjectId, status]));
 
 const goalTitle = (goal: GoalListItem) =>
   goal.name?.trim() || goal.instruction.trim() || goal.identifier;
@@ -71,10 +57,8 @@ const goalTitle = (goal: GoalListItem) =>
 /**
  * The rail's goal rows, bucketed and ordered.
  *
- * A goal whose acceptance isn't in the index falls back to its task status,
- * which reads `completed` as "pending acceptance" — right until the moment it is
- * accepted. That window only opens for goals older than the acceptance feed's
- * page, i.e. far below the rail's own cut.
+ * A goal with no acceptance row at all falls back to its task status, which is
+ * the right reading: nothing has judged it yet.
  */
 export const buildHomeGoalEntries = (
   goals: GoalListItem[],

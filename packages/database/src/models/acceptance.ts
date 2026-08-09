@@ -1,5 +1,5 @@
 import type { AcceptanceStatus, AcceptanceSubjectType } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
@@ -72,6 +72,30 @@ export class AcceptanceModel {
         this.ownership(),
       ),
     });
+  };
+
+  /**
+   * The status of many subjects' acceptances in one read — for list surfaces
+   * that must know each row's state without a request per row. Exact where the
+   * recency-capped `query()` is not: it answers about the subjects asked for,
+   * however old they are, and one acceptance per subject is a scope invariant.
+   */
+  listStatusesBySubjects = async (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<Array<{ status: string; subjectId: string }>> => {
+    if (subjectIds.length === 0) return [];
+
+    return this.db
+      .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
   };
 
   /**

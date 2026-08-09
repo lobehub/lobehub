@@ -15,7 +15,7 @@ import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 // Direct module import, not the feature barrel: home must not pull the whole
 // acceptance workspace into its chunk for one hook.
-import { useLiveAcceptanceList } from '@/features/Verify/hooks';
+import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -165,21 +165,25 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const goalsEnabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
-  useFetchHomeGoals(showGoals, cacheScope);
-  const goals = useGoalStore(goalSelectors.homeGoals);
-  // One list read for every goal's acceptance, instead of two per row: the rail
-  // needs only the status, and `getBySubject` per goal would be N round-trips.
-  const acceptanceList = useLiveAcceptanceList(showGoals);
-  // Which pile a goal lands in depends on that feed, so wait for it rather than
+  const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
+  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
+  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
+  const goalIds = useMemo(() => goals.map(({ id }) => id), [goals]);
+  // One read for every goal's acceptance, instead of two per row — and asked
+  // about these goals specifically, since the recency-capped acceptance feed
+  // would drop an older accepted goal and resurrect it as "pending acceptance".
+  const acceptanceStatuses = useAcceptanceStatuses('task', goalIds, showGoals);
+  // Which pile a goal lands in depends on that read, so wait for it rather than
   // flash an already-accepted goal into "pending acceptance" for a beat. A
-  // failed feed still shows the card, on task status alone.
-  const goalsResolved = Boolean(acceptanceList.data || acceptanceList.error);
+  // failed read still shows the card, on task status alone.
+  const goalsResolved =
+    goalIds.length === 0 || Boolean(acceptanceStatuses.data || acceptanceStatuses.error);
   const goalEntries = useMemo(
     () =>
       showGoals && goalsResolved
-        ? buildHomeGoalEntries(goals, indexAcceptanceStatuses(acceptanceList.data))
+        ? buildHomeGoalEntries(goals, indexAcceptanceStatuses(acceptanceStatuses.data))
         : [],
-    [acceptanceList.data, acceptanceList.error, goals, goalsResolved, showGoals],
+    [acceptanceStatuses.data, goals, goalsResolved, showGoals],
   );
 
   const topics = useHomeInboxTopics(isLogin);
@@ -277,6 +281,22 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     key === toggleSectionKey ? scopeToggle : undefined;
 
   const sections: InboxSection[] = [];
+
+  // A goal feed failure must not be silent: without this the card just vanishes,
+  // which is indistinguishable from having no open goals — the one reading a
+  // long-running goal surface can least afford.
+  if (showGoals && goalsSWR.error && !isGoalsInit)
+    sections.push({
+      key: 'goals-error',
+      label: t('inbox.goals.title'),
+      node: (
+        <AsyncError
+          error={goalsSWR.error}
+          variant={'inline'}
+          onRetry={() => void goalsSWR.mutate()}
+        />
+      ),
+    });
 
   // First: a goal is the longest-lived thing on the page, and the only one whose
   // absence from the rail leaves it with no home at all.

@@ -24,34 +24,16 @@ const goal = (overrides: Partial<GoalListItem> & Pick<GoalListItem, 'id'>): Goal
 const titlesOf = (entries: { title: string }[]) => entries.map(({ title }) => title);
 
 describe('indexAcceptanceStatuses', () => {
-  it('indexes task acceptances by subject id', () => {
+  it('indexes acceptances by subject id', () => {
     expect(
       indexAcceptanceStatuses([
-        { status: 'delivered', subjectId: 'task_1', subjectType: 'task' },
-        { status: 'accepted', subjectId: 'task_2', subjectType: 'task' },
+        { status: 'delivered', subjectId: 'task_1' },
+        { status: 'accepted', subjectId: 'task_2' },
       ]),
     ).toEqual({ task_1: 'delivered', task_2: 'accepted' });
   });
 
-  it('ignores acceptances on other subject types', () => {
-    expect(
-      indexAcceptanceStatuses([
-        { status: 'delivered', subjectId: 'tpc_1', subjectType: 'topic' },
-        { status: 'accepted', subjectId: 'doc_1', subjectType: 'document' },
-      ]),
-    ).toEqual({});
-  });
-
-  it('keeps the newest row when a task carries more than one acceptance', () => {
-    expect(
-      indexAcceptanceStatuses([
-        { status: 'delivered', subjectId: 'task_1', subjectType: 'task' },
-        { status: 'closed', subjectId: 'task_1', subjectType: 'task' },
-      ]),
-    ).toEqual({ task_1: 'delivered' });
-  });
-
-  it('tolerates a missing feed', () => {
+  it('tolerates a read that has not landed', () => {
     expect(indexAcceptanceStatuses()).toEqual({});
   });
 });

@@ -16,10 +16,18 @@ const GOAL_STATUSES = [
 ];
 
 /**
- * The home roll-up reads goals across every agent, so it asks for more than one
- * agent's page would need — the rail only shows the open ones, and those are a
- * fraction of the set once a workspace has history.
+ * The home roll-up only ever renders goals that are still open, so it asks for
+ * the statuses one can be open in and leaves the terminal ones on the server.
+ * `completed` is in because a completed goal is awaiting acceptance until the
+ * user accepts it.
+ *
+ * The limit still bites in a workspace with more than this many such goals —
+ * `groupList` takes the newest, and accepted goals stay `completed` — so the
+ * tail of a very long history can crowd out an old still-running goal. Fixing
+ * that for real needs an acceptance join on the server; this keeps the window
+ * as wide as the query allows in the meantime.
  */
+const HOME_GOAL_STATUSES = ['backlog', 'running', 'scheduled', 'completed'];
 const HOME_GOAL_FETCH_LIMIT = 100;
 
 export type GoalStore = GoalState & GoalAction;
@@ -115,14 +123,19 @@ export class GoalActionImpl {
       enabled ? taskKeys.homeGoals(scope) : null,
       () =>
         taskService.groupList({
-          groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: GOAL_STATUSES }],
+          groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }],
           hasGoal: true,
           parentTaskId: null,
         }),
       {
         onSuccess: ({ data }) => {
           this.#set(
-            { homeGoals: data[0]?.tasks ?? [], isHomeGoalsInit: true },
+            ({ homeGoalsByScope, homeGoalsInitializedScopes }) => ({
+              homeGoalsByScope: { ...homeGoalsByScope, [scope]: data[0]?.tasks ?? [] },
+              homeGoalsInitializedScopes: homeGoalsInitializedScopes.includes(scope)
+                ? homeGoalsInitializedScopes
+                : [...homeGoalsInitializedScopes, scope],
+            }),
             false,
             'useFetchHomeGoals/success',
           );

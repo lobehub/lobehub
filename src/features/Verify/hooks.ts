@@ -95,15 +95,23 @@ export const useAcceptanceList = (enabled: boolean) =>
   );
 
 /**
- * The same feed, read by a glance surface that must not go stale: home shows
- * which goals are waiting on the user, and a delivery that lands while the tab
- * sits open has to appear on the next focus rather than on the next reload.
- * Shares the list panel's cache — only the revalidation policy differs.
+ * Acceptance status for a known subject set — one read for a whole list.
+ *
+ * Not `useAcceptanceList`: that feed is capped at the newest rows across every
+ * subject type, so any subject pushed past the cap would read as having no
+ * acceptance at all. Revalidates on focus like the bundle, because a delivery
+ * that lands while the tab sits open has to show up without a reload.
  */
-export const useLiveAcceptanceList = (enabled: boolean) =>
+export const useAcceptanceStatuses = (
+  subjectType: AcceptanceSubjectType,
+  subjectIds: string[],
+  enabled = true,
+) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances() : null,
-    () => verifyService.listAcceptances(),
+    enabled && subjectIds.length > 0
+      ? verifyKeys.acceptanceStatuses(subjectType, subjectIds)
+      : null,
+    () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
     ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
 

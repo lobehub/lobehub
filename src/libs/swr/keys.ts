@@ -883,6 +883,15 @@ export const verifyKeys = {
       subjectId,
     ],
   ),
+  /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
+  acceptanceStatuses: def(
+    'verify:acceptanceStatuses',
+    (subjectType: string, subjectIds: string[]) => [
+      'verify:acceptanceStatuses',
+      subjectType,
+      [...subjectIds].sort().join(','),
+    ],
+  ),
   acceptances: def('verify:acceptances', () => ['verify:acceptances']),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [

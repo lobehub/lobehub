@@ -83,6 +83,7 @@ export const isHomeMinimalLayout = (state: HomeVisibilityState): boolean =>
 // hidden widget silence a failure that explains the other's absence.
 const HOME_SECTION_WIDGET_COVERAGE: Record<string, HomeWidgetKey[]> = {
   'goals': ['goals'],
+  'goals-error': ['goals'],
   'needsYou': ['needsYou'],
   'needsYou-error': ['needsYou', 'news'],
   'needsYou-loading': ['needsYou'],
