@@ -146,6 +146,7 @@ def main(encoded):
 `;
 
 interface DispatchResult {
+  error?: { message: string; name?: string };
   result: unknown;
   success: boolean;
 }
@@ -203,9 +204,11 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     try {
       const sandbox = await this.connect();
-      const { result, success } = await this.dispatch(sandbox, toolName, params);
+      const { error, result, success } = await this.dispatch(sandbox, toolName, params);
 
-      return { result, sessionExpiredAndRecreated: false, success };
+      // `error` has to survive: the runtime builds the model-visible failure
+      // content from it, and dropping it here left the model with `undefined`.
+      return { error, result, sessionExpiredAndRecreated: false, success };
     } catch (error) {
       log('Tencent sandbox tool %s failed: %O', toolName, error);
 
@@ -383,11 +386,16 @@ export class TencentSandboxProvider implements SandboxProvider {
       // `setsid` gives the command its own process group so kill reaches the
       // real child, and `timeout` bounds the detached process itself — the
       // launcher's own timeout would only cover the few milliseconds it runs.
+      // `--foreground` keeps `timeout` in the group `setsid` created; without
+      // it timeout forks its own group and signalling the recorded pgid leaves
+      // timeout and the command running (verified against a live sandbox).
+      // The launcher also has to detach every fd, otherwise the caller's
+      // `commands.run` waits for the detached process to close stdout.
       const launch =
         `mkdir -p ${BACKGROUND_DIR}; ` +
         `setsid sh -c 'echo $$ > ${base}.pgid; ` +
-        `timeout ${timeoutSec}s sh ${base}.sh > ${base}.log 2>&1; ` +
-        `echo $? > ${base}.exit' & ` +
+        `timeout --foreground ${timeoutSec}s sh ${base}.sh > ${base}.log 2>&1; ` +
+        `echo $? > ${base}.exit' < /dev/null > /dev/null 2>&1 & ` +
         `echo $! > ${base}.pid`;
 
       const result = await sandbox.commands.run(launch, {

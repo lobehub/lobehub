@@ -114,6 +114,8 @@ describe('TencentSandboxProvider', () => {
     const result = await (await load()).callTool('executeCode', { code: '1/0' });
 
     expect(result.success).toBe(false);
+    // The runtime builds the model-visible content from the outer error.
+    expect(result.error?.message).toBe('ZeroDivisionError');
     // The payload still has to reach the runtime so the card can show it.
     expect(result.result).toMatchObject({ error: 'ZeroDivisionError', stderr: 'boom' });
   });
@@ -177,8 +179,11 @@ describe('TencentSandboxProvider', () => {
 
     const [launch] = mocks.sandbox.commands.run.mock.calls[0];
     expect(launch).not.toContain('hello world');
-    // The detached process gets the timeout, not just the launcher.
-    expect(launch).toContain('timeout 5s');
+    // The detached process gets the timeout, not just the launcher, and
+    // `--foreground` keeps timeout inside the group we record and later kill.
+    expect(launch).toContain('timeout --foreground 5s');
+    // Without detaching every fd the caller waits for the background process.
+    expect(launch).toContain('< /dev/null > /dev/null 2>&1');
   });
 
   // The tool contract polls for new output while the process keeps running, so
