@@ -104,6 +104,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-height: 208px;
     border-block: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
 
     background: ${cssVar.colorBgElevated};
   `,
@@ -119,7 +120,8 @@ const styles = createStaticStyles(({ css }) => ({
       z-index: 1;
       inset: 0;
 
-      padding: 1px;
+      padding: 2px;
+      border-radius: inherit;
 
       background: linear-gradient(
         90deg,
