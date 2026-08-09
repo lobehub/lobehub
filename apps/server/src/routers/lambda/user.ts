@@ -9,7 +9,6 @@ import type {
   ConfirmOnboardingUnderstandingInput,
   ConfirmOnboardingUnderstandingResult,
   CreateOnboardingTasksInput,
-  OnboardingGenerationProgressEvent,
   OnboardingTaskRecommendationPollingResult,
   OnboardingTaskRecommendationTopicInput,
   OnboardingUnderstandingPollingResult,
@@ -58,6 +57,11 @@ import {
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import {
+  onboardingProgressEventId,
+  projectOnboardingGenerationProgress,
+  subscribeToOnboardingGenerationProgress,
+} from '@/server/services/onboardingProgress';
 import {
   createTaskRecommendationService,
   TaskRecommendationNotFoundError,
@@ -263,92 +267,12 @@ const onboardingGenerationProgressProcedure = personalOnboardingProcedure.use(
   },
 );
 
-const ONBOARDING_PROGRESS_POLL_INTERVAL = 1000;
+const INITIAL_PROGRESS_RECOVERY_DELAY = 3_000;
+const MAX_PROGRESS_RECOVERY_DELAY = 30_000;
 
-const toProgressStatus = (
-  status: 'completed' | 'failed' | 'partial' | 'pending' | 'processing' | 'running' | undefined,
-): OnboardingGenerationProgressEvent['steps']['collectSources'] => {
-  if (status === 'processing') return 'running';
-  if (status === 'partial') return 'completed';
-  return status ?? 'pending';
-};
-
-const projectOnboardingGenerationProgress = (
-  understanding: OnboardingUnderstandingPollingResult,
-  taskRecommendations: OnboardingTaskRecommendationPollingResult | undefined,
-): OnboardingGenerationProgressEvent => {
-  const sourceStatuses = Object.values(understanding.sources).map((source) => source.status);
-  const collectSources: OnboardingGenerationProgressEvent['steps']['collectSources'] =
-    sourceStatuses.some((status) => status === 'pending' || status === 'running')
-      ? 'running'
-      : sourceStatuses.length > 0 && sourceStatuses.every((status) => status === 'failed')
-        ? 'failed'
-        : sourceStatuses.length > 0
-          ? 'completed'
-          : 'pending';
-  const understandingStatus = toProgressStatus(understanding.writing?.status);
-  const detailedPersona = toProgressStatus(understanding.writing?.detailed?.status);
-  const taskRecommendationsStatus = toProgressStatus(taskRecommendations?.status);
-  const steps = {
-    collectSources,
-    detailedPersona,
-    taskRecommendations: taskRecommendationsStatus,
-    understanding: understandingStatus,
-  };
-
-  if (understanding.status === 'failed') {
-    return { phase: 'failed', sessionId: understanding.id, steps };
-  }
-  if (understanding.status === 'partial') {
-    return { phase: 'partial', sessionId: understanding.id, steps };
-  }
-  if (taskRecommendations?.status === 'failed' || taskRecommendations?.status === 'partial') {
-    return { phase: 'partial', sessionId: understanding.id, steps };
-  }
-  if (collectSources === 'pending' || collectSources === 'running') {
-    return { phase: 'collecting-sources', sessionId: understanding.id, steps };
-  }
-  if (understandingStatus === 'running') {
-    return { phase: 'generating-understanding', sessionId: understanding.id, steps };
-  }
-  if (detailedPersona === 'running') {
-    return { phase: 'generating-detailed-persona', sessionId: understanding.id, steps };
-  }
-  if (taskRecommendationsStatus === 'running') {
-    return { phase: 'recommending-tasks', sessionId: understanding.id, steps };
-  }
-  return { phase: 'completed', sessionId: understanding.id, steps };
-};
-
-/**
- * Builds a stable opaque event ID from state persisted by the two onboarding workflows.
- *
- * It only enables best-effort SSE reconnection deduplication. Missing intermediate event IDs
- * are deliberately repaired by the existing polling endpoints rather than a separate event log.
- */
-const onboardingProgressEventId = (
-  understanding: OnboardingUnderstandingPollingResult,
-  taskRecommendations: OnboardingTaskRecommendationPollingResult | undefined,
-) =>
-  [
-    understanding.id,
-    understanding.generationRevision ?? 0,
-    ...Object.entries(understanding.sources)
-      .toSorted(([left], [right]) => left.localeCompare(right))
-      .map(([providerId, source]) =>
-        [providerId, source.revision, source.status, source.completedAt ?? ''].join(':'),
-      ),
-    understanding.writing?.status ?? '',
-    understanding.writing?.updatedAt ?? '',
-    understanding.writing?.detailed?.status ?? '',
-    understanding.writing?.detailed?.updatedAt ?? '',
-    taskRecommendations?.status ?? '',
-    taskRecommendations?.updatedAt ?? '',
-  ].join('|');
-
-const waitForProgressChange = (signal: AbortSignal | undefined) =>
+const waitForProgressRecovery = (delay: number, signal: AbortSignal | undefined) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ONBOARDING_PROGRESS_POLL_INTERVAL);
+    const timer = setTimeout(resolve, delay);
     signal?.addEventListener(
       'abort',
       () => {
@@ -399,8 +323,7 @@ export const userRouter = router({
     .input(onboardingGenerationProgressInputSchema)
     .subscription(async function* ({ ctx, input, signal }) {
       let lastEventId = input.lastEventId;
-
-      while (!signal?.aborted) {
+      const readPersistedProgress = async () => {
         const understanding = await ctx.understandingService.get(input.topicId);
         const taskRecommendations = await ctx.taskRecommendationService
           .get(input.topicId)
@@ -410,7 +333,53 @@ export const userRouter = router({
           });
         const eventId = onboardingProgressEventId(understanding, taskRecommendations);
         const progress = projectOnboardingGenerationProgress(understanding, taskRecommendations);
+        return { eventId, progress };
+      };
 
+      const initial = await readPersistedProgress();
+      if (initial.eventId !== lastEventId) {
+        lastEventId = initial.eventId;
+        yield tracked(initial.eventId, initial.progress);
+      }
+      if (
+        initial.progress.phase === 'completed' ||
+        initial.progress.phase === 'failed' ||
+        initial.progress.phase === 'partial'
+      ) {
+        return;
+      }
+
+      const subscription = await subscribeToOnboardingGenerationProgress(input.topicId);
+      if (subscription) {
+        try {
+          while (!signal?.aborted) {
+            const notification = await subscription.next(signal);
+            if (!notification) return;
+
+            if (notification.eventId !== lastEventId) {
+              lastEventId = notification.eventId;
+              yield tracked(notification.eventId, notification.progress);
+            }
+            if (
+              notification.progress.phase === 'completed' ||
+              notification.progress.phase === 'failed' ||
+              notification.progress.phase === 'partial'
+            ) {
+              return;
+            }
+          }
+        } finally {
+          await subscription.unsubscribe();
+        }
+        return;
+      }
+
+      let recoveryDelay = INITIAL_PROGRESS_RECOVERY_DELAY;
+      while (!signal?.aborted) {
+        await waitForProgressRecovery(recoveryDelay, signal);
+        if (signal?.aborted) return;
+
+        const { eventId, progress } = await readPersistedProgress();
         if (eventId !== lastEventId) {
           lastEventId = eventId;
           yield tracked(eventId, progress);
@@ -423,8 +392,7 @@ export const userRouter = router({
         ) {
           return;
         }
-
-        await waitForProgressChange(signal);
+        recoveryDelay = Math.min(recoveryDelay * 2, MAX_PROGRESS_RECOVERY_DELAY);
       }
     }),
 

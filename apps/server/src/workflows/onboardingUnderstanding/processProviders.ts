@@ -8,6 +8,7 @@ import {
 import type { InvokableWorkflow, PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createUnderstandingService,
   type UnderstandingService,
@@ -90,6 +91,7 @@ export const processUnderstandingProviders = async (
           topicId: payload.topicId,
         }),
       );
+      await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
       if (result.status === 'completed' && result.revision === revision) {
         const body = {
           responseLanguage: payload.responseLanguage,
@@ -169,7 +171,10 @@ export const failRunningUnderstandingProviders = async (
           sessionId: payload.sessionId,
           topicId: payload.topicId,
         });
-        if (failed) failedProviderIds.push(providerId);
+        if (failed) {
+          failedProviderIds.push(providerId);
+          await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+        }
       } catch (error) {
         if (!isTerminalizedSession(error)) throw error;
       }

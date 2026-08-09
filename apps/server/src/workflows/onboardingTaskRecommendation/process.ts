@@ -2,6 +2,7 @@ import { errorNameFrom } from '@lobechat/utils';
 import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createTaskRecommendationService,
   type TaskRecommendationProviderResult,
@@ -49,6 +50,7 @@ export const processOnboardingTaskRecommendations = async (
   const plan = await context.run('session:begin', () =>
     service.begin(payload.topicId, payload.sessionId, payload.sourceFingerprint),
   );
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
   if (!plan.ready) return service.get(payload.topicId);
 
   const results = await Promise.all(
@@ -77,9 +79,11 @@ export const processOnboardingTaskRecommendations = async (
       ),
     ),
   );
-  return context.run('session:commit', () =>
+  const session = await context.run('session:commit', () =>
     service.commit(payload.topicId, payload.sessionId, results),
   );
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+  return session;
 };
 
 /** Terminalizes a recommendation session after workflow-level retries are exhausted. */
@@ -89,7 +93,9 @@ export const failOnboardingTaskRecommendations = async (
 ) => {
   const payload = ProcessOnboardingTaskRecommendationPayloadSchema.parse(input);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  return service.fail(payload.topicId, payload.sessionId);
+  const failed = await service.fail(payload.topicId, payload.sessionId);
+  if (failed) await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+  return failed;
 };
 
 /** Upstash parser and failure callback for the recommendation workflow endpoint. */

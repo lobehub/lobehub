@@ -312,6 +312,40 @@ describe('userRouter', () => {
       await iterator.return?.();
     });
 
+    /** @example A completed source waits for the downstream writer instead of ending the stream. */
+    it('keeps the durable downstream scheduling window active after the last source completes', async () => {
+      mockUnderstandingService.get.mockResolvedValueOnce({
+        id: 'session-1',
+        sources: {
+          github: {
+            errors: [],
+            failedCount: 0,
+            revision: 1,
+            status: 'completed',
+            succeededCount: 2,
+          },
+        },
+        status: 'processing',
+      });
+      mockTaskRecommendationService.get.mockResolvedValueOnce(undefined);
+
+      const stream = await userRouter
+        .createCaller(scopedCtx)
+        .watchOnboardingGenerationProgress({ topicId: 'topic-1' });
+      const iterator = stream[Symbol.asyncIterator]();
+      const first = await iterator.next();
+
+      expect(first.done).toBe(false);
+      if (first.done || !isTrackedEnvelope(first.value)) {
+        throw new Error('Expected a tracked progress event during downstream scheduling');
+      }
+      expect(first.value[1]).toMatchObject({
+        phase: 'generating-understanding',
+        steps: { understanding: 'pending' },
+      });
+      await iterator.return?.();
+    });
+
     /** @example The UI can distinguish each active generation stage without receiving content. */
     it('projects writing, detailed-persona, and task-recommendation stages', async () => {
       const cases = [

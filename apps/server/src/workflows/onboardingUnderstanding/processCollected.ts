@@ -9,6 +9,7 @@ import {
 import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createUnderstandingService,
   type UnderstandingService,
@@ -67,6 +68,7 @@ export const processCollectedUnderstanding = async (
       throw error;
     }
   });
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
   const triggerDetailedPersona = dependencies.triggerDetailedPersona;
   if (result.published && triggerDetailedPersona) {
     await context.run('collected:trigger-detailed-persona', () =>
@@ -105,8 +107,11 @@ export const failRunningUnderstandingWriting = async (
         sourceFingerprint: payload.sourceFingerprint,
         topicId: payload.topicId,
       });
+      if (detailedFailed)
+        await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
       return { failed: Boolean(detailedFailed) };
     }
+    await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
   } catch (error) {
     if (isStaleSession(error)) return { failed: false as const };
     throw error;
