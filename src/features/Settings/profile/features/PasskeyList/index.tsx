@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, EditableText, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { KeyRound, Plus, Trash2 } from 'lucide-react';
+import { KeyRound, PencilLine, Plus, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,8 +25,11 @@ export const PasskeyList = memo(() => {
   const providers = useUserStore(authSelectors.authProviders);
   const { t } = useTranslation('auth');
 
-  const { passkeys, isLoading, addPasskey, deletePasskey } = usePasskeys();
+  const { passkeys, isLoading, addPasskey, deletePasskey, renamePasskey } = usePasskeys();
   const [pending, setPending] = useState(false);
+  // Authenticators frequently register without a label, which leaves the list
+  // showing several indistinguishable entries until the user can name them.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Never let users lock themselves out: a passkey may only be removed while
   // some other way to sign in remains (password, SSO, or another passkey).
@@ -77,7 +80,18 @@ export const PasskeyList = memo(() => {
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} key={item.id}>
           <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
             <KeyRound size={16} />
-            <span>{item.name || t('profile.passkey.unnamed')}</span>
+            <EditableText
+              editing={editingId === item.id}
+              showEditIcon={false}
+              style={{ height: 24 }}
+              value={item.name || t('profile.passkey.unnamed')}
+              onEditingChange={(next) => setEditingId(next ? item.id : null)}
+              onChangeEnd={async (input) => {
+                const name = input.trim();
+                setEditingId(null);
+                if (name && name !== item.name) await renamePasskey(item.id, name);
+              }}
+            />
             {item.createdAt && (
               <Text fontSize={11} type="secondary">
                 · {new Date(item.createdAt).toLocaleDateString()}
@@ -85,16 +99,25 @@ export const PasskeyList = memo(() => {
             )}
           </Flexbox>
           {enableActions && (
-            <Tooltip title={!allowDelete ? t('profile.passkey.delete.forbidden') : undefined}>
-              <span>
+            <Flexbox horizontal align={'center'} gap={2}>
+              <Tooltip title={t('profile.passkey.rename')}>
                 <ActionIcon
-                  disabled={!allowDelete}
-                  icon={Trash2}
+                  icon={PencilLine}
                   size={'small'}
-                  onClick={() => handleDelete(item.id, item.name)}
+                  onClick={() => setEditingId(item.id)}
                 />
-              </span>
-            </Tooltip>
+              </Tooltip>
+              <Tooltip title={!allowDelete ? t('profile.passkey.delete.forbidden') : undefined}>
+                <span>
+                  <ActionIcon
+                    disabled={!allowDelete}
+                    icon={Trash2}
+                    size={'small'}
+                    onClick={() => handleDelete(item.id, item.name)}
+                  />
+                </span>
+              </Tooltip>
+            </Flexbox>
           )}
         </Flexbox>
       ))}

@@ -71,9 +71,26 @@ export const usePasskeys = () => {
     [refetch, t],
   );
 
+  const renamePasskey = useCallback(
+    async (id: string, name: string) => {
+      const { passkey } = await import('@/libs/better-auth/auth-client');
+
+      const result = await passkey.updatePasskey({ id, name });
+      if (result?.error) {
+        toast.error(result.error.message || t('profile.passkey.renameError'));
+        return false;
+      }
+
+      await refetch();
+      return true;
+    },
+    [refetch, t],
+  );
+
   return {
     addPasskey,
     deletePasskey,
+    renamePasskey,
     isLoading: isPending,
     passkeys: (data ?? []) as PasskeyItem[],
     refetch,

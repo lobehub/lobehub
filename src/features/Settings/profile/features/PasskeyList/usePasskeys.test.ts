@@ -6,6 +6,7 @@ import { usePasskeys } from './usePasskeys';
 const mocks = vi.hoisted(() => ({
   addPasskey: vi.fn(),
   deletePasskey: vi.fn(),
+  updatePasskey: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   refetch: vi.fn(),
@@ -21,7 +22,11 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => ({
-  passkey: { addPasskey: mocks.addPasskey, deletePasskey: mocks.deletePasskey },
+  passkey: {
+    addPasskey: mocks.addPasskey,
+    deletePasskey: mocks.deletePasskey,
+    updatePasskey: mocks.updatePasskey,
+  },
   useListPasskeys: mocks.useListPasskeys,
 }));
 
@@ -130,5 +135,37 @@ describe('usePasskeys', () => {
     expect(returned).toBe(false);
     expect(mocks.toastError).toHaveBeenCalledWith('nope');
     expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  // Authenticators often register without a label, so renaming is the only way
+  // to tell several credentials apart.
+  it('renames a passkey and refreshes the list', async () => {
+    mocks.updatePasskey.mockResolvedValue({ data: {} });
+
+    const { result } = renderHook(() => usePasskeys());
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.renamePasskey('key-1', 'MacBook Touch ID');
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.updatePasskey).toHaveBeenCalledWith({
+      id: 'key-1',
+      name: 'MacBook Touch ID',
+    });
+    expect(mocks.refetch).toHaveBeenCalled();
+  });
+
+  it('reports a rename failure without refreshing', async () => {
+    mocks.updatePasskey.mockResolvedValue({ error: { message: 'nope' } });
+
+    const { result } = renderHook(() => usePasskeys());
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.renamePasskey('key-1', 'x');
+    });
+
+    expect(ok).toBe(false);
+    expect(mocks.toastError).toHaveBeenCalledWith('nope');
   });
 });

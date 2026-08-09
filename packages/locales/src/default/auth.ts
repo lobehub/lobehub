@@ -307,6 +307,8 @@ export default {
   'profile.passkey.loading': 'Loading passkeys',
   'profile.passkey.title': 'Passkeys',
   'profile.passkey.unnamed': 'Unnamed passkey',
+  'profile.passkey.rename': 'Rename',
+  'profile.passkey.renameError': 'Failed to rename the passkey. Please try again.',
   'profile.resetPasswordError': 'Failed to send password reset link',
   'profile.resetPasswordSent': 'Reset link sent to {{email}}',
   'profile.save': 'Save',
