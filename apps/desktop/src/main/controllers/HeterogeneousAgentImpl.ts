@@ -1084,6 +1084,7 @@ export default class HeterogeneousAgentCtr {
     let traceSession;
     let cwd: string;
     let initialCumulativeUsage: UsageData | undefined;
+    let resolvedCliSpawnPlan;
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
@@ -1111,6 +1112,11 @@ export default class HeterogeneousAgentCtr {
         promptInput,
         resumeSessionId: session.agentSessionId,
       });
+
+      resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+        session.resolvedCommandPath ?? session.command,
+        spawnPlan.args,
+      );
 
       // Fall back to the user's Desktop so the process never inherits
       // the Electron parent's cwd (which is `/` when launched from Finder).
@@ -1153,11 +1159,6 @@ export default class HeterogeneousAgentCtr {
       throw err;
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
-    const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
-      session.resolvedCommandPath ?? session.command,
-      cliArgs,
-    );
 
     logger.info(
       'Spawning agent:',

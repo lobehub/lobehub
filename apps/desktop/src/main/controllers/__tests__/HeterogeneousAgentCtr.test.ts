@@ -19,6 +19,8 @@ vi.mock('node:os', async () => {
   return { ...actual, platform: vi.fn(() => 'linux') };
 });
 
+const platformMock = vi.mocked(os.platform);
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, existsSync: vi.fn(() => true) };
@@ -263,6 +265,7 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
     mockGetAllWindows.mockReset();
+    platformMock.mockReturnValue('linux');
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
   });
@@ -642,6 +645,45 @@ describe('HeterogeneousAgentCtr', () => {
         { text: 'selected code context', type: 'text' },
         { text: 'user task', type: 'text' },
       ]);
+    });
+
+    it('cleans up the intervention when Windows command-line validation rejects before spawn', async () => {
+      platformMock.mockReturnValue('win32');
+      const operationId = 'op-oversized-windows-argv';
+      const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await rm(tmpConfigPath, { force: true });
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: {
+          detect: vi.fn().mockResolvedValue({
+            available: true,
+            path: 'C:\\claude.exe',
+          }),
+        },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        args: ['a'.repeat(32_767)],
+        command: 'claude',
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          agentId: 'agent-1',
+          operationId,
+          prompt: 'hello',
+          sessionId,
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/resolved Windows command line requires/);
+
+      expect(spawnCalls).toHaveLength(0);
+      expect((ctr as any).opIdToIntervention.has(operationId)).toBe(false);
+      expect((ctr as any).opIdToBrowserBinding.has(operationId)).toBe(false);
+      expect((ctr as any).builtinMcpServer.hasOperation(operationId)).toBe(false);
+      await expect(access(tmpConfigPath)).rejects.toThrow();
     });
 
     it('uses Claude SDK streaming lab instead of spawning claude -p', async () => {
