@@ -1,6 +1,7 @@
 export default {
   'ModelSwitch.title': 'Model',
   'active': 'Active',
+  'audioPlayer.download': 'Download audio',
   'audioPlayer.pause': 'Pause audio',
   'audioPlayer.play': 'Play audio',
   'agentBuilder.installPlugin.authRequired': 'Cloud MCP requires sign-in to continue',

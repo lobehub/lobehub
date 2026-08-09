@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { PauseIcon, PlayIcon } from 'lucide-react';
+import { DownloadIcon, PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -59,6 +59,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  download: css`
+    cursor: pointer;
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
+
+    transition: all 120ms ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
   time: css`
     flex: none;
 
@@ -73,11 +97,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   waveform: css`
     cursor: pointer;
 
+    overflow: hidden;
     display: flex;
     flex: 1;
     gap: 2px;
     align-items: center;
 
+    /* The bars' intrinsic minimum (56 × min-width + gaps ≈ 222px) must never
+       set the row's minimum — without this, adding any sibling (the download
+       button) pushes the tail controls out of the rounded box. */
+    min-width: 0;
     height: 32px;
   `,
 }));
@@ -91,10 +120,17 @@ const formatTime = (seconds: number): string => {
 
 interface AudioPlayerProps {
   alt?: string;
+  /** Download filename; also switches the download affordance on. */
+  downloadFileName?: string;
+  /**
+   * Fill the host's width instead of the chat bubble's fixed 360px — evidence
+   * surfaces render the player as a block, not an inline attachment.
+   */
+  fullWidth?: boolean;
   url: string;
 }
 
-const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
+const AudioPlayer = memo<AudioPlayerProps>(({ url, alt, downloadFileName, fullWidth }) => {
   const { t } = useTranslation('chat');
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -128,8 +164,27 @@ const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
     [duration],
   );
 
+  // Cross-origin sources (a signed S3 url) ignore the anchor `download`
+  // attribute, so pull the bytes and hand out a same-origin object url — the
+  // one route that saves with the intended filename instead of navigating.
+  const handleDownload = useCallback(async () => {
+    if (!downloadFileName) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = downloadFileName;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener');
+    }
+  }, [url, downloadFileName]);
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} style={fullWidth ? { width: '100%' } : undefined}>
       <audio
         preload={'metadata'}
         ref={audioRef}
@@ -164,6 +219,17 @@ const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
         })}
       </div>
       <span className={styles.time}>{formatTime(currentTime || duration)}</span>
+      {downloadFileName && (
+        <button
+          aria-label={t('audioPlayer.download')}
+          className={styles.download}
+          title={t('audioPlayer.download')}
+          type={'button'}
+          onClick={() => void handleDownload()}
+        >
+          <Icon icon={DownloadIcon} size={15} />
+        </button>
+      )}
     </div>
   );
 });

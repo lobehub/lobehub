@@ -18,6 +18,7 @@ import {
   registerVerifyCommand,
   reportEvidence,
   scenarioFromResult,
+  screenProgrammaticTestChecks,
   subjectFromEnv,
   subjectFromResult,
   surfacesFromResult,
@@ -473,6 +474,17 @@ describe('evidenceTypeForFile — markdown evidence', () => {
     expect(evidenceTypeForFile('assets/root-cause.txt')).toBe('text');
   });
 
+  it('types an audio clip as audio, not the binary-blob-as-text fallback', () => {
+    // Before `audio` existed these fell through to `text`, so a TTS deliverable
+    // published as an unreadable, unplayable artifact.
+    expect(evidenceTypeForFile('assets/tts-zh.mp3')).toBe('audio');
+    expect(evidenceTypeForFile('assets/reply.WAV')).toBe('audio');
+    expect(evidenceTypeForFile('assets/voice.m4a')).toBe('audio');
+    expect(evidenceTypeForFile('assets/tone.opus')).toBe('audio');
+    // .webm stays video — the container is overwhelmingly used for screen clips.
+    expect(evidenceTypeForFile('assets/flow.webm')).toBe('video');
+  });
+
   it('inlines a small markdown file as content instead of uploading it', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'lh-evidence-'));
     const file = path.join(dir, 'root-cause.md');
@@ -521,6 +533,71 @@ describe('surfacesFromResult — surface normalization', () => {
   it('returns undefined when the report names no surfaces at all', () => {
     expect(surfacesFromResult({})).toBeUndefined();
     expect(surfacesFromResult({ surfaces: [] })).toBeUndefined();
+  });
+});
+
+describe('screenProgrammaticTestChecks', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('drops the repo test suites and static gates, keeping real acceptance checks', () => {
+    const result = {
+      cases: [
+        { id: 'c1', name: '语音回复能在气泡里播放', status: 'pass' },
+        { id: 'c2', name: '单元测试全部通过', status: 'pass' },
+      ],
+      plan: [
+        { id: 'c1', title: '语音回复能在气泡里播放' },
+        { id: 'c2', title: '单元测试全部通过' },
+        { id: 'c3', method: 'bun run check --type', title: '类型检查无报错' },
+      ],
+    };
+
+    const { droppedIds, droppedLabels } = screenProgrammaticTestChecks(result);
+
+    expect([...droppedIds]).toEqual(['c2', 'c3']);
+    expect(droppedLabels).toEqual(['c2 — 单元测试全部通过', 'c3 — 类型检查无报错']);
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('screens plan and cases together so a dropped item never orphans its pair', () => {
+    // The plan item names the gate; the case is titled loosely. Screening only
+    // one side would leave the other behind as an "unplanned" row.
+    const { droppedIds } = screenProgrammaticTestChecks({
+      cases: [{ id: 'c1', name: 'all green' }],
+      plan: [{ id: 'c1', title: 'vitest suite passes' }],
+    });
+
+    expect([...droppedIds]).toEqual(['c1']);
+  });
+
+  it('says nothing when the round has no programmatic-test checks', () => {
+    const { droppedIds, droppedLabels } = screenProgrammaticTestChecks({
+      plan: [{ id: '1', title: 'the reply streams token by token' }],
+    });
+
+    expect(droppedIds.size).toBe(0);
+    expect(droppedLabels).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('omits the screened ids from the frozen plan', () => {
+    const result = {
+      plan: [
+        { id: 'c1', title: 'the reply streams token by token' },
+        { id: 'c2', title: 'unit tests pass' },
+      ],
+    };
+    const { droppedIds } = screenProgrammaticTestChecks(result);
+
+    expect(planFromResult(result, droppedIds)!.map((item) => item.id)).toEqual(['c1']);
   });
 });
 
@@ -1002,6 +1079,15 @@ describe('deriveReportVerdict — headline fallback when summary.verdict is abse
 
   it('no cases → no derived verdict', () => {
     expect(deriveReportVerdict([])).toBeUndefined();
+  });
+
+  it('reads the documented `status` field, same as the per-case ingest', () => {
+    // Regression: `status` was skipped here while the per-case ingest reads
+    // `result ?? status ?? verdict`, so an all-pass report written with the
+    // documented field derived `uncertain` whenever this fallback ran (e.g.
+    // after the programmatic-test screen recounts the summary).
+    expect(deriveReportVerdict([{ status: 'pass' }, { status: 'pass' }])).toBe('passed');
+    expect(deriveReportVerdict([{ status: 'pass' }, { status: 'fail' }])).toBe('failed');
   });
 });
 

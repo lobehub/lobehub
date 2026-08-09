@@ -156,70 +156,74 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
   });
 
 interface GroupFeedbackContentProps {
+  /** Override the group-scoped description (the decision bar's global note). */
+  description?: string;
   groupLabel: string;
   /** Record the feedback (note + any screenshots); resolve true to close. */
   onConfirm: (comment: string, fileIds: string[]) => Promise<boolean>;
 }
 
-const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onConfirm }) => {
-  const { t: translate } = useTranslation('verify');
-  const { close } = useModalContext();
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { attachments, fileIds, handlePaste, remove, uploadFiles, uploading } =
-    useFeedbackAttachments();
+const GroupFeedbackContent = memo<GroupFeedbackContentProps>(
+  ({ description, groupLabel, onConfirm }) => {
+    const { t: translate } = useTranslation('verify');
+    const { close } = useModalContext();
+    const [comment, setComment] = useState('');
+    const [loading, setLoading] = useState(false);
+    const { attachments, fileIds, handlePaste, remove, uploadFiles, uploading } =
+      useFeedbackAttachments();
 
-  const handleConfirm = async () => {
-    const trimmed = comment.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    try {
-      if (await onConfirm(trimmed, fileIds)) close();
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleConfirm = async () => {
+      const trimmed = comment.trim();
+      if (!trimmed) return;
+      setLoading(true);
+      try {
+        if (await onConfirm(trimmed, fileIds)) close();
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  return (
-    <Flexbox gap={16}>
-      <Text fontSize={13} type={'secondary'}>
-        {translate('acceptance.group.feedbackDescription', { label: groupLabel })}
-      </Text>
-      <Flexbox gap={8}>
-        <TextArea
-          autoSize={{ maxRows: 8, minRows: 3 }}
-          placeholder={translate('acceptance.group.feedbackPlaceholder')}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-          onPaste={handlePaste}
-        />
-        {/* One row hugging the input — attachments belong to the note. */}
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <AttachmentStrip
-            attachments={attachments}
-            disabled={loading}
-            uploading={uploading}
-            onRemove={remove}
+    return (
+      <Flexbox gap={16}>
+        <Text fontSize={13} type={'secondary'}>
+          {description ?? translate('acceptance.group.feedbackDescription', { label: groupLabel })}
+        </Text>
+        <Flexbox gap={8}>
+          <TextArea
+            autoSize={{ maxRows: 8, minRows: 3 }}
+            placeholder={translate('acceptance.group.feedbackPlaceholder')}
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            onPaste={handlePaste}
           />
-          <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+          {/* One row hugging the input — attachments belong to the note. */}
+          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            <AttachmentStrip
+              attachments={attachments}
+              disabled={loading}
+              uploading={uploading}
+              onRemove={remove}
+            />
+            <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+          </Flexbox>
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
+          <Button disabled={loading} onClick={close}>
+            {translate('acceptance.actions.cancel')}
+          </Button>
+          <Button
+            disabled={!comment.trim() || uploading}
+            loading={loading}
+            type={'primary'}
+            onClick={handleConfirm}
+          >
+            {translate('acceptance.group.feedbackSubmit')}
+          </Button>
         </Flexbox>
       </Flexbox>
-      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-        <Button disabled={loading} onClick={close}>
-          {translate('acceptance.actions.cancel')}
-        </Button>
-        <Button
-          disabled={!comment.trim() || uploading}
-          loading={loading}
-          type={'primary'}
-          onClick={handleConfirm}
-        >
-          {translate('acceptance.group.feedbackSubmit')}
-        </Button>
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 GroupFeedbackContent.displayName = 'AcceptanceGroupFeedbackContent';
 
@@ -227,12 +231,14 @@ GroupFeedbackContent.displayName = 'AcceptanceGroupFeedbackContent';
  * Group-scoped feedback dialog — the channel for concerns that belong to no
  * single check (which may well be accepted) yet must reach the next round.
  */
-export const openGroupFeedbackModal = (options: GroupFeedbackContentProps): ModalInstance =>
+export const openGroupFeedbackModal = (
+  options: GroupFeedbackContentProps & { title?: string },
+): ModalInstance =>
   createModal({
     content: <GroupFeedbackContent {...options} />,
     footer: null,
     maskClosable: true,
     styles: frostedModalStyles,
-    title: t('acceptance.group.feedbackTitle', { ns: 'verify' }),
+    title: options.title ?? t('acceptance.group.feedbackTitle', { ns: 'verify' }),
     width: 'min(90vw, 520px)',
   });

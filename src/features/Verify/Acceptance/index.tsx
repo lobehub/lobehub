@@ -84,7 +84,7 @@ import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { acceptanceFocusedLayout, acceptanceScrollLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
-import { openAcceptModal, openRejectModal } from './modals';
+import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
 import { getAcceptanceStatusActions } from './statusActions';
 import TopicPanel from './TopicPanel';
@@ -604,6 +604,17 @@ const AcceptancePage = memo<AcceptancePageProps>(
       },
       [runAction, acceptanceRecordId],
     );
+
+    // The decision bar's global note — the same group-feedback channel, aimed
+    // at the uncategorized bucket ('' targets the whole delivery).
+    const handleAddGlobalComment = useCallback(() => {
+      openGroupFeedbackModal({
+        description: t('acceptance.bar.addCommentDescription'),
+        groupLabel: t('acceptance.feedback.global'),
+        onConfirm: (comment, fileIds) => handleGroupFeedback('', comment, fileIds),
+        title: t('acceptance.bar.addComment'),
+      });
+    }, [handleGroupFeedback, t]);
 
     const gotoRound = useCallback((round: number) => {
       setHighlightRound(round);
@@ -1833,6 +1844,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 subText={barTexts.subText}
                 totalCount={reviewTotal}
                 onAccept={handleAccept}
+                onAddComment={handleAddGlobalComment}
                 onCopyReview={handleCopyReview}
                 onOpenFeedback={() => setFeedbackOpen(true)}
                 onRejectComment={handleRejectComment}

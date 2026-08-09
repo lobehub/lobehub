@@ -79,6 +79,16 @@ describe('hasVisualEvidence', () => {
       } as AcceptanceCheck),
     ).toBe(false);
   });
+
+  it('counts an audio clip as media, so a sound deliverable expands on open', () => {
+    // The clip IS the deliverable — a row that stays collapsed hides the one
+    // thing the reviewer has to listen to.
+    expect(
+      hasVisualEvidence({
+        evidence: [{ fileUrl: 'https://example.com/tts.mp3', type: 'audio' }],
+      } as AcceptanceCheck),
+    ).toBe(true);
+  });
 });
 
 describe('hasAnnotatableEvidence', () => {
@@ -94,6 +104,14 @@ describe('hasAnnotatableEvidence', () => {
     expect(
       hasAnnotatableEvidence({
         evidence: [{ fileUrl: 'https://example.com/evidence.mp4', type: 'video' }],
+      } as AcceptanceCheck),
+    ).toBe(false);
+  });
+
+  it('does not offer region comments for audio — there is no image to circle', () => {
+    expect(
+      hasAnnotatableEvidence({
+        evidence: [{ fileUrl: 'https://example.com/tts.mp3', type: 'audio' }],
       } as AcceptanceCheck),
     ).toBe(false);
   });
