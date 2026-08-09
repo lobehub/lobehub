@@ -4,6 +4,8 @@ import { AlertTriangle, CornerUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveRejectedCopyKey } from './resolveRejectedCopyKey';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 8px;
@@ -30,39 +32,20 @@ interface RejectedResponseProps {
   skipped?: boolean;
 }
 
-/**
- * All ask surfaces (user-interaction, lobe-agent, claude-code) share this
- * apiName; other skippable interactions (e.g. the onboarding marketplace
- * picker) get the generic skipped copy instead of the question-specific one.
- */
-const ASK_USER_QUESTION_API_NAME = 'askUserQuestion';
-
 const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped }) => {
   const { t } = useTranslation('chat');
 
-  if (skipped)
-    return (
-      <Flexbox className={styles.container} gap={8}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
-          <div className={styles.title}>
-            {apiName === ASK_USER_QUESTION_API_NAME
-              ? t('tool.intervention.questionSkipped')
-              : t('tool.intervention.toolSkipped')}
-          </div>
-        </Flexbox>
-      </Flexbox>
-    );
+  const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped });
 
   return (
     <Flexbox className={styles.container} gap={8}>
       <Flexbox horizontal align={'center'} gap={8}>
-        <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
-        <div className={styles.title}>
-          {reason
-            ? t('tool.intervention.rejectedWithReason', { reason })
-            : t('tool.intervention.toolRejected')}
-        </div>
+        {skipped ? (
+          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
+        ) : (
+          <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
+        )}
+        <div className={styles.title}>{t(copyKey, { reason })}</div>
       </Flexbox>
     </Flexbox>
   );
