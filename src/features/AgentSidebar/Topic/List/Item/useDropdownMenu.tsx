@@ -98,17 +98,6 @@ export const useTopicItemDropdownMenu = ({
 
     return [
       {
-        icon: <Icon icon={PanelRight} />,
-        key: 'openOnRight',
-        label: t('openOnRight', { ns: 'common' }),
-        onClick: () => {
-          openTopicInPortal(id);
-        },
-      },
-      {
-        type: 'divider' as const,
-      },
-      {
         disabled: !canEditTopic,
         icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
         key: 'markCompleted',
@@ -199,6 +188,18 @@ export const useTopicItemDropdownMenu = ({
                 navigate(url, { escape: true });
               },
             },
+          ]
+        : []),
+      {
+        icon: <Icon icon={PanelRight} />,
+        key: 'openOnRight',
+        label: t('openOnRight', { ns: 'common' }),
+        onClick: () => {
+          openTopicInPortal(id);
+        },
+      },
+      ...(isDesktop
+        ? [
             {
               icon: <Icon icon={ExternalLink} />,
               key: 'openInNewWindow',
@@ -211,7 +212,7 @@ export const useTopicItemDropdownMenu = ({
               type: 'divider' as const,
             },
           ]
-        : []),
+        : [{ type: 'divider' as const }]),
       {
         icon: <Icon icon={Hash} />,
         key: 'copySessionId',
