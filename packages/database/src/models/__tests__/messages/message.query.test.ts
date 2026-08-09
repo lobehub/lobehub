@@ -388,7 +388,7 @@ describe('MessageModel Query Tests', () => {
       );
     });
 
-    it('materializes only validated audio duration metadata in both query paths', async () => {
+    it('materializes safe audio metadata and only validated duration in both query paths', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(messages).values({
           content: 'message with audio',
@@ -434,11 +434,13 @@ describe('MessageModel Query Tests', () => {
           alt: 'valid.mp3',
           durationMs: 2500,
           id: 'audio-duration-valid',
+          mimeType: 'audio/mpeg',
           url: 'files/valid.mp3',
         });
         expect(message?.audioList?.find((audio) => audio.id === 'audio-duration-invalid')).toEqual({
           alt: 'invalid.mp3',
           id: 'audio-duration-invalid',
+          mimeType: 'audio/mpeg',
           url: 'files/invalid.mp3',
         });
       }
