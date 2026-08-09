@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks — and import the handler file directly (not via the
-// agent-hono barrel) so we don't trigger Hono module resolution. The handler
+// agent router barrel) so we don't trigger Hono module resolution. The handler
 // only imports Hono types, which are erased at runtime.
 import { toolResult } from '../toolResult';
 

@@ -118,7 +118,7 @@ export const processUnderstandingProviders = async (
               // Cross-route workflow fan-out must use an absolute QStash trigger.
               // context.invoke only replaces the current URL's final path segment, which sent this
               // child to `/api/workflows/onboarding/understanding/process` and returned 404.
-              // Source/context: `workflows-hono/memory-user-memory/workflows/processUserTopics.ts:193`.
+              // Source/context: `router-hono/workflows/memory-user-memory/workflows/processUserTopics.ts:193`.
               // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
               dependencies.triggerTaskRecommendations(body, {
                 // Every completed provider may race to schedule a fingerprint-specific run. The

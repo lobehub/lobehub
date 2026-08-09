@@ -89,7 +89,7 @@ git submodules.
     ├── business/             # Open-source stubs (client/server) — cloud repo provides real impls
     ├── features/             # Domain business components
     ├── store/                # ~30 zustand stores — `ls` for the full set
-    ├── server/               # standalone-Hono server pieces only: agent-hono, workflows-hono (main backend lives in `apps/server`)
+    ├── server/               # backend code lives in `apps/server`; Hono endpoints are grouped under router-hono
     └── ...                   # components, hooks, layout, libs, services, types, utils
 ```
 
