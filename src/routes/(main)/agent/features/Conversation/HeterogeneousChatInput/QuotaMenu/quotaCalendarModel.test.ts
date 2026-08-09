@@ -6,6 +6,7 @@ import {
   buildWindowStats,
   type QuotaWindowSpan,
   utilizationLevelOf,
+  utilizationStatusOf,
 } from './quotaCalendarModel';
 
 const hour = 60 * 60 * 1000;
@@ -97,5 +98,16 @@ describe('quota calendar window statistics', () => {
     [100, 4],
   ])('maps %s%% utilization to level %s', (utilization, level) => {
     expect(utilizationLevelOf(utilization)).toBe(level);
+  });
+
+  it.each([
+    [0, 'safe'],
+    [79, 'safe'],
+    [80, 'warning'],
+    [99, 'warning'],
+    [100, 'error'],
+    [120, 'error'],
+  ] as const)('maps %s%% utilization to %s pressure', (utilization, status) => {
+    expect(utilizationStatusOf(utilization)).toBe(status);
   });
 });

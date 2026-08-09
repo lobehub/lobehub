@@ -372,6 +372,13 @@ export const utilizationLevelOf = (utilization: number): 0 | 1 | 2 | 3 | 4 => {
   return 4;
 };
 
+/** Semantic quota pressure: comfortable, nearly full, or exhausted. */
+export const utilizationStatusOf = (utilization: number): 'error' | 'safe' | 'warning' => {
+  if (utilization >= 100) return 'error';
+  if (utilization >= 80) return 'warning';
+  return 'safe';
+};
+
 export interface CalendarDayCell {
   date: dayjs.Dayjs;
   inMonth: boolean;

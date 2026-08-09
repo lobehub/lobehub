@@ -3,7 +3,7 @@
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { createModal, type ModalInstance, Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
@@ -33,6 +33,7 @@ import {
   SESSION_SERIES,
   spendInWindow,
   type UsageTurn,
+  utilizationStatusOf,
   type WindowStat,
 } from './quotaCalendarModel';
 
@@ -87,20 +88,20 @@ const styles = createStaticStyles(({ css }) => ({
     }
 
     &[data-heat='1'] {
-      background: ${cssVar.colorInfoBg};
+      background: ${cssVar.colorSuccessBg};
     }
 
     &[data-heat='2'] {
-      background: ${cssVar.colorInfoBgHover};
+      background: ${cssVar.colorSuccessBgHover};
     }
 
     &[data-heat='3'] {
-      background: ${cssVar.colorInfoBorder};
+      background: ${cssVar.colorSuccessBorder};
     }
 
     &[data-heat='4'] {
       color: ${cssVar.colorTextLightSolid};
-      background: ${cssVar.colorInfo};
+      background: ${cssVar.colorSuccess};
     }
 
     /* Rate limited: the provider refused work that day — an error state, not heat. */
@@ -128,35 +129,58 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
 
     &[data-heat='1'] {
-      background: ${cssVar.colorInfoBg};
+      background: ${cssVar.colorSuccessBg};
     }
 
     &[data-heat='2'] {
-      background: ${cssVar.colorInfoBgHover};
+      background: ${cssVar.colorSuccessBgHover};
     }
 
     &[data-heat='3'] {
-      background: ${cssVar.colorInfoBorder};
+      background: ${cssVar.colorSuccessBorder};
     }
 
     &[data-heat='4'] {
-      background: ${cssVar.colorInfo};
+      background: ${cssVar.colorSuccess};
     }
 
     &[data-rate-limited='true'] {
       background: ${cssVar.colorErrorBg};
     }
   `,
-  /** The headline number of the panel — readable at a glance, not a caption. */
-  ratio: css`
-    font-size: 26px;
+  capacityRing: css`
+    position: relative;
+
+    display: grid;
+    flex: none;
+    place-items: center;
+
+    width: 54px;
+    height: 54px;
+
+    color: ${cssVar.colorSuccess};
+
+    &[data-status='warning'] {
+      color: ${cssVar.colorWarning};
+    }
+
+    &[data-status='error'] {
+      color: ${cssVar.colorError};
+    }
+  `,
+  capacityRingLabel: css`
+    position: absolute;
+
+    font-size: 13px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-    color: ${cssVar.colorText};
+    color: currentcolor;
   `,
-  ratioExhausted: css`
-    color: ${cssVar.colorErrorText};
+  capacityRingSvg: css`
+    transform: rotate(-90deg);
+    display: block;
+    width: 100%;
+    height: 100%;
   `,
   statusExhausted: css`
     font-size: 12px;
@@ -178,7 +202,15 @@ const styles = createStaticStyles(({ css }) => ({
   capacityFill: css`
     height: 100%;
     border-radius: inherit;
-    background: ${cssVar.colorInfo};
+    background: ${cssVar.colorSuccess};
+
+    &[data-status='warning'] {
+      background: ${cssVar.colorWarning};
+    }
+
+    &[data-status='error'] {
+      background: ${cssVar.colorError};
+    }
   `,
   capacityTrack: css`
     overflow: hidden;
@@ -187,7 +219,7 @@ const styles = createStaticStyles(({ css }) => ({
     height: 5px;
     border-radius: 999px;
 
-    background: ${cssVar.colorInfoBg};
+    background: ${cssVar.colorFillSecondary};
   `,
   windowCell: css`
     display: flex;
@@ -269,6 +301,8 @@ const normalizeWindows = (rows: WindowRow[]): NormalizedWindow[] =>
 
 const CHART_W = 640;
 const CHART_H = 120;
+const RING_RADIUS = 22;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const xOf = (time: number, window: QuotaWindowSpan) =>
   ((time - window.windowStartAt) / (window.resetsAt - window.windowStartAt)) * CHART_W;
@@ -327,23 +361,21 @@ const BurnChart = memo<{
   return (
     <Flexbox gap={8}>
       <Flexbox horizontal align={'flex-end'} gap={12} justify={'space-between'}>
-        <Flexbox gap={2}>
-          <Flexbox horizontal align={'baseline'} gap={6}>
-            <span className={cx(styles.ratio, exhausted && styles.ratioExhausted)}>
-              {Math.round(last.utilization)}%
-            </span>
+        <Flexbox horizontal align={'center'} gap={10}>
+          <CapacityRing utilization={last.utilization} />
+          <Flexbox gap={2}>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {t('heteroAgent.claudeQuota.calendar.usedOfWindow')}
             </Text>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {spend.tokens > 0
+                ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
+                    cost: formatCost(spend.cost),
+                    tokens: formatTokens(spend.tokens),
+                  })
+                : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
+            </Text>
           </Flexbox>
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
-            {spend.tokens > 0
-              ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
-                  cost: formatCost(spend.cost),
-                  tokens: formatTokens(spend.tokens),
-                })
-              : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
-          </Text>
         </Flexbox>
         <span
           className={
@@ -387,8 +419,8 @@ const BurnChart = memo<{
             y1={CHART_H}
             y2={0}
           />
-          <path d={area} fill={cssVar.colorInfo} opacity={0.12} />
-          <polyline fill={'none'} points={polyline} stroke={cssVar.colorInfo} strokeWidth={2} />
+          <path d={area} fill={cssVar.colorSuccess} opacity={0.12} />
+          <polyline fill={'none'} points={polyline} stroke={cssVar.colorSuccess} strokeWidth={2} />
           {isLive && projectionEnd && (
             <line
               stroke={willExhaust ? cssVar.colorWarning : cssVar.colorTextTertiary}
@@ -411,7 +443,7 @@ const BurnChart = memo<{
           <circle
             cx={xOf(last.time, window)}
             cy={yOf(last.utilization)}
-            fill={cssVar.colorInfo}
+            fill={cssVar.colorSuccess}
             r={3.5}
           />
         </svg>
@@ -434,6 +466,47 @@ const BurnChart = memo<{
 
 BurnChart.displayName = 'BurnChart';
 
+const CapacityRing = memo<{ utilization: number }>(({ utilization }) => {
+  const value = Math.min(100, Math.max(0, utilization));
+
+  return (
+    <div
+      aria-label={`${Math.round(utilization)}%`}
+      aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuenow={Math.round(utilization)}
+      className={styles.capacityRing}
+      data-status={utilizationStatusOf(utilization)}
+      role={'meter'}
+    >
+      <svg className={styles.capacityRingSvg} viewBox={'0 0 54 54'}>
+        <circle
+          cx={27}
+          cy={27}
+          fill={'none'}
+          r={RING_RADIUS}
+          stroke={cssVar.colorFillSecondary}
+          strokeWidth={5}
+        />
+        <circle
+          cx={27}
+          cy={27}
+          fill={'none'}
+          r={RING_RADIUS}
+          stroke={'currentColor'}
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - value / 100)}
+          strokeLinecap={'round'}
+          strokeWidth={5}
+        />
+      </svg>
+      <span className={styles.capacityRingLabel}>{Math.round(utilization)}%</span>
+    </div>
+  );
+});
+
+CapacityRing.displayName = 'CapacityRing';
+
 const CapacityMeter = memo<{ utilization: number }>(({ utilization }) => (
   <div
     aria-label={`${Math.round(utilization)}%`}
@@ -445,6 +518,7 @@ const CapacityMeter = memo<{ utilization: number }>(({ utilization }) => (
   >
     <div
       className={styles.capacityFill}
+      data-status={utilizationStatusOf(utilization)}
       style={{ width: `${Math.min(100, Math.max(0, utilization))}%` }}
     />
   </div>
