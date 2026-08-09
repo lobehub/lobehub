@@ -13,6 +13,7 @@ const GALLERY_FIRST_CATEGORIES = new Set<FilesTabs>([
   FilesTabs.Audios,
   FilesTabs.Images,
   FilesTabs.Videos,
+  FilesTabs.Websites,
 ]);
 
 /**

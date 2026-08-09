@@ -27,6 +27,7 @@ import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
 import VideoFileItem from './VideoFileItem';
+import WebpageFileItem from './WebpageFileItem';
 
 // Image file types
 const IMAGE_TYPES = new Set([
@@ -197,6 +198,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     embeddingStatus,
     finishEmbedding,
     chunkCount,
+    content,
     url,
     name,
     fileType,
@@ -234,11 +236,13 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         isMarkdown: isMarkdownFile(name, fileType),
         isPage: isCustomPage(fileType, name),
         isVideo: !!fileType?.startsWith('video'),
+        // web clippings: article documents plus raw html captures
+        isWebpage: fileType === 'article' || !!fileType?.startsWith('text/html'),
       }),
       [fileType, name],
     );
 
-    const { isAudio, isImage, isMarkdown, isPage, isFolder, isVideo } = computedValues;
+    const { isAudio, isImage, isMarkdown, isPage, isFolder, isVideo, isWebpage } = computedValues;
 
     // Use shared click handler hook
     const handleItemClick = useFileItemClick({
@@ -439,12 +443,21 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         <div
           className={cx(
             styles.content,
-            !isImage && !isMarkdown && !isPage && !isVideo && !isAudio && styles.contentWithPadding,
+            !isImage &&
+              !isMarkdown &&
+              !isPage &&
+              !isVideo &&
+              !isAudio &&
+              !isWebpage &&
+              styles.contentWithPadding,
           )}
           onClick={handleItemClick}
         >
           {(() => {
             switch (true) {
+              case isWebpage: {
+                return <WebpageFileItem content={content} name={name} url={url} />;
+              }
               case isVideo && !!url: {
                 return <VideoFileItem isInView={isInView} name={name} size={size} url={url} />;
               }

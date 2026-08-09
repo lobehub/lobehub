@@ -14,7 +14,7 @@ import RecentFiles from './RecentFiles';
 import RecentPages from './RecentPages';
 import RecentWorks from './RecentWorks';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   content: css`
     width: 100%;
     max-width: 1080px;
@@ -22,33 +22,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 32px 64px;
     padding-inline: 32px;
   `,
-  greeting: css`
-    margin: 0;
-    font-size: 26px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
   scroll: css`
     overflow: hidden auto;
     flex: 1;
   `,
-  subtitle: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
 }));
 
-const getGreetingKey = () => {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'home.greeting.morning' as const;
-  if (hour < 18) return 'home.greeting.afternoon' as const;
-  return 'home.greeting.evening' as const;
-};
-
 /**
- * The library-style landing page of /resource: greeting, quick library
- * access, then works → recent pages → libraries → recent files — instead of
- * the flat all-files table (which now lives at /resource/all).
+ * The library-style landing page of /resource: quick library access, then
+ * works → recent pages → libraries → recent files — instead of the flat
+ * all-files table (which now lives at /resource/all).
  */
 const ResourceHomeDashboard = memo(() => {
   const { t } = useTranslation('file');
@@ -62,10 +45,6 @@ const ResourceHomeDashboard = memo(() => {
       />
       <div className={styles.scroll}>
         <Flexbox className={styles.content} gap={40}>
-          <Flexbox gap={8}>
-            <h1 className={styles.greeting}>{t(getGreetingKey())}</h1>
-            <span className={styles.subtitle}>{t('home.subtitle')}</span>
-          </Flexbox>
           <FrequentLibraries />
           <RecentWorks />
           <RecentPages />

@@ -6,9 +6,11 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
+  GlobeIcon,
   HouseIcon,
   ImageIcon,
   LayoutPanelTopIcon,
+  type LucideIcon,
   Mic2,
   SquarePlay,
 } from 'lucide-react';
@@ -23,6 +25,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { FilesTabs } from '@/types/files';
 
+interface CategoryItem {
+  icon: LucideIcon;
+  isBusiness?: boolean;
+  key: string;
+  title: string;
+  url: string;
+}
+
 const CategoryMenu = memo(() => {
   const { t } = useTranslation('file');
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
@@ -35,101 +45,118 @@ const CategoryMenu = memo(() => {
   // workspace prefix.
   const worksActive = location.pathname.endsWith('/resource/works');
 
-  const items = useMemo(
+  // Two groups below the fixed Home/All entries: file-based categories
+  // (uploaded files by type) and LobeHub business entities (pages, works,
+  // webpages), separated by a gap.
+  const groups = useMemo(
     () => [
-      {
-        icon: HouseIcon,
-        key: FilesTabs.Home,
-        title: t('tab.home'),
-        url: '/resource',
-      },
-      {
-        icon: LayoutPanelTopIcon,
-        key: FilesTabs.All,
-        title: t('tab.all'),
-        url: '/resource/all',
-      },
-      {
-        icon: FilePenIcon,
-        key: FilesTabs.Pages,
-        title: t('tab.pages'),
-        url: '/resource/page',
-      },
-      {
-        icon: FileText,
-        key: FilesTabs.Documents,
-        title: t('tab.documents'),
-        url: '/resource/documents',
-      },
-      {
-        icon: ImageIcon,
-        key: FilesTabs.Images,
-        title: t('tab.images'),
-        url: '/resource/images',
-      },
-      {
-        icon: Mic2,
-        key: FilesTabs.Audios,
-        title: t('tab.audios'),
-        url: '/resource/audios',
-      },
-      {
-        icon: SquarePlay,
-        key: FilesTabs.Videos,
-        title: t('tab.videos'),
-        url: '/resource/videos',
-      },
-      {
-        icon: FilesIcon,
-        key: FilesTabs.Files,
-        title: t('tab.files'),
-        url: '/resource/files',
-      },
-      // Single Works entry (no sub-categories this iteration): switches the
-      // content area to the topic-grouped Work gallery.
-      {
-        icon: ClipboardListIcon,
-        key: 'works',
-        title: t('work.group'),
-        url: '/resource/works',
-      },
-      ...businessCategories.map((category) => ({
-        icon: category.icon,
-        isBusiness: true,
-        key: category.key,
-        // Business categories carry a chat-namespace key but the type narrows to a
-        // string at this seam; cast so t() accepts the dynamic key.
-        title: t(category.titleKey as never) as string,
-        url: category.url,
-      })),
+      [
+        {
+          icon: HouseIcon,
+          key: FilesTabs.Home,
+          title: t('tab.home'),
+          url: '/resource',
+        },
+        {
+          icon: LayoutPanelTopIcon,
+          key: FilesTabs.All,
+          title: t('tab.all'),
+          url: '/resource/all',
+        },
+      ],
+      // file-based categories
+      [
+        {
+          icon: FileText,
+          key: FilesTabs.Documents,
+          title: t('tab.documents'),
+          url: '/resource/documents',
+        },
+        {
+          icon: FilesIcon,
+          key: FilesTabs.Files,
+          title: t('tab.files'),
+          url: '/resource/files',
+        },
+        {
+          icon: ImageIcon,
+          key: FilesTabs.Images,
+          title: t('tab.images'),
+          url: '/resource/images',
+        },
+        {
+          icon: SquarePlay,
+          key: FilesTabs.Videos,
+          title: t('tab.videos'),
+          url: '/resource/videos',
+        },
+        {
+          icon: Mic2,
+          key: FilesTabs.Audios,
+          title: t('tab.audios'),
+          url: '/resource/audios',
+        },
+      ],
+      // LobeHub business entities
+      [
+        {
+          icon: FilePenIcon,
+          key: FilesTabs.Pages,
+          title: t('tab.pages'),
+          url: '/resource/page',
+        },
+        {
+          icon: ClipboardListIcon,
+          key: 'works',
+          title: t('work.group'),
+          url: '/resource/works',
+        },
+        {
+          icon: GlobeIcon,
+          key: FilesTabs.Websites,
+          title: t('tab.websites'),
+          url: '/resource/websites',
+        },
+        ...businessCategories.map((category) => ({
+          icon: category.icon,
+          isBusiness: true,
+          key: category.key,
+          // Business categories carry a chat-namespace key but the type narrows to a
+          // string at this seam; cast so t() accepts the dynamic key.
+          title: t(category.titleKey as never) as string,
+          url: category.url,
+        })),
+      ] as CategoryItem[],
     ],
     [t, businessCategories],
   );
 
   return (
-    <Flexbox gap={1} paddingInline={4}>
-      {items.map((item) => {
-        const isActive =
-          item.key === 'works'
-            ? worksActive
-            : !worksActive &&
-              ('isBusiness' in item && item.isBusiness
-                ? location.pathname === item.url
-                : activeKey === item.key);
-        return (
-          <Link
-            key={item.key}
-            to={item.url}
-            onClick={(e) => {
-              e.preventDefault();
-              setMode('explorer');
-              navigate(item.url, { replace: true });
-            }}
-          >
-            <NavItem active={isActive} icon={item.icon} title={item.title} />
-          </Link>
-        );
-      })}
+    <Flexbox gap={12} paddingInline={4}>
+      {groups.map((group, groupIndex) => (
+        <Flexbox gap={1} key={groupIndex}>
+          {group.map((item) => {
+            const isActive =
+              item.key === 'works'
+                ? worksActive
+                : !worksActive &&
+                  (item.isBusiness ? location.pathname === item.url : activeKey === item.key);
+            return (
+              <Link
+                key={item.key}
+                to={item.url}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMode('explorer');
+                  navigate(item.url, { replace: true });
+                }}
+              >
+                <NavItem active={isActive} icon={item.icon} title={item.title} />
+              </Link>
+            );
+          })}
+        </Flexbox>
+      ))}
     </Flexbox>
   );
 });

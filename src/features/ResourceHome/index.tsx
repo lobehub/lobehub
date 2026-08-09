@@ -25,6 +25,7 @@ export const CATEGORY_BY_SEGMENT: Record<string, FilesTabs> = {
   images: FilesTabs.Images,
   page: FilesTabs.Pages,
   videos: FilesTabs.Videos,
+  websites: FilesTabs.Websites,
 };
 
 const SEGMENT_BY_CATEGORY = Object.fromEntries(

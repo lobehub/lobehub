@@ -114,6 +114,10 @@ export const buildDocumentCategoryFilter = (
     case FilesTabs.Pages: {
       return sql`(${column} ILIKE ${'custom/%'} AND ${column} != ${'custom/folder'})`;
     }
+    case FilesTabs.Websites: {
+      // web clippings: article documents plus raw html captures
+      return sql`(${column} = ${'article'} OR ${column} ILIKE ${'text/html%'})`;
+    }
     default: {
       return 'none';
     }

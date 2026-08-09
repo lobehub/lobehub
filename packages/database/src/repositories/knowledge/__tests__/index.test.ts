@@ -1208,13 +1208,43 @@ describe('KnowledgeRepo', () => {
           url: 'https://example.com/readme.txt',
         },
       ]);
+
+      // a web clipping saved as an article document plus a plain note that
+      // must stay out of the Websites category
+      await serverDB.insert(documents).values([
+        {
+          id: 'article-doc',
+          userId,
+          title: 'Clipped Article',
+          fileType: 'article',
+          sourceType: 'web',
+          source: 'https://example.com/some-article',
+          content: 'clipped content',
+          totalCharCount: 15,
+          totalLineCount: 1,
+        },
+        {
+          id: 'plain-note',
+          userId,
+          title: 'Plain Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/plain-note',
+          totalCharCount: 10,
+          totalLineCount: 1,
+        },
+      ]);
     });
 
-    it('should filter by category - Websites', async () => {
+    it('should filter by category - Websites includes html files and article clippings', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Websites });
 
       expect(result.some((item) => item.id === 'website-file')).toBe(true);
-      expect(result.every((item) => item.fileType === 'text/html')).toBe(true);
+      expect(result.some((item) => item.id === 'article-doc')).toBe(true);
+      expect(result.every((item) => item.id !== 'plain-note')).toBe(true);
+      expect(
+        result.every((item) => item.fileType === 'text/html' || item.fileType === 'article'),
+      ).toBe(true);
     });
   });
 
