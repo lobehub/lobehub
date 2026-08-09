@@ -127,6 +127,9 @@ CLAUDE.local.md
 docker-compose/dev/data/
 docker-compose/deploy/data
 docker-compose/deploy/data/
+
+# Control-plane SPA publish dir (built by build:spa:control-plane / moz)
+apps/aico-control-plane/web/spa/
 docker-compose/deploy/.env
 
 # Migration scripts data

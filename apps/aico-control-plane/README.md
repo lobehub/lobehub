@@ -7,36 +7,67 @@ Privileged operations app for Aico. **Not** part of the customer product surface
 - Hold `OPENROUTER_MANAGEMENT_API_KEY` (never on the product server)
 - Expose token-gated OpenRouter Management proxy at `/internal/openrouter/v1/keys`
 - Host `platformAdmin.*` tRPC for operators
-- Serve the operator admin UI at `/`
+- Serve the operator admin UI (built SPA) at `/` on the **same port** as the API
 
 ## Env
 
-| Variable                           | Required      | Notes                            |
-| ---------------------------------- | ------------- | -------------------------------- |
-| `AICO_IS_CONTROL_PLANE`            | yes (`1`)     | Set automatically by `dev` entry |
-| `OPENROUTER_MANAGEMENT_API_KEY`    | production    | Real OpenRouter management key   |
-| `AICO_CONTROL_PLANE_SERVICE_TOKEN` | yes           | Shared with product server       |
-| `DATABASE_URL` / auth secrets      | yes           | Same DB + Better Auth as product |
-| `AICO_CONTROL_PLANE_PORT`          | no            | Default `3020`                   |
-| `AICO_OPENROUTER_MOCK`             | non-prod only | In-process mock when no key      |
+| Variable                           | Required      | Notes                                                                                                                       |
+| ---------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `AICO_IS_CONTROL_PLANE`            | yes (`1`)     | Set automatically by `dev` entry                                                                                            |
+| `OPENROUTER_MANAGEMENT_API_KEY`    | production    | Real OpenRouter management key                                                                                              |
+| `AICO_CONTROL_PLANE_SERVICE_TOKEN` | yes           | Shared with product server                                                                                                  |
+| `DATABASE_URL` / auth secrets      | yes           | Same DB + Better Auth as product                                                                                            |
+| `AICO_CONTROL_PLANE_PORT`          | no            | Host port (default `3020`)                                                                                                  |
+| `AICO_CONTROL_PLANE_PUBLIC_URL`    | no            | Browser origin (default `http://localhost:3020`). Set to any domain when reverse-proxying, e.g. `https://admin.example.com` |
+| `AICO_INSECURE_AUTH_COOKIES`       | no            | `1` for HTTP; use `0` when PUBLIC\_URL is `https://`                                                                        |
+| `AICO_OPENROUTER_MOCK`             | non-prod only | In-process mock when no key                                                                                                 |
+
+Better Auth runs **on this process** (`/api/auth/*`). `APP_URL` must equal the public browser origin.
 
 ## Product server env
 
-| Variable                           | Notes                           |
-| ---------------------------------- | ------------------------------- |
-| `AICO_CONTROL_PLANE_URL`           | e.g. `http://localhost:3020`    |
-| `AICO_CONTROL_PLANE_SERVICE_TOKEN` | Same token as above             |
-| `OPENROUTER_MANAGEMENT_API_KEY`    | **Must be unset** in production |
+| Variable                           | Notes                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `AICO_CONTROL_PLANE_URL`           | e.g. `http://localhost:3020`                                              |
+| `AICO_CONTROL_PLANE_SERVICE_TOKEN` | Same token as above                                                       |
+| `AICO_CONTROL_PLANE_UI_URL`        | Browser origin of control plane (merged into Better Auth trusted origins) |
+| `OPENROUTER_MANAGEMENT_API_KEY`    | **Must be unset** in production                                           |
 
-## Dev
+## One port (recommended)
+
+Operator UI + API share **<http://localhost:3020/>**.
 
 ```bash
-# from repo root
-pnpm --filter @aico/control-plane dev
+# build SPA into apps/aico-control-plane/web/spa + Hono dist
+bun run build:spa:control-plane
+pnpm --filter @aico/control-plane build
+
+# run
+env AICO_CONTROL_PLANE_SERVICE_TOKEN=devtok \
+  AICO_PRODUCT_URL=http://127.0.0.1:3210 \
+  bun run dev:control-plane
 ```
 
-## UI
+Or via **moz** (builds + deploys product and control plane together):
 
-Runtime operator UI: [`src/web/admin.html`](src/web/admin.html).
+```bash
+moz -u # full build + deploy
+moz -d # recreate lobe + aico-control-plane
+moz -i # status includes control-plane /health
+```
 
-React reference panel (future Vite SPA): [`src/ui/PlatformAdminPanel.tsx`](src/ui/PlatformAdminPanel.tsx).
+Open **<http://127.0.0.1:3020/>** — design-system panel with login. Auth is proxied to the product app; tRPC stays on 3020.
+
+## Optional Vite HMR (3021)
+
+Only for UI development with hot reload:
+
+```bash
+bun run dev:spa:control-plane # http://localhost:3021 → proxies /trpc to 3020
+```
+
+Normal operators / moz do **not** need 3021.
+
+## Platform admin seed
+
+Sign in with a user that exists in `platform_admins` (same Better Auth users as the product).

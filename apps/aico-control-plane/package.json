@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build --config viteHonoBuild.config.ts",
-    "dev": "vite-node --watch --config viteNode.config.ts src/hono/dev.ts",
+    "build": "pnpm exec vite build --config viteHonoBuild.config.ts",
+    "dev": "pnpm exec vite-node --watch --config viteNode.config.ts src/hono/dev.ts",
     "start": "node dist/standalone.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "pnpm exec tsc --noEmit"
   }
 }

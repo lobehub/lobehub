@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { openrouterModelCatalog, openrouterModelSyncState } from '../../schemas';
+import {
+  openrouterModelCatalog,
+  openrouterModelSyncRuns,
+  openrouterModelSyncState,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { OpenRouterModelCatalogModel } from '../openrouterModelCatalog';
 
@@ -12,6 +16,7 @@ beforeEach(async () => {
   db = await getTestDB();
   await db.delete(openrouterModelCatalog);
   await db.delete(openrouterModelSyncState);
+  await db.delete(openrouterModelSyncRuns);
   catalog = new OpenRouterModelCatalogModel(db);
 }, 30_000);
 
@@ -77,7 +82,8 @@ describe('OpenRouterModelCatalogModel', () => {
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'manual:admin',
-      modelCount: 9,
+      // Input models + product Auto
+      modelCount: 10,
     });
   });
 
@@ -117,7 +123,8 @@ describe('OpenRouterModelCatalogModel', () => {
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'cron',
-      modelCount: 3,
+      // Remaining models + product Auto
+      modelCount: 4,
     });
     expect(status.lastSyncedAt).toBeTruthy();
   });
@@ -137,9 +144,49 @@ describe('OpenRouterModelCatalogModel', () => {
       lastError: 'OpenRouter down',
       lastStatus: 'error',
       lastTriggeredBy: 'manual:ops',
-      modelCount: 1,
+      // openai/x + product Auto
+      modelCount: 2,
     });
     expect(afterError.lastSyncedAt).toBeTruthy();
+
+    const history = await catalog.listSyncRuns(10);
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatchObject({
+      error: 'OpenRouter down',
+      status: 'error',
+      triggeredBy: 'manual:ops',
+    });
+    expect(history[1]).toMatchObject({
+      addedModelIds: expect.arrayContaining(['openai/x']),
+      status: 'success',
+      triggeredBy: 'cron',
+    });
+  });
+
+  it('records added and removed model ids across syncs', async () => {
+    await catalog.replaceCatalog({
+      models: [
+        { displayName: 'A', id: 'openai/a', type: 'chat' },
+        { displayName: 'B', id: 'openai/b', type: 'chat' },
+      ],
+      triggeredBy: 'manual:1',
+    });
+
+    await catalog.replaceCatalog({
+      models: [
+        { displayName: 'B', id: 'openai/b', type: 'chat' },
+        { displayName: 'C', id: 'openai/c', type: 'chat' },
+      ],
+      triggeredBy: 'manual:2',
+    });
+
+    const [latest] = await catalog.listSyncRuns(1);
+    expect(latest).toMatchObject({
+      addedModelIds: ['openai/c'],
+      removedModelIds: ['openai/a'],
+      status: 'success',
+      triggeredBy: 'manual:2',
+    });
   });
 
   it('reseeds default enabled flags from existing rows', async () => {
@@ -163,7 +210,7 @@ describe('OpenRouterModelCatalogModel', () => {
       },
     ]);
 
-    await expect(catalog.reseedDefaultEnabledFlags()).resolves.toBe(1);
+    await expect(catalog.reseedDefaultEnabledFlags()).resolves.toBe(2);
 
     const rows = await catalog.listAsProviderModels();
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));

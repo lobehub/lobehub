@@ -1,15 +1,14 @@
 'use client';
 
 /**
- * React reference implementation of the platform admin panel.
- * Runtime operator UI is `apps/aico-control-plane/src/web/admin.html`.
- * This file is kept for a future Vite SPA on the control plane.
+ * Platform admin UI — control-plane SPA only (`SPA_TARGET=control-plane`).
+ * Talks to `@aico/control-plane` via `controlPlaneClient` (not the product lambda).
  */
 
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Select, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
-import { Building2Icon, DollarSignIcon, RefreshCwIcon, ShieldIcon, WalletIcon } from 'lucide-react';
+import { Building2Icon, RefreshCwIcon, ShieldIcon, WalletIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +22,7 @@ import {
 } from '@/features/AicoBilling/FxTopupFields';
 import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { useClientDataSWR } from '@/libs/swr';
-import { lambdaClient } from '@/libs/trpc/client';
+import { controlPlaneClient } from '@/libs/trpc/client/controlPlane';
 
 const usd = (n: number | string | undefined | null) => `$${Number(n ?? 0).toFixed(2)}`;
 
@@ -53,33 +52,33 @@ export const PlatformAdminPanel = () => {
   const [busy, setBusy] = useState(false);
 
   const { data, error, isLoading, mutate } = useClientDataSWR('aico-platform-orgs', () =>
-    lambdaClient.platformAdmin.listOrganizations.query({ page: 1, pageSize: 50 }),
+    controlPlaneClient.platformAdmin.listOrganizations.query({ page: 1, pageSize: 50 }),
   );
 
   const { data: financials, mutate: mutateFinancials } = useClientDataSWR(
     'aico-platform-financials',
-    () => lambdaClient.platformAdmin.getPlatformFinancials.query(),
+    () => controlPlaneClient.platformAdmin.getPlatformFinancials.query(),
   );
   const { data: fx } = useClientDataSWR('aico-fx', () =>
-    lambdaClient.platformAdmin.getFxRate.query(),
+    controlPlaneClient.platformAdmin.getFxRate.query(),
   );
   const { data: master } = useClientDataSWR('aico-platform-master', () =>
-    lambdaClient.platformAdmin.getMasterAccountStatus.query(),
+    controlPlaneClient.platformAdmin.getMasterAccountStatus.query(),
   );
   const { data: trialConfig, mutate: mutateTrial } = useClientDataSWR('aico-trial-config', () =>
-    lambdaClient.platformAdmin.getTrialConfig.query(),
+    controlPlaneClient.platformAdmin.getTrialConfig.query(),
   );
   const { data: userWallets, mutate: mutateUserWallets } = useClientDataSWR(
     'aico-user-wallets',
-    () => lambdaClient.platformAdmin.listUserWallets.query(),
+    () => controlPlaneClient.platformAdmin.listUserWallets.query(),
   );
   const { data: modelSync, mutate: mutateModelSync } = useClientDataSWR(
     'aico-openrouter-model-sync',
-    () => lambdaClient.platformAdmin.getOpenRouterModelSyncStatus.query(),
+    () => controlPlaneClient.platformAdmin.getOpenRouterModelSyncStatus.query(),
   );
   const { data: modelSyncHistory, mutate: mutateModelSyncHistory } = useClientDataSWR(
     'aico-openrouter-model-sync-history',
-    () => lambdaClient.platformAdmin.listOpenRouterModelSyncHistory.query({ limit: 15 }),
+    () => controlPlaneClient.platformAdmin.listOpenRouterModelSyncHistory.query({ limit: 15 }),
   );
 
   useEffect(() => {
@@ -95,12 +94,21 @@ export const PlatformAdminPanel = () => {
   }, [trialConfig, trialForm]);
 
   if (error) {
+    const code = (error as { data?: { code?: string } })?.data?.code;
+    // Auth / non-admin should never reach this panel — gate handles those.
+    if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN') {
+      return null;
+    }
     return (
       <Flexbox className={aicoPanelStyles.page} gap={8}>
         <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={8}>
-            <Text strong>{t('platform.forbiddenTitle')}</Text>
-            <Text type="secondary">{t('platform.forbiddenDesc')}</Text>
+            <Text strong>{t('platform.loadErrorTitle')}</Text>
+            <Text type="secondary">
+              {t('platform.loadErrorDesc', {
+                message: (error as Error)?.message || code || 'unknown',
+              })}
+            </Text>
           </Flexbox>
         </Block>
       </Flexbox>
@@ -130,7 +138,6 @@ export const PlatformAdminPanel = () => {
         <StatisticCard
           title={t('platform.usdCredited')}
           statistic={{
-            prefix: <DollarSignIcon size={16} />,
             value: usd(financials?.totalUsdCredited),
           }}
         />
@@ -222,7 +229,7 @@ export const PlatformAdminPanel = () => {
                 onFinish={async (values) => {
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.createOrganization.mutate(values);
+                    await controlPlaneClient.platformAdmin.createOrganization.mutate(values);
                     toast.success(t('platform.created'));
                     createForm.resetFields();
                     await mutate();
@@ -268,7 +275,7 @@ export const PlatformAdminPanel = () => {
                 onFinish={async (values) => {
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.assignManager.mutate(values);
+                    await controlPlaneClient.platformAdmin.assignManager.mutate(values);
                     toast.success(t('platform.assigned'));
                     await mutate();
                   } catch (err) {
@@ -360,7 +367,7 @@ export const PlatformAdminPanel = () => {
                             <Button
                               size="small"
                               onClick={async () => {
-                                await lambdaClient.platformAdmin.suspendOrganization.mutate({
+                                await controlPlaneClient.platformAdmin.suspendOrganization.mutate({
                                   orgId: row.id,
                                 });
                                 await mutate();
@@ -372,7 +379,7 @@ export const PlatformAdminPanel = () => {
                             <Button
                               size="small"
                               onClick={async () => {
-                                await lambdaClient.platformAdmin.activateOrganization.mutate({
+                                await controlPlaneClient.platformAdmin.activateOrganization.mutate({
                                   orgId: row.id,
                                 });
                                 await mutate();
@@ -431,7 +438,7 @@ export const PlatformAdminPanel = () => {
               onClick={async () => {
                 setBusy(true);
                 try {
-                  await lambdaClient.platformAdmin.syncOpenRouterModels.mutate();
+                  await controlPlaneClient.platformAdmin.syncOpenRouterModels.mutate();
                   toast.success(t('platform.modelsSynced'));
                   await Promise.all([mutateModelSync(), mutateModelSyncHistory()]);
                 } catch (err) {
@@ -522,7 +529,7 @@ export const PlatformAdminPanel = () => {
                     .split(/[,\n]/)
                     .map((s: string) => s.trim())
                     .filter(Boolean);
-                  await lambdaClient.platformAdmin.updateTrialConfig.mutate({
+                  await controlPlaneClient.platformAdmin.updateTrialConfig.mutate({
                     allowedModelIds,
                     durationDays: values.durationDays,
                     enabled: values.enabled,
@@ -652,7 +659,7 @@ export const PlatformAdminPanel = () => {
                             onClick={async () => {
                               setBusy(true);
                               try {
-                                await lambdaClient.platformAdmin.reactivateUser.mutate({
+                                await controlPlaneClient.platformAdmin.reactivateUser.mutate({
                                   userId: row.userId,
                                 });
                                 toast.success(t('platform.reactivateSuccess'));
@@ -699,7 +706,7 @@ export const PlatformAdminPanel = () => {
                   if (!window.confirm(t('platform.deactivateConfirm'))) return;
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.deactivateUser.mutate({
+                    await controlPlaneClient.platformAdmin.deactivateUser.mutate({
                       reason: values.reason,
                       userId: values.userId,
                     });
@@ -754,7 +761,7 @@ export const PlatformAdminPanel = () => {
                   if (!payload) return;
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.addManualCredit.mutate({
+                    await controlPlaneClient.platformAdmin.addManualCredit.mutate({
                       ...payload,
                       description: values.description,
                       orgId: values.orgId,
@@ -814,7 +821,7 @@ export const PlatformAdminPanel = () => {
                   if (!payload) return;
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.addManualUserCredit.mutate({
+                    await controlPlaneClient.platformAdmin.addManualUserCredit.mutate({
                       ...payload,
                       description: values.description,
                       email: values.email || undefined,

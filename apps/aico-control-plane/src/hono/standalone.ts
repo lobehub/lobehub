@@ -8,7 +8,7 @@ type HonoStandaloneGlobal = typeof globalThis & {
   __aicoControlPlaneServer?: Server;
 };
 
-const DEFAULT_HOST = 'localhost';
+const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_PORT = 3020;
 
 const resolvePort = () => {

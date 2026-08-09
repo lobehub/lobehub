@@ -20,9 +20,13 @@ export const createControlPlaneTrpcApp = () => {
   const app = new Hono();
 
   const handler = async (request: Request) => {
-    const preparedReq = prepareRequestForTRPC(new NextRequest(request));
+    // One NextRequest for auth context; clone the body stream for tRPC (same
+    // pattern as src/app/(backend)/trpc/lambda/[trpc]/route.ts). Constructing
+    // NextRequest twice from the same raw Request throws after the body is used.
+    const nextReq = new NextRequest(request);
+    const preparedReq = prepareRequestForTRPC(nextReq);
     return fetchRequestHandler({
-      createContext: () => createLambdaContext(new NextRequest(request)),
+      createContext: () => createLambdaContext(nextReq),
       endpoint: '/trpc/lambda',
       onError: createTRPCErrorLogger('control-plane'),
       req: preparedReq,

@@ -1,16 +1,17 @@
 import {
-  OPENROUTER_AUTO_DISPLAY_NAME,
-  OPENROUTER_AUTO_MODEL_ID,
   computeDefaultEnabledOpenRouterModelIds,
   ensureOpenRouterAutoModel,
+  OPENROUTER_AUTO_DISPLAY_NAME,
+  OPENROUTER_AUTO_MODEL_ID,
 } from '@lobechat/business-const';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AiProviderModelListItem, ModelAbilities, Pricing } from 'model-bank';
 import { AiModelSourceEnum, normalizeAiModelType } from 'model-bank';
 
 import {
   type NewOpenrouterModelCatalog,
   openrouterModelCatalog,
+  openrouterModelSyncRuns,
   openrouterModelSyncState,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -21,6 +22,17 @@ export type OpenRouterCatalogSyncStatus = {
   lastSyncedAt: string | null;
   lastTriggeredBy: string | null;
   modelCount: number;
+};
+
+export type OpenRouterCatalogSyncRun = {
+  addedModelIds: string[];
+  error: string | null;
+  id: string;
+  modelCount: number;
+  removedModelIds: string[];
+  status: string;
+  syncedAt: string;
+  triggeredBy: string | null;
 };
 
 export type OpenRouterCatalogModelInput = {
@@ -68,6 +80,25 @@ export class OpenRouterModelCatalogModel {
       lastTriggeredBy: row?.lastTriggeredBy ?? null,
       modelCount: row?.modelCount ?? 0,
     };
+  };
+
+  listSyncRuns = async (limit = 20): Promise<OpenRouterCatalogSyncRun[]> => {
+    const rows = await this.db
+      .select()
+      .from(openrouterModelSyncRuns)
+      .orderBy(desc(openrouterModelSyncRuns.syncedAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      addedModelIds: row.addedModelIds ?? [],
+      error: row.error ?? null,
+      id: row.id,
+      modelCount: row.modelCount,
+      removedModelIds: row.removedModelIds ?? [],
+      status: row.status,
+      syncedAt: row.syncedAt.toISOString(),
+      triggeredBy: row.triggeredBy ?? null,
+    }));
   };
 
   count = async (): Promise<number> => {
@@ -183,6 +214,7 @@ export class OpenRouterModelCatalogModel {
     const existing = await this.db
       .select({ id: openrouterModelCatalog.id })
       .from(openrouterModelCatalog);
+    const existingIds = new Set(existing.map((r) => r.id));
 
     const defaultEnabled = computeDefaultEnabledOpenRouterModelIds(
       models.map((model) => ({
@@ -191,6 +223,13 @@ export class OpenRouterModelCatalogModel {
         type: model.type,
       })),
     );
+
+    const addedModelIds = incomingIds.filter(
+      (id) => !existingIds.has(id) && id !== OPENROUTER_AUTO_MODEL_ID,
+    );
+    const removedModelIds = existing
+      .filter((r) => !incomingIds.includes(r.id) && r.id !== OPENROUTER_AUTO_MODEL_ID)
+      .map((r) => r.id);
 
     const rows: NewOpenrouterModelCatalog[] = models.map((model) => {
       const {
@@ -240,9 +279,7 @@ export class OpenRouterModelCatalogModel {
     await this.db.transaction(async (tx) => {
       if (incomingIds.length > 0) {
         // Delete rows that disappeared from OpenRouter (never drop Auto)
-        const stale = existing
-          .filter((r) => !incomingIds.includes(r.id) && r.id !== OPENROUTER_AUTO_MODEL_ID)
-          .map((r) => r.id);
+        const stale = removedModelIds;
         if (stale.length > 0) {
           await tx.delete(openrouterModelCatalog).where(inArray(openrouterModelCatalog.id, stale));
         }
@@ -297,6 +334,16 @@ export class OpenRouterModelCatalogModel {
           },
           target: openrouterModelSyncState.id,
         });
+
+      await tx.insert(openrouterModelSyncRuns).values({
+        addedModelIds,
+        error: null,
+        modelCount: rows.length,
+        removedModelIds,
+        status: 'success',
+        syncedAt: now,
+        triggeredBy: params.triggeredBy,
+      });
     });
 
     return this.getSyncStatus();
@@ -308,25 +355,38 @@ export class OpenRouterModelCatalogModel {
   }): Promise<OpenRouterCatalogSyncStatus> => {
     const now = new Date();
     const current = await this.getSyncStatus();
-    await this.db
-      .insert(openrouterModelSyncState)
-      .values({
-        id: SYNC_STATE_ID,
-        lastError: params.error.slice(0, 2000),
-        lastStatus: 'error',
-        lastSyncedAt: current.lastSyncedAt ? new Date(current.lastSyncedAt) : null,
-        lastTriggeredBy: params.triggeredBy,
-        modelCount: current.modelCount,
-      })
-      .onConflictDoUpdate({
-        set: {
-          lastError: params.error.slice(0, 2000),
+    const errorText = params.error.slice(0, 2000);
+    await this.db.transaction(async (tx) => {
+      await tx
+        .insert(openrouterModelSyncState)
+        .values({
+          id: SYNC_STATE_ID,
+          lastError: errorText,
           lastStatus: 'error',
+          lastSyncedAt: current.lastSyncedAt ? new Date(current.lastSyncedAt) : null,
           lastTriggeredBy: params.triggeredBy,
-          updatedAt: now,
-        },
-        target: openrouterModelSyncState.id,
+          modelCount: current.modelCount,
+        })
+        .onConflictDoUpdate({
+          set: {
+            lastError: errorText,
+            lastStatus: 'error',
+            lastTriggeredBy: params.triggeredBy,
+            updatedAt: now,
+          },
+          target: openrouterModelSyncState.id,
+        });
+
+      await tx.insert(openrouterModelSyncRuns).values({
+        addedModelIds: [],
+        error: errorText,
+        modelCount: current.modelCount,
+        removedModelIds: [],
+        status: 'error',
+        syncedAt: now,
+        triggeredBy: params.triggeredBy,
       });
+    });
 
     return this.getSyncStatus();
   };

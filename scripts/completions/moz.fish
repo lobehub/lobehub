@@ -6,7 +6,7 @@ complete -c moz -s d -l deploy -l deploy-only -d 'Force redeploy / recreate (no 
 complete -c moz -s b -l build -l build-only -d 'Build image only (skip deploy)'
 complete -c moz -s B -l backup -d 'Backup Postgres + RustFS now'
 complete -c moz -s r -l restart -d 'Restart containers (start if stopped)'
-complete -c moz -s i -l info -l status -d 'Show containers, HTTP, and migration info'
+complete -c moz -s i -l info -l status -d 'Show containers, HTTP, control plane, and migration info'
 complete -c moz -s k -l kill -l stop -l down -d 'Kill (stop) deployment containers'
 complete -c moz -n '__fish_use_subcommand' -a up -d 'Build from source, then force-deploy'
 complete -c moz -n '__fish_use_subcommand' -a deploy -d 'Force redeploy / recreate (no build)'

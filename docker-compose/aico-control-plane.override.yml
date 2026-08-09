@@ -1,23 +1,15 @@
-# Optional overlay: run the Aico control plane beside the product stack.
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose/aico-control-plane.override.yml up -d
+# Optional pointer for docs / manual compose.
+# `moz` / `scripts/deploy-local.sh` already include:
+#   docker-compose/deploy/docker-compose.aico.control-plane.override.yml
 #
-# Product container must NOT receive OPENROUTER_MANAGEMENT_API_KEY.
-# Point product env at this service instead.
-
-services:
-  aico-control-plane:
-    image: aico-control-plane:local
-    build:
-      context: ..
-      dockerfile: apps/aico-control-plane/Dockerfile
-    environment:
-      AICO_IS_CONTROL_PLANE: '1'
-      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN}
-      OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY}
-      DATABASE_URL: ${DATABASE_URL}
-      KEY_VAULTS_SECRET: ${KEY_VAULTS_SECRET}
-      AUTH_SECRET: ${AUTH_SECRET}
-    ports:
-      - '${AICO_CONTROL_PLANE_PORT:-3020}:3020'
-    restart: unless-stopped
+# Manual usage from docker-compose/deploy:
+#   docker compose \
+#     --env-file ../../.env --env-file .env \
+#     -f docker-compose.yml \
+#     -f docker-compose.aico.override.yml \
+#     -f docker-compose.aico.data.override.yml \
+#     -f docker-compose.aico.control-plane.override.yml \
+#     up -d
+#
+# This file is intentionally a no-op so accidental `-f` usage is harmless.
+services: {}

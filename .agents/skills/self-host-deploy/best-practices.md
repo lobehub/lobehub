@@ -295,7 +295,23 @@ Optional: Grafana stack in `docker-compose/production/grafana/`.
 
 ### Control plane (required for OpenRouter key management)
 
-Run `@aico/control-plane` as a separate process. Put secrets only there:
+`moz` starts the control plane automatically (`aico-control-plane` on port `3020`).
+UI and API share that port. Put the management key only in the repo root `.env` — the
+product container clears it and talks to the control plane via `AICO_CONTROL_PLANE_URL`
+
+- `AICO_CONTROL_PLANE_SERVICE_TOKEN`.
+
+```bash
+# repo root .env (loaded by moz)
+OPENROUTER_MANAGEMENT_API_KEY=sk-or-v1-...
+AICO_CONTROL_PLANE_SERVICE_TOKEN=long-random-token
+AICO_CONTROL_PLANE_PORT=3020
+
+moz -u # builds control-plane SPA+API and deploys with the product stack
+# Admin UI: http://127.0.0.1:3020/
+```
+
+Without moz, run `@aico/control-plane` as a separate process:
 
 ```bash
 # control plane
@@ -303,6 +319,7 @@ export AICO_IS_CONTROL_PLANE=1
 export OPENROUTER_MANAGEMENT_API_KEY=sk-or-v1-...
 export AICO_CONTROL_PLANE_SERVICE_TOKEN=long-random-token
 export AICO_CONTROL_PLANE_PORT=3020
+pnpm --filter @aico/control-plane build
 pnpm --filter @aico/control-plane start
 
 # product server — no management key

@@ -42,6 +42,17 @@ const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, 
 });
 
 export const platformAdminRouter = router({
+  /**
+   * Soft gate for the control-plane SPA: authenticated users learn whether they
+   * are platform admins without throwing FORBIDDEN (so the UI can stay on login /
+   * "not allowed" instead of the admin panel shell).
+   */
+  checkAccess: authedProcedure.use(serverDatabase).query(async ({ ctx }) => {
+    const organizationModel = new OrganizationModel(ctx.serverDB);
+    const isPlatformAdmin = await organizationModel.isPlatformAdmin(ctx.userId);
+    return { isPlatformAdmin, userId: ctx.userId };
+  }),
+
   /** FX helper for the control-plane admin UI (replaces aicoBilling.getFxRate there). */
   getFxRate: platformProcedure.query(async () => {
     const { rate, source } = await getTomanPerUsd();
