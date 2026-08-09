@@ -90,24 +90,41 @@ const hostnameOf = (url?: string): string | null => {
  * Strip clipping noise down to readable excerpt text: YAML frontmatter,
  * markdown images/links (including the `(<url>)` angle-bracket form and
  * empty-text link shells), html tags and markdown punctuation.
+ *
+ * The output is a plain-text excerpt: after tag stripping every remaining
+ * angle bracket is dropped too, so no `<script`-style fragment can survive
+ * (js/incomplete-multi-character-sanitization).
  */
-const excerptOf = (content?: string | null): string =>
-  (content ?? '')
+export const excerptOf = (content?: string | null): string => {
+  let text = (content ?? '')
     .replace(/^\s*---[\s\S]*?---\s*/, '')
     .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replaceAll(/<\/?[a-z][^>]*>/gi, '')
-    // markdown table rulers (|:---|---|) survive as long dash runs once the
-    // pipes are stripped — drop them together with any leftover link shells
-    .replaceAll(/:?-{3,}:?/g, ' ')
-    .replaceAll(/\[\s*\]/g, '')
-    .replaceAll(/[#*>`_\\|]/g, '')
-    .replaceAll(/\(\s*\)/g, '')
-    // nested-link leftovers surface as stray bracket runs like `(]`
-    .replaceAll(/[()[\]]{2,}/g, ' ')
-    .replaceAll(/\s+/g, ' ')
-    .trim()
-    .slice(0, 240);
+    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+
+  // strip html tags to a fixpoint — a single pass can splice a new tag
+  // together (e.g. `<scr<b>ipt`), which is exactly what CodeQL flags
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replaceAll(/<\/?[a-z][^>]*>/gi, '');
+  } while (text !== previous);
+
+  return (
+    text
+      // markdown table rulers (|:---|---|) survive as long dash runs once the
+      // pipes are stripped — drop them together with any leftover link shells
+      .replaceAll(/:?-{3,}:?/g, ' ')
+      .replaceAll(/\[\s*\]/g, '')
+      // plain-text excerpt: no angle brackets survive at all
+      .replaceAll(/[#*<>`_\\|]/g, '')
+      .replaceAll(/\(\s*\)/g, '')
+      // nested-link leftovers surface as stray bracket runs like `(]`
+      .replaceAll(/[()[\]]{2,}/g, ' ')
+      .replaceAll(/\s+/g, ' ')
+      .trim()
+      .slice(0, 240)
+  );
+};
 
 /**
  * Clippings without a real page title store the URL in `name`. A raw URL as a
@@ -115,7 +132,7 @@ const excerptOf = (content?: string | null): string =>
  * document name, e.g. `SKILL.md`) or the hostname; the full source stays on
  * the domain row and the open-link button.
  */
-const displayTitle = (name: string): string => {
+export const displayTitle = (name: string): string => {
   if (!/^https?:\/\//.test(name.trim())) return name;
   try {
     const parsed = new URL(name.trim());
