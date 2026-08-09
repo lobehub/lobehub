@@ -1544,7 +1544,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-1',
-        metadata: {},
+        metadata: { runningOperation: undefined },
       });
 
       await h.handler.finish({

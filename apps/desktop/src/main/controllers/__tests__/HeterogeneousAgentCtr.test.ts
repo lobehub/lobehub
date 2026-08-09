@@ -1490,6 +1490,7 @@ describe('HeterogeneousAgentCtr', () => {
   describe('spawnLhHeteroExec', () => {
     const params = {
       agentType: 'opencode',
+      assistantMessageId: 'asst-gateway',
       jwt: 'device-jwt',
       operationId: 'op-gateway',
       prompt: 'inspect the repository',
@@ -1537,6 +1538,7 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
+          LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst-gateway',
           LOBEHUB_JWT: 'device-jwt',
           LOBEHUB_SERVER: 'https://server.example.com',
         }),

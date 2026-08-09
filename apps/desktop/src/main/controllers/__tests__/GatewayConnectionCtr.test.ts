@@ -868,6 +868,18 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('forwards the seeded assistant message id to the hetero launcher', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-assistant', 'hi', 'mock-jwt', {
+        assistantMessageId: 'asst-1',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ assistantMessageId: 'asst-1' }),
+      );
+    });
+
     it('forwards resolved selector args from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-args', 'hi', 'mock-jwt', {

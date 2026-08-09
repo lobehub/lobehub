@@ -2001,6 +2001,7 @@ export default class HeterogeneousAgentCtr {
    */
   spawnLhHeteroExec(params: {
     agentType: string;
+    assistantMessageId?: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
@@ -2016,6 +2017,7 @@ export default class HeterogeneousAgentCtr {
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
+      assistantMessageId,
       args: extraArgs,
       cwd,
       imageList,
@@ -2071,6 +2073,7 @@ export default class HeterogeneousAgentCtr {
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
       LOBEHUB_JWT: jwt,
+      ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
     };
 
