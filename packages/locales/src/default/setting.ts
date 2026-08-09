@@ -260,6 +260,27 @@ export default {
   'permission.page.entry': 'Member Permissions',
   'permission.page.generalAccessDesc':
     'What every workspace member can do with this agent. The creator and workspace owners always keep full access.',
+  'permission.page.groupAccessLevelPrivateHint':
+    'Members get this level once the group is published to the workspace. It can be changed after publishing.',
+  'permission.page.groupDevicePolicyDesc':
+    'Whether members can switch the execution environment for their own runs in this group.',
+  'permission.page.groupDevicePolicyFixedDesc':
+    'Members can only use the environment you set for this group',
+  'permission.page.groupDevicePolicyMemberDesc': 'Members can set their own execution environment',
+  'permission.page.groupDevicePolicyUnset':
+    'Pick an execution environment for the orchestrator first, then you can fix it here.',
+  'permission.page.groupGeneralAccessDesc':
+    'What every workspace member can do with this group. The same level is applied to the member agents the group owns. The creator and workspace owners always keep full access.',
+  'permission.page.groupPersonalDesc':
+    'This group only belongs to you, so there is nothing to share yet. Publish it to a workspace to set member permissions.',
+  'permission.page.groupPersonalTitle': 'Permissions apply to workspace groups',
+  'permission.page.groupPrivateNotice':
+    'This group is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.groupModelPolicyDesc':
+    'Whether members can switch the model for their own conversations in this group.',
+  'permission.page.groupModelPolicyFixedDesc':
+    'Members can only use the model you set for this group',
+  'permission.page.groupModelPolicyMemberDesc': 'Members can use a model they set themselves',
   'permission.page.memberGroup': 'Access',
   'permission.page.modelPolicyFixedDesc': 'Members can only use the model you set',
   'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',

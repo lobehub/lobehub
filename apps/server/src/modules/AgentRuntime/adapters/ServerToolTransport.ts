@@ -206,6 +206,7 @@ export class ServerToolTransport implements ToolTransport {
                 : undefined,
               documentId: context.state.metadata?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
+              editingGroupId: context.state.metadata?.editingGroupId,
               execSubAgent: this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
               groupId: context.state.metadata?.groupId,

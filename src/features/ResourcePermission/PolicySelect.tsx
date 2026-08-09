@@ -74,10 +74,10 @@ interface PolicySelectProps<Value extends string> {
 }
 
 /**
- * The one control shape shared by every row of the Agent Permission page:
- * a two-line option in the popup (what it means), a single compact line once
- * chosen. Keeping all three rows on one component is what makes "who can do
- * what" read as a single decision rather than three unrelated widgets.
+ * The one control shape shared by every row of the Agent / Agent Group
+ * Permission pages: a two-line option in the popup (what it means), a single
+ * compact line once chosen. Keeping every row on one component is what makes
+ * "who can do what" read as a single decision rather than unrelated widgets.
  */
 const PolicySelectInner = <Value extends string>({
   disabled,

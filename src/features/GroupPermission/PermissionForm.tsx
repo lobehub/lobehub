@@ -14,12 +14,13 @@ import PolicySelect, { type PolicyOption } from '@/features/ResourcePermission/P
 import { getSelectionPolicyLabelKeys } from '@/features/ResourcePermission/selectionPolicyLabels';
 import { useAccessLevelOptions } from '@/features/ResourcePermission/useAccessLevelOptions';
 
-import { useAgentPermission } from './useAgentPermission';
+import { resolveGroupPermissionSections } from './permissionSections';
+import { useGroupPermission } from './useGroupPermission';
 
 const styles = createStaticStyles(({ css }) => ({
-  // FormTitle centres the avatar against title+description; a one-line icon
-  // should sit on the title instead, so pin it to the top and centre it inside
-  // a box the height of the title's own line (`line-height: 1`, inherited size).
+  // Same one-line-icon alignment the Agent Permission form uses: FormTitle
+  // centres the avatar against title+description, which drops a single-line
+  // icon below the label it belongs to.
   rowIcon: css`
     display: flex;
     align-items: center;
@@ -29,10 +30,10 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface PermissionFormProps {
-  agentId: string;
+  groupId: string;
 }
 
-const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
+const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
   const { t } = useTranslation('setting');
   const {
     accessError,
@@ -42,29 +43,36 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     canFixExecutionTarget,
     canManageAccess,
     executionTargetPolicy,
+    hasSupervisor,
     isPrivate,
-    isWorkspaceAgent,
+    isWorkspaceGroup,
     modelPolicy,
     retryAccess,
     setAccessLevel,
     setExecutionTargetPolicy,
     setModelPolicy,
-  } = useAgentPermission(agentId);
+  } = useGroupPermission(groupId);
 
+  const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
+  const sections = resolveGroupPermissionSections({
+    accessError,
+    canManageAccess,
+    hasSupervisor,
+    isPrivate,
+    isWorkspaceGroup,
+  });
 
-  // Same shape as the access-level options: the label is the decision, the
-  // description says what it means for a member day to day.
   const modelPolicyOptions = useMemo(
     (): PolicyOption<AgentModelSelectionPolicy>[] => [
       {
-        desc: t('permission.page.modelPolicyMemberDesc'),
+        desc: t('permission.page.groupModelPolicyMemberDesc'),
         icon: UsersIcon,
         label: t(labelKeys.member),
         value: 'member',
       },
       {
-        desc: t('permission.page.modelPolicyFixedDesc'),
+        desc: t('permission.page.groupModelPolicyFixedDesc'),
         icon: LockIcon,
         label: t(labelKeys.fixed),
         value: 'fixed',
@@ -73,12 +81,10 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     [labelKeys, t],
   );
 
-  const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
-
   const executionPolicyOptions = useMemo(
     (): PolicyOption<AgentModelSelectionPolicy>[] => [
       {
-        desc: t('permission.page.devicePolicyMemberDesc'),
+        desc: t('permission.page.groupDevicePolicyMemberDesc'),
         icon: UsersIcon,
         label: t(labelKeys.member),
         value: 'member',
@@ -87,13 +93,13 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
       // letting the click fail silently.
       canFixExecutionTarget
         ? {
-            desc: t('permission.page.devicePolicyFixedDesc'),
+            desc: t('permission.page.groupDevicePolicyFixedDesc'),
             icon: LockIcon,
             label: t(labelKeys.fixed),
             value: 'fixed',
           }
         : {
-            desc: t('permission.page.devicePolicyUnset'),
+            desc: t('permission.page.groupDevicePolicyUnset'),
             disabled: true,
             icon: LockIcon,
             label: t(labelKeys.fixed),
@@ -103,18 +109,18 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     [canFixExecutionTarget, labelKeys, t],
   );
 
-  if (!isWorkspaceAgent) {
+  if (sections.showPersonalEmpty) {
     return (
       <Empty
-        description={t('permission.page.personalDesc')}
+        description={t('permission.page.groupPersonalDesc')}
         icon={LockIcon}
-        title={t('permission.page.personalTitle')}
+        title={t('permission.page.groupPersonalTitle')}
         type={'page'}
       />
     );
   }
 
-  const memberGroup: FormGroupItemType | undefined = !accessError
+  const memberGroup: FormGroupItemType | undefined = sections.showAccessCard
     ? {
         children: [
           {
@@ -128,7 +134,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
                 // Not disabled while the write is in flight: the level updates
                 // optimistically and a failure rolls back with a toast, so
                 // greying the control out only adds a visible dead beat — the
-                // switch policies next to it behave the same way.
+                // policies next to it behave the same way.
                 disabled={!canManageAccess}
                 loading={accessLoading}
                 options={accessOptions}
@@ -136,11 +142,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
                 onChange={setAccessLevel}
               />
             ),
-            desc: canManageAccess
-              ? isPrivate
-                ? t('permission.page.accessLevelPrivateHint')
-                : t('permission.page.generalAccessDesc')
-              : t('permission.noManagePermission'),
+            desc: t(sections.accessDescKey),
             label: t('permission.page.accessLevelLabel'),
           },
         ],
@@ -148,67 +150,72 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
       }
     : undefined;
 
-  const configGroup: FormGroupItemType = {
-    children: [
-      {
-        avatar: (
-          <span className={styles.rowIcon}>
-            <Icon icon={Bot} size={16} />
-          </span>
-        ),
-        children: (
-          <PolicySelect
-            disabled={!canEditConfig}
-            options={modelPolicyOptions}
-            value={modelPolicy}
-            onChange={setModelPolicy}
-          />
-        ),
-        desc: t('permission.page.modelPolicyDesc'),
-        label: t('settingAgent.modelPolicy.title'),
-      },
-      {
-        avatar: (
-          <span className={styles.rowIcon}>
-            <Icon icon={MonitorSmartphone} size={16} />
-          </span>
-        ),
-        children: (
-          <PolicySelect
-            disabled={!canEditConfig}
-            options={executionPolicyOptions}
-            value={executionTargetPolicy}
-            onChange={setExecutionTargetPolicy}
-          />
-        ),
-        desc: t('permission.page.devicePolicyDesc'),
-        label: t('settingAgent.devicePolicy.title'),
-      },
-    ],
-    title: t('permission.page.configGroup'),
-  };
+  // Both rows write to the supervisor agent. Until group detail resolves one
+  // there is no row to write to, so the whole card waits rather than offering
+  // controls whose save would silently target nothing.
+  const configGroup: FormGroupItemType | undefined = sections.showConfigCard
+    ? {
+        children: [
+          {
+            avatar: (
+              <span className={styles.rowIcon}>
+                <Icon icon={Bot} size={16} />
+              </span>
+            ),
+            children: (
+              <PolicySelect
+                disabled={!canEditConfig}
+                options={modelPolicyOptions}
+                value={modelPolicy}
+                onChange={setModelPolicy}
+              />
+            ),
+            desc: t('permission.page.groupModelPolicyDesc'),
+            label: t('settingAgent.modelPolicy.title'),
+          },
+          {
+            avatar: (
+              <span className={styles.rowIcon}>
+                <Icon icon={MonitorSmartphone} size={16} />
+              </span>
+            ),
+            children: (
+              <PolicySelect
+                disabled={!canEditConfig}
+                options={executionPolicyOptions}
+                value={executionTargetPolicy}
+                onChange={setExecutionTargetPolicy}
+              />
+            ),
+            desc: t('permission.page.groupDevicePolicyDesc'),
+            label: t('settingAgent.devicePolicy.title'),
+          },
+        ],
+        title: t('permission.page.configGroup'),
+      }
+    : undefined;
 
   return (
     <>
-      {/* A failed permission fetch must not read as "this agent has no member
+      {/* A failed permission fetch must not read as "this group has no member
           permissions" — name the failure and keep a way back to the data. */}
       {accessError ? (
         <AsyncError error={accessError} variant={'inline'} onRetry={retryAccess} />
       ) : null}
-      {/* Everything below describes what happens once the agent is shared, so
+      {/* Everything below describes what happens once the group is shared, so
           say that once, up front, instead of qualifying each control. */}
-      {isPrivate ? (
+      {sections.showPrivateNotice ? (
         <Alert
           icon={<Icon icon={InfoIcon} />}
           style={{ width: '100%' }}
-          title={t('permission.page.privateNotice')}
+          title={t('permission.page.groupPrivateNotice')}
           type={'info'}
           variant={'outlined'}
         />
       ) : null}
       <Form
         collapsible={false}
-        items={[...(memberGroup ? [memberGroup] : []), configGroup]}
+        items={[...(memberGroup ? [memberGroup] : []), ...(configGroup ? [configGroup] : [])]}
         itemsType={'group'}
         variant={'filled'}
         {...FORM_STYLE}
@@ -217,6 +224,6 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
   );
 });
 
-PermissionForm.displayName = 'PermissionForm';
+PermissionForm.displayName = 'GroupPermissionForm';
 
 export default PermissionForm;

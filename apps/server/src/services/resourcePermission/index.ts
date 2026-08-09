@@ -144,8 +144,8 @@ const resolveAgentBuiltinMarkers = async (
  * group supervisor) have no configuration surface, and letting any member
  * repoint their persisted model / chatConfig would silently change background
  * automation for the entire workspace. They keep the ordinary creator + General
- * access rules, which still allow every member to *use* them (the resource
- * default is `use`).
+ * access rules, which still allow every member to reach them through whatever
+ * level the workspace grants.
  */
 const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
   BUILTIN_AGENT_SLUGS.agentBuilder,
@@ -162,7 +162,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * created lazily by whichever member happens to trigger them first, so
  * `agents.user_id` records an accident of timing rather than authorship, and no
  * `resource_permissions` row is ever written for them (their effective General
- * access falls back to the `use` default). Treating them as creator-owned locks
+ * access falls back to the resource default). Treating them as creator-owned locks
  * every other member out of the Agent Builder, of Lobe AI's config page, and of
  * the Page Copilot's own settings, so they are governed by workspace
  * capability instead: anyone holding `agent:update:{owner,all}` may
@@ -282,7 +282,9 @@ export const canPerformResourceAction = async (params: {
   const isSharedWorkspaceAgent =
     !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
   // The bypass exists because these rows have no `resource_permissions` row and
-  // would silently fall back to the `use` default. An owner who *explicitly* sets
+  // would silently inherit whatever the resource default happens to be — today
+  // that default is `edit` and the bypass is a no-op, but it must not become a
+  // lockout again if the default is ever lowered. An owner who *explicitly* sets
   // a level still means it — otherwise the General-access control would persist a
   // value it never enforces — so only the implicit default is overridden.
   const hasExplicitAccessLevel = isSharedWorkspaceAgent
@@ -305,7 +307,7 @@ export const canPerformResourceAction = async (params: {
 
   if (isCreator) return true;
   // Collaboratively-configured workspace infrastructure is not creator-owned
-  // content, so the *implicit* `use` default must not lock members out. An
+  // content, so an *implicit* default below `edit` must not lock members out. An
   // explicitly configured level falls through to the comparison below.
   if (bypassesImplicitDefault) return true;
   if (isPrivate) return false;

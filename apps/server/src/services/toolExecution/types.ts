@@ -202,6 +202,12 @@ export interface ToolExecutionContext {
    */
   editingAgentId?: string;
   /**
+   * When scope is 'group_agent_builder', the ID of the group being edited. Kept
+   * separate from `groupId` so the builder's own conversation is not treated as
+   * a group chat turn; only GroupAgentBuilder tool methods read this.
+   */
+  editingGroupId?: string;
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.

@@ -207,6 +207,8 @@ const ExecAgentSchema = z
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
         editingAgentId: z.string().optional(),
+        /** The group being edited when scope is 'group_agent_builder' (not a group chat turn). */
+        editingGroupId: z.string().optional(),
         groupId: z.string().nullish(),
         initialTopicMetadata: z
           .object({

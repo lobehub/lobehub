@@ -274,7 +274,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
   ({ error: alertError, data, onRegenerate, retryScopeId }) => {
     const error = data.error;
     const navigate = useWorkspaceAwareNavigate();
-    const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
@@ -332,6 +331,13 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       if (resolvedScopeId) resetHeteroOverloadRetry(resolvedScopeId);
       handleRetryAgentMessage();
     }, [handleRetryAgentMessage, resetHeteroOverloadRetry, resolvedScopeId]);
+
+    // Business cards get the surface-resolved retry rather than deriving one
+    // from `data.id`: on the group surface that id is a nested content block,
+    // so message-level store actions can't resolve it and silently no-op.
+    const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id, {
+      onRetry: canRetry ? handleManualRetry : undefined,
+    });
 
     const autoRetry = useHeterogeneousAutoRetry({
       // Must be an actual heterogeneous-agent (CC / Codex) overloaded error —
@@ -441,7 +447,10 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
 
       case AgentRuntimeErrorType.QuotaLimitReached:
       case AgentRuntimeErrorType.RateLimitExceeded: {
-        if (enableBusinessFeatures) return <QuotaLimitError id={data.id} />;
+        if (enableBusinessFeatures)
+          return (
+            <QuotaLimitError id={data.id} onRetry={canRetry ? handleManualRetry : undefined} />
+          );
         break;
       }
 

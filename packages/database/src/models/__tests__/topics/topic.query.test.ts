@@ -213,7 +213,7 @@ describe('TopicModel - Query', () => {
       // The client sorts the sidebar by `sortUpdatedAt`, so it must carry the same
       // activity time the server ORDER BY uses (topicActivityAt) — otherwise the two
       // sorts disagree and the list jumps. `updatedAt` stays the raw row value so
-      // rename/favorite edits still show a real edit time. 
+      // rename/favorite edits still show a real edit time.
       await serverDB.insert(topics).values([
         { id: 'has-msg', sessionId, updatedAt: new Date('2023-01-01'), userId },
         { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },
@@ -925,6 +925,114 @@ describe('TopicModel - Query', () => {
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('group-topic');
+    });
+  });
+
+  describe('query with editing-target filters', () => {
+    // Builder panels run on one shared builtin agent for every target, so their
+    // topics all carry the same `agentId` and no `groupId` (a groupId would pull
+    // them into the target's own chat read path). What each conversation was
+    // configuring lives only in `metadata.editingGroupId` / `editingAgentId`.
+    // The panels list the full history on purpose — these filters exist for
+    // callers that want one target's builds.
+    const seedBuilderTopics = async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(agents)
+          .values([{ id: 'builder-agent', userId, title: 'Group Agent Builder' }]);
+        await trx.insert(chatGroups).values([
+          { id: 'grp-a', userId, title: 'Group A' },
+          { id: 'grp-b', userId, title: 'Group B' },
+        ]);
+        await trx.insert(topics).values([
+          {
+            id: 'builder-topic-a',
+            userId,
+            agentId: 'builder-agent',
+            metadata: { editingGroupId: 'grp-a' },
+            updatedAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'builder-topic-b',
+            userId,
+            agentId: 'builder-agent',
+            metadata: { editingGroupId: 'grp-b' },
+            updatedAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'builder-topic-legacy',
+            userId,
+            agentId: 'builder-agent',
+            updatedAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+    };
+
+    it('should only return builder topics belonging to the edited group', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({
+        agentId: 'builder-agent',
+        editingGroupId: 'grp-a',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['builder-topic-a']);
+      expect(result.total).toBe(1);
+    });
+
+    it('should exclude legacy builder topics that carry no editingGroupId', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({
+        agentId: 'builder-agent',
+        editingGroupId: 'grp-b',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['builder-topic-b']);
+    });
+
+    // The builder panel relies on this: its history list is deliberately
+    // unfiltered, so the default query must keep returning every build.
+    it('should return every builder topic when no editing target is given', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({ agentId: 'builder-agent' });
+
+      expect(result.items).toHaveLength(3);
+    });
+
+    it('should filter agent-builder topics by the agent they configured', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([
+          { id: 'agent-builder-agent', userId, title: 'Agent Builder' },
+          { id: 'edited-agent-a', userId, title: 'Edited A' },
+          { id: 'edited-agent-b', userId, title: 'Edited B' },
+        ]);
+        await trx.insert(topics).values([
+          {
+            id: 'agent-build-a',
+            userId,
+            agentId: 'agent-builder-agent',
+            metadata: { editingAgentId: 'edited-agent-a' },
+            updatedAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'agent-build-b',
+            userId,
+            agentId: 'agent-builder-agent',
+            metadata: { editingAgentId: 'edited-agent-b' },
+            updatedAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agent-builder-agent',
+        editingAgentId: 'edited-agent-a',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['agent-build-a']);
     });
   });
 

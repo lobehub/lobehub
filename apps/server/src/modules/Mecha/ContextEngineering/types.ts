@@ -8,6 +8,7 @@ import type {
   DiscordContext,
   EvalContext,
   FileContent,
+  GroupAgentBuilderContext,
   KnowledgeBaseInfo,
   LobeToolManifest,
   OnboardingContext,
@@ -92,6 +93,8 @@ export interface ServerMessagesEngineParams {
   agentGroup?: AgentGroupConfig;
   /** Agent Management context (optional, available models and plugins) */
   agentManagementContext?: AgentManagementContext;
+  /** Group Agent Builder context (optional, for editing the current group) */
+  groupAgentBuilderContext?: GroupAgentBuilderContext;
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;

@@ -21,6 +21,8 @@ const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
 const displayMessageMock = vi.hoisted(() => new Map<string, { parentId?: string }>());
+// Stands in for whatever card a downstream build installs into the business slot.
+const businessSlot = vi.hoisted(() => ({ render: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
 const businessErrorContentMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -96,7 +98,10 @@ vi.mock('@/business/client/hooks/useBusinessErrorContent', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useRenderBusinessChatErrorMessageExtra', () => ({
-  default: () => undefined,
+  default: (_error: unknown, _messageId: string, options?: { onRetry?: () => void }) =>
+    businessSlot.render ? (
+      <button onClick={() => options?.onRetry?.()}>business-retry</button>
+    ) : undefined,
 }));
 
 vi.mock('@/features/Conversation/ChatItem/components/ErrorContent', () => ({
@@ -185,6 +190,7 @@ describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     dynamicComponentPropsMock.mockClear();
     missingTranslationKeys.clear();
+    businessSlot.render = false;
     serverConfigMock.enableBusinessFeatures = false;
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
@@ -340,6 +346,32 @@ describe('ErrorMessageExtra', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'dynamic-retry' }));
+
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the group retry to the business card so a multi-step run can resume', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+    businessSlot.render = true;
+    const onRegenerate = vi.fn();
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.InsufficientBudgetForModel' }}
+        retryScopeId="group-parent"
+        data={{
+          error: {
+            type: ChatErrorType.InsufficientBudgetForModel,
+          } as any,
+          // A nested content block of an assistantGroup — not a top-level
+          // display message, so the card cannot resolve a retry from it.
+          id: 'group-child-step-14',
+        }}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'business-retry' }));
 
     expect(onRegenerate).toHaveBeenCalledTimes(1);
   });

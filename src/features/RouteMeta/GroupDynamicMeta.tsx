@@ -64,4 +64,22 @@ export const GroupProfileDynamicMeta = ({ onResolve, params }: DynamicRouteMetaP
   return null;
 };
 
+export const GroupPermissionDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('electron');
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const group = useSessionStore((state) => {
+    const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(state);
+    return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
+  });
+
+  usePublishDynamicRouteMeta(
+    {
+      title: [t('navigation.permission'), group?.name].filter(Boolean).join(' · ') || undefined,
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
 export default GroupDynamicMeta;

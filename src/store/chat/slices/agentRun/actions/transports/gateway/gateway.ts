@@ -584,6 +584,17 @@ export class GatewayActionImpl {
           ...(executionContext.scope === 'agent_builder' && {
             editingAgentId: this.#get().activeAgentId ?? undefined,
           }),
+          // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+          // the group Profile page. The builder conversation is keyed by the
+          // builtin builder agent (no groupId in its ConversationContext, so the
+          // message map key and the group's own chat stay separate), which left
+          // the server runtime with no idea which group it was editing.
+          // The context value wins: it is the same one that keyed this run's
+          // message bucket, so a mid-run navigation cannot make the server stamp
+          // a different group onto the topic than the panel is reading from.
+          ...(executionContext.scope === 'group_agent_builder' && {
+            editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
+          }),
           groupId: executionContext.groupId,
           ...(initialTopicMetadata && { initialTopicMetadata }),
           // Forward the group orchestration role so the server can stamp it onto
