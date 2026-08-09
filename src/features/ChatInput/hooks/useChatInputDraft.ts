@@ -17,12 +17,12 @@ export const useChatInputDraft = () => {
   const loadedDraftKeyRef = useRef<string | undefined>(undefined);
 
   const persistDraftFor = useCallback(
-    (draftKey: string) => {
+    (draftKey: string, removeEmpty = true) => {
       const { editor, getMarkdownContent, getJSONState } = storeApi.getState();
       if (!editor) return;
 
       if (getMarkdownContent().trim().length === 0) {
-        if (loadedDraftKeyRef.current === draftKey) removeDraft(draftKey);
+        if (removeEmpty && loadedDraftKeyRef.current === draftKey) removeDraft(draftKey);
         return;
       }
 
@@ -44,14 +44,16 @@ export const useChatInputDraft = () => {
     [persistDraftFor, storeApi],
   );
 
-  // Persist the live document rather than flushing the pending save: the
-  // editor's own change notification is debounced too, so text typed in the
-  // last moment before unmount has not scheduled anything to flush.
+  // Flush locally scheduled work first so an intentional clear still removes
+  // its draft. Then save live non-empty content that may not have reached the
+  // debounce yet. The unconditional pass must not remove an empty draft: a
+  // different composer instance may have written the shared key since this
+  // instance restored it as empty.
   useEffect(
     () => () => {
-      saveDraftDebounced.cancel();
+      saveDraftDebounced.flush();
       const { draftKey } = storeApi.getState();
-      if (draftKey) persistDraftFor(draftKey);
+      if (draftKey) persistDraftFor(draftKey, false);
     },
     [persistDraftFor, saveDraftDebounced, storeApi],
   );

@@ -108,6 +108,39 @@ describe('useChatInputDraft', () => {
     expect(editor.getDocument('markdown')).toBe('typed a moment before remount');
   });
 
+  it('keeps a draft saved by another composer when an untouched empty instance unmounts', () => {
+    const draftKey = 'main_agt_a_tpc_shared';
+    const emptyEditor = createFakeEditor();
+    const writerEditor = createFakeEditor();
+    const emptyStore = createStore({ draftKey, editor: emptyEditor });
+    const writerStore = createStore({ draftKey, editor: writerEditor });
+    const emptyWrapper = ({ children }: { children: ReactNode }) => (
+      <Provider createStore={() => emptyStore}>{children}</Provider>
+    );
+    const writerWrapper = ({ children }: { children: ReactNode }) => (
+      <Provider createStore={() => writerStore}>{children}</Provider>
+    );
+
+    const emptyComposer = renderHook(() => useChatInputDraft(), { wrapper: emptyWrapper });
+    const writerComposer = renderHook(() => useChatInputDraft(), { wrapper: writerWrapper });
+
+    act(() => {
+      emptyComposer.result.current.restoreDraft(emptyEditor);
+      writerComposer.result.current.restoreDraft(writerEditor);
+      writerEditor.setDocument('json', { text: 'draft from the other tab' });
+      writerComposer.result.current.saveDraftDebounced();
+      vi.runAllTimers();
+    });
+
+    expect(getDraft(draftKey)).toEqual({ text: 'draft from the other tab' });
+
+    emptyComposer.unmount();
+
+    expect(getDraft(draftKey)).toEqual({ text: 'draft from the other tab' });
+
+    writerComposer.unmount();
+  });
+
   it('restores a draft when the editor is empty', () => {
     const draftJson = { root: { children: [{ text: 'draft' }] } };
     const setDocument = vi.fn();
