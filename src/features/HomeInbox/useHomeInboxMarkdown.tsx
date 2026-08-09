@@ -1,7 +1,9 @@
 import type { MarkdownProps } from '@lobehub/ui';
+import type { FC } from 'react';
 import { useMemo } from 'react';
 
 import LinkElement from '@/features/Conversation/Markdown/plugins/Link';
+import type { MarkdownElementProps } from '@/features/Conversation/Markdown/plugins/type';
 
 const rehypePlugins = LinkElement.rehypePlugin ? [LinkElement.rehypePlugin] : [];
 
@@ -12,14 +14,13 @@ const rehypePlugins = LinkElement.rehypePlugin ? [LinkElement.rehypePlugin] : []
  * context.
  */
 export const useHomeInboxMarkdown = (messageId: string): Partial<MarkdownProps> => {
-  const components = useMemo(
-    () => ({
-      [LinkElement.tag]: (props: Record<PropertyKey, unknown>) => (
-        <LinkElement.Component {...props} id={messageId} />
-      ),
-    }),
-    [messageId],
-  );
+  const components = useMemo(() => {
+    const LinkComponent: FC = (props) => (
+      <LinkElement.Component {...(props as MarkdownElementProps)} id={messageId} />
+    );
+
+    return { [LinkElement.tag]: LinkComponent };
+  }, [messageId]);
 
   return useMemo(
     () => ({
