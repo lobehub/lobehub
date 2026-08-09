@@ -28,6 +28,7 @@ import type { HomeMode } from './types';
 // no-op. Lazy so the home bundle doesn't pay for the chat stack until a run is
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
+const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -375,6 +376,9 @@ const Home = memo(() => {
           <TopicChatDrawer />
         </Suspense>
       )}
+      <Suspense fallback={null}>
+        <AcceptancePortalDrawer />
+      </Suspense>
     </Flexbox>
   );
 });
