@@ -10,6 +10,9 @@ export interface GoalState {
   goalListInitializedAgentIds: string[];
   goalListVisibleLimit: number;
   goalViewMode: GoalViewMode;
+  /** Every agent's goals, for the home rail's cross-agent roll-up. */
+  homeGoals: GoalListItem[];
+  isHomeGoalsInit: boolean;
 }
 
 export const initialState: GoalState = {
@@ -18,4 +21,6 @@ export const initialState: GoalState = {
   goalListInitializedAgentIds: [],
   goalListVisibleLimit: 10,
   goalViewMode: 'list',
+  homeGoals: [],
+  isHomeGoalsInit: false,
 };

@@ -7,7 +7,13 @@ const goalList = (agentId: string) => (s: GoalStore) => s.goalListByAgentId[agen
 const isGoalListInitialized = (agentId: string) => (s: GoalStore) =>
   s.goalListInitializedAgentIds.includes(agentId);
 
+const homeGoals = (s: GoalStore) => s.homeGoals;
+
+const isHomeGoalsInitialized = (s: GoalStore) => s.isHomeGoalsInit;
+
 export const goalSelectors = {
   goalList,
+  homeGoals,
   isGoalListInitialized,
+  isHomeGoalsInitialized,
 };

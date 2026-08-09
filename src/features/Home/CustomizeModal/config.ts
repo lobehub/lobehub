@@ -3,6 +3,7 @@
 // never appear in the rail — folding them in would keep the rail alive on the
 // strength of a section it cannot show.
 export const HOME_INBOX_WIDGET_KEYS = [
+  'goals',
   'needsYou',
   'unread',
   'running',
@@ -81,6 +82,7 @@ export const isHomeMinimalLayout = (state: HomeVisibilityState): boolean =>
 // fetch powers needsYou AND news. Narrowing either pair back to one key lets a
 // hidden widget silence a failure that explains the other's absence.
 const HOME_SECTION_WIDGET_COVERAGE: Record<string, HomeWidgetKey[]> = {
+  'goals': ['goals'],
   'needsYou': ['needsYou'],
   'needsYou-error': ['needsYou', 'news'],
   'needsYou-loading': ['needsYou'],

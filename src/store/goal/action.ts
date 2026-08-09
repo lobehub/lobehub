@@ -15,6 +15,13 @@ const GOAL_STATUSES = [
   'canceled',
 ];
 
+/**
+ * The home roll-up reads goals across every agent, so it asks for more than one
+ * agent's page would need — the rail only shows the open ones, and those are a
+ * fraction of the set once a workspace has history.
+ */
+const HOME_GOAL_FETCH_LIMIT = 100;
+
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
 
@@ -56,6 +63,10 @@ export class GoalActionImpl {
     await mutate(taskKeys.sidebarGroups(`${agentId}:goals-page`));
   };
 
+  refreshHomeGoals = async (scope: string): Promise<void> => {
+    await mutate(taskKeys.homeGoals(scope));
+  };
+
   setGoalListFilter = (filter: GoalListFilter): void => {
     this.#set({ goalListFilter: filter, goalListVisibleLimit: 10 }, false, 'setGoalListFilter');
   };
@@ -88,6 +99,32 @@ export class GoalActionImpl {
             }),
             false,
             'useFetchGoals/success',
+          );
+        },
+        revalidateOnFocus: true,
+      },
+    );
+
+  /**
+   * Every agent's goals in one read — the home rail is a cross-agent roll-up,
+   * so it cannot go through the per-agent list. Same server query minus the
+   * assignee filter; the rail buckets and truncates client-side.
+   */
+  useFetchHomeGoals = (enabled: boolean, scope: string) =>
+    useClientDataSWR(
+      enabled ? taskKeys.homeGoals(scope) : null,
+      () =>
+        taskService.groupList({
+          groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: GOAL_STATUSES }],
+          hasGoal: true,
+          parentTaskId: null,
+        }),
+      {
+        onSuccess: ({ data }) => {
+          this.#set(
+            { homeGoals: data[0]?.tasks ?? [], isHomeGoalsInit: true },
+            false,
+            'useFetchHomeGoals/success',
           );
         },
         revalidateOnFocus: true,

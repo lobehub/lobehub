@@ -272,6 +272,12 @@ export const taskKeys = {
       visibility,
     ],
   ),
+  /**
+   * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
+   * other home feeds — goals are workspace rows, so a list left over from the
+   * previous workspace holds ids this one cannot open.
+   */
+  homeGoals: def('task:homeGoals', (scope: string) => ['task:homeGoals', scope]),
   list: def(
     'task:list',
     (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [

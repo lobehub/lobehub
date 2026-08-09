@@ -95,6 +95,19 @@ export const useAcceptanceList = (enabled: boolean) =>
   );
 
 /**
+ * The same feed, read by a glance surface that must not go stale: home shows
+ * which goals are waiting on the user, and a delivery that lands while the tab
+ * sits open has to appear on the next focus rather than on the next reload.
+ * Shares the list panel's cache — only the revalidation policy differs.
+ */
+export const useLiveAcceptanceList = (enabled: boolean) =>
+  useClientDataSWR(
+    enabled ? verifyKeys.acceptances() : null,
+    () => verifyService.listAcceptances(),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  );
+
+/**
  * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
  * server-side title search (spanning the whole history, not just loaded pages);
  * changing it collapses back to the first page.
