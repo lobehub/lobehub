@@ -76,14 +76,34 @@ describe('renderContextMapHtml', () => {
     expect(html).toContain('class="band hit" style="width:60.000%"');
   });
 
-  it('renders cache hits as a 60%-opaque hatch and fresh context as a flat fill', () => {
+  it('renders cache hits at 40% opacity and reserves hatching for re-processed context', () => {
     const html = renderContextMapHtml(map);
 
-    expect(html).toContain('.seg.cached { opacity: 0.6; }');
-    expect(html).toContain('.seg.cached::before { background-image: repeating-linear-gradient');
-    expect(html).not.toContain('.seg.changed::before');
+    expect(html).toContain('.seg.cached { opacity: 0.4; }');
+    expect(html).not.toContain('.seg.cached::before');
+    expect(html).toContain(
+      '.seg.reprocessed::before { background-image: repeating-linear-gradient',
+    );
+    expect(html).toContain('class="seg reprocessed"');
     expect(html).toContain('served from cache</div>');
     expect(html).toContain('re-processed by the model</div>');
+  });
+
+  it('colors an injected user message as user content and marks it with an injection badge', () => {
+    const html = renderContextMapHtml(map);
+
+    expect(html).toContain('background:var(--kind-user);flex:40 1 0');
+    expect(html).toContain('<span class="inject-mark" title="Framework injected">I</span>');
+    expect(html).toContain('class="swatch injected" style="background:var(--kind-user)"');
+  });
+
+  it('orders assistant content, tool calls, and reasoning from darkest to lightest', () => {
+    expect(HTML_THEME.light.kind.assistant).toBe('#0d78ce');
+    expect(HTML_THEME.light.kind.tool_call).toBe('#76baff');
+    expect(HTML_THEME.light.kind.reasoning).toBe('#acd4ff');
+    expect(HTML_THEME.dark.kind.assistant).toBe('#0d78ce');
+    expect(HTML_THEME.dark.kind.tool_call).toBe('#439aed');
+    expect(HTML_THEME.dark.kind.reasoning).toBe('#a7d3ff');
   });
 
   it('uses a neutral gray for tool results', () => {

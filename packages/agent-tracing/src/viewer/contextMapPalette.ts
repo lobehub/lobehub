@@ -7,8 +7,8 @@ import { blue, type ColorScale, green, orange, red, sand, slate } from './contex
  * chart theme. Every value below is a step index into a scale — nothing is hand-picked.
  *
  * Role is the primary encoding: orange system, green user, blue assistant, gray tool.
- * Assistant internals use different steps of the same blue scale, while framework injection
- * uses a lighter orange than the system prompt.
+ * Assistant internals use different steps of the same blue scale. Injected content inherits
+ * the color of the role carrying it; the HTML renderer marks injection separately.
  */
 
 export type SegmentFamily = 'framework' | 'conversation' | 'execution';
@@ -35,7 +35,7 @@ export const KIND_LABEL: Record<SegmentKind, string> = {
   user: 'User turn',
 };
 
-/** Ordered darkest-to-lightest inside each family — the ramp is the role hierarchy. */
+/** Ordered by reading flow inside each family. */
 export const KINDS_BY_FAMILY: Record<SegmentFamily, SegmentKind[]> = {
   conversation: ['user', 'assistant'],
   execution: ['reasoning', 'tool_call', 'tool_result'],
@@ -50,9 +50,9 @@ const KIND_STEPS: Record<SegmentKind, { dark: number; light: number; scale: Colo
   system: { dark: 9, light: 10, scale: orange },
   injected: { dark: 6, light: 7, scale: orange },
   user: { dark: 8, light: 9, scale: green },
-  reasoning: { dark: 10, light: 10, scale: blue },
+  reasoning: { dark: 10, light: 6, scale: blue },
   tool_call: { dark: 8, light: 8, scale: blue },
-  assistant: { dark: 6, light: 6, scale: blue },
+  assistant: { dark: 6, light: 10, scale: blue },
   tool_result: { dark: 7, light: 7, scale: slate },
 };
 
@@ -139,9 +139,9 @@ export const TERMINAL_KIND_COLOR: Record<SegmentKind, string> = {
   system: orange.light[10],
   injected: orange.light[7],
   user: green.light[9],
-  reasoning: blue.light[10],
+  reasoning: blue.light[6],
   tool_call: blue.light[8],
-  assistant: blue.light[6],
+  assistant: blue.light[10],
   tool_result: slate.light[7],
 };
 

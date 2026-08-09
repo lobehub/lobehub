@@ -85,10 +85,11 @@ const STYLE = `
      payload message read as a distinct object. Every role uses the same neutral frame. */
   .msg { background: transparent; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--border); display: flex; gap: 1px; padding: 3px; position: relative; }
   .seg { border-radius: 3px; min-width: 1px; position: relative; }
-  /* A cache hit is quieter and hatched: texture carries the cache state, while the 60%
-     opacity keeps the underlying role color readable without overpowering fresh context. */
-  .seg.cached { opacity: 0.6; }
-  .seg.cached::before { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); content: ''; inset: 0; position: absolute; }
+  /* Cache hits recede through opacity alone. Hatching is reserved for context the model had
+     to re-process after a prefix break, so the two cache states never compete visually. */
+  .seg.cached { opacity: 0.4; }
+  .seg.reprocessed::before { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); content: ''; inset: 0; position: absolute; }
+  .inject-mark { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); display: flex; font-size: 7px; font-weight: 700; height: 13px; justify-content: center; letter-spacing: -0.02em; position: absolute; right: -5px; top: -7px; width: 13px; z-index: 12; }
   .seg .tip { background: var(--tip-bg); border-radius: 6px; bottom: calc(100% + 10px); color: var(--tip-text); display: none; font-size: 12px; left: 0; line-height: 1.5; max-width: 460px; padding: 8px 10px; position: absolute; width: max-content; z-index: 20; }
   .seg:hover .tip { display: block; }
   .seg .tip b { color: var(--kind-injected); }
@@ -121,7 +122,10 @@ const STYLE = `
   .family .items span.num { color: var(--text-dim); }
   .swatch { border-radius: 4px; display: inline-block; height: 14px; width: 26px; }
   .swatch.frame { background: transparent; border: 2px solid var(--border); }
-  .swatch.hatch { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); opacity: 0.6; }
+  .swatch.cached { opacity: 0.4; }
+  .swatch.hatch { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); }
+  .swatch.injected { position: relative; }
+  .swatch.injected::after { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); content: 'I'; display: flex; font-size: 6px; font-weight: 700; height: 10px; justify-content: center; position: absolute; right: -4px; top: -5px; width: 10px; }
 
   .summary { background: var(--surface-raised); border: 1px solid var(--divider); border-radius: 8px; font-size: 13px; line-height: 1.8; margin-top: 28px; padding: 16px 20px; }
   .summary b { color: var(--lane-text-miss); }
@@ -178,13 +182,29 @@ export function renderContextMapHtml(
           }
           offset += pct(message.tokens);
 
+          const isInjected = message.segments.some((segment) => segment.kind === 'injected');
           const segments = message.segments
             .map((segment) => {
-              const tip = `msg[${segment.messageIndex}] · ${KIND_LABEL[segment.kind]} · ${fmtTokens(segment.tokens)} tok · ${segment.unchanged ? 'served from cache' : 're-processed'}<br><b>${escapeHtml(segment.label)}</b><br>${escapeHtml(segment.preview)}`;
-              return `<div class="seg ${segment.unchanged ? 'cached' : 'changed'}" style="background:var(--kind-${segment.kind});flex:${segment.tokens} 1 0"><span class="tip">${tip}</span></div>`;
+              const cacheState = segment.unchanged
+                ? 'cached'
+                : call.breakMessageIndex === undefined
+                  ? 'new'
+                  : 'reprocessed';
+              const cacheLabel =
+                cacheState === 'cached'
+                  ? 'served from cache'
+                  : cacheState === 'reprocessed'
+                    ? 're-processed'
+                    : 'new context';
+              const colorKind = segment.kind === 'injected' ? segment.role : segment.kind;
+              const tip = `msg[${segment.messageIndex}] · ${KIND_LABEL[segment.kind]} · ${fmtTokens(segment.tokens)} tok · ${cacheLabel}<br><b>${escapeHtml(segment.label)}</b><br>${escapeHtml(segment.preview)}`;
+              return `<div class="seg ${cacheState}" style="background:var(--kind-${colorKind});flex:${segment.tokens} 1 0"><span class="tip">${tip}</span></div>`;
             })
             .join('');
-          return `<div class="msg" data-message-index="${message.messageIndex}" style="width:${pct(message.tokens).toFixed(3)}%">${segments}</div>`;
+          const injectedMark = isInjected
+            ? '<span class="inject-mark" title="Framework injected">I</span>'
+            : '';
+          return `<div class="msg" data-message-index="${message.messageIndex}" style="width:${pct(message.tokens).toFixed(3)}%">${segments}${injectedMark}</div>`;
         })
         .join('');
 
@@ -238,7 +258,7 @@ export function renderContextMapHtml(
       .filter((kind) => summary.kindTokens[kind] > 0)
       .map(
         (kind) =>
-          `<div><span class="swatch" style="background:var(--kind-${kind})"></span>${KIND_LABEL[kind]} <span class="num">${fmtTokens(summary.kindTokens[kind])}</span></div>`,
+          `<div><span class="swatch${kind === 'injected' ? ' injected' : ''}" style="background:var(--kind-${kind === 'injected' ? 'user' : kind})"></span>${KIND_LABEL[kind]} <span class="num">${fmtTokens(summary.kindTokens[kind])}</span></div>`,
       )
       .join('');
     return items
@@ -292,8 +312,8 @@ ${rows}
   ${legend}
   <div class="family"><div class="fname">Fill</div><div class="items">
     <div><span class="swatch frame"></span>message boundary</div>
-    <div><span class="swatch hatch" style="background-color:var(--kind-tool_call)"></span>served from cache</div>
-    <div><span class="swatch" style="background:var(--kind-tool_call)"></span>re-processed by the model</div>
+    <div><span class="swatch cached" style="background:var(--kind-tool_call)"></span>served from cache</div>
+    <div><span class="swatch hatch" style="background-color:var(--kind-tool_call)"></span>re-processed by the model</div>
   </div></div>
 </div>
 ${summaryBlock}
