@@ -108,7 +108,7 @@ describe('useChatInputDraft', () => {
     expect(editor.getDocument('markdown')).toBe('typed a moment before remount');
   });
 
-  it('keeps a draft saved by another composer when an untouched empty instance unmounts', () => {
+  it('keeps a newer draft when an empty composer flushes a pending save on unmount', () => {
     const draftKey = 'main_agt_a_tpc_shared';
     const emptyEditor = createFakeEditor();
     const writerEditor = createFakeEditor();
@@ -127,9 +127,10 @@ describe('useChatInputDraft', () => {
     act(() => {
       emptyComposer.result.current.restoreDraft(emptyEditor);
       writerComposer.result.current.restoreDraft(writerEditor);
+      emptyComposer.result.current.saveDraftDebounced();
       writerEditor.setDocument('json', { text: 'draft from the other tab' });
       writerComposer.result.current.saveDraftDebounced();
-      vi.runAllTimers();
+      writerComposer.result.current.saveDraftDebounced.flush();
     });
 
     expect(getDraft(draftKey)).toEqual({ text: 'draft from the other tab' });
@@ -139,6 +140,30 @@ describe('useChatInputDraft', () => {
     expect(getDraft(draftKey)).toEqual({ text: 'draft from the other tab' });
 
     writerComposer.unmount();
+  });
+
+  it('removes its unchanged draft when flushing a pending clear on unmount', () => {
+    const draftKey = 'main_agt_a_tpc_owned';
+    const editor = createFakeEditor();
+    const store = createStore({ draftKey, editor });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider createStore={() => store}>{children}</Provider>
+    );
+    saveDraft(draftKey, { text: 'draft to clear' });
+
+    const { result, unmount } = renderHook(() => useChatInputDraft(), { wrapper });
+
+    act(() => {
+      result.current.restoreDraft(editor);
+      editor.cleanDocument();
+      result.current.saveDraftDebounced();
+    });
+
+    expect(getDraft(draftKey)).toEqual({ text: 'draft to clear' });
+
+    unmount();
+
+    expect(getDraft(draftKey)).toBeUndefined();
   });
 
   it('restores a draft when the editor is empty', () => {

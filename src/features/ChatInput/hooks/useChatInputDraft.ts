@@ -2,19 +2,19 @@ import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { getDraft, removeDraft, saveDraft } from '../draftStorage';
+import { getDraftEntry, removeDraftIfUnchanged, saveDraft } from '../draftStorage';
 import { useStoreApi } from '../store';
 
 const SAVE_DEBOUNCE_MS = 500;
 
 export const useChatInputDraft = () => {
   const storeApi = useStoreApi();
-  // The key whose document the editor is currently carrying. An empty editor
-  // only means "the user emptied it" once this matches; before the restore
-  // lands (it is deferred a frame, and never runs at all while frames are
-  // starved) an empty editor just means the draft has not been loaded, and
-  // treating that as a clear would delete unsent input the user never saw.
-  const loadedDraftKeyRef = useRef<string | undefined>(undefined);
+  // The storage revision whose document the editor is currently carrying. An
+  // empty editor may remove only that revision: before restore it owns none,
+  // and after another composer writes the same key its revision is stale.
+  const loadedDraftRef = useRef<{ draftKey: string; updatedAt: number | undefined } | undefined>(
+    undefined,
+  );
 
   const persistDraftFor = useCallback(
     (draftKey: string, removeEmpty = true) => {
@@ -22,14 +22,21 @@ export const useChatInputDraft = () => {
       if (!editor) return;
 
       if (getMarkdownContent().trim().length === 0) {
-        if (removeEmpty && loadedDraftKeyRef.current === draftKey) removeDraft(draftKey);
+        const loadedDraft = loadedDraftRef.current;
+        if (
+          removeEmpty &&
+          loadedDraft?.draftKey === draftKey &&
+          removeDraftIfUnchanged(draftKey, loadedDraft.updatedAt)
+        ) {
+          loadedDraftRef.current = { draftKey, updatedAt: undefined };
+        }
         return;
       }
 
       const json = getJSONState();
       if (json) {
-        saveDraft(draftKey, json);
-        loadedDraftKeyRef.current = draftKey;
+        const updatedAt = saveDraft(draftKey, json);
+        if (updatedAt !== undefined) loadedDraftRef.current = { draftKey, updatedAt };
       }
     },
     [storeApi],
@@ -45,10 +52,9 @@ export const useChatInputDraft = () => {
   );
 
   // Flush locally scheduled work first so an intentional clear still removes
-  // its draft. Then save live non-empty content that may not have reached the
-  // debounce yet. The unconditional pass must not remove an empty draft: a
-  // different composer instance may have written the shared key since this
-  // instance restored it as empty.
+  // the revision this editor owns. Then save live non-empty content that may
+  // not have reached the debounce yet. The unconditional pass must not remove
+  // an empty draft: a different composer may have written the shared key.
   useEffect(
     () => () => {
       saveDraftDebounced.flush();
@@ -63,12 +69,12 @@ export const useChatInputDraft = () => {
       const { draftKey } = storeApi.getState();
       if (!draftKey) return;
 
-      loadedDraftKeyRef.current = draftKey;
+      const draft = getDraftEntry(draftKey);
+      loadedDraftRef.current = { draftKey, updatedAt: draft?.updatedAt };
 
       if (!editor.isEmpty) return;
 
-      const draft = getDraft(draftKey);
-      if (draft) editor.setDocument('json', draft);
+      if (draft) editor.setDocument('json', draft.json);
     },
     [storeApi],
   );
