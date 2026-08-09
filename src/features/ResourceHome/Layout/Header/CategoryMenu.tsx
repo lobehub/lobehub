@@ -6,7 +6,6 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
-  GlobeIcon,
   HouseIcon,
   ImageIcon,
   LayoutPanelTopIcon,
@@ -111,12 +110,9 @@ const CategoryMenu = memo(() => {
           title: t('work.group'),
           url: '/resource/works',
         },
-        {
-          icon: GlobeIcon,
-          key: FilesTabs.Websites,
-          title: t('tab.websites'),
-          url: '/resource/websites',
-        },
+        // The Websites entry is hidden for now (the category route and the
+        // reading-card view stay reachable at /resource/websites) — re-add it
+        // here once web clippings ship as a first-class flow.
         ...businessCategories.map((category) => ({
           icon: category.icon,
           isBusiness: true,
