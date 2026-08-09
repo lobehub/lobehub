@@ -4228,6 +4228,23 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect((instance as any).shouldUseResponsesAPI({ model: requiredModel })).toBe(true);
     });
 
+    it('keeps Codex-namespaced ids on the Responses API despite the user opt-out', () => {
+      // Priority 0. `codex/gpt-*` gateways only implement the Responses contract
+      // (#17831 / #17851), so they belong to the required cohort even though the
+      // bare `gpt-5.6-luna` id is merely preferred and stays overridable.
+      const codexResult = (instance as any).shouldUseResponsesAPI({
+        model: 'codex/gpt-5.6-luna',
+        userApiMode: 'chatCompletion',
+      });
+      expect(codexResult).toBe(true);
+
+      const bareResult = (instance as any).shouldUseResponsesAPI({
+        model: 'gpt-5.6-luna',
+        userApiMode: 'chatCompletion',
+      });
+      expect(bareResult).toBe(false);
+    });
+
     it('returns false for preferred models when the user disables Responses API', () => {
       // Priority 1. The user's explicit opt-out is what lets OpenAI-compatible
       // proxies (CLIProxyAPI, LiteLLM, One-API, vLLM) receive /v1/chat/completions.

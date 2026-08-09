@@ -155,6 +155,18 @@ describe('isResponsesAPIRequiredModel', () => {
     expect(isResponsesAPIRequiredModel('openai/gpt-5.1-codex-mini')).toBe(false);
   });
 
+  it('should require Responses API for Codex-namespaced ids', () => {
+    // `codex/gpt-*` gateways only expose the Responses contract, so the user's
+    // enableResponseApi opt-out must not reroute them to /chat/completions.
+    expect(isResponsesAPIRequiredModel('codex/gpt-5.6-luna')).toBe(true);
+    expect(isResponsesAPIRequiredModel('codex/gpt-5.6')).toBe(true);
+    expect(isResponsesAPIRequiredModel('codex/gpt-5-mini')).toBe(true);
+
+    // Chat variants stay out of the required set, keeping required a subset of preferred.
+    expect(isResponsesAPIRequiredModel('codex/gpt-5-chat-latest')).toBe(false);
+    expect(isResponsesAPIModel('codex/gpt-5-chat-latest')).toBe(false);
+  });
+
   it('should be a subset of isResponsesAPIModel', () => {
     // Invariant: anything required is also part of the broader "defaults to
     // Responses API" set, so consumers reading only the superset (Azure, GitHub
@@ -170,6 +182,10 @@ describe('isResponsesAPIRequiredModel', () => {
       'gpt-5-chat-latest',
       'gpt-4o',
       'openai/gpt-5.5-pro',
+      'codex/gpt-5.6-luna',
+      'codex/gpt-5.6',
+      'codex/gpt-5',
+      'codex/gpt-5-chat-latest',
     ];
 
     for (const model of samples) {

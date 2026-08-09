@@ -169,8 +169,14 @@ export const isGPT5ResponsesModel = (model: string): boolean => {
 export const isResponsesAPIRequiredModel = (model: string): boolean => {
   if (responsesAPIModels.has(model)) return true;
 
-  const parsed = isNativeGPT5Model(model);
+  const parsed = isGPT5ResponsesEndpointModel(model);
   if (!parsed || hasModifier(parsed, 'chat')) return false;
+
+  // Codex-namespaced ids (`codex/gpt-*`) are served by gateways that speak the Responses
+  // contract only — there is no /chat/completions to fall back to, so an explicit
+  // `apiMode: 'chatCompletion'` must not reroute them (see #17831 / #17851).
+  // Gated on isGPT5ResponsesModel so "required" stays a subset of the preferred set.
+  if (parsed.source === 'codex') return isGPT5ResponsesModel(model);
 
   return hasModifier(parsed, 'pro') || hasModifier(parsed, 'codex');
 };
