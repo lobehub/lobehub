@@ -66,9 +66,12 @@ describe('renderContextMapHtml', () => {
     expect(html).toContain('.track { background: var(--track-bg);');
     expect(html).toContain('.track-inner { inset: 4px; position: absolute; }');
     expect(html).toContain('.msg { background: transparent; border-radius: 7px; bottom: 0;');
-    expect(html).toContain('box-shadow: inset 0 0 0 2px var(--border);');
     expect(html).toContain(
-      'class="msg" data-message-index="0" style="left:0.000%;width:calc(60.000% - 3px)"',
+      '.msg::before { border-radius: inherit; box-shadow: inset 0 0 0 2px var(--border);',
+    );
+    expect(html).toContain('.msg.cached-message::before { opacity: 0.1; }');
+    expect(html).toContain(
+      'class="msg cached-message" data-message-index="0" style="left:0.000%;width:calc(60.000% - 3px)"',
     );
     expect(html).toContain(
       'class="msg" data-message-index="1" style="left:60.000%;width:calc(40.000%)"',
@@ -101,7 +104,11 @@ describe('renderContextMapHtml', () => {
 
     expect(html).toContain('background:var(--kind-user);flex:40 1 0');
     expect(html).toContain('<span class="inject-mark" title="Framework injected">I</span>');
+    expect(html).toContain('.inject-mark { align-items: center; background: var(--kind-system);');
     expect(html).toContain('class="swatch injected" style="background:var(--kind-user)"');
+    expect(html).toContain(
+      '.swatch.injected::after { align-items: center; background: var(--kind-system);',
+    );
   });
 
   it('orders assistant content, tool calls, and reasoning from darkest to lightest', () => {

@@ -85,13 +85,15 @@ const STYLE = `
   /* Every message uses the same neutral frame. Absolute token coordinates keep the same
      boundary aligned across calls; the visual gap is deducted from the preceding message
      instead of accumulating and stretching rows that contain more messages. */
-  .msg { background: transparent; border-radius: 7px; bottom: 0; box-shadow: inset 0 0 0 2px var(--border); display: flex; gap: 1px; padding: 3px; position: absolute; top: 0; }
+  .msg { background: transparent; border-radius: 7px; bottom: 0; display: flex; gap: 1px; padding: 3px; position: absolute; top: 0; }
+  .msg::before { border-radius: inherit; box-shadow: inset 0 0 0 2px var(--border); content: ''; inset: 0; pointer-events: none; position: absolute; z-index: 1; }
+  .msg.cached-message::before { opacity: 0.1; }
   .seg { border-radius: 3px; min-width: 1px; position: relative; }
   /* Cache hits recede through opacity alone. Hatching is reserved for context the model had
      to re-process after a prefix break, so the two cache states never compete visually. */
   .seg.cached { opacity: 0.1; }
   .seg.reprocessed::before { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); content: ''; inset: 0; position: absolute; }
-  .inject-mark { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); display: flex; font-size: 7px; font-weight: 700; height: 13px; justify-content: center; letter-spacing: -0.02em; position: absolute; right: -5px; top: -7px; width: 13px; z-index: 12; }
+  .inject-mark { align-items: center; background: var(--kind-system); border: 1px solid var(--kind-system); border-radius: 999px; color: var(--surface); display: flex; font-size: 7px; font-weight: 700; height: 13px; justify-content: center; letter-spacing: -0.02em; position: absolute; right: -5px; top: -7px; width: 13px; z-index: 12; }
   .seg .tip { background: var(--tip-bg); border-radius: 6px; bottom: calc(100% + 10px); color: var(--tip-text); display: none; font-size: 12px; left: 0; line-height: 1.5; max-width: 460px; padding: 8px 10px; position: absolute; width: max-content; z-index: 20; }
   .seg:hover .tip { display: block; }
   .seg .tip b { color: var(--kind-injected); }
@@ -127,7 +129,7 @@ const STYLE = `
   .swatch.cached { opacity: 0.1; }
   .swatch.hatch { background-image: repeating-linear-gradient(45deg, var(--hatch) 0 3px, transparent 3px 7px); }
   .swatch.injected { position: relative; }
-  .swatch.injected::after { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); content: 'I'; display: flex; font-size: 6px; font-weight: 700; height: 10px; justify-content: center; position: absolute; right: -4px; top: -5px; width: 10px; }
+  .swatch.injected::after { align-items: center; background: var(--kind-system); border: 1px solid var(--kind-system); border-radius: 999px; color: var(--surface); content: 'I'; display: flex; font-size: 6px; font-weight: 700; height: 10px; justify-content: center; position: absolute; right: -4px; top: -5px; width: 10px; }
 
   .summary { background: var(--surface-raised); border: 1px solid var(--divider); border-radius: 8px; font-size: 13px; line-height: 1.8; margin-top: 28px; padding: 16px 20px; }
   .summary b { color: var(--lane-text-miss); }
@@ -187,6 +189,7 @@ export function renderContextMapHtml(
           offset += pct(message.tokens);
 
           const isInjected = message.segments.some((segment) => segment.kind === 'injected');
+          const isCachedMessage = message.segments.every((segment) => segment.unchanged);
           const segments = message.segments
             .map((segment) => {
               const cacheState = segment.unchanged
@@ -209,7 +212,7 @@ export function renderContextMapHtml(
             ? '<span class="inject-mark" title="Framework injected">I</span>'
             : '';
           const messageWidth = `${pct(message.tokens).toFixed(3)}%${messagePosition < messageGroups.length - 1 ? ' - 3px' : ''}`;
-          return `<div class="msg" data-message-index="${message.messageIndex}" style="left:${messageLeft.toFixed(3)}%;width:calc(${messageWidth})">${segments}${injectedMark}</div>`;
+          return `<div class="msg${isCachedMessage ? ' cached-message' : ''}" data-message-index="${message.messageIndex}" style="left:${messageLeft.toFixed(3)}%;width:calc(${messageWidth})">${segments}${injectedMark}</div>`;
         })
         .join('');
 
