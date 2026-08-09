@@ -407,8 +407,12 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const handleVoiceMessageSend = useCallback(
-      (recording: VoiceMessageRecording) =>
-        Boolean(
+      (recording: VoiceMessageRecording) => {
+        if (operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState())) {
+          return false;
+        }
+
+        return Boolean(
           useChatStore.getState().sendVoiceMessage({
             canSend: canSendVoiceMessage,
             context,
@@ -420,7 +424,8 @@ const ChatInput = memo<ChatInputProps>(
                 signal,
               }),
           }),
-        ),
+        );
+      },
       [context, sendMessage],
     );
 

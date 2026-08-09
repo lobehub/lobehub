@@ -1726,6 +1726,7 @@
   "voiceMessage.otherAudioModeActive": "请先结束另一个麦克风会话",
   "voiceMessage.ready": "录音已就绪，可以发送",
   "voiceMessage.recording": "正在录制语音消息",
+  "voiceMessage.replyInProgress": "请等待当前回复完成后再录制语音消息",
   "voiceMessage.requesting": "正在请求麦克风权限…",
   "voiceMessage.retry": "重试语音消息",
   "voiceMessage.send": "发送语音消息",

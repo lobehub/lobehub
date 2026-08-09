@@ -495,24 +495,28 @@ const VoiceMessage = memo(() => {
     activeAudioInputMode,
     injectedCanRecordVoiceMessage,
     onVoiceMessageSend,
+    sendButtonProps,
     setActiveAudioInputMode,
   ] = useChatInputStore((s) => [
     s.activeAudioInputMode,
     s.canRecordVoiceMessage,
     s.onVoiceMessageSend,
+    s.sendButtonProps,
     s.setActiveAudioInputMode,
   ]);
   const canRecordVoiceMessage = injectedCanRecordVoiceMessage ?? fallbackCanRecordVoiceMessage;
+  const isGenerating = Boolean(sendButtonProps?.generating);
+  const canUseVoiceMessage = canRecordVoiceMessage && !isGenerating;
   const recorder = useVoiceMessageRecorder();
-  const canRecordVoiceMessageRef = useRef(canRecordVoiceMessage);
-  canRecordVoiceMessageRef.current = canRecordVoiceMessage;
+  const canUseVoiceMessageRef = useRef(canUseVoiceMessage);
+  canUseVoiceMessageRef.current = canUseVoiceMessage;
   const sendCommittedRef = useRef(false);
 
   const hasRecorderActivity = recorder.status !== 'idle';
   const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
   const isOtherAudioModeActive =
     activeAudioInputMode !== undefined && activeAudioInputMode !== 'voiceMessage';
-  const canStart = canRecordVoiceMessage && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
+  const canStart = canUseVoiceMessage && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
 
   useEffect(() => {
     if (hasRecorderActivity && activeAudioInputMode !== 'voiceMessage') {
@@ -536,14 +540,23 @@ const VoiceMessage = memo(() => {
     setActiveAudioInputMode(undefined);
   }, [recorder, setActiveAudioInputMode]);
 
+  useEffect(() => {
+    if (isGenerating && isActive) discard();
+  }, [discard, isActive, isGenerating]);
+
   const commitRecording = useCallback(
     async (captured?: VoiceMessageRecording) => {
-      if (!canRecordVoiceMessageRef.current || sendCommittedRef.current) return;
+      if (!canUseVoiceMessageRef.current || sendCommittedRef.current) return;
       sendCommittedRef.current = true;
 
       try {
         const voiceRecording = captured ?? recorder.recording ?? (await recorder.stop());
-        if (!voiceRecording || voiceRecording.durationMs < recorder.minDurationMs) return;
+        if (
+          !canUseVoiceMessageRef.current ||
+          !voiceRecording ||
+          voiceRecording.durationMs < recorder.minDurationMs
+        )
+          return;
         if (!onVoiceMessageSend) return;
 
         const accepted = onVoiceMessageSend(voiceRecording);
@@ -559,13 +572,13 @@ const VoiceMessage = memo(() => {
   );
 
   const handleStart = useCallback(() => {
-    if (!canStart) return;
+    if (!canStart || storeApi.getState().sendButtonProps?.generating) return;
     setActiveAudioInputMode('voiceMessage');
     void recorder.start();
-  }, [canStart, recorder, setActiveAudioInputMode]);
+  }, [canStart, recorder, setActiveAudioInputMode, storeApi]);
 
   const handleRetryPermission = useCallback(() => {
-    if (!canRecordVoiceMessageRef.current) return;
+    if (!canUseVoiceMessageRef.current) return;
 
     recorder.reset();
     void recorder.start();
@@ -574,7 +587,9 @@ const VoiceMessage = memo(() => {
   if (!isActive) {
     const disabledReason = isOtherAudioModeActive
       ? t('voiceMessage.otherAudioModeActive')
-      : t('voiceMessage.unsupported');
+      : isGenerating
+        ? t('voiceMessage.replyInProgress')
+        : t('voiceMessage.unsupported');
 
     return canStart ? (
       <ChatInputAction
@@ -598,18 +613,20 @@ const VoiceMessage = memo(() => {
     );
   }
 
-  const errorText = !canRecordVoiceMessage
-    ? t('voiceMessage.unsupported')
-    : recorder.error
-      ? t(`voiceMessage.error.${recorder.error}`)
-      : undefined;
+  const errorText = isGenerating
+    ? t('voiceMessage.replyInProgress')
+    : !canRecordVoiceMessage
+      ? t('voiceMessage.unsupported')
+      : recorder.error
+        ? t(`voiceMessage.error.${recorder.error}`)
+        : undefined;
   const waveform = recorder.recording?.waveform ?? recorder.waveform;
   const visibleWaveform = waveform.slice(-8);
   const canSendRecording =
     recorder.durationMs >= recorder.minDurationMs &&
     (recorder.status === 'recording' || recorder.status === 'ready');
   const { canSend, sendDisabled, showRetry } = getVoiceMessageActionState({
-    canRecordVoiceMessage,
+    canRecordVoiceMessage: canUseVoiceMessage,
     canSendRecording,
     hasRecoverableError: recorder.status === 'error',
   });
@@ -647,7 +664,7 @@ const VoiceMessage = memo(() => {
         duration: formatVoiceDuration(recorder.durationMs),
       })}
       tooltip={
-        canRecordVoiceMessage && !canSend && recorder.status === 'recording'
+        canUseVoiceMessage && !canSend && recorder.status === 'recording'
           ? t('voiceMessage.tooShort', { duration: recorder.minDurationMs })
           : undefined
       }

@@ -1923,6 +1923,8 @@ export default {
   'voiceMessage.ready': 'Recording ready to send',
   'voiceMessage.recording': 'Recording voice message',
   'voiceMessage.requesting': 'Requesting microphone access…',
+  'voiceMessage.replyInProgress':
+    'Wait for the current response to finish before recording another voice message.',
   'voiceMessage.retry': 'Retry voice message',
   'voiceMessage.send': 'Send voice message',
   'voiceMessage.statusLabel': 'Voice message recorder',
