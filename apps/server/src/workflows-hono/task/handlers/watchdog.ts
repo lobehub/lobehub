@@ -4,6 +4,8 @@ import type { Context } from 'hono';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { getServerDB } from '@/database/server';
+import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
+import { TaskResultCallbackRedisStore } from '@/server/services/taskResultBridge/redisStore';
 
 const log = debug('lobe-server:workflows:task:watchdog');
 
@@ -44,10 +46,41 @@ export async function watchdog(c: Context) {
       failed.push(task.identifier);
     }
 
-    log('Watchdog scan: checked=%d failed=%d', stuckTasks.length, failed.length);
+    const recoverableCallbacks = await TaskResultCallbackRedisStore.findRecoverableScopes();
+    const recoveredCallbacks: string[] = [];
+    for (const scope of recoverableCallbacks) {
+      if (!scope.agentId) continue;
+      try {
+        const workspaceId = scope.workspaceId ?? undefined;
+        const callbackStore = new TaskResultCallbackRedisStore(
+          scope.userId,
+          scope.originTopicId,
+          workspaceId,
+        );
+        await callbackStore.resetStaleProcessing();
+        await new TaskResultBridgeService(db, scope.userId, workspaceId).drain(
+          scope.agentId,
+          scope.originTopicId,
+        );
+        recoveredCallbacks.push(scope.originTopicId);
+      } catch (error) {
+        console.error(
+          `[task/watchdog] Failed to recover creator callback scope ${scope.originTopicId}:`,
+          error,
+        );
+      }
+    }
+
+    log(
+      'Watchdog scan: checked=%d failed=%d callbacks=%d',
+      stuckTasks.length,
+      failed.length,
+      recoveredCallbacks.length,
+    );
     return c.json({
       checked: stuckTasks.length,
       failed,
+      recoveredCallbacks,
       success: true,
     });
   } catch (error) {
