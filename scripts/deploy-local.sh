@@ -75,7 +75,11 @@ Aliases (same actions):
   stop, --stop, --down  → -k
 
 Environment:
-  PANACHAT_DATA_DIR     Host data root (default: ~/.local/share/panachat-data)
+  PANACHAT_DATA_DIR       Host data root (default: ~/.local/share/panachat-data)
+  MOZ_ALLOW_EMPTY_DB=1    Allow starting Postgres when data dir has no cluster
+                          (intentional wipe / first bootstrap after delete)
+  MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
+                          the last known good snapshot (users dropped, etc.)
 EOF
       exit 0
       ;;
@@ -189,6 +193,203 @@ has_postgres_cluster() {
   docker run --rm -v "$dir:/data:ro" alpine sh -c 'test -f /data/PG_VERSION' 2>/dev/null
 }
 
+postgres_data_dir() {
+  echo "$PANACHAT_DATA_DIR/postgres"
+}
+
+db_fingerprint_file() {
+  echo "$PANACHAT_DATA_DIR/.moz-db-fingerprint"
+}
+
+# Read live DB stats when postgres is up. Prints: users|admins|migrations
+# Uses "?" for any field that cannot be read.
+read_live_db_stats() {
+  local users="?" admins="?" migrations="?"
+  if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" == "running" ]]; then
+    users="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM users;" 2>/dev/null || echo "?"
+    )"
+    admins="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM platform_admins;" 2>/dev/null || echo "?"
+    )"
+    migrations="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM drizzle.__drizzle_migrations;" 2>/dev/null || echo "?"
+    )"
+  fi
+  printf '%s|%s|%s\n' "$users" "$admins" "$migrations"
+}
+
+# Persist a fingerprint after a healthy deploy so later moz runs can detect wipe/drift.
+save_db_fingerprint() {
+  local users admins migrations has_cluster=0 pgdir
+  local stats
+  pgdir="$(postgres_data_dir)"
+  if has_postgres_cluster "$pgdir"; then
+    has_cluster=1
+  fi
+  stats="$(read_live_db_stats)"
+  IFS='|' read -r users admins migrations <<<"$stats"
+
+  mkdir -p "$PANACHAT_DATA_DIR"
+  cat >"$(db_fingerprint_file)" <<EOF
+# Written by moz after a healthy deploy. Do not edit while debugging data loss.
+version=1
+saved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+data_dir=$PANACHAT_DATA_DIR
+postgres_dir=$pgdir
+has_cluster=$has_cluster
+users=${users}
+admins=${admins}
+migrations=${migrations}
+EOF
+}
+
+load_fingerprint_value() {
+  local key="$1"
+  local file
+  file="$(db_fingerprint_file)"
+  [[ -f "$file" ]] || return 1
+  grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2-
+}
+
+# Abort if starting Postgres would initdb on an empty dir after we previously had data.
+assert_postgres_cluster_safe() {
+  local pgdir fingerprint_users fingerprint_cluster
+  pgdir="$(postgres_data_dir)"
+
+  if has_postgres_cluster "$pgdir"; then
+    return 0
+  fi
+
+  fingerprint_cluster="$(load_fingerprint_value has_cluster || true)"
+  fingerprint_users="$(load_fingerprint_value users || true)"
+
+  if [[ "${MOZ_ALLOW_EMPTY_DB:-}" == "1" ]]; then
+    echo "==> Warning: postgres data dir has no cluster (PG_VERSION missing)."
+    echo "    MOZ_ALLOW_EMPTY_DB=1 set — allowing empty bootstrap (initdb will wipe/create)."
+    return 0
+  fi
+
+  if [[ "$fingerprint_cluster" == "1" ]] \
+    || [[ "$fingerprint_users" =~ ^[0-9]+$ && "$fingerprint_users" -gt 0 ]]; then
+    cat >&2 <<EOF
+Error: refusing to start/redeploy — Postgres data directory is EMPTY but moz
+previously recorded a real cluster here.
+
+  Data dir:     $PANACHAT_DATA_DIR
+  Postgres dir: $pgdir
+  Fingerprint:  $(db_fingerprint_file)
+  Last users:   ${fingerprint_users:-unknown}
+
+Starting the stack now would run initdb and permanently lose the previous DB.
+
+Recover the postgres folder from backup, or intentionally reset with:
+  MOZ_ALLOW_EMPTY_DB=1 moz -d
+EOF
+    exit 1
+  fi
+
+  # First-time install (no fingerprint / never had users): allow empty cluster.
+  echo "==> Postgres data dir has no cluster yet (first bootstrap)."
+}
+
+# Abort redeploy when live DB no longer matches the last known fingerprint.
+assert_db_fingerprint_matches() {
+  local fp_dir fp_users fp_admins fp_migrations
+  local live_users live_admins live_migrations
+  local stats
+
+  if [[ "${MOZ_ALLOW_DB_DRIFT:-}" == "1" ]]; then
+    echo "==> Warning: MOZ_ALLOW_DB_DRIFT=1 — skipping DB fingerprint check."
+    return 0
+  fi
+
+  [[ -f "$(db_fingerprint_file)" ]] || return 0
+
+  fp_dir="$(load_fingerprint_value data_dir || true)"
+  fp_users="$(load_fingerprint_value users || true)"
+  fp_admins="$(load_fingerprint_value admins || true)"
+  fp_migrations="$(load_fingerprint_value migrations || true)"
+
+  if [[ -n "$fp_dir" && "$fp_dir" != "$PANACHAT_DATA_DIR" ]]; then
+    cat >&2 <<EOF
+Error: refusing to redeploy — PANACHAT_DATA_DIR changed since last healthy deploy.
+
+  Fingerprint data dir: $fp_dir
+  Current data dir:     $PANACHAT_DATA_DIR
+
+Fix the path in docker-compose/deploy/.env, or override with:
+  MOZ_ALLOW_DB_DRIFT=1 moz -d
+EOF
+    exit 1
+  fi
+
+  assert_postgres_cluster_safe
+
+  # Only compare live counts when postgres is already running (redeploy/restart).
+  if ! docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 \
+    || [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" != "running" ]]; then
+    return 0
+  fi
+
+  stats="$(read_live_db_stats)"
+  IFS='|' read -r live_users live_admins live_migrations <<<"$stats"
+
+  if [[ "$fp_users" =~ ^[0-9]+$ && "$live_users" =~ ^[0-9]+$ ]]; then
+    if (( live_users < fp_users )); then
+      cat >&2 <<EOF
+Error: refusing to redeploy — live user count DROPPED vs last known good DB.
+
+  Fingerprint users: $fp_users
+  Live users:        $live_users
+  Fingerprint file:  $(db_fingerprint_file)
+
+This usually means Postgres was re-initialized (empty data dir → initdb) or
+data was restored from the wrong volume. Investigate before redeploying.
+
+Override only if intentional:
+  MOZ_ALLOW_DB_DRIFT=1 moz -d
+EOF
+      exit 1
+    fi
+  fi
+
+  if [[ "$fp_admins" =~ ^[0-9]+$ && "$live_admins" =~ ^[0-9]+$ ]]; then
+    if (( fp_admins > 0 && live_admins < fp_admins )); then
+      cat >&2 <<EOF
+Error: refusing to redeploy — platform admin count DROPPED vs fingerprint.
+
+  Fingerprint admins: $fp_admins
+  Live admins:        $live_admins
+
+Override only if intentional:
+  MOZ_ALLOW_DB_DRIFT=1 moz -d
+EOF
+      exit 1
+    fi
+  fi
+
+  if [[ "$fp_migrations" =~ ^[0-9]+$ && "$live_migrations" =~ ^[0-9]+$ ]]; then
+    # Migrations should never shrink on a healthy volume; shrink ⇒ different/empty cluster.
+    if (( live_migrations + 5 < fp_migrations )); then
+      cat >&2 <<EOF
+Error: refusing to redeploy — migration count looks like a different/empty DB.
+
+  Fingerprint migrations: $fp_migrations
+  Live migrations:        $live_migrations
+
+Override only if intentional:
+  MOZ_ALLOW_DB_DRIFT=1 moz -d
+EOF
+      exit 1
+    fi
+  fi
+}
+
 migrate_legacy_deploy_data() {
   local legacy="$DEPLOY_DIR/data"
   local target="$PANACHAT_DATA_DIR/postgres"
@@ -251,6 +452,9 @@ verify_deploy_health() {
     printf '%s\n' "$migrate_line" | sed 's/^/  /'
   fi
 
+  save_db_fingerprint
+  echo "==> DB fingerprint saved ($(db_fingerprint_file))"
+
   docker logs "$CONTAINER_NAME" 2>&1 | tail -8
   echo ""
   echo "App: $url"
@@ -265,6 +469,7 @@ show_status() {
   local app_port app_url http_code image_id image_created
   local expected_migrations applied_migrations migrate_log docker_cjs migrations_dir
   local user_count admin_count exit_code=0
+  local fp_users
 
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
   app_url="http://127.0.0.1:${app_port:-3210}"
@@ -338,15 +543,35 @@ show_status() {
     printf "\nDB migrations: %s / %s applied\n" "$applied_migrations" "$expected_migrations"
     printf "Users:         %s\n" "$user_count"
     printf "Platform admins: %s\n" "$admin_count"
+    if [[ -f "$(db_fingerprint_file)" ]]; then
+      printf "DB fingerprint: users=%s admins=%s migrations=%s (saved %s)\n" \
+        "$(load_fingerprint_value users || echo '?')" \
+        "$(load_fingerprint_value admins || echo '?')" \
+        "$(load_fingerprint_value migrations || echo '?')" \
+        "$(load_fingerprint_value saved_at || echo '?')"
+    else
+      echo "DB fingerprint: none yet (will be written after next healthy moz -d/-u/-r)"
+    fi
     if [[ "$applied_migrations" =~ ^[0-9]+$ && "$expected_migrations" =~ ^[0-9]+$ ]]; then
       if (( applied_migrations < expected_migrations )); then
         echo "  ⚠️  DB behind repo — run: bun run db:migrate   (or moz -u after packaging fix)"
         exit_code=1
       fi
     fi
+    if [[ -f "$(db_fingerprint_file)" ]]; then
+      fp_users="$(load_fingerprint_value users || true)"
+      if [[ "$fp_users" =~ ^[0-9]+$ && "$user_count" =~ ^[0-9]+$ ]] && (( user_count < fp_users )); then
+        echo "  ⚠️  Live users ($user_count) < fingerprint ($fp_users) — possible DB wipe"
+        exit_code=1
+      fi
+    fi
   else
     echo ""
     echo "DB:            postgres not running"
+    if ! has_postgres_cluster "$(postgres_data_dir)"; then
+      echo "Postgres data: NO cluster (empty dir — initdb risk)"
+      exit_code=1
+    fi
     exit_code=1
   fi
 
@@ -471,6 +696,7 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
   migrate_legacy_deploy_data
+  assert_db_fingerprint_matches
   compose_in_deploy_dir up -d
   verify_deploy_health
   exit 0
@@ -478,12 +704,14 @@ fi
 
 if [[ $RESTART -eq 1 ]]; then
   url="$(app_url)"
+  assert_db_fingerprint_matches
   if is_app_running; then
     echo "==> Restarting containers from $DEPLOY_DIR"
     compose_in_deploy_dir restart
   else
     echo "==> Not running — starting stack from $DEPLOY_DIR"
     migrate_legacy_deploy_data
+    assert_db_fingerprint_matches
     compose_in_deploy_dir up -d
   fi
   verify_deploy_health
@@ -493,6 +721,7 @@ fi
 if [[ $DEPLOY -eq 1 ]]; then
   echo "==> Force-deploying from $DEPLOY_DIR"
   migrate_legacy_deploy_data
+  assert_db_fingerprint_matches
   compose_in_deploy_dir up -d --force-recreate lobe
   verify_deploy_health
 fi
