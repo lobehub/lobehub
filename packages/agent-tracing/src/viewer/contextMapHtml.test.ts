@@ -139,6 +139,16 @@ describe('renderContextMapHtml', () => {
     expect(HTML_THEME.dark.kind.system).toBe('#ff9927');
   });
 
+  it('positions cache-break copy at the same token boundary as the cut marker', () => {
+    const html = renderContextMapHtml(map);
+
+    expect(html).toContain(
+      '.lanetext { font-size: 11.5px; margin: 5px 5px 0; min-height: 14px; position: relative; }',
+    );
+    expect(html).toContain('.lanetext .at-boundary { position: absolute;');
+    expect(html).toContain('<span class="at-boundary" style="left:60.000%">');
+  });
+
   it('organizes the legend by conversation role before assistant details', () => {
     const html = renderContextMapHtml(map);
 

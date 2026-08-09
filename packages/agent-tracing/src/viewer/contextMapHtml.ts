@@ -103,7 +103,8 @@ const STYLE = `
   .band.miss { background: var(--lane-miss); }
   .band.cold { background: var(--lane-cold); }
   .band.new { background: var(--lane-new); }
-  .lanetext { font-size: 11.5px; margin-top: 5px; }
+  .lanetext { font-size: 11.5px; margin: 5px 5px 0; min-height: 14px; position: relative; }
+  .lanetext .at-boundary { position: absolute; top: 0; white-space: nowrap; }
   .lanetext .hit { color: var(--lane-text-hit); }
   .lanetext .miss { color: var(--lane-text-miss); font-weight: 600; }
   .lanetext .cold { color: var(--lane-text-cold); }
@@ -234,7 +235,10 @@ export function renderContextMapHtml(
           : call.breakMessageIndex === undefined
             ? `<span class="new">${call.reprocessedTokens > 0 ? `+${fmtTokens(call.reprocessedTokens)} new` : 'identical payload — nothing re-processed'}</span>`
             : `<span class="miss">▲ cache broke at msg[${call.breakMessageIndex}] — ${escapeHtml(call.breakReason ?? '')}</span>${sep}<span class="miss">✂ ${fmtTokens(call.reprocessedTokens)} re-processed${call.wastedTokens > 0 ? `, ${fmtTokens(call.wastedTokens)} of it unchanged` : ''}</span>`;
-      const laneText = [hitText, restText].filter(Boolean).join(sep);
+      const laneText =
+        call.breakMessageIndex === undefined
+          ? [hitText, restText].filter(Boolean).join(sep)
+          : `${hitText}<span class="at-boundary" style="left:${pct(call.cachedTokens).toFixed(3)}%">${restText}</span>`;
 
       const share = map.contextWindowTokens
         ? ` · ${Math.round((call.totalTokens / map.contextWindowTokens) * 100)}% of window`
