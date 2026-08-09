@@ -2,10 +2,15 @@ import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildDailyHeatLevels,
+  buildDailySpend,
   buildSessionGrid,
   buildWindowStats,
+  isCalendarMonthAvailable,
   type QuotaWindowSpan,
+  selectQuotaAccount,
   shouldShowHeatDot,
+  trackedCostOf,
   utilizationLevelOf,
   utilizationStatusOf,
 } from './quotaCalendarModel';
@@ -36,14 +41,22 @@ describe('quota calendar window statistics', () => {
       [
         { cost: 1.25, occurredAt: at('2026-08-08T09:00:00'), tokens: 1000 },
         { cost: 2.5, occurredAt: at('2026-08-09T09:00:00'), tokens: 2000 },
+        { cost: null, occurredAt: at('2026-08-09T09:30:00'), tokens: 500 },
       ],
       at('2026-08-09T10:00:00'),
     );
 
     expect(stats).toHaveLength(2);
-    expect(stats[0]).toMatchObject({ cost: 2.5, isLive: true, peakUtilization: 72, tokens: 2000 });
+    expect(stats[0]).toMatchObject({
+      cost: 2.5,
+      hasUnpricedTurn: true,
+      isLive: true,
+      peakUtilization: 72,
+      tokens: 2500,
+    });
     expect(stats[1]).toMatchObject({
       cost: 1.25,
+      hasUnpricedTurn: false,
       isLive: false,
       rateLimitedAt: at('2026-08-08T10:00:00'),
       tokens: 1000,
@@ -106,6 +119,55 @@ describe('quota calendar window statistics', () => {
     expect(shouldShowHeatDot(1, false)).toBe(true);
     expect(shouldShowHeatDot(4, false)).toBe(true);
     expect(shouldShowHeatDot(4, true)).toBe(false);
+  });
+
+  it('falls back to provider burn per day when ledger exists only on other days', () => {
+    const spend = buildDailySpend([
+      { cost: 2, occurredAt: at('2026-08-08T09:00:00'), tokens: 2000 },
+    ]);
+    const burn = new Map([
+      ['2026-08-08', 20],
+      ['2026-08-09', 60],
+    ]);
+
+    expect(buildDailyHeatLevels(spend, burn)).toEqual(
+      new Map([
+        ['2026-08-08', 4],
+        ['2026-08-09', 4],
+      ]),
+    );
+  });
+
+  it('does not fall back to a different quota account', () => {
+    const accounts = [
+      { externalAccountId: 'account-a', id: 'a' },
+      { externalAccountId: 'account-b', id: 'b' },
+    ];
+
+    expect(selectQuotaAccount(accounts, 'missing')).toBeUndefined();
+    expect(selectQuotaAccount(accounts)).toBeUndefined();
+    expect(selectQuotaAccount([accounts[0]])).toEqual(accounts[0]);
+  });
+
+  it('limits calendar navigation to the two fully loaded months', () => {
+    const now = at('2026-08-09T12:00:00');
+
+    expect(isCalendarMonthAvailable(dayjs('2026-08-01'), now)).toBe(true);
+    expect(isCalendarMonthAvailable(dayjs('2026-07-01'), now)).toBe(true);
+    expect(isCalendarMonthAvailable(dayjs('2026-06-01'), now)).toBe(false);
+    expect(isCalendarMonthAvailable(dayjs('2026-09-01'), now)).toBe(false);
+  });
+
+  it('distinguishes exact, lower-bound, and unknown costs', () => {
+    expect(trackedCostOf({ cost: 2, hasUnpricedTurn: false })).toEqual({
+      cost: 2,
+      kind: 'exact',
+    });
+    expect(trackedCostOf({ cost: 2, hasUnpricedTurn: true })).toEqual({
+      cost: 2,
+      kind: 'lower-bound',
+    });
+    expect(trackedCostOf({ cost: 0, hasUnpricedTurn: true })).toEqual({ kind: 'unknown' });
   });
 
   it.each([

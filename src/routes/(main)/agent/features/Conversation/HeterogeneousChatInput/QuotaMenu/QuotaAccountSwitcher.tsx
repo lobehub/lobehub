@@ -8,10 +8,10 @@ import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 
 import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
-import { openQuotaCalendarModal } from './QuotaCalendarModal';
 
 const styles = createStaticStyles(({ css }) => ({
   // Divider faces the quota windows: below when on top, above when it trails.

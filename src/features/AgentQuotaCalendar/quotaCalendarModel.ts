@@ -65,6 +65,34 @@ export interface DaySpend {
   tokens: number;
 }
 
+export type TrackedCost =
+  { cost: number; kind: 'exact' } | { cost: number; kind: 'lower-bound' } | { kind: 'unknown' };
+
+export const trackedCostOf = (spend: Pick<DaySpend, 'cost' | 'hasUnpricedTurn'>): TrackedCost => {
+  if (!spend.hasUnpricedTurn) return { cost: spend.cost, kind: 'exact' };
+  if (spend.cost > 0) return { cost: spend.cost, kind: 'lower-bound' };
+  return { kind: 'unknown' };
+};
+
+interface QuotaAccountCandidate {
+  externalAccountId?: string | null;
+}
+
+export const selectQuotaAccount = <T extends QuotaAccountCandidate>(
+  accounts: T[],
+  externalAccountId?: string,
+): T | undefined => {
+  if (externalAccountId)
+    return accounts.find((candidate) => candidate.externalAccountId === externalAccountId);
+  return accounts.length === 1 ? accounts[0] : undefined;
+};
+
+/** The 90-day query guarantees complete data for the current and previous month. */
+export const isCalendarMonthAvailable = (month: dayjs.Dayjs, now: number) => {
+  const current = dayjs(now).startOf('month');
+  return month.isSame(current, 'month') || month.isSame(current.subtract(1, 'month'), 'month');
+};
+
 const isSessionReading = (reading: QuotaLimitReading) =>
   reading.limitType === 'session' || reading.limitType === 'five_hour';
 
@@ -153,6 +181,28 @@ export const heatLevelOf = (value: number, max: number): 0 | 1 | 2 | 3 | 4 => {
   if (ratio <= 0.5) return 2;
   if (ratio <= 0.75) return 3;
   return 4;
+};
+
+/**
+ * Resolve calendar intensity per day without mixing incomparable units.
+ * LobeHub-owned days rank by tokens; days without a ledger row fall back to
+ * provider-reported quota burn and rank against the other burn-only days.
+ */
+export const buildDailyHeatLevels = (
+  spendByDay: Map<string, DaySpend>,
+  burnByDay: Map<string, number>,
+): Map<string, 0 | 1 | 2 | 3 | 4> => {
+  const tokenMax = Math.max(0, ...[...spendByDay.values()].map((spend) => spend.tokens));
+  const externalBurn = [...burnByDay].filter(([key]) => (spendByDay.get(key)?.tokens ?? 0) === 0);
+  const burnMax = Math.max(0, ...externalBurn.map(([, burn]) => burn));
+  const levels = new Map<string, 0 | 1 | 2 | 3 | 4>();
+
+  for (const [key, spend] of spendByDay) {
+    if (spend.tokens > 0) levels.set(key, heatLevelOf(spend.tokens, tokenMax));
+  }
+  for (const [key, burn] of externalBurn) levels.set(key, heatLevelOf(burn, burnMax));
+
+  return levels;
 };
 
 /** A rate-limit alarm owns the corner; otherwise positive heat gets a dot. */
@@ -268,6 +318,7 @@ export const projectBurnout = (points: BurnPoint[], window: QuotaWindowSpan): Bu
  */
 export interface WindowStat extends QuotaWindowSpan {
   cost: number;
+  hasUnpricedTurn: boolean;
   isLive: boolean;
   tokens: number;
 }
@@ -275,7 +326,13 @@ export interface WindowStat extends QuotaWindowSpan {
 const withSpend = (window: QuotaWindowSpan, turns: UsageTurn[], now: number): WindowStat => {
   const spend = spendInWindow(turns, window);
 
-  return { ...window, cost: spend.cost, isLive: window.resetsAt > now, tokens: spend.tokens };
+  return {
+    ...window,
+    cost: spend.cost,
+    hasUnpricedTurn: spend.hasUnpricedTurn,
+    isLive: window.resetsAt > now,
+    tokens: spend.tokens,
+  };
 };
 
 /**

@@ -329,6 +329,8 @@ export default {
   'heteroAgent.claudeQuota.calendar.capacityUsed': 'Capacity used',
   'heteroAgent.claudeQuota.calendar.dayShare': 'Used {{percent}}% of this window',
   'heteroAgent.claudeQuota.calendar.dayTokens': '{{tokens}} tokens · {{cost}}',
+  'heteroAgent.claudeQuota.calendar.accountUnavailable':
+    'The quota account for this snapshot is unavailable',
   'heteroAgent.claudeQuota.calendar.currentWindow': 'Current window',
   'heteroAgent.claudeQuota.calendar.empty':
     'Not enough usage history yet — run a few tasks and check back.',
@@ -341,6 +343,7 @@ export default {
   'heteroAgent.claudeQuota.calendar.noLedgerSpendHint':
     'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
   'heteroAgent.claudeQuota.calendar.noLedgerSpendShort': 'History not recorded',
+  'heteroAgent.claudeQuota.calendar.partialCost': 'at least {{cost}}',
   'heteroAgent.claudeQuota.calendar.pace': 'Even pace',
   'heteroAgent.claudeQuota.calendar.pastWindow': 'Last observed window',
   'heteroAgent.claudeQuota.calendar.rateLimited': 'Rate limited',
@@ -353,6 +356,7 @@ export default {
   'heteroAgent.claudeQuota.calendar.weeklyHistory': 'Weekly windows',
   'heteroAgent.claudeQuota.calendar.weeklyHistoryHint': 'Recent windows',
   'heteroAgent.claudeQuota.calendar.windowSpend': '{{tokens}} tokens · {{cost}} this window',
+  'heteroAgent.claudeQuota.calendar.unpricedCost': 'cost unavailable',
   'heteroAgent.claudeQuota.calendar.windowUtilization': '{{percent}}% used',
   'heteroAgent.claudeQuota.manage.addHint':
     'Sign in to the Claude Code CLI and the account shows up here automatically.',

@@ -16,6 +16,7 @@ import { agentQuotaService } from '@/services/agentQuota';
 import {
   buildBurnSeries,
   buildDailyBurn,
+  buildDailyHeatLevels,
   buildDailySpend,
   buildMonthGrid,
   buildSessionGrid,
@@ -25,14 +26,16 @@ import {
   type DaySpend,
   formatCost,
   formatTokens,
-  heatLevelOf,
+  isCalendarMonthAvailable,
   projectBurnout,
   type QuotaSeriesKey,
   type QuotaWindowSpan,
+  selectQuotaAccount,
   seriesId,
   SESSION_SERIES,
   shouldShowHeatDot,
   spendInWindow,
+  trackedCostOf,
   type UsageTurn,
   utilizationStatusOf,
   type WindowStat,
@@ -301,12 +304,26 @@ const normalizeWindows = (rows: WindowRow[]): NormalizedWindow[] =>
 
 const CHART_W = 640;
 const CHART_H = 120;
+const HISTORY_DAYS = 90;
 const RING_RADIUS = 22;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const xOf = (time: number, window: QuotaWindowSpan) =>
   ((time - window.windowStartAt) / (window.resetsAt - window.windowStartAt)) * CHART_W;
 const yOf = (utilization: number) => CHART_H * (1 - utilization / 100);
+
+const formatTrackedCost = (
+  spend: Pick<DaySpend, 'cost' | 'hasUnpricedTurn'>,
+  t: TFunction<'chat'>,
+) => {
+  const trackedCost = trackedCostOf(spend);
+  if (trackedCost.kind === 'unknown') return t('heteroAgent.claudeQuota.calendar.unpricedCost');
+  if (trackedCost.kind === 'lower-bound')
+    return t('heteroAgent.claudeQuota.calendar.partialCost', {
+      cost: formatCost(trackedCost.cost),
+    });
+  return formatCost(trackedCost.cost);
+};
 
 /**
  * Burn-down curve for one window: actual utilization against the even-pace
@@ -370,7 +387,7 @@ const BurnChart = memo<{
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {spend.tokens > 0
                 ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
-                    cost: formatCost(spend.cost),
+                    cost: formatTrackedCost(spend, t),
                     tokens: formatTokens(spend.tokens),
                   })
                 : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
@@ -534,7 +551,7 @@ const windowTooltip = (stat: WindowStat, t: TFunction<'chat'>) =>
     }),
     stat.tokens > 0 &&
       t('heteroAgent.claudeQuota.calendar.windowSpend', {
-        cost: formatCost(stat.cost),
+        cost: formatTrackedCost(stat, t),
         tokens: formatTokens(stat.tokens),
       }),
     stat.rateLimitedAt && t('heteroAgent.claudeQuota.calendar.rateLimited'),
@@ -590,7 +607,7 @@ const WindowHistory = memo<{
                   <CapacityMeter utilization={stat.peakUtilization} />
                   <span className={styles.windowSpend}>
                     {stat.tokens > 0
-                      ? `${formatTokens(stat.tokens)} · ${formatCost(stat.cost)}`
+                      ? `${formatTokens(stat.tokens)} · ${formatTrackedCost(stat, t)}`
                       : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
                   </span>
                 </div>
@@ -646,7 +663,7 @@ const WindowHistory = memo<{
           </Flexbox>
           {stat.tokens > 0 ? (
             <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
-              {formatTokens(stat.tokens)} · {formatCost(stat.cost)}
+              {formatTokens(stat.tokens)} · {formatTrackedCost(stat, t)}
             </Text>
           ) : (
             <Tooltip title={t('heteroAgent.claudeQuota.calendar.noLedgerSpendHint')}>
@@ -672,6 +689,7 @@ interface QuotaCalendarProps {
 
 const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   const { t } = useTranslation('chat');
+  const [accountUnavailable, setAccountUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [readings, setReadings] = useState<QuotaLimitReading[]>([]);
   const [turns, setTurns] = useState<UsageTurn[]>([]);
@@ -685,13 +703,19 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     (async () => {
       const accounts = await agentQuotaService.listAccounts().catch(() => []);
       const claude = accounts.filter((a) => a.provider === 'claude-code');
-      const account = claude.find((a) => a.externalAccountId === externalAccountId) ?? claude[0];
-      if (!account) return;
+      const account = selectQuotaAccount(claude, externalAccountId);
+      if (!account) {
+        if (!cancelled) setAccountUnavailable(true);
+        return;
+      }
+      setAccountUnavailable(false);
 
       const [windowRows, snapshotSeries, usageTurns] = await Promise.all([
         agentQuotaService.getWindows(account.id, 200).catch(() => [] as WindowRow[]),
-        agentQuotaService.listSnapshots(account.id, 42).catch(() => [] as QuotaLimitReading[]),
-        agentQuotaService.listUsageTurns(account.id, 42).catch(() => [] as UsageTurn[]),
+        agentQuotaService
+          .listSnapshots(account.id, HISTORY_DAYS)
+          .catch(() => [] as QuotaLimitReading[]),
+        agentQuotaService.listUsageTurns(account.id, HISTORY_DAYS).catch(() => [] as UsageTurn[]),
       ]);
       if (cancelled) return;
       setWindows(normalizeWindows(windowRows));
@@ -727,14 +751,10 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
 
   const dailySpend = useMemo(() => buildDailySpend(turns), [turns]);
   const dailyBurn = useMemo(() => buildDailyBurn(readings, series), [readings, series]);
-  const hasLedger = turns.length > 0;
-
-  // Heat ranks each day against the busiest day in view, so the ramp reads as
-  // relative intensity instead of flagging every working day at once.
-  const heatBy = hasLedger
-    ? new Map([...dailySpend].map(([key, spend]) => [key, spend.tokens]))
-    : dailyBurn;
-  const heatMax = Math.max(0, ...heatBy.values());
+  const dailyHeatLevels = useMemo(
+    () => buildDailyHeatLevels(dailySpend, dailyBurn),
+    [dailyBurn, dailySpend],
+  );
 
   const chartWindow = useMemo(() => {
     const live = currentWindow(readings, series, now);
@@ -788,6 +808,8 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     [],
   );
   const todayKey = dayKeyOf(now);
+  const previousMonth = month.subtract(1, 'month');
+  const nextMonth = month.add(1, 'month');
 
   if (loading)
     return (
@@ -800,14 +822,18 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   if (readings.length === 0 && windows.length === 0)
     return (
       <Text style={{ paddingBlock: 24, textAlign: 'center' }} type={'secondary'}>
-        {t('heteroAgent.claudeQuota.calendar.empty')}
+        {t(
+          accountUnavailable
+            ? 'heteroAgent.claudeQuota.calendar.accountUnavailable'
+            : 'heteroAgent.claudeQuota.calendar.empty',
+        )}
       </Text>
     );
 
   const dayLabel = (spend: DaySpend | undefined, burn: number) => {
     if (spend && spend.tokens > 0) return formatTokens(spend.tokens);
     // No ledger row (usage burned outside LobeHub) but the meter still moved.
-    if (!hasLedger && burn > 0) return `${Math.round(burn)}%`;
+    if (burn > 0) return `${Math.round(burn)}%`;
     return '';
   };
 
@@ -848,11 +874,13 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
           </Flexbox>
           <Flexbox horizontal gap={2}>
             <ActionIcon
+              disabled={!isCalendarMonthAvailable(previousMonth, now)}
               icon={ChevronLeftIcon}
               size={'small'}
               onClick={() => setMonth((m) => m.subtract(1, 'month'))}
             />
             <ActionIcon
+              disabled={!isCalendarMonthAvailable(nextMonth, now)}
               icon={ChevronRightIcon}
               size={'small'}
               onClick={() => setMonth((m) => m.add(1, 'month'))}
@@ -871,13 +899,13 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             const burn = dailyBurn.get(cell.key) ?? 0;
             const resetsAt = resetsByDay.get(cell.key);
             const rateLimited = rateLimitedDays.has(cell.key);
-            const heatLevel = heatLevelOf(heatBy.get(cell.key) ?? 0, heatMax);
+            const heatLevel = dailyHeatLevels.get(cell.key) ?? 0;
             const label = dayLabel(spend, burn);
             const tooltipParts = [
               spend &&
                 spend.tokens > 0 &&
                 t('heteroAgent.claudeQuota.calendar.dayTokens', {
-                  cost: formatCost(spend.cost),
+                  cost: formatTrackedCost(spend, t),
                   tokens: formatTokens(spend.tokens),
                 }),
               burn > 0 &&
@@ -910,8 +938,8 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
                     )}
                   </span>
                 </span>
-                {spend && spend.cost > 0 && (
-                  <span className={styles.cost}>{formatCost(spend.cost)}</span>
+                {spend && (spend.cost > 0 || spend.hasUnpricedTurn) && (
+                  <span className={styles.cost}>{formatTrackedCost(spend, t)}</span>
                 )}
               </div>
             );
