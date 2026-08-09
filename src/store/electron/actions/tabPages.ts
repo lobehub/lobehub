@@ -30,6 +30,12 @@ export interface TabPagesState {
 
 export interface SplitViewState {
   /**
+   * The tab `duplicatedTabId` was copied from. Recorded at split time because
+   * panes can be replaced afterwards — deriving the source from "the other
+   * pane" later would point at whatever tab happens to sit there.
+   */
+  duplicatedFromTabId?: string;
+  /**
    * Tab created by copying the active tab when it was split against itself.
    * It only exists to mirror its source side-by-side and is removed as soon as
    * it leaves the split, so no stray duplicate tab survives the session.
@@ -139,7 +145,12 @@ export class TabPagesActionImpl {
     const cleaned = this.#dropDisplacedDuplicate(splitView, null, tabs, activeTabId);
 
     this.#set(
-      { activeTabId: cleaned.activeTabId, splitView: null, tabs: cleaned.tabs },
+      {
+        activeTabId: cleaned.activeTabId,
+        splitView: null,
+        // #touch keeps the promoted source tab's keep-alive recency fresh — see #touch.
+        tabs: this.#touch(cleaned.tabs, cleaned.activeTabId),
+      },
       false,
       'closeSplitView',
     );
@@ -182,6 +193,7 @@ export class TabPagesActionImpl {
       : this.#touch(tabs, id);
 
     const nextSplitView: SplitViewState = {
+      duplicatedFromTabId: shouldDuplicate ? id : undefined,
       duplicatedTabId: shouldDuplicate ? secondaryTabId : undefined,
       primaryTabId,
       ratio: splitView?.ratio ?? 0.5,
@@ -470,16 +482,15 @@ export class TabPagesActionImpl {
         nextSplitView.secondaryTabId === duplicatedTabId);
     if (stillInPane) return keep;
 
-    const sourceTabId =
-      prevSplitView.primaryTabId === duplicatedTabId
-        ? prevSplitView.secondaryTabId
-        : prevSplitView.primaryTabId;
+    const sourceTabId = prevSplitView.duplicatedFromTabId;
     // The source tab already closed, so the copy is the page's only remaining tab.
-    if (!tabs.some((tab) => tab.id === sourceTabId)) return keep;
+    if (!sourceTabId || !tabs.some((tab) => tab.id === sourceTabId)) return keep;
 
     return {
       activeTabId: activeTabId === duplicatedTabId ? sourceTabId : activeTabId,
-      splitView: nextSplitView,
+      splitView: nextSplitView
+        ? { ...nextSplitView, duplicatedFromTabId: undefined, duplicatedTabId: undefined }
+        : null,
       tabs: tabs.filter((tab) => tab.id !== duplicatedTabId),
     };
   };
@@ -519,11 +530,21 @@ export class TabPagesActionImpl {
       url,
     };
 
+    const withNew = [...tabs, newTab];
+    const cleaned = activate
+      ? this.#dropDisplacedDuplicate(
+          splitView,
+          this.#replaceFocusedPane(splitView, activeTabId, id),
+          withNew,
+          id,
+        )
+      : { activeTabId, splitView, tabs: withNew };
+
     this.#set(
       {
         activeTabId: activate ? id : activeTabId,
-        splitView: activate ? this.#replaceFocusedPane(splitView, activeTabId, id) : splitView,
-        tabs: [...tabs, newTab],
+        splitView: cleaned.splitView,
+        tabs: cleaned.tabs,
       },
       false,
       'addTab',
