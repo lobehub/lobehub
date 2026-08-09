@@ -57,7 +57,11 @@ const Render = memo<RenderProps>(
 
     if (intervention?.status === 'rejected') {
       return (
-        <RejectedResponse reason={intervention.rejectedReason} skipped={intervention.skipped} />
+        <RejectedResponse
+          apiName={apiName}
+          reason={intervention.rejectedReason}
+          skipped={intervention.skipped}
+        />
       );
     }
 

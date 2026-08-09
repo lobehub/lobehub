@@ -1770,7 +1770,8 @@ export default {
   'tool.intervention.viewParameters': 'View parameters ({{count}})',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
-  'tool.intervention.toolSkipped': 'You skipped this question',
+  'tool.intervention.questionSkipped': 'You skipped this question',
+  'tool.intervention.toolSkipped': 'You skipped this step',
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',
   'toolAuth.hint':

@@ -20,6 +20,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface RejectedResponseProps {
+  /** Distinguishes question skips from other skipped interactions in the copy. */
+  apiName?: string;
   reason?: string;
   /**
    * The user skipped the interaction (e.g. an AskUserQuestion) instead of
@@ -28,7 +30,14 @@ interface RejectedResponseProps {
   skipped?: boolean;
 }
 
-const RejectedResponse = memo<RejectedResponseProps>(({ reason, skipped }) => {
+/**
+ * All ask surfaces (user-interaction, lobe-agent, claude-code) share this
+ * apiName; other skippable interactions (e.g. the onboarding marketplace
+ * picker) get the generic skipped copy instead of the question-specific one.
+ */
+const ASK_USER_QUESTION_API_NAME = 'askUserQuestion';
+
+const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped }) => {
   const { t } = useTranslation('chat');
 
   if (skipped)
@@ -36,7 +45,11 @@ const RejectedResponse = memo<RejectedResponseProps>(({ reason, skipped }) => {
       <Flexbox className={styles.container} gap={8}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
-          <div className={styles.title}>{t('tool.intervention.toolSkipped')}</div>
+          <div className={styles.title}>
+            {apiName === ASK_USER_QUESTION_API_NAME
+              ? t('tool.intervention.questionSkipped')
+              : t('tool.intervention.toolSkipped')}
+          </div>
         </Flexbox>
       </Flexbox>
     );
