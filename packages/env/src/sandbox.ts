@@ -42,7 +42,7 @@ export const getSandboxConfig = () => {
       TENCENT_SANDBOX_REGION: z.preprocess(emptyStringToUndefined, z.string().optional()),
       TENCENT_SANDBOX_TIMEOUT_SEC: z.preprocess(
         emptyStringToUndefined,
-        z.coerce.number().int().positive().optional(),
+        z.coerce.number().int().min(300).max(3600).optional(),
       ),
     },
   });

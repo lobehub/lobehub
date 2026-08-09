@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFile } from 'node:child_process';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
@@ -34,6 +34,15 @@ const controlPlaneRequests: { action: keyof typeof calls; payload: Record<string
 /** Seconds until the acquired instance expires; drives the renewal path. */
 let expiresInSec = 300;
 
+const fetchUrl = (input: string | URL | Request) =>
+  typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+const controlPlaneResponse = (data: Record<string, unknown>) =>
+  new Response(JSON.stringify({ Code: 0, Data: data }), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
+  });
+
 const installFetch = () => {
   calls.acquire = 0;
   calls.release = 0;
@@ -42,26 +51,20 @@ const installFetch = () => {
 
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      const action = url.split('/').pop() as keyof typeof calls;
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const action = fetchUrl(input).split('/').pop() as keyof typeof calls;
       calls[action] += 1;
       controlPlaneRequests.push({
         action,
         payload: JSON.parse(String(init?.body || '{}')),
       });
 
-      return {
-        json: async () => ({
-          Code: 0,
-          Data: {
-            InstanceExpiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
-            InstanceId: `instance-${calls.acquire}`,
-            SandboxDomain: 'ap-beijing.tencentags.com',
-            Token: 'sit_test',
-          },
-        }),
-        ok: true,
-      };
+      return controlPlaneResponse({
+        InstanceExpiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
+        InstanceId: `instance-${calls.acquire}`,
+        SandboxDomain: 'ap-beijing.tencentags.com',
+        Token: 'sit_test',
+      });
     }),
   );
 };
@@ -276,9 +279,11 @@ describe('TencentSandboxProvider', () => {
 
     // Directory setup and process-group publication use a bounded control
     // timeout independent of the command's own lifetime.
-    expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(1, 'mkdir -p /tmp/lobe-background', {
-      timeoutMs: 10_000,
-    });
+    expect(mocks.sandbox.commands.run).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("directory = Path('/tmp/lobe-background')"),
+      { timeoutMs: 10_000 },
+    );
     expect(mocks.sandbox.commands.run.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sandbox.files.write.mock.invocationCallOrder[0],
     );
@@ -314,9 +319,14 @@ describe('TencentSandboxProvider', () => {
     async () => {
       const childPidFile = `/tmp/lobe-background/test-child-${process.pid}-${Date.now()}.pid`;
       await rm('/tmp/lobe-background', { force: true, recursive: true });
+      await mkdir('/tmp/lobe-background', { recursive: true });
+      await Promise.all(
+        Array.from({ length: 1024 }, (_, index) =>
+          writeFile(`/tmp/lobe-background/retained-${index}.exit`, '0'),
+        ),
+      );
 
-      // Plain writeFile rejects a missing parent, so this test also enforces
-      // that production creates the background directory before files.write.
+      // Execute the generated scripts against real Linux process and file APIs.
       mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
         await writeFile(path, content);
       });
@@ -346,6 +356,11 @@ describe('TencentSandboxProvider', () => {
           { interval: 50, timeout: 5000 },
         );
 
+        const completionMarkers = (await readdir('/tmp/lobe-background')).filter((name) =>
+          name.endsWith('.exit'),
+        );
+        expect(completionMarkers).toHaveLength(1024);
+
         // A rounded-up implementation waits a full second. Leave ample CI
         // scheduling headroom while still distinguishing the 250 ms deadline.
         expect(Date.now() - startedAt).toBeLessThan(900);
@@ -357,6 +372,30 @@ describe('TencentSandboxProvider', () => {
           },
           { interval: 50, timeout: 2000 },
         );
+
+        const completed = await provider.callTool('getCommandOutput', { commandId });
+        expect(completed.result).toMatchObject({
+          exitCode: 124,
+          newOutput: '',
+          running: false,
+          success: false,
+        });
+
+        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off']) {
+          await expect(readFile(`${base}.${suffix}`, 'utf8')).rejects.toMatchObject({
+            code: 'ENOENT',
+          });
+        }
+        expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('124');
+
+        // Keeping the exit marker makes completion polling idempotent without
+        // retaining the command body, output log, or stale process ids.
+        const repeated = await provider.callTool('getCommandOutput', { commandId });
+        expect(repeated.result).toMatchObject({
+          exitCode: 124,
+          newOutput: '',
+          running: false,
+        });
       } finally {
         try {
           const pgid = Number((await readFile(`${base}.pgid`, 'utf8')).trim());
@@ -533,15 +572,17 @@ describe('TencentSandboxProvider', () => {
     const provider = await load();
     await provider.callTool('runCommand', { command: 'echo acquire' });
 
-    vi.mocked(fetch).mockImplementationOnce(async (url: string, init?: RequestInit) => {
-      const action = url.split('/').pop() as keyof typeof calls;
-      calls[action] += 1;
-      controlPlaneRequests.push({
-        action,
-        payload: JSON.parse(String(init?.body || '{}')),
-      });
-      throw new Error('transient update failure');
-    });
+    vi.mocked(fetch).mockImplementationOnce(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const action = fetchUrl(input).split('/').pop() as keyof typeof calls;
+        calls[action] += 1;
+        controlPlaneRequests.push({
+          action,
+          payload: JSON.parse(String(init?.body || '{}')),
+        });
+        throw new Error('transient update failure');
+      },
+    );
 
     const result = await provider.callTool('runCommand', { command: 'echo still-valid' });
 
@@ -587,37 +628,34 @@ describe('TencentSandboxProvider', () => {
       await provider.callTool('runCommand', { command: 'echo acquire' });
       vi.advanceTimersByTime(900);
 
-      vi.mocked(fetch).mockImplementation(async (url: string, init?: RequestInit) => {
-        const action = url.split('/').pop() as keyof typeof calls;
-        calls[action] += 1;
-        controlPlaneRequests.push({
-          action,
-          payload: JSON.parse(String(init?.body || '{}')),
-        });
+      vi.mocked(fetch).mockImplementation(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const action = fetchUrl(input).split('/').pop() as keyof typeof calls;
+          calls[action] += 1;
+          controlPlaneRequests.push({
+            action,
+            payload: JSON.parse(String(init?.body || '{}')),
+          });
 
-        if (action === 'update') {
-          // The service renewed the conversation, but the response was lost
-          // after the old local timestamp passed.
-          vi.setSystemTime(new Date(Date.now() + 200));
-          throw new Error('response timed out after the update committed');
-        }
+          if (action === 'update') {
+            // The service renewed the conversation, but the response was lost
+            // after the old local timestamp passed.
+            vi.setSystemTime(new Date(Date.now() + 200));
+            throw new Error('response timed out after the update committed');
+          }
 
-        return {
-          json: async () => ({
-            Code: 0,
-            Data:
-              action === 'acquire'
-                ? {
-                    InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
-                    InstanceId: 'instance-1',
-                    SandboxDomain: 'ap-beijing.tencentags.com',
-                    Token: 'sit_test',
-                  }
-                : {},
-          }),
-          ok: true,
-        };
-      });
+          return controlPlaneResponse(
+            action === 'acquire'
+              ? {
+                  InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+                  InstanceId: 'instance-1',
+                  SandboxDomain: 'ap-beijing.tencentags.com',
+                  Token: 'sit_test',
+                }
+              : {},
+          );
+        },
+      );
 
       const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
 
@@ -672,29 +710,25 @@ describe('TencentSandboxProvider', () => {
       await provider.callTool('runCommand', { command: 'echo acquire' });
       vi.advanceTimersByTime(1100);
 
-      vi.mocked(fetch).mockImplementation(async (url: string, init?: RequestInit) => {
-        const action = url.split('/').pop() as keyof typeof calls;
-        calls[action] += 1;
-        controlPlaneRequests.push({
-          action,
-          payload: JSON.parse(String(init?.body || '{}')),
-        });
+      vi.mocked(fetch).mockImplementation(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const action = fetchUrl(input).split('/').pop() as keyof typeof calls;
+          calls[action] += 1;
+          controlPlaneRequests.push({
+            action,
+            payload: JSON.parse(String(init?.body || '{}')),
+          });
 
-        return {
-          json: async () => ({
-            Code: 0,
-            Data: {
-              InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
-              // Another replica renewed the deterministic conversation, so
-              // reacquire returns its original sandbox rather than a reset.
-              InstanceId: 'instance-1',
-              SandboxDomain: 'ap-beijing.tencentags.com',
-              Token: 'sit_test',
-            },
-          }),
-          ok: true,
-        };
-      });
+          return controlPlaneResponse({
+            InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+            // Another replica renewed the deterministic conversation, so
+            // reacquire returns its original sandbox rather than a reset.
+            InstanceId: 'instance-1',
+            SandboxDomain: 'ap-beijing.tencentags.com',
+            Token: 'sit_test',
+          });
+        },
+      );
 
       const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
 
@@ -738,6 +772,38 @@ describe('TencentSandboxProvider', () => {
     ]);
 
     expect(calls.acquire).toBe(1);
+  });
+
+  it('bounds cached credentials across many one-shot sessions', async () => {
+    expiresInSec = 3600;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const firstProvider = await load();
+    const { TencentSandboxProvider } = await import('./tencent');
+    const providers = [firstProvider];
+
+    // One more than the live-cache limit proves old credentials are evicted.
+    // The separate, bounded id-only history still detects a changed instance.
+    for (let index = 1; index <= 1024; index += 1) {
+      providers.push(
+        new TencentSandboxProvider({
+          ...options,
+          topicId: `one-shot-topic-${index}`,
+        }),
+      );
+    }
+
+    for (const provider of providers) {
+      await provider.callTool('runCommand', { command: 'true' });
+    }
+
+    expect(calls.acquire).toBe(1025);
+    await providers.at(-1)!.callTool('runCommand', { command: 'still-cached' });
+    expect(calls.acquire).toBe(1025);
+    const reacquired = await providers[0].callTool('runCommand', { command: 'evicted' });
+
+    expect(calls.acquire).toBe(1026);
+    expect(reacquired.sessionExpiredAndRecreated).toBe(true);
   });
 
   it.runIf(process.platform === 'linux')(
@@ -807,6 +873,70 @@ describe('TencentSandboxProvider', () => {
           ),
         );
         await rm(childPidFile, { force: true });
+        await rm('/tmp/lobe-background', { force: true, recursive: true });
+      }
+    },
+  );
+
+  it.runIf(process.platform === 'linux')(
+    'does not signal a reused process group after a background command exits',
+    async () => {
+      await rm('/tmp/lobe-background', { force: true, recursive: true });
+
+      mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
+        await writeFile(path, content);
+      });
+      mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
+        const { stderr, stdout } = await execFileAsync('sh', ['-c', command], {
+          encoding: 'utf8',
+        });
+
+        return { exitCode: 0, stderr, stdout };
+      });
+
+      const provider = await load();
+      const started = await provider.callTool('runCommand', {
+        background: true,
+        command: 'true',
+        timeout: 5000,
+      });
+      const { commandId } = started.result as Record<string, string>;
+      const base = `/tmp/lobe-background/${commandId}`;
+      let unrelatedPid: number | undefined;
+
+      try {
+        await vi.waitFor(
+          async () => {
+            expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('0');
+          },
+          { interval: 25, timeout: 2000 },
+        );
+
+        const { stdout } = await execFileAsync(
+          'sh',
+          ['-c', 'setsid sleep 60 < /dev/null > /dev/null 2>&1 & echo $!'],
+          { encoding: 'utf8' },
+        );
+        unrelatedPid = Number(stdout.trim());
+        await writeFile(`${base}.pgid`, String(unrelatedPid));
+
+        const killed = await provider.callTool('killCommand', { commandId });
+
+        expect(killed.result).toMatchObject({ forced: false, success: true });
+        expect(await isLinuxProcessTerminated(unrelatedPid)).toBe(false);
+      } finally {
+        if (unrelatedPid !== undefined) {
+          try {
+            process.kill(-unrelatedPid, 'SIGKILL');
+          } catch {
+            try {
+              process.kill(unrelatedPid, 'SIGKILL');
+            } catch {
+              // Cleanup is best-effort if the process already exited.
+            }
+          }
+        }
+
         await rm('/tmp/lobe-background', { force: true, recursive: true });
       }
     },

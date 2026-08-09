@@ -35,6 +35,7 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const CONTROL_PLANE_TIMEOUT_MS = 30_000;
 const BACKGROUND_LAUNCH_TIMEOUT_MS = 10_000;
 const BACKGROUND_KILL_GRACE_SEC = 1;
+const BACKGROUND_COMPLETED_LIMIT = 1024;
 const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
 const TSX_VERSION = '4.22.4';
@@ -42,6 +43,36 @@ const TSX_VERSION = '4.22.4';
 const RENEW_THRESHOLD_MS = 60_000;
 const BACKGROUND_DIR = '/tmp/lobe-background';
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const INSTANCE_CACHE_LIMIT = 1024;
+const INSTANCE_HISTORY_LIMIT = 4096;
+
+/**
+ * Prepares the background directory and bounds retained completion history.
+ * Active jobs have no `.exit` marker and are never considered for pruning.
+ */
+const prepareBackgroundDirectoryScript = `${scriptPrelude}
+def main(encoded):
+    directory = Path('${BACKGROUND_DIR}')
+    directory.mkdir(parents=True, exist_ok=True)
+    completed = []
+    for marker in directory.glob('*.exit'):
+        try:
+            completed.append((marker.stat().st_mtime, marker))
+        except FileNotFoundError:
+            pass
+
+    # Leave room for the command being launched, so completion never takes the
+    # retained history above the configured limit in the sequential case.
+    for _, marker in sorted(completed, reverse=True)[${BACKGROUND_COMPLETED_LIMIT - 1}:]:
+        base = marker.with_suffix('')
+        for suffix in ('.sh', '.log', '.pid', '.pgid', '.exit', '.off'):
+            try:
+                base.with_suffix(suffix).unlink()
+            except FileNotFoundError:
+                pass
+
+    emit({'success': True})
+`;
 
 /**
  * Reads whatever a background command has produced since the previous check.
@@ -57,17 +88,20 @@ def main(encoded):
     log, pid_file = base.with_suffix('.log'), base.with_suffix('.pid')
     exit_file, off_file = base.with_suffix('.exit'), base.with_suffix('.off')
 
-    if not log.exists() and not pid_file.exists():
+    if not log.exists() and not pid_file.exists() and not exit_file.exists():
         emit({'success': False, 'error': 'unknown commandId'})
         return
 
     offset = int(off_file.read_text()) if off_file.exists() else 0
     chunk = b''
     if log.exists():
-        with log.open('rb') as handle:
-            handle.seek(offset)
-            chunk = handle.read()
-            off_file.write_text(str(handle.tell()))
+        try:
+            with log.open('rb') as handle:
+                handle.seek(offset)
+                chunk = handle.read()
+                off_file.write_text(str(handle.tell()))
+        except FileNotFoundError:
+            pass
 
     exit_code = None
     if exit_file.exists():
@@ -89,6 +123,16 @@ def main(encoded):
             running = False
 
     output = chunk.decode(errors='replace')
+    if exit_code is not None:
+        # Once the final bytes have been consumed, retain only the tiny exit
+        # marker so repeated polls stay idempotent without keeping commands,
+        # logs, offsets, or stale process identifiers forever.
+        for suffix in ('.sh', '.log', '.pid', '.pgid', '.off'):
+            try:
+                base.with_suffix(suffix).unlink()
+            except FileNotFoundError:
+                pass
+
     emit({
         'exitCode': exit_code,
         'newOutput': output,
@@ -135,7 +179,12 @@ import signal, time
 def main(encoded):
     args = load_args(encoded)
     base = Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')
+    exit_file = base.with_suffix('.exit')
     pgid_file, pid_file = base.with_suffix('.pgid'), base.with_suffix('.pid')
+
+    if exit_file.exists():
+        emit({'forced': False, 'success': True})
+        return
 
     if not pgid_file.exists() and not pid_file.exists():
         emit({'success': False, 'error': 'unknown commandId'})
@@ -231,6 +280,11 @@ interface ResolvedInstance {
  * this map for persistence.
  */
 const instances = new Map<string, AcquiredInstance>();
+/**
+ * Bounded, id-only history preserves reset detection after expired credentials
+ * are evicted from the live cache.
+ */
+const instanceHistory = new Map<string, string>();
 /**
  * In-flight acquisitions, so two concurrent tool calls for one session share a
  * container instead of racing and leaking the loser.
@@ -481,15 +535,16 @@ export class TencentSandboxProvider implements SandboxProvider {
       const timeoutMs = this.timeoutMs(params);
       const timeoutSec = timeoutMs / 1000;
 
-      // Create the parent before files.write. Besides making the ordering
-      // explicit for E2B-compatible implementations, this avoids relying on
-      // an SDK-specific implicit recursive-directory behavior.
-      const directory = await sandbox.commands.run(`mkdir -p ${BACKGROUND_DIR}`, {
-        timeoutMs: BACKGROUND_LAUNCH_TIMEOUT_MS,
-      });
-      if (directory.exitCode !== 0) {
-        throw new Error(directory.stderr || 'Failed to prepare background command directory');
-      }
+      // Create the parent before files.write and prune only completed history.
+      // The bounded control timeout is independent of the command's lifetime.
+      await this.runScript(
+        sandbox,
+        prepareBackgroundDirectoryScript,
+        {},
+        {
+          timeoutMs: BACKGROUND_LAUNCH_TIMEOUT_MS,
+        },
+      );
 
       // The command is written to a file rather than interpolated into the
       // launcher: anything with quotes — `printf '%s' 'hello world'` — would
@@ -569,10 +624,10 @@ export class TencentSandboxProvider implements SandboxProvider {
     sandbox: Sandbox,
     script: string,
     params: Record<string, unknown>,
-    options: { allowReportedFailure?: boolean } = {},
+    options: { allowReportedFailure?: boolean; timeoutMs?: number } = {},
   ): Promise<Record<string, unknown>> {
     const result = await sandbox.commands.run(buildScriptCommand(script, params), {
-      timeoutMs: this.timeoutMs(params),
+      timeoutMs: options.timeoutMs ?? this.timeoutMs(params),
     });
 
     if (result.exitCode !== 0) {
@@ -649,6 +704,8 @@ export class TencentSandboxProvider implements SandboxProvider {
   }
 
   private async resolveInstance(key: string): Promise<ResolvedInstance> {
+    this.compactInstanceCache(key);
+
     const cached = instances.get(key);
 
     if (cached) {
@@ -660,16 +717,18 @@ export class TencentSandboxProvider implements SandboxProvider {
       // their real expiry — dropping them early would strand files and
       // background processes mid-session.
       if (sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand') {
+        this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
       if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) {
+        this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
       const renewed = await this.renew(cached);
       if (renewed) {
-        instances.set(key, renewed);
+        this.rememberInstance(key, renewed);
 
         return { instance: renewed, sessionExpiredAndRecreated: false };
       }
@@ -678,6 +737,7 @@ export class TencentSandboxProvider implements SandboxProvider {
       // while it is still valid and retry on the next call rather than
       // discarding the topic's files and background processes.
       if (cached.expiresAt > Date.now()) {
+        this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
@@ -689,10 +749,15 @@ export class TencentSandboxProvider implements SandboxProvider {
       return this.reacquireExpired(key, cached);
     }
 
+    const previousInstanceId = instanceHistory.get(key);
     const instance = await this.acquire();
-    instances.set(key, instance);
+    this.rememberInstance(key, instance);
 
-    return { instance, sessionExpiredAndRecreated: false };
+    return {
+      instance,
+      sessionExpiredAndRecreated:
+        previousInstanceId !== undefined && instance.instanceId !== previousInstanceId,
+    };
   }
 
   /**
@@ -705,12 +770,46 @@ export class TencentSandboxProvider implements SandboxProvider {
     previous: AcquiredInstance,
   ): Promise<ResolvedInstance> {
     const instance = await this.acquire();
-    instances.set(key, instance);
+    this.rememberInstance(key, instance);
 
     return {
       instance,
       sessionExpiredAndRecreated: instance.instanceId !== previous.instanceId,
     };
+  }
+
+  /**
+   * Drop expired credentials for inactive sessions while retaining bounded,
+   * id-only history so a later acquire can still report a real replacement.
+   */
+  private compactInstanceCache(currentKey: string) {
+    const now = Date.now();
+
+    for (const [key, instance] of instances) {
+      if (key !== currentKey && instance.expiresAt <= now) {
+        instances.delete(key);
+      }
+    }
+  }
+
+  private rememberInstance(key: string, instance: AcquiredInstance) {
+    // Delete before set to make Map insertion order an LRU order.
+    instances.delete(key);
+    instances.set(key, instance);
+    instanceHistory.delete(key);
+    instanceHistory.set(key, instance.instanceId);
+
+    this.trimOldest(instances, INSTANCE_CACHE_LIMIT);
+    this.trimOldest(instanceHistory, INSTANCE_HISTORY_LIMIT);
+  }
+
+  private trimOldest<T>(cache: Map<string, T>, limit: number) {
+    while (cache.size > limit) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) return;
+
+      cache.delete(oldest);
+    }
   }
 
   private async renew(instance: AcquiredInstance): Promise<AcquiredInstance | undefined> {
@@ -858,5 +957,6 @@ const connect = (instance: AcquiredInstance): Sandbox =>
 /** Exposed for tests; instance reuse is otherwise process-wide. */
 export const __clearSandboxInstances = () => {
   instances.clear();
+  instanceHistory.clear();
   pending.clear();
 };

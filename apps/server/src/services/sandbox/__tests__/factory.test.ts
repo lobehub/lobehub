@@ -52,4 +52,26 @@ describe('sandbox service factory', () => {
     expect(service.kind).toBe('onlyboxes');
     expect(service.capabilities.languages).toEqual(['python', 'javascript', 'typescript']);
   });
+
+  it('uses the Tencent provider when configured', async () => {
+    vi.doMock('@/envs/sandbox', () => ({
+      sandboxEnv: {
+        SANDBOX_PROVIDER: 'tencent',
+        TENCENT_SANDBOX_API_TOKEN: 'edgeone-token',
+        TENCENT_SANDBOX_MODE: 'persistent',
+        TENCENT_SANDBOX_PROJECT_ID: 'makers-test',
+      },
+    }));
+
+    const { createSandboxService } = await import('../factory');
+    const service = createSandboxService(baseOptions);
+
+    expect(service.kind).toBe('tencent');
+    expect(service.capabilities).toMatchObject({
+      backgroundCommands: true,
+      files: true,
+      persistentSession: true,
+      skillScripts: false,
+    });
+  });
 });
