@@ -174,7 +174,7 @@ describe('AgentArtworkAction', () => {
         params: expect.objectContaining({
           aspectRatio: '1:1',
           imageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
-          prompt: expect.stringContaining('The attached images are style references'),
+          prompt: expect.stringContaining('as the target character style'),
         }),
       }),
     );
@@ -219,7 +219,7 @@ describe('AgentArtworkAction', () => {
       expect.objectContaining({
         params: expect.objectContaining({
           imageUrls: ['https://example.com/ref-a.webp'],
-          prompt: expect.stringContaining('The attached image is a style reference'),
+          prompt: expect.stringContaining('as the target character style'),
         }),
       }),
     );
