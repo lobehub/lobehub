@@ -680,6 +680,21 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
+### `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+
+**Situation:** after a successful ingest, wanting to re-check a field from its JSON
+output (evidence count, acceptanceId).
+
+**Doesn't work:** running the same `ingest` command again "just to see the output".
+Every invocation creates a new immutable round on the acceptance — the re-run
+publishes a byte-identical duplicate round that reviewers then see twice.
+
+**Works:** re-read state with the read-only commands — `acceptance run list`,
+`acceptance run get <runId>`, `acceptance view <id> --json`. If a duplicate was
+minted by mistake, `acceptance run delete <runId> --yes` (newest timestamp = the
+accident) restores the round history; this is data correction of an operator
+error, distinct from the forbidden overwrite-a-real-round.
+
 ### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
 
 **Situation:** starting the dev server from a harness-managed background command in a
