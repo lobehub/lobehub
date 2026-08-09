@@ -14,7 +14,11 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { openFilePicker, resolveAgentBackground } from '@/features/AgentProfileArtwork/utils';
+import {
+  avatarRemountKey,
+  openFilePicker,
+  resolveAgentBackground,
+} from '@/features/AgentProfileArtwork/utils';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -236,7 +240,16 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
           generation stage so both paths land on the same picture. */}
       <Flexbox gap={16} style={{ flex: 'none', width: 232 }}>
         <Center className={styles.preview} height={232} width={232}>
-          <Avatar avatar={meta.avatar || undefined} shape={'square'} size={180} />
+          {/* Keyed by the url: Avatar latches an internal `isImgError` on the
+              first failed load and never clears it when `avatar` changes, so a
+              previously broken avatar would keep the freshly generated one
+              invisible until a reload. */}
+          <Avatar
+            avatar={meta.avatar || undefined}
+            key={avatarRemountKey(meta.avatar)}
+            shape={'square'}
+            size={180}
+          />
           {generating ? (
             <Center className={styles.generationOverlay}>
               <Flexbox align={'center'} gap={10}>

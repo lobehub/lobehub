@@ -24,7 +24,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
 
-import { openFilePicker, resolveAgentBackground } from './utils';
+import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';
 
 const MAX_ARTWORK_SIZE = 1024 * 1024;
 
@@ -466,9 +466,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               emoji plus the studio launcher tab; the launcher tab is ordered
               first and auto-selected on open, preserving the old generate-tab
               position. */}
+          {/* Keyed by the url for the same reason as the studio preview: the
+              underlying Avatar latches its image-error state, so without a
+              remount a newly generated avatar stays invisible whenever the
+              previous one failed to load. */}
           <EmojiPicker
             allowModelAvatar
             allowDelete={canEdit && !!avatar}
+            key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
             popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
@@ -486,7 +491,12 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 render: () => (
                   <Flexbox gap={16} padding={20} width={348}>
                     <Center className={styles.generatedPreview} height={156}>
-                      <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
+                      <Avatar
+                        avatar={avatar || undefined}
+                        key={avatarRemountKey(avatar)}
+                        shape={'square'}
+                        size={112}
+                      />
                     </Center>
                     <Button
                       icon={WandSparkles}
