@@ -5,6 +5,7 @@ import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui'
 import { createModal, type ModalInstance, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
+import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
 import { BanIcon, ChevronLeftIcon, ChevronRightIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,8 @@ import {
   buildDailyBurn,
   buildDailySpend,
   buildMonthGrid,
+  buildSessionGrid,
+  buildWindowStats,
   currentWindow,
   dayKeyOf,
   type DaySpend,
@@ -30,6 +33,8 @@ import {
   SESSION_SERIES,
   spendInWindow,
   type UsageTurn,
+  utilizationLevelOf,
+  type WindowStat,
 } from './quotaCalendarModel';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,8 +49,18 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   cost: css`
+    align-self: flex-start;
+
+    padding-block: 1px;
+    padding-inline: 4px;
+    border-radius: ${cssVar.borderRadiusSM};
+
     font-size: 10px;
-    color: ${cssVar.colorTextTertiary};
+    font-weight: 500;
+    line-height: 14px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgContainer};
   `,
   /**
    * Heat is a fill ramp only. An outline on the busiest tier read as an alarm
@@ -159,6 +174,66 @@ const styles = createStaticStyles(({ css }) => ({
   tokens: css`
     font-size: 12px;
     font-variant-numeric: tabular-nums;
+  `,
+  windowCell: css`
+    display: flex;
+
+    min-width: 0;
+    height: 36px;
+    padding: 4px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+
+    &[data-level='1'] {
+      background: ${cssVar.colorSuccessBg};
+    }
+
+    &[data-level='2'] {
+      background: ${cssVar.colorSuccessBgHover};
+    }
+
+    &[data-level='3'] {
+      background: ${cssVar.colorSuccessBorder};
+    }
+
+    &[data-level='4'] {
+      color: ${cssVar.colorTextLightSolid};
+      background: ${cssVar.colorSuccess};
+    }
+
+    &[data-rate-limited='true'] {
+      color: ${cssVar.colorErrorText};
+      background: ${cssVar.colorErrorBg};
+    }
+  `,
+  windowGrid: css`
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+  `,
+  windowListRow: css`
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) 54px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+
+    min-height: 36px;
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  windowSection: css`
+    padding: 10px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
   weekday: css`
     font-size: 11px;
@@ -352,6 +427,123 @@ const BurnChart = memo<{
 
 BurnChart.displayName = 'BurnChart';
 
+const windowTooltip = (stat: WindowStat, t: TFunction<'chat'>) =>
+  [
+    `${dayjs(stat.windowStartAt).format('M/D HH:mm')} – ${dayjs(stat.resetsAt).format('M/D HH:mm')}`,
+    t('heteroAgent.claudeQuota.calendar.windowUtilization', {
+      percent: Math.round(stat.peakUtilization),
+    }),
+    stat.tokens > 0 &&
+      t('heteroAgent.claudeQuota.calendar.windowSpend', {
+        cost: formatCost(stat.cost),
+        tokens: formatTokens(stat.tokens),
+      }),
+    stat.rateLimitedAt && t('heteroAgent.claudeQuota.calendar.rateLimited'),
+  ].filter(Boolean) as string[];
+
+const WindowHistory = memo<{
+  series: QuotaSeriesKey;
+  stats: WindowStat[];
+}>(({ series, stats }) => {
+  const { t } = useTranslation('chat');
+
+  if (stats.length === 0) return null;
+
+  if (series.type === 'session') {
+    const latestDay = dayjs(Math.max(...stats.map((stat) => stat.windowStartAt)));
+    const grid = buildSessionGrid(stats, latestDay);
+
+    return (
+      <Flexbox className={styles.windowSection} gap={8}>
+        <Flexbox horizontal align={'baseline'} justify={'space-between'}>
+          <Text strong style={{ fontSize: 13 }}>
+            {t('heteroAgent.claudeQuota.calendar.sessionHistory')}
+          </Text>
+          <Text style={{ fontSize: 11 }} type={'secondary'}>
+            {t('heteroAgent.claudeQuota.calendar.sessionHistoryHint')}
+          </Text>
+        </Flexbox>
+        <div className={styles.windowGrid}>
+          {grid.columns.map((column) => (
+            <div className={styles.weekday} key={column.key}>
+              {column.date.format('dd M/D')}
+            </div>
+          ))}
+          {Array.from({ length: grid.rowCount }, (_, row) =>
+            grid.columns.map((column) => {
+              const stat = column.slots[row];
+              if (!stat)
+                return (
+                  <div className={styles.windowCell} data-level={0} key={`${column.key}-${row}`} />
+                );
+
+              const cell = (
+                <div
+                  className={styles.windowCell}
+                  data-level={utilizationLevelOf(stat.peakUtilization)}
+                  data-rate-limited={stat.rateLimitedAt != null}
+                  key={`${column.key}-${stat.resetsAt}`}
+                >
+                  <Flexbox justify={'space-between'} style={{ minWidth: 0, width: '100%' }}>
+                    <span>{dayjs(stat.windowStartAt).format('HH:mm')}</span>
+                    <strong>{Math.round(stat.peakUtilization)}%</strong>
+                  </Flexbox>
+                </div>
+              );
+
+              return (
+                <Tooltip
+                  key={`${column.key}-${stat.resetsAt}`}
+                  title={windowTooltip(stat, t).join(' · ')}
+                >
+                  {cell}
+                </Tooltip>
+              );
+            }),
+          )}
+        </div>
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox className={styles.windowSection} gap={6}>
+      <Flexbox horizontal align={'baseline'} justify={'space-between'}>
+        <Text strong style={{ fontSize: 13 }}>
+          {t('heteroAgent.claudeQuota.calendar.weeklyHistory')}
+        </Text>
+        <Text style={{ fontSize: 11 }} type={'secondary'}>
+          {t('heteroAgent.claudeQuota.calendar.weeklyHistoryHint')}
+        </Text>
+      </Flexbox>
+      {stats.map((stat) => (
+        <div className={styles.windowListRow} key={stat.resetsAt}>
+          <Flexbox gap={1}>
+            <Text style={{ fontSize: 11 }}>
+              {dayjs(stat.windowStartAt).format('M/D')} – {dayjs(stat.resetsAt).format('M/D')}
+            </Text>
+            <Text style={{ fontSize: 10 }} type={'secondary'}>
+              {stat.isLive
+                ? t('heteroAgent.claudeQuota.calendar.currentWindow')
+                : t('heteroAgent.claudeQuota.calendar.pastWindow')}
+            </Text>
+          </Flexbox>
+          <Text strong style={{ fontSize: 14, textAlign: 'right' }}>
+            {Math.round(stat.peakUtilization)}%
+          </Text>
+          <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
+            {stat.tokens > 0
+              ? `${formatTokens(stat.tokens)} · ${formatCost(stat.cost)}`
+              : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
+          </Text>
+        </div>
+      ))}
+    </Flexbox>
+  );
+});
+
+WindowHistory.displayName = 'WindowHistory';
+
 interface QuotaCalendarProps {
   externalAccountId?: string;
 }
@@ -429,6 +621,13 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     return past.length > 0 ? past.reduce((a, b) => (a.resetsAt > b.resetsAt ? a : b)) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readings, series, windows]);
+
+  const windowStats = useMemo(() => {
+    const history = windows.filter((window) => window.seriesId === seriesId(series));
+    return buildWindowStats(history, chartWindow, turns, now, series.type === 'session' ? 40 : 8);
+    // `now` is intentionally captured when the modal opens, matching chartWindow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windows, chartWindow, turns, series]);
 
   // A 5-hour window resets several times a day, so a per-day reset badge would
   // fire on every cell — only the weekly windows get one.
@@ -513,11 +712,18 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
         />
       )}
 
+      <WindowHistory series={series} stats={windowStats} />
+
       <Flexbox gap={8}>
         <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-          <Text strong style={{ fontSize: 13 }}>
-            {month.format('YYYY/MM')}
-          </Text>
+          <Flexbox horizontal align={'baseline'} gap={8}>
+            <Text strong style={{ fontSize: 13 }}>
+              {t('heteroAgent.claudeQuota.calendar.monthSpend')}
+            </Text>
+            <Text style={{ fontSize: 11 }} type={'secondary'}>
+              {month.format('YYYY/MM')}
+            </Text>
+          </Flexbox>
           <Flexbox horizontal gap={2}>
             <ActionIcon
               icon={ChevronLeftIcon}

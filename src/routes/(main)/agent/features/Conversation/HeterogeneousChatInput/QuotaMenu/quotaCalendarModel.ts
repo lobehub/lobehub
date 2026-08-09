@@ -256,6 +256,122 @@ export const projectBurnout = (points: BurnPoint[], window: QuotaWindowSpan): Bu
   };
 };
 
+/**
+ * One concrete window with what it cost. This is the middle zoom level of the
+ * panel: the burn chart is one window in detail, the month grid is calendar
+ * days, and this is the window itself as a countable unit — which is the unit
+ * the provider actually enforces.
+ */
+export interface WindowStat extends QuotaWindowSpan {
+  cost: number;
+  isLive: boolean;
+  tokens: number;
+}
+
+const withSpend = (window: QuotaWindowSpan, turns: UsageTurn[], now: number): WindowStat => {
+  const spend = spendInWindow(turns, window);
+
+  return { ...window, cost: spend.cost, isLive: window.resetsAt > now, tokens: spend.tokens };
+};
+
+/**
+ * Recent windows of one series, newest first, each with its spend. The live
+ * window is merged in from the readings: it has no `agent_quota_windows` row
+ * until it closes, and leaving "now" out of a window list is exactly the gap
+ * that makes the list feel disconnected from the chart above it.
+ */
+export const buildWindowStats = (
+  windows: QuotaWindowSpan[],
+  live: QuotaWindowSpan | null,
+  turns: UsageTurn[],
+  now: number,
+  limit = 8,
+): WindowStat[] => {
+  const merged: QuotaWindowSpan[] = [];
+  for (const window of [...windows, ...(live ? [live] : [])].sort(
+    (a, b) => a.resetsAt - b.resetsAt,
+  )) {
+    const existingIndex = merged.findIndex(
+      (candidate) => Math.abs(candidate.resetsAt - window.resetsAt) < RESET_MATCH_TOLERANCE_MS,
+    );
+    if (existingIndex < 0) {
+      merged.push(window);
+      continue;
+    }
+
+    const existing = merged[existingIndex];
+    merged[existingIndex] = {
+      peakUtilization: Math.max(existing.peakUtilization, window.peakUtilization),
+      rateLimitedAt: existing.rateLimitedAt ?? window.rateLimitedAt,
+      // Keep the widest observed boundary pair for spend attribution.
+      resetsAt: Math.max(existing.resetsAt, window.resetsAt),
+      windowStartAt: Math.min(existing.windowStartAt, window.windowStartAt),
+    };
+  }
+
+  return merged
+    .sort((a, b) => b.resetsAt - a.resetsAt)
+    .slice(0, limit)
+    .map((window) => withSpend(window, turns, now));
+};
+
+export interface SessionGridColumn {
+  date: dayjs.Dayjs;
+  key: string;
+  /** Windows that started on this local day, earliest first. */
+  slots: (WindowStat | null)[];
+}
+
+export interface SessionGrid {
+  columns: SessionGridColumn[];
+  rowCount: number;
+}
+
+/**
+ * Session windows laid out as slot × weekday. A 5-hour window is a *slot in a
+ * day*, not a day — so the natural shape is a grid whose columns are days and
+ * whose rows are the successive windows within each day. Columns are the seven
+ * days ending on `endDay`, which keeps this block navigation-free: it reads as
+ * "the last week of working windows" beside the month grid's longer arc.
+ */
+export const buildSessionGrid = (
+  stats: WindowStat[],
+  endDay: dayjs.Dayjs,
+  days = 7,
+): SessionGrid => {
+  const byDay = new Map<string, WindowStat[]>();
+  for (const stat of stats) {
+    const key = dayKeyOf(stat.windowStartAt);
+    byDay.set(key, [...(byDay.get(key) ?? []), stat]);
+  }
+  for (const list of byDay.values()) list.sort((a, b) => a.windowStartAt - b.windowStartAt);
+
+  const start = endDay.startOf('day').subtract(days - 1, 'day');
+  const columns = Array.from({ length: days }, (_, index) => {
+    const date = start.add(index, 'day');
+    const key = date.format('YYYY-MM-DD');
+    return { date, key, slots: byDay.get(key) ?? [] };
+  });
+  const rowCount = Math.max(1, ...columns.map((c) => c.slots.length));
+
+  return {
+    columns: columns.map((c) => ({
+      ...c,
+      slots: Array.from({ length: rowCount }, (_, row) => c.slots[row] ?? null),
+    })),
+    rowCount,
+  };
+};
+
+/** Utilization ramp for a window cell — absolute, since 0–100 already means something. */
+export const utilizationLevelOf = (utilization: number): 0 | 1 | 2 | 3 | 4 => {
+  if (utilization <= 0) return 0;
+  if (utilization < 25) return 1;
+  if (utilization < 50) return 2;
+  if (utilization < 80) return 3;
+  return 4;
+};
+
 export interface CalendarDayCell {
   date: dayjs.Dayjs;
   inMonth: boolean;
