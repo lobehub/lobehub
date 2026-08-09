@@ -34,7 +34,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useTaskStore } from '@/store/task';
 
-import { buildGoalTaskConfig } from './goalConfig';
+import { buildGoalTaskConfig, deriveInitialGoalCriterionTitle } from './goalConfig';
 import { deriveGoalTitle } from './goalTitle';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -126,11 +126,14 @@ const styles = createStaticStyles(({ css }) => ({
       background: linear-gradient(
         90deg,
         ${cssVar.colorBorderSecondary} 0%,
-        ${cssVar.colorBorderSecondary} 24%,
-        ${cssVar.colorPrimary} 42%,
-        ${cssVar.colorInfo} 50%,
-        ${cssVar.colorSuccess} 58%,
-        ${cssVar.colorBorderSecondary} 76%,
+        ${cssVar.colorBorderSecondary} 16%,
+        #ff3d8d 30%,
+        #8b5cf6 40%,
+        #00c8ff 50%,
+        #22e6a8 60%,
+        #ffd43b 70%,
+        #ff6b35 80%,
+        ${cssVar.colorBorderSecondary} 92%,
         ${cssVar.colorBorderSecondary} 100%
       );
       background-size: 300% 100%;
@@ -298,7 +301,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const handleNext = useCallback(() => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
     if (!canCreate || !instruction) return;
-    const seededCriterion = initialRequirement?.trim();
+    const criterionTitle = deriveInitialGoalCriterionTitle(instruction, initialRequirement);
     setPlan((current) => ({
       ...current,
       criteria:
@@ -308,7 +311,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               {
                 onFail: 'auto_repair',
                 required: true,
-                title: seededCriterion ?? '',
+                title: criterionTitle,
                 verifierType: 'agent',
               },
             ],
