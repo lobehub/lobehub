@@ -26,7 +26,7 @@ const STYLE_DIRECTIONS: Record<AgentArtworkStyle, string> = {
   clay: 'Render it as a soft 3D clay-style figure with rounded forms, matte materials, subtle hand-made charm, gentle studio lighting, and warm pastel colors.',
   geometric:
     'Render it as flat geometric illustration built from bold simple shapes, crisp edges, and a confident limited palette in the spirit of mid-century poster design.',
-  lobe: "Render it as a single 3D cartoon character with smooth rounded shapes, big lively glossy eyes, simple friendly features, soft studio lighting, and one vivid saturated solid background color. Express the identity through the character's outfit and accessories — do not draw scenes, maps, or diagrams on the character's body.",
+  lobe: "Render it as a single 3D cartoon character in the spirit of a collectible designer figure: smooth rounded shapes, expressive finely-crafted features with big lively eyes, balanced head-to-body proportions (a half-body or full-body character, not an oversized baby head), soft studio lighting, and one vivid saturated solid background color. Express the identity through the character's outfit and accessories — do not draw scenes, maps, or diagrams on the character's body.",
   pixel:
     'Render it as crisp retro pixel art with chunky readable pixels, a limited bright palette, and clean shading in the spirit of classic 16-bit games.',
   sticker:
@@ -107,9 +107,13 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
 
   const styleReferenceCount =
     input.styleReferenceImageUrls?.filter((url) => url.trim()).length ?? 0;
+  // "Match … exactly" measurably drags the references' PROPORTIONS into the
+  // result (the official mascots are big-headed, which infantilizes every
+  // generated character), so the wording scopes the borrowing to surface
+  // qualities and explicitly fences proportions off.
   const styleReferenceDirection =
     styleReferenceCount > 0
-      ? `\n\nThe attached ${styleReferenceCount === 1 ? 'image is a style reference' : 'images are style references'}. Match ${styleReferenceCount === 1 ? 'its' : 'their'} rendering technique, material treatment, lighting, color saturation, and level of finish exactly. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects, characters, or compositions — invent a new subject from the agent described above.`
+      ? `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} only as a rendering-style reference — match ${styleReferenceCount === 1 ? 'its' : 'their'} materials, lighting, color saturation, and level of finish. Do NOT copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects, compositions, or proportions — invent a new subject from the agent described above.`
       : '';
   const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
 

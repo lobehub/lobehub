@@ -59,6 +59,7 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(prompt).toContain('one vivid saturated solid background color');
     expect(prompt).toContain('outfit and accessories');
+    expect(prompt).toContain('balanced head-to-body proportions');
   });
 
   it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
@@ -68,15 +69,15 @@ describe('buildAgentArtworkPrompt', () => {
     expect(prompt).not.toContain('big lively glossy eyes');
   });
 
-  it('describes attached style references and forbids copying their subjects', () => {
+  it('describes attached style references and fences off subjects and proportions', () => {
     const prompt = buildAgentArtworkPrompt({
       id: 'agent-1',
       kind: 'avatar',
       styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
     });
 
-    expect(prompt).toContain('The attached images are style references');
-    expect(prompt).toContain('Do not copy their subjects, characters, or compositions');
+    expect(prompt).toContain('only as a rendering-style reference');
+    expect(prompt).toContain('Do NOT copy their subjects, compositions, or proportions');
   });
 
   it('uses singular wording for a single style reference', () => {
@@ -86,7 +87,7 @@ describe('buildAgentArtworkPrompt', () => {
       styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
     });
 
-    expect(prompt).toContain('The attached image is a style reference');
+    expect(prompt).toContain('Use the attached image only as a rendering-style reference');
   });
 
   it('lets style references suppress the counterpart artwork reference', () => {
@@ -97,7 +98,7 @@ describe('buildAgentArtworkPrompt', () => {
       styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
     });
 
-    expect(prompt).toContain('The attached image is a style reference');
+    expect(prompt).toContain('only as a rendering-style reference');
     expect(prompt).not.toContain('attached existing profile background');
   });
 
