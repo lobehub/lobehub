@@ -1,9 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import AudioPlayer from '@/features/AudioPlayer';
 import { type ChatAudioItem } from '@/types/index';
-
-import AudioPlayer from './AudioPlayer';
 
 interface AudioFileListViewerProps {
   items: ChatAudioItem[];

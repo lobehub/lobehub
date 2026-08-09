@@ -482,6 +482,7 @@ export const buildServerCallLlmContext = async ({
   }
 
   const contextEngineInput = {
+    additionalContexts: llmPayload.additionalContexts,
     agentDocuments,
     ...(agentBuilderContext && { agentBuilderContext }),
     agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,

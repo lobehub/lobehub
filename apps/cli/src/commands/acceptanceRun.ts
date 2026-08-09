@@ -29,10 +29,12 @@ import {
   pullRequestFromResult,
   reportEvidence,
   scenarioFromResult,
+  screenProgrammaticTestChecks,
   subjectFromEnv,
   subjectFromResult,
   surfacesFromResult,
   toVerdict,
+  type Verdict,
   visualizationMetadata,
 } from './verifyHelpers';
 
@@ -540,14 +542,39 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     process.exit(1);
   }
 
-  const cases: any[] = Array.isArray(result.cases) ? result.cases : [];
+  // Unit tests, type-checks and lint gates are preconditions of shipping, not
+  // things a person accepts — a page full of them buries the checks that
+  // actually needed a human eye. Screen them out of both the plan and the cases
+  // before anything is published.
+  const { droppedIds, droppedLabels } = screenProgrammaticTestChecks(result);
+  const allCases: any[] = Array.isArray(result.cases) ? result.cases : [];
+  // Freeze each case's id BEFORE filtering: the fallback id is position-based
+  // (`case-N`), so dropping an earlier case would re-enumerate the survivors in
+  // the ingest loop — pairing them with the wrong plan items and publishing
+  // orphaned results into the immutable round.
+  const casesWithIds = allCases.map((c, index) => ({
+    case: c,
+    checkItemId: String(c?.id ?? c?.checkItemId ?? `case-${index + 1}`),
+  }));
+  const cases = casesWithIds.filter(({ checkItemId }) => !droppedIds.has(checkItemId));
+  // Every check was a gate: there is nothing here for a person to accept, and
+  // publishing an empty round would just create a verdict-less page. Fail before
+  // the first remote mutation, while the author can still fix the report.
+  if (cases.length === 0 && allCases.length > 0) {
+    log.error(
+      'every check in this round is a programmatic gate (tests / type-check / lint) — nothing here needs a human decision.',
+    );
+    log.error(
+      '  Verify what the delivery does, shows, or produces, and keep the gates as one line of report.md.',
+    );
+    process.exit(1);
+  }
   // Validate every schemaless visualization before the first remote mutation.
   // An ingest that cannot render must not create or attach a partial immutable round.
-  const caseMetadata = cases.map((item, index) => {
+  const caseMetadata = cases.map(({ case: item, checkItemId }) => {
     try {
       return visualizationMetadata(item);
     } catch (error) {
-      const checkItemId = String(item.id ?? item.checkItemId ?? `case-${index + 1}`);
       throw new Error(
         `case ${checkItemId}: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },
@@ -589,7 +616,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 
   // What the run set out to check, written before it ran. Paired with the
   // results by `id`, so the report can show a planned item that never ran.
-  const plan = planFromResult(result);
+  const plan = planFromResult(result, droppedIds);
 
   const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
   const title = options.title ?? result.title;
@@ -698,8 +725,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const seenCheckItemIds = new Set<string>();
   let evidenceCount = 0;
   let inlined = 0;
-  for (const [index, c] of cases.entries()) {
-    const checkItemId = String(c.id ?? c.checkItemId ?? `case-${index + 1}`);
+  for (const [index, { case: c, checkItemId }] of cases.entries()) {
     seenCheckItemIds.add(checkItemId);
     const verdict = toVerdict(c.result ?? c.status ?? c.verdict);
     const observation = c.keyObservation ?? c.observation ?? c.note;
@@ -765,18 +791,31 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // surfaces it as the `score` stat.
   const score =
     typeof summary.score === 'number' ? Math.max(0, Math.min(1, summary.score / 100)) : undefined;
+  // The authored counts describe the report the author wrote. Once a
+  // programmatic-test check is screened out they no longer match what was
+  // published, so recount from the cases that actually landed — a stats block
+  // that disagrees with the visible check list is worse than no stats.
+  const recount = cases.length !== allCases.length;
+  const verdicts = cases.map(({ case: c }) => toVerdict(c.result ?? c.status ?? c.verdict));
+  const counted = (verdict: Verdict) => verdicts.filter((v) => v === verdict).length;
   await client.verify.upsertReport.mutate({
     content,
-    failedChecks: summary.failed,
+    failedChecks: recount ? counted('failed') : summary.failed,
     overallConfidence: score,
-    passedChecks: summary.passed,
+    passedChecks: recount ? counted('passed') : summary.passed,
     summary: conclusion,
-    totalChecks: summary.total ?? cases.length,
-    uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
+    totalChecks: recount ? cases.length : (summary.total ?? cases.length),
+    uncertainChecks: recount
+      ? counted('uncertain') || undefined
+      : (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
     // An explicit summary.verdict wins; otherwise the headline is derived
     // from the ingested cases (deriveReportVerdict) so no report ships
-    // verdict-less and lists as a permanent "?".
-    verdict: summary.verdict ? toVerdict(summary.verdict) : deriveReportVerdict(cases),
+    // verdict-less and lists as a permanent "?". After a screen the authored
+    // verdict may have been about a check that is no longer here, so rederive.
+    verdict:
+      summary.verdict && !recount
+        ? toVerdict(summary.verdict)
+        : deriveReportVerdict(cases.map(({ case: c }) => c)),
     verifyRunId: runId,
   });
 
@@ -793,6 +832,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       {
         acceptanceId,
         cases: cases.length,
+        droppedProgrammaticChecks: droppedLabels,
         evidence: evidenceCount,
         inlined,
         origin,
@@ -811,7 +851,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 
   console.log(
     `${pc.green('✓')} Ingested ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
-      `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}`,
+      `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
+      `${droppedLabels.length > 0 ? pc.yellow(` — ${droppedLabels.length} programmatic-test check(s) dropped`) : ''}`,
   );
   if (plan?.length) {
     const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));

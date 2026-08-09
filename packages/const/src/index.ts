@@ -26,6 +26,7 @@ export * from './settings';
 export * from './skill';
 export * from './taskTemplate';
 export * from './theme';
+export * from './threadDrag';
 export * from './topicDrag';
 export * from './trace';
 export * from './url';

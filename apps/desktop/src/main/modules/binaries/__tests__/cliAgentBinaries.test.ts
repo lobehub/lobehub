@@ -36,13 +36,6 @@ const callExecFileError = (err: Error) => {
     return {} as any;
   }) as any);
 };
-const callExec = (stdout: string, stderr = '') => {
-  execMock.mockImplementationOnce(((cmd: string, opts: any, cb: any) => {
-    const callback = typeof opts === 'function' ? opts : cb;
-    callback(noErr, { stdout, stderr });
-    return {} as any;
-  }) as any);
-};
 
 describe('cliAgentBinaries', () => {
   beforeEach(() => {
@@ -59,11 +52,11 @@ describe('cliAgentBinaries', () => {
       platformMock.mockReturnValue('win32');
     });
 
-    it('resolves `claude` to the .cmd path via `where`, then runs it through the shell', async () => {
+    it('resolves `claude` to the .cmd path via `where` without constructing a shell command', async () => {
       // 1) `where claude` → resolves to the .cmd shim under %APPDATA%\npm
       callExecFile('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd\r\n');
-      // 2) `cmd /c "...\\claude.cmd" --version` → keyword match
-      callExec('1.2.3 (Claude Code)');
+      // 2) validate the resolved command without interpolating it into a shell string
+      callExecFile('1.2.3 (Claude Code)');
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
@@ -72,11 +65,12 @@ describe('cliAgentBinaries', () => {
       expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd');
       expect(status.version).toBe('1.2.3 (Claude Code)');
 
-      // The validation call must go via `exec` (shell), NOT `execFile`, so
-      // cmd.exe can actually interpret the .cmd shim.
-      expect(execMock).toHaveBeenCalledTimes(1);
-      const execCall = execMock.mock.calls[0]!;
-      expect(execCall[0]).toBe('"C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd" --version');
+      expect(execMock).not.toHaveBeenCalled();
+      expect(execFileMock).toHaveBeenCalledTimes(2);
+      expect(execFileMock.mock.calls[1]![0]).toBe(
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd',
+      );
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
     });
 
     it('returns unavailable when `where` finds nothing', async () => {
@@ -101,7 +95,7 @@ describe('cliAgentBinaries', () => {
 
     it('fails detection when version output does not match the expected keyword', async () => {
       callExecFile('C:\\some\\other\\claude.cmd\r\n');
-      callExec('this is some other binary v1.0');
+      callExecFile('this is some other binary v1.0');
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
@@ -120,16 +114,18 @@ describe('cliAgentBinaries', () => {
           'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.ps1',
         ].join('\r\n'),
       );
-      callExec('codex 0.130.0');
+      callExecFile('codex 0.130.0');
 
       const { codexBinary } = await import('../cliAgentBinaries');
       const status = await codexBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd');
-      expect(execMock.mock.calls[0]![0]).toBe(
-        '"C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd" --version',
+      expect(execMock).not.toHaveBeenCalled();
+      expect(execFileMock.mock.calls[1]![0]).toBe(
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd',
       );
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
     });
 
     it('prefers .exe over .cmd when both are present', async () => {
@@ -154,17 +150,18 @@ describe('cliAgentBinaries', () => {
           'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
         ].join('\r\n'),
       );
-      callExec('1.2.3 (Claude Code)');
+      callExecFile('1.2.3 (Claude Code)');
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
-      expect(execMock).toHaveBeenCalledTimes(1);
-      expect(execMock.mock.calls[0]![0]).toBe(
-        '"C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd" --version',
+      expect(execMock).not.toHaveBeenCalled();
+      expect(execFileMock.mock.calls[1]![0]).toBe(
+        'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
       );
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
     });
 
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {

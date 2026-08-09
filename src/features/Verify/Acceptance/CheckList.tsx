@@ -17,6 +17,7 @@ import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  AudioLines,
   BadgeCheck,
   Ban,
   Check,
@@ -39,6 +40,7 @@ import {
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AudioPlayer from '@/features/AudioPlayer';
 import type { AcceptanceBundle } from '@/services/verify';
 
 import {
@@ -142,11 +144,15 @@ export const checkHeadMeta = (check: AcceptanceCheck) => {
 export const isException = (check: AcceptanceCheck) =>
   check.state === 'failed' || check.state === 'uncertain';
 
-const VISUAL_EVIDENCE = new Set(['gif', 'screenshot', 'video']);
-const ANNOTATABLE_EVIDENCE = new Set(['gif', 'screenshot']);
+const IMAGE_EVIDENCE = new Set(['gif', 'screenshot']);
+/** Rendered by a `<video>` / `<audio>` element rather than an image box. */
+const PLAYER_EVIDENCE = new Set(['audio', 'video']);
+/** Everything that shows or plays inline — the deliverable itself, not a log about it. */
+const MEDIA_EVIDENCE = new Set([...IMAGE_EVIDENCE, ...PLAYER_EVIDENCE]);
+const ANNOTATABLE_EVIDENCE = IMAGE_EVIDENCE;
 
 const isVisual = (item: AcceptanceEvidence) =>
-  Boolean(item.fileUrl) && VISUAL_EVIDENCE.has(item.type);
+  Boolean(item.fileUrl) && MEDIA_EVIDENCE.has(item.type);
 
 export const hasVisualEvidence = (check: AcceptanceCheck) => check.evidence.some(isVisual);
 
@@ -360,9 +366,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Evidence media counts for the collapsed row's right-side badges. */
 const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
-  const counts = { file: 0, image: 0, video: 0 };
+  const counts = { audio: 0, file: 0, image: 0, video: 0 };
   for (const item of evidence) {
     if (item.type === 'video' && item.fileUrl) counts.video += 1;
+    else if (item.type === 'audio' && item.fileUrl) counts.audio += 1;
     else if (isVisual(item)) counts.image += 1;
     else counts.file += 1;
   }
@@ -372,6 +379,7 @@ const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
 const EVIDENCE_BADGES = [
   { icon: Images, key: 'image', labelKey: 'acceptance.evidence.image' },
   { icon: Film, key: 'video', labelKey: 'acceptance.evidence.video' },
+  { icon: AudioLines, key: 'audio', labelKey: 'acceptance.evidence.audio' },
   { icon: FileText, key: 'file', labelKey: 'acceptance.evidence.file' },
 ] as const;
 
@@ -386,6 +394,13 @@ const imageRatio = (item: AcceptanceEvidence): string | undefined =>
 const comparisonContent = (item: AcceptanceEvidence) =>
   item.type === 'video' ? (
     <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />
+  ) : item.type === 'audio' ? (
+    <AudioPlayer
+      fullWidth
+      alt={item.description ?? item.fileName ?? item.type}
+      downloadFileName={item.fileName ?? 'audio'}
+      url={item.fileUrl!}
+    />
   ) : (
     <Image
       preview
@@ -458,7 +473,21 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
               {caption}
             </Flexbox>
           );
-        if (item.fileUrl && VISUAL_EVIDENCE.has(item.type))
+        if (item.fileUrl && item.type === 'audio')
+          return (
+            <Flexbox gap={4} key={item.id} width={'100%'}>
+              {/* The conversation's own waveform player — one audio dialect across
+                  the product, with the download the reviewer needs to keep the clip. */}
+              <AudioPlayer
+                fullWidth
+                alt={item.description ?? item.fileName ?? item.type}
+                downloadFileName={item.fileName ?? 'audio'}
+                url={item.fileUrl}
+              />
+              {caption}
+            </Flexbox>
+          );
+        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type))
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
               {/* The frame owns the border — the inner Image must not draw its
@@ -739,7 +768,7 @@ const IterationTimeline = memo<{
               {step.evidence.length > 0 && (
                 <Flexbox horizontal gap={8} wrap={'wrap'}>
                   {step.evidence.map((item) =>
-                    item.fileUrl && VISUAL_EVIDENCE.has(item.type) ? (
+                    item.fileUrl && IMAGE_EVIDENCE.has(item.type) ? (
                       <Flexbox className={styles.evidenceImage} key={item.id}>
                         <Image
                           alt={item.description ?? item.type}
@@ -749,6 +778,24 @@ const IterationTimeline = memo<{
                           variant={'borderless'}
                         />
                       </Flexbox>
+                    ) : item.fileUrl && item.type === 'video' ? (
+                      // A player, never an <Image>: pointing an image box at an
+                      // mp4 renders a broken thumbnail, not the clip.
+                      <video
+                        controls
+                        key={item.id}
+                        src={item.fileUrl}
+                        style={{ borderRadius: 8, maxHeight: 160, maxWidth: 280 }}
+                      />
+                    ) : item.fileUrl && item.type === 'audio' ? (
+                      <div key={item.id} style={{ width: '100%' }}>
+                        <AudioPlayer
+                          fullWidth
+                          alt={item.description ?? item.type}
+                          downloadFileName={item.fileName ?? 'audio'}
+                          url={item.fileUrl}
+                        />
+                      </div>
                     ) : item.content ? (
                       <div
                         className={styles.evidenceText}

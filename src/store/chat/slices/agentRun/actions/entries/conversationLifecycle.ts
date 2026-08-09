@@ -1,5 +1,6 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
+import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
@@ -273,6 +274,12 @@ export class ConversationLifecycleActionImpl {
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
+    if (
+      isGoalPrompt(message) &&
+      !selectedTools.some(({ identifier }) => identifier === GoalIdentifier)
+    ) {
+      selectedTools.push({ identifier: GoalIdentifier, name: 'Goal' });
+    }
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
 
     const localFileReferences = mergeLocalFileReferences(

@@ -1,6 +1,7 @@
 export default {
   'ModelSwitch.title': 'Model',
   'active': 'Active',
+  'audioPlayer.download': 'Download audio',
   'audioPlayer.pause': 'Pause audio',
   'audioPlayer.play': 'Play audio',
   'agentBuilder.installPlugin.authRequired': 'Cloud MCP requires sign-in to continue',
@@ -594,6 +595,7 @@ export default {
     'The current model doesn’t support continuing an assistant message. Try regenerating instead.',
   'messageAction.copyOperationId': 'Copy Operation ID',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
+  'messageAction.regenerateAlreadyRunning': 'This message is already being regenerated.',
   'messageAction.interrupted': 'Interrupted',
   'messageAction.interruptedHint': 'What should I do instead?',
   'messageAction.deleteDisabledByThreads': 'This message has a subtopic and can’t be deleted',
@@ -796,6 +798,12 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'workingDirectoryGuide.actions.retry': 'Retry',
+  'workingDirectoryGuide.desc':
+    'The working directory saved for this conversation no longer exists.',
+  'workingDirectoryGuide.hint':
+    'Choose an existing folder from the working directory selector, then retry this message.',
+  'workingDirectoryGuide.title': 'Working directory unavailable',
   'opencodeInstallGuide.actions.openDocs': 'Open Install Guide',
   'opencodeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'opencodeInstallGuide.afterInstall':
@@ -1440,11 +1448,13 @@ export default {
   'createGoal.costBudgetPlaceholder': 'No cap',
   'createGoal.createFailed': 'Failed to create goal',
   'createGoal.back': 'Back',
+  'createGoal.budgetTitle': 'Budget',
   'createGoal.contextLabel': 'Context for the Agent',
   'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
-  'createGoal.criteriaTitle': 'What counts as done',
+  'createGoal.criteriaTitle': 'Acceptance criteria',
+  'createGoal.describeTitle': 'What outcome do you want?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
   'createGoal.instructionPlaceholder':
@@ -1467,7 +1477,7 @@ export default {
   'createGoal.roundBudgetUncappedHint':
     'It keeps going until the goal is reached — watch the cost.',
   'createGoal.submit': 'Create goal',
-  'createGoal.titlePlaceholder': 'The outcome you want',
+  'createGoal.titlePlaceholder': 'Goal title',
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
@@ -1767,6 +1777,8 @@ export default {
   'tool.intervention.viewParameters': 'View parameters ({{count}})',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
+  'tool.intervention.questionSkipped': 'You skipped this question',
+  'tool.intervention.toolSkipped': 'You skipped this step',
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',
   'toolAuth.hint':

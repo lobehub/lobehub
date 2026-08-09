@@ -77,8 +77,8 @@ export class TaskRecommendationMaterializer {
       );
       if (!recommendation) return { status: 'not-found' };
 
-      const sourceList = recommendation.sources.map(({ subject, url }) =>
-        subject ? `- ${subject}: ${url}` : `- ${url}`,
+      const sourceList = recommendation.sources.map(({ subject, title, url }) =>
+        title || subject ? `- ${title ?? subject}: ${url}` : `- ${url}`,
       );
       const task = await this.createTask(transaction as unknown as LobeChatDatabase, {
         assigneeAgentId: input.assigneeAgentId,

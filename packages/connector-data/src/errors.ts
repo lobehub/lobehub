@@ -1,5 +1,6 @@
-export type ConnectorDataProvider = 'github' | 'gmail';
+import type { ConnectorDataProvider } from './providers';
 
+/** Options used to create a sanitized Connector Data boundary error. */
 export interface ConnectorDataErrorOptions {
   code: string;
   operation: string;
@@ -7,6 +8,7 @@ export interface ConnectorDataErrorOptions {
   retryable: boolean;
 }
 
+/** Sanitized provider error safe to propagate across connector collection boundaries. */
 export class ConnectorDataError extends Error {
   readonly code: string;
   readonly operation: string;

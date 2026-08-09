@@ -76,6 +76,16 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
 };
 
 /**
+ * Whether a message currently has no reply rendered beneath it.
+ *
+ * True during the window a retry opens up: `delAndRegenerateMessage` removes the
+ * failed turn before the replacement exists, so for a beat the user turn stands
+ * alone with nothing under it and nothing to hang a loading state on.
+ */
+const hasNoRenderedReply = (id: string) => (s: State) =>
+  !s.displayMessages.some((message) => message.parentId === id);
+
+/**
  * Finds the last (deepest) message ID from a display message
  * Recursively traverses children and tools to find the actual last message
  */
@@ -242,6 +252,7 @@ export const dataSelectors = {
   getGroupLatestMessageWithoutTools,
   getToolInBlock,
   getToolsInBlock,
+  hasNoRenderedReply,
   isSecondLastMessageFromUser,
   messagesInit,
   pendingInterventions,

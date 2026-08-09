@@ -24,6 +24,7 @@ const mockDeleteMessage = vi.fn();
 const mockSwitchMessageBranch = vi.fn();
 const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
+const mockAssociateMessageWithOperation = vi.fn();
 const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
@@ -50,6 +51,7 @@ vi.mock('@/store/chat', () => ({
       deleteMessage: mockDeleteMessage,
       switchMessageBranch: mockSwitchMessageBranch,
       startOperation: mockStartOperation,
+      associateMessageWithOperation: mockAssociateMessageWithOperation,
       completeOperation: mockCompleteOperation,
       failOperation: mockFailOperation,
       executeClientAgent: mockExecuteClientAgent,
@@ -210,6 +212,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -270,6 +273,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -307,6 +311,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -346,6 +351,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -393,6 +399,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent.mockResolvedValue(undefined),
@@ -438,6 +445,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -469,6 +477,199 @@ describe('Generation Actions', () => {
     });
   });
 
+  // Retrying the failed step of a turn used to be "delete the block, then call
+  // continueGeneration and hope it still finds a group". Verified live: it did
+  // not. Both shapes below deleted the failed step and then created NO operation
+  // at all — the answer was gone and nothing was running, with no toast.
+  describe('retryFailedAssistantStep', () => {
+    const context: ConversationContext = {
+      agentId: 'session-1',
+      topicId: 'topic-1',
+      threadId: null,
+    };
+
+    const mockChatStore = async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        dbMessagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        deleteMessage: mockDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      } as any);
+    };
+
+    it('replaces the whole turn when the failed block is the turn only step', async () => {
+      await mockChatStore();
+      const store = createStore({ context });
+      const deleteDBMessage = vi.fn();
+
+      act(() => {
+        store.setState({
+          deleteDBMessage,
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hi' },
+            {
+              id: 'group-1',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'user-1',
+              children: [{ id: 'group-1', content: '...', error: { type: 'ProviderBizError' } }],
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().retryFailedAssistantStep('group-1', 'group-1');
+      });
+
+      // Never delete the only block speculatively — that is what destroyed the
+      // group and left continueGeneration with nothing to find.
+      expect(deleteDBMessage).not.toHaveBeenCalled();
+      // The turn is replaced instead: delete-then-regenerate from the user turn.
+      expect(mockDeleteMessage).toHaveBeenCalledWith('group-1', { operationId: 'test-op-id' });
+      expect(mockExecuteClientAgent).toHaveBeenCalled();
+    });
+
+    it('continues in place when the turn has earlier steps to keep', async () => {
+      await mockChatStore();
+      const store = createStore({ context });
+      const deleteDBMessage = vi.fn();
+
+      act(() => {
+        store.setState({
+          deleteDBMessage,
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hi' },
+            {
+              id: 'group-1',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'user-1',
+              children: [
+                { id: 'block-1', content: 'step one' },
+                { id: 'block-2', content: '...', error: { type: 'ProviderBizError' } },
+              ],
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().retryFailedAssistantStep('group-1', 'block-2');
+      });
+
+      expect(deleteDBMessage).toHaveBeenCalledWith('block-2');
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'group-1' },
+        type: 'continue',
+      });
+      expect(mockExecuteClientAgent).toHaveBeenCalled();
+    });
+
+    it('falls back to replacing the turn when continuing turns out to be impossible', async () => {
+      await mockChatStore();
+      const store = createStore({ context });
+      // Deleting the failed block makes the turn stop resolving as a group —
+      // observed live, where continueGeneration then bailed on role !==
+      // 'assistantGroup' and left the turn dead.
+      const deleteDBMessage = vi.fn(async () => {
+        act(() => {
+          store.setState({
+            displayMessages: [
+              { id: 'user-1', role: 'user', content: 'Hi' },
+              { id: 'group-1', role: 'assistant', content: 'step one', parentId: 'user-1' },
+            ],
+          } as any);
+        });
+      });
+
+      act(() => {
+        store.setState({
+          deleteDBMessage,
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hi' },
+            {
+              id: 'group-1',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'user-1',
+              children: [
+                { id: 'group-1', content: 'step one' },
+                { id: 'block-2', content: '...', error: { type: 'ProviderBizError' } },
+              ],
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().retryFailedAssistantStep('group-1', 'block-2');
+      });
+
+      expect(deleteDBMessage).toHaveBeenCalledWith('block-2');
+      // No `continue` op could be started …
+      expect(mockStartOperation).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'continue' }),
+      );
+      // … so the turn must still end up regenerated rather than silently dead.
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'group-1' },
+        type: 'regenerate',
+      });
+      expect(mockExecuteClientAgent).toHaveBeenCalled();
+    });
+
+    it('routes a heterogeneous status error to the session-resuming path', async () => {
+      await mockChatStore();
+      const store = createStore({ context });
+      const deleteDBMessage = vi.fn();
+      const continueHeteroAfterError = vi.fn();
+
+      act(() => {
+        store.setState({
+          continueHeteroAfterError,
+          deleteDBMessage,
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hi' },
+            {
+              id: 'group-1',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'user-1',
+              children: [
+                { id: 'block-1', content: 'step one' },
+                {
+                  id: 'block-2',
+                  content: '...',
+                  error: {
+                    type: 'ProviderBizError',
+                    body: { agentType: 'claude-code', code: 'overloaded' },
+                  },
+                },
+              ],
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().retryFailedAssistantStep('group-1', 'block-2');
+      });
+
+      expect(continueHeteroAfterError).toHaveBeenCalledWith('group-1');
+      expect(deleteDBMessage).not.toHaveBeenCalled();
+    });
+  });
+
   describe('delAndRegenerateMessage', () => {
     it('should create operation with context and pass operationId to deleteMessage', async () => {
       // Re-setup mock to ensure all required functions are available
@@ -483,6 +684,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -554,6 +756,7 @@ describe('Generation Actions', () => {
           return Promise.resolve();
         }),
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: vi.fn().mockImplementation(() => {
@@ -614,6 +817,7 @@ describe('Generation Actions', () => {
         operationsByMessage: {},
 
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         deleteMessage: mockDeleteMessage,
       } as any);
@@ -659,6 +863,7 @@ describe('Generation Actions', () => {
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         switchMessageBranch: mockSwitchMessageBranch,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         startOperation: vi.fn(() => {
           const operationId = operationCount++ === 0 ? 'outer-op-id' : 'inner-op-id';
           chatState.operations[operationId] = { id: operationId, status: 'running' };
@@ -756,6 +961,7 @@ describe('Generation Actions', () => {
         failOperation: mockFailOperation,
         isGatewayModeEnabled: mockIsGatewayModeEnabled,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         switchMessageBranch: mockSwitchMessageBranch,
       };
       vi.mocked(useChatStore.getState).mockReturnValue(chatState);
@@ -808,6 +1014,7 @@ describe('Generation Actions', () => {
         cancelOperation: mockCancelOperation,
         deleteMessage: vi.fn().mockResolvedValue(undefined),
         switchMessageBranch: mockSwitchMessageBranch,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         startOperation: vi.fn(() => {
           const operationId = operationCount++ === 0 ? 'outer-op-id' : 'inner-op-id';
           chatState.operations[operationId] = { id: operationId, status: 'running' };
@@ -864,6 +1071,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         executeClientAgent: mockExecuteClientAgent,
         isGatewayModeEnabled: mockIsGatewayModeEnabled,
@@ -917,6 +1125,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -975,6 +1184,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -1026,6 +1236,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -1074,6 +1285,7 @@ describe('Generation Actions', () => {
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -1122,6 +1334,7 @@ describe('Generation Actions', () => {
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
@@ -1191,6 +1404,7 @@ describe('Generation Actions', () => {
         operationsByMessage: {},
 
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         isGatewayModeEnabled: vi.fn(() => true),
@@ -1223,11 +1437,18 @@ describe('Generation Actions', () => {
       });
 
       // Should call executeGatewayAgent with parentMessageId, original content, and onComplete
+      // — and, critically, the wrapper op id. `executeGatewayAgent` completes
+      // `parentOperationId` at phase-1 (child runtime op running), which is the
+      // only thing that keeps a WS drop before session end from stranding a
+      // running `regenerate` op on the user turn. The retry guard reads exactly
+      // that op type, so a stranded wrapper would brick retry for the turn
+      // permanently (Codex review P1 on this PR).
       expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
           message: 'Hello world',
           parentMessageId: 'msg-1',
+          parentOperationId: 'test-op-id',
           onComplete: expect.any(Function),
         }),
       );
@@ -1235,7 +1456,9 @@ describe('Generation Actions', () => {
       // Should NOT call client-mode executeClientAgent
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
 
-      // regenerate operation stays running until onComplete is called
+      // The flow itself must not settle the wrapper — phase-1 handoff belongs
+      // to executeGatewayAgent (mocked here), and double-settling would mask a
+      // missing handoff.
       expect(mockCompleteOperation).not.toHaveBeenCalled();
 
       // Simulate gateway session complete
@@ -1252,6 +1475,7 @@ describe('Generation Actions', () => {
         operationsByMessage: {},
 
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         isGatewayModeEnabled: vi.fn(() => true),
@@ -1295,6 +1519,7 @@ describe('Generation Actions', () => {
         operationsByMessage: {},
 
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         isGatewayModeEnabled: vi.fn(() => false),
@@ -1328,21 +1553,21 @@ describe('Generation Actions', () => {
       expect(mockExecuteClientAgent).toHaveBeenCalled();
     });
 
-    it('should not regenerate if message is already loading', async () => {
-      // Mock operation system to indicate message is processing
+    it('should not regenerate if the message already has a running regenerate op', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {
           'op-1': {
             id: 'op-1',
-            type: 'sendMessage',
+            type: 'regenerate',
             status: 'running',
             context: { messageIds: ['msg-1'] },
           },
         },
         operationsByMessage: { 'msg-1': ['op-1'] },
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
       } as any);
 
       const context: ConversationContext = {
@@ -1366,6 +1591,58 @@ describe('Generation Actions', () => {
 
       // Should not create operation if already regenerating
       expect(mockStartOperation).not.toHaveBeenCalled();
+    });
+
+    // Regression: the guard used to be `isMessageProcessing` — ANY running op on
+    // the message. A stray op that outlived its run (a translate, or a gateway
+    // regenerate whose WS dropped non-terminally so `onComplete` never fired)
+    // then killed retry for that turn permanently, and silently.
+    it('regenerates despite an unrelated running op left on the message', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        dbMessagesMap: {},
+        operations: {
+          'stale-op': {
+            id: 'stale-op',
+            type: 'translate',
+            status: 'running',
+            context: { messageIds: ['msg-1'] },
+          },
+        },
+        operationsByMessage: { 'msg-1': ['stale-op'] },
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        switchMessageBranch: mockSwitchMessageBranch,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'msg-1' },
+        type: 'regenerate',
+      });
+      expect(mockExecuteClientAgent).toHaveBeenCalled();
     });
   });
 
@@ -1597,6 +1874,7 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,

@@ -206,17 +206,31 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * ```sql
  * (metadata ->> 'cronJobId')          IS NULL          -- 💥
  * (metadata #>> '{a,b}')              IS NOT NULL      -- 💥
- * (metadata ->> 'status')             IS DISTINCT FROM 'done'  -- 💥
  * ```
  *
- * The engine backing production is not stock Postgres, and this query *shape*
- * crashes it outright — `rt_fetch used out-of-bounds`, SQLSTATE XX000, thrown
- * before any row is read (a table with zero matching rows crashes just the same,
- * so no test on real Postgres will ever catch it). Drizzle then reports it as a
- * bare `Failed query:`, with the real cause only in the driver's `[cause]`.
+ * The crash is `pg_search`'s (ParadeDB BM25) planner hook, and it fires on any
+ * table carrying a `bm25` index: `rt_fetch used out-of-bounds`, SQLSTATE XX000.
+ * Drizzle reports it as a bare `Failed query:`, with the real cause only in the
+ * driver's `[cause]`. Four properties make it uniquely nasty:
+ *
+ * - It fires at PLAN time. `EXPLAIN` alone crashes, so a table with zero
+ *   matching rows crashes exactly like a full one.
+ * - Stock Postgres, PGlite, and any table *without* a bm25 index run these
+ *   predicates happily — no test we can write will ever catch it.
+ * - It has nothing to do with jsonb. `upper(col) IS NULL` and `(id + 1) IS NULL`
+ *   crash identically; the trigger is a null test over a *computed expression*
+ *   in a qual. A null test over a bare column is fine.
+ * - Only quals crash — WHERE, JOIN ON, HAVING, and the WHERE of a subquery, CTE,
+ *   UPDATE or DELETE. SELECT lists, ORDER BY and `UPDATE … SET` targets are safe.
+ *
+ * `topics` and `messages` carry bm25 indexes today, but so do `agents`, `files`,
+ * `documents`, `chat_groups`, `knowledge_bases` and every `user_memories*`
+ * table — and that list is one migration away from growing. A predicate written
+ * today outlives the index list, so the rule is table-independent: never write
+ * the shape.
  *
  * COALESCE the extracted value to a sentinel instead — same semantics, a shape
- * the engine survives:
+ * the planner survives:
  *
  * ```sql
  * COALESCE(metadata ->> 'cronJobId', '') = ''                     -- "is null"
@@ -224,9 +238,14 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * COALESCE(metadata ->> 'status', '') <> 'done'                   -- IS DISTINCT FROM
  * ```
  *
- * This has now bitten twice: `getLatestSpineMessageId` (#16693) and
- * `getDueScheduledTopics` (#17077 — the scheduled-run cron crashed on every tick
- * from the day it shipped, so rate-limit continuations never once resumed).
+ * (`IS DISTINCT FROM` measured safe on pg_search 0.15.26, but the guard bans it
+ * anyway — it sits one planner-hook change from the crashing family and the
+ * COALESCE form costs nothing.)
+ *
+ * This has now bitten three times: #13040, `getLatestSpineMessageId` (#16693)
+ * and `getDueScheduledTopics` (#17077 — the scheduled-run cron crashed on every
+ * tick from the day it shipped, so rate-limit continuations never once resumed).
+ * `jsonbNullTest.test.ts` is the source-shape guard that holds the line.
  */
 export class TopicModel {
   private userId: string;

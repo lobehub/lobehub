@@ -4,19 +4,22 @@ import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
+  CalendarClockIcon,
   CheckIcon,
   CircleCheckBigIcon,
   InfinityIcon,
+  Layers3Icon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
+  TablePropertiesIcon,
   TargetIcon,
   XIcon,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GoalExampleSeed } from './goalExamples';
+import type { GoalExampleKey, GoalExampleSeed } from './goalExamples';
 import { buildGoalExampleSeed, GOAL_EXAMPLE_KEYS } from './goalExamples';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,9 +47,19 @@ const styles = createStaticStyles(({ css }) => ({
       grid-template-columns: minmax(0, 1fr);
     }
   `,
+  exampleIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+  `,
   hero: css`
+    isolation: isolate;
+    position: relative;
+
+    overflow: hidden;
+
     padding-block: 40px 32px;
     padding-inline: 40px;
+
     text-align: center;
   `,
   heroIcon: css`
@@ -54,13 +67,14 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 104px;
+    height: 72px;
 
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
+    color: ${cssVar.colorTextTertiary};
+  `,
+  heroInner: css`
+    position: relative;
+    z-index: 1;
   `,
   heroLead: css`
     max-width: 560px;
@@ -130,6 +144,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+const EXAMPLE_ICONS: Record<GoalExampleKey, typeof TargetIcon> = {
+  backlog: TablePropertiesIcon,
+  digest: CalendarClockIcon,
+  metric: Layers3Icon,
+};
+
 interface StepProps {
   desc: string;
   icon: typeof TargetIcon;
@@ -172,22 +192,24 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
   const { t } = useTranslation('chat');
 
   return (
-    <Block padding={0} variant={'outlined'}>
-      <Flexbox align={'center'} className={styles.hero} gap={16}>
-        <div className={styles.heroIcon}>
-          <Icon icon={InfinityIcon} size={24} />
-        </div>
-        <Flexbox align={'center'} gap={8}>
-          <Text fontSize={20} weight={600}>
-            {t('goalEmpty.title')}
-          </Text>
-          <Text className={styles.heroLead} fontSize={14} type={'secondary'}>
-            {t('goalEmpty.lead')}
-          </Text>
+    <Block padding={0} variant={'borderless'}>
+      <Flexbox align={'center'} className={styles.hero}>
+        <Flexbox align={'center'} className={styles.heroInner} gap={16}>
+          <div className={styles.heroIcon}>
+            <InfinityIcon aria-hidden size={64} strokeWidth={1.75} />
+          </div>
+          <Flexbox align={'center'} gap={8}>
+            <Text fontSize={20} weight={600}>
+              {t('goalEmpty.title')}
+            </Text>
+            <Text className={styles.heroLead} fontSize={14} type={'secondary'}>
+              {t('goalEmpty.lead')}
+            </Text>
+          </Flexbox>
+          <Button icon={PlusIcon} type={'primary'} onClick={() => onCreate()}>
+            {t('goalEmpty.create')}
+          </Button>
         </Flexbox>
-        <Button icon={PlusIcon} type={'primary'} onClick={() => onCreate()}>
-          {t('goalEmpty.create')}
-        </Button>
       </Flexbox>
 
       <Flexbox className={styles.section} gap={14}>
@@ -249,9 +271,12 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
                   onCreate(seed);
                 }}
               >
-                <Text fontSize={11} type={'secondary'}>
-                  {t(`goalEmpty.examples.${key}.tag` as never)}
-                </Text>
+                <Flexbox horizontal align={'center'} justify={'space-between'}>
+                  <Text fontSize={11} type={'secondary'}>
+                    {t(`goalEmpty.examples.${key}.tag` as never)}
+                  </Text>
+                  <Icon className={styles.exampleIcon} icon={EXAMPLE_ICONS[key]} size={16} />
+                </Flexbox>
                 <Text fontSize={13} weight={500}>
                   {seed.title}
                 </Text>

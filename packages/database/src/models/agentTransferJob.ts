@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import {
   agentHistoryJobAgents,
+  agentHistoryJobGroups,
   agentHistoryJobs,
   agentHistoryJobTopics,
   messageChunks,
@@ -135,9 +136,52 @@ export const rewriteResidualMessageScope = async (
   }
 };
 
+/**
+ * The owner-delete guards below match ONLY pending `transfer` jobs.
+ *
+ * A transfer re-homes existing rows, so between the synchronous half and the
+ * drain the message snapshot columns still point at the other side — deleting
+ * either side would cascade away history that already belongs elsewhere. That
+ * is worth blocking a delete for, and the window is minutes.
+ *
+ * A `copy` job never moves an existing row: the source stays intact and the
+ * target is a fresh duplicate, so a delete on either side can only cost a
+ * half-finished copy. Both directions also self-heal:
+ *
+ * - source gone → the per-topic drain's `sourceTopicExists` check fails and
+ *   `deleteEmptyTargetTopic` drops the empty shell (same path as the user
+ *   deleting the conversation mid-copy, which is likewise never blocked);
+ * - target gone → `agent_history_job_topics.topic_id` cascades with the target
+ *   topics, so the queue empties and the next drain flips the job `completed`.
+ *
+ * Blocking on copy jobs is therefore pure cost: copy sits on the ordinary user
+ * path (importing a heavy agent into a workspace), so it would let any member
+ * wedge an owner's workspace/account deletion — after the caller has already
+ * cancelled Stripe and wiped the billing rows. See LOBE-12922.
+ */
+const isPendingTransfer = () =>
+  and(eq(agentHistoryJobs.status, 'pending'), eq(agentHistoryJobs.type, 'transfer'));
+
 export interface CreateAgentTransferJobParams {
+  /**
+   * Agents this job covers: one junction row each, which is what the guards
+   * and the progress badge read. NOT automatically the residual linkage — see
+   * `residualAgentIds`.
+   */
   agentIds: string[];
   groupIds?: string[];
+  /**
+   * Agent linkage for the final topicless-residual rewrite; defaults to
+   * `agentIds`.
+   *
+   * A GROUP transfer passes `[]`. Its synchronous half rewrites residual
+   * messages by group only — a member agent's own topicless rows are not the
+   * group's to move (the group transfer does not move that agent's own topics
+   * either). Letting the drain fall back to `agentIds` would make a heavy
+   * group transfer move strictly more than a small one: exactly the fast/slow
+   * drift this framework exists to avoid.
+   */
+  residualAgentIds?: string[];
   sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
@@ -170,7 +214,9 @@ export class AgentTransferJobModel {
     const [job] = await trx
       .insert(agentHistoryJobs)
       .values({
-        agentIds: params.agentIds,
+        // The COLUMN is the residual-rewrite snapshot the drain reads back;
+        // the junction below is the coverage set. They differ for a group job.
+        agentIds: params.residualAgentIds ?? params.agentIds,
         groupIds: params.groupIds ?? [],
         sessionIds: params.sessionIds,
         sourceUserId: params.source.userId,
@@ -185,6 +231,11 @@ export class AgentTransferJobModel {
       await trx
         .insert(agentHistoryJobAgents)
         .values(params.agentIds.map((agentId) => ({ agentId, jobId: job.id })));
+    }
+    if (params.groupIds && params.groupIds.length > 0) {
+      await trx
+        .insert(agentHistoryJobGroups)
+        .values(params.groupIds.map((groupId) => ({ groupId, jobId: job.id })));
     }
     // Chunked so a pathological agent (tens of thousands of topics) cannot
     // blow the Postgres per-statement parameter cap (65535; 4 params/row).
@@ -201,7 +252,16 @@ export class AgentTransferJobModel {
     return job.id;
   };
 
-  /** Any of the agents already covered by an unfinished job? */
+  /**
+   * Any of the agents already covered by an unfinished job?
+   *
+   * Type-agnostic on purpose. A `copy` registers its NEW agent here, and that
+   * agent is exactly the one a concurrent transfer must not move: the copy's
+   * drain keeps writing history into the scope the transfer just rewrote, so
+   * the conversation ends up split across both scopes. Exempting `copy` from
+   * the OWNER-DELETE guards (LOBE-12922) is a separate judgement — it does not
+   * extend to agent mutations.
+   */
   static hasPendingJobForAgents = async (
     db: Transaction | LobeChatDatabase,
     agentIds: string[],
@@ -222,9 +282,39 @@ export class AgentTransferJobModel {
   };
 
   /**
-   * A pending job still references this owner (as source or target). Deleting
-   * the owner now would cascade away message rows whose snapshot columns have
-   * not been rewritten yet.
+   * Any of the chat groups already covered by an unfinished job?
+   *
+   * Not redundant with {@link hasPendingJobForAgents}: a group's guard cannot
+   * lean on its member agents alone, because a group with an empty roster
+   * registers no agent rows and would slip through unguarded.
+   *
+   * Type-agnostic for the same reason as {@link hasPendingJobForAgents}.
+   */
+  static hasPendingJobForGroups = async (
+    db: Transaction | LobeChatDatabase,
+    groupIds: string[],
+  ): Promise<boolean> => {
+    if (groupIds.length === 0) return false;
+    const [row] = await db
+      .select({ jobId: agentHistoryJobGroups.jobId })
+      .from(agentHistoryJobGroups)
+      .innerJoin(agentHistoryJobs, eq(agentHistoryJobs.id, agentHistoryJobGroups.jobId))
+      .where(
+        and(
+          inArray(agentHistoryJobGroups.groupId, groupIds),
+          eq(agentHistoryJobs.status, 'pending'),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  };
+
+  /**
+   * A pending TRANSFER job still references this owner (as source or target).
+   * Deleting the owner now would cascade away message rows whose snapshot
+   * columns have not been rewritten yet.
+   *
+   * `copy` jobs are deliberately excluded — see {@link isPendingTransfer}.
    */
   static hasPendingJobTouchingUser = async (
     db: Transaction | LobeChatDatabase,
@@ -235,7 +325,7 @@ export class AgentTransferJobModel {
       .from(agentHistoryJobs)
       .where(
         and(
-          eq(agentHistoryJobs.status, 'pending'),
+          isPendingTransfer(),
           or(eq(agentHistoryJobs.sourceUserId, userId), eq(agentHistoryJobs.targetUserId, userId)),
         ),
       )
@@ -243,6 +333,7 @@ export class AgentTransferJobModel {
     return !!row;
   };
 
+  /** Workspace counterpart of {@link hasPendingJobTouchingUser}. */
   static hasPendingJobTouchingWorkspace = async (
     db: Transaction | LobeChatDatabase,
     workspaceId: string,
@@ -252,7 +343,7 @@ export class AgentTransferJobModel {
       .from(agentHistoryJobs)
       .where(
         and(
-          eq(agentHistoryJobs.status, 'pending'),
+          isPendingTransfer(),
           or(
             eq(agentHistoryJobs.sourceWorkspaceId, workspaceId),
             eq(agentHistoryJobs.targetWorkspaceId, workspaceId),
@@ -263,6 +354,14 @@ export class AgentTransferJobModel {
     return !!row;
   };
 
+  /**
+   * Progress of the job covering this agent, for the migration badge.
+   *
+   * Deliberately NOT filtered to `type = 'transfer'` — the same reason spelled
+   * out on {@link findPendingJobForGroup}: a heavy agent COPY drives the very
+   * same badge and topic gray-out, and the returned `type` is what the client
+   * words its progress hints by.
+   */
   static findPendingJobForAgent = async (
     db: LobeChatDatabase,
     agentId: string,
@@ -279,6 +378,36 @@ export class AgentTransferJobModel {
       .innerJoin(agentHistoryJobs, eq(agentHistoryJobs.id, agentHistoryJobAgents.jobId))
       .where(
         and(eq(agentHistoryJobAgents.agentId, agentId), eq(agentHistoryJobs.status, 'pending')),
+      )
+      .limit(1);
+    return row;
+  };
+
+  /**
+   * Group counterpart of {@link findPendingJobForAgent}, for the group badge.
+   *
+   * Deliberately NOT filtered to `type = 'transfer'`: a group's badge, topic
+   * gray-out and pending-topic gating must cover a heavy group COPY as well —
+   * its queue rows point at freshly created topic shells that would otherwise
+   * render as empty, writable conversations. The returned `type` is what the
+   * UI words its progress hints by.
+   */
+  static findPendingJobForGroup = async (
+    db: LobeChatDatabase,
+    groupId: string,
+  ): Promise<AgentTransferJobProgress | undefined> => {
+    const [row] = await db
+      .select({
+        completedTopics: agentHistoryJobs.completedTopics,
+        id: agentHistoryJobs.id,
+        status: agentHistoryJobs.status,
+        totalTopics: agentHistoryJobs.totalTopics,
+        type: agentHistoryJobs.type,
+      })
+      .from(agentHistoryJobGroups)
+      .innerJoin(agentHistoryJobs, eq(agentHistoryJobs.id, agentHistoryJobGroups.jobId))
+      .where(
+        and(eq(agentHistoryJobGroups.groupId, groupId), eq(agentHistoryJobs.status, 'pending')),
       )
       .limit(1);
     return row;
@@ -310,7 +439,12 @@ export class AgentTransferJobModel {
     return rows.map((row) => row.topicId);
   };
 
-  /** Is this topic still awaiting its scope rewrite under a pending job? */
+  /**
+   * Is this topic still awaiting its rewrite under a pending job?
+   *
+   * Type-agnostic: this backs open-to-prioritize, and a copy's queued topic
+   * shell needs jumping the queue just as much as a transfer's.
+   */
   static findPendingJobForTopic = async (
     db: LobeChatDatabase,
     topicId: string,
@@ -330,6 +464,9 @@ export class AgentTransferJobModel {
    * Jump-the-queue: the user opened a topic that is still pending, so the next
    * `processNextTopic` call picks it first. Returns whether a pending row was
    * actually flagged (false → the topic already migrated; caller can refetch).
+   *
+   * Type-agnostic, like {@link findPendingJobForTopic} which selects the job
+   * this then kicks.
    */
   static prioritizeTopic = async (db: LobeChatDatabase, topicId: string): Promise<boolean> => {
     const rows = await db
@@ -376,7 +513,11 @@ export class AgentTransferJobModel {
         .where(eq(agentHistoryJobs.id, jobId))
         .for('update')
         .limit(1);
-      if (!job || job.status === 'completed') return { done: true };
+      // Mirror of `AgentCopyJobModel.processNextTopic`'s own type check: running
+      // transfer logic over a `copy` job would rewrite the scope of its target
+      // topics and drop their queue rows, reporting success against history it
+      // never duplicated (see the `type` column's schema comment).
+      if (!job || job.type !== 'transfer' || job.status === 'completed') return { done: true };
 
       const target = { userId: job.targetUserId, workspaceId: job.targetWorkspaceId };
 
@@ -396,7 +537,13 @@ export class AgentTransferJobModel {
         await trx
           .update(agentHistoryJobs)
           .set({ completedAt: new Date(), status: 'completed' })
-          .where(and(eq(agentHistoryJobs.id, jobId), eq(agentHistoryJobs.status, 'pending')));
+          .where(
+            and(
+              eq(agentHistoryJobs.id, jobId),
+              eq(agentHistoryJobs.status, 'pending'),
+              eq(agentHistoryJobs.type, 'transfer'),
+            ),
+          );
         return { done: true };
       }
 
@@ -434,6 +581,9 @@ export class AgentTransferJobModel {
     const rows = await db
       .select({ id: agentHistoryJobs.id })
       .from(agentHistoryJobs)
+      // Type-agnostic: the drivers this feeds dispatch by job type
+      // (`processNextAgentHistoryJobTopic`), so restricting it to `transfer`
+      // would strand every crashed `copy` job as permanently pending.
       .where(eq(agentHistoryJobs.status, 'pending'));
     return rows.map((row) => row.id);
   };

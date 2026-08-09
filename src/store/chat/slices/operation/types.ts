@@ -477,11 +477,14 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
   //
   // Known limitation (accepted): this also makes Stop appear during the pre-
-  // generation window. Because these gateway branches don't forward
-  // `parentOperationId` to `executeGatewayAgent`, hitting Stop in that narrow
-  // window doesn't actually abort the in-flight request (loading briefly
-  // flickers, generation proceeds). No stuck state; wiring the abort handoff
-  // through these branches is deferred.
+  // generation window. The approve/submit/skip gateway branches don't forward
+  // `parentOperationId` to `executeGatewayAgent`, so hitting Stop in that
+  // narrow window doesn't actually abort the in-flight request (loading
+  // briefly flickers, generation proceeds). No stuck state; wiring the abort
+  // handoff through those branches is deferred. The `regenerate` branch DOES
+  // forward it — an unsettled regenerate wrapper is what the retry guard
+  // reads, so it must never outlive phase-1 (a WS drop before session end
+  // would otherwise brick retry for that turn permanently).
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
 

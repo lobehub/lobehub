@@ -1,6 +1,12 @@
 import { isRemoteServerNetworkError } from '@lobechat/types';
 import { type TRPCLink } from '@trpc/client';
-import { createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
+import {
+  createTRPCClient,
+  httpBatchLink,
+  httpLink,
+  httpSubscriptionLink,
+  splitLink,
+} from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import { observable } from '@trpc/server/observable';
 import debug from 'debug';
@@ -170,9 +176,15 @@ const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedur
 
 // 3. splitLink to conditionally disable batching
 const customSplitLink = splitLink({
-  condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-  false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
-  true: httpLink(linkOptions),
+  condition: (op) => op.type === 'subscription',
+  false: splitLink({
+    condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+    false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
+    true: httpLink(linkOptions),
+  }),
+  // EventSource sends the same-origin session cookie. Subscription event payloads are progress
+  // hints only; all durable onboarding state is still read via the authenticated polling calls.
+  true: httpSubscriptionLink({ transformer: superjson, url: linkOptions.url }),
 });
 
 // 4. assembly links
@@ -204,9 +216,13 @@ export const createWorkspaceLambdaClient = (workspaceId: string) => {
     links: [
       errorHandlingLink,
       splitLink({
-        condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-        false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
-        true: httpLink(scopedLinkOptions),
+        condition: (op) => op.type === 'subscription',
+        false: splitLink({
+          condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+          false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
+          true: httpLink(scopedLinkOptions),
+        }),
+        true: httpSubscriptionLink({ transformer: superjson, url: scopedLinkOptions.url }),
       }),
     ],
   });

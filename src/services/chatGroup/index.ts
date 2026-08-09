@@ -156,12 +156,20 @@ class ChatGroupService {
     groupId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ groupId: string } | null> => {
+  ): Promise<{ groupId: string; transferJobId?: string | null } | null> => {
     return lambdaClient.group.transferGroup.mutate({
       groupId,
       targetVisibility,
       targetWorkspaceId,
     });
+  };
+
+  /**
+   * Async history-backfill progress for a transferred/copied group.
+   * `topicIds` caps the reported pending set to what the client can show.
+   */
+  getTransferJobStatus = async (groupId: string, topicIds: string[]) => {
+    return lambdaClient.group.getTransferJobStatus.query({ groupId, topicIds });
   };
 }
 

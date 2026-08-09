@@ -20,7 +20,7 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
-import { hookDispatcher, type SerializedHook } from './hooks';
+import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
 import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -111,9 +111,9 @@ const toAgentSignalSnapshotEvents = (
  * events, dispatching `onComplete`/`onError` hooks, and writing the final
  * error back onto the assistant message row.
  *
- * All public methods are fire-and-forget: errors are logged but never thrown,
- * so the executor's terminal cleanup path (snapshot finalize, lock release)
- * always runs.
+ * Ordinary side-effect errors are logged and remain non-fatal. Critical
+ * no-fallback webhook failures are rethrown after terminal persistence so a
+ * queue execution can retry the control-flow handoff.
  */
 export class CompletionLifecycle {
   private readonly messageModel: MessageModel;
@@ -752,6 +752,7 @@ export class CompletionLifecycle {
         }
       }
     } catch (error) {
+      if (error instanceof CriticalHookDeliveryError) throw error;
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     } finally {
       // Keep hooks registered across an async-tool park so the eventual resume

@@ -26,6 +26,9 @@ export default {
   'acceptance.banner.rejectedHint':
     'The next verification round re-opens this acceptance when it lands.',
   'acceptance.banner.rejectedReason': 'Reason: {{reason}}',
+  'acceptance.bar.addComment': 'Add note',
+  'acceptance.bar.addCommentDescription':
+    'A delivery-wide note for what the queued feedback misses — the next verification round reads it.',
   'acceptance.bar.copied': 'Copied — paste it to any agent to start the repair.',
   'acceptance.bar.copyReview': 'Copy review prompt',
   'acceptance.bar.feedback': 'Feedback {{count}}',
@@ -68,6 +71,7 @@ export default {
   'acceptance.error.title': 'Unable to load acceptance',
   'acceptance.evidence.empty':
     'No evidence artifacts were submitted for this check in this round — only the verifier’s recorded observation.',
+  'acceptance.evidence.audio': '{{count}} audio evidence item(s)',
   'acceptance.evidence.file': '{{count}} text evidence item(s)',
   'acceptance.evidence.image': '{{count}} image evidence item(s)',
   'acceptance.evidence.video': '{{count}} video evidence item(s)',
@@ -365,6 +369,7 @@ export default {
   'report.error.description':
     'The report could not be loaded. Check your connection and try again.',
   'report.error.title': 'Unable to load report',
+  'report.evidence.category.audio': 'Audio',
   'report.evidence.category.file': 'File',
   'report.evidence.category.image': 'Image',
   'report.evidence.category.video': 'Video',
@@ -414,6 +419,7 @@ export default {
   'report.overview.title': 'Check overview',
   'report.overview.total': 'All',
   'report.overview.uncertain': 'Uncertain',
+  'report.evidence.medium.audio': 'Audio',
   'report.evidence.medium.dom_snapshot': 'DOM snapshot',
   'report.evidence.medium.gif': 'GIF',
   'report.evidence.medium.markdown': 'Markdown',

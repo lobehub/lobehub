@@ -21,7 +21,30 @@ const styles = createStaticStyles(({ css }) => ({
     margin: 7px;
     border-radius: 11px;
 
-    background: ${cssVar.colorFillQuaternary};
+    /* A white top spotlight keeps the flat fill from reading dull. Light and
+       dark need different intensities: on the light grey fill the highlight
+       must be near-opaque white to register at all, while in dark mode a few
+       percent of white already lifts the surface. */
+    background:
+      radial-gradient(
+        140% 110% at 50% 0%,
+        color-mix(in srgb, #fff 85%, transparent) 0%,
+        color-mix(in srgb, #fff 30%, transparent) 45%,
+        transparent 75%
+      ),
+      ${cssVar.colorFillTertiary};
+    box-shadow: inset 0 1px 0 #fff;
+
+    [data-theme='dark'] & {
+      background:
+        radial-gradient(
+          140% 110% at 50% 0%,
+          color-mix(in srgb, #fff 10%, transparent) 0%,
+          transparent 65%
+        ),
+        ${cssVar.colorFillQuaternary};
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+    }
   `,
   coverBadge: css`
     position: absolute;

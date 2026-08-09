@@ -4,6 +4,7 @@ import { platform } from 'node:os';
 import path from 'node:path';
 
 const WINDOWS_EXE_EXT_PATTERN = /\.exe$/i;
+const WINDOWS_MAX_COMMAND_LINE_LENGTH = 32_767;
 const WINDOWS_NODE_EXE_PATTERN = /(?:^|[\\/])node(?:\.exe)?$/i;
 
 export interface CliSpawnPlan {
@@ -17,6 +18,41 @@ interface WindowsShimTarget {
 }
 
 const isWindows = () => platform() === 'win32';
+
+const quoteWindowsCommandLineArgument = (argument: string): string => {
+  if (argument && !/[\t "]/u.test(argument)) return argument;
+
+  let quoted = '"';
+  let backslashCount = 0;
+
+  for (const character of argument) {
+    if (character === '\\') {
+      backslashCount += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      quoted += `${'\\'.repeat(backslashCount * 2 + 1)}"`;
+    } else {
+      quoted += `${'\\'.repeat(backslashCount)}${character}`;
+    }
+    backslashCount = 0;
+  }
+
+  return `${quoted}${'\\'.repeat(backslashCount * 2)}"`;
+};
+
+const assertWindowsCommandLineFits = ({ args, command }: CliSpawnPlan): void => {
+  const commandLineLength = [command, ...args]
+    .map(quoteWindowsCommandLineArgument)
+    .join(' ').length;
+  const requiredLength = commandLineLength + 1;
+  if (requiredLength <= WINDOWS_MAX_COMMAND_LINE_LENGTH) return;
+
+  throw new Error(
+    `Cannot start CLI because the resolved Windows command line requires ${requiredLength} UTF-16 code units; Windows permits at most ${WINDOWS_MAX_COMMAND_LINE_LENGTH} including the terminator. Shorten the prompt or conversation context and retry.`,
+  );
+};
 
 const isPathLikeCommand = (command: string) =>
   path.win32.isAbsolute(command) || path.posix.isAbsolute(command) || /[\\/]/.test(command);
@@ -229,7 +265,10 @@ export const resolveCliSpawnPlan = async (
     ? await inferWindowsNpmShimTarget(trimmedCommand)
     : await resolveWindowsBareCommand(trimmedCommand);
 
-  if (!target) return { args, command };
+  const spawnPlan = target
+    ? { args: [...(target.argsPrefix ?? []), ...args], command: target.command }
+    : { args, command };
 
-  return { args: [...(target.argsPrefix ?? []), ...args], command: target.command };
+  assertWindowsCommandLineFits(spawnPlan);
+  return spawnPlan;
 };

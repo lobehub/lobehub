@@ -4,10 +4,10 @@ import type {
   GitHubPullRequest,
   GitHubRepository,
 } from '@lobechat/connector-data/github';
+import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts';
 import type { OnboardingTaskSource } from '@lobechat/types';
 
 import type { GitHubTaskRecommendationProviderConfig } from '../config';
-import { defaultTaskRecommendationConfig } from '../config';
 import type { TaskRecommendationProvider } from '../types';
 
 type GitHubSignal =
@@ -32,9 +32,15 @@ type GitHubSignal =
 
 /** Creates the independent GitHub task recommendation collector. */
 export const createGitHubTaskRecommendationProvider = (
-  config: GitHubTaskRecommendationProviderConfig = defaultTaskRecommendationConfig.providers.github,
+  config: GitHubTaskRecommendationProviderConfig = {
+    ...DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.github,
+    maxContextLength: 24_000,
+    maxSignals: 24,
+    staleAfterDays: 120,
+  },
 ): TaskRecommendationProvider => ({
   id: 'github',
+  guide: { examples: config.examples, principles: config.principles },
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
     const [repositoryResult, pullRequestResult, contributionResult] = await Promise.allSettled([

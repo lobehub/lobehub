@@ -479,6 +479,32 @@ export const sharedMainAreaChildren: RouteObject[] = [
             index: true,
           },
           ...BusinessResourceRoutes,
+          // /resource/page needs a static segment: the dynamic `:category`
+          // ties with the workspace mirror `/:workspaceSlug/page` on route
+          // score, and the workspace tree would swallow it into a slug 404.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Pages',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: 'page',
+          },
+          // Category views share the home page: /resource/documents, /resource/images, …
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Category',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: ':category',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),

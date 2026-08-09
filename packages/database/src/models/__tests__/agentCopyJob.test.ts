@@ -18,6 +18,9 @@ import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../agentCopyJob';
 import { processNextAgentHistoryJobTopic } from '../agentHistoryJob';
+import { AgentTransferJobModel } from '../agentTransferJob';
+import { UserModel } from '../user';
+import { WorkspaceModel } from '../workspace';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -333,6 +336,88 @@ describe('AgentCopyJobModel', () => {
       AGENT_COPY_IN_PROGRESS,
     );
     await expect(agentModel.delete(source.id)).rejects.toThrow(AGENT_COPY_IN_PROGRESS);
+  });
+
+  // LOBE-12922: copy sits on the ordinary user path, so a pending copy job
+  // must never wedge an owner's workspace/account deletion the way a pending
+  // transfer does — the cloud delete flows cancel Stripe and wipe the billing
+  // rows BEFORE they reach these guards.
+  it('does not block deleting the target workspace, and self-heals the job', async () => {
+    const source = await seedSourceAgent();
+    const { jobId, topicPairs } = await seedTargetShells(source.id);
+
+    expect(await AgentTransferJobModel.hasPendingJobTouchingWorkspace(serverDB, wsId)).toBe(false);
+    await expect(new WorkspaceModel(serverDB, userId).delete(wsId)).resolves.toBeDefined();
+
+    // the target topics cascaded away with the workspace, taking the queue
+    // rows with them, so the next drain simply finalizes the job
+    expect(await serverDB.query.agentHistoryJobTopics.findMany()).toHaveLength(0);
+    await AgentCopyJobModel.drain(serverDB, jobId);
+    const [job] = await serverDB.query.agentHistoryJobs.findMany();
+    expect(job).toMatchObject({ status: 'completed', type: 'copy' });
+
+    // source history is untouched — a copy never moved it in the first place
+    const newTopicIds = new Map(topicPairs);
+    expect(
+      await serverDB.query.messages.findMany({
+        where: and(eq(messages.agentId, source.id), isNull(messages.workspaceId)),
+      }),
+    ).toHaveLength(3);
+    expect(
+      await serverDB.query.topics.findFirst({
+        where: eq(topics.id, newTopicIds.get('acj-t1')!),
+      }),
+    ).toBeUndefined();
+  });
+
+  it('does not block deleting the owner account', async () => {
+    const source = await seedSourceAgent();
+    await seedTargetShells(source.id);
+
+    expect(await AgentTransferJobModel.hasPendingJobTouchingUser(serverDB, userId)).toBe(false);
+    await expect(UserModel.deleteUser(serverDB, userId)).resolves.toBeDefined();
+    expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeUndefined();
+  });
+
+  // LOBE-12935: a copy drives the SAME migration UI as a transfer (progress
+  // badge, topic gray-out, open-to-prioritize) and shares the same crash-
+  // recovery net. Every query behind those must stay type-agnostic; only the
+  // owner-delete guards (LOBE-12922) and the per-type drains filter by type.
+  it('stays visible to the shared migration queries while pending', async () => {
+    const source = await seedSourceAgent();
+    const { jobId, newAgent, topicPairs } = await seedTargetShells(source.id);
+    const shellId = new Map(topicPairs).get('acj-t1')!;
+
+    // progress badge + the `type` the client words its hints by
+    const progress = await AgentTransferJobModel.findPendingJobForAgent(serverDB, newAgent.id);
+    expect(progress).toMatchObject({ id: jobId, totalTopics: 2, type: 'copy' });
+
+    // gray-out set and open-to-prioritize on a queued shell
+    expect(await AgentTransferJobModel.getPendingTopicIds(serverDB, jobId)).toHaveLength(2);
+    expect(await AgentTransferJobModel.findPendingJobForTopic(serverDB, shellId)).toEqual({
+      jobId,
+    });
+    expect(await AgentTransferJobModel.prioritizeTopic(serverDB, shellId)).toBe(true);
+
+    // crash-recovery net must re-arm copy jobs too
+    expect(await AgentTransferJobModel.listPendingJobIds(serverDB)).toContain(jobId);
+
+    // and a concurrent transfer of the copy's TARGET agent stays blocked: the
+    // drain would keep writing into the scope the transfer just moved away
+    expect(await AgentTransferJobModel.hasPendingJobForAgents(serverDB, [newAgent.id])).toBe(true);
+  });
+
+  it('is not drained by the transfer driver', async () => {
+    const source = await seedSourceAgent();
+    const { jobId } = await seedTargetShells(source.id);
+
+    // running transfer logic here would rewrite the shells' scope and delete
+    // their queue rows while copying nothing
+    expect(await AgentTransferJobModel.processNextTopic(serverDB, jobId)).toEqual({ done: true });
+
+    expect(await serverDB.query.agentHistoryJobTopics.findMany()).toHaveLength(2);
+    const [job] = await serverDB.query.agentHistoryJobs.findMany();
+    expect(job).toMatchObject({ completedTopics: 0, status: 'pending' });
   });
 
   it('routes copy jobs through the type dispatcher', async () => {

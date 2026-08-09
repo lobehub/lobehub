@@ -89,6 +89,7 @@ export interface PublicState {
 export interface State extends PublicState {
   _savedEditorState?: Record<string, any>;
   editor?: IEditor;
+  goalMode: boolean;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
   isContentEmpty: boolean;
@@ -100,6 +101,7 @@ export const initialState: State = {
   allowExpand: true,
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,
+  goalMode: false,
   inputCompletionErrorDismissed: false,
   isContentEmpty: false,
   leftActions: [],

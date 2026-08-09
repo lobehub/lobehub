@@ -35,8 +35,15 @@ export default {
     'You may not need to delete your account — you can change your email or link more sign-in methods in <0>Profile Settings</0>.',
   'accountDeletion.divert.bug':
     'Sorry about that! Come tell us in our <0>Discord</0> community and we’ll follow up.',
+  'accountDeletion.blockedByAgentMigration':
+    'Deletion is paused: an agent is still migrating its conversation history. It will retry automatically once the migration finishes.',
+  'accountDeletion.blockedByOwnedWorkspaces':
+    'Deletion is paused: you still own a workspace with other members. Transfer ownership or delete the workspace, and it will retry automatically.',
+  'accountDeletion.blockedRetrying':
+    'Deletion could not be completed yet and will retry automatically.',
   'accountDeletion.pendingDesc': 'Your account is scheduled for deletion',
   'accountDeletion.pendingMessage': 'Your account will be deleted in {{hours}} hours',
+  'accountDeletion.processingMessage': 'Your account is being deleted…',
   'accountDeletion.reasonLabel': 'Why are you leaving?',
   'accountDeletion.reasonOption.account_issue':
     'Account issues (duplicate account / changing email)',
@@ -745,10 +752,8 @@ export default {
   'plugin.store': 'Skill Store',
   'settingAgent.avatar.sizeExceeded': 'Image size exceeds 1MB limit, please choose a smaller image',
   'settingAgent.avatar.title': 'Avatar',
-  'settingAgent.artwork.avatar.generate': 'Generate avatar',
-  'settingAgent.artwork.avatar.generateAction': 'Generate from Agent Profile',
   'settingAgent.artwork.avatar.generating': 'Creating an avatar that matches this Agent…',
-  'settingAgent.artwork.avatar.image': 'Image avatar',
+  'settingAgent.artwork.avatar.image': 'AI avatar',
   'settingAgent.artwork.background.empty': 'Add a background to give this Agent a visual identity',
   'settingAgent.artwork.background.emptyHint': 'Add a cover image',
   'settingAgent.artwork.background.generate': 'Generate background',
@@ -761,11 +766,28 @@ export default {
     'This usually takes about 60 seconds. You can keep editing while it finishes.',
   'settingAgent.artwork.retry': 'Try again',
   'settingAgent.artwork.sizeExceeded': 'Image must be smaller than 1 MB',
+  'settingAgent.artwork.studio.diyHint':
+    'Upload your own image (under 1 MB), or click the avatar on the profile to pick an emoji.',
+  'settingAgent.artwork.studio.diyTitle': 'Make your own',
+  'settingAgent.artwork.studio.enableModel': 'Enable a model',
+  'settingAgent.artwork.studio.generate': 'Generate avatar',
+  'settingAgent.artwork.studio.generateHint':
+    "Pick a style and we'll create an avatar from this Agent's profile.",
+  'settingAgent.artwork.studio.generateTitle': 'Generate with AI',
+  'settingAgent.artwork.studio.lobeStyle': 'Lobe official style',
+  'settingAgent.artwork.studio.moreStyles': 'More styles',
+  'settingAgent.artwork.studio.noModel':
+    'Enable an image generation model to use one-click generation.',
+  'settingAgent.artwork.studio.open': 'Customize appearance',
+  'settingAgent.artwork.studio.openAction': 'Open the avatar studio',
+  'settingAgent.artwork.studio.recommended': 'Recommended',
+  'settingAgent.artwork.studio.title': 'Agent Appearance',
+  'settingAgent.artwork.studio.upload': 'Upload image',
   'settingAgent.artwork.style.clay': '3D Clay',
-  'settingAgent.artwork.style.editorial': 'Editorial Illustration',
   'settingAgent.artwork.style.geometric': 'Flat Geometric',
-  'settingAgent.artwork.style.photographic': 'Minimal Photography',
-  'settingAgent.artwork.style.riso': 'Retro Print',
+  'settingAgent.artwork.style.lobe': 'Soft 3D mascot with a bold color backdrop',
+  'settingAgent.artwork.style.pixel': 'Pixel Art',
+  'settingAgent.artwork.style.sticker': 'Sticker',
   'settingAgent.artwork.style.watercolor': 'Watercolor',
   'settingAgent.artwork.styleMenu': 'Generation style',
   'settingAgent.artwork.uploadFailed': 'Could not upload the image. Try again.',
@@ -2384,6 +2406,8 @@ When I am ___, I need ___
   'workspace.general.copyTargetLabel': 'Copy to',
   'workspace.general.transferTargetLabel': 'Move to',
   'workspace.general.transferAgentGroups.modal.back': 'Back',
+  'workspace.general.transferAgentGroups.modal.backgroundMigration':
+    'Chat history is large, so it keeps migrating in the background. The agent group is ready to use now; older conversations light up one by one as they finish.',
   'workspace.general.transferAgentGroups.modal.continue': 'Continue',
   'workspace.general.transferAgentGroups.modal.done': 'Done',
   'workspace.general.transferAgentGroups.modal.failed': 'Failed to transfer agent groups',
@@ -2441,6 +2465,8 @@ When I am ___, I need ___
   'workspace.general.copyLobeAI.modal.title': 'Copy Agents',
   'workspace.general.copyLobeAI.modal.untitledAgent': 'Untitled Agent',
   'workspace.general.copyAgentGroups.modal.back': 'Back',
+  'workspace.general.copyAgentGroups.modal.backgroundCopy':
+    'Chat history is large, so it keeps copying in the background. The agent group is ready to use now; conversations light up one by one as they finish.',
   'workspace.general.copyAgentGroups.modal.continue': 'Continue',
   'workspace.general.copyAgentGroups.modal.copyOptions.config.desc':
     'Required. Copies group metadata, members, member roles, and Agent profiles.',

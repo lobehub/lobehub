@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -43,7 +44,7 @@ describe('TaskRecommendationWriter', () => {
 
     const recommendations = await writer.generate({
       context: '{"pullRequest":1}',
-      guide: defaultTaskRecommendationConfig.providers.github,
+      guide: DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.github,
       limit: 3,
       providerId: 'github',
       responseLanguage: 'en-US',

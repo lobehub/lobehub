@@ -120,6 +120,23 @@ table — those double up on the page. It carries only the non-duplicate narrati
        on each side, so the two captions read as a comparison rather than repeating
        the case title.
 
+   - Audio (a deliverable the user **hears** — TTS output, a voice reply, an
+     alert tone): attach the clip itself as `audio` evidence. The acceptance page
+     renders a player, so the reviewer can listen; prose about a sound, or a
+     screenshot of a waveform, proves nothing. `mp3` / `wav` / `m4a` / `aac` /
+     `flac` / `ogg` / `opus` are typed as `audio` from the extension.
+
+     Verify the clip before citing it — confirm it is non-silent and carries the
+     expected content (duration plus a transcription or spectral check); an empty
+     or truncated file is indistinguishable from a good one in a file listing.
+     Pair it with a short text artifact when the claim is about _what was said_
+     (input text, voice/model, measured duration): the player proves it plays,
+     the text makes it auditable.
+
+     A screen recording with system audio is the fallback for "the UI plays it at
+     the right moment"; for "the output is correct", attach the file the feature
+     produced.
+
    - CLI: use the dual-text evidence format below. Preserve the exact command +
      trimmed output (`<cli> <command> | tee "$DIR/assets/x-execution.txt"`) in
      the execution artifact, and attach a separate reasoning artifact.
@@ -187,6 +204,11 @@ from the current one.
    which is what lets the report pair intent against outcome. A planned item that
    never produces a case renders as **未执行** rather than vanishing, so cut coverage
    in the open.
+
+   **HARD RULE: no programmatic gates in the plan.** Tests / type-check / lint /
+   build are never plan items — ingest drops them and a gates-only round fails
+   to publish. See
+   [what is NOT an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
 
 4. **Fill `result.json` as you go** — it is the report. Each tested behavior is one
    entry in `cases[]` (`{ id, name, result, observation, evidence }`), where
@@ -387,10 +409,10 @@ you cut it is not.
 Two of its fields are a **closed vocabulary**, because the pipeline acts on them —
 they are not labels:
 
-| field              | values                                                                       | what it does                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| field              | values                                                                                                | what it does                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
 
 An out-of-vocabulary value in either fails the ingest — an unrecognized medium
 would silently gate on nothing, which is worse than no gate at all.
@@ -398,6 +420,38 @@ would silently gate on nothing, which is worse than no gate at all.
 `method` (how you would exercise it) and `expected` (what would make it pass) stay
 **free prose** — they carry intent no enum can, and both render under the check on
 the page next to the outcome.
+
+### HARD RULE — what is NOT an acceptance check
+
+A check is something a **person decides about the delivery**. The repo's own
+automated gates are not that, and on the page they are actively harmful: twenty
+green "unit tests pass" rows bury the two checks that actually needed someone to
+look.
+
+**These MUST NOT appear in `plan[]` / `cases[]`, under any phrasing:**
+
+| Not a check                                                | Where it belongs                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
+| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
+| "the suite is green", "CI passes"                          | same                                                 |
+
+This is enforced, not advisory. `acceptance run ingest` **drops every matching
+item** — matched on title, category, AND `method`, so "run `bun run test`"
+inside `method` under a product-sounding title still matches — warns with the
+dropped ids, and recounts `summary` from the checks that remain. A round
+consisting **only** of such checks **fails to publish**. Apply the rule at plan
+time (Phase 1 case selection gate), before any case runs: a gate written as a
+check is a round spent proving something nobody accepts. Run the gates as your
+own diligence — report them as one line of narrative.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a good acceptance item (`verifier: "program"`);
+"`bun run test` is green" is not.
+
+**What IS a check:** what the user sees, hears, reads, or receives — a rendered
+screen, a produced file, a response shape a client depends on, an audio clip that
+actually plays, a failure state that recovers.
 
 A plan item may also carry a per-item `surface` (same closed set as the run-level
 `surfaces`; `electron` normalizes to `desktop`). It says which product surface THIS

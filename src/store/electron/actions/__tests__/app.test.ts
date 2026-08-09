@@ -19,10 +19,10 @@ describe('ElectronAppActionImpl', () => {
       expect(useElectronStore.getState().appState.defaultShell).toBe('Git Bash');
     });
 
-    it('syncs defaultShell into the global agent context so {{defaultShell}} flips without a restart', () => {
+    it('syncs defaultShell into the global agent context so the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux) flips without a restart', () => {
       // Regression: switching the Windows shell in settings only updated the
       // main process; the prompt placeholder kept describing the old shell
-      // until app restart (LOBE-12692).
+      // until app restart.
       act(() => {
         useElectronStore.getState().updateElectronAppState({ defaultShell: 'Git Bash' });
       });
@@ -30,7 +30,7 @@ describe('ElectronAppActionImpl', () => {
       expect(globalAgentContextManager.getContext().defaultShell).toBe('Git Bash');
     });
 
-    it('syncs arch into the global agent context so {{arch}} renders in the prompt', () => {
+    it('syncs arch into the global agent context so unknown renders in the prompt', () => {
       act(() => {
         useElectronStore.getState().updateElectronAppState({ arch: 'arm64' });
       });

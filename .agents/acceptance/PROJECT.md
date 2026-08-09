@@ -18,8 +18,8 @@ Electron desktop shell, and a CLI (`lh`). Repo layout that matters for testing:
 - `apps/cli/` — the `lh` CLI; runs from source (`bun src/index.ts`), no rebuild.
   **Standalone install** (see §6).
 - `packages/**`, `e2e`, `apps/server` — covered by the root pnpm workspace.
-- `src/` — the SPA and shared web app; `src/server/` holds agent-hono /
-  workflows-hono.
+- `src/` — the SPA and shared web app; `apps/server/src/router-hono/` holds the
+  Hono endpoint routers and standalone runtime.
 
 **The root pnpm workspace does NOT cover `apps/desktop` or `apps/cli`.**
 `pnpm-workspace.yaml` lists `packages/**`, `e2e`, `apps/server`, and only

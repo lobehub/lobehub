@@ -20,6 +20,7 @@ export interface Action {
   pauseInputCompletion: (error: State['inputCompletionError']) => void;
   setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expend: boolean) => void;
+  setGoalMode: (enabled: boolean) => void;
   setJSONState: (content: any) => void;
   setShowTypoBar: (show: boolean) => void;
   updateMarkdownContent: () => void;
@@ -85,19 +86,29 @@ export const store: CreateStore = (publicState) => (set, get) => ({
         }
       : undefined;
 
+    // Tie the draft's fate to the composer actually being cleared: a host may
+    // decline the send after the fact (a rejected scheduled send keeps the text
+    // on screen), and the key is captured here because committing the send can
+    // move the conversation to a freshly created topic.
+    const sentDraftKey = get().draftKey;
+
     onSend?.({
-      clearContent: () => editor?.cleanDocument(),
+      clearContent: () => {
+        editor?.cleanDocument();
+        if (sentDraftKey) removeDraft(sentDraftKey);
+        set({ goalMode: false });
+      },
       editor: editor!,
       getEditorData: get().getJSONState,
-      getMarkdownContent: get().getMarkdownContent,
+      getMarkdownContent: () => {
+        const content = get().getMarkdownContent();
+        return get().goalMode ? `/goal ${content}`.trimEnd() : content;
+      },
     });
 
     if (historySnapshot) {
       addInputHistory(historySnapshot);
     }
-
-    const { draftKey } = get();
-    if (draftKey) removeDraft(draftKey);
 
     if (get().expand) {
       set({ _savedEditorState: undefined, expand: false });
@@ -127,6 +138,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     const editor = get().editor;
     const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
     set({ _savedEditorState, expand });
+  },
+
+  setGoalMode: (goalMode) => {
+    set({ goalMode });
   },
 
   setJSONState: (content) => {

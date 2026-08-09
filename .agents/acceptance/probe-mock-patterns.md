@@ -695,6 +695,36 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
+### `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+
+**Situation:** after a successful ingest, wanting to re-check a field from its JSON
+output (evidence count, acceptanceId).
+
+**Doesn't work:** running the same `ingest` command again "just to see the output".
+Every invocation creates a new immutable round on the acceptance — the re-run
+publishes a byte-identical duplicate round that reviewers then see twice.
+
+**Works:** re-read state with the read-only commands — `acceptance run list`,
+`acceptance run get <runId>`, `acceptance view <id> --json`. If a duplicate was
+minted by mistake, `acceptance run delete <runId> --yes` (newest timestamp = the
+accident) restores the round history; this is data correction of an operator
+error, distinct from the forbidden overwrite-a-real-round.
+
+### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+
+**Situation:** starting the dev server from a harness-managed background command in a
+worktree, then waiting for readiness.
+
+**Doesn't work:** trusting the background task's captured output (it can stay 0 bytes
+while the detached process tree lives on), or polling the default port. Worktrees
+allocate dynamic ports, so probing `localhost:3010` waits forever while the server is
+already up elsewhere; a retry then fails with "an owned dev server is already running".
+
+**Works:** treat `.records/runtime/` as the source of truth — it records `PID`,
+`SERVER_PORT` and `SPA_PORT` for the owned instance. Read the port from there and poll
+that. For a long-lived start prefer a detached `screen -dmS <name> … >> .records/logs/x.log`
+so the log lands in a stable file; `stop-dev` still stops the recorded PID tree either way.
+
 ### Cold SWR cache: clearing then reloading is undone by the outgoing page
 
 **Situation:** forcing a first-load / skeleton state for anything backed by the
@@ -1100,3 +1130,47 @@ timestamps before suspecting the query.
   work / Works and evidence for every mechanism claim.
 - Promote product-independent findings to the generic skill layer rather than
   duplicating them here.
+
+### Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+
+**Situation:** capturing light- and dark-mode evidence in the seeded `agent-browser`
+web session (settings UI navigation is slow and the theme control moved between
+releases; an earlier round wrongly concluded the web session "cannot switch to
+dark").
+
+**Doesn't work:** driving the settings UI to flip appearance, or editing user
+settings server-side (the provider is `next-themes` with `defaultTheme="system"` —
+the server does not own it).
+
+**Works:** set the next-themes key directly, then reload the target route in the
+same session:
+
+```bash
+agent-browser --session lobehub-dev eval "localStorage.setItem('theme','dark')"
+agent-browser --session lobehub-dev open "$SERVER_URL/<route>" # re-render applies html[data-theme]
+```
+
+`'light'` / removal (`localStorage.removeItem('theme')` → back to system) work the
+same way. Restore BEFORE stopping the dev server — once the server is down the
+document becomes sourceless and `localStorage` access throws SecurityError, so the
+override stays behind for the next run. Assert the applied theme via
+`document.documentElement.dataset.theme`, not the storage value.
+
+### A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+
+**Situation:** a long worktree-based session where the harness occasionally resets the
+shell cwd back to the main repo root (e.g. after a `cd /tmp` in a compound command).
+
+**Doesn't work:** running `git add -A && git commit` (or `bun run check`) without an
+explicit `cd` into the worktree. The commands succeed against the MAIN repo — the
+commit lands on whatever branch the user has checked out there, staging their
+unrelated dirty files, while the intended worktree change stays uncommitted. The
+only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
+"Everything up-to-date" because the worktree branch ref never moved.
+
+**Works:** in any worktree session, prefix every git/check command with an explicit
+`cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
+before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
+restores the user's branch and leaves their working tree as it was (verify against
+the session-start `gitStatus` snapshot); nothing needs force-pushing because the
+wrong-branch push was a no-op.

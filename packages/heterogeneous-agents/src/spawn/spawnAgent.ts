@@ -1,10 +1,12 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -347,6 +349,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     resumeSessionId: options.resumeSessionId,
   });
   const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
   const childEnv = { ...process.env, ...options.env };
   const initialModel =
     options.agentType === 'codex'

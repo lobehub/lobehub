@@ -15,6 +15,7 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { createBotCompletionWebhook } from './createBotCompletionHook';
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { BotReplyLocale, PlatformClient } from './platforms';
 import {
@@ -998,11 +999,19 @@ export class AgentBridgeService {
               },
               id: 'bot-completion',
               type: 'onComplete',
-              webhook: {
-                body: { ...webhookBody, type: 'completion', userPrompt: prompt },
-                delivery: 'qstash',
-                url: callbackUrl,
-              },
+              webhook: botContext
+                ? createBotCompletionWebhook({
+                    body: { ...webhookBody, userPrompt: prompt },
+                    botContext,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  })
+                : {
+                    body: { ...webhookBody, type: 'completion', userPrompt: prompt },
+                    delivery: 'qstash',
+                    fallback: 'none',
+                    url: callbackUrl,
+                  },
             },
           ],
           prompt,
@@ -1388,11 +1397,19 @@ export class AgentBridgeService {
               },
               id: 'bot-completion',
               type: 'onComplete' as const,
-              webhook: {
-                body: { ...webhookBody, type: 'completion', userPrompt: prompt },
-                delivery: 'qstash' as const,
-                url: callbackUrl,
-              },
+              webhook: botContext
+                ? createBotCompletionWebhook({
+                    body: { ...webhookBody, userPrompt: prompt },
+                    botContext,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  })
+                : {
+                    body: { ...webhookBody, type: 'completion', userPrompt: prompt },
+                    delivery: 'qstash' as const,
+                    fallback: 'none' as const,
+                    url: callbackUrl,
+                  },
             },
           ],
           prompt,

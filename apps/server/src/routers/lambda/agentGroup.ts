@@ -2,11 +2,15 @@ import { AgentPluginEntrySchema, InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
-import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
+import {
+  AGENT_TRANSFER_IN_PROGRESS,
+  AgentTransferJobModel,
+} from '@/database/models/agentTransferJob';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
@@ -240,6 +244,52 @@ export const agentGroupRouter = router({
    * Check agents before removal to identify virtual agents that will be permanently deleted.
    * This allows the frontend to show a confirmation dialog.
    */
+  /**
+   * Progress of the async history backfill after a heavy group transfer/copy,
+   * plus the topic ids still awaiting their turn (the UI's gray-out set).
+   * Returns null when no backfill is running for the group.
+   *
+   * The group twin of `agent.getTransferJobStatus`. Only the lookup key
+   * differs: a group's job is found through the group junction, not the member
+   * agents — a group with an empty roster registers no agent rows at all.
+   * Queue-jumping stays on `agent.prioritizeTransferTopic`, which is keyed by
+   * topic and authorizes by topic visibility, so it already serves both.
+   */
+  getTransferJobStatus: agentGroupProcedure
+    .input(
+      z.object({
+        groupId: z.string(),
+        /**
+         * Topics the client currently shows (sidebar rows + active topic).
+         * `pendingTopicIds` is the intersection with the job's queue, keeping
+         * the poll payload bounded however large the backfill is.
+         */
+        topicIds: z.array(z.string()).max(1000),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      // Scope check: only report migration state for groups visible to the
+      // caller's current personal/workspace scope (group ids are guessable).
+      const group = await ctx.chatGroupModel.findById(input.groupId);
+      if (!group) return null;
+
+      const job = await AgentTransferJobModel.findPendingJobForGroup(ctx.serverDB, input.groupId);
+      if (!job) return null;
+      const pendingTopicIds = await AgentTransferJobModel.getPendingTopicIds(
+        ctx.serverDB,
+        job.id,
+        input.topicIds,
+      );
+      return {
+        completedTopics: job.completedTopics,
+        jobId: job.id,
+        pendingTopicIds,
+        totalTopics: job.totalTopics,
+        // `transfer` vs `copy` — the client words its progress hints by it.
+        type: job.type,
+      };
+    }),
+
   checkAgentsBeforeRemoval: agentGroupProcedure
     .input(
       z.object({
@@ -602,11 +652,29 @@ export const agentGroupRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
-      return ctx.agentGroupRepo.removeAgentsFromGroup(
-        input.groupId,
-        input.agentIds,
-        input.deleteVirtualAgents,
-      );
+      try {
+        return await ctx.agentGroupRepo.removeAgentsFromGroup(
+          input.groupId,
+          input.agentIds,
+          input.deleteVirtualAgents,
+        );
+      } catch (error) {
+        // A backfill still maps these agents' message rows — removing a member
+        // now would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: "A previous transfer of this group's agents is still migrating history",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        throw error;
+      }
     }),
 
   transferGroup: agentGroupProcedureWrite
@@ -721,6 +789,16 @@ export const agentGroupRouter = router({
         }
         throw error;
       }
+
+      // Nothing moved: the group was not in this scope, or a racing transfer
+      // took it before we got the row lock. Return before the permission writes
+      // below — they would wipe the source ACL and grant access in the target
+      // for a group this call did not transfer.
+      if (!result) return result;
+
+      // Heavy history goes through an async backfill — kick the driver now
+      // that the transfer transaction has committed.
+      if (result.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(

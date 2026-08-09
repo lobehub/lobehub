@@ -36,7 +36,7 @@ describe('VisibilityConfirmContent', () => {
     expect(screen.getAllByText('visibilityConfirm.irreversible')).toHaveLength(1);
   });
 
-  // LOBE-12543: publishing no longer asks for member permissions up front —
+  // Publishing no longer asks for member permissions up front —
   // the resource lands on the workspace default and the owner tunes it later
   // from the resource's own "Member Permissions" entry.
   it('does not render a member-permission select when publishing', () => {

@@ -40,7 +40,7 @@ const MainChatInput = memo(() => {
     : contextWindowRightActions;
 
   // Reasoning effort lives inside the "+" menu (Plus → 推理强度) rather than as
-  // a standalone action — reviewer feedback on the LOBE-12599 acceptance.
+  // a standalone action — per the effort parameter refactoring.
   const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
 
   return (

@@ -144,10 +144,10 @@ const TabItem = memo<TabItemProps>(
     }, [x, isSorting, targetX, springX]);
 
     const handleClick = useCallback(() => {
-      if (!isActive) {
+      if (!isActive || isSplitVisible) {
         onActivate(id, tab.url);
       }
-    }, [isActive, onActivate, id, tab.url]);
+    }, [isActive, isSplitVisible, onActivate, id, tab.url]);
 
     const handleClose = useCallback(
       (e: React.MouseEvent) => {

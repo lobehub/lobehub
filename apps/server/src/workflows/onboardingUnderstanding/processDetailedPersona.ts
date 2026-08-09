@@ -7,6 +7,7 @@ import {
 import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createUnderstandingService,
   type UnderstandingService,
@@ -64,7 +65,7 @@ export const processDetailedUnderstandingPersona = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  return context.run('detailed-persona:process', async () => {
+  const result = await context.run('detailed-persona:process', async () => {
     try {
       return await service.processDetailedPersona({
         expectedSourceFingerprint: payload.sourceFingerprint,
@@ -79,6 +80,8 @@ export const processDetailedUnderstandingPersona = async (
       throw error;
     }
   });
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+  return result;
 };
 
 /**
@@ -105,6 +108,7 @@ export const failRunningDetailedUnderstandingPersona = async (
       sourceFingerprint: payload.sourceFingerprint,
       topicId: payload.topicId,
     });
+    if (failed) await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
     return { failed: Boolean(failed) };
   } catch (error) {
     if (isStaleSession(error)) return { failed: false };

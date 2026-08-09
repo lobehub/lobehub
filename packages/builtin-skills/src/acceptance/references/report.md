@@ -89,6 +89,10 @@ Any directory works — no repo convention required:
 supersedes? }`.
    A planned item that never produces a case renders as **未执行** rather than
    vanishing — cut coverage in the open.
+   **HARD RULE: every item must be an outcome the reader can judge.** Never
+   plan a programmatic gate (tests / type-check / lint / build) as a check —
+   ingest drops them, and a gates-only round fails to publish. See
+   [what is not an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
 2. **Collect evidence into `assets/` as you test.** Screenshots/charts must be
    **visually verified with the Read tool before being cited** — never cite an
    image you haven't looked at. Numeric results worth seeing (loss curves,
@@ -172,15 +176,46 @@ Optional fields: `branch` / `commit` / `pullRequest` (provenance line; when
 
 ### Closed vocabularies — the pipeline acts on these, they are not labels
 
-| field                           | values                                                                       | what it does                                                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
-| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)    | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
+| field                           | values                                                                                                | what it does                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)                             | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
 
 `category` names the user-facing requirement area (e.g. `Task hierarchy`,
 `Rate-limit recovery`) — never a technical surface. `method` / `expected` stay
 free prose; they render under the check next to the outcome.
+
+### HARD RULE — what is not an acceptance check
+
+An acceptance check is something a **person decides about the delivery**. The
+repo's own automated gates are not that, and they are actively harmful on the
+page: twenty green "unit tests pass" rows bury the two checks that actually
+needed someone to look.
+
+**These MUST NOT appear as `plan[]` / `cases[]` items, under any phrasing:**
+
+| Not a check                                                | Where it belongs                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
+| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
+| "the test suite is green", "CI passes"                     | same                                                 |
+
+This is enforced, not advisory. `lh acceptance run ingest` **drops every
+matching item** — matched on title, category, AND `method`, so writing
+"run `bun run test`" into `method` under a product-sounding title still
+matches — warns with the dropped ids, and recounts `summary` from the checks
+that remain. A round consisting **only** of such checks **fails to publish**.
+Either way, a gate written as a check is effort spent proving something nobody
+accepts: apply the rule at plan time, before the first case runs.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a fine acceptance item (`verifier: "program"`). "Run
+`bun run test`" is not.
+
+**What IS an acceptance check:** what the user sees, hears, reads, or receives —
+a rendered screen, a produced file, an API response shape a client depends on,
+an audio clip that actually plays, a failure state that recovers.
 
 ### Before/after comparison pairs
 

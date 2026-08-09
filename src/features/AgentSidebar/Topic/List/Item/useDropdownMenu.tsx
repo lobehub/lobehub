@@ -13,6 +13,7 @@ import {
   Hash,
   Link2,
   LucideCopy,
+  PanelRight,
   PanelTop,
   PencilLine,
   Star,
@@ -62,6 +63,7 @@ export const useTopicItemDropdownMenu = ({
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
+  const openTopicInPortal = useChatStore((s) => s.openTopicInPortal);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();
@@ -95,6 +97,17 @@ export const useTopicItemDropdownMenu = ({
     if (!id) return [];
 
     return [
+      {
+        icon: <Icon icon={PanelRight} />,
+        key: 'openOnRight',
+        label: t('openOnRight', { ns: 'common' }),
+        onClick: () => {
+          openTopicInPortal(id);
+        },
+      },
+      {
+        type: 'divider' as const,
+      },
       {
         disabled: !canEditTopic,
         icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
@@ -307,6 +320,7 @@ export const useTopicItemDropdownMenu = ({
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,
+    openTopicInPortal,
     addTab,
     navigate,
     t,

@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "程序化检查",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "检查方式",
   "builtins.lobe-delivery-checker.verifyPlan.required": "必选",
+  "builtins.lobe-goal.apiName.createGoal": "启动目标",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "批量创建 Agent",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "创建助理",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "创建群组",

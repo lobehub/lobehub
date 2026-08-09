@@ -1,4 +1,5 @@
-export type OnboardingTaskRecommendationProviderId = 'github' | 'gmail';
+/** Connector identifier supplied by a registered task recommendation provider. */
+export type OnboardingTaskRecommendationProviderId = string;
 
 /** Provider-specific examples and safety rules used to recommend onboarding tasks. */
 export interface OnboardingTaskRecommendationProviderGuide {
@@ -16,6 +17,12 @@ export interface OnboardingTaskRecommendationWritingGuide {
   maxSourcesPerRecommendation: number;
   /** Guidance that keeps task titles distinguishable in large cross-project lists. */
   titlePrinciples: readonly string[];
+}
+
+/** Provider prompt configuration with optional policies activated by trusted runtime conditions. */
+interface OnboardingTaskRecommendationProviderPromptConfig extends OnboardingTaskRecommendationProviderGuide {
+  /** Writing policy used when a Notion collector establishes a stale-dominant bounded scan. */
+  staleWorkspacePrinciples?: readonly string[];
 }
 
 interface OnboardingTaskRecommendationPromptInput {
@@ -94,6 +101,26 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
         'Prefer direct and important mail over promotions, except for an explicit subscription-cleanup task.',
       ],
     },
+    notion: {
+      examples: [
+        'Title: Prepare the next launch checklist from the Product Launch page. Instruction: Read the linked Notion page in the background, group its unchecked items by dependency and owner evidence, and return a private prioritized checklist with ambiguous ownership called out. Do not edit the page, check boxes, assign people, or post comments.',
+        'Title: Review unresolved decisions in the API redesign notes. Instruction: Inspect the linked planning page, extract TODO, TBD, and decision markers with their surrounding context, and return a private decision brief that separates confirmed choices from open questions. Do not modify the document or notify collaborators.',
+        'Title: Assess whether the dormant onboarding runbook needs refresh. Instruction: Compare the linked page’s last-edit date, structure, and visible content, then return a private maintenance assessment with stale sections and a proposed review plan. Treat age as a review signal rather than proof that the page is obsolete, and do not edit or archive it.',
+      ],
+      principles: [
+        'Prefer pages with explicit unchecked tasks, TODO or TBD markers, decision notes, or concrete maintenance signals over generic recently edited documents.',
+        'A page being accessible does not establish that the user authored, owns, or is responsible for it.',
+        'Treat old pages as review opportunities, not proof that content is obsolete or work is overdue.',
+        'Default to read-only work that returns a private checklist, decision brief, synthesis, or maintenance plan. Never edit pages, check tasks, change properties, comment, mention collaborators, move, duplicate, or archive content without later explicit user approval.',
+      ],
+      staleWorkspacePrinciples: [
+        'The runtime has established that the bounded accessible Notion scan is dominated by items older than the configured freshness threshold. Return exactly one recommendation, centered on coverage and freshness rather than the subject matter of the old pages.',
+        'A small minority of recently edited items does not by itself prove that the old subject matter is current. A recent item may be a hub, index, or access-related page; treat current work as unknown unless the supplied evidence explicitly establishes it.',
+        'Do not turn old TODOs, unchecked boxes, decisions, or technical topics into current execution work. Their age makes current ownership, priority, and validity unknown until the user reviews them.',
+        'The recommendation must produce a private coverage summary and a short user-facing checklist to verify the Notion workspace, account, integration, page, and Teamspace access; look for or authorize more recent pages; and only then decide which old pages to refresh, retain, or archive.',
+        'Describe incomplete authorization only as a possibility. Never claim that newer or unauthorized pages exist, and never ask the agent to bypass Notion access controls.',
+      ],
+    },
   },
   writing: {
     instructionPrinciples: [
@@ -114,10 +141,7 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
     ],
   },
 } as const satisfies {
-  providers: Record<
-    OnboardingTaskRecommendationProviderId,
-    OnboardingTaskRecommendationProviderGuide
-  >;
+  providers: Record<string, OnboardingTaskRecommendationProviderPromptConfig>;
   writing: OnboardingTaskRecommendationWritingGuide;
 };
 

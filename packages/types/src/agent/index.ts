@@ -8,4 +8,5 @@ export * from './heterogeneousAgent';
 export * from './item';
 export * from './modelSelection';
 export * from './pluginConfig';
+export * from './runtimeAdditionalContext';
 export * from './tts';
