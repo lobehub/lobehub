@@ -153,4 +153,17 @@ describe('PasskeyList', () => {
 
     expect(screen.getAllByText('profile.passkey.delete.forbidden').length).toBeGreaterThan(0);
   });
+
+  // The editable field shows "Unnamed passkey" when the authenticator gave no
+  // name; blurring without typing must not save that placeholder as the name.
+  it('does not persist the unnamed placeholder on a no-op rename', async () => {
+    mocks.passkeys = [{ id: 'a' }];
+    const user = userEvent.setup();
+    render(<PasskeyList />);
+
+    await user.click(screen.getByRole('button', { name: 'profile.passkey.rename' }));
+    await user.tab();
+
+    await waitFor(() => expect(mocks.renamePasskey).not.toHaveBeenCalled());
+  });
 });

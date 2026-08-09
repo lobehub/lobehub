@@ -108,53 +108,64 @@ export const PasskeyList = memo(() => {
 
   return (
     <Flexbox gap={8}>
-      {passkeys.map((item) => (
-        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} key={item.id}>
-          <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
-            <KeyRound size={16} />
-            <EditableText
-              // Let the name take the slack so the date is not squeezed onto a
-              // second line when it grows.
-              editing={editingId === item.id}
-              showEditIcon={false}
-              style={{ flex: 1, height: 24, minWidth: 0 }}
-              value={item.name || t('profile.passkey.unnamed')}
-              onEditingChange={(next) => setEditingId(next ? item.id : null)}
-              onChangeEnd={async (input) => {
-                const name = input.trim();
-                setEditingId(null);
-                if (name && name !== item.name) await renamePasskey(item.id, name);
-              }}
-            />
-            {item.createdAt && (
-              <Text fontSize={11} style={{ flex: 'none', whiteSpace: 'nowrap' }} type="secondary">
-                · {new Date(item.createdAt).toLocaleDateString()}
-              </Text>
-            )}
-          </Flexbox>
-          {enableActions && (
-            <Flexbox horizontal align={'center'} gap={2}>
-              <Tooltip title={t('profile.passkey.rename')}>
+      {passkeys.map((item) => {
+        // The fallback is what the field shows, so a blur without edits
+        // must compare against it — otherwise the placeholder is saved
+        // as the credential's real name.
+        const displayName = item.name || t('profile.passkey.unnamed');
+
+        return (
+          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} key={item.id}>
+            <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
+              <KeyRound size={16} />
+              <EditableText
+                // Let the name take the slack so the date is not squeezed onto a
+                // second line when it grows.
+                editing={editingId === item.id}
+                showEditIcon={false}
+                style={{ flex: 1, height: 24, minWidth: 0 }}
+                value={item.name || t('profile.passkey.unnamed')}
+                onEditingChange={(next) => setEditingId(next ? item.id : null)}
+                onChangeEnd={async (input) => {
+                  const name = input.trim();
+                  setEditingId(null);
+                  if (name && name !== item.name) await renamePasskey(item.id, name);
+                }}
+              />
+              {item.createdAt && (
+                <Text fontSize={11} style={{ flex: 'none', whiteSpace: 'nowrap' }} type="secondary">
+                  · {new Date(item.createdAt).toLocaleDateString()}
+                </Text>
+              )}
+            </Flexbox>
+            {enableActions && (
+              <Flexbox horizontal align={'center'} gap={2}>
+                {/* `title` only renders a tooltip — icon-only controls still
+                    need an explicit label, or assistive tech announces an
+                    unnamed button. */}
                 <ActionIcon
+                  aria-label={t('profile.passkey.rename')}
                   icon={PencilLine}
                   size={'small'}
+                  title={t('profile.passkey.rename')}
                   onClick={() => setEditingId(item.id)}
                 />
-              </Tooltip>
-              <Tooltip title={!allowDelete ? t('profile.passkey.delete.forbidden') : undefined}>
-                <span>
-                  <ActionIcon
-                    disabled={!allowDelete}
-                    icon={Trash2}
-                    size={'small'}
-                    onClick={() => handleDelete(item.id, item.name)}
-                  />
-                </span>
-              </Tooltip>
-            </Flexbox>
-          )}
-        </Flexbox>
-      ))}
+                <Tooltip title={!allowDelete ? t('profile.passkey.delete.forbidden') : undefined}>
+                  <span>
+                    <ActionIcon
+                      aria-label={t('profile.passkey.delete.title')}
+                      disabled={!allowDelete}
+                      icon={Trash2}
+                      size={'small'}
+                      onClick={() => handleDelete(item.id, item.name)}
+                    />
+                  </span>
+                </Tooltip>
+              </Flexbox>
+            )}
+          </Flexbox>
+        );
+      })}
 
       {passkeys.length === 0 && (
         <Text fontSize={11} type="secondary">
