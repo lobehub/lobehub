@@ -59,7 +59,7 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(prompt).toContain('one vivid saturated solid background color');
     expect(prompt).toContain('outfit and accessories');
-    expect(prompt).toContain('upper-body bust portrait');
+    expect(prompt).toContain('head-and-shoulders close-up');
     expect(prompt).toContain('not an oversized baby head');
   });
 
