@@ -128,7 +128,7 @@ describe('renderContextMapHtml', () => {
   it('aligns the cache lane to the track inset and uses a bright system orange', () => {
     const html = renderContextMapHtml(map);
 
-    expect(html).toContain('.lane { height: 9px; margin: 5px 4px 0; position: relative; }');
+    expect(html).toContain('.lane { height: 9px; margin: 5px 5px 0; position: relative; }');
     expect(HTML_THEME.light.kind.system).toBe('#f88c13');
     expect(HTML_THEME.dark.kind.system).toBe('#ff9927');
   });

@@ -104,7 +104,8 @@ const STYLE = `
 
   /* Cache lane: bands carry the geometry only — the figures live on the line below, where
      no amount of proportional narrowing can clip them. */
-  .lane { height: 9px; margin: 5px 4px 0; position: relative; }
+  /* Match track-inner exactly: the track contributes a 1px border plus its 4px inset. */
+  .lane { height: 9px; margin: 5px 5px 0; position: relative; }
   .band { border-radius: 3px; bottom: 0; position: absolute; top: 0; }
   .band.hit { background: var(--lane-hit); }
   .band.miss { background: var(--lane-miss); }
