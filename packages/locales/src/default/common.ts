@@ -305,6 +305,15 @@ export default {
 
   'cmdk.video': 'AI Video',
 
+  'betaFeedback.desc':
+    'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.discord.action': 'Open Discord',
+  'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
+  'betaFeedback.discord.title': 'Discord',
+  'betaFeedback.title': 'Workspace beta feedback',
+  'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
+  'betaFeedback.wechat.title': 'WeChat group',
+
   'confirm': 'Confirm',
   'continue': 'Continue',
   'contact': 'Contact Us',
