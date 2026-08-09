@@ -52,7 +52,7 @@ const mockGlobalConfigDependencies = (
   vi.doMock('@/envs/auth', () => ({
     authEnv: {
       AUTH_DISABLE_EMAIL_PASSWORD: false,
-      AUTH_EMAIL_VERIFICATION: false,
+      AUTH_EMAIL_VERIFICATION: true,
       AUTH_ENABLE_MAGIC_LINK: false,
       AUTH_SSO_PROVIDERS: '',
     },

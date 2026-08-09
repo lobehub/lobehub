@@ -190,14 +190,15 @@ const DEPRECATED_CHECKS = [
     getVars: () => {
       const hasEmailService =
         process.env['SMTP_HOST'] || process.env['EMAIL_SERVICE_PROVIDER'] === 'resend';
-      const hasEmailVerification = process.env['AUTH_EMAIL_VERIFICATION'] === '1';
+      // Default on; only AUTH_EMAIL_VERIFICATION=0 disables (AUTH-004).
+      const hasEmailVerification = process.env['AUTH_EMAIL_VERIFICATION'] !== '0';
       if (hasEmailService && !hasEmailVerification) {
         return ['AUTH_EMAIL_VERIFICATION'];
       }
       return [];
     },
     message:
-      'Email service is configured but email verification is disabled. Consider setting AUTH_EMAIL_VERIFICATION=1 to verify user email ownership during registration.',
+      'Email service is configured but email verification is disabled (AUTH_EMAIL_VERIFICATION=0). Remove the override or set AUTH_EMAIL_VERIFICATION=1 so users verify email ownership during registration.',
     name: 'Email Verification',
     severity: 'warning',
   },
