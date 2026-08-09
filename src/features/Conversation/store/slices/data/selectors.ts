@@ -225,6 +225,21 @@ const getBlockHasTools =
     return !!tools && tools.length > 0;
   };
 
+/**
+ * Task ids whose `role='taskCallback'` handoff message already landed in this
+ * thread. Drives Goal-card dedupe: once the callback card exists it absorbs
+ * the Goal status header, so the creating turn's tracker card retires.
+ */
+const taskCallbackTaskIds = (s: State): string[] => {
+  const ids: string[] = [];
+  for (const message of s.displayMessages) {
+    if (message.role !== 'taskCallback') continue;
+    const taskId = message.metadata?.taskCallback?.taskId;
+    if (taskId) ids.push(taskId);
+  }
+  return ids;
+};
+
 /** 1-based position of a verify message among all verify messages in the thread. */
 const getVerifyOrdinal = (id: string) => (s: State) => {
   let ordinal = 0;
@@ -257,5 +272,6 @@ export const dataSelectors = {
   messagesInit,
   pendingInterventions,
   skipFetch,
+  taskCallbackTaskIds,
   workSummariesByRootOperationId,
 };
