@@ -5,6 +5,7 @@ import {
   buildSessionGrid,
   buildWindowStats,
   type QuotaWindowSpan,
+  shouldShowHeatDot,
   utilizationLevelOf,
   utilizationStatusOf,
 } from './quotaCalendarModel';
@@ -98,6 +99,13 @@ describe('quota calendar window statistics', () => {
     [100, 4],
   ])('maps %s%% utilization to level %s', (utilization, level) => {
     expect(utilizationLevelOf(utilization)).toBe(level);
+  });
+
+  it('shows a heat dot only for positive, non-rate-limited days', () => {
+    expect(shouldShowHeatDot(0, false)).toBe(false);
+    expect(shouldShowHeatDot(1, false)).toBe(true);
+    expect(shouldShowHeatDot(4, false)).toBe(true);
+    expect(shouldShowHeatDot(4, true)).toBe(false);
   });
 
   it.each([

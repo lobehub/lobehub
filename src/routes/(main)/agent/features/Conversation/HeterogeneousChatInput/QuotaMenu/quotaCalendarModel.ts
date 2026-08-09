@@ -155,6 +155,10 @@ export const heatLevelOf = (value: number, max: number): 0 | 1 | 2 | 3 | 4 => {
   return 4;
 };
 
+/** A rate-limit alarm owns the corner; otherwise positive heat gets a dot. */
+export const shouldShowHeatDot = (level: 0 | 1 | 2 | 3 | 4, rateLimited: boolean) =>
+  level > 0 && !rateLimited;
+
 /** The window of this series that is live right now. */
 export const currentWindow = (
   readings: QuotaLimitReading[],

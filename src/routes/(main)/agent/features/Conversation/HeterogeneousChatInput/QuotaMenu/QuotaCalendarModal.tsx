@@ -31,6 +31,7 @@ import {
   type QuotaWindowSpan,
   seriesId,
   SESSION_SERIES,
+  shouldShowHeatDot,
   spendInWindow,
   type UsageTurn,
   utilizationStatusOf,
@@ -62,11 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  /**
-   * Heat is a fill ramp only. An outline on the busiest tier read as an alarm
-   * state rather than as "more", so the scale stays purely tonal and the
-   * outline is reserved for the one cell that IS an alarm (rate limited).
-   */
+  /** Keep the content surface neutral; intensity is carried by the corner dot. */
   dayCell: css`
     position: relative;
 
@@ -87,23 +84,6 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0.35;
     }
 
-    &[data-heat='1'] {
-      background: ${cssVar.colorSuccessBg};
-    }
-
-    &[data-heat='2'] {
-      background: ${cssVar.colorSuccessBgHover};
-    }
-
-    &[data-heat='3'] {
-      background: ${cssVar.colorSuccessBorder};
-    }
-
-    &[data-heat='4'] {
-      color: ${cssVar.colorTextLightSolid};
-      background: ${cssVar.colorSuccess};
-    }
-
     /* Rate limited: the provider refused work that day — an error state, not heat. */
     &[data-rate-limited='true'] {
       color: ${cssVar.colorErrorText};
@@ -122,27 +102,47 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-height: 14px;
   `,
+  heatDot: css`
+    position: absolute;
+    inset-block-start: 6px;
+    inset-inline-end: 6px;
+
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+
+    opacity: 0.45;
+    background: ${cssVar.colorSuccess};
+
+    &[data-heat='2'] {
+      width: 6px;
+      height: 6px;
+      opacity: 0.65;
+    }
+
+    &[data-heat='3'] {
+      width: 8px;
+      height: 8px;
+      opacity: 0.82;
+    }
+
+    &[data-heat='4'] {
+      width: 10px;
+      height: 10px;
+      opacity: 1;
+    }
+
+    &[data-legend='true'] {
+      position: relative;
+      inset: auto;
+      flex: none;
+    }
+  `,
   legendSwatch: css`
     width: 10px;
     height: 10px;
     border-radius: 3px;
     background: ${cssVar.colorFillQuaternary};
-
-    &[data-heat='1'] {
-      background: ${cssVar.colorSuccessBg};
-    }
-
-    &[data-heat='2'] {
-      background: ${cssVar.colorSuccessBgHover};
-    }
-
-    &[data-heat='3'] {
-      background: ${cssVar.colorSuccessBorder};
-    }
-
-    &[data-heat='4'] {
-      background: ${cssVar.colorSuccess};
-    }
 
     &[data-rate-limited='true'] {
       background: ${cssVar.colorErrorBg};
@@ -871,6 +871,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             const burn = dailyBurn.get(cell.key) ?? 0;
             const resetsAt = resetsByDay.get(cell.key);
             const rateLimited = rateLimitedDays.has(cell.key);
+            const heatLevel = heatLevelOf(heatBy.get(cell.key) ?? 0, heatMax);
             const label = dayLabel(spend, burn);
             const tooltipParts = [
               spend &&
@@ -891,13 +892,15 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             const day = (
               <div
                 className={styles.dayCell}
-                data-heat={heatLevelOf(heatBy.get(cell.key) ?? 0, heatMax)}
                 data-in-month={cell.inMonth}
                 data-rate-limited={rateLimited}
                 data-today={cell.key === todayKey}
                 key={cell.key}
               >
                 <span>{cell.date.date()}</span>
+                {shouldShowHeatDot(heatLevel, rateLimited) && (
+                  <span aria-hidden className={styles.heatDot} data-heat={heatLevel} />
+                )}
                 <span className={styles.dayFooter}>
                   <span className={styles.tokens}>{label}</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
@@ -929,7 +932,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
               {t('heteroAgent.claudeQuota.calendar.legendLess')}
             </Text>
             {[1, 2, 3, 4].map((level) => (
-              <span className={styles.legendSwatch} data-heat={level} key={level} />
+              <span className={styles.heatDot} data-heat={level} data-legend={'true'} key={level} />
             ))}
             <Text style={{ fontSize: 11 }} type={'secondary'}>
               {t('heteroAgent.claudeQuota.calendar.legendMore')}
