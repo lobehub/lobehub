@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
+import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -188,6 +189,32 @@ describe('TencentSandboxProvider', () => {
     expect(result.error?.message).toBe('ZeroDivisionError');
     // The payload still has to reach the runtime so the card can show it.
     expect(result.result).toMatchObject({ error: 'ZeroDivisionError', stderr: 'boom' });
+  });
+
+  it('surfaces execution errors through the real cloud sandbox runtime', async () => {
+    mocks.sandbox.runCode.mockResolvedValue({
+      error: { value: 'ZeroDivisionError' },
+      logs: { stderr: ['boom'], stdout: [] },
+      results: [],
+    });
+
+    const provider = await load();
+    const runtime = new CloudSandboxExecutionRuntime({
+      callTool: provider.callTool.bind(provider),
+      exportAndUploadFile: vi.fn(),
+    });
+
+    const output = await runtime.executeCode({ code: '1/0', language: 'python' });
+
+    // CloudSandboxExecutionRuntime builds model-visible failure content from
+    // the outer envelope while retaining the nested payload for card state.
+    expect(output.content).toBe('ZeroDivisionError');
+    expect(output.state).toMatchObject({
+      error: 'ZeroDivisionError',
+      stderr: 'boom',
+      success: false,
+    });
+    expect(output.success).toBe(true);
   });
 
   // The runtime falls back to the outer envelope when the command result has no
