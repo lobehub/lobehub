@@ -479,7 +479,7 @@ export class TencentSandboxProvider implements SandboxProvider {
       const id = randomUUID();
       const base = `${BACKGROUND_DIR}/${id}`;
       const timeoutMs = this.timeoutMs(params);
-      const timeoutSec = Math.max(1, Math.ceil(timeoutMs / 1000));
+      const timeoutSec = timeoutMs / 1000;
 
       // Create the parent before files.write. Besides making the ordering
       // explicit for E2B-compatible implementations, this avoids relying on
@@ -649,12 +649,13 @@ export class TencentSandboxProvider implements SandboxProvider {
   }
 
   private async resolveInstance(key: string): Promise<ResolvedInstance> {
-    const expiredSessions = this.evictExpired();
-    let sessionExpiredAndRecreated = expiredSessions.has(key);
-
     const cached = instances.get(key);
 
     if (cached) {
+      if (cached.expiresAt <= Date.now()) {
+        return this.reacquireExpired(key, cached);
+      }
+
       // On-demand instances are not renewed, so they stay usable right up to
       // their real expiry — dropping them early would strand files and
       // background processes mid-session.
@@ -680,30 +681,36 @@ export class TencentSandboxProvider implements SandboxProvider {
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
 
-      instances.delete(key);
-      await this.release(cached.instanceId);
-      sessionExpiredAndRecreated = true;
+      // The update result is ambiguous: it may have succeeded server-side
+      // before its response timed out, or another replica may already have
+      // renewed this deterministic conversation. Never release based only on
+      // our stale timestamp. Reacquire by ConversationId and let the control
+      // plane return the live owner (or create a replacement).
+      return this.reacquireExpired(key, cached);
     }
 
     const instance = await this.acquire();
     instances.set(key, instance);
 
-    return { instance, sessionExpiredAndRecreated };
+    return { instance, sessionExpiredAndRecreated: false };
   }
 
-  /** Keeps the module-level map from growing with abandoned sessions. */
-  private evictExpired(): Set<string> {
-    const now = Date.now();
-    const expiredSessions = new Set<string>();
+  /**
+   * Reconciles a locally expired entry with the control-plane owner. A remote
+   * replica may have renewed the same conversation, so only an instance-id
+   * change proves that files and processes were actually replaced.
+   */
+  private async reacquireExpired(
+    key: string,
+    previous: AcquiredInstance,
+  ): Promise<ResolvedInstance> {
+    const instance = await this.acquire();
+    instances.set(key, instance);
 
-    for (const [key, instance] of instances) {
-      if (instance.expiresAt <= now) {
-        instances.delete(key);
-        expiredSessions.add(key);
-      }
-    }
-
-    return expiredSessions;
+    return {
+      instance,
+      sessionExpiredAndRecreated: instance.instanceId !== previous.instanceId,
+    };
   }
 
   private async renew(instance: AcquiredInstance): Promise<AcquiredInstance | undefined> {
@@ -755,15 +762,6 @@ export class TencentSandboxProvider implements SandboxProvider {
     const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN;
 
     return Number.isFinite(parsed) ? parsed : undefined;
-  }
-
-  private async release(instanceId: string): Promise<void> {
-    try {
-      await this.request('release', { InstanceId: instanceId });
-    } catch (error) {
-      // A leaked instance expires on its own; failing the tool call is worse.
-      log('Failed to release instance %s: %O', instanceId, error);
-    }
   }
 
   private async request(

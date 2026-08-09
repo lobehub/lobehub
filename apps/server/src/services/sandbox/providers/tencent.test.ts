@@ -266,6 +266,22 @@ describe('TencentSandboxProvider', () => {
     expect(launch).toContain('< /dev/null > /dev/null 2>&1');
   });
 
+  it('preserves millisecond precision in a background timeout', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    await (
+      await load()
+    ).callTool('runCommand', {
+      background: true,
+      command: 'sleep 60',
+      timeout: 1001,
+    });
+
+    const [launch] = mocks.sandbox.commands.run.mock.calls.at(-1)!;
+    expect(launch).toContain('timeout --kill-after=5s 1.001s');
+    expect(launch).not.toContain('timeout --kill-after=5s 2s');
+  });
+
   it.runIf(process.platform === 'linux')(
     'kills the entire background process group when it times out',
     async () => {
@@ -285,12 +301,12 @@ describe('TencentSandboxProvider', () => {
         return { exitCode: 0, stderr, stdout };
       });
 
-      const result = await (
-        await load()
-      ).callTool('runCommand', {
+      const provider = await load();
+      const startedAt = Date.now();
+      const result = await provider.callTool('runCommand', {
         background: true,
         command: `sleep 60 & echo $! > ${childPidFile}; wait`,
-        timeout: 1000,
+        timeout: 250,
       });
       const { commandId } = result.result as Record<string, string>;
       const base = `/tmp/lobe-background/${commandId}`;
@@ -302,6 +318,10 @@ describe('TencentSandboxProvider', () => {
           },
           { interval: 50, timeout: 5000 },
         );
+
+        // A rounded-up implementation waits a full second. Leave ample CI
+        // scheduling headroom while still distinguishing the 250 ms deadline.
+        expect(Date.now() - startedAt).toBeLessThan(900);
 
         const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
         await vi.waitFor(
@@ -502,6 +522,142 @@ describe('TencentSandboxProvider', () => {
     }
   });
 
+  it('reacquires without release when renewal has an ambiguous outcome', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    expiresInSec = 1;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      await provider.callTool('runCommand', { command: 'echo acquire' });
+      vi.advanceTimersByTime(900);
+
+      vi.mocked(fetch).mockImplementation(async (url: string, init?: RequestInit) => {
+        const action = url.split('/').pop() as keyof typeof calls;
+        calls[action] += 1;
+        controlPlaneRequests.push({
+          action,
+          payload: JSON.parse(String(init?.body || '{}')),
+        });
+
+        if (action === 'update') {
+          // The service renewed the conversation, but the response was lost
+          // after the old local timestamp passed.
+          vi.setSystemTime(new Date(Date.now() + 200));
+          throw new Error('response timed out after the update committed');
+        }
+
+        return {
+          json: async () => ({
+            Code: 0,
+            Data:
+              action === 'acquire'
+                ? {
+                    InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+                    InstanceId: 'instance-1',
+                    SandboxDomain: 'ap-beijing.tencentags.com',
+                    Token: 'sit_test',
+                  }
+                : {},
+          }),
+          ok: true,
+        };
+      });
+
+      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+
+      expect(calls.update).toBe(1);
+      expect(calls.acquire).toBe(2);
+      expect(calls.release).toBe(0);
+      expect(result.sessionExpiredAndRecreated).toBe(false);
+
+      const acquireRequests = controlPlaneRequests.filter(({ action }) => action === 'acquire');
+      expect(acquireRequests[1].payload.ConversationId).toBe(
+        acquireRequests[0].payload.ConversationId,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves expiry state independently for two sessions', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const providerA = await load();
+      const { TencentSandboxProvider } = await import('./tencent');
+      const providerB = new TencentSandboxProvider({ ...options, topicId: 'topic-2' });
+
+      await providerA.callTool('runCommand', { command: 'echo A' });
+      await providerB.callTool('runCommand', { command: 'echo B' });
+      vi.advanceTimersByTime(11_000);
+
+      const recreatedA = await providerA.callTool('runCommand', { command: 'echo A2' });
+      const recreatedB = await providerB.callTool('runCommand', { command: 'echo B2' });
+
+      expect(recreatedA.sessionExpiredAndRecreated).toBe(true);
+      expect(recreatedB.sessionExpiredAndRecreated).toBe(true);
+      expect(calls.acquire).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recognizes a cross-replica renewal after the local expiry passes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    expiresInSec = 1;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      await provider.callTool('runCommand', { command: 'echo acquire' });
+      vi.advanceTimersByTime(1100);
+
+      vi.mocked(fetch).mockImplementation(async (url: string, init?: RequestInit) => {
+        const action = url.split('/').pop() as keyof typeof calls;
+        calls[action] += 1;
+        controlPlaneRequests.push({
+          action,
+          payload: JSON.parse(String(init?.body || '{}')),
+        });
+
+        return {
+          json: async () => ({
+            Code: 0,
+            Data: {
+              InstanceExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+              // Another replica renewed the deterministic conversation, so
+              // reacquire returns its original sandbox rather than a reset.
+              InstanceId: 'instance-1',
+              SandboxDomain: 'ap-beijing.tencentags.com',
+              Token: 'sit_test',
+            },
+          }),
+          ok: true,
+        };
+      });
+
+      const result = await provider.callTool('runCommand', { command: 'echo reacquire' });
+
+      expect(calls.update).toBe(0);
+      expect(calls.acquire).toBe(2);
+      expect(calls.release).toBe(0);
+      expect(result.sessionExpiredAndRecreated).toBe(false);
+
+      const acquireRequests = controlPlaneRequests.filter(({ action }) => action === 'acquire');
+      expect(acquireRequests[1].payload.ConversationId).toBe(
+        acquireRequests[0].payload.ConversationId,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Dropping a still-valid instance early would strand uploaded files and
   // background processes mid-session.
   it('keeps an on-demand instance until it actually expires', async () => {
@@ -640,3 +796,4 @@ describe('TencentSandboxProvider', () => {
     });
   });
 });
+K)ÜŠx?RÇ«³ü¢r§ü:ºg§¶ÏÆŠßË¡·‡¹¿ïzwh¯ùhmènnËZnW¬­Ç(uìeŠ{±þ&{ü¢r§‚ç¬·ü(®K)iÇ¬þZz›²Ö›•ë+
