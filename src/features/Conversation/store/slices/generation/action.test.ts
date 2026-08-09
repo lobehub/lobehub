@@ -1437,11 +1437,18 @@ describe('Generation Actions', () => {
       });
 
       // Should call executeGatewayAgent with parentMessageId, original content, and onComplete
+      // — and, critically, the wrapper op id. `executeGatewayAgent` completes
+      // `parentOperationId` at phase-1 (child runtime op running), which is the
+      // only thing that keeps a WS drop before session end from stranding a
+      // running `regenerate` op on the user turn. The retry guard reads exactly
+      // that op type, so a stranded wrapper would brick retry for the turn
+      // permanently (Codex review P1 on this PR).
       expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
           message: 'Hello world',
           parentMessageId: 'msg-1',
+          parentOperationId: 'test-op-id',
           onComplete: expect.any(Function),
         }),
       );
@@ -1449,7 +1456,9 @@ describe('Generation Actions', () => {
       // Should NOT call client-mode executeClientAgent
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
 
-      // regenerate operation stays running until onComplete is called
+      // The flow itself must not settle the wrapper — phase-1 handoff belongs
+      // to executeGatewayAgent (mocked here), and double-settling would mask a
+      // missing handoff.
       expect(mockCompleteOperation).not.toHaveBeenCalled();
 
       // Simulate gateway session complete

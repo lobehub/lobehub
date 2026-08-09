@@ -370,8 +370,18 @@ const regenerateUserMessageFromSource = async (
 
     // ── Gateway mode: trigger server-side regeneration ──
     if (runtimeType === 'gateway') {
-      // Keep the regenerate operation running until the gateway session completes,
-      // so isMessageRegenerating stays true and duplicate clicks are blocked.
+      // Hand the wrapper op off at phase-1 (`executeGatewayAgent` completes
+      // `parentOperationId` once the child `execServerAgentRuntime` op is
+      // running) — the documented interim-op contract this branch used to
+      // deviate from by keeping the wrapper alive until session end. That
+      // deviation is what made a WS drop before `onComplete` leave a running
+      // `regenerate` op on the user turn FOREVER, and the retry guard reads
+      // exactly that op type — so one dropped socket permanently bricked
+      // retry for the turn. Forwarding the id also wires the wrapper's abort
+      // signal into the preflight round trip, so a Stop pressed there now
+      // actually aborts the request instead of being swallowed.
+      // `onComplete` still fires at session end for the UI hook; re-completing
+      // the already-settled wrapper is an idempotent no-op.
       await chatStore.executeGatewayAgent({
         context,
         message: item.content,
@@ -380,6 +390,7 @@ const regenerateUserMessageFromSource = async (
             hooks.onRegenerateComplete?.(messageId),
           ),
         parentMessageId: messageId,
+        parentOperationId: operationId,
       });
 
       return;
