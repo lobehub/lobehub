@@ -1140,3 +1140,22 @@ same way. Restore BEFORE stopping the dev server — once the server is down the
 document becomes sourceless and `localStorage` access throws SecurityError, so the
 override stays behind for the next run. Assert the applied theme via
 `document.documentElement.dataset.theme`, not the storage value.
+
+### A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+
+**Situation:** a long worktree-based session where the harness occasionally resets the
+shell cwd back to the main repo root (e.g. after a `cd /tmp` in a compound command).
+
+**Doesn't work:** running `git add -A && git commit` (or `bun run check`) without an
+explicit `cd` into the worktree. The commands succeed against the MAIN repo — the
+commit lands on whatever branch the user has checked out there, staging their
+unrelated dirty files, while the intended worktree change stays uncommitted. The
+only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
+"Everything up-to-date" because the worktree branch ref never moved.
+
+**Works:** in any worktree session, prefix every git/check command with an explicit
+`cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
+before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
+restores the user's branch and leaves their working tree as it was (verify against
+the session-start `gitStatus` snapshot); nothing needs force-pushing because the
+wrong-branch push was a no-op.
