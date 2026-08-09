@@ -142,14 +142,22 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   /\bsnapshot[\s-]?tests?\b/i,
   /\btest[\s-]?(?:suite|case)s?\b/i,
   /\bcode coverage\b|\btest coverage\b/i,
+  // "the tests pass" in its ordinary phrasings — the subject is the suite even
+  // when no runner or kind is named ("All tests pass", "tests are green").
+  /\btests?\s+(?:pass(?:es|ed|ing)?|(?:are\s+|is\s+)?green)\b/i,
   // runners
   /\b(?:vitest|jest|mocha|pytest|junit|rspec|phpunit|karma|ava)\b/i,
   /\b(?:npm|pnpm|yarn|bun|bunx|go|cargo|make)\s+(?:run\s+)?tests?\b/i,
-  // static analysis / build gates
+  // this repo's own composite gate ("bun run check", with or without flags)
+  /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
+  // static analysis / build / CI gates
   /\btype[\s-]?check(?:s|ing)?\b/i,
   /\b(?:tsc|tsgo|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
   /\blint(?:s|ing)?\b/i,
   /\bcompiles?\s+(?:cleanly|without errors)\b/i,
+  /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,
+  /\bci\s+(?:is\s+)?(?:pass(?:es|ed|ing)?|green)\b/i,
+  /\bformat(?:ting)?\s+(?:is\s+)?(?:clean|correct)\b/i,
   // Chinese
   /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
 ];

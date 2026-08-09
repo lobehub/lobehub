@@ -98,6 +98,18 @@ describe('isProgrammaticTestCheck', () => {
     expect(isProgrammaticTestCheck('Integration test suite is green')).toBe(true);
   });
 
+  it('catches the ordinary phrasings the docs name, not only runner/kind keywords', () => {
+    // Regression (codex review): these documented gate labels slipped through,
+    // so a gates-only round written in plain words still published.
+    expect(isProgrammaticTestCheck('All tests pass')).toBe(true);
+    expect(isProgrammaticTestCheck('Tests are green')).toBe(true);
+    expect(isProgrammaticTestCheck('Build passes')).toBe(true);
+    expect(isProgrammaticTestCheck('CI passes')).toBe(true);
+    expect(isProgrammaticTestCheck('CI is green')).toBe(true);
+    expect(isProgrammaticTestCheck('Formatting is clean')).toBe(true);
+    expect(isProgrammaticTestCheck('质量保障', undefined, 'bun run check --test')).toBe(true);
+  });
+
   it('reads the method too — the give-away is often in the how, not the what', () => {
     expect(
       isProgrammaticTestCheck('Topic list stays ordered', undefined, 'bun run test topicList'),

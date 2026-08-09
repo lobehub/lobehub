@@ -742,6 +742,37 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     await program.parseAsync(['node', 'lh', 'verify', ...args]);
   };
 
+  it('keeps position-based fallback ids stable when screening drops an earlier case', async () => {
+    // Regression (codex review): the survivors used to be re-enumerated after
+    // the programmatic-test screen, so dropping an id-less first case shifted
+    // every later fallback id (`case-2` ingested as `case-1`) — orphaning the
+    // results from their plan items in the immutable round.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.ingestResult = { mutate: vi.fn().mockResolvedValue({ id: 'result-1' }) };
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          { name: '单元测试全部通过', status: 'pass' },
+          { name: '回复在气泡中渲染', status: 'pass' },
+          { name: '失败态可重试', status: 'pass' },
+        ],
+        plan: [
+          { id: 'case-2', title: '回复在气泡中渲染' },
+          { id: 'case-3', title: '失败态可重试' },
+        ],
+        title: 'fallback id screening',
+      }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    const ingested = verify.ingestResult.mutate.mock.calls.map(
+      ([input]: [{ checkItemId: string }]) => input.checkItemId,
+    );
+    expect(ingested).toEqual(['case-2', 'case-3']);
+  });
+
   it('creates a fresh run and binds it to the current topic acceptance', async () => {
     const verify = mockTrpcClient.verify as Record<string, any>;
 

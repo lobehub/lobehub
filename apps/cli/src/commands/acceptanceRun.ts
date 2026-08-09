@@ -548,9 +548,15 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // before anything is published.
   const { droppedIds, droppedLabels } = screenProgrammaticTestChecks(result);
   const allCases: any[] = Array.isArray(result.cases) ? result.cases : [];
-  const cases: any[] = allCases.filter(
-    (c, index) => !droppedIds.has(String(c?.id ?? c?.checkItemId ?? `case-${index + 1}`)),
-  );
+  // Freeze each case's id BEFORE filtering: the fallback id is position-based
+  // (`case-N`), so dropping an earlier case would re-enumerate the survivors in
+  // the ingest loop — pairing them with the wrong plan items and publishing
+  // orphaned results into the immutable round.
+  const casesWithIds = allCases.map((c, index) => ({
+    case: c,
+    checkItemId: String(c?.id ?? c?.checkItemId ?? `case-${index + 1}`),
+  }));
+  const cases = casesWithIds.filter(({ checkItemId }) => !droppedIds.has(checkItemId));
   // Every check was a gate: there is nothing here for a person to accept, and
   // publishing an empty round would just create a verdict-less page. Fail before
   // the first remote mutation, while the author can still fix the report.
@@ -565,11 +571,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   }
   // Validate every schemaless visualization before the first remote mutation.
   // An ingest that cannot render must not create or attach a partial immutable round.
-  const caseMetadata = cases.map((item, index) => {
+  const caseMetadata = cases.map(({ case: item, checkItemId }) => {
     try {
       return visualizationMetadata(item);
     } catch (error) {
-      const checkItemId = String(item.id ?? item.checkItemId ?? `case-${index + 1}`);
       throw new Error(
         `case ${checkItemId}: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },
@@ -720,8 +725,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const seenCheckItemIds = new Set<string>();
   let evidenceCount = 0;
   let inlined = 0;
-  for (const [index, c] of cases.entries()) {
-    const checkItemId = String(c.id ?? c.checkItemId ?? `case-${index + 1}`);
+  for (const [index, { case: c, checkItemId }] of cases.entries()) {
     seenCheckItemIds.add(checkItemId);
     const verdict = toVerdict(c.result ?? c.status ?? c.verdict);
     const observation = c.keyObservation ?? c.observation ?? c.note;
@@ -792,7 +796,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // published, so recount from the cases that actually landed — a stats block
   // that disagrees with the visible check list is worse than no stats.
   const recount = cases.length !== allCases.length;
-  const verdicts = cases.map((c) => toVerdict(c.result ?? c.status ?? c.verdict));
+  const verdicts = cases.map(({ case: c }) => toVerdict(c.result ?? c.status ?? c.verdict));
   const counted = (verdict: Verdict) => verdicts.filter((v) => v === verdict).length;
   await client.verify.upsertReport.mutate({
     content,
@@ -808,7 +812,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     // from the ingested cases (deriveReportVerdict) so no report ships
     // verdict-less and lists as a permanent "?". After a screen the authored
     // verdict may have been about a check that is no longer here, so rederive.
-    verdict: summary.verdict && !recount ? toVerdict(summary.verdict) : deriveReportVerdict(cases),
+    verdict:
+      summary.verdict && !recount
+        ? toVerdict(summary.verdict)
+        : deriveReportVerdict(cases.map(({ case: c }) => c)),
     verifyRunId: runId,
   });
 
