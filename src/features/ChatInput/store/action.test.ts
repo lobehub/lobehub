@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentStore } from '@/store/agent';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
+import { getDraft, saveDraft } from '../draftStorage';
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
 
@@ -50,6 +51,46 @@ describe('ChatInput store actions', () => {
       json: editorData,
       markdown: 'Hello',
     });
+  });
+
+  it('drops the stored draft once the send handler clears the composer', () => {
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
+    };
+    saveDraft('main_agt_a_tpc_1', { text: 'Hello' });
+    const store = createStore({
+      draftKey: 'main_agt_a_tpc_1',
+      editor: editor as unknown as IEditor,
+      onSend: ({ clearContent }) => {
+        clearContent();
+      },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(getDraft('main_agt_a_tpc_1')).toBeUndefined();
+  });
+
+  it('keeps the stored draft when the send handler declines to clear the composer', () => {
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
+    };
+    saveDraft('main_agt_a_tpc_1', { text: 'Hello' });
+    const store = createStore({
+      draftKey: 'main_agt_a_tpc_1',
+      editor: editor as unknown as IEditor,
+      // a scheduled send that the server rejects leaves the text in the
+      // composer, so the draft behind it must survive
+      onSend: () => {},
+    });
+
+    store.getState().handleSendButton();
+
+    expect(getDraft('main_agt_a_tpc_1')).toEqual({ text: 'Hello' });
   });
 
   it('records sent input in the active agent history when no agent id is provided', () => {

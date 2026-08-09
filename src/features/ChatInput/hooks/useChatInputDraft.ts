@@ -1,6 +1,6 @@
 import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { getDraft, removeDraft, saveDraft } from '../draftStorage';
 import { useStoreApi } from '../store';
@@ -9,6 +9,12 @@ const SAVE_DEBOUNCE_MS = 500;
 
 export const useChatInputDraft = () => {
   const storeApi = useStoreApi();
+  // The key whose document the editor is currently carrying. An empty editor
+  // only means "the user emptied it" once this matches; before the restore
+  // lands (it is deferred a frame, and never runs at all while frames are
+  // starved) an empty editor just means the draft has not been loaded, and
+  // treating that as a clear would delete unsent input the user never saw.
+  const loadedDraftKeyRef = useRef<string | undefined>(undefined);
 
   const persistDraftFor = useCallback(
     (draftKey: string) => {
@@ -16,12 +22,15 @@ export const useChatInputDraft = () => {
       if (!editor) return;
 
       if (getMarkdownContent().trim().length === 0) {
-        removeDraft(draftKey);
+        if (loadedDraftKeyRef.current === draftKey) removeDraft(draftKey);
         return;
       }
 
       const json = getJSONState();
-      if (json) saveDraft(draftKey, json);
+      if (json) {
+        saveDraft(draftKey, json);
+        loadedDraftKeyRef.current = draftKey;
+      }
     },
     [storeApi],
   );
@@ -35,12 +44,24 @@ export const useChatInputDraft = () => {
     [persistDraftFor, storeApi],
   );
 
-  useEffect(() => () => saveDraftDebounced.flush(), [saveDraftDebounced]);
+  // Persist the live document rather than flushing the pending save: the
+  // editor's own change notification is debounced too, so text typed in the
+  // last moment before unmount has not scheduled anything to flush.
+  useEffect(
+    () => () => {
+      saveDraftDebounced.cancel();
+      const { draftKey } = storeApi.getState();
+      if (draftKey) persistDraftFor(draftKey);
+    },
+    [persistDraftFor, saveDraftDebounced, storeApi],
+  );
 
   const restoreDraft = useCallback(
     (editor: IEditor) => {
       const { draftKey } = storeApi.getState();
       if (!draftKey) return;
+
+      loadedDraftKeyRef.current = draftKey;
 
       if (!editor.isEmpty) return;
 
