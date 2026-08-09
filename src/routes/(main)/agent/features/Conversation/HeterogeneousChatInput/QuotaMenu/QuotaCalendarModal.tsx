@@ -7,7 +7,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
-import { BanIcon, ChevronLeftIcon, ChevronRightIcon, RotateCcwIcon } from 'lucide-react';
+import { BanIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,7 +33,6 @@ import {
   SESSION_SERIES,
   spendInWindow,
   type UsageTurn,
-  utilizationLevelOf,
   type WindowStat,
 } from './quotaCalendarModel';
 
@@ -88,19 +87,20 @@ const styles = createStaticStyles(({ css }) => ({
     }
 
     &[data-heat='1'] {
-      background: ${cssVar.colorSuccessBg};
+      background: ${cssVar.colorInfoBg};
     }
 
     &[data-heat='2'] {
-      background: ${cssVar.colorSuccessBgHover};
+      background: ${cssVar.colorInfoBgHover};
     }
 
     &[data-heat='3'] {
-      background: ${cssVar.colorSuccessBorder};
+      background: ${cssVar.colorInfoBorder};
     }
 
     &[data-heat='4'] {
-      background: ${cssVar.colorSuccessBorderHover};
+      color: ${cssVar.colorTextLightSolid};
+      background: ${cssVar.colorInfo};
     }
 
     /* Rate limited: the provider refused work that day — an error state, not heat. */
@@ -128,19 +128,19 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
 
     &[data-heat='1'] {
-      background: ${cssVar.colorSuccessBg};
+      background: ${cssVar.colorInfoBg};
     }
 
     &[data-heat='2'] {
-      background: ${cssVar.colorSuccessBgHover};
+      background: ${cssVar.colorInfoBgHover};
     }
 
     &[data-heat='3'] {
-      background: ${cssVar.colorSuccessBorder};
+      background: ${cssVar.colorInfoBorder};
     }
 
     &[data-heat='4'] {
-      background: ${cssVar.colorSuccessBorderHover};
+      background: ${cssVar.colorInfo};
     }
 
     &[data-rate-limited='true'] {
@@ -175,11 +175,27 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   `,
+  capacityFill: css`
+    height: 100%;
+    border-radius: inherit;
+    background: ${cssVar.colorInfo};
+  `,
+  capacityTrack: css`
+    overflow: hidden;
+
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+
+    background: ${cssVar.colorInfoBg};
+  `,
   windowCell: css`
     display: flex;
+    flex-direction: column;
+    gap: 3px;
 
     min-width: 0;
-    height: 36px;
+    height: 54px;
     padding: 4px;
     border-radius: ${cssVar.borderRadiusSM};
 
@@ -188,24 +204,7 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.2;
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillQuaternary};
-
-    &[data-level='1'] {
-      background: ${cssVar.colorSuccessBg};
-    }
-
-    &[data-level='2'] {
-      background: ${cssVar.colorSuccessBgHover};
-    }
-
-    &[data-level='3'] {
-      background: ${cssVar.colorSuccessBorder};
-    }
-
-    &[data-level='4'] {
-      color: ${cssVar.colorTextLightSolid};
-      background: ${cssVar.colorSuccess};
-    }
+    background: ${cssVar.colorBgContainer};
 
     &[data-rate-limited='true'] {
       color: ${cssVar.colorErrorText};
@@ -219,7 +218,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   windowListRow: css`
     display: grid;
-    grid-template-columns: minmax(0, 1.6fr) 54px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(120px, 1fr) minmax(0, 1fr);
     gap: 12px;
     align-items: center;
 
@@ -234,6 +233,14 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 10px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
+  `,
+  windowSpend: css`
+    overflow: hidden;
+
+    font-size: 9px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   weekday: css`
     font-size: 11px;
@@ -380,8 +387,8 @@ const BurnChart = memo<{
             y1={CHART_H}
             y2={0}
           />
-          <path d={area} fill={cssVar.colorSuccess} opacity={0.12} />
-          <polyline fill={'none'} points={polyline} stroke={cssVar.colorSuccess} strokeWidth={2} />
+          <path d={area} fill={cssVar.colorInfo} opacity={0.12} />
+          <polyline fill={'none'} points={polyline} stroke={cssVar.colorInfo} strokeWidth={2} />
           {isLive && projectionEnd && (
             <line
               stroke={willExhaust ? cssVar.colorWarning : cssVar.colorTextTertiary}
@@ -404,7 +411,7 @@ const BurnChart = memo<{
           <circle
             cx={xOf(last.time, window)}
             cy={yOf(last.utilization)}
-            fill={cssVar.colorSuccess}
+            fill={cssVar.colorInfo}
             r={3.5}
           />
         </svg>
@@ -426,6 +433,24 @@ const BurnChart = memo<{
 });
 
 BurnChart.displayName = 'BurnChart';
+
+const CapacityMeter = memo<{ utilization: number }>(({ utilization }) => (
+  <div
+    aria-label={`${Math.round(utilization)}%`}
+    aria-valuemax={100}
+    aria-valuemin={0}
+    aria-valuenow={Math.round(utilization)}
+    className={styles.capacityTrack}
+    role={'meter'}
+  >
+    <div
+      className={styles.capacityFill}
+      style={{ width: `${Math.min(100, Math.max(0, utilization))}%` }}
+    />
+  </div>
+));
+
+CapacityMeter.displayName = 'CapacityMeter';
 
 const windowTooltip = (stat: WindowStat, t: TFunction<'chat'>) =>
   [
@@ -472,22 +497,28 @@ const WindowHistory = memo<{
           {Array.from({ length: grid.rowCount }, (_, row) =>
             grid.columns.map((column) => {
               const stat = column.slots[row];
-              if (!stat)
-                return (
-                  <div className={styles.windowCell} data-level={0} key={`${column.key}-${row}`} />
-                );
+              if (!stat) return <div className={styles.windowCell} key={`${column.key}-${row}`} />;
 
               const cell = (
                 <div
                   className={styles.windowCell}
-                  data-level={utilizationLevelOf(stat.peakUtilization)}
                   data-rate-limited={stat.rateLimitedAt != null}
                   key={`${column.key}-${stat.resetsAt}`}
                 >
-                  <Flexbox justify={'space-between'} style={{ minWidth: 0, width: '100%' }}>
+                  <Flexbox
+                    horizontal
+                    justify={'space-between'}
+                    style={{ minWidth: 0, width: '100%' }}
+                  >
                     <span>{dayjs(stat.windowStartAt).format('HH:mm')}</span>
                     <strong>{Math.round(stat.peakUtilization)}%</strong>
                   </Flexbox>
+                  <CapacityMeter utilization={stat.peakUtilization} />
+                  <span className={styles.windowSpend}>
+                    {stat.tokens > 0
+                      ? `${formatTokens(stat.tokens)} · ${formatCost(stat.cost)}`
+                      : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
+                  </span>
                 </div>
               );
 
@@ -528,14 +559,31 @@ const WindowHistory = memo<{
                 : t('heteroAgent.claudeQuota.calendar.pastWindow')}
             </Text>
           </Flexbox>
-          <Text strong style={{ fontSize: 14, textAlign: 'right' }}>
-            {Math.round(stat.peakUtilization)}%
-          </Text>
-          <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
-            {stat.tokens > 0
-              ? `${formatTokens(stat.tokens)} · ${formatCost(stat.cost)}`
-              : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
-          </Text>
+          <Flexbox gap={4}>
+            <Flexbox horizontal align={'center'} justify={'space-between'}>
+              <Text style={{ fontSize: 10 }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.capacityUsed')}
+              </Text>
+              <Text strong style={{ fontSize: 13 }}>
+                {Math.round(stat.peakUtilization)}%
+              </Text>
+            </Flexbox>
+            <CapacityMeter utilization={stat.peakUtilization} />
+          </Flexbox>
+          {stat.tokens > 0 ? (
+            <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
+              {formatTokens(stat.tokens)} · {formatCost(stat.cost)}
+            </Text>
+          ) : (
+            <Tooltip title={t('heteroAgent.claudeQuota.calendar.noLedgerSpendHint')}>
+              <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
+                <Icon color={cssVar.colorTextTertiary} icon={InfoIcon} size={11} />
+                <Text style={{ fontSize: 11 }} type={'secondary'}>
+                  {t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
+                </Text>
+              </Flexbox>
+            </Tooltip>
+          )}
         </div>
       ))}
     </Flexbox>
