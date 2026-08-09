@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { ActionIcon, EditableText, Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { KeyRound, PencilLine, Plus, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -75,14 +75,9 @@ export const PasskeyList = memo(() => {
         <Text fontSize={11} type="danger">
           {t('profile.passkey.loadError')}
         </Text>
-        <Text
-          fontSize={11}
-          style={{ cursor: 'pointer' }}
-          type="secondary"
-          onClick={() => refetch()}
-        >
+        <Button size={'small'} type={'text'} onClick={() => refetch()}>
           {t('profile.passkey.retry')}
-        </Text>
+        </Button>
       </Flexbox>
     );
   }
@@ -158,20 +153,16 @@ export const PasskeyList = memo(() => {
       )}
 
       {enableActions && (
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={6}
-          style={{
-            cursor: pending ? 'default' : 'pointer',
-            fontSize: 12,
-            opacity: pending ? 0.6 : 1,
-          }}
+        <Button
+          disabled={pending}
+          icon={<Plus size={14} />}
+          size={'small'}
+          style={{ alignSelf: 'flex-start' }}
+          type={'text'}
           onClick={handleAdd}
         >
-          <Plus size={14} />
-          <span>{pending ? t('profile.passkey.adding') : t('profile.passkey.add')}</span>
-        </Flexbox>
+          {pending ? t('profile.passkey.adding') : t('profile.passkey.add')}
+        </Button>
       )}
     </Flexbox>
   );

@@ -59,6 +59,12 @@ describe('getServerAuthConfig / enablePasskey', () => {
     expect((await load('http://localhost:3210')).enablePasskey).toBe(true);
   });
 
+  // URL.hostname keeps the brackets for IPv6, so a naive '::1' comparison
+  // would reject a perfectly usable loopback origin.
+  it('allows bracketed IPv6 loopback', async () => {
+    expect((await load('http://[::1]:3210')).enablePasskey).toBe(true);
+  });
+
   it('rejects a malformed APP_URL', async () => {
     expect((await load('not a url')).enablePasskey).toBe(false);
   });
