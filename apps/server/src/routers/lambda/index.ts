@@ -68,7 +68,6 @@ import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { organizationRouter } from './organization';
-import { platformAdminRouter } from './platformAdmin';
 import { pluginRouter } from './plugin';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
@@ -146,7 +145,7 @@ export const lambdaRouter = router({
   oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
   organization: organizationRouter,
-  platformAdmin: platformAdminRouter,
+  // platformAdmin lives on @aico/control-plane only — never mount on the product lambda.
   plugin: pluginRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,

@@ -8,7 +8,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 /**
  * Aico billing / org surfaces in the user avatar menu.
  * Personal-only routes (`/wallet`, `/org`) — never workspace-prefixed.
- * `/platform` stays reachable by URL only (no menu entry).
+ * Platform admin is a separate control-plane app (`@aico/control-plane`).
  */
 export default function useBusinessMenuItems(isSignin: boolean | undefined): MenuProps['items'] {
   const { t } = useTranslation('aico');

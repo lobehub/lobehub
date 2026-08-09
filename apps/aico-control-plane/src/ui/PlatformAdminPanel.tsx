@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * React reference implementation of the platform admin panel.
+ * Runtime operator UI is `apps/aico-control-plane/src/web/admin.html`.
+ * This file is kept for a future Vite SPA on the control plane.
+ */
+
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Select, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
@@ -55,7 +61,7 @@ export const PlatformAdminPanel = () => {
     () => lambdaClient.platformAdmin.getPlatformFinancials.query(),
   );
   const { data: fx } = useClientDataSWR('aico-fx', () =>
-    lambdaClient.aicoBilling.getFxRate.query(),
+    lambdaClient.platformAdmin.getFxRate.query(),
   );
   const { data: master } = useClientDataSWR('aico-platform-master', () =>
     lambdaClient.platformAdmin.getMasterAccountStatus.query(),

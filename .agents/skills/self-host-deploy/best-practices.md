@@ -293,6 +293,26 @@ Optional: Grafana stack in `docker-compose/production/grafana/`.
 
 ## 6. Post-deploy bootstrap
 
+### Control plane (required for OpenRouter key management)
+
+Run `@aico/control-plane` as a separate process. Put secrets only there:
+
+```bash
+# control plane
+export AICO_IS_CONTROL_PLANE=1
+export OPENROUTER_MANAGEMENT_API_KEY=sk-or-v1-...
+export AICO_CONTROL_PLANE_SERVICE_TOKEN=long-random-token
+export AICO_CONTROL_PLANE_PORT=3020
+pnpm --filter @aico/control-plane start
+
+# product server — no management key
+export AICO_CONTROL_PLANE_URL=https://admin.example.com
+export AICO_CONTROL_PLANE_SERVICE_TOKEN=long-random-token
+# OPENROUTER_MANAGEMENT_API_KEY must be unset on the product server
+```
+
+Operator UI: control-plane origin `/` (requires a `platform_admins` session).
+
 ### Platform admin (do once)
 
 ```bash
@@ -308,7 +328,7 @@ docker exec lobe-postgres psql -U postgres -d lobechat -c \
    ON CONFLICT (user_id) DO NOTHING;"
 ```
 
-Prefer tRPC `platformAdmin.addPlatformAdmin` when you already have an admin session.
+Prefer control-plane tRPC `platformAdmin.addPlatformAdmin` when you already have an admin session.
 
 ---
 

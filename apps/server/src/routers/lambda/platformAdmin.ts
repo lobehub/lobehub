@@ -21,6 +21,11 @@ import {
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { OpenRouterModelCatalogSyncService } from '@/server/services/openrouter/modelCatalogSync';
 
+/**
+ * Platform-admin procedures live on the Aico control plane only.
+ * Do not mount this router on the customer product lambda.
+ */
+
 const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   const organizationModel = new OrganizationModel(ctx.serverDB);
   const allowed = await organizationModel.isPlatformAdmin(ctx.userId);
@@ -37,6 +42,12 @@ const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, 
 });
 
 export const platformAdminRouter = router({
+  /** FX helper for the control-plane admin UI (replaces aicoBilling.getFxRate there). */
+  getFxRate: platformProcedure.query(async () => {
+    const { rate, source } = await getTomanPerUsd();
+    return { source, tomanPerUsd: Math.round(rate) };
+  }),
+
   listOrganizations: platformProcedure
     .input(
       z

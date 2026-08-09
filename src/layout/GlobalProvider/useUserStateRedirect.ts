@@ -36,7 +36,6 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'tasks',
   'verify-phone',
   'org',
-  'platform',
   'invite',
   'wallet',
   'video',

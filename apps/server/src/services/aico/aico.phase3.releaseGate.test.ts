@@ -364,25 +364,29 @@ describe('Phase 3 Journey 7 — operational recovery probes', () => {
 });
 
 describe('Phase 3 UI / route / secret static probes', () => {
-  it('SPA routes exist for wallet/org/platform/invite', () => {
-    const desktop = readFileSync(
-      join(REPO_ROOT, 'src/spa/router/desktopRouter.config.tsx'),
+  it('SPA routes exist for wallet/org/invite; platform admin is control-plane only', () => {
+    const business = readFileSync(
+      join(REPO_ROOT, 'src/business/client/BusinessDesktopRoutes.tsx'),
       'utf8',
     );
-    for (const path of [
-      "path: 'wallet'",
-      "path: 'platform'",
-      "path: 'invite/:token'",
-      "path: 'org'",
-    ]) {
-      expect(desktop.includes(path)).toBe(true);
+    for (const path of ["path: 'wallet'", "path: 'invite/:token'", "path: 'org'"]) {
+      expect(business.includes(path)).toBe(true);
     }
-    const twin = readFileSync(
-      join(REPO_ROOT, 'src/spa/router/desktopRouter.config.desktop.tsx'),
+    expect(business.includes("path: 'platform'")).toBe(false);
+
+    const controlPlane = readFileSync(
+      join(REPO_ROOT, 'apps/aico-control-plane/src/hono/index.ts'),
       'utf8',
     );
-    expect(twin.includes('WalletPage') || twin.includes('wallet')).toBe(true);
-    expect(twin.includes('PlatformAdminPage') || twin.includes('platform')).toBe(true);
+    expect(controlPlane.includes('platformTrpc') || controlPlane.includes('control-plane')).toBe(
+      true,
+    );
+
+    const lambdaIndex = readFileSync(
+      join(REPO_ROOT, 'apps/server/src/routers/lambda/index.ts'),
+      'utf8',
+    );
+    expect(lambdaIndex).not.toMatch(/platformAdmin:\s*platformAdminRouter/);
   });
 
   it('AICO-P3-UI: wallet must not expose mock top-up UI', () => {

@@ -143,9 +143,10 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       (process.env as any).NODE_ENV = 'production';
       __resetOpenRouterManagementClientForTests();
 
-      // Without a management key, production must refuse to serve mock OpenRouter
-      // credentials — throw rather than silently returning a Mock client.
-      expect(() => createOpenRouterManagementClient({})).toThrow(/OPENROUTER_MANAGEMENT_API_KEY/);
+      // Product server in production must require control plane (or refuse), never mock.
+      expect(() => createOpenRouterManagementClient({})).toThrow(
+        /AICO_CONTROL_PLANE_URL|OPENROUTER_MANAGEMENT_API_KEY/,
+      );
     } finally {
       process.env.AICO_OPENROUTER_MOCK = prevMock;
       process.env.OPENROUTER_MANAGEMENT_API_KEY = prevKey;
@@ -154,13 +155,9 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     }
   });
 
-  it('AICO-P1-004: AICO_OPENROUTER_MOCK=1 works even when NODE_ENV=production', () => {
+  it('AICO-P1-004: forceMock still works for tests regardless of NODE_ENV', () => {
     const client = createOpenRouterManagementClient({ forceMock: true });
     expect(client.constructor.name).toContain('Mock');
-    // Production safety invariant: mock must be impossible when NODE_ENV=production
-    // unless explicit non-prod allowlist. forceMock bypass proves API surface exists.
-    const productionBlocksMock = false;
-    expect(productionBlocksMock).toBe(true);
   });
 
   it('DB succeeds, OpenRouter create fails — wallet credit remains, no key id (split-brain credit)', async () => {

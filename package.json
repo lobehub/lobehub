@@ -71,6 +71,7 @@
     "desktop:package:local:reuse": "npm run package:local:reuse --prefix=./apps/desktop",
     "dev": "tsx scripts/devStartupSequence.mts",
     "dev:bun": "bun --bun next dev -p 3010",
+    "dev:control-plane": "pnpm --filter @aico/control-plane dev",
     "dev:desktop": "cd apps/desktop && pnpm run dev",
     "dev:docker": "bash -lc 'd=\"${PANACHAT_DEV_DATA_DIR:-$HOME/.local/share/panachat-data-dev}\"; mkdir -p \"$d/postgres\" \"$d/redis\" \"$d/rustfs\"; export PANACHAT_DEV_DATA_DIR=\"$d\"; docker compose -f docker-compose/dev/docker-compose.yml -f docker-compose/dev/docker-compose.aico.data.override.yml up -d --wait postgresql redis rustfs searxng'",
     "dev:docker:down": "bash -lc 'd=\"${PANACHAT_DEV_DATA_DIR:-$HOME/.local/share/panachat-data-dev}\"; export PANACHAT_DEV_DATA_DIR=\"$d\"; docker compose -f docker-compose/dev/docker-compose.yml -f docker-compose/dev/docker-compose.aico.data.override.yml down'",

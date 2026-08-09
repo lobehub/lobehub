@@ -327,18 +327,6 @@ export const mobileRoutes: RouteObject[] = [
         errorElement: <ErrorBoundary />,
         path: 'invite/:token',
       },
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/platform'),
-          'Mobile > Platform Admin',
-        ),
-        errorElement: <ErrorBoundary />,
-        path: 'platform',
-      },
-      {
-        element: redirectElement('/platform'),
-        path: 'panel',
-      },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {

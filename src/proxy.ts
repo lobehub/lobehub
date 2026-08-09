@@ -48,10 +48,6 @@ export const config = {
 
     '/org',
     '/org(.*)',
-    '/platform',
-    '/platform(.*)',
-    '/panel',
-    '/panel(.*)',
     '/invite(.*)',
     '/wallet',
     '/wallet(.*)',
