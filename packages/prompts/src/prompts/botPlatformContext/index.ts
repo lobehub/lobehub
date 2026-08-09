@@ -1,13 +1,24 @@
+/** One prior topic (session) from the same IM channel. */
+export interface RecentChannelTopic {
+  /** Topic creation time as a UTC ISO-8601 string. */
+  createdAt?: string;
+  /** Topic description / summary, if any. */
+  description?: string;
+  /** Topic id — lets the model fetch the full transcript via `lh topic view <id>`. */
+  id: string;
+  /** The last user message in this topic (pre-truncated upstream). */
+  lastUserMessage?: string;
+  name: string;
+}
+
 /**
  * Compact cross-session history from the same IM channel, pre-injected for
  * platforms that can't read chat history at runtime (e.g. WeChat). Topics are
- * most-recent-first; user messages are oldest-first.
+ * most-recent-first.
  */
 export interface RecentChannelHistory {
-  /** Recent topic titles from the same channel, most-recent first. */
-  topics: string[];
-  /** The last few user messages across those topics, oldest-first. */
-  userMessages: string[];
+  /** Recent topics from the same channel, most-recent first. */
+  topics: RecentChannelTopic[];
 }
 
 export interface BotPlatformInfo {
@@ -47,7 +58,7 @@ export const formatBotPlatformContext = ({
     '- Act like a knowledgeable group member: respond naturally, stay on topic, and match the conversational tone.',
     // On platforms that can read history, tell the model to fetch it on demand.
     // Platforms without a history-read API (e.g. WeChat) instead get the
-    // `recent_channel_history` block below — telling them to call a tool that
+    // `recent_topics` block below — telling them to call a tool that
     // isn't in their manifest just wastes a turn and ends in an apology.
     ...(canReadHistory
       ? [
@@ -55,7 +66,7 @@ export const formatBotPlatformContext = ({
           '- When you lack enough context to give a useful answer, silently read more history rather than asking clarifying questions — the answer is usually already in the chat.',
         ]
       : [
-          '- When the user references prior context you don\'t have, use the `recent_channel_history` below (if present). This platform has no history-read API, so do NOT claim you "can\'t read history" — work from what you have and ask a brief clarifying question only if the history block is absent or insufficient.',
+          '- When the user references prior context you don\'t have, use the `recent_topics` below (if present). This platform has no history-read API, so do NOT claim you "can\'t read history" — work from what you have and ask a brief clarifying question only if the topics block is absent or insufficient.',
         ]),
     '- Keep responses concise and conversational — IM platforms have character limits and small viewports. Avoid long preambles or formal structure unless the question demands it.',
     '- Do NOT reference UI elements from other environments (e.g. "check the sidebar", "click the button above").',
@@ -93,29 +104,33 @@ export const formatBotPlatformContext = ({
       (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[ch]!,
     );
 
-  const recentTopics = recentChannelHistory?.topics?.filter((t) => t?.trim()) ?? [];
-  const recentUserMessages = recentChannelHistory?.userMessages?.filter((m) => m?.trim()) ?? [];
-  if (recentTopics.length > 0 || recentUserMessages.length > 0) {
+  const recentTopics = recentChannelHistory?.topics?.filter((t) => t?.id) ?? [];
+  if (recentTopics.length > 0) {
     lines.push(
       '',
-      '<recent_channel_history>',
-      'Summary of THIS conversation from earlier sessions (not the current message). Use it for continuity; do not treat it as the current turn.',
+      '<recent_topics>',
+      'Prior sessions from THIS channel (most recent first). Use them for continuity; do not treat them as the current turn.',
+      'To read the full conversation of a topic, run `lh topic view <topic-id>` with the `id` below.',
     );
-    if (recentTopics.length > 0) {
+    for (const topic of recentTopics) {
+      const attrs = [
+        `id="${sanitize(topic.id)}"`,
+        `name="${sanitize(topic.name)}"`,
+        topic.createdAt ? `createdAt="${sanitize(topic.createdAt)}"` : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ');
       lines.push(
         '',
-        'Recent topics (most recent first):',
-        ...recentTopics.map((t, i) => `${i + 1}. ${sanitize(t)}`),
+        `<topic ${attrs}>`,
+        ...(topic.description?.trim() ? [sanitize(topic.description.trim())] : []),
+        ...(topic.lastUserMessage?.trim()
+          ? [`<last_user_message>${sanitize(topic.lastUserMessage.trim())}</last_user_message>`]
+          : []),
+        '</topic>',
       );
     }
-    if (recentUserMessages.length > 0) {
-      lines.push(
-        '',
-        'Recent messages from the user (oldest first):',
-        ...recentUserMessages.map((m) => `- ${sanitize(m)}`),
-      );
-    }
-    lines.push('</recent_channel_history>');
+    lines.push('</recent_topics>');
   }
 
   if (warnings && warnings.length > 0) {

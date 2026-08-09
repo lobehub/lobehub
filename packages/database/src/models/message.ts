@@ -48,6 +48,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   not,
   or,
   sql,
@@ -390,22 +391,17 @@ export class MessageModel {
   // **************** Query *************** //
 
   /**
-   * The last N user messages across a set of topics, oldest-first. Used to
+   * The newest user message of each given topic, keyed by topic id. Used to
    * pre-inject recent same-channel history for IM platforms that can't read
    * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
-   * non-empty text are returned; ordering spans all topics by `createdAt` so
-   * the newest turns win regardless of which topic they landed in.
+   * non-empty text are considered.
    */
-  queryRecentUserMessagesByTopics = async (
-    topicIds: string[],
-    limit = 4,
-  ): Promise<{ content: string; createdAt: Date; topicId: string | null }[]> => {
-    if (topicIds.length === 0) return [];
+  queryLastUserMessageByTopics = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
 
     const rows = await this.db
-      .select({
+      .selectDistinctOn([messages.topicId], {
         content: messages.content,
-        createdAt: messages.createdAt,
         topicId: messages.topicId,
       })
       .from(messages)
@@ -415,16 +411,17 @@ export class MessageModel {
           inArray(messages.topicId, topicIds),
           eq(messages.role, 'user'),
           isNotNull(messages.content),
+          ne(messages.content, ''),
         ),
       )
-      .orderBy(desc(messages.createdAt))
-      .limit(limit);
+      .orderBy(messages.topicId, desc(messages.createdAt));
 
-    // Fetched newest-first for the LIMIT; hand back oldest-first for prompting.
-    return rows
-      .filter((r) => (r.content ?? '').trim().length > 0)
-      .map((r) => ({ content: r.content as string, createdAt: r.createdAt, topicId: r.topicId }))
-      .reverse();
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      const content = (row.content ?? '').trim();
+      if (row.topicId && content) result.set(row.topicId, content);
+    }
+    return result;
   };
 
   /**
