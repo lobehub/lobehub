@@ -45,6 +45,10 @@ export interface HeterogeneousIngestParams {
 
 export interface HeterogeneousFinishParams {
   agentType: HeterogeneousAgentType;
+  /** Initial assistant placeholder supplied by the producer. This remains
+   * usable when gateway completion wins the race and clears runningOperation
+   * before the CLI's terminal callback reaches the server. */
+  assistantMessageId?: string;
   /**
    * CLI-reported failure. `body`, when present, is the structured status-guide
    * error (`agentType` + `code` + details) persisted verbatim as the
@@ -229,7 +233,14 @@ export class HeterogeneousAgentService {
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
-    const { agentType, operationId, result, sessionId, topicId } = params;
+    const {
+      agentType,
+      assistantMessageId: seedAssistantMessageId,
+      operationId,
+      result,
+      sessionId,
+      topicId,
+    } = params;
     const error = normalizeHeterogeneousFinishError(agentType, params.error);
 
     log(
@@ -261,7 +272,14 @@ export class HeterogeneousAgentService {
     // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
     // error must be written HERE, before the `agent_runtime_end` publish below
     // triggers the client's message refetch.
-    await this.persistenceHandler.finish({ error, operationId, result, sessionId, topicId });
+    await this.persistenceHandler.finish({
+      assistantMessageId: seedAssistantMessageId,
+      error,
+      operationId,
+      result,
+      sessionId,
+      topicId,
+    });
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,

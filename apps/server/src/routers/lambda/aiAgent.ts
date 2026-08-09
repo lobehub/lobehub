@@ -581,6 +581,11 @@ const HeteroIngestSchema = z.object({
  */
 const HeteroFinishSchema = z.object({
   agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
+  /** Initial assistant placeholder forwarded by the producer. Unlike the live
+   * ingest path, finish may arrive after gateway session completion has already
+   * cleared topic.metadata.runningOperation, so this is the durable fallback
+   * anchor for projecting a terminal error onto the assistant turn. */
+  assistantMessageId: z.string().min(1).optional(),
   error: z
     .object({
       /**
@@ -1720,7 +1725,7 @@ export const aiAgentRouter = router({
    * CLI's own end-event was lost mid-flight.
    */
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
-    const { agentType, error, operationId, result, sessionId, topicId } = input;
+    const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
@@ -1753,6 +1758,7 @@ export const aiAgentRouter = router({
       // here anymore; this is just the server-to-server ack endpoint.
       await heteroService.heteroFinish({
         agentType,
+        assistantMessageId,
         error,
         operationId,
         result,
