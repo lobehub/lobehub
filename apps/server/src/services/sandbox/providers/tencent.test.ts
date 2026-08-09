@@ -1,4 +1,9 @@
 // @vitest-environment node
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import nodePath from 'node:path';
+import { promisify } from 'node:util';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -22,6 +27,7 @@ vi.mock('@e2b/code-interpreter', () => ({ Sandbox: vi.fn(() => mocks.sandbox) })
 
 const options = { marketService: {} as never, topicId: 'topic-1', userId: 'user-1' };
 
+const execFileAsync = promisify(execFile);
 const calls = { acquire: 0, release: 0, update: 0 };
 /** Seconds until the acquired instance expires; drives the renewal path. */
 let expiresInSec = 300;
@@ -180,11 +186,79 @@ describe('TencentSandboxProvider', () => {
     const [launch] = mocks.sandbox.commands.run.mock.calls[0];
     expect(launch).not.toContain('hello world');
     // The detached process gets the timeout, not just the launcher, and
-    // `--foreground` keeps timeout inside the group we record and later kill.
-    expect(launch).toContain('timeout --foreground 5s');
+    // timeout's own pid/group is the one we record and later kill.
+    expect(launch).toContain('timeout --kill-after=5s 5s');
+    expect(launch).toContain('command_pgid=$!');
     // Without detaching every fd the caller waits for the background process.
     expect(launch).toContain('< /dev/null > /dev/null 2>&1');
   });
+
+  it.runIf(process.platform === 'linux')(
+    'kills the entire background process group when it times out',
+    async () => {
+      const childPidFile = `/tmp/lobe-background/test-child-${process.pid}-${Date.now()}.pid`;
+
+      mocks.sandbox.files.write.mockImplementation(async (path: string, content: string) => {
+        await mkdir(nodePath.dirname(path), { recursive: true });
+        await writeFile(path, content);
+      });
+      mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
+        const { stderr, stdout } = await execFileAsync('sh', ['-c', command], {
+          encoding: 'utf8',
+        });
+
+        return { exitCode: 0, stderr, stdout };
+      });
+
+      const result = await (
+        await load()
+      ).callTool('runCommand', {
+        background: true,
+        command: `sleep 60 & echo $! > ${childPidFile}; wait`,
+        timeout: 1000,
+      });
+      const { commandId } = result.result as Record<string, string>;
+      const base = `/tmp/lobe-background/${commandId}`;
+
+      try {
+        await vi.waitFor(
+          async () => {
+            expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('124');
+          },
+          { interval: 50, timeout: 5000 },
+        );
+
+        const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
+        await vi.waitFor(
+          () => {
+            expect(() => process.kill(childPid, 0)).toThrow();
+          },
+          { interval: 50, timeout: 2000 },
+        );
+      } finally {
+        try {
+          const pgid = Number((await readFile(`${base}.pgid`, 'utf8')).trim());
+          process.kill(-pgid, 'SIGKILL');
+        } catch {
+          // The timeout normally removed the group already.
+        }
+
+        try {
+          const childPid = Number((await readFile(childPidFile, 'utf8')).trim());
+          process.kill(childPid, 'SIGKILL');
+        } catch {
+          // The expected path: the child is already gone.
+        }
+
+        await Promise.all(
+          ['sh', 'log', 'pid', 'pgid', 'exit', 'off'].map((suffix) =>
+            rm(`${base}.${suffix}`, { force: true }),
+          ),
+        );
+        await rm(childPidFile, { force: true });
+      }
+    },
+  );
 
   // The tool contract polls for new output while the process keeps running, so
   // this must never block on completion.

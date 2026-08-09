@@ -383,19 +383,21 @@ export class TencentSandboxProvider implements SandboxProvider {
       // otherwise terminate the wrapper's own quoting and break or mutate it.
       await sandbox.files.write(`${base}.sh`, String(params.command ?? ''));
 
-      // `setsid` gives the command its own process group so kill reaches the
-      // real child, and `timeout` bounds the detached process itself — the
-      // launcher's own timeout would only cover the few milliseconds it runs.
-      // `--foreground` keeps `timeout` in the group `setsid` created; without
-      // it timeout forks its own group and signalling the recorded pgid leaves
-      // timeout and the command running (verified against a live sandbox).
+      // The outer `setsid` detaches the monitor shell. GNU timeout, without
+      // `--foreground`, then creates a separate process group for itself and
+      // the command tree. `$!` is both timeout's pid and that group's pgid, so
+      // manual cancellation and the deadline target the real command group.
+      // `--kill-after` also bounds children that ignore SIGTERM. The launcher's
+      // own timeout would only cover the few milliseconds it runs.
       // The launcher also has to detach every fd, otherwise the caller's
       // `commands.run` waits for the detached process to close stdout.
       const launch =
         `mkdir -p ${BACKGROUND_DIR}; ` +
-        `setsid sh -c 'echo $$ > ${base}.pgid; ` +
-        `timeout --foreground ${timeoutSec}s sh ${base}.sh > ${base}.log 2>&1; ` +
-        `echo $? > ${base}.exit' < /dev/null > /dev/null 2>&1 & ` +
+        `setsid sh -c 'timeout --kill-after=5s ${timeoutSec}s sh ${base}.sh ` +
+        `> ${base}.log 2>&1 & command_pgid=$!; ` +
+        `echo $command_pgid > ${base}.pgid; ` +
+        `wait $command_pgid; echo $? > ${base}.exit' ` +
+        `< /dev/null > /dev/null 2>&1 & ` +
         `echo $! > ${base}.pid`;
 
       const result = await sandbox.commands.run(launch, {
