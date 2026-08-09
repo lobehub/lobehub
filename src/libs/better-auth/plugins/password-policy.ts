@@ -2,7 +2,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { type BetterAuthPlugin } from 'better-auth/types';
 
 /** Server-enforced minimum (AUTH-003); keep in sync with signup/reset UI. */
-export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MIN_LENGTH = 8;
 
 const PASSWORD_PATHS = new Set(['/sign-up/email', '/change-password', '/reset-password']);
 

@@ -88,7 +88,7 @@ vi.mock('@/libs/better-auth/plugins/force-change-password-revoke', () => ({
 }));
 
 vi.mock('@/libs/better-auth/plugins/password-policy', () => ({
-  PASSWORD_MIN_LENGTH: 10,
+  PASSWORD_MIN_LENGTH: 8,
   passwordPolicy: vi.fn(() => ({ id: 'aico-password-policy' })),
 }));
 
