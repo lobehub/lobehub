@@ -1,5 +1,26 @@
 import { buildHeterogeneousPrompt } from './promptEngine';
 
+export const HETERO_EXEC_CANCEL_GRACE_MS = 30_000;
+
+export type HeteroExecCancelSignal = 'SIGINT' | 'SIGTERM';
+
+export interface HeteroExecCancelMessage {
+  operationId: string;
+  signal: HeteroExecCancelSignal;
+  type: 'lobe:hetero-exec:cancel';
+}
+
+export const isHeteroExecCancelMessage = (message: unknown): message is HeteroExecCancelMessage => {
+  if (!message || typeof message !== 'object') return false;
+
+  const candidate = message as Partial<HeteroExecCancelMessage>;
+  return (
+    candidate.type === 'lobe:hetero-exec:cancel' &&
+    typeof candidate.operationId === 'string' &&
+    (candidate.signal === 'SIGINT' || candidate.signal === 'SIGTERM')
+  );
+};
+
 /**
  * Image attachment reference carried through the hetero dispatch protocols
  * (gateway `agent_run_request`, sandbox runner). The URL must be fetchable by

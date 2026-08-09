@@ -10,8 +10,9 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
 
-const { cancelScheduled, scheduleNextTopic } = vi.hoisted(() => ({
+const { cancelScheduled, interruptTask, scheduleNextTopic } = vi.hoisted(() => ({
   cancelScheduled: vi.fn(),
+  interruptTask: vi.fn(),
   scheduleNextTopic: vi.fn(),
 }));
 
@@ -39,7 +40,7 @@ vi.mock('@/database/models/user', () => ({
 // the running-status branch in updateStatus doesn't drag them in.
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    interruptTask: vi.fn(),
+    interruptTask,
   })),
 }));
 
@@ -91,10 +92,13 @@ describe('TaskService', () => {
   const mockTaskTopicModel = {
     cancelIfRunning: vi.fn(),
     findByTaskId: vi.fn(),
+    findByTopicId: vi.fn(),
     findRunningByTaskIds: vi.fn().mockResolvedValue([]),
     findWithHandoff: vi.fn(),
     findWithHandoffByTaskIds: vi.fn().mockResolvedValue([]),
+    remove: vi.fn(),
     timeoutRunning: vi.fn(),
+    updateStatus: vi.fn(),
   };
 
   const mockBriefModel = {
@@ -104,6 +108,7 @@ describe('TaskService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cancelScheduled.mockResolvedValue(undefined);
+    interruptTask.mockResolvedValue({ success: true });
     scheduleNextTopic.mockResolvedValue('tick-new');
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     (AgentModel as any).mockImplementation(() => mockAgentModel);
@@ -1354,6 +1359,41 @@ describe('TaskService', () => {
       ...overrides,
     });
 
+    it('aborts the status transition when a topic execution owner rejects interruption', async () => {
+      const prev = baseTask({ automationMode: null, status: 'running' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskTopicModel.findByTaskId.mockResolvedValue([
+        { operationId: 'op-1', status: 'running', topicId: 'topic-1' },
+      ]);
+      interruptTask.mockResolvedValue({ success: false });
+
+      const service = new TaskService(db, userId);
+      await expect(service.updateStatus({ id: 'T-1', status: 'paused' as any })).rejects.toThrow(
+        /did not acknowledge/i,
+      );
+
+      expect(mockTaskTopicModel.cancelIfRunning).not.toHaveBeenCalled();
+      // The parent task must NOT settle while one of its runs is still live.
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('aborts the status transition when interrupting a topic throws', async () => {
+      const prev = baseTask({ automationMode: null, status: 'running' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskTopicModel.findByTaskId.mockResolvedValue([
+        { operationId: 'op-1', status: 'running', topicId: 'topic-1' },
+      ]);
+      interruptTask.mockRejectedValue(new Error('device offline'));
+
+      const service = new TaskService(db, userId);
+      await expect(service.updateStatus({ id: 'T-1', status: 'canceled' as any })).rejects.toThrow(
+        /did not acknowledge/i,
+      );
+
+      expect(mockTaskTopicModel.cancelIfRunning).not.toHaveBeenCalled();
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
     it('stamps scheduleStartedAt when a user starts a schedule (backlog → scheduled)', async () => {
       const prev = baseTask({ status: 'backlog', automationMode: 'schedule' });
       const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
@@ -1501,6 +1541,36 @@ describe('TaskService', () => {
       await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
 
       expect(mockTaskModel.updateContext).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('topic cancellation acknowledgement', () => {
+    const runningTopic = {
+      operationId: 'op-1',
+      status: 'running',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    };
+
+    it('does not settle a topic when its execution owner rejects interruption', async () => {
+      mockTaskTopicModel.findByTopicId.mockResolvedValue(runningTopic);
+      interruptTask.mockResolvedValue({ success: false });
+
+      const service = new TaskService(db, userId);
+
+      await expect(service.cancelTopic('topic-1')).rejects.toThrow(/did not acknowledge/i);
+      expect(mockTaskTopicModel.updateStatus).not.toHaveBeenCalled();
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not delete a topic when its execution owner rejects interruption', async () => {
+      mockTaskTopicModel.findByTopicId.mockResolvedValue(runningTopic);
+      interruptTask.mockResolvedValue({ success: false });
+
+      const service = new TaskService(db, userId);
+
+      await expect(service.deleteTopic('topic-1')).rejects.toThrow(/did not acknowledge/i);
+      expect(mockTaskTopicModel.remove).not.toHaveBeenCalled();
     });
   });
 

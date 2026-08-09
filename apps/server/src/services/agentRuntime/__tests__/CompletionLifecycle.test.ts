@@ -645,6 +645,46 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
   });
 });
 
+describe('CompletionLifecycle.dispatchHooks — interrupted terminal contract', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mockNotifyAgentRunCompleted.mockClear();
+  });
+
+  it('persists and dispatches onComplete without success-only terminal effects', async () => {
+    const lifecycle = buildLifecycle();
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const createVerifySpy = vi
+      .spyOn(lifecycle as any, 'createVerifyMessage')
+      .mockResolvedValue(undefined);
+    const registerWorksSpy = vi.spyOn(lifecycle, 'registerFileWorks').mockResolvedValue(undefined);
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    const runVerifySpy = vi
+      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .mockResolvedValue(undefined);
+    const state = {
+      messages: [{ content: 'partial output', role: 'assistant' }],
+      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1' },
+      status: 'interrupted',
+    };
+
+    await lifecycle.dispatchHooks('op-1', state, 'interrupted');
+
+    expect(persistSpy).toHaveBeenCalledWith('op-1', state, 'interrupted');
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ reason: 'interrupted' }),
+      [],
+    );
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+    expect(createVerifySpy).not.toHaveBeenCalled();
+    expect(runVerifySpy).not.toHaveBeenCalled();
+    expect(registerWorksSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('CompletionLifecycle.dispatchHooks — completion notification', () => {
   afterEach(() => {
     vi.restoreAllMocks();

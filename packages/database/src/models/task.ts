@@ -785,6 +785,22 @@ export class TaskModel {
     return this.update(id, { status, ...extra });
   }
 
+  async pauseUnlessTerminal(id: string): Promise<boolean> {
+    const result = await this.db
+      .update(tasks)
+      .set({ status: 'paused', updatedAt: new Date() })
+      .where(
+        and(
+          eq(tasks.id, id),
+          this.ownership(),
+          notInArray(tasks.status, ['canceled', 'completed', 'failed']),
+        ),
+      )
+      .returning({ id: tasks.id });
+
+    return result.length > 0;
+  }
+
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {
     const result = await this.db
       .update(tasks)

@@ -1540,17 +1540,22 @@ describe('HeterogeneousAgentCtr', () => {
       topicId: 'topic-gateway',
     };
 
-    const createGatewayCliProc = () => {
+    const createGatewayCliProc = (pid?: number) => {
       const proc = new EventEmitter() as any;
       const stdin = new EventEmitter() as any;
       stdin.end = vi.fn();
       stdin.write = vi.fn(() => true);
+      proc.connected = true;
+      proc.kill = vi.fn(() => true);
+      proc.pid = pid;
+      proc.send = vi.fn((_message, callback?: (error: Error | null) => void) => callback?.(null));
       proc.stdin = stdin;
       return proc;
     };
 
     beforeEach(() => {
       vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(os.platform).mockReturnValue('linux');
       spawnCalls.length = 0;
       nextFakeProc = null;
     });
@@ -1585,6 +1590,7 @@ describe('HeterogeneousAgentCtr', () => {
           LOBEHUB_SERVER: 'https://server.example.com',
         }),
       );
+      expect(spawnCall.options.stdio).toEqual(['pipe', 'inherit', 'inherit', 'ipc']);
       expect(proc.stdin.write).not.toHaveBeenCalled();
 
       proc.emit('spawn');
@@ -1592,6 +1598,88 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ack).resolves.toEqual({ status: 'accepted' });
       expect(proc.stdin.write).toHaveBeenCalledOnce();
       expect(proc.stdin.end).toHaveBeenCalledOnce();
+    });
+
+    it('tracks and cancels a connected-device CLI wrapper by operation id', async () => {
+      const proc = createGatewayCliProc(4321);
+      nextFakeProc = proc;
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, operationId: 'op-cancel' });
+      proc.emit('spawn');
+      await ack;
+
+      expect(ctr.cancelLhHeteroExec({ operationId: 'op-cancel' })).toEqual({
+        pid: 4321,
+        signal: 'SIGINT',
+      });
+      expect(killSpy).toHaveBeenCalledWith(-4321, 'SIGINT');
+
+      proc.emit('exit', 130, 'SIGINT');
+      expect(ctr.cancelLhHeteroExec({ operationId: 'op-cancel' })).toBeUndefined();
+      killSpy.mockRestore();
+    });
+
+    it('uses IPC to preserve the embedded CLI finish path on Windows cancellation', async () => {
+      vi.mocked(os.platform).mockReturnValue('win32');
+      const proc = createGatewayCliProc(4321);
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, operationId: 'op-windows' });
+      proc.emit('spawn');
+      await ack;
+
+      expect(ctr.cancelLhHeteroExec({ operationId: 'op-windows' })).toEqual({
+        pid: 4321,
+        signal: 'SIGINT',
+      });
+      expect(proc.send).toHaveBeenCalledWith(
+        {
+          operationId: 'op-windows',
+          signal: 'SIGINT',
+          type: 'lobe:hetero-exec:cancel',
+        },
+        expect.any(Function),
+      );
+      expect(proc.kill).not.toHaveBeenCalled();
+
+      proc.emit('exit', 130, 'SIGINT');
+    });
+
+    it('keeps the Windows force-kill deadline anchored to the first cancellation', async () => {
+      vi.useFakeTimers();
+      vi.mocked(os.platform).mockReturnValue('win32');
+      const proc = createGatewayCliProc(4321);
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, operationId: 'op-deadline' });
+      proc.emit('spawn');
+      await ack;
+
+      ctr.cancelLhHeteroExec({ operationId: 'op-deadline' });
+      await vi.advanceTimersByTimeAsync(20_000);
+      ctr.cancelLhHeteroExec({ operationId: 'op-deadline' });
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(spawnCalls.at(-1)).toEqual({
+        args: ['/pid', '4321', '/T', '/F'],
+        command: 'taskkill',
+        options: { stdio: 'ignore' },
+      });
+      proc.emit('exit', 130, 'SIGINT');
+      vi.useRealTimers();
     });
 
     it('rejects the gateway request when the embedded CLI cannot spawn', async () => {

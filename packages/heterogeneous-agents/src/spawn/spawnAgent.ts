@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
@@ -298,16 +299,18 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
 const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   if (!proc.pid || proc.killed) return;
 
-  // On Windows the spawn `detached` flag has different semantics; fall back
-  // to a direct signal. Tree-kill via `taskkill` is what the desktop
-  // controller does for end-user CC, but the CLI's primary use case is
-  // sandbox + Unix dev terminals, so keep this minimal.
-  if (process.platform === 'win32') {
-    try {
-      proc.kill(signal);
-    } catch {
-      // already gone
-    }
+  // Keep the `lh hetero exec` wrapper alive on Windows while terminating the
+  // native agent and its tools. The wrapper must drain pending events and send
+  // the sole heteroFinish terminal callback after this tree exits.
+  if (platform() === 'win32') {
+    const killer = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+    killer.once('error', () => {
+      try {
+        proc.kill(signal);
+      } catch {
+        // already gone
+      }
+    });
     return;
   }
 
@@ -361,7 +364,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached: platform() !== 'win32',
     env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });

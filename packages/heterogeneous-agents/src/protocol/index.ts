@@ -7,7 +7,14 @@
  * Executor-side helpers that materialize this contract (`normalizeImage`,
  * `buildAgentInput`, `spawnAgent`, …) live under `./spawn` instead.
  */
-export { buildHeteroExecStdinPayload, type HeteroExecImageRef } from './execStdinPayload';
+export {
+  buildHeteroExecStdinPayload,
+  HETERO_EXEC_CANCEL_GRACE_MS,
+  type HeteroExecCancelMessage,
+  type HeteroExecCancelSignal,
+  type HeteroExecImageRef,
+  isHeteroExecCancelMessage,
+} from './execStdinPayload';
 export {
   buildHeterogeneousPrompt,
   type HeterogeneousPromptContextProvider,

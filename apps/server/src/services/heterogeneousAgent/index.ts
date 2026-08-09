@@ -242,6 +242,13 @@ export class HeterogeneousAgentService {
       topicId,
     } = params;
     const error = normalizeHeterogeneousFinishError(agentType, params.error);
+    const completionReason =
+      result === 'success'
+        ? ('done' as const)
+        : result === 'error'
+          ? ('error' as const)
+          : ('interrupted' as const);
+    const runtimeEndReason = result === 'cancelled' ? 'interrupted' : result;
 
     log(
       'heteroFinish: user=%s topic=%s op=%s type=%s result=%s sessionId=%s',
@@ -262,6 +269,16 @@ export class HeterogeneousAgentService {
         agentType,
         error.body.stderr ?? error.message,
       );
+    }
+
+    // Reject a delayed finish before it can mutate persistence belonging to a
+    // newer run on the same topic. Missing legacy metadata is allowed through;
+    // the atomic settle below remains the authority for destructive cleanup.
+    const topic = await this.topicModel.findById(topicId);
+    const runningOperation = topic?.metadata?.runningOperation;
+    if (runningOperation && runningOperation.operationId !== operationId) {
+      log('heteroFinish: ignored stale terminal callback for op=%s topic=%s', operationId, topicId);
+      return;
     }
 
     // Drain any pending state in the persistence handler — flushes trailing
@@ -290,7 +307,7 @@ export class HeterogeneousAgentService {
         agentType,
         error,
         operationId,
-        reason: result,
+        reason: runtimeEndReason,
         sessionId,
       },
       stepIndex: 0,
@@ -303,41 +320,36 @@ export class HeterogeneousAgentService {
     // fire uniformly. The hooks were registered in-memory (local mode) and
     // serialized onto runningOperation (queue mode) at dispatch time.
     //
-    // Skip on `cancelled` — heteroFinish may be called twice: first with
-    // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation or fire hooks on
-    // cancelled so the subsequent success/error call still finds the hooks +
-    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
-    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
-    // branch — and suppresses a spurious bot "stopped" message before the real
-    // result lands.)
-    if (result === 'cancelled') return;
-
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
     let isolationThreadId: string | undefined;
     try {
-      const topic = await this.topicModel.findById(topicId);
-      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
+      const settledMetadata = await this.topicModel.settleRunningOperation(
+        topicId,
+        operationId,
+        completionReason === 'interrupted' ? 'active' : 'unread',
+      );
+      if (!settledMetadata && runningOperation) {
+        log('heteroFinish: operation ownership changed while settling op=%s', operationId);
+        return;
+      }
+      const metadata = settledMetadata ?? topic?.metadata ?? {};
+
+      serializedHooks = metadata.runningOperation?.hooks as SerializedHook[] | undefined;
+      isolationThreadId = metadata.runningOperation?.threadId ?? undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
       // recorded in runningOperation if the pointer is absent or belongs to a
       // different operation (shouldn't happen, but defensive).
-      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
+      const currentMsgRef = metadata.heteroCurrentMsgId;
       assistantMessageId =
         currentMsgRef?.operationId === operationId
           ? currentMsgRef.msgId
-          : topic?.metadata?.runningOperation?.assistantMessageId;
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-      // topic off `running`. Guarded in the model: an attached client's own
-      // terminal write ('active'/'unread') is never clobbered.
-      await this.topicModel.settleRunningStatus(topicId);
+          : metadata.runningOperation?.assistantMessageId;
     } catch (err) {
-      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
+      log('heteroFinish: failed to settle runningOperation: %O', err);
+      throw err;
     }
 
     // The owning agentId is authoritatively encoded in the operationId
@@ -396,13 +408,10 @@ export class HeterogeneousAgentService {
     }
 
     // Finalize the trace snapshot (uploads it; the terminal op row is written by
-    // CompletionLifecycle.persistCompletion below). Runs on the real terminal only
-    // (cancelled returned above). Aggregates come from the accumulated steps;
+    // CompletionLifecycle.persistCompletion below). Aggregates come from the accumulated steps;
     // missing fields stay null (schema treats null as "not measured"). Kept inside
     // its own try so an upload hiccup never blocks the lifecycle dispatch — verify
     // and hooks still fire, persistCompletion just records null aggregates.
-    // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
-    const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
     let totals: Awaited<ReturnType<HeteroTraceRecorder['finalize']>> | undefined;
     try {
       totals = await this.traceRecorder.finalize(operationId, {

@@ -12,6 +12,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { isHeteroExecCancelMessage } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
   AgentContentBlock,
@@ -37,6 +38,14 @@ export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_T
 const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
+
+/**
+ * How long a cancelled agent process gets to exit gracefully (flush its final
+ * stream-json events, restore terminal state) before the wrapper SIGKILLs its
+ * process tree. Must stay well below the caller-side
+ * `HETERO_EXEC_CANCEL_GRACE_MS` (30s) last-resort tree kill.
+ */
+const CANCEL_SIGKILL_GRACE_MS = 5000;
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -339,11 +348,78 @@ class RawStreamDump {
 }
 
 const exec = async (options: ExecOptions): Promise<void> => {
+  let activeAgentKill: ((signal: NodeJS.Signals) => void) | undefined;
+  let ipcCancelSignal: NodeJS.Signals | undefined;
+
+  // A native CLI (or one of its tool subprocesses, e.g. a bash that swallows
+  // SIGINT) can ignore the graceful cancellation signal. The device has
+  // already acknowledged the cancel to the server by then, so nothing
+  // upstream retries — without a bound the agent would keep running and
+  // modifying files indefinitely. Mirror the desktop session path
+  // (cancelSession): escalate to SIGKILL on the agent's process tree after a
+  // short grace, from inside the wrapper so the heteroFinish leg survives.
+  // Kept well below HETERO_EXEC_CANCEL_GRACE_MS (30s) so the caller's
+  // last-resort tree kill only fires when this wrapper itself is wedged.
+  let cancelEscalationTimer: NodeJS.Timeout | undefined;
+  const armCancelEscalation = () => {
+    if (cancelEscalationTimer) return;
+    cancelEscalationTimer = setTimeout(() => {
+      // Reset first so a pre-spawn no-op firing can be re-armed at the
+      // consume point in runOneAgent once the agent process exists.
+      cancelEscalationTimer = undefined;
+      activeAgentKill?.('SIGKILL');
+    }, CANCEL_SIGKILL_GRACE_MS);
+    cancelEscalationTimer.unref();
+  };
+
+  const onIpcMessage = (message: unknown) => {
+    if (
+      !isHeteroExecCancelMessage(message) ||
+      !options.operationId ||
+      message.operationId !== options.operationId ||
+      ipcCancelSignal
+    ) {
+      return;
+    }
+
+    ipcCancelSignal = message.signal;
+    activeAgentKill?.(message.signal);
+    if (activeAgentKill) armCancelEscalation();
+  };
+  process.on('message', onIpcMessage);
+
+  // Device cancellation reaches Unix wrappers as a plain SIGINT (agentRun
+  // signals the child directly; only Windows uses the IPC message), but
+  // runOneAgent installs its SIGINT/SIGTERM handlers only after spawnAgent
+  // resolves. A cancel landing during setup (prompt/image resolution) or the
+  // final drain would hit Node's default signal exit and skip the heteroFinish
+  // leg, leaving the server operation dangling. In server-ingest mode, latch
+  // those signals like an IPC cancel so the normal lifecycle consumes them;
+  // runOneAgent's own per-attempt handlers take precedence mid-run.
+  let agentSignalHandlersInstalled = false;
+  const onLatchedSignal = (signal: NodeJS.Signals) => {
+    if (agentSignalHandlersInstalled || ipcCancelSignal) return;
+    ipcCancelSignal = signal;
+    activeAgentKill?.(signal);
+    if (activeAgentKill) armCancelEscalation();
+  };
+  const onLatchedSigint = () => onLatchedSignal('SIGINT');
+  const onLatchedSigterm = () => onLatchedSignal('SIGTERM');
+  if (options.topic) {
+    process.on('SIGINT', onLatchedSigint);
+    process.on('SIGTERM', onLatchedSigterm);
+  }
+
+  const exitProcess = (code: number): never => {
+    process.off('message', onIpcMessage);
+    process.exit(code);
+  };
+
   if (!isLocalHeterogeneousType(options.type)) {
     log.error(
       `Unsupported --type "${options.type}". Supported: ${[...SUPPORTED_AGENT_TYPES].join(', ')}`,
     );
-    process.exit(2);
+    exitProcess(2);
   }
 
   let resolved: ResolvedPrompt;
@@ -351,14 +427,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
     resolved = await resolvePrompt(options);
   } catch (err) {
     log.error(err instanceof Error ? err.message : String(err));
-    process.exit(2);
+    exitProcess(2);
   }
 
   if (!resolved.describe()) {
     log.error(
       'Empty prompt. Pass --prompt <text>, --image <path>, --input-json <file|->, or pipe content via stdin.',
     );
-    process.exit(2);
+    exitProcess(2);
   }
 
   // Server-ingest mode is active when --topic is provided.
@@ -367,7 +443,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const serverIngest = !!options.topic;
   if (serverIngest && !options.operationId) {
     log.error('--operation-id is required when --topic is set (server-ingest mode).');
-    process.exit(2);
+    exitProcess(2);
   }
 
   const operationId = options.operationId || randomUUID();
@@ -610,7 +686,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           // best-effort; process is exiting anyway
         }
       }
-      process.exit(1);
+      exitProcess(1);
     }
 
     // Always collect stderr — used for resume-error detection AND for
@@ -636,23 +712,33 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
+    const killAgent = (signal: NodeJS.Signals) => handle.kill(signal);
+    activeAgentKill = killAgent;
+
     // Ctrl-C → SIGINT to the child's process group.
     // Repeated Ctrl-C escalates to SIGKILL.
-    let interrupted = false;
+    let interrupted = ipcCancelSignal !== undefined;
+    if (ipcCancelSignal) {
+      killAgent(ipcCancelSignal);
+      armCancelEscalation();
+    }
     const onSigint = () => {
       if (interrupted) {
-        handle.kill('SIGKILL');
+        killAgent('SIGKILL');
         return;
       }
       interrupted = true;
-      handle.kill('SIGINT');
+      killAgent('SIGINT');
+      armCancelEscalation();
     };
     const onSigterm = () => {
       interrupted = true;
-      handle.kill('SIGTERM');
+      killAgent('SIGTERM');
+      armCancelEscalation();
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
+    agentSignalHandlersInstalled = true;
 
     // Stream events. Each event is optionally written as JSONL and pushed
     // into the ingester.  When intercepting resume errors, a matching
@@ -718,13 +804,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
       }
       await dumpAttempt?.close();
-      process.exit(1);
+      exitProcess(1);
     } finally {
       process.off('SIGINT', onSigint);
       process.off('SIGTERM', onSigterm);
+      agentSignalHandlersInstalled = false;
     }
 
     const { code, signal } = await exit;
+    if (activeAgentKill === killAgent) activeAgentKill = undefined;
     await stderrEnded;
     await dumpAttempt?.close();
 
@@ -740,7 +828,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     return {
-      cancelled: interrupted,
+      cancelled: interrupted || ipcCancelSignal !== undefined,
       code,
       ingestError,
       resumeNotFound,
@@ -839,11 +927,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
       result = { ...result, ingestError: true };
     }
 
+    // Cancellation can arrive after the native agent exits while its final
+    // event batch is still draining. Read the live IPC latch here rather than
+    // relying only on runOneAgent's earlier snapshot.
+    const cancelled = result.cancelled || ipcCancelSignal !== undefined;
+
     // CC relays API/rate-limit errors as an in-stream terminal `error` event but
     // still exits 0, so the exit code alone would report `success`. Treat any
     // pushed terminal error as a failed run so the topic/task is marked failed.
     const exitedClean =
-      !result.cancelled &&
+      !cancelled &&
       !result.ingestError &&
       !result.sawTerminalError &&
       (code === 0 || signal === 'SIGTERM');
@@ -862,7 +955,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // which would drop `agentType`/`code` and demote the client UI to the
     // generic error card.
     const finishError =
-      result.cancelled || exitedClean
+      cancelled || exitedClean
         ? undefined
         : result.terminalErrorData
           ? {
@@ -877,7 +970,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       await sink.finish({
         error: finishError,
-        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
+        result: cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
         sessionId,
       });
     } catch (err) {
@@ -895,11 +988,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
-  if (code !== null) process.exit(result.ingestError ? 1 : code);
-  if (signal === 'SIGINT') process.exit(130);
-  if (signal === 'SIGTERM') process.exit(143);
-  if (signal === 'SIGKILL') process.exit(137);
-  process.exit(1);
+  if (code !== null) exitProcess(result.ingestError ? 1 : code);
+  if (signal === 'SIGINT') exitProcess(130);
+  if (signal === 'SIGTERM') exitProcess(143);
+  if (signal === 'SIGKILL') exitProcess(137);
+  exitProcess(1);
 };
 
 export function registerHeteroCommand(program: Command) {

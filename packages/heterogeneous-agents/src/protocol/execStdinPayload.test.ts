@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildHeteroExecStdinPayload } from './execStdinPayload';
+import { buildHeteroExecStdinPayload, isHeteroExecCancelMessage } from './execStdinPayload';
 
 describe('buildHeteroExecStdinPayload', () => {
   it('returns a plain JSON string when no systemContext or images', () => {
@@ -59,5 +59,24 @@ describe('buildHeteroExecStdinPayload', () => {
         type: 'text',
       },
     ]);
+  });
+});
+
+describe('isHeteroExecCancelMessage', () => {
+  it('accepts the bounded wrapper cancellation protocol only', () => {
+    expect(
+      isHeteroExecCancelMessage({
+        operationId: 'op-1',
+        signal: 'SIGINT',
+        type: 'lobe:hetero-exec:cancel',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroExecCancelMessage({
+        operationId: 'op-1',
+        signal: 'SIGKILL',
+        type: 'lobe:hetero-exec:cancel',
+      }),
+    ).toBe(false);
   });
 });

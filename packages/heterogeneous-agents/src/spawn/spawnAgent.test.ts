@@ -308,6 +308,24 @@ describe('spawnAgent', () => {
     expect(args[0]).toBe('exec');
   });
 
+  it('kills the native agent tree but leaves the wrapper alive on Windows cancellation', async () => {
+    platformMock.mockReturnValue('win32');
+    callExecFile('C:\\Tools\\codex.exe\r\n');
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({ agentType: 'codex', operationId: 'op-1', prompt: 'hi' });
+    handle.kill('SIGINT');
+
+    expect(spawnCalls[1]).toMatchObject({
+      args: ['/pid', '12345', '/T', '/F'],
+      command: 'taskkill',
+      options: { stdio: 'ignore' },
+    });
+    expect(fake.proc.kill).not.toHaveBeenCalled();
+  });
+
   it('uses codex `exec resume` form with thread id + `-` stdin marker on resume', async () => {
     const codexHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-codex-spawn-empty-'));
     tempDirs.push(codexHome);

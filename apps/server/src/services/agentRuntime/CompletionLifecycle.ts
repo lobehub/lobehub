@@ -574,7 +574,7 @@ export class CompletionLifecycle {
    */
   async completeOperation(
     input: OperationCompletionInput,
-    reason: 'done' | 'error',
+    reason: 'done' | 'error' | 'interrupted',
     options?: CompleteOperationOptions,
   ): Promise<void> {
     await this.dispatchHooks(input.operationId, this.buildStateFromInput(input), reason, options);

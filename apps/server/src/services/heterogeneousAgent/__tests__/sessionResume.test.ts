@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { TopicModel } from '@/database/models/topic';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 
 import { HeterogeneousAgentService, HeterogeneousPersistenceHandler } from '..';
@@ -10,6 +11,24 @@ const createSilentStreamManager = (): IStreamEventManager =>
   ({
     publishStreamEvent: vi.fn(async () => 'ok'),
   }) as unknown as IStreamEventManager;
+
+interface TerminalTopicSnapshot {
+  metadata?: {
+    runningOperation?: { operationId?: string };
+  };
+}
+
+const createTerminalTopicModel = (
+  findById: (id: string) => Promise<null | TerminalTopicSnapshot>,
+): TopicModel =>
+  ({
+    findById,
+    settleRunningOperation: vi.fn(async (topicId: string, operationId: string) => {
+      const topic = await findById(topicId);
+      if (topic?.metadata?.runningOperation?.operationId !== operationId) return;
+      return topic.metadata;
+    }),
+  }) as unknown as TopicModel;
 
 describe('HeterogeneousAgentService — phase 2c session id persistence + resume', () => {
   beforeEach(() => __resetOperationStatesForTesting());
@@ -59,6 +78,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: createTerminalTopicModel(findById),
       });
 
       await service.heteroFinish({
@@ -114,6 +134,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: createTerminalTopicModel(findById),
       });
 
       await service.heteroFinish({
@@ -166,6 +187,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: createTerminalTopicModel(findById),
       });
 
       // Simulate: sandbox was recycled, CC exited before emitting system.init
@@ -222,6 +244,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: createTerminalTopicModel(findById),
       });
 
       await service.heteroFinish({
@@ -282,6 +305,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: createTerminalTopicModel(findById),
       });
 
       await service.heteroFinish({
@@ -346,6 +370,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: stream,
+        topicModel: createTerminalTopicModel(findById),
       });
 
       // Should not throw — sessionId persistence is best-effort

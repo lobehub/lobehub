@@ -247,6 +247,7 @@ const mockShellCommandCtr = {
 } as unknown as ShellCommandCtr;
 
 const mockHeterogeneousAgentCtr = {
+  cancelLhHeteroExec: vi.fn().mockResolvedValue(undefined),
   sendPrompt: vi.fn().mockResolvedValue(undefined),
   spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
@@ -990,6 +991,26 @@ describe('GatewayConnectionCtr', () => {
         operationId: 'op-spawn-fail',
         reason: 'spawn EACCES',
         status: 'rejected',
+      });
+    });
+
+    it('routes cancelHeteroTask to a gateway-dispatched local CLI run', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.cancelLhHeteroExec).mockResolvedValueOnce({
+        pid: 4242,
+        signal: 'SIGINT',
+      });
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'op-local' },
+        'req-cancel-local',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.cancelLhHeteroExec).toHaveBeenCalledWith({
+        operationId: 'op-local',
+        signal: 'SIGINT',
       });
     });
   });

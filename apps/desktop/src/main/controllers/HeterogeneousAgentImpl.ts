@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
 import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import os, { platform } from 'node:os';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
@@ -29,10 +29,14 @@ import type {
   McpToolResult,
 } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import type {
+  HeteroExecCancelMessage,
+  HeteroExecImageRef,
+} from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
   buildHeterogeneousPrompt,
+  HETERO_EXEC_CANCEL_GRACE_MS,
 } from '@lobechat/heterogeneous-agents/protocol';
 import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
@@ -159,6 +163,11 @@ interface StartSessionParams {
   useClaudeCodeSdk?: boolean;
   /** Run Codex prompts through codex app-server instead of one-shot codex exec (lab preference) */
   useCodexAppServer?: boolean;
+}
+
+interface GatewayAgentRun {
+  child: ChildProcess;
+  forceKillTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface StartSessionResult {
@@ -353,6 +362,8 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+  /** Gateway-dispatched `lh hetero exec` wrappers, keyed by server operation id. */
+  private gatewayAgentRuns = new Map<string, GatewayAgentRun>();
   /**
    * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
    * `submitIntervention` IPC can route an answer to the right pending MCP
@@ -1991,6 +2002,49 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
+   * Cancel a connected-device run started by {@link spawnLhHeteroExec}.
+   * The wrapper forwards the signal to its agent process tree and completes the
+   * normal heteroFinish cancellation path.
+   */
+  cancelLhHeteroExec(params: {
+    operationId: string;
+    signal?: NodeJS.Signals;
+  }): { pid: number; signal: NodeJS.Signals } | undefined {
+    const run = this.gatewayAgentRuns.get(params.operationId);
+    const child = run?.child;
+    if (!child?.pid) return undefined;
+
+    const signal = params.signal ?? 'SIGINT';
+    if (platform() === 'win32') {
+      if (!run.forceKillTimer) {
+        run.forceKillTimer = setTimeout(() => {
+          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+            stdio: 'ignore',
+          });
+          killer.once('error', () => {});
+        }, HETERO_EXEC_CANCEL_GRACE_MS);
+        run.forceKillTimer.unref();
+      }
+
+      const message: HeteroExecCancelMessage = {
+        operationId: params.operationId,
+        signal: signal === 'SIGTERM' ? 'SIGTERM' : 'SIGINT',
+        type: 'lobe:hetero-exec:cancel',
+      };
+      if (child.connected) {
+        try {
+          child.send(message, () => {});
+        } catch {
+          // The bounded force-kill fallback remains armed.
+        }
+      }
+    } else {
+      this.killProcessTree(child, signal);
+    }
+    return { pid: child.pid, signal };
+  }
+
+  /**
    * Spawn the embedded CLI's `hetero exec` for gateway-driven agent runs.
    * The bundled CLI handles everything downstream — no local
    * AgentStreamPipeline or IPC broadcast needed. Mirrors
@@ -2086,10 +2140,15 @@ export default class HeterogeneousAgentCtr {
     const child = spawn(process.execPath, [cliScript, ...args], {
       cwd: workDir,
       env,
-      stdio: ['pipe', 'inherit', 'inherit'],
+      stdio: ['pipe', 'inherit', 'inherit', 'ipc'],
     });
 
     child.on('exit', (code, signal) => {
+      const run = this.gatewayAgentRuns.get(operationId);
+      if (run?.child === child) {
+        if (run.forceKillTimer) clearTimeout(run.forceKillTimer);
+        this.gatewayAgentRuns.delete(operationId);
+      }
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
     });
 
@@ -2111,6 +2170,7 @@ export default class HeterogeneousAgentCtr {
       });
 
       child.once('spawn', () => {
+        if (child.pid) this.gatewayAgentRuns.set(operationId, { child });
         try {
           child.stdin.write(stdinPayload);
           child.stdin.end();
@@ -2127,6 +2187,11 @@ export default class HeterogeneousAgentCtr {
       });
 
       child.once('error', (err) => {
+        const run = this.gatewayAgentRuns.get(operationId);
+        if (run?.child === child) {
+          if (run.forceKillTimer) clearTimeout(run.forceKillTimer);
+          this.gatewayAgentRuns.delete(operationId);
+        }
         logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
         settle({ reason: err.message, status: 'rejected' });
       });

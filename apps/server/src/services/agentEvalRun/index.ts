@@ -1658,6 +1658,7 @@ export class AgentEvalRunService {
     topicId: string;
   }): Promise<Record<string, unknown>> {
     const { runId, status, telemetry, testCaseId, threadId } = params;
+    const interrupted = status === 'interrupted' || telemetry.completionReason === 'interrupted';
 
     const baseMeta: Record<string, unknown> = {
       completionReason: telemetry.completionReason,
@@ -1669,15 +1670,17 @@ export class AgentEvalRunService {
       toolCalls: telemetry.toolCalls,
     };
 
-    // Error case — skip evaluation
-    if (status === 'error') {
+    // Error/interruption case — partial output is not eligible for evaluation.
+    if (status === 'error' || interrupted) {
       return {
         ...baseMeta,
-        error:
-          telemetry.errorMessage || `Execution error: ${telemetry.completionReason || 'unknown'}`,
+        error: interrupted
+          ? 'Evaluation interrupted'
+          : telemetry.errorMessage || `Execution error: ${telemetry.completionReason || 'unknown'}`,
         errorDetail: telemetry.errorDetail,
         passed: false,
         score: 0,
+        ...(interrupted && { status: 'error' }),
       };
     }
 
@@ -1824,6 +1827,7 @@ export class AgentEvalRunService {
     const anyPassed = threadResults.some((t) => t.passed === true);
     // pass^k: all threads passed
     const allPassed = threadResults.every((t) => t.passed === true);
+    const allErrored = threadResults.every((t) => t.status === 'error');
 
     // Best score (used as the representative score)
     const scores = threadResults.filter((t) => t.score != null).map((t) => t.score!);
@@ -1849,7 +1853,7 @@ export class AgentEvalRunService {
     const k = threadResults.length;
 
     // The topic-level completionReason: use "completed" if any succeeded
-    const completionReason = anyPassed ? 'completed' : 'failed';
+    const completionReason = anyPassed ? 'completed' : allErrored ? 'error' : 'failed';
 
     // Write aggregated result to RunTopic
     // Primary fields (cost/tokens/duration/steps/llmCalls/toolCalls) = average per execution
@@ -1873,7 +1877,7 @@ export class AgentEvalRunService {
       // pass@k: passed if any thread passed
       passed: anyPassed,
       score: bestScore,
-      status: anyPassed ? 'passed' : 'failed',
+      status: anyPassed ? 'passed' : allErrored ? 'error' : 'failed',
     });
   }
 
@@ -1958,6 +1962,7 @@ export class AgentEvalRunService {
     testCaseId: string;
   }): Promise<{ allDone: boolean; completedCount: number }> {
     const { runId, testCaseId, telemetry, status } = params;
+    const interrupted = status === 'interrupted' || telemetry.completionReason === 'interrupted';
 
     // Write runtime telemetry to RunTopic
     const runTopic = await this.runTopicModel.findByRunAndTestCase(runId, testCaseId);
@@ -1985,14 +1990,15 @@ export class AgentEvalRunService {
           evalResult: evalResultWithTelemetry,
         });
 
-        if (status === 'error') {
-          // Short-circuit: execution error — skip evaluation, write error directly
+        if (status === 'error' || interrupted) {
+          // Short-circuit: execution error/interruption — partial output is not evaluable.
           await this.runTopicModel.updateByRunAndTopic(runTopic.runId, runTopic.topicId, {
             evalResult: {
               ...evalResultWithTelemetry,
-              error:
-                telemetry.errorMessage ||
-                `Execution error: ${telemetry.completionReason || 'unknown'}`,
+              error: interrupted
+                ? 'Evaluation interrupted'
+                : telemetry.errorMessage ||
+                  `Execution error: ${telemetry.completionReason || 'unknown'}`,
               errorDetail: telemetry.errorDetail,
             },
             passed: false,

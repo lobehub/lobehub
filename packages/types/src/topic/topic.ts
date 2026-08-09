@@ -192,13 +192,13 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
-    /** Device selected for a notify-based platform task. */
+    /** Device selected for a heterogeneous agent task. */
     deviceId?: string;
     /** Personal-device owner used to route dispatch and cancellation through the same principal. */
     deviceUserId?: string;
     /** Workspace principal used for a workspace-enrolled device. */
     deviceWorkspaceId?: string;
-    /** Notify-based platform type used to select the cancellation protocol. */
+    /** Heterogeneous agent type used to select the cancellation protocol. */
     heteroType?: string;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.

@@ -987,25 +987,28 @@ describe('createGatewayEventHandler', () => {
     // the executor's partial-finalize catch is still racing to write the
     // real content, and a fetch here would return placeholder and clobber
     // in-memory streamed content.
-    it('should NOT refetch from DB when reason=interrupted AND stream had progressed', async () => {
-      const store = createMockStore();
-      const handler = createHandler(store);
+    it.each(['interrupted', 'cancelled'])(
+      'should NOT refetch from DB when reason=%s AND stream had progressed',
+      async (reason) => {
+        const store = createMockStore();
+        const handler = createHandler(store);
 
-      // Simulate a stream that had progressed: server-assigned assistant id
-      // arrived via stream_start, then a text chunk landed.
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-server' } }));
-      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial answer' }));
-      await flush();
-      vi.mocked(messageService.getMessages).mockClear();
-      store.replaceMessages.mockClear();
+        // Simulate a stream that had progressed: server-assigned assistant id
+        // arrived via stream_start, then a text chunk landed.
+        handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-server' } }));
+        handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial answer' }));
+        await flush();
+        vi.mocked(messageService.getMessages).mockClear();
+        store.replaceMessages.mockClear();
 
-      handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
-      await flush();
+        handler(makeEvent('agent_runtime_end', { reason }));
+        await flush();
 
-      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
-      expect(messageService.getMessages).not.toHaveBeenCalled();
-      expect(store.replaceMessages).not.toHaveBeenCalled();
-    });
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+      },
+    );
 
     // Reviewer feedback on PR #15173: if cancel arrives BEFORE any
     // stream activity (no server-assigned assistant id, no chunks), the
@@ -1490,7 +1493,7 @@ describe('createGatewayEventHandler', () => {
       );
     });
 
-    it.each(['interrupted', 'waiting_for_async_tool'])(
+    it.each(['interrupted', 'cancelled', 'waiting_for_async_tool'])(
       'agent_runtime_end with reason "%s" completes the op but does NOT mark unread (cancel/park)',
       async (reason) => {
         const store = createMockStore();

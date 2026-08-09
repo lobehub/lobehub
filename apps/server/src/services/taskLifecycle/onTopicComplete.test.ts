@@ -53,6 +53,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
   let updateContext: ReturnType<typeof vi.fn>;
   let findById: ReturnType<typeof vi.fn>;
   let updateHeartbeat: ReturnType<typeof vi.fn>;
+  let pauseUnlessTerminal: ReturnType<typeof vi.fn>;
   let updateTopicStatus: ReturnType<typeof vi.fn>;
   let createBrief: ReturnType<typeof vi.fn>;
   let getReviewConfig: ReturnType<typeof vi.fn>;
@@ -66,6 +67,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     updateContext = vi.fn().mockResolvedValue(null);
     findById = vi.fn();
     updateHeartbeat = vi.fn().mockResolvedValue(undefined);
+    pauseUnlessTerminal = vi.fn().mockResolvedValue(true);
     updateTopicStatus = vi.fn().mockResolvedValue(undefined);
     createBrief = vi.fn().mockResolvedValue(undefined);
     getReviewConfig = vi.fn().mockReturnValue(undefined);
@@ -76,6 +78,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     taskModel.updateContext = updateContext;
     taskModel.findById = findById;
     taskModel.updateHeartbeat = updateHeartbeat;
+    taskModel.pauseUnlessTerminal = pauseUnlessTerminal;
     taskModel.getReviewConfig = getReviewConfig;
     // Default checkpoint behavior: pause after topic complete
     taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(true);
@@ -343,6 +346,29 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
 
       expect(bridge).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('reason=interrupted', () => {
+    it('cancels the task topic and the owning task without rearming automation', async () => {
+      const runningTask = baseTask({ automationMode: 'heartbeat', status: 'running' });
+      const pausedTask = baseTask({ automationMode: 'heartbeat', status: 'paused' });
+      findById.mockResolvedValueOnce(runningTask).mockResolvedValueOnce(pausedTask);
+      const bridge = vi.spyOn(service as any, 'bridgeResultToCreator').mockResolvedValue(undefined);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'interrupted',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateTopicStatus).toHaveBeenCalledWith('task-1', 'topic-1', 'canceled');
+      expect(pauseUnlessTerminal).toHaveBeenCalledWith('task-1');
+      expect(createBrief).not.toHaveBeenCalled();
+      expect(bridge).toHaveBeenCalledTimes(1);
+      expect(fakeScheduler.scheduleNextTopic).not.toHaveBeenCalled();
     });
   });
 

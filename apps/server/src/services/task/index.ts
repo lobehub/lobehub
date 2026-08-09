@@ -247,7 +247,13 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      const result = await aiAgentService.interruptTask({ operationId: target.operationId });
+      if (!result.success) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The execution owner did not acknowledge cancellation.',
+        });
+      }
     }
 
     await this.taskTopicModel.updateStatus(target.taskId, topicId, 'canceled');
@@ -266,7 +272,13 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      const result = await aiAgentService.interruptTask({ operationId: target.operationId });
+      if (!result.success) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The execution owner did not acknowledge cancellation.',
+        });
+      }
     }
 
     await this.taskTopicModel.remove(target.taskId, topicId);
@@ -361,18 +373,27 @@ export class TaskService {
       for (const t of topics) {
         if (t.status !== 'running' || !t.topicId) continue;
 
-        // Interrupt the remote operation first; if it fails, skip cancellation
-        // to avoid desynchronizing DB state from a still-running operation.
+        // Interrupt the remote operation first. The whole transition must
+        // abort when any execution owner does not acknowledge — otherwise the
+        // parent task would settle (and e.g. unlock downstream work on
+        // 'completed') while one of its runs is still live.
         if (t.operationId) {
+          let acknowledged = false;
           try {
-            await aiAgentService.interruptTask({ operationId: t.operationId });
+            const result = await aiAgentService.interruptTask({ operationId: t.operationId });
+            acknowledged = result.success;
           } catch (err) {
             console.error(
               '[TaskService.updateStatus] failed to interrupt topic %s:',
               t.topicId,
               err,
             );
-            continue;
+          }
+          if (!acknowledged) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'The execution owner did not acknowledge cancellation.',
+            });
           }
         }
 

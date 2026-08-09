@@ -87,6 +87,33 @@ describe('AgentEvalRunService', () => {
       });
     });
 
+    it('should record an interrupted trajectory as non-evaluable', async () => {
+      const { run, testCase } = await setupEvalChain({
+        assistantOutput: '42',
+        datasetEvalMode: 'contains',
+        expected: '42',
+        totalCases: 1,
+      });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.recordTrajectoryCompletion({
+        runId: run.id,
+        status: 'interrupted',
+        telemetry: { completionReason: 'interrupted', duration: 500 },
+        testCaseId: testCase.id,
+      });
+
+      const runTopic = await new AgentEvalRunTopicModel(serverDB, userId).findByRunAndTestCase(
+        run.id,
+        testCase.id,
+      );
+      expect(runTopic).toMatchObject({ passed: false, score: 0, status: 'error' });
+      expect(runTopic?.evalResult).toMatchObject({
+        completionReason: 'interrupted',
+        error: 'Evaluation interrupted',
+      });
+    });
+
     it('should persist toolCalls and llmCalls in evalResult', async () => {
       const { run, testCase } = await setupEvalChain({
         assistantOutput: '42',

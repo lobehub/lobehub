@@ -1208,6 +1208,37 @@ export class TopicModel {
   };
 
   /**
+   * Atomically clear and settle one exact running operation. Returns the
+   * metadata snapshot that owned the operation, or undefined when the topic is
+   * missing, belongs to another user, or has already moved on to another run.
+   */
+  settleRunningOperation = async (
+    id: string,
+    operationId: string,
+    status: TopicItem['status'] = 'unread',
+  ): Promise<ChatTopicMetadata | undefined> => {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      if (existing?.metadata?.runningOperation?.operationId !== operationId) return;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: { ...existing.metadata, runningOperation: null },
+          ...(existing.status === 'running' && { status }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return existing.metadata;
+    });
+  };
+
+  /**
    * Settle a topic out of `running` once its run has terminated server-side.
    *
    * Guarded on `status = 'running'` so it is race-tolerant with clients: an

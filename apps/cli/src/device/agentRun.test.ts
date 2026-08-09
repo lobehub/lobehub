@@ -1,17 +1,32 @@
 import { EventEmitter } from 'node:events';
+import * as os from 'node:os';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { spawnHeteroAgentRun } from './agentRun';
+import { cancelHeteroAgentRun, spawnHeteroAgentRun } from './agentRun';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof os>('node:os');
+  return { ...actual, platform: vi.fn(() => 'linux') };
+});
 
-const makeFakeChild = () => {
+const platformMock = vi.mocked(os.platform);
+
+const makeFakeChild = (pid = 9999) => {
   const child = new EventEmitter() as EventEmitter & {
+    connected: boolean;
+    kill: ReturnType<typeof vi.fn>;
+    pid: number;
+    send: ReturnType<typeof vi.fn>;
     stdin: { end: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> };
   };
+  child.connected = true;
+  child.kill = vi.fn(() => true);
+  child.pid = pid;
+  child.send = vi.fn((_message, callback?: (error: Error | null) => void) => callback?.(null));
   child.stdin = { end: vi.fn(), write: vi.fn() };
   return child;
 };
@@ -27,6 +42,10 @@ const baseParams = {
 };
 
 describe('spawnHeteroAgentRun', () => {
+  beforeEach(() => {
+    platformMock.mockReturnValue('linux');
+  });
+
   afterEach(() => {
     spawnMock.mockReset();
   });
@@ -72,6 +91,7 @@ describe('spawnHeteroAgentRun', () => {
         LOBEHUB_JWT: 'jwt-token',
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),
+      stdio: ['pipe', 'inherit', 'inherit', 'ipc'],
     });
 
     // stdin is only written after the child actually spawns.
@@ -156,5 +176,67 @@ describe('spawnHeteroAgentRun', () => {
         { source: { id: 'file-1', type: 'url', url: 'https://signed/a.png' }, type: 'image' },
       ]),
     );
+  });
+
+  it('cancels an active gateway-dispatched wrapper by operation id', async () => {
+    const child = makeFakeChild(4321);
+    spawnMock.mockReturnValue(child);
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-cancel' });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(cancelHeteroAgentRun('op-cancel', 'SIGINT')).toEqual({ pid: 4321, signal: 'SIGINT' });
+    expect(child.kill).toHaveBeenCalledWith('SIGINT');
+
+    child.emit('exit', 130, 'SIGINT');
+    expect(cancelHeteroAgentRun('op-cancel')).toBeUndefined();
+  });
+
+  it('uses IPC to preserve the wrapper finish path when cancelling on Windows', async () => {
+    platformMock.mockReturnValue('win32');
+    const child = makeFakeChild(4321);
+    spawnMock.mockReturnValue(child);
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-windows' });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(cancelHeteroAgentRun('op-windows', 'SIGINT')).toEqual({
+      pid: 4321,
+      signal: 'SIGINT',
+    });
+    expect(child.send).toHaveBeenCalledWith(
+      {
+        operationId: 'op-windows',
+        signal: 'SIGINT',
+        type: 'lobe:hetero-exec:cancel',
+      },
+      expect.any(Function),
+    );
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+
+    child.emit('exit', 130, 'SIGINT');
+    expect(cancelHeteroAgentRun('op-windows')).toBeUndefined();
+  });
+
+  it('keeps the Windows force-kill deadline anchored to the first cancellation', async () => {
+    vi.useFakeTimers();
+    const child = makeFakeChild(4321);
+    platformMock.mockReturnValue('win32');
+    spawnMock.mockReturnValue(child);
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-deadline' });
+    child.emit('spawn');
+    await ackPromise;
+
+    cancelHeteroAgentRun('op-deadline');
+    await vi.advanceTimersByTimeAsync(20_000);
+    cancelHeteroAgentRun('op-deadline');
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(spawnMock).toHaveBeenLastCalledWith('taskkill', ['/pid', '4321', '/T', '/F'], {
+      stdio: 'ignore',
+    });
+    child.emit('exit', 130, 'SIGINT');
+    vi.useRealTimers();
   });
 });

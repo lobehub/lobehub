@@ -602,6 +602,17 @@ describe('TaskModel', () => {
       expect(updated!.status).toBe('running');
       expect(updated!.startedAt).toBeDefined();
     });
+
+    it('pauses a non-terminal task without moving a concurrently completed task backwards', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const running = await model.create({ instruction: 'Running task', status: 'running' });
+      const completed = await model.create({ instruction: 'Completed task', status: 'completed' });
+
+      expect(await model.pauseUnlessTerminal(running.id)).toBe(true);
+      expect(await model.pauseUnlessTerminal(completed.id)).toBe(false);
+      expect((await model.findById(running.id))?.status).toBe('paused');
+      expect((await model.findById(completed.id))?.status).toBe('completed');
+    });
   });
 
   describe('heartbeat', () => {

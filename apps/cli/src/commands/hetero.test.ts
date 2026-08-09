@@ -519,10 +519,10 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(130);
   });
 
-  it('flushes terminal tool events before finishing a server-ingest run as cancelled', async () => {
-    let sigintHandler: (() => void) | undefined;
+  it('handles IPC cancellation while flushing terminal tool events before heteroFinish', async () => {
+    let ipcMessageHandler: ((message: unknown) => void) | undefined;
     vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
-      if (event === 'SIGINT') sigintHandler = listener;
+      if (event === 'message') ipcMessageHandler = listener;
       return process;
     }) as typeof process.on);
 
@@ -591,9 +591,14 @@ describe('hetero exec command', () => {
       '--render',
       'none',
     ]);
-    for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
+    for (let i = 0; i < 20 && !ipcMessageHandler; i += 1) await Promise.resolve();
 
-    sigintHandler?.();
+    ipcMessageHandler?.({
+      operationId: 'op-cancel',
+      signal: 'SIGINT',
+      type: 'lobe:hetero-exec:cancel',
+    });
+    for (let i = 0; i < 20 && kill.mock.calls.length === 0; i += 1) await Promise.resolve();
     expect(kill).toHaveBeenCalledWith('SIGINT');
     expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
 
@@ -615,6 +620,212 @@ describe('hetero exec command', () => {
     await command;
 
     expect(callOrder).toEqual(['tool_result', 'tool_end', 'finish:cancelled']);
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ error: undefined, result: 'cancelled' }),
+    );
+  });
+
+  it('latches a SIGINT that arrives before the agent process spawns (Unix device cancel)', async () => {
+    // agentRun.ts cancels Unix wrappers with a direct SIGINT. If it lands
+    // during setup — before runOneAgent installs its handlers — the early
+    // latch must record it so the run still flows through heteroFinish
+    // instead of dying on Node's default signal exit.
+    let earlySigintHandler: (() => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT' && !earlySigintHandler) earlySigintHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    let resolveSpawn: ((handle: unknown) => void) | undefined;
+    mockSpawnAgent.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSpawn = resolve;
+        }),
+    );
+
+    const command = runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-early-cancel',
+      '--render',
+      'none',
+    ]);
+    for (let i = 0; i < 20 && !resolveSpawn; i += 1) await Promise.resolve();
+
+    // Cancellation arrives while spawnAgent is still preparing the process.
+    expect(earlySigintHandler).toBeDefined();
+    earlySigintHandler?.();
+
+    const stderr = new PassThrough();
+    stderr.end();
+    const kill = vi.fn();
+    resolveSpawn?.({
+      events: (async function* () {})(),
+      exit: Promise.resolve({ code: null, signal: 'SIGINT' as NodeJS.Signals }),
+      kill,
+      pid: 4242,
+      stderr,
+    });
+    await command;
+
+    // The latched signal is consumed right after spawn …
+    expect(kill).toHaveBeenCalledWith('SIGINT');
+    // … and the run still settles through the normal cancelled finish leg.
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ error: undefined, result: 'cancelled' }),
+    );
+    expect(exitSpy).toHaveBeenCalledWith(130);
+  });
+
+  it('escalates to SIGKILL when the agent ignores the graceful cancellation signal', async () => {
+    // A tool subprocess can swallow SIGINT. The cancel has already been acked
+    // to the server, so the wrapper must bound termination itself: SIGKILL
+    // the tree after the grace window while staying alive for heteroFinish.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let ipcMessageHandler: ((message: unknown) => void) | undefined;
+      vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+        if (event === 'message') ipcMessageHandler = listener;
+        return process;
+      }) as typeof process.on);
+
+      let resolveEvents: ((result: IteratorResult<Record<string, unknown>>) => void) | undefined;
+      const events: AsyncIterable<Record<string, unknown>> = {
+        [Symbol.asyncIterator]() {
+          return {
+            next: () =>
+              new Promise<IteratorResult<Record<string, unknown>>>((resolve) => {
+                resolveEvents = resolve;
+              }),
+          };
+        },
+      };
+      let resolveExit: (info: {
+        code: number | null;
+        signal: NodeJS.Signals | null;
+      }) => void = () => {};
+      const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+        (resolve) => {
+          resolveExit = resolve;
+        },
+      );
+      const stderr = new PassThrough();
+      stderr.end();
+      // SIGINT is ignored; only SIGKILL actually terminates the fake agent.
+      const kill = vi.fn((signal: NodeJS.Signals) => {
+        if (signal !== 'SIGKILL') return;
+        resolveEvents?.({ done: true, value: undefined });
+        resolveExit({ code: null, signal: 'SIGKILL' });
+      });
+      mockSpawnAgent.mockResolvedValue({ events, exit, kill, pid: 777, stderr });
+
+      const command = runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--prompt',
+        'hi',
+        '--topic',
+        'topic-1',
+        '--operation-id',
+        'op-stuck',
+        '--render',
+        'none',
+      ]);
+      for (let i = 0; i < 20 && !resolveEvents; i += 1) await Promise.resolve();
+
+      ipcMessageHandler?.({
+        operationId: 'op-stuck',
+        signal: 'SIGINT',
+        type: 'lobe:hetero-exec:cancel',
+      });
+      for (let i = 0; i < 20 && kill.mock.calls.length === 0; i += 1) await Promise.resolve();
+      expect(kill).toHaveBeenCalledWith('SIGINT');
+      expect(kill).not.toHaveBeenCalledWith('SIGKILL');
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(kill).toHaveBeenCalledWith('SIGKILL');
+
+      await command;
+      expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ error: undefined, result: 'cancelled' }),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(137);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports IPC cancellation that arrives while the final ingest batch is draining', async () => {
+    let ipcMessageHandler: ((message: unknown) => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'message') ipcMessageHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'done' },
+            operationId: 'op-draining',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+      }),
+    );
+
+    let markDrainStarted: (() => void) | undefined;
+    const drainStarted = new Promise<void>((resolve) => {
+      markDrainStarted = resolve;
+    });
+    let releaseDrain: (() => void) | undefined;
+    mockHeteroIngestMutate.mockImplementation(
+      () =>
+        new Promise<{ ack: true }>((resolve) => {
+          markDrainStarted?.();
+          releaseDrain = () => resolve({ ack: true });
+        }),
+    );
+
+    const command = runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-draining',
+      '--render',
+      'none',
+    ]);
+    await drainStarted;
+
+    ipcMessageHandler?.({
+      operationId: 'op-draining',
+      signal: 'SIGINT',
+      type: 'lobe:hetero-exec:cancel',
+    });
+    releaseDrain?.();
+    await command;
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
       expect.objectContaining({ error: undefined, result: 'cancelled' }),
     );

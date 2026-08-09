@@ -223,4 +223,14 @@ describe('executeToolCall', () => {
     expect(result.success).toBe(true);
     expect((result.state as { success: boolean }).success).toBe(false);
   });
+
+  it('should expose a rejected heterogeneous cancellation in the tool result', async () => {
+    const result = await executeToolCall(
+      'cancelHeteroTask',
+      JSON.stringify({ taskId: 'nonexistent-operation' }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.state).toEqual(expect.objectContaining({ success: false }));
+  });
 });

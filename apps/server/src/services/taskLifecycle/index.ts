@@ -269,6 +269,15 @@ export class TaskLifecycleService {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
       }
+    } else if (reason === 'interrupted') {
+      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'canceled');
+
+      // Match TaskService.cancelTopic: stopping one run pauses its parent task
+      // so automation cannot immediately start another run. A terminal task
+      // that settled concurrently must not be moved backwards to paused.
+      if (currentTask && !isTerminal(currentTask.status)) {
+        await this.taskModel.pauseUnlessTerminal(taskId);
+      }
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
@@ -542,6 +551,7 @@ export class TaskLifecycleService {
    *     resolves the urgent error brief)
    */
   private async maybeRearmHeartbeat(task: TaskItem, reason: string): Promise<void> {
+    if (reason === 'interrupted') return;
     if (task.automationMode !== 'heartbeat') return;
     if (!task.heartbeatInterval || task.heartbeatInterval <= 0) return;
     if (isTerminal(task.status)) return;

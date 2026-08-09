@@ -567,6 +567,51 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('settleRunningOperation', () => {
+    it('atomically settles only the matching operation and returns its metadata snapshot', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'msg-old',
+            operationId: 'op-old',
+          },
+        },
+        status: 'running',
+        title: 'guarded running operation',
+      });
+
+      expect(await topicModel.settleRunningOperation(topic.id, 'op-stale')).toBeUndefined();
+      const unchanged = await topicModel.findById(topic.id);
+      expect(unchanged?.metadata?.runningOperation?.operationId).toBe('op-old');
+      expect(unchanged?.status).toBe('running');
+
+      const metadata = await topicModel.settleRunningOperation(topic.id, 'op-old');
+      expect(metadata?.runningOperation).toMatchObject({
+        assistantMessageId: 'msg-old',
+        operationId: 'op-old',
+      });
+      const settled = await topicModel.findById(topic.id);
+      expect(settled?.metadata?.runningOperation).toBeNull();
+      expect(settled?.status).toBe('unread');
+    });
+
+    it('preserves a status already settled by an attached client', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-client', operationId: 'op-client' },
+        },
+        status: 'active',
+        title: 'client settled operation',
+      });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-client');
+
+      const settled = await topicModel.findById(topic.id);
+      expect(settled?.metadata?.runningOperation).toBeNull();
+      expect(settled?.status).toBe('active');
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({

@@ -34,7 +34,11 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
 // must take the non-success branch in `onSessionComplete` so the run clears
 // back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
+const NON_COMPLETION_RUNTIME_END_REASONS = new Set([
+  'cancelled',
+  'interrupted',
+  'waiting_for_async_tool',
+]);
 
 /**
  * Whether an `agent_runtime_end` event represents a clean completion (vs. a
@@ -1121,10 +1125,7 @@ export const createGatewayEventHandler = (
               action: 'gateway/agent_runtime_end',
               context,
             });
-          } else if (
-            (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
-            hasStreamedContent
-          ) {
+          } else if (!isCompletedRuntimeEnd(data?.reason) && hasStreamedContent) {
             // MID-stream cancel, or a deferred-tool pause
             // (`waiting_for_async_tool`). The server's
             // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages

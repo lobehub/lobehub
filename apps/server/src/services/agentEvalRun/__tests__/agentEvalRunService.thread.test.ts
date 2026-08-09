@@ -136,6 +136,38 @@ describe('AgentEvalRunService', () => {
       expect(rt?.status).toBe('running');
     });
 
+    it('should record an interrupted thread as non-evaluable', async () => {
+      const { run, testCase, threadIds, topic } = await setupMultiThreadEvalChain({
+        assistantOutputs: ['42'],
+        expected: '42',
+        k: 1,
+      });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.recordThreadCompletion({
+        runId: run.id,
+        status: 'interrupted',
+        telemetry: { completionReason: 'interrupted', duration: 500 },
+        testCaseId: testCase.id,
+        threadId: threadIds[0],
+        topicId: topic.id,
+      });
+
+      const thread = await new ThreadModel(serverDB, userId).findById(threadIds[0]);
+      expect(thread?.metadata).toMatchObject({
+        completionReason: 'interrupted',
+        error: 'Evaluation interrupted',
+        passed: false,
+        score: 0,
+        status: 'error',
+      });
+      const runTopic = await new AgentEvalRunTopicModel(serverDB, userId).findByRunAndTestCase(
+        run.id,
+        testCase.id,
+      );
+      expect(runTopic).toMatchObject({ passed: false, score: 0, status: 'error' });
+    });
+
     it('should aggregate thread results when all K threads complete', async () => {
       const { run, testCase, threadIds, topic } = await setupMultiThreadEvalChain({
         assistantOutputs: ['42', '42'],

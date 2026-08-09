@@ -1029,15 +1029,19 @@ export default class GatewayConnectionCtr extends ControllerModule {
   private async cancelHeteroTask(args: { signal?: string; taskId: string }): Promise<string> {
     const { signal = 'SIGINT', taskId } = args;
     const entry = this.platformTasks.get(taskId);
-
-    if (!entry) {
-      return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
+    if (entry) {
+      // The close handler sends the terminal notify after the whole tree exits.
+      this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
+      return JSON.stringify({ pid: entry.pid, signal, taskId });
     }
 
-    // The close handler sends the terminal notify after the whole tree exits.
-    this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
+    const agentRun = await this.heterogeneousAgentCtr.cancelLhHeteroExec({
+      operationId: taskId,
+      signal: signal as NodeJS.Signals,
+    });
+    if (agentRun) return JSON.stringify({ ...agentRun, taskId });
 
-    return JSON.stringify({ pid: entry.pid, signal, taskId });
+    return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
   }
 
   /**
