@@ -40,7 +40,7 @@ interface FakeThread {
 
 interface FakeTopicMetadata {
   heteroCurrentMsgId?: { msgId: string; operationId: string };
-  runningOperation: {
+  runningOperation?: {
     assistantMessageId: string;
     operationId: string;
     threadId?: string;
@@ -1544,7 +1544,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-1',
-        metadata: { runningOperation: undefined },
+        metadata: {},
       });
 
       await h.handler.finish({
