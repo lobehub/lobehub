@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { AGENT_TRANSFER_IN_PROGRESS } from '../../models/agentTransferJob';
@@ -33,6 +33,10 @@ const isServerDB = process.env.TEST_SERVER_DB === '1';
 beforeEach(async () => {
   // Clean up
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so `delete(users)` leaves them
+  // behind. On the shared server DB (`singleFork`) a stray pending job would
+  // outlive this file and trip the transfer/removal guards in the next one.
+  await serverDB.delete(agentHistoryJobs);
   delete process.env.AGENT_COPY_SYNC_MESSAGE_THRESHOLD;
 
   // Create test users
@@ -40,6 +44,10 @@ beforeEach(async () => {
 
   // Initialize repo
   agentGroupRepo = new AgentGroupRepository(serverDB, userId);
+});
+
+afterEach(async () => {
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('AgentGroupRepository', () => {

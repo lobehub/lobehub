@@ -66,6 +66,10 @@ const fileList2 = [
 
 beforeEach(async () => {
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so `delete(users)` leaves them
+  // behind. On the shared server DB (`singleFork`) a stray pending job would
+  // outlive this file and trip the delete guard in the next one.
+  await serverDB.delete(agentHistoryJobs);
   await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
   await serverDB.insert(knowledgeBases).values([knowledgeBase, knowledgeBase2]);
   await serverDB.insert(files).values([...fileList, ...fileList2]);
@@ -73,6 +77,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('AgentModel', () => {
