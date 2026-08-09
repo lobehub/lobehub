@@ -1,0 +1,12 @@
+{
+  "name": "@aico/control-plane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm exec vite build --config viteHonoBuild.config.ts",
+    "dev": "pnpm exec vite-node --watch --config viteNode.config.ts src/hono/dev.ts",
+    "start": "node dist/standalone.js",
+    "type-check": "pnpm exec tsc --noEmit"
+  }
+}

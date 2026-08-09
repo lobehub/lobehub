@@ -25,13 +25,10 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
-import {
-  AicoManagedPolicy,
-  AicoManagedPolicyError,
-} from '@/server/services/aico/managedPolicy';
-import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
+import { AicoManagedPolicy, AicoManagedPolicyError } from '@/server/services/aico/managedPolicy';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
+import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
@@ -505,7 +502,8 @@ export const initModelRuntimeFromDB = async (
     if (options?.billingContext === undefined) {
       throw new AicoManagedPolicyError('BILLING_CONTEXT_REQUIRED');
     }
-    const keyService = new AicoOpenRouterKeyService(db);
+    // Decrypt-only: chat path must not construct the OpenRouter management client.
+    const keyService = new AicoOpenRouterKeyService(db, null);
     const policy = new AicoManagedPolicy(db, (ciphertext) => keyService.decryptKey(ciphertext));
     const authorized = await policy.authorize({
       billing: options.billingContext,

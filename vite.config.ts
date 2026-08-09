@@ -23,6 +23,7 @@ import { createViteWatchOptions } from './plugins/vite/watchOptions';
 const isMobile = process.env.MOBILE === 'true';
 const isAuth = process.env.AUTH === 'true';
 const isWorkbench = process.env.SPA_TARGET === 'workbench';
+const isControlPlane = process.env.SPA_TARGET === 'control-plane';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
@@ -110,16 +111,25 @@ export default defineConfig({
   base: isDev
     ? '/'
     : process.env.VITE_CDN_BASE ||
-      (isAuth ? '/_spa-auth/' : isWorkbench ? '/_spa-workbench/' : '/_spa/'),
+      (isAuth
+        ? '/_spa-auth/'
+        : isWorkbench
+          ? '/_spa-workbench/'
+          : isControlPlane
+            ? // Dedicated control-plane origin (moz / production) serves UI at `/`
+              '/'
+            : '/_spa/'),
   build: {
     modulePreload: sharedModulePreload,
     outDir: isAuth
       ? 'dist/auth'
       : isWorkbench
         ? 'dist/workbench'
-        : isMobile
-          ? 'dist/mobile'
-          : 'dist/desktop',
+        : isControlPlane
+          ? 'dist/control-plane'
+          : isMobile
+            ? 'dist/mobile'
+            : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
       ...(enableViteDevTools && { devtools: {} }),
@@ -129,9 +139,11 @@ export default defineConfig({
           ? 'index.auth.html'
           : isWorkbench
             ? 'index.workbench.html'
-            : isMobile
-              ? 'index.mobile.html'
-              : 'index.html',
+            : isControlPlane
+              ? 'index.controlPlane.html'
+              : isMobile
+                ? 'index.mobile.html'
+                : 'index.html',
       ),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
@@ -139,6 +151,7 @@ export default defineConfig({
   define: {
     ...sharedRendererDefine({ isMobile: isMobileRuntime, isElectron: false }),
     __WORKBENCH__: JSON.stringify(isWorkbench),
+    __CONTROL_PLANE__: JSON.stringify(isControlPlane),
   },
   experimental: {
     bundledDev: false,
@@ -161,6 +174,24 @@ export default defineConfig({
             const search = q === -1 ? '' : raw.slice(q);
             if (pathOnly === '/' || pathOnly === '/index.html') {
               req.url = `/${isWorkbench ? 'index.workbench.html' : 'index.mobile.html'}${search}`;
+            }
+            next();
+          });
+        },
+      },
+    isControlPlane &&
+      isDev && {
+        name: 'control-plane-html-dev-entry',
+        enforce: 'pre' as const,
+        configureServer(server: ViteDevServer) {
+          server.middlewares.use((req, _res, next) => {
+            const raw = req.url;
+            if (!raw) return next();
+            const q = raw.indexOf('?');
+            const pathOnly = q === -1 ? raw : raw.slice(0, q);
+            const search = q === -1 ? '' : raw.slice(q);
+            if (pathOnly === '/' || pathOnly === '/index.html') {
+              req.url = `/index.controlPlane.html${search}`;
             }
             next();
           });
@@ -295,8 +326,10 @@ export default defineConfig({
       },
     },
 
+    // Control-plane admin UI must never PWA-cache /api/auth or /trpc (breaks login).
     !isAuth &&
       !isWorkbench &&
+      !isControlPlane &&
       VitePWA({
         injectRegister: null,
         manifest: false,
@@ -346,11 +379,13 @@ export default defineConfig({
     host: true,
     port: isWorkbench
       ? Number(process.env.WORKBENCH_SPA_PORT) || 3014
-      : isMobile
-        ? Number(process.env.MOBILE_SPA_PORT) || 3012
-        : isAuth
-          ? Number(process.env.AUTH_SPA_PORT) || 3013
-          : Number(process.env.SPA_PORT) || 9876,
+      : isControlPlane
+        ? Number(process.env.CONTROL_PLANE_SPA_PORT) || 3021
+        : isMobile
+          ? Number(process.env.MOBILE_SPA_PORT) || 3012
+          : isAuth
+            ? Number(process.env.AUTH_SPA_PORT) || 3013
+            : Number(process.env.SPA_PORT) || 9876,
     // The dev orchestrator (scripts/devStartupSequence.mts) pre-resolves a free
     // port and injects it via env; never silently drift to another port, since
     // downstream consumers locate this server through that env contract.
@@ -358,7 +393,9 @@ export default defineConfig({
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,
-      '/trpc': `http://localhost:${process.env.PORT || 3010}`,
+      '/trpc': isControlPlane
+        ? `http://localhost:${process.env.AICO_CONTROL_PLANE_PORT || 3020}`
+        : `http://localhost:${process.env.PORT || 3010}`,
       '/webapi': `http://localhost:${process.env.PORT || 3010}`,
     },
     warmup: {

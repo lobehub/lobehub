@@ -7,6 +7,9 @@ import {
 
 vi.mock('@/envs/aico', () => ({
   aicoEnv: {
+    AICO_CONTROL_PLANE_SERVICE_TOKEN: undefined,
+    AICO_CONTROL_PLANE_URL: undefined,
+    AICO_IS_CONTROL_PLANE: false,
     AICO_OPENROUTER_MOCK: false,
     AICO_TOMAN_PER_USD: 50_000,
     OPENROUTER_MANAGEMENT_API_KEY: undefined,

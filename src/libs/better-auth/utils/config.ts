@@ -33,6 +33,13 @@ export const normalizeOrigin = (url?: string) => {
  * Build trusted origins with env override and Vercel-aware defaults.
  */
 export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
+  const controlPlaneUiOrigin = normalizeOrigin(
+    process.env.AICO_CONTROL_PLANE_UI_URL ||
+      (isDev
+        ? `http://localhost:${process.env.AICO_CONTROL_PLANE_PORT || process.env.CONTROL_PLANE_SPA_PORT || 3020}`
+        : undefined),
+  );
+
   if (authEnv.AUTH_TRUSTED_ORIGINS) {
     const originsFromEnv = authEnv.AUTH_TRUSTED_ORIGINS.split(',')
       .map((item) => {
@@ -45,6 +52,7 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
       })
       .filter(Boolean) as string[];
 
+    if (controlPlaneUiOrigin) originsFromEnv.push(controlPlaneUiOrigin);
     if (originsFromEnv.length > 0) return Array.from(new Set(originsFromEnv));
   }
 
@@ -52,9 +60,19 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
     normalizeOrigin(appEnv.APP_URL),
     normalizeOrigin(process.env.VERCEL_URL),
     normalizeOrigin(process.env.VERCEL_BRANCH_URL),
+    controlPlaneUiOrigin,
     MOBILE_APP_SCHEME,
     // Add expo URL in development
-    ...(isDev ? [EXPO_DEV_SCHEME] : []),
+    ...(isDev
+      ? [
+          EXPO_DEV_SCHEME,
+          'http://127.0.0.1:3020',
+          'http://localhost:3020',
+          // Vite HMR SPA (optional local UI-only)
+          'http://127.0.0.1:3021',
+          'http://localhost:3021',
+        ]
+      : []),
   ].filter(Boolean) as string[];
 
   const baseTrustedOrigins = defaults.length > 0 ? Array.from(new Set(defaults)) : undefined;

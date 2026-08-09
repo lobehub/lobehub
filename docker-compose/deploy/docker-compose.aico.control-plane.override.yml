@@ -1,0 +1,77 @@
+# Control plane beside the product stack for local `moz` deploys.
+#
+# Included automatically by scripts/deploy-local.sh (moz).
+# Product must NOT receive OPENROUTER_MANAGEMENT_API_KEY — it talks to this
+# service via AICO_CONTROL_PLANE_URL + AICO_CONTROL_PLANE_SERVICE_TOKEN.
+#
+# Runtime uses the repo bind-mount so `node dist/standalone.js` can resolve
+# monorepo node_modules (same pattern as local `bun run dev:control-plane`).
+
+services:
+  lobe:
+    environment:
+      AICO_CONTROL_PLANE_URL: http://aico-control-plane:3020
+      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-devtok}
+      # Browser origin of the control-plane UI (any host/domain later)
+      AICO_CONTROL_PLANE_UI_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
+      # Clear management key on the product container even if present in env_file.
+      OPENROUTER_MANAGEMENT_API_KEY: ''
+      # Local moz is HTTP; don't force __Secure- cookies that browsers drop on http://
+      AICO_INSECURE_AUTH_COOKIES: '1'
+
+  aico-control-plane:
+    image: node:24-bookworm-slim
+    container_name: aico-control-plane
+    working_dir: /repo/apps/aico-control-plane
+    volumes:
+      # deploy dir is docker-compose/deploy → repo root is ../..
+      - ../../:/repo
+    command: ['node', 'dist/standalone.js']
+    env_file:
+      - ../../.env
+      - .env
+    environment:
+      AICO_IS_CONTROL_PLANE: '1'
+      AICO_CONTROL_PLANE_PORT: '3020'
+      HONO_HOST: '0.0.0.0'
+      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-devtok}
+      OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY:-}
+      # Prefer the compose network DB/Redis, not host-only URLs from repo .env
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
+      REDIS_URL: redis://redis:6379
+      REDIS_PREFIX: ${REDIS_PREFIX:-lobechat}
+      REDIS_TLS: '0'
+      # AUTH_SECRET / KEY_VAULTS_SECRET come from env_file (../../.env) —
+      # do not set ${AUTH_SECRET} here or an empty host env blanks them.
+      #
+      # Public browser origin — set AICO_CONTROL_PLANE_PUBLIC_URL to any domain
+      # (e.g. https://admin.example.com) when reverse-proxying :3020. Must match
+      # what users type in the address bar.
+      APP_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
+      AICO_CONTROL_PLANE_UI_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
+      INTERNAL_APP_URL: ${INTERNAL_APP_URL:-http://lobe:3210}
+      # HTTP public URL → non-__Secure cookies; override with 0 behind HTTPS TLS
+      AICO_INSECURE_AUTH_COOKIES: ${AICO_INSECURE_AUTH_COOKIES:-1}
+      # development allows OpenRouter mock when management key is unset (local moz)
+      NODE_ENV: ${CONTROL_PLANE_NODE_ENV:-development}
+      AICO_OPENROUTER_MOCK: ${AICO_OPENROUTER_MOCK:-1}
+    ports:
+      - '${AICO_CONTROL_PLANE_PORT:-3020}:3020'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      lobe:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:3020/health\").then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - lobe-network

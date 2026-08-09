@@ -33,17 +33,33 @@ const microToOpenRouterLimitUsd = (micro: number): number => Number(microUsdToDe
  * Plaintext keys are encrypted with KeyVaultsGateKeeper and never returned to SPA.
  */
 export class AicoOpenRouterKeyService {
-  private readonly client: OpenRouterManagementClient;
+  private readonly _client: OpenRouterManagementClient | null | undefined;
+  private readonly decryptOnly: boolean;
   private readonly orgModel: OrganizationModel;
   private readonly billingModel: AicoBillingModel;
 
+  /**
+   * @param client Injected management client (tests). Pass `null` for decrypt-only
+   *   usage so the OpenRouter management client is never constructed.
+   */
   constructor(
     private readonly db: LobeChatDatabase,
-    client?: OpenRouterManagementClient,
+    client?: OpenRouterManagementClient | null,
   ) {
-    this.client = client ?? createOpenRouterManagementClient();
+    this.decryptOnly = client === null;
+    this._client = client;
     this.orgModel = new OrganizationModel(db);
     this.billingModel = new AicoBillingModel(db);
+  }
+
+  private get client(): OpenRouterManagementClient {
+    if (this.decryptOnly) {
+      throw new Error('AicoOpenRouterKeyService is decrypt-only — management client unavailable');
+    }
+    if (this._client) return this._client;
+    const created = createOpenRouterManagementClient();
+    (this as { _client: OpenRouterManagementClient })._client = created;
+    return created;
   }
 
   private async encryptKey(plaintext: string): Promise<string> {

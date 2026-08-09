@@ -1,0 +1,15 @@
+# Optional pointer for docs / manual compose.
+# `moz` / `scripts/deploy-local.sh` already include:
+#   docker-compose/deploy/docker-compose.aico.control-plane.override.yml
+#
+# Manual usage from docker-compose/deploy:
+#   docker compose \
+#     --env-file ../../.env --env-file .env \
+#     -f docker-compose.yml \
+#     -f docker-compose.aico.override.yml \
+#     -f docker-compose.aico.data.override.yml \
+#     -f docker-compose.aico.control-plane.override.yml \
+#     up -d
+#
+# This file is intentionally a no-op so accidental `-f` usage is harmless.
+services: {}

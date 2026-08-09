@@ -60,6 +60,7 @@ for arg in "$@"; do
 Usage: moz [options]
 
 Deploy Aico via docker-compose/deploy using the local image in this repo.
+Also builds and starts the Aico control plane (SPA + API on port 3020).
 
 Options (each has a distinct one-letter flag):
   (default)             Start stack only if not already running
@@ -87,6 +88,9 @@ Environment:
                           (intentional wipe / first bootstrap after delete)
   MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
                           the last known good snapshot (users dropped, etc.)
+  AICO_CONTROL_PLANE_SERVICE_TOKEN   Shared product↔control-plane token (default: devtok)
+  AICO_CONTROL_PLANE_PORT            Host port for control plane (default: 3020)
+  OPENROUTER_MANAGEMENT_API_KEY      Set in repo .env — loaded only by control plane
 
 Backups:
   moz -B                  Manual backup now
@@ -452,12 +456,54 @@ compose_in_deploy_dir() {
       -f docker-compose.yml \
       -f docker-compose.aico.override.yml \
       -f docker-compose.aico.data.override.yml \
+      -f docker-compose.aico.control-plane.override.yml \
       "$@"
   )
 }
 
+CONTROL_PLANE_CONTAINER="aico-control-plane"
+
+ensure_control_plane_build() {
+  echo "==> Building control-plane SPA + API"
+  cd "$ROOT"
+  bun run build:spa:control-plane
+  pnpm --filter @aico/control-plane build
+  [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || {
+    echo "Error: missing apps/aico-control-plane/dist/standalone.js after build" >&2
+    exit 1
+  }
+  [[ -f "$ROOT/apps/aico-control-plane/web/spa/index.html" ]] || {
+    echo "Error: missing apps/aico-control-plane/web/spa/index.html after SPA build" >&2
+    exit 1
+  }
+}
+
+wait_for_control_plane() {
+  local port timeout elapsed code
+  port="$(grep -E '^AICO_CONTROL_PLANE_PORT=' "$ROOT/.env" 2>/dev/null | cut -d= -f2- || true)"
+  port="${port:-3020}"
+  timeout="${1:-90}"
+  elapsed=0
+  code="000"
+
+  echo "==> Waiting for control plane at http://127.0.0.1:${port}/health ..."
+  while (( elapsed < timeout )); do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:${port}/health" 2>/dev/null || echo "000")"
+    if [[ "$code" == "200" ]]; then
+      echo "==> Control plane healthy"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  echo "Error: control plane not ready (last HTTP $code)" >&2
+  docker logs "$CONTROL_PLANE_CONTAINER" 2>&1 | tail -30 >&2 || true
+  return 1
+}
+
 verify_deploy_health() {
-  local url migrate_line
+  local url migrate_line cp_port
   url="$(app_url)"
 
   echo "==> Waiting for container $CONTAINER_NAME..."
@@ -485,12 +531,17 @@ verify_deploy_health() {
     printf '%s\n' "$migrate_line" | sed 's/^/  /'
   fi
 
+  wait_for_container "$CONTROL_PLANE_CONTAINER" 90 || return 1
+  wait_for_control_plane 90 || return 1
+
   save_db_fingerprint
   echo "==> DB fingerprint saved ($(db_fingerprint_file))"
 
   docker logs "$CONTAINER_NAME" 2>&1 | tail -8
   echo ""
   echo "App: $url"
+  cp_port="$(grep -E '^AICO_CONTROL_PLANE_PORT=' "$ROOT/.env" 2>/dev/null | cut -d= -f2- || true)"
+  echo "Control plane: http://127.0.0.1:${cp_port:-3020}"
 }
 
 container_state() {
@@ -503,6 +554,7 @@ show_status() {
   local expected_migrations applied_migrations migrate_log docker_cjs migrations_dir
   local user_count admin_count exit_code=0
   local fp_users
+  local cp_port cp_code
 
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
   app_url="http://127.0.0.1:${app_port:-3210}"
@@ -527,10 +579,11 @@ show_status() {
 
   echo ""
   echo "Containers"
-  printf "  %-16s %s\n" "lobehub" "$(container_state lobehub)"
-  printf "  %-16s %s\n" "lobe-postgres" "$(container_state lobe-postgres)"
-  printf "  %-16s %s\n" "lobe-redis" "$(container_state lobe-redis)"
-  printf "  %-16s %s\n" "lobe-rustfs" "$(container_state lobe-rustfs)"
+  printf "  %-20s %s\n" "lobehub" "$(container_state lobehub)"
+  printf "  %-20s %s\n" "aico-control-plane" "$(container_state aico-control-plane)"
+  printf "  %-20s %s\n" "lobe-postgres" "$(container_state lobe-postgres)"
+  printf "  %-20s %s\n" "lobe-redis" "$(container_state lobe-redis)"
+  printf "  %-20s %s\n" "lobe-rustfs" "$(container_state lobe-rustfs)"
 
   http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$app_url/signin" 2>/dev/null || echo "000")"
   printf "\nHTTP /signin: %s\n" "$http_code"
@@ -538,6 +591,18 @@ show_status() {
     exit_code=1
   fi
 
+  cp_port="$(grep -E '^AICO_CONTROL_PLANE_PORT=' "$ROOT/.env" 2>/dev/null | cut -d= -f2- || true)"
+  cp_port="${cp_port:-3020}"
+  cp_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${cp_port}/health" 2>/dev/null || echo "000")"
+  printf "Control plane: http://127.0.0.1:%s  /health=%s\n" "$cp_port" "$cp_code"
+  if [[ "$cp_code" != "200" ]]; then
+    exit_code=1
+  fi
+  if [[ ! -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] \
+    || [[ ! -f "$ROOT/apps/aico-control-plane/web/spa/index.html" ]]; then
+    echo "  (missing control-plane build — run: moz -b / moz -u)"
+    exit_code=1
+  fi
   # Migration packaging inside the running app image
   if docker inspect lobehub >/dev/null 2>&1; then
     docker_cjs="$(docker exec lobehub sh -c 'test -f /app/docker.cjs && echo ok || echo missing' 2>/dev/null || echo unreachable)"
@@ -659,6 +724,7 @@ if [[ $BUILD -eq 1 ]]; then
   echo "==> Building app (DOCKER=true bun run build:docker)"
   cd "$ROOT"
   DOCKER=true bun run build:docker
+  ensure_control_plane_build
 
   required_paths=(
     "$ROOT/.next/standalone"
@@ -672,6 +738,8 @@ if [[ $BUILD -eq 1 ]]; then
     "$ROOT/scripts/_shared"
     "$ROOT/scripts/serverLauncher/startServer.js"
     "$ROOT/scripts/docker/Dockerfile.staged"
+    "$ROOT/apps/aico-control-plane/dist/standalone.js"
+    "$ROOT/apps/aico-control-plane/web/spa/index.html"
   )
   for path in "${required_paths[@]}"; do
     [[ -e "$path" ]] || {
@@ -745,6 +813,7 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
     exit 0
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
+  [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
   migrate_legacy_deploy_data
   assert_db_fingerprint_matches
   compose_in_deploy_dir up -d
@@ -755,6 +824,7 @@ fi
 if [[ $RESTART -eq 1 ]]; then
   url="$(app_url)"
   assert_db_fingerprint_matches
+  [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
   if is_app_running; then
     echo "==> Restarting containers from $DEPLOY_DIR"
     compose_in_deploy_dir restart
@@ -770,8 +840,9 @@ fi
 
 if [[ $DEPLOY -eq 1 ]]; then
   echo "==> Force-deploying from $DEPLOY_DIR"
+  [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
   migrate_legacy_deploy_data
   assert_db_fingerprint_matches
-  compose_in_deploy_dir up -d --force-recreate lobe
+  compose_in_deploy_dir up -d --force-recreate lobe aico-control-plane
   verify_deploy_health
 fi

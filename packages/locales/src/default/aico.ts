@@ -238,6 +238,21 @@ export default {
   'platform.description': 'Description',
   'platform.forbiddenDesc': 'Only platform admins can open this page.',
   'platform.forbiddenTitle': 'Access denied',
+  'platform.loadErrorDesc':
+    'Could not load platform data ({{message}}). Sign out and try again, or check the control-plane logs.',
+  'platform.loadErrorTitle': 'Failed to load',
+  'platform.loginChecking': 'Checking session…',
+  'platform.loginEmail': 'Email',
+  'platform.loginFailed':
+    'Sign-in failed. Check email, password, and that the product API is running.',
+  'platform.loginPassword': 'Password',
+  'platform.loginSubmit': 'Sign in',
+  'platform.loginSubtitle': 'Sign in with a platform admin account.',
+  'platform.loginTitle': 'Control plane',
+  'platform.notAdminDesc':
+    '{{email}} is signed in but is not a platform admin. Sign out and use a platform admin account.',
+  'platform.notAdminTitle': 'Platform admin required',
+  'platform.signOut': 'Sign out',
   'platform.managerEmail': 'Manager email (existing user)',
   'platform.managerRole': 'Role',
   'platform.manualCredit': 'Manual org credit',

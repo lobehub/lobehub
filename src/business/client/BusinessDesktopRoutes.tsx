@@ -2,10 +2,11 @@
 
 import { type RouteObject } from 'react-router';
 
-import { dynamicElement, ErrorBoundary, redirectElement } from '@/utils/router';
+import { dynamicElement, ErrorBoundary } from '@/utils/router';
 
 /**
- * Aico personal billing / org / platform-admin surfaces.
+ * Aico personal billing / org surfaces.
+ * Platform admin lives on `@aico/control-plane` — not in the customer SPA.
  * Personal-only — never mirrored under `/:workspaceSlug`.
  */
 export const BusinessDesktopRoutesWithMainLayout: RouteObject[] = [
@@ -34,15 +35,6 @@ export const BusinessDesktopRoutesWithMainLayout: RouteObject[] = [
     ),
     errorElement: <ErrorBoundary />,
     path: 'invite/:token',
-  },
-  {
-    element: dynamicElement(() => import('@/routes/(main)/platform'), 'Desktop > Platform Admin'),
-    errorElement: <ErrorBoundary />,
-    path: 'platform',
-  },
-  {
-    element: redirectElement('/platform'),
-    path: 'panel',
   },
 ];
 

@@ -5,6 +5,7 @@ packages:
   - e2e
   - apps/desktop/src/main
   - apps/server
+  - apps/aico-control-plane
 
 minimumReleaseAgeExclude:
   - '@lobehub/ui@5.20.2'

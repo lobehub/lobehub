@@ -275,6 +275,12 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
 
     socialProviders,
     advanced: {
+      // Plain-HTTP control-plane / moz: browsers reject __Secure- cookies on http://
+      ...(process.env.AICO_INSECURE_AUTH_COOKIES === '1' ||
+      (process.env.AICO_IS_CONTROL_PLANE === '1' &&
+        (process.env.APP_URL || '').startsWith('http://'))
+        ? { useSecureCookies: false }
+        : {}),
       database: {
         /**
          * Align Better Auth user IDs with our shared idGenerator for consistency.
