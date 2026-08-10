@@ -1,1 +1,1 @@
-export { default } from '@/features/Projects/Conversation';
+export { default } from '@/features/Projects/Workspace';

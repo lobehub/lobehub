@@ -1,7 +1,7 @@
 export const getProjectAgentPath = (agentId: string) => `/agent/${agentId}`;
 
 export const getProjectConversationPath = (projectId: string, topicId?: string) =>
-  topicId ? `/project/${projectId}/conversation/${topicId}` : `/project/${projectId}`;
+  topicId ? `/project/${projectId}/conversation/${topicId}` : `/project/${projectId}/conversation`;
 
 export const getProjectConversationStartPath = (projectId: string, message: string) =>
   `${getProjectConversationPath(projectId)}?message=${encodeURIComponent(message)}`;

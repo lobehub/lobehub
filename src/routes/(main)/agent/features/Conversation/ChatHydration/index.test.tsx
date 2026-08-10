@@ -167,14 +167,14 @@ describe('ChatHydration', () => {
     useParamsMock.mockReturnValue({ projectId: 'prj_1' });
     useLocationMock.mockReturnValue({
       hash: '',
-      pathname: '/project/prj_1',
+      pathname: '/project/prj_1/conversation',
       search: '',
     });
     useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
 
     render(
       <ChatHydration
-        getConversationPath={() => '/project/prj_1'}
+        getConversationPath={() => '/project/prj_1/conversation'}
         getTopicPath={(_agentId, topicId) => `/project/prj_1/conversation/${topicId}`}
       />,
     );

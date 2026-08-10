@@ -6,8 +6,8 @@ import {
   BadgeCheckIcon,
   BookOpenIcon,
   ListTodoIcon,
-  MessageSquareIcon,
-  PlusIcon,
+  MessageSquareDashedIcon,
+  MessageSquarePlusIcon,
   TargetIcon,
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -146,7 +146,7 @@ const ProjectSidebarContent = memo(() => {
               {coordinatorAgentId && (
                 <NavItem
                   active={pathname === getProjectConversationPath(projectId!)}
-                  icon={PlusIcon}
+                  icon={MessageSquarePlusIcon}
                   title={t('sidebar.newConversation')}
                   onClick={() => navigate(getProjectConversationPath(projectId!))}
                 />
@@ -163,7 +163,7 @@ const ProjectSidebarContent = memo(() => {
                 conversations.map((conversation) => (
                   <NavItem
                     active={pathname === getProjectConversationPath(projectId!, conversation.id)}
-                    icon={MessageSquareIcon}
+                    icon={MessageSquareDashedIcon}
                     key={conversation.id}
                     title={conversation.title || t('sidebar.untitledConversation')}
                     onClick={() =>
