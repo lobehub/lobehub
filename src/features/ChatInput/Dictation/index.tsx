@@ -31,13 +31,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   listening: css`
     color: ${cssVar.colorWhite};
+
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+
     transition:
       color 160ms ease,
       background 160ms ease,
       box-shadow 160ms ease,
       transform 120ms ease;
+    animation: dictation-halo-breathe 1.6s ease-in-out infinite;
 
     &:hover {
       color: ${cssVar.colorWhite};
@@ -55,8 +58,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       outline-offset: 3px;
     }
 
+    @keyframes dictation-halo-breathe {
+      0%,
+      100% {
+        box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px ${cssVar.colorSuccessBgHover};
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       transition: none;
+      animation: none;
     }
   `,
   listeningControls: css`
