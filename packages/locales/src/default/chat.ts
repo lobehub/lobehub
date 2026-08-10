@@ -1557,9 +1557,7 @@ export default {
     'At least 20 ideas, each with a headline, an angle and a target reader, deduped and excluding anything already published.',
   'goalEmpty.examples.metric.tag': 'Reach a target count',
   'goalEmpty.examples.metric.title': 'Build up 20 workable article ideas for the newsletter',
-  'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
-  'goalEmpty.examplesHint': 'Click to prefill',
-  'goalEmpty.examplesTitle': 'Start from an example',
+  'goalEmpty.examplesTitle': 'Examples',
   'goalEmpty.howHint': 'How it works',
   'goalEmpty.howTitle': 'What happens after you create one',
   'goalEmpty.judge.bad':

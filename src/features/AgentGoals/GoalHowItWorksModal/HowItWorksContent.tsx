@@ -1,8 +1,9 @@
 'use client';
 
 import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleCheckBigIcon, PlayIcon, RotateCcwIcon, TargetIcon } from 'lucide-react';
+import { RotateCcwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,53 +19,18 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 1px;
     color: ${cssVar.colorTextQuaternary};
   `,
-  step: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  stepIndex: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
+  steps: css`
+    .ant-steps-item-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
 
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
+    .ant-steps-item-description {
+      font-size: 12px;
+      line-height: 1.65;
+    }
   `,
 }));
-
-interface StepProps {
-  desc: string;
-  icon: typeof TargetIcon;
-  index: number;
-  title: string;
-}
-
-const Step = memo<StepProps>(({ desc, icon, index, title }) => (
-  <Flexbox className={styles.step} gap={8}>
-    <Flexbox horizontal align={'center'} gap={8}>
-      <span className={styles.stepIndex}>{index}</span>
-      <Icon icon={icon} size={14} style={{ flexShrink: 0 }} />
-      <Text fontSize={13} weight={600}>
-        {title}
-      </Text>
-    </Flexbox>
-    <Text fontSize={12} style={{ lineHeight: 1.65 }} type={'secondary'}>
-      {desc}
-    </Text>
-  </Flexbox>
-));
-
-Step.displayName = 'GoalHowItWorksStep';
 
 /**
  * The mechanism behind a goal: what each round does and how it ends.
@@ -75,31 +41,25 @@ Step.displayName = 'GoalHowItWorksStep';
  * works. It now lives behind a hint at the bottom of the empty state, so the
  * explanation is one click away instead of a permanent tax.
  *
- * Stacked vertically here: a modal is narrow, and the three steps are a
- * sequence, so reading them top-to-bottom matches how they actually run.
+ * The three steps run as a vertical `Steps`: they are a sequence, and the rail
+ * that connects them carries that ordering better than three separate cards.
+ * `current={-1}` leaves every step in its neutral state — this explains the
+ * loop, it does not track a run's progress.
  */
 const HowItWorksContent = memo(() => {
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox gap={10}>
-      <Step
-        desc={t('goalEmpty.step1.desc')}
-        icon={TargetIcon}
-        index={1}
-        title={t('goalEmpty.step1.title')}
-      />
-      <Step
-        desc={t('goalEmpty.step2.desc')}
-        icon={PlayIcon}
-        index={2}
-        title={t('goalEmpty.step2.title')}
-      />
-      <Step
-        desc={t('goalEmpty.step3.desc')}
-        icon={CircleCheckBigIcon}
-        index={3}
-        title={t('goalEmpty.step3.title')}
+    <Flexbox gap={12}>
+      <Steps
+        className={styles.steps}
+        current={-1}
+        direction={'vertical'}
+        size={'small'}
+        items={[1, 2, 3].map((index) => ({
+          description: t(`goalEmpty.step${index}.desc` as never),
+          title: t(`goalEmpty.step${index}.title` as never),
+        }))}
       />
       <Flexbox horizontal align={'flex-start'} className={styles.loopBack} gap={8}>
         <Icon className={styles.loopIcon} icon={RotateCcwIcon} size={13} />

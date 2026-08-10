@@ -37,6 +37,20 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  exampleIconBox: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
   exampleGrid: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -45,10 +59,6 @@ const styles = createStaticStyles(({ css }) => ({
     @media (width <= 860px) {
       grid-template-columns: minmax(0, 1fr);
     }
-  `,
-  exampleIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
   `,
   hero: css`
     isolation: isolate;
@@ -79,12 +89,19 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 560px;
     line-height: 1.7;
   `,
+  /* Doubled selectors on purpose: base-ui's text variant pins the colour through
+     `&, &:hover, &:active`, so a single-class rule here loses the cascade and the
+     hint renders at full text weight. */
   howHint: css`
     align-self: flex-start;
-    color: ${cssVar.colorTextTertiary};
 
-    &:hover {
-      color: ${cssVar.colorText};
+    &&,
+    &&:active {
+      color: ${cssVar.colorTextTertiary};
+    }
+
+    &&:hover {
+      color: ${cssVar.colorTextSecondary};
     }
   `,
   judge: css`
@@ -146,22 +163,19 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
       </Flexbox>
 
       <Flexbox className={styles.section} gap={12}>
-        <Flexbox horizontal align={'center'} justify={'space-between'}>
-          <Text fontSize={13} type={'secondary'} weight={600}>
-            {t('goalEmpty.examplesTitle')}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('goalEmpty.examplesHint')}
-          </Text>
-        </Flexbox>
+        <Text fontSize={13} type={'secondary'} weight={600}>
+          {t('goalEmpty.examplesTitle')}
+        </Text>
         <div className={styles.exampleGrid}>
           {GOAL_EXAMPLE_KEYS.map((key) => {
             const seed = buildGoalExampleSeed(key, (localeKey) => t(localeKey as never));
 
             return (
               <Flexbox
+                horizontal
+                align={'center'}
                 className={styles.example}
-                gap={6}
+                gap={12}
                 key={key}
                 role={'button'}
                 tabIndex={0}
@@ -172,18 +186,17 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
                   onCreate(seed);
                 }}
               >
-                <Flexbox horizontal align={'center'} justify={'space-between'}>
+                <div className={styles.exampleIconBox}>
+                  <Icon icon={EXAMPLE_ICONS[key]} size={16} />
+                </div>
+                <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
                   <Text fontSize={11} type={'secondary'}>
                     {t(`goalEmpty.examples.${key}.tag` as never)}
                   </Text>
-                  <Icon className={styles.exampleIcon} icon={EXAMPLE_ICONS[key]} size={16} />
+                  <Text ellipsis={{ rows: 2 }} fontSize={13} weight={500}>
+                    {seed.title}
+                  </Text>
                 </Flexbox>
-                <Text fontSize={13} weight={500}>
-                  {seed.title}
-                </Text>
-                <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
-                  {t('goalEmpty.examples.requirementPrefix', { requirement: seed.requirement })}
-                </Text>
               </Flexbox>
             );
           })}
