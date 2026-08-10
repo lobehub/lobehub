@@ -48,8 +48,12 @@ export const BLOG = urlJoin(OFFICIAL_SITE, 'blog');
 
 export const ABOUT = OFFICIAL_SITE;
 export const FEEDBACK = 'https://github.com/lobehub/lobe-chat/issues/new/choose';
-export const PRIVACY_URL = urlJoin(OFFICIAL_SITE, '/privacy');
-export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/terms');
+/** Same-origin auth SPA routes — prefer these for in-app links. */
+export const PRIVACY_PATH = '/privacy';
+export const TERMS_PATH = '/terms';
+
+export const PRIVACY_URL = urlJoin(OFFICIAL_SITE, PRIVACY_PATH);
+export const TERMS_URL = urlJoin(OFFICIAL_SITE, TERMS_PATH);
 
 export const PLUGINS_INDEX_URL = 'https://chat-plugins.lobehub.com';
 
