@@ -720,6 +720,64 @@ describe('KnowledgeRepo', () => {
       const otherUserItem = results.find((item) => item.name === 'other-recent.pdf');
       expect(otherUserItem).toBeUndefined();
     });
+
+    it('should still return pages when newer files would fill the limit', async () => {
+      // The page kind has to be filtered in SQL: filtering a truncated
+      // recent-everything list dropped every page as soon as the newest rows
+      // were all files, emptying the resource home "recent pages" section.
+      await serverDB.insert(files).values(
+        Array.from({ length: 5 }, (_, index) => ({
+          id: `newer-file-${index}`,
+          fileType: 'application/pdf',
+          name: `newer-${index}.pdf`,
+          size: 1024,
+          url: `newer-url-${index}`,
+          userId,
+          updatedAt: new Date('2024-02-01T10:00:00Z'),
+        })),
+      );
+
+      const results = await knowledgeRepo.queryRecent(3, 'page');
+
+      expect(results.map((item) => item.name)).toEqual(['recent-doc.txt']);
+    });
+
+    it('should exclude folders from the page kind', async () => {
+      await serverDB.insert(documents).values({
+        id: 'recent-folder',
+        fileType: 'custom/folder',
+        filename: 'recent folder',
+        source: 'api-source',
+        sourceType: 'api',
+        title: 'recent folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        updatedAt: new Date('2024-01-04T10:00:00Z'),
+        userId,
+      });
+
+      const results = await knowledgeRepo.queryRecent(10, 'page');
+
+      expect(results.some((item) => item.id === 'recent-folder')).toBe(false);
+      expect(results.map((item) => item.name)).toEqual(['recent-doc.txt']);
+    });
+
+    it('should exclude derived page rows from the file kind', async () => {
+      await serverDB.insert(files).values({
+        id: 'derived-page-file',
+        fileType: 'custom/document',
+        name: 'a page',
+        size: 0,
+        url: 'url-page',
+        userId,
+        updatedAt: new Date('2024-01-04T10:00:00Z'),
+      });
+
+      const results = await knowledgeRepo.queryRecent(10, 'file');
+
+      expect(results.some((item) => item.id === 'derived-page-file')).toBe(false);
+      expect(results.map((item) => item.name)).toEqual(['recent-1.pdf', 'recent-2.pdf']);
+    });
   });
 
   describe('deleteItem', () => {

@@ -1,8 +1,4 @@
-import {
-  CUSTOM_DOCUMENT_FILE_TYPE,
-  CUSTOM_FOLDER_FILE_TYPE,
-  DERIVED_DOCUMENT_SOURCE_TYPE,
-} from '@lobechat/const';
+import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -566,11 +562,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for files only (exclude documents/pages)
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough files after filtering
-      const fileItems = allItems
-        .filter((item) => item.sourceType === 'file' && item.fileType !== CUSTOM_DOCUMENT_FILE_TYPE)
-        .slice(0, limit);
+      // Files only (pages are excluded in SQL, so `limit` can't be eaten by
+      // page rows that are then filtered out).
+      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file');
 
       if (fileItems.length === 0) return [];
 
@@ -626,15 +620,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for pages (documents) only, exclude folders
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough pages after filtering
-      return allItems
-        .filter(
-          (item) =>
-            item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE &&
-            item.fileType !== CUSTOM_FOLDER_FILE_TYPE,
-        )
-        .slice(0, limit);
+      // Pages only (folders and files are excluded in SQL, so `limit` can't be
+      // eaten by rows that are then filtered out).
+      return ctx.knowledgeRepo.queryRecent(limit, 'page');
     }),
 
   removeFile: fileProcedure

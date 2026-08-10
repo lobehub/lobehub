@@ -1,3 +1,4 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
@@ -41,6 +42,13 @@ export interface KnowledgeItem {
    */
   visibility?: 'private' | 'public' | null;
 }
+
+/**
+ * Kind of row a recent query is after:
+ * - `file` — uploaded files, excluding the file rows that back a derived page
+ * - `page` — derived pages / notes, excluding folders
+ */
+export type RecentItemKind = 'file' | 'page';
 
 interface KnowledgeQueryParams extends QueryFileListParams {
   /** Restrict the result set to rows created by a specific workspace member. */
@@ -227,8 +235,21 @@ export class KnowledgeRepo {
   /**
    * Query recent items (files and documents)
    * Returns the most recently updated items
+   *
+   * `kind` narrows the result to uploaded files or derived pages. The narrowing
+   * has to happen inside SQL: filtering the combined list afterwards lets
+   * `LIMIT` truncate away every row of the wanted kind — a burst of uploads
+   * left the resource home with an empty "recent pages" section.
    */
-  async queryRecent(limit: number = 12): Promise<KnowledgeItem[]> {
+  async queryRecent(limit: number = 12, kind?: RecentItemKind): Promise<KnowledgeItem[]> {
+    // Derived pages live in the documents table; their backing file row is not
+    // a file the user uploaded, so it never belongs to the file list.
+    const fileKindCondition =
+      kind === 'file' ? sql` AND f.file_type != ${CUSTOM_DOCUMENT_FILE_TYPE}` : sql``;
+    // Folders are containers, not pages.
+    const pageKindCondition =
+      kind === 'page' ? sql` AND file_type != ${CUSTOM_FOLDER_FILE_TYPE}` : sql``;
+
     const fileQuery = sql`
       SELECT
         COALESCE(d.id, f.id) as id,
@@ -262,7 +283,7 @@ export class KnowledgeRepo {
         AND NOT EXISTS (
           SELECT 1 FROM ${knowledgeBaseFiles}
           WHERE ${knowledgeBaseFiles.fileId} = f.id
-        )
+        )${fileKindCondition}
     `;
 
     const documentQuery = sql`
@@ -302,14 +323,23 @@ export class KnowledgeRepo {
       ) documents
       WHERE ${this.documentOwnershipSql('documents')}
         AND source_type != ${'file'}
-        AND knowledge_base_id IS NULL
+        AND knowledge_base_id IS NULL${pageKindCondition}
     `;
 
-    const combinedQuery = sql`
-      SELECT * FROM (
+    const sourceQuery =
+      kind === 'file'
+        ? sql`(${fileQuery})`
+        : kind === 'page'
+          ? sql`(${documentQuery})`
+          : sql`
         (${fileQuery})
         UNION ALL
         (${documentQuery})
+      `;
+
+    const combinedQuery = sql`
+      SELECT * FROM (
+        ${sourceQuery}
       ) as combined
       ORDER BY updated_at DESC
       LIMIT ${limit}
