@@ -4,7 +4,7 @@ import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, HotkeyInput, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -25,6 +25,10 @@ const HotkeySetting = memo(() => {
   const { hotkey } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+
+  useEffect(() => {
+    form.setFieldsValue(hotkey);
+  }, [form, hotkey]);
 
   if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
