@@ -22,6 +22,7 @@ import {
 } from '@/libs/better-auth/email-templates';
 import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { aicoBanMessage } from '@/libs/better-auth/plugins/aico-ban-message';
+import { authAbuseSignal } from '@/libs/better-auth/plugins/auth-abuse-signal';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { forceChangePasswordRevoke } from '@/libs/better-auth/plugins/force-change-password-revoke';
 import { PASSWORD_MIN_LENGTH, passwordPolicy } from '@/libs/better-auth/plugins/password-policy';
@@ -313,6 +314,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       phoneLoginGate(),
       passwordPolicy(),
       forceChangePasswordRevoke(),
+      authAbuseSignal(),
       expo(),
       aicoBanMessage(),
       admin({

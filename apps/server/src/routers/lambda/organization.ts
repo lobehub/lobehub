@@ -15,6 +15,7 @@ import { appEnv } from '@/envs/app';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { recordAicoSecurityEvent } from '@/server/services/aico/securityAudit';
 import { EmailService } from '@/server/services/email';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { SmsService } from '@/server/services/sms';
@@ -280,6 +281,22 @@ export const organizationRouter = router({
         role: input.role,
       });
 
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'org.member.invite',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: {
+          identifierType,
+          // Never log raw phone/email values — only type + invite id
+          inviteId: invite.id,
+          role: input.role,
+        },
+        organizationId: input.orgId,
+        targetId: invite.id,
+        targetType: 'organization_invite',
+        userAgent: ctx.userAgent,
+      });
+
       const inviteUrl = `${appEnv.APP_URL}/invite/${invite.token}`;
 
       try {
@@ -352,6 +369,16 @@ export const organizationRouter = router({
       try {
         const updated = await ctx.organizationModel.updateMemberRole(input);
         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'org.member.role_update',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          metadata: { memberId: input.memberId, role: input.role },
+          organizationId: input.orgId,
+          targetId: input.memberId,
+          targetType: 'organization_member',
+          userAgent: ctx.userAgent,
+        });
         return updated;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -395,6 +422,17 @@ export const organizationRouter = router({
         userId: updated.userId,
       });
 
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'org.member.remove',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: { memberId: input.memberId, targetUserId: updated.userId },
+        organizationId: input.orgId,
+        targetId: input.memberId,
+        targetType: 'organization_member',
+        userAgent: ctx.userAgent,
+      });
+
       return updated;
     }),
 
@@ -420,6 +458,17 @@ export const organizationRouter = router({
         orgId: input.orgId,
         orgMemberId: input.orgMemberId,
         remainingMicroUsd: reclaimed.remainingMicroUsd,
+      });
+
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'org.key.reclaim_member',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: { remainingMicroUsd: reclaimed.remainingMicroUsd },
+        organizationId: input.orgId,
+        targetId: input.orgMemberId,
+        targetType: 'organization_member',
+        userAgent: ctx.userAgent,
       });
 
       return {
@@ -833,6 +882,17 @@ export const organizationRouter = router({
       // Fail closed: members must lose OpenRouter access immediately.
       const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
       await keyService.disableAllOrgMemberKeys(input.orgId);
+
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'org.key.disable_all',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: { reason: 'org_deleted' },
+        organizationId: input.orgId,
+        targetId: input.orgId,
+        targetType: 'organization',
+        userAgent: ctx.userAgent,
+      });
 
       for (const member of result.membersToReclaim) {
         await ctx.serverDB.insert(aicoKeyOutbox).values({

@@ -98,6 +98,10 @@ vi.mock('@/libs/better-auth/plugins/force-change-password-revoke', () => ({
   forceChangePasswordRevoke: vi.fn(() => ({ id: 'aico-force-change-password-revoke' })),
 }));
 
+vi.mock('@/libs/better-auth/plugins/auth-abuse-signal', () => ({
+  authAbuseSignal: vi.fn(() => ({ id: 'aico-auth-abuse-signal' })),
+}));
+
 vi.mock('@/libs/better-auth/plugins/password-policy', () => ({
   PASSWORD_MIN_LENGTH: 8,
   passwordPolicy: vi.fn(() => ({ id: 'aico-password-policy' })),
@@ -169,6 +173,7 @@ describe('AICO-102 authentication security controls', () => {
         plugins: expect.arrayContaining([
           expect.objectContaining({ id: 'aico-password-policy' }),
           expect.objectContaining({ id: 'aico-force-change-password-revoke' }),
+          expect.objectContaining({ id: 'aico-auth-abuse-signal' }),
         ]),
         rateLimit: expect.objectContaining({
           customRules: expect.objectContaining({

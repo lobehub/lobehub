@@ -14,6 +14,7 @@ import { type BudgetPeriod, confirmedUnusedMicro } from '@/database/utils/aicoMo
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 import { computePeriodWindow } from './periodBoundaries';
+import { sendSecurityAlert } from './securityAlert';
 
 /** Outbox retry schedule: 1m, 2m, 4m … capped at 6h, then parked as `failed`. */
 const OUTBOX_BASE_DELAY_MS = 60_000;
@@ -399,6 +400,17 @@ export const processKeyOutbox = async (
         .where(eq(aicoKeyOutbox.id, row.id));
       if (exhausted) {
         console.error('[aico] key outbox entry exhausted retries', row.id, row.action, message);
+        await sendSecurityAlert(db, {
+          dedupeKey: `outbox.exhausted:${row.id}`,
+          details: {
+            action: row.action,
+            attempts: row.attempts,
+            outboxId: row.id,
+          },
+          severity: 'critical',
+          summary: `Key outbox entry exhausted retries (${row.action})`,
+          type: 'outbox.exhausted',
+        });
       }
     }
   }

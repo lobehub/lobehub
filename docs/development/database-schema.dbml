@@ -681,6 +681,35 @@ table aico_renewal_batches {
   }
 }
 
+table aico_security_alert_state {
+  id text [pk, not null]
+  last_alerted_at "timestamp with time zone"
+  hit_count integer [not null, default: 0]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+}
+
+table aico_security_audit_logs {
+  id text [pk, not null]
+  actor_user_id text
+  action text [not null]
+  target_type text
+  target_id text
+  organization_id text
+  result text [not null, default: 'success']
+  source text [not null, default: 'trpc']
+  ip_address text
+  user_agent text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    action [name: 'aico_security_audit_logs_action_idx']
+    organization_id [name: 'aico_security_audit_logs_organization_id_idx']
+    actor_user_id [name: 'aico_security_audit_logs_actor_user_id_idx']
+    created_at [name: 'aico_security_audit_logs_created_at_idx']
+  }
+}
+
 table aico_user_public_ids {
   id text [pk, not null]
   user_id text [not null]
@@ -696,6 +725,7 @@ table aico_user_public_ids {
 
 table member_budgets {
   id text [pk, not null]
+  org_id text [not null]
   org_member_id text [not null]
   period_amount_micro_usd bigint [not null]
   period text [not null, default: 'total']
@@ -720,6 +750,7 @@ table member_budgets {
 
   indexes {
     org_member_id [name: 'member_budgets_org_member_uidx', unique]
+    org_id [name: 'member_budgets_org_id_idx']
     next_renewal_at [name: 'member_budgets_next_renewal_at_idx']
     renewal_status [name: 'member_budgets_renewal_status_idx']
   }
@@ -745,7 +776,7 @@ table openrouter_model_catalog {
   id text [pk, not null]
   display_name text
   description text
-  enabled boolean [not null, default: true]
+  enabled boolean [not null, default: false]
   type varchar(20) [not null, default: 'chat']
   context_window_tokens integer
   pricing jsonb
