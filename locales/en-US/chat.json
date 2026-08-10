@@ -390,6 +390,7 @@
   "goalEmpty.examples.requirementPrefix": "Done when: {{requirement}}",
   "goalEmpty.examplesHint": "Click to prefill",
   "goalEmpty.examplesTitle": "Start from an example",
+  "goalEmpty.howHint": "How it works",
   "goalEmpty.howTitle": "What happens after you create one",
   "goalEmpty.judge.bad": "“Keep an eye on competitors” — that is an activity, not an outcome. The agent can never tell when it is done.",
   "goalEmpty.judge.good": "“Ship a weekly digest covering 5 named products, each with a source link” — a deliverable, a boundary, a verdict.",

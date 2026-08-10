@@ -390,6 +390,7 @@
   "goalEmpty.examples.requirementPrefix": "验收：{{requirement}}",
   "goalEmpty.examplesHint": "点击即可预填",
   "goalEmpty.examplesTitle": "从一个例子开始",
+  "goalEmpty.howHint": "如何工作",
   "goalEmpty.howTitle": "创建之后会发生什么",
   "goalEmpty.judge.bad": "「帮我盯一下竞品」—— 这是一件事，不是一个结果，Agent 无法判断什么时候算做完。",
   "goalEmpty.judge.good": "「每周产出竞品汇总，覆盖 5 个指定产品，每条带原始链接」—— 有交付物、有边界、可判定。",

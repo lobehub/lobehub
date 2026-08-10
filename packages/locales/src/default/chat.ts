@@ -1560,6 +1560,7 @@ export default {
   'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
   'goalEmpty.examplesHint': 'Click to prefill',
   'goalEmpty.examplesTitle': 'Start from an example',
+  'goalEmpty.howHint': 'How it works',
   'goalEmpty.howTitle': 'What happens after you create one',
   'goalEmpty.judge.bad':
     '“Keep an eye on competitors” — that is an activity, not an outcome. The agent can never tell when it is done.',
