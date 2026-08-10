@@ -257,21 +257,10 @@ const FileUpload = memo(() => {
     });
   }
 
-  if (knowledgeItems.length > 0) {
-    knowledgeItems.push(
-      {
-        type: 'divider',
-      },
-      {
-        extra: <Icon icon={ArrowRight} />,
-        icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
-        key: 'knowledge-base-store',
-        label: t('knowledgeBase.viewMore'),
-        onClick: () => {
-          openAttachKnowledgeModal();
-        },
-      },
-    );
+  const hasRelated = knowledgeItems.length > 0;
+
+  if (hasRelated) {
+    knowledgeItems.push({ type: 'divider' });
   } else {
     knowledgeItems.push({
       disabled: true,
@@ -280,10 +269,19 @@ const FileUpload = memo(() => {
     });
   }
 
-  const items: ActionDropdownMenuItems = [
-    ...uploadItems,
-    ...(knowledgeItems.length > 0 ? knowledgeItems : []),
-  ];
+  // The picker entry is the only way to attach the first library or file, so it has to
+  // stay reachable while nothing is attached yet — otherwise the empty hint is a dead end.
+  knowledgeItems.push({
+    extra: <Icon icon={ArrowRight} />,
+    icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
+    key: 'knowledge-base-store',
+    label: hasRelated ? t('knowledgeBase.viewMore') : t('knowledgeBase.related.browse'),
+    onClick: () => {
+      openAttachKnowledgeModal();
+    },
+  });
+
+  const items: ActionDropdownMenuItems = [...uploadItems, ...knowledgeItems];
 
   const content = (
     <ChatInputAction

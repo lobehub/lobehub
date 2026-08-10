@@ -769,6 +769,7 @@
   "knowledgeBase.library.action.detail": "Details",
   "knowledgeBase.library.action.remove": "Remove",
   "knowledgeBase.library.title": "Files / Libraries",
+  "knowledgeBase.related.browse": "Choose Files / Libraries",
   "knowledgeBase.related.empty": "No related files or libraries",
   "knowledgeBase.relativeFilesOrLibraries": "Related Files/Libraries",
   "knowledgeBase.title": "Library",

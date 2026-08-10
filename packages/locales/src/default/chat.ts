@@ -603,6 +603,7 @@ export default {
   'knowledgeBase.library.title': 'Files / Libraries',
   'knowledgeBase.files': 'Files',
   'knowledgeBase.libraries': 'Libraries',
+  'knowledgeBase.related.browse': 'Choose Files / Libraries',
   'knowledgeBase.related.empty': 'No related files or libraries',
   'knowledgeBase.relativeFilesOrLibraries': 'Related Files/Libraries',
   'knowledgeBase.title': 'Library',
