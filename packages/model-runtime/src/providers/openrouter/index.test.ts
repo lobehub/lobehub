@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
@@ -60,10 +61,8 @@ describe('LobeOpenRouterAI - custom features', () => {
     it('should have constructorOptions with headers', () => {
       expect(params.constructorOptions).toBeDefined();
       expect(params.constructorOptions.defaultHeaders).toBeDefined();
-      expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe(
-        'https://chat.panafor.com',
-      );
-      expect(params.constructorOptions.defaultHeaders['X-Title']).toBe('Panachat');
+      expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe(OFFICIAL_URL);
+      expect(params.constructorOptions.defaultHeaders['X-Title']).toBe(BRANDING_NAME);
     });
 
     it('should have debug configuration', () => {

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { BRANDING_NAME } from '@lobechat/const';
 import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
@@ -85,7 +86,7 @@ class CopilotTokenManager {
       headers: {
         'Accept': 'application/json',
         'Authorization': `Token ${githubToken}`,
-        'User-Agent': 'Panachat/1.0',
+        'User-Agent': `${BRANDING_NAME}/1.0`,
       },
       method: 'GET',
     });
@@ -220,8 +221,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           defaultHeaders: {
             'Authorization': `Bearer ${bearerToken}`,
             'Copilot-Integration-Id': 'vscode-chat',
-            'Editor-Plugin-Version': 'Panachat/1.0',
-            'Editor-Version': 'Panachat/1.0',
+            'Editor-Plugin-Version': `${BRANDING_NAME}/1.0`,
+            'Editor-Version': `${BRANDING_NAME}/1.0`,
             'anthropic-version': '2023-06-01',
           },
         });
@@ -283,8 +284,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         baseURL: COPILOT_BASE_URL,
         defaultHeaders: {
           'Copilot-Integration-Id': 'vscode-chat',
-          'Editor-Plugin-Version': 'Panachat/1.0',
-          'Editor-Version': 'Panachat/1.0',
+          'Editor-Plugin-Version': `${BRANDING_NAME}/1.0`,
+          'Editor-Version': `${BRANDING_NAME}/1.0`,
         },
       });
 
@@ -452,8 +453,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
             'Accept': 'application/json',
             'Authorization': `Bearer ${bearerToken}`,
             'Copilot-Integration-Id': 'vscode-chat',
-            'Editor-Plugin-Version': 'Panachat/1.0',
-            'Editor-Version': 'Panachat/1.0',
+            'Editor-Plugin-Version': `${BRANDING_NAME}/1.0`,
+            'Editor-Version': `${BRANDING_NAME}/1.0`,
           },
           method: 'GET',
         });

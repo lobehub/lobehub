@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,8 +41,8 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
     it('should have constructor options with default headers', () => {
       expect(params.constructorOptions).toBeDefined();
       expect(params.constructorOptions?.defaultHeaders).toEqual({
-        'http-referer': 'https://chat.panafor.com',
-        'x-title': 'Panachat',
+        'http-referer': OFFICIAL_URL,
+        'x-title': BRANDING_NAME,
       });
     });
   });

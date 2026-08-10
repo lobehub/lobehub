@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { CURRENT_VERSION } from '@lobechat/const';
+import { BRANDING_NAME, CURRENT_VERSION } from '@lobechat/const';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,8 +33,8 @@ describe('LobeChatGPTAI', () => {
     expect(headers).toEqual(
       expect.objectContaining({
         'ChatGPT-Account-Id': 'account-id',
-        'User-Agent': `Panachat/${CURRENT_VERSION}`,
-        'originator': 'panachat',
+        'User-Agent': `${BRANDING_NAME}/${CURRENT_VERSION}`,
+        'originator': BRANDING_NAME.toLowerCase(),
         'session-id': expect.any(String),
         'version': CURRENT_VERSION,
       }),
