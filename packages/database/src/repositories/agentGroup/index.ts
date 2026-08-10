@@ -785,7 +785,11 @@ export class AgentGroupRepository {
       if (row.role === GROUP_SUPERVISOR_ROLE) {
         sourceSupervisor = row;
       } else if (
-        resolveGroupMembershipType({ role: row.role, virtual: row.agent.virtual }) === 'owned'
+        resolveGroupMembershipType({
+          role: row.role,
+          slug: row.agent.slug,
+          virtual: row.agent.virtual,
+        }) === 'owned'
       ) {
         virtualMembers.push(row);
       } else {
@@ -1095,6 +1099,7 @@ export class AgentGroupRepository {
       for (const row of memberRows) {
         const membership = resolveGroupMembershipType({
           role: row.role,
+          slug: row.agent.slug,
           virtual: row.agent.virtual,
         });
         if (membership === 'owned') ownedAgentIds.push(row.agentId);
@@ -1472,7 +1477,11 @@ export class AgentGroupRepository {
     // than copying them, so no config crosses a scope.
     const referencedSourceMembers = sourceMembers.filter(
       (row) =>
-        resolveGroupMembershipType({ role: row.role, virtual: row.agent.virtual }) !== 'owned',
+        resolveGroupMembershipType({
+          role: row.role,
+          slug: row.agent.slug,
+          virtual: row.agent.virtual,
+        }) !== 'owned',
     );
     // Only apply visibility when copying INTO a workspace — in personal
     // scope visibility is a no-op and the DB defaults win.

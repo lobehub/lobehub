@@ -1916,6 +1916,7 @@ export class AgentModel {
         backgroundColor: chatGroups.backgroundColor,
         groupId: chatGroups.id,
         role: chatGroupsAgents.role,
+        slug: agents.slug,
         title: chatGroups.title,
         virtual: agents.virtual,
         visible: sql<boolean>`(${buildWorkspaceWhere(

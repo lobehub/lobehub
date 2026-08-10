@@ -1,6 +1,17 @@
-import { eq, or, type SQL } from 'drizzle-orm';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { and, eq, isNull, notInArray, or, type SQL } from 'drizzle-orm';
 
 import { agents, chatGroupsAgents } from '../schemas';
+
+/**
+ * Builtins (Inbox, the agent builders) are provisioned per user and carry
+ * `virtual: true` just like a group's own members — so without this they would
+ * classify as OWNED the moment one landed on a roster, and the owned paths
+ * delete them (group delete, roster removal) or rehome them into another scope
+ * (group transfer). `addAgentsToGroup` refuses them at the door; this keeps a
+ * malformed row from costing somebody their Inbox anyway.
+ */
+const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
 
 /**
  * How a `chat_groups_agents` row binds an agent's LIFECYCLE to its group.
@@ -37,6 +48,12 @@ export const GROUP_SUPERVISOR_ROLE = 'supervisor';
 interface GroupMembershipSource {
   /** `chat_groups_agents.role` of the membership row. */
   role?: string | null;
+  /**
+   * `agents.slug` of the member agent. Pass it wherever the read has it: a
+   * reserved builtin slug forces `referenced`, so no owned path can delete or
+   * rehome someone's Inbox.
+   */
+  slug?: string | null;
   /** `agents.virtual` of the member agent. */
   virtual?: boolean | null;
 }
@@ -66,6 +83,12 @@ interface GroupMembershipSource {
 export const resolveGroupMembershipType = (
   membership: GroupMembershipSource,
 ): GroupMembershipType => {
+  // Ahead of every other rule, including `supervisor`: a builtin is nobody's
+  // group member, and no roster row should be able to make it one.
+  if (membership.slug && RESERVED_BUILTIN_AGENT_SLUGS.includes(membership.slug)) {
+    return 'referenced';
+  }
+
   if (membership.role === GROUP_SUPERVISOR_ROLE) return 'owned';
 
   return membership.virtual ? 'owned' : 'referenced';
@@ -81,4 +104,10 @@ export const resolveGroupMembershipType = (
  * deleted.
  */
 export const isOwnedMembership = (): SQL =>
-  or(eq(chatGroupsAgents.role, GROUP_SUPERVISOR_ROLE), eq(agents.virtual, true))!;
+  and(
+    or(eq(chatGroupsAgents.role, GROUP_SUPERVISOR_ROLE), eq(agents.virtual, true)),
+    // Mirrors the builtin carve-out above. A NULL slug predates slug
+    // generation and is not a builtin; `NOT IN` alone would evaluate to NULL
+    // and drop those rows from the owned set.
+    or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+  )!;

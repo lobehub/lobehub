@@ -2357,6 +2357,43 @@ describe('AgentGroupRepository', () => {
     });
   });
 
+  describe('transfer builtin backstop', () => {
+    it('never rehomes a builtin agent that ended up on a roster', async () => {
+      // The owned path REHOMES (userId/workspaceId), so a builtin classified
+      // as owned would have someone's Inbox moved into another scope.
+      const wsId = 'tb-ws';
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'TB',
+        primaryOwnerId: userId,
+        slug: 'tb-ws',
+      });
+      await serverDB.insert(chatGroups).values({ id: 'tb-group', title: 'TB', userId });
+      await serverDB.insert(agents).values({
+        id: 'tb-inbox',
+        slug: 'inbox',
+        title: 'Inbox',
+        userId,
+        virtual: true,
+      });
+      await serverDB
+        .insert(chatGroupsAgents)
+        .values({ agentId: 'tb-inbox', chatGroupId: 'tb-group', userId });
+
+      await new AgentGroupRepository(serverDB, userId).transferToWorkspace(
+        'tb-group',
+        wsId,
+        userId,
+      );
+
+      const inbox = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'tb-inbox'),
+      });
+      // Stayed put: still personal scope, still the caller's.
+      expect(inbox).toMatchObject({ userId, workspaceId: null });
+    });
+  });
+
   describe('removeAgentsFromGroup builtin backstop', () => {
     it('never deletes a builtin agent that ended up on a roster', async () => {
       // `addAgentsToGroup` refuses builtins at the door; this is the belt to

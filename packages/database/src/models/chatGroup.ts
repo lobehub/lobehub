@@ -634,7 +634,7 @@ export class ChatGroupModel {
     // lifecycle, so it is refused rather than silently reclassified.
     if (updates.role === GROUP_SUPERVISOR_ROLE) {
       const [row] = await this.db
-        .select({ role: chatGroupsAgents.role, virtual: agents.virtual })
+        .select({ role: chatGroupsAgents.role, slug: agents.slug, virtual: agents.virtual })
         .from(chatGroupsAgents)
         .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
         .where(
