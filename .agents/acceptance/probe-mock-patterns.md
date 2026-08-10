@@ -1149,6 +1149,24 @@ and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped c
 needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
 dispatched `pointerover`+`mouseover` pair) before its content mounts.
 
+### A pool instance seeded from the login snapshot can boot signed out — `safeStorage` cannot decrypt the copied token
+
+**Situation:** `electron-dev.sh start <id>` in a worktree; the helper reports the
+renderer ready and the seeded login is present on disk.
+
+**Doesn't work:** trusting `login-status`'s "refresh token PRESENT" as proof the
+instance will come up authenticated. The pool's copied userData can fail to decrypt
+its access token — `/tmp/lobe-electron-pool/instance-<id>.log` repeats
+`Failed to decrypt access token: Error while decrypting the ciphertext provided to
+safeStorage.decryptString` — and the app boots signed out (`app-probe.sh auth` →
+`isSignedIn: false`) with a near-blank shell that reads like a broken route tree.
+Cause not established; re-seeding and restarting the same pool id does not help.
+
+**Works:** fall back to the legacy single instance (`electron-dev.sh start`, no id),
+which runs on the golden profile in place and decrypts normally. It boots on the
+loading shell once, so reload once before probing (see L-S0b). Gate on
+`app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
