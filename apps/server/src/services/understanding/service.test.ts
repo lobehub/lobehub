@@ -111,7 +111,11 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     diagnostics,
     sourceCount: 3,
   }));
-  providers.set('github', { collect: githubCollect, id: 'github' });
+  providers.set('github', {
+    collect: githubCollect,
+    connectionSource: 'composio',
+    id: 'github',
+  });
   providers.set('gmail', {
     collect: vi.fn(async () => ({
       context:
@@ -119,6 +123,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       diagnostics,
       sourceCount: 3,
     })),
+    connectionSource: 'composio',
     id: 'gmail',
   });
 
