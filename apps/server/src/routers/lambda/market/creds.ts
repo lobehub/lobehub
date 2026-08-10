@@ -8,6 +8,10 @@ import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspace
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
+import {
+  applyInjectedCredentialsToSandboxIfNeeded,
+  type SandboxInjectedCredentials,
+} from '@/server/services/sandbox';
 
 const log = debug('lambda-router:market:creds');
 
@@ -348,11 +352,17 @@ export const credsRouter = router({
       log('inject input: %O', input);
 
       try {
-        const userId = input.userId || ctx.userId;
-        if (!userId) {
+        if (!ctx.userId) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'userId is required for credential injection',
+          });
+        }
+
+        if (input.userId && input.userId !== ctx.userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot inject credentials for another user',
           });
         }
 
@@ -360,9 +370,26 @@ export const credsRouter = router({
           keys: input.keys,
           sandbox: input.sandbox,
           topicId: input.topicId,
-          userId,
+          userId: ctx.userId,
         });
+
+        const applyResult = await applyInjectedCredentialsToSandboxIfNeeded({
+          credentials: (result as { credentials?: SandboxInjectedCredentials }).credentials,
+          marketService: ctx.marketService,
+          sandbox: input.sandbox,
+          topicId: input.topicId,
+          userId: ctx.userId,
+        });
+
+        if (applyResult.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: applyResult.error,
+          });
+        }
+
         log('inject success: %O', {
+          appliedToSandbox: applyResult.applied,
           notFound: result.notFound?.length,
           success: result.success,
         });
