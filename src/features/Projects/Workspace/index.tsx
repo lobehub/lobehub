@@ -1,10 +1,10 @@
 'use client';
 
-import { Block, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Center, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BookOpenIcon, BotIcon, CheckSquareIcon, FolderKanbanIcon, PlusIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -13,6 +13,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import {
   getProjectAgentPath,
+  getProjectConversationStartPath,
   getProjectLibraryPath,
   getProjectTasksPath,
 } from '@/features/Projects/Layout/navigation';
@@ -29,6 +30,9 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 1200px;
     margin-inline: auto;
     padding: 32px;
+  `,
+  composer: css`
+    min-height: 154px;
   `,
   dashboard: css`
     display: grid;
@@ -56,6 +60,7 @@ const ProjectWorkspace = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const detail = useCurrentProjectDetail(projectId);
+  const [message, setMessage] = useState('');
   const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
 
   if (!enabled) {
@@ -89,6 +94,12 @@ const ProjectWorkspace = memo(() => {
       title: t('sections.knowledgeBases'),
     },
   ];
+  const startConversation = () => {
+    const content = message.trim();
+    if (!content) return;
+
+    navigate(getProjectConversationStartPath(detail.project.coordinatorAgentId, content));
+  };
 
   return (
     <Flexbox className={styles.shell} flex={1}>
@@ -99,6 +110,28 @@ const ProjectWorkspace = memo(() => {
           </Text>
           <Text type="secondary">{detail.project.description || t('overview.noDescription')}</Text>
         </Flexbox>
+        <Block
+          className={styles.composer}
+          padding={0}
+          style={{ overflow: 'hidden' }}
+          variant="filled"
+        >
+          <TextArea
+            autoSize={{ maxRows: 6, minRows: 3 }}
+            placeholder={t('overview.composerPlaceholder')}
+            style={{ background: 'transparent', border: 0, boxShadow: 'none', padding: 16 }}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') startConversation();
+            }}
+          />
+          <Flexbox horizontal justify="flex-end" padding={12}>
+            <Button disabled={!message.trim()} type="primary" onClick={startConversation}>
+              {t('overview.startConversation')}
+            </Button>
+          </Flexbox>
+        </Block>
         <Flexbox horizontal gap={12} wrap="wrap">
           {sections.map(({ icon, items, key, title }) => (
             <Block key={key} style={{ minWidth: 220, padding: 16 }} variant="filled">

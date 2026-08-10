@@ -147,7 +147,6 @@ export class GoalActionImpl {
         revalidateOnFocus: true,
       },
     );
-  };
 }
 
 export type GoalAction = Pick<GoalActionImpl, keyof GoalActionImpl>;

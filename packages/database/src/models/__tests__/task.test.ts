@@ -8,7 +8,6 @@ import {
   agents,
   briefs,
   documents,
-  projects,
   tasks,
   topics,
   users,
@@ -17,6 +16,7 @@ import {
 import { taskTopics } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
 import { WorkModel } from '../work';
 
@@ -434,10 +434,10 @@ describe('TaskModel', () => {
 
     it('should filter by projectId', async () => {
       const model = new TaskModel(serverDB, userId);
-      const [project] = await serverDB
-        .insert(projects)
-        .values({ identifier: 'TLIST', name: 'Scoped project', userId })
-        .returning();
+      const project = await new ProjectModel(serverDB, userId).create({
+        identifier: 'TLIST',
+        name: 'Scoped project',
+      });
       await model.create({ instruction: 'Project task', projectId: project.id });
       await model.create({ instruction: 'Unrelated task' });
 
@@ -588,10 +588,10 @@ describe('TaskModel', () => {
 
     it('should group only tasks from the requested project', async () => {
       const model = new TaskModel(serverDB, userId);
-      const [project] = await serverDB
-        .insert(projects)
-        .values({ identifier: 'TGRP', name: 'Scoped project', userId })
-        .returning();
+      const project = await new ProjectModel(serverDB, userId).create({
+        identifier: 'TGRP',
+        name: 'Scoped project',
+      });
       await model.create({ instruction: 'Project task', projectId: project.id });
       await model.create({ instruction: 'Unrelated task' });
 

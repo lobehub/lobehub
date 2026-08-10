@@ -7,6 +7,8 @@ import {
   BookOpenIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
+  MessageSquareIcon,
+  PlusIcon,
   TargetIcon,
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -22,10 +24,13 @@ import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import {
   getProjectAcceptancePath,
+  getProjectConversationPath,
   getProjectGoalsPath,
   getProjectLibraryPath,
   getProjectTasksPath,
@@ -40,6 +45,16 @@ const ProjectSidebarContent = memo(() => {
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const projectLibraries = detail?.knowledgeBases ?? [];
+  const coordinatorAgentId = detail?.project.coordinatorAgentId;
+  const useFetchTopics = useChatStore((s) => s.useFetchTopics);
+  const conversations = useChatStore((s) =>
+    coordinatorAgentId ? topicSelectors.getTopicsByAgentId(coordinatorAgentId)(s) : undefined,
+  );
+  const conversationSWR = useFetchTopics(!!coordinatorAgentId, {
+    agentId: coordinatorAgentId,
+    excludeTriggers: ['cron', 'eval'],
+    pageSize: 10,
+  });
   const projectAgentItems = useMemo(
     () =>
       (detail?.agents ?? []).map(({ agent, binding }) => ({
@@ -105,7 +120,48 @@ const ProjectSidebarContent = memo(() => {
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}
           />
-          <Accordion defaultExpandedKeys={['agents', 'libraries']} gap={4}>
+          <Accordion defaultExpandedKeys={['conversations', 'agents', 'libraries']} gap={4}>
+            <AccordionItem
+              itemKey="conversations"
+              paddingInline="8px 4px"
+              title={
+                <Text ellipsis fontSize={12} type="secondary" weight={500}>
+                  {t('sections.conversations')}
+                </Text>
+              }
+            >
+              {coordinatorAgentId && (
+                <NavItem
+                  icon={PlusIcon}
+                  title={t('sidebar.newConversation')}
+                  onClick={() => navigate(getProjectConversationPath(coordinatorAgentId))}
+                />
+              )}
+              {conversationSWR.error ? (
+                <AsyncError
+                  error={conversationSWR.error}
+                  variant="inline"
+                  onRetry={() => void conversationSWR.mutate()}
+                />
+              ) : conversationSWR.isLoading && !conversations ? (
+                <SkeletonList rows={3} />
+              ) : conversations?.length ? (
+                conversations.map((conversation) => (
+                  <NavItem
+                    icon={MessageSquareIcon}
+                    key={conversation.id}
+                    title={conversation.title || t('sidebar.untitledConversation')}
+                    onClick={() =>
+                      navigate(getProjectConversationPath(coordinatorAgentId!, conversation.id))
+                    }
+                  />
+                ))
+              ) : (
+                <Text fontSize={12} style={{ padding: 8 }} type="secondary">
+                  {t('sidebar.conversationsEmpty')}
+                </Text>
+              )}
+            </AccordionItem>
             <AccordionItem
               itemKey="agents"
               paddingInline="8px 4px"
