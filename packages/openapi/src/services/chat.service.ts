@@ -349,7 +349,9 @@ export class ChatService extends BaseService {
         model,
         presence_penalty: params.presence_penalty,
         stream: params.stream,
-        temperature: params.temperature || 1,
+        // `?? 1`, not `|| 1`: the schema accepts `temperature: 0`, and a falsy
+        // check would silently promote a deterministic request to temperature 1.
+        temperature: params.temperature ?? 1,
         top_p: params.top_p,
         ...options,
       };
