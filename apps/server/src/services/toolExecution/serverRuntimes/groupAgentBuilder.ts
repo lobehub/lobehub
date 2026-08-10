@@ -689,8 +689,27 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
       ): Promise<ToolExecutionResult> => {
         const groupId = resolveGroupId(ctx);
         const { agentId: paramAgentId, ...rest } = params;
-        // Falls back to the group's supervisor — the tool contract documents
-        // `agentId` as optional and "defaults to the supervisor agent".
+
+        // A caller-supplied id has to be confirmed against this group's roster
+        // first. The delegated `AgentBuilder.updateConfig` write is scoped by
+        // visibility alone, so without this check a tool call naming any agent
+        // the caller can merely *see* would reconfigure it from inside a group
+        // edit. The supervisor fallback below needs no check — it is read off
+        // the roster itself. (The tool contract documents `agentId` as optional
+        // and "defaults to the supervisor agent".)
+        if (paramAgentId) {
+          if (!groupId) return noGroupContext();
+
+          const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
+          if (!roster.some((member) => member.agentId === paramAgentId)) {
+            return {
+              content: `Agent "${paramAgentId}" is not a member of this group`,
+              error: { message: `Agent "${paramAgentId}" not found`, type: 'AgentNotFound' },
+              success: false,
+            };
+          }
+        }
+
         const agentId =
           paramAgentId ?? (groupId ? await findSupervisorAgentId(groupId) : undefined);
 

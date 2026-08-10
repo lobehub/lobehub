@@ -6,6 +6,7 @@ import { groupAgentBuilderRuntime } from '../groupAgentBuilder';
 const {
   mockAddAgentsToGroup,
   mockBatchCreate,
+  mockBuilderUpdateConfig,
   mockFindById,
   mockGetAccessLevel,
   mockGetAgentConfigById,
@@ -17,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   mockAddAgentsToGroup: vi.fn(),
   mockBatchCreate: vi.fn(),
+  mockBuilderUpdateConfig: vi.fn(),
   mockFindById: vi.fn(),
   mockGetAccessLevel: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
@@ -67,7 +69,10 @@ vi.mock('@/server/services/resourcePermission', () => ({
 }));
 
 vi.mock('../agentBuilder', () => ({
-  agentBuilderRuntime: { factory: () => ({}), identifier: 'lobe-agent-builder' },
+  agentBuilderRuntime: {
+    factory: () => ({ updateConfig: mockBuilderUpdateConfig }),
+    identifier: 'lobe-agent-builder',
+  },
 }));
 
 const createRuntime = (workspaceId?: string) =>
@@ -217,6 +222,49 @@ describe('groupAgentBuilderRuntime', () => {
         state: { newPrompt: 'new prompt', previousPrompt: 'old', success: true },
         success: true,
       });
+    });
+  });
+
+  describe('updateConfig', () => {
+    // The delegated `AgentBuilder.updateConfig` write is scoped by visibility
+    // alone, so an unchecked caller-supplied id would let a group edit
+    // reconfigure any workspace agent the caller can merely see.
+    it('rejects a caller-supplied agent that is not on the roster', async () => {
+      const result = await createRuntime('ws_1').updateConfig(
+        { agentId: 'agt_outsider', model: 'gpt-5' },
+        groupCtx,
+      );
+
+      expect(result).toMatchObject({ error: { type: 'AgentNotFound' }, success: false });
+      expect(mockBuilderUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('refuses a caller-supplied agent when there is no group in context', async () => {
+      const result = await createRuntime('ws_1').updateConfig(
+        { agentId: 'agt_sup', model: 'gpt-5' },
+        {} as never,
+      );
+
+      expect(result).toMatchObject({ success: false });
+      expect(mockBuilderUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('delegates for a roster member, stamping it as the edited agent', async () => {
+      await createRuntime('ws_1').updateConfig({ agentId: 'agt_sup', model: 'gpt-5' }, groupCtx);
+
+      expect(mockBuilderUpdateConfig).toHaveBeenCalledWith(
+        { model: 'gpt-5' },
+        expect.objectContaining({ editingAgentId: 'agt_sup' }),
+      );
+    });
+
+    it('falls back to the supervisor when no agentId is given', async () => {
+      await createRuntime('ws_1').updateConfig({ model: 'gpt-5' }, groupCtx);
+
+      expect(mockBuilderUpdateConfig).toHaveBeenCalledWith(
+        { model: 'gpt-5' },
+        expect.objectContaining({ editingAgentId: 'agt_sup' }),
+      );
     });
   });
 

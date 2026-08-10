@@ -16,6 +16,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
+import type { ResourceAccessLevel } from '@/database/schemas';
 import {
   DEFAULT_RESOURCE_ACCESS_LEVELS,
   LEGACY_VIEWER_ACCESS_LEVELS,
@@ -865,7 +866,12 @@ export const agentGroupRouter = router({
    * back to `private`. Restricted to the creator's own still-private group.
    */
   publishGroupToWorkspace: agentGroupProcedureWrite
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        accessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agentGroup).optional(),
+        id: z.string(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       // Same rule `setGroupVisibility` enforces, on the other route to the same
       // transition: a private group may hold the creator's private member
@@ -885,12 +891,16 @@ export const agentGroupRouter = router({
 
       const result = await ctx.chatGroupModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
-          'agentGroup',
-          input.id,
-          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup,
-          ctx.userId,
-        );
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        // Same rule as `publishAgentToWorkspace`: an explicit request wins;
+        // otherwise keep whatever the creator already chose on the Permission
+        // page while the group was still private — rewriting the default here
+        // would silently discard that decision.
+        const accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
+        await permissionModel.setAccessLevel('agentGroup', input.id, accessLevel, ctx.userId);
       }
       return result;
     }),
@@ -981,19 +991,18 @@ export const agentGroupRouter = router({
       const updated = await ctx.chatGroupModel.setVisibility(input.id, input.visibility);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
 
-      const accessLevel =
-        input.visibility === 'private'
-          ? 'edit'
-          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup);
+      let accessLevel: ResourceAccessLevel;
       if (input.visibility === 'private') {
+        accessLevel = 'edit';
         await permissionModel.removeAll('agentGroup', input.id);
       } else {
-        await permissionModel.setAccessLevel(
-          'agentGroup',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup,
-          ctx.userId,
-        );
+        // Same rule as `publishGroupToWorkspace`: promotion keeps a level the
+        // creator already set while private instead of resetting to the default.
+        accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
+        await permissionModel.setAccessLevel('agentGroup', input.id, accessLevel, ctx.userId);
       }
 
       return buildResourcePermissionState({

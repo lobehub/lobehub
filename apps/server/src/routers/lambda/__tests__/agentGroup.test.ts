@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import * as AgentModelModule from '@/database/models/agent';
 import * as ChatGroupModelModule from '@/database/models/chatGroup';
+import * as ResourcePermissionModelModule from '@/database/models/resourcePermission';
 import * as UserModelModule from '@/database/models/user';
 import * as AgentGroupRepoModule from '@/database/repositories/agentGroup';
 import * as ChatGroupServiceModule from '@/server/services/agentGroup';
@@ -43,6 +44,7 @@ describe('agentGroupRouter', () => {
   let agentGroupRepoMock: any;
   let userModelMock: any;
   let chatGroupServiceMock: any;
+  let resourcePermissionModelMock: any;
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -85,8 +87,17 @@ describe('agentGroupRouter', () => {
       ),
     };
 
+    resourcePermissionModelMock = {
+      getAccessLevel: vi.fn().mockResolvedValue(null),
+      removeAll: vi.fn(),
+      setAccessLevel: vi.fn(),
+    };
+
     // Use vi.spyOn to mock the class constructors to return our mock instances
     vi.spyOn(AgentModelModule, 'AgentModel').mockImplementation(() => agentModelMock as any);
+    vi.spyOn(ResourcePermissionModelModule, 'ResourcePermissionModel').mockImplementation(
+      () => resourcePermissionModelMock as any,
+    );
     vi.spyOn(ChatGroupModelModule, 'ChatGroupModel').mockImplementation(
       () => chatGroupModelMock as any,
     );
@@ -583,6 +594,79 @@ describe('agentGroupRouter', () => {
         config: undefined,
       });
       expect(result).toEqual(mockUpdatedGroup);
+    });
+  });
+
+  // The Permission page lets a creator pick an access level while the group is
+  // still private ("Members get this level once the group is published"). Both
+  // routes into the publish transition must read that row back — stamping the
+  // default over it silently upgrades everyone to `edit`.
+  describe('publish keeps the level chosen while private', () => {
+    beforeEach(() => {
+      mockCtx.workspaceId = 'ws_1';
+      chatGroupModelMock.countPrivateGroupAgents = vi.fn().mockResolvedValue(0);
+      chatGroupModelMock.publishToWorkspace = vi.fn().mockResolvedValue({ success: true });
+      chatGroupModelMock.setVisibility = vi.fn().mockResolvedValue(true);
+      chatGroupModelMock.findById.mockResolvedValue({
+        id: 'cg_1',
+        userId,
+        visibility: 'private',
+        workspaceId: 'ws_1',
+      });
+    });
+
+    it('publishGroupToWorkspace reads the stored level', async () => {
+      resourcePermissionModelMock.getAccessLevel.mockResolvedValue('use');
+
+      await agentGroupRouter.createCaller(mockCtx).publishGroupToWorkspace({ id: 'cg_1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agentGroup',
+        'cg_1',
+        'use',
+        userId,
+      );
+    });
+
+    it('publishGroupToWorkspace falls back to the default when nothing was stored', async () => {
+      await agentGroupRouter.createCaller(mockCtx).publishGroupToWorkspace({ id: 'cg_1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agentGroup',
+        'cg_1',
+        'edit',
+        userId,
+      );
+    });
+
+    it('publishGroupToWorkspace lets an explicit request win', async () => {
+      resourcePermissionModelMock.getAccessLevel.mockResolvedValue('use');
+
+      await agentGroupRouter
+        .createCaller(mockCtx)
+        .publishGroupToWorkspace({ accessLevel: 'view', id: 'cg_1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agentGroup',
+        'cg_1',
+        'view',
+        userId,
+      );
+    });
+
+    it('setGroupVisibility reads the stored level when promoting', async () => {
+      resourcePermissionModelMock.getAccessLevel.mockResolvedValue('use');
+
+      await agentGroupRouter
+        .createCaller(mockCtx)
+        .setGroupVisibility({ id: 'cg_1', visibility: 'public' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agentGroup',
+        'cg_1',
+        'use',
+        userId,
+      );
     });
   });
 
