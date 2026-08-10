@@ -60,7 +60,6 @@ app.get(
  * - sessionId: string (optional) - Session ID; if provided, creates a file-session association
  * - skipCheckFileType: boolean (optional) - Whether to skip file type check
  * - directory: string (optional) - Upload directory
- * - pathname: string (optional) - Custom object pathname
  * - skipDeduplication: boolean (optional) - Whether to skip content deduplication
  */
 app.post(
@@ -75,7 +74,6 @@ app.post(
               directory: { type: 'string' },
               file: { format: 'binary', type: 'string' },
               knowledgeBaseId: { type: 'string' },
-              pathname: { type: 'string' },
               sessionId: { type: 'string' },
               skipCheckFileType: { type: 'boolean' },
               skipDeduplication: { type: 'boolean' },

@@ -18,8 +18,6 @@ export interface FileUploadRequest {
   file: File;
   /** Knowledge base ID (optional) */
   knowledgeBaseId?: string;
-  /** Custom path (optional) */
-  pathname?: string;
   /** Session ID (optional) */
   sessionId?: string;
   /** Whether to skip file type check */
@@ -66,7 +64,6 @@ export const FileUploadFormFieldsSchema = z
     agentId: MultipartOptionalIdSchema,
     directory: MultipartOptionalPathSchema,
     knowledgeBaseId: MultipartOptionalIdSchema,
-    pathname: MultipartOptionalPathSchema,
     sessionId: MultipartOptionalIdSchema,
     skipCheckFileType: MultipartBooleanSchema,
     skipDeduplication: MultipartBooleanSchema,
@@ -74,7 +71,6 @@ export const FileUploadFormFieldsSchema = z
   .strict();
 
 export const BatchFileUploadFormFieldsSchema = FileUploadFormFieldsSchema.omit({
-  pathname: true,
   skipDeduplication: true,
 });
 

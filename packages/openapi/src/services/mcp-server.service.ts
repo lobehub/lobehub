@@ -68,6 +68,17 @@ export class McpServerService extends BaseService {
     return server;
   }
 
+  /**
+   * `ConnectorModel`'s ownership predicate is workspace-wide, so a member holding
+   * only `agent:update:owner` could otherwise mutate a shared MCP server created
+   * by someone else. Mirrors the connector tRPC mutations.
+   */
+  private async requireManageableServer(id: string) {
+    const server = await this.requireServer(id);
+    await this.assertRowManageable(server.userId, 'AGENT_UPDATE', 'MCP server');
+    return server;
+  }
+
   async listServers(): Promise<McpServerResponse[]> {
     const servers = (await this.connectorModel.queryPublic()).filter(isPublicMcpServer);
     return Promise.all(servers.map((server) => this.projectServer(server)));
@@ -106,7 +117,7 @@ export class McpServerService extends BaseService {
   }
 
   async updateServer(id: string, request: UpdateMcpServerRequest): Promise<McpServerResponse> {
-    await this.requireServer(id);
+    await this.requireManageableServer(id);
     const model = await this.getCredentialConnectorModel();
     // The decrypted row is needed only to preserve non-public metadata during a
     // patch. It is never logged or returned; GET paths use findPublicById and
@@ -137,13 +148,13 @@ export class McpServerService extends BaseService {
   }
 
   async deleteServer(id: string): Promise<{ id: string }> {
-    await this.requireServer(id);
+    await this.requireManageableServer(id);
     await this.connectorModel.delete(id);
     return { id };
   }
 
   async syncServer(id: string): Promise<{ id: string; status: string; toolCount: number }> {
-    await this.requireServer(id);
+    await this.requireManageableServer(id);
     const model = await this.getCredentialConnectorModel();
     const { toolCount } = await syncConnectorToolsById(id, {
       connectorModel: model,

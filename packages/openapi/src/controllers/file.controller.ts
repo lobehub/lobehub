@@ -204,7 +204,6 @@ export class FileController extends BaseController {
             'agentId',
             'directory',
             'knowledgeBaseId',
-            'pathname',
             'sessionId',
             'skipCheckFileType',
             'skipDeduplication',

@@ -35,6 +35,8 @@ export interface PublicConnectorRecord {
   sourceType: string;
   status: string;
   updatedAt: Date;
+  /** Row creator. Needed for row-level manage checks; never surfaced to API responses. */
+  userId: string;
 }
 
 export interface ComposioConnectorReference extends ConnectorReference {
@@ -93,6 +95,7 @@ export class ConnectorModel {
     sourceType: userConnectors.sourceType,
     status: userConnectors.status,
     updatedAt: userConnectors.updatedAt,
+    userId: userConnectors.userId,
   };
 
   /**

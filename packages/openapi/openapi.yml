@@ -3731,8 +3731,6 @@ paths:
                   type: string
                 knowledgeBaseId:
                   type: string
-                pathname:
-                  type: string
                 sessionId:
                   type: string
                 skipCheckFileType:
