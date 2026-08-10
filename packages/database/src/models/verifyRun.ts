@@ -6,7 +6,7 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -493,6 +493,70 @@ export class VerifyRunModel {
       .set({ metadata })
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
+
+  /**
+   * Claim the right to run the completion-time verify gate on this run, and
+   * flip it to `verifying` in the same statement. Always go through the
+   * service-layer chokepoint ({@link VerifyStatusService.claimVerifying}).
+   *
+   * The gate used to be a plain `status === 'planned'` read followed by a
+   * separate `verifying` write, which failed in two directions at once: two
+   * completions landing together (a queue redelivery of the terminal step) could
+   * both pass the read, and an attempt that flipped the run and then died left
+   * the gate permanently shut — no later attempt could re-enter, so the rollup
+   * was never finished and the run stayed `verifying` forever.
+   *
+   * One conditional UPDATE answers both: exactly one caller wins, and a
+   * `verifying` run untouched since `staleBefore` is read as abandoned and
+   * handed to the new caller.
+   *
+   * @returns true when this caller owns the verification.
+   */
+  claimVerifying = async (runId: string, staleBefore: Date): Promise<boolean> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({ status: 'verifying' })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          or(
+            eq(verifyRuns.status, 'planned'),
+            and(eq(verifyRuns.status, 'verifying'), lt(verifyRuns.updatedAt, staleBefore)),
+          ),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return claimed.length > 0;
+  };
+
+  /**
+   * Every run stranded in `verifying` since before `olderThan`, across all
+   * owners — the sweep's input (see `sweepStuckVerifyRuns`).
+   *
+   * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
+   * cron, and each row carries the owner the recovery is then performed as.
+   * Operation-less rounds are excluded — the rollup is addressed by operation,
+   * so there is nothing to recompute for them.
+   */
+  static findStuckVerifying = async (
+    db: LobeChatDatabase,
+    olderThan: Date,
+    limit = 200,
+  ): Promise<VerifyRunItem[]> =>
+    db
+      .select()
+      .from(verifyRuns)
+      .where(
+        and(
+          eq(verifyRuns.status, 'verifying'),
+          lt(verifyRuns.updatedAt, olderThan),
+          isNotNull(verifyRuns.operationId),
+        ),
+      )
+      .orderBy(asc(verifyRuns.updatedAt))
+      .limit(limit);
 
   /** Update the denormalized rollup. Always go through the service-layer chokepoint. */
   updateStatus = async (runId: string, status: VerifyRunStatus | null): Promise<void> => {

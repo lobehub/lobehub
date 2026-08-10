@@ -19,6 +19,7 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
 import { registerWorksForOperation } from './workRegistration';
@@ -691,15 +692,24 @@ export class CompletionLifecycle {
           metadata?.assistantMessageId,
           metadata?.userId || this.userId,
         );
-        void runVerifyOnCompletion(
-          this.serverDB,
-          metadata?.userId || this.userId,
-          {
-            deliverable: event.lastAssistantContent ?? '',
-            goal,
-            operationId,
-          },
-          this.workspaceId,
+        // `after`, not a bare `void`: judging is minutes of LLM calls and the
+        // step handler must not wait for it, but a detached promise has nobody
+        // keeping it scheduled — on the serverless path the instance is free to
+        // stop running it the moment this response returns. That is not merely a
+        // lost verification: entering `verifying` is a durable write, so a run
+        // cut off mid-judge stays `verifying` forever. `after` hands the work to
+        // the host as post-response work instead (no-op fallback off Next).
+        after(() =>
+          runVerifyOnCompletion(
+            this.serverDB,
+            metadata?.userId || this.userId,
+            {
+              deliverable: event.lastAssistantContent ?? '',
+              goal,
+              operationId,
+            },
+            this.workspaceId,
+          ),
         );
       }
 
