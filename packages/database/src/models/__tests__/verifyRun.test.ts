@@ -103,6 +103,13 @@ describe('VerifyRunModel.claimVerifying', () => {
   });
 });
 
+/**
+ * `findStuckVerifying` is deliberately global — no user or workspace scope, since
+ * it backs a cross-owner cron. The test database is shared with every other suite,
+ * so these assertions state what must be true of *our* rows (present / absent /
+ * ordered) and never that a page equals exactly them: any stranded row another
+ * suite left behind is legitimately part of the same result.
+ */
 describe('VerifyRunModel.findStuckVerifying', () => {
   it('returns verifying runs older than the bound, across owners', async () => {
     const mine = await buildRun('op-stuck-1');
@@ -115,9 +122,11 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     const stuck = await VerifyRunModel.findStuckVerifying(
       serverDB,
       new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
     );
 
-    expect(stuck.map((r) => r.id).sort()).toEqual([mine, theirs].sort());
+    // Both owners' runs, from a query given neither owner.
+    expect(stuck.map((r) => r.id)).toEqual(expect.arrayContaining([mine, theirs]));
   });
 
   it('leaves a freshly-entered run alone', async () => {
@@ -151,20 +160,38 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     // runs behind it.
     const first = await buildRun('op-page-1');
     const second = await buildRun('op-page-2');
+    // A third stranded run belonging to someone else, landing between the two —
+    // the scan is global, so the cursor has to be right about ours regardless of
+    // what else shares the window.
+    const interloper = await buildRun('op-page-3', otherUserId);
     await new VerifyRunModel(serverDB, userId).updateStatus(first, 'verifying');
     await new VerifyRunModel(serverDB, userId).updateStatus(second, 'verifying');
+    await new VerifyRunModel(serverDB, otherUserId).updateStatus(interloper, 'verifying');
     await backdate(first, 20 * 60 * 1000);
+    await backdate(interloper, 15 * 60 * 1000);
     await backdate(second, 10 * 60 * 1000);
 
     const olderThan = new Date(Date.now() - 5 * 60 * 1000);
-    const [head] = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, { limit: 1 });
-    expect(head.id).toBe(first);
+    const scan = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, { limit: 500 });
+    const ids = scan.map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining([first, second]));
+    // Oldest first, so the cursor has something to advance past.
+    expect(ids.indexOf(first)).toBeLessThan(ids.indexOf(second));
 
-    const next = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, {
-      after: { id: head.id, updatedAt: head.updatedAt },
-      limit: 1,
+    const cursor = scan[ids.indexOf(first)];
+    const rest = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, {
+      after: { id: cursor.id, updatedAt: cursor.updatedAt },
+      limit: 500,
     });
-    expect(next.map((r) => r.id)).toEqual([second]);
+    const restIds = rest.map((r) => r.id);
+
+    // The whole point: the cursor drops what it already saw and still reaches
+    // everything behind it — the row it advanced past cannot starve the rest.
+    expect(restIds).not.toContain(first);
+    expect(restIds).toContain(second);
+    // Guards the guard: if the interloper stopped landing inside the window this
+    // test would quietly stop covering the contaminated case it exists for.
+    expect(restIds).toContain(interloper);
   });
 
   it('ignores operation-less rounds — there is no rollup to address', async () => {
