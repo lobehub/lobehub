@@ -114,6 +114,27 @@ const ProjectSidebarContent = memo(() => {
           />
           <Accordion defaultExpandedKeys={['conversations', 'agents', 'libraries']} gap={4}>
             <AccordionItem
+              itemKey="agents"
+              paddingInline="8px 4px"
+              title={
+                <Text ellipsis fontSize={12} type="secondary" weight={500}>
+                  {t('sections.agents')}
+                </Text>
+              }
+            >
+              {detailSWR.isLoading ? (
+                <SkeletonList rows={3} />
+              ) : projectAgentItems.length === 0 ? (
+                <Text fontSize={12} style={{ padding: 8 }} type="secondary">
+                  {t('sidebar.agentsEmpty')}
+                </Text>
+              ) : (
+                projectAgentItems.map(({ item, binding }) => (
+                  <AgentItem item={item} key={item.id} secondaryLabel={binding.role} />
+                ))
+              )}
+            </AccordionItem>
+            <AccordionItem
               itemKey="conversations"
               paddingInline="8px 4px"
               title={
@@ -154,27 +175,6 @@ const ProjectSidebarContent = memo(() => {
                 <Text fontSize={12} style={{ padding: 8 }} type="secondary">
                   {t('sidebar.conversationsEmpty')}
                 </Text>
-              )}
-            </AccordionItem>
-            <AccordionItem
-              itemKey="agents"
-              paddingInline="8px 4px"
-              title={
-                <Text ellipsis fontSize={12} type="secondary" weight={500}>
-                  {t('sections.agents')}
-                </Text>
-              }
-            >
-              {detailSWR.isLoading ? (
-                <SkeletonList rows={3} />
-              ) : projectAgentItems.length === 0 ? (
-                <Text fontSize={12} style={{ padding: 8 }} type="secondary">
-                  {t('sidebar.agentsEmpty')}
-                </Text>
-              ) : (
-                projectAgentItems.map(({ item, binding }) => (
-                  <AgentItem item={item} key={item.id} secondaryLabel={binding.role} />
-                ))
               )}
             </AccordionItem>
             <AccordionItem
