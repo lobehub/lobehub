@@ -6,7 +6,7 @@ import { messageService } from '@/services/message';
 import { agentSelectors } from '@/store/agent/selectors';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
-import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import type * as OperationSelectorsModule from '@/store/chat/slices/operation/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 
@@ -30,6 +30,20 @@ const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
+const operationSelectorMock = vi.hoisted(() => ({
+  getRunningInputLoadingOperationIds: vi.fn(() => () => ['root-op', 'retry-op']),
+}));
+
+vi.mock('@/store/chat/slices/operation/selectors', async (importOriginal) => {
+  const actual = await importOriginal<typeof OperationSelectorsModule>();
+  return {
+    ...actual,
+    operationSelectors: {
+      ...actual.operationSelectors,
+      getRunningInputLoadingOperationIds: operationSelectorMock.getRunningInputLoadingOperationIds,
+    },
+  };
+});
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -73,7 +87,7 @@ describe('Generation Actions', () => {
   });
 
   describe('stopGenerating', () => {
-    it('should cancel all running execAgentRuntime operations', () => {
+    it('should cancel every input-loading operation resolved by the conversation key', () => {
       const context: ConversationContext = {
         agentId: 'session-1',
         topicId: 'topic-1',
@@ -86,19 +100,13 @@ describe('Generation Actions', () => {
         store.getState().stopGenerating();
       });
 
-      expect(mockCancelOperations).toHaveBeenCalledWith(
-        {
-          agentId: 'session-1',
-          groupId: undefined,
-          isNew: undefined,
-          scope: undefined,
-          status: 'running',
-          threadId: null,
-          topicId: 'topic-1',
-          type: INPUT_LOADING_OPERATION_TYPES,
-        },
-        expect.any(String),
+      expect(operationSelectorMock.getRunningInputLoadingOperationIds).toHaveBeenCalledWith(
+        context,
       );
+      expect(mockCancelOperation).toHaveBeenCalledTimes(2);
+      expect(mockCancelOperation).toHaveBeenNthCalledWith(1, 'root-op', expect.any(String));
+      expect(mockCancelOperation).toHaveBeenNthCalledWith(2, 'retry-op', expect.any(String));
+      expect(mockCancelOperations).not.toHaveBeenCalled();
     });
 
     it('should isolate a creating thread from the main conversation in the same topic', () => {
@@ -118,16 +126,10 @@ describe('Generation Actions', () => {
         store.getState().stopGenerating();
       });
 
-      expect(mockCancelOperations).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'session-1',
-          isNew: true,
-          scope: 'thread',
-          threadId: null,
-          topicId: 'topic-1',
-        }),
-        expect.any(String),
+      expect(operationSelectorMock.getRunningInputLoadingOperationIds).toHaveBeenCalledWith(
+        context,
       );
+      expect(mockCancelOperations).not.toHaveBeenCalled();
       expect(mockCancelSendMessageInServer).toHaveBeenCalledWith(context, editor);
     });
 

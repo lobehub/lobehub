@@ -35,7 +35,6 @@ import {
   resolveHeteroResume,
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
-import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
@@ -1223,25 +1222,17 @@ export const generationSlice: StateCreator<
   stopGenerating: () => {
     const state = get();
     const { context, editor, hooks } = state;
-    const { agentId, groupId, isNew, scope, threadId, topicId } = context;
 
     const chatStore = useChatStore.getState();
 
-    // Cancel all running operations in this conversation context
-    // Includes sendMessage, AI runtime (client-side and server-side), and agent mode stream
-    chatStore.cancelOperations(
-      {
-        agentId,
-        groupId,
-        isNew,
-        scope,
-        status: 'running',
-        threadId,
-        topicId,
-        type: INPUT_LOADING_OPERATION_TYPES,
-      },
-      MESSAGE_CANCEL_FLAT,
-    );
+    // The loading UI and operation index both use the canonical conversation key.
+    // Reuse it here because a group run can be owned by a member agent and omit an
+    // explicit scope while the visible conversation uses its supervisor and `group`.
+    // Those shapes share one group bucket but do not match raw field-by-field filters.
+    const operationIds = operationSelectors.getRunningInputLoadingOperationIds(context)(chatStore);
+    operationIds.forEach((operationId) => {
+      chatStore.cancelOperation(operationId, MESSAGE_CANCEL_FLAT);
+    });
 
     // Restore editor content if a sendMessage operation was cancelled
     chatStore.cancelSendMessageInServer(context, editor);
