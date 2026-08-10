@@ -51,6 +51,7 @@ vi.mock('@/database/models/connector', () => ({
     delete = vi.fn();
     findById = vi.fn().mockResolvedValue({ id: 'mcp-1', metadata: {} });
     findPublicById = vi.fn().mockResolvedValue({
+      agentId: null,
       id: 'mcp-1',
       mcpConnectionType: 'http',
       mcpServerUrl: 'https://example.com/mcp',
@@ -102,6 +103,7 @@ describe('McpServerService row-level manage checks', () => {
     const svc = service();
     connectorInstances.forEach((it) =>
       it.findPublicById.mockResolvedValue({
+        agentId: null,
         id: 'mcp-1',
         mcpConnectionType: 'http',
         mcpServerUrl: 'https://example.com/mcp',
@@ -112,4 +114,32 @@ describe('McpServerService row-level manage checks', () => {
 
     await expect(svc.deleteServer('mcp-1')).resolves.toEqual({ id: 'mcp-1' });
   });
+
+  // The list route only surfaces base connectors (`agent_id IS NULL`), and the
+  // connector router unpins an agent's plugin on delete. Reaching an
+  // agent-scoped row through an id route would skip that cleanup.
+  it.each(['getServer', 'updateServer', 'deleteServer', 'syncServer'] as const)(
+    'treats an agent-scoped connector as not found for %s',
+    async (method) => {
+      hasAnyPermissionMock.mockResolvedValue(true);
+      const svc = service();
+      connectorInstances.forEach((it) =>
+        it.findPublicById.mockResolvedValue({
+          agentId: 'agent-1',
+          id: 'mcp-1',
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'https://example.com/mcp',
+          sourceType: 'custom',
+          userId: OWNER,
+        }),
+      );
+
+      const call =
+        method === 'updateServer' ? svc.updateServer('mcp-1', { name: 'x' }) : svc[method]('mcp-1');
+
+      await expect(call).rejects.toThrow(/MCP server not found/);
+      expect(connectorInstances.every((it) => it.delete.mock.calls.length === 0)).toBe(true);
+      expect(syncConnectorToolsByIdMock).not.toHaveBeenCalled();
+    },
+  );
 });

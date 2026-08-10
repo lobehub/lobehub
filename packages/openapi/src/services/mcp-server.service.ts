@@ -17,7 +17,15 @@ import type {
   UpdateMcpServerRequest,
 } from '../types/mcp-server.type';
 
+/**
+ * Base-scope only (`agent_id IS NULL`), matching `queryPublic()`. Without the
+ * `agentId` check the id routes could reach agent-scoped connectors that the
+ * list route cannot even surface, and deleting one here would skip the
+ * connector router's agent-plugin unpin, leaving the agent with a dangling
+ * pinned tool. Agent-scoped connectors are managed through the agent profile.
+ */
 const isPublicMcpServer = (value: PublicConnectorRecord) =>
+  value.agentId === null &&
   value.sourceType === ConnectorSourceType.custom &&
   value.mcpConnectionType === ConnectorMcpConnectionType.http &&
   !!value.mcpServerUrl;
