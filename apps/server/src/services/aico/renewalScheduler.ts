@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import { OrganizationModel } from '@/database/models/organization';
 import {
@@ -10,7 +10,7 @@ import {
   walletTransactions,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { type BudgetPeriod, confirmedUnusedMicro } from '@/database/utils/aicoMoney';
+import { type BudgetPeriod, confirmedUnusedMicro, periodToOpenRouterLimitReset } from '@/database/utils/aicoMoney';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 import { computePeriodWindow } from './periodBoundaries';
@@ -40,12 +40,18 @@ export interface OrgRenewalResult {
 interface DueBudget {
   budgetId: string;
   currentPeriod: BudgetPeriod;
+  /** Active-cycle cap (OR limit source) — never includes pending hold. */
+  currentPeriodAmountMicroUsd: number;
   memberId: string;
   nextPeriod: BudgetPeriod;
   nextPeriodAmountMicroUsd: number;
   nextRenewalAt: Date;
   orgId: string;
-  reservedMicroUsd: number;
+  /**
+   * Already CAS-debited at allocate for a queued period change.
+   * Renewal must not charge this again (AICO-140 prepaid-once).
+   */
+  prepaidMicroUsd: number;
 }
 
 const backoffMs = (attempts: number): number =>
@@ -57,8 +63,12 @@ const backoffMs = (attempts: number): number =>
  * Money safety: per org, the whole cycle is one all-or-none batch keyed by
  * `org + boundary` — a unique `batch_key` makes a concurrent/duplicate run a
  * no-op, and the org wallet debit is a compare-and-swap so a partially funded
- * roster can never exist. If the wallet cannot cover the gross renewal, no
- * member is funded and every key in the batch is disabled via the outbox.
+ * roster can never exist. If the wallet cannot cover the net renewal debit
+ * (next caps minus amounts already prepaid on period-change), no member is
+ * funded and every key in the batch is disabled via the outbox.
+ *
+ * Failed batches delete their `batch_key` row on the next attempt so top-up +
+ * re-run can recover (AICO-140).
  */
 export const processDueRenewals = async (
   db: LobeChatDatabase,
@@ -75,26 +85,34 @@ export const processDueRenewals = async (
       and(
         // `total` budgets never reset — they are settled manually on revoke/remove.
         ne(memberBudgets.period, 'total'),
-        eq(memberBudgets.isActive, true),
         isNotNull(memberBudgets.nextRenewalAt),
         lte(memberBudgets.nextRenewalAt, now),
+        or(
+          eq(memberBudgets.isActive, true),
+          // Allow retry after insufficient-balance / settlement failure.
+          eq(memberBudgets.renewalStatus, 'renewal_failed'),
+        ),
       ),
     );
 
   const byOrg = new Map<string, DueBudget[]>();
   for (const row of rows) {
+    const prepaidMicroUsd = Number(row.budget.pendingPeriodAmountMicroUsd ?? 0);
     const nextPeriod = (row.budget.pendingPeriod ?? row.budget.period) as BudgetPeriod;
+    const nextPeriodAmountMicroUsd =
+      prepaidMicroUsd > 0
+        ? prepaidMicroUsd
+        : Number(row.budget.periodAmountMicroUsd ?? 0);
     const due: DueBudget = {
       budgetId: row.budget.id,
       currentPeriod: row.budget.period as BudgetPeriod,
+      currentPeriodAmountMicroUsd: Number(row.budget.periodAmountMicroUsd ?? 0),
       memberId: row.budget.orgMemberId,
       nextPeriod,
-      nextPeriodAmountMicroUsd: Number(
-        row.budget.pendingPeriodAmountMicroUsd ?? row.budget.periodAmountMicroUsd ?? 0,
-      ),
+      nextPeriodAmountMicroUsd,
       nextRenewalAt: row.budget.nextRenewalAt!,
       orgId: row.member.orgId,
-      reservedMicroUsd: Number(row.budget.reservedMicroUsd ?? 0),
+      prepaidMicroUsd,
     };
     const list = byOrg.get(due.orgId);
     if (list) list.push(due);
@@ -106,6 +124,45 @@ export const processDueRenewals = async (
     results.push(await renewOrg({ budgets, db, keyService, now, orgId }));
   }
   return results;
+};
+
+const claimRenewalBatch = async (params: {
+  batchKey: string;
+  budgetIds: string[];
+  db: LobeChatDatabase;
+  grossRequiredMicroUsd: number;
+  orgId: string;
+}) => {
+  const { batchKey, budgetIds, db, grossRequiredMicroUsd, orgId } = params;
+
+  const tryInsert = async () => {
+    const [row] = await db
+      .insert(aicoRenewalBatches)
+      .values({
+        batchKey,
+        grossRequiredMicroUsd,
+        memberBudgetIds: budgetIds,
+        orgId,
+        status: 'pending',
+      })
+      .onConflictDoNothing({ target: aicoRenewalBatches.batchKey })
+      .returning();
+    return row ?? null;
+  };
+
+  let batch = await tryInsert();
+  if (batch) return batch;
+
+  const existing = await db.query.aicoRenewalBatches.findFirst({
+    where: eq(aicoRenewalBatches.batchKey, batchKey),
+  });
+  if (!existing) return null;
+  if (existing.status !== 'failed') return null;
+
+  // Prior attempt failed (e.g. shortfall). Drop the unique key so a funded retry can proceed.
+  await db.delete(aicoRenewalBatches).where(eq(aicoRenewalBatches.id, existing.id));
+  batch = await tryInsert();
+  return batch;
 };
 
 const renewOrg = async (params: {
@@ -121,21 +178,24 @@ const renewOrg = async (params: {
     .map((b) => b.nextRenewalAt.getTime())
     .reduce((min, t) => Math.min(min, t), Number.POSITIVE_INFINITY);
   const batchKey = `${orgId}:${new Date(boundary).toISOString()}`;
-  const grossRequiredMicroUsd = budgets.reduce((sum, b) => sum + b.nextPeriodAmountMicroUsd, 0);
+  // Wallet debit excludes amounts already prepaid when queuing a period change.
+  const walletDebitByMember = new Map<string, number>();
+  for (const b of budgets) {
+    walletDebitByMember.set(
+      b.memberId,
+      Math.max(0, b.nextPeriodAmountMicroUsd - b.prepaidMicroUsd),
+    );
+  }
+  const grossRequiredMicroUsd = [...walletDebitByMember.values()].reduce((sum, v) => sum + v, 0);
 
-  // Unique `batch_key` is the idempotency guard: a second worker (or a retry of
-  // the same boundary) inserts nothing and does no money movement.
-  const [batch] = await db
-    .insert(aicoRenewalBatches)
-    .values({
-      batchKey,
-      grossRequiredMicroUsd,
-      memberBudgetIds: budgets.map((b) => b.budgetId),
-      orgId,
-      status: 'pending',
-    })
-    .onConflictDoNothing({ target: aicoRenewalBatches.batchKey })
-    .returning();
+  const budgetIds = budgets.map((b) => b.budgetId);
+  const batch = await claimRenewalBatch({
+    batchKey,
+    budgetIds,
+    db,
+    grossRequiredMicroUsd,
+    orgId,
+  });
 
   if (!batch) {
     return {
@@ -149,14 +209,21 @@ const renewOrg = async (params: {
     };
   }
 
-  const budgetIds = budgets.map((b) => b.budgetId);
-
-  // Deny chat for the whole roster while the boundary settles — a member must
-  // never spend against an unfunded period.
+  // Deny chat + disable OR keys while the boundary settles.
   await db
     .update(memberBudgets)
-    .set({ renewalStatus: 'renewal_pending' })
+    .set({ isActive: true, renewalStatus: 'renewal_pending' })
     .where(inArray(memberBudgets.id, budgetIds));
+
+  await Promise.all(
+    budgets.map(async (b) => {
+      try {
+        await keyService.disableMemberKey(b.memberId);
+      } catch (error) {
+        console.warn('[aico] disableMemberKey at renewal start failed', b.memberId, error);
+      }
+    }),
+  );
 
   const failBatch = async (error: string, shortfallMicroUsd = 0) => {
     await db
@@ -196,9 +263,11 @@ const renewOrg = async (params: {
     for (const b of budgets) {
       const settled = await keyService.settleMemberPeriod(b.memberId);
       const usage = BigInt(settled?.usageMicroUsd ?? 0);
+      // Never refund from reserved (may include pending). Prefer OR remaining;
+      // fall back to current-cycle cap − usage only.
       const unused =
         settled?.remainingMicroUsd == null
-          ? confirmedUnusedMicro(BigInt(b.reservedMicroUsd), usage)
+          ? confirmedUnusedMicro(BigInt(b.currentPeriodAmountMicroUsd), usage)
           : BigInt(Math.max(0, Math.floor(settled.remainingMicroUsd)));
       refunds.set(b.memberId, Number(unused));
     }
@@ -208,8 +277,7 @@ const renewOrg = async (params: {
 
   const refundedMicroUsd = [...refunds.values()].reduce((sum, v) => sum + v, 0);
 
-  // 2. Refund confirmed-unused credit, then take the gross renewal in a single
-  //    compare-and-swap so the roster is funded all-or-none.
+  // 2. Refund confirmed-unused credit, then CAS-debit only the unfunded next-cap slice.
   try {
     await db.transaction(async (tx) => {
       const orgBefore = await tx.query.organizations.findFirst({
@@ -249,23 +317,30 @@ const renewOrg = async (params: {
         }
       }
 
-      const [funded] = await tx
-        .update(organizations)
-        .set({
-          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} - ${grossRequiredMicroUsd}`,
-        })
-        .where(
-          and(
-            eq(organizations.id, orgId),
-            sql`${organizations.walletBalanceMicroUsd} >= ${grossRequiredMicroUsd}`,
-          ),
-        )
-        .returning();
-      if (!funded) throw new Error('INSUFFICIENT_ORG_BALANCE');
-      runningBalanceMicroUsd = Number(funded.walletBalanceMicroUsd ?? 0);
+      if (grossRequiredMicroUsd > 0) {
+        const [funded] = await tx
+          .update(organizations)
+          .set({
+            walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} - ${grossRequiredMicroUsd}`,
+          })
+          .where(
+            and(
+              eq(organizations.id, orgId),
+              sql`${organizations.walletBalanceMicroUsd} >= ${grossRequiredMicroUsd}`,
+            ),
+          )
+          .returning();
+        if (!funded) throw new Error('INSUFFICIENT_ORG_BALANCE');
+        runningBalanceMicroUsd = Number(funded.walletBalanceMicroUsd ?? 0);
+      } else {
+        const [fresh] = await tx
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, orgId))
+          .limit(1);
+        runningBalanceMicroUsd = Number(fresh?.walletBalanceMicroUsd ?? 0);
+      }
 
-      // Attribute the gross debit across per-member renewal ledger rows (reverse order of apply).
-      // Snapshot after CAS first, then walk renewals so each row shows progressive before/after.
       let attributed = runningBalanceMicroUsd + grossRequiredMicroUsd;
       for (const b of budgets) {
         const window = computePeriodWindow(b.nextPeriod, now);
@@ -274,7 +349,9 @@ const renewOrg = async (params: {
           .set({
             currentPeriodEnd: window.end,
             currentPeriodStart: window.start,
+            isActive: true,
             nextRenewalAt: window.nextRenewalAt,
+            openrouterLimitReset: periodToOpenRouterLimitReset(b.nextPeriod),
             pendingPeriod: null,
             pendingPeriodAmountMicroUsd: null,
             period: b.nextPeriod,
@@ -286,14 +363,16 @@ const renewOrg = async (params: {
           })
           .where(eq(memberBudgets.id, b.budgetId));
 
+        const debit = walletDebitByMember.get(b.memberId) ?? 0;
+        if (debit <= 0) continue;
+
         const member = await tx.query.organizationMembers.findFirst({
           where: eq(organizationMembers.id, b.memberId),
         });
-        const amount = b.nextPeriodAmountMicroUsd;
         const balanceBeforeMicroUsd = attributed;
-        attributed -= amount;
+        attributed -= debit;
         await tx.insert(walletTransactions).values({
-          amountMicroUsd: amount,
+          amountMicroUsd: debit,
           amountToman: 0,
           balanceAfterMicroUsd: attributed,
           balanceBeforeMicroUsd,
@@ -321,9 +400,7 @@ const renewOrg = async (params: {
     return failBatch(`RENEWAL_FAILED:${message}`);
   }
 
-  // 3. Push the new limit + limit_reset to OpenRouter. A key that cannot be
-  //    updated is left disabled and retried by the outbox rather than allowed to
-  //    spend against a stale limit.
+  // 3. Push the new limit + limit_reset to OpenRouter (re-enables funded keys).
   for (const b of budgets) {
     try {
       await keyService.ensureMemberKey(b.memberId);

@@ -79,14 +79,14 @@ describe('Aico multi-organization billing context (Phase 2)', () => {
     });
     await orgModel.allocateMemberCredit({
       periodAmountMicroUsd: 5000000,
-      period: 'total',
+      period: 'daily',
       createdByUserId: ownerA,
       orgId: orgA.id,
       orgMemberId: meA.id,
     });
     await orgModel.allocateMemberCredit({
       periodAmountMicroUsd: 40000000,
-      period: 'total',
+      period: 'daily',
       createdByUserId: ownerB,
       orgId: orgB.id,
       orgMemberId: meB.id,

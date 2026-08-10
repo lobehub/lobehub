@@ -7,7 +7,7 @@ import { DatePicker, Form, Input, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { Building2Icon, DollarSignIcon, UsersIcon, WalletIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -66,6 +66,31 @@ type InviteForm = {
 
 const usd = (n: number | string | undefined | null) => `$${Number(n ?? 0).toFixed(2)}`;
 
+const nextUtcBoundaryLocal = (period: 'daily' | 'weekly' | 'monthly' | undefined): string => {
+  if (!period) return '—';
+  const utcNow = new Date();
+  const next = new Date(
+    Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), utcNow.getUTCDate() + 1, 0, 0, 0),
+  );
+  if (period === 'weekly') {
+    const day = utcNow.getUTCDay(); // 0 Sun … 6 Sat
+    const daysUntilMon = day === 0 ? 1 : 8 - day;
+    next.setUTCFullYear(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), utcNow.getUTCDate() + daysUntilMon);
+    next.setUTCHours(0, 0, 0, 0);
+  } else if (period === 'monthly') {
+    next.setUTCFullYear(utcNow.getUTCFullYear(), utcNow.getUTCMonth() + 1, 1);
+    next.setUTCHours(0, 0, 0, 0);
+  }
+  return dayjs(next).format('YYYY-MM-DD HH:mm');
+};
+
+const periodLabelKey = (period: string | null | undefined) => {
+  if (period === 'daily' || period === 'weekly' || period === 'monthly' || period === 'total') {
+    return `org.period.${period}` as const;
+  }
+  return 'org.period.total' as const;
+};
+
 /** Default inclusive UTC window: last 30 calendar days including today. */
 const defaultRange = (): [string, string] => {
   const to = dayjs().format('YYYY-MM-DD');
@@ -89,7 +114,15 @@ export const OrgAdminMembers = () => {
   const [teamForm] = Form.useForm<{ name: string }>();
   const [topupForm] = Form.useForm<FxTopupFormValues>();
   const [topupChargeField, setTopupChargeField] = useState<FxTopupChargeField>('toman');
-  const [allocForm] = Form.useForm<{ amountUsd: number; orgMemberId: string }>();
+  const [allocForm] = Form.useForm<{
+    amountUsd: number;
+    orgMemberId: string;
+    period: 'daily' | 'weekly' | 'monthly';
+  }>();
+  const allocMemberId = Form.useWatch('orgMemberId', allocForm);
+  const allocPeriod = Form.useWatch('period', allocForm);
+  /** One FIN-003 key per in-flight allocate attempt (stable across retries / double-submit). */
+  const allocIdempotencyKeyRef = useRef<string | null>(null);
   const [modelsForm] = Form.useForm<{ modelIds: string[]; teamId: string }>();
   const [upgradeForm] = Form.useForm<{ name: string }>();
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
@@ -487,6 +520,11 @@ export const OrgAdminMembers = () => {
                     render: (v: string | null) => v || t('org.unspecifiedTeam'),
                   },
                   {
+                    dataIndex: 'period',
+                    title: t('org.columns.period'),
+                    render: (v: string | null) => t(periodLabelKey(v)),
+                  },
+                  {
                     dataIndex: 'periodAmountUsd',
                     title: t('org.columns.limit'),
                     render: (v: string) => usd(v),
@@ -500,6 +538,24 @@ export const OrgAdminMembers = () => {
                     dataIndex: 'remainingUsd',
                     title: t('org.columns.remaining'),
                     render: (v: string) => usd(v),
+                  },
+                  {
+                    dataIndex: 'nextRenewalAt',
+                    title: t('org.columns.nextRenewal'),
+                    render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'),
+                  },
+                  {
+                    key: 'pending',
+                    title: t('org.columns.pending'),
+                    render: (_, row) =>
+                      row.pendingPeriod
+                        ? `${t(periodLabelKey(row.pendingPeriod))} ${usd(row.pendingPeriodAmountUsd)}`
+                        : '—',
+                  },
+                  {
+                    dataIndex: 'renewalStatus',
+                    title: t('org.columns.renewalStatus'),
+                    render: (v: string | null) => v || '—',
                   },
                 ]}
               />
@@ -585,15 +641,24 @@ export const OrgAdminMembers = () => {
                 layout="vertical"
                 onFinish={async (values) => {
                   if (!selectedOrgId) return;
+                  if (!allocIdempotencyKeyRef.current) {
+                    allocIdempotencyKeyRef.current =
+                      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                        ? crypto.randomUUID()
+                        : `alloc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+                  }
                   setBusy(true);
                   try {
                     await lambdaClient.organization.allocateMemberCredit.mutate({
                       amountUsd: Number(values.amountUsd).toFixed(6),
+                      idempotencyKey: allocIdempotencyKeyRef.current,
                       orgId: selectedOrgId,
                       orgMemberId: values.orgMemberId,
+                      period: values.period,
                     });
                     toast.success(t('org.allocateSuccess'));
-                    allocForm.resetFields(['amountUsd']);
+                    allocIdempotencyKeyRef.current = null;
+                    allocForm.resetFields(['amountUsd', 'period']);
                     await refreshAll();
                   } catch (err) {
                     toastAicoError(err, t, 'org.allocateFailed');
@@ -621,6 +686,21 @@ export const OrgAdminMembers = () => {
                     />
                   </Form.Item>
                   <Form.Item
+                    label={t('org.allocatePeriod')}
+                    name="period"
+                    rules={[{ required: true }]}
+                    style={{ minWidth: 160 }}
+                  >
+                    <Select
+                      options={[
+                        { label: t('org.period.daily'), value: 'daily' },
+                        { label: t('org.period.weekly'), value: 'weekly' },
+                        { label: t('org.period.monthly'), value: 'monthly' },
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                  <Form.Item
                     label={t('org.amountUsd')}
                     name="amountUsd"
                     rules={[{ required: true }]}
@@ -629,6 +709,25 @@ export const OrgAdminMembers = () => {
                     <InputNumber min={0.01} step={0.5} style={{ width: '100%' }} />
                   </Form.Item>
                 </Flexbox>
+                <Text type="secondary">{t('org.allocatePeriodHint')}</Text>
+                {allocPeriod ? (
+                  <Text type="secondary">
+                    {t('org.period.nextBoundary', { time: nextUtcBoundaryLocal(allocPeriod) })}
+                  </Text>
+                ) : null}
+                {(() => {
+                  const current = (dashboard?.members || []).find((m) => m.memberId === allocMemberId);
+                  if (!current?.period || !allocPeriod || current.period === allocPeriod) return null;
+                  if (Number(current.periodAmountUsd) <= 0) return null;
+                  return (
+                    <Text type="secondary">
+                      {t('org.allocatePeriodChangeWarn', {
+                        current: t(periodLabelKey(current.period)),
+                        next: t(periodLabelKey(allocPeriod)),
+                      })}
+                    </Text>
+                  );
+                })()}
                 <Button disabled={readOnly} htmlType="submit" loading={busy} type="primary">
                   {t('org.allocateSubmit')}
                 </Button>

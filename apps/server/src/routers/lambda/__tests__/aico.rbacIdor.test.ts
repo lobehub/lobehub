@@ -168,7 +168,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
         amountUsd: '1.000000',
         orgId: created.id,
         orgMemberId: 'x',
-        period: 'total',
+        period: 'daily',
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -275,7 +275,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       amountUsd: '1.000000',
       orgId: orgB.id,
       orgMemberId: orgBMember!.id,
-      period: 'total',
+      period: 'daily',
     });
 
     // Same-org read still works for Org B owner.
@@ -496,7 +496,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: me!.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 5_000_000,
     });
 

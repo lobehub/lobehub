@@ -154,7 +154,7 @@ describe('Phase 3 Journey 2 — Organization lifecycle', () => {
     const { member, org } = await setupOrg();
     await orgModel.allocateMemberCredit({
       periodAmountMicroUsd: 40000000,
-      period: 'total',
+      period: 'daily',
       createdByUserId: P3.orgOwner,
       orgId: org.id,
       orgMemberId: member.id,
@@ -162,7 +162,7 @@ describe('Phase 3 Journey 2 — Organization lifecycle', () => {
     await expect(
       orgModel.allocateMemberCredit({
         periodAmountMicroUsd: 80000000,
-        period: 'total',
+        period: 'daily',
         createdByUserId: P3.orgOwner,
         orgId: org.id,
         orgMemberId: member.id,
@@ -181,7 +181,7 @@ describe('Phase 3 Journey 2 — Organization lifecycle', () => {
       createdByUserId: P3.orgOwner,
       orgId: org.id,
       orgMemberId: member.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 10_000_000,
     });
     await orgModel.updateMemberOpenRouterKey({
@@ -204,7 +204,7 @@ describe('Phase 3 Journey 2 — Organization lifecycle', () => {
     await expect(
       orgModel.allocateMemberCredit({
         periodAmountMicroUsd: 1000000,
-        period: 'total',
+        period: 'daily',
         createdByUserId: P3.orgOwner,
         orgId: org.id,
         orgMemberId: member.id,
@@ -282,14 +282,14 @@ describe('Phase 3 Journey 5 — Concurrency (release invariants)', () => {
         createdByUserId: P3.orgOwner,
         orgId: org.id,
         orgMemberId: mA.id,
-        period: 'total',
+        period: 'daily',
         periodAmountMicroUsd: 80_000_000,
       }),
       orgModel.allocateMemberCredit({
         createdByUserId: P3.orgOwner,
         orgId: org.id,
         orgMemberId: mB.id,
-        period: 'total',
+        period: 'daily',
         periodAmountMicroUsd: 80_000_000,
       }),
     ]);
@@ -346,14 +346,14 @@ describe('Phase 3 Journey 5 — Concurrency (release invariants)', () => {
           createdByUserId: P3.orgOwner,
           orgId: org.id,
           orgMemberId: mA.id,
-          period: 'total',
+          period: 'daily',
           periodAmountMicroUsd: 80_000_000,
         }),
         orgModel.allocateMemberCredit({
           createdByUserId: P3.orgOwner,
           orgId: org.id,
           orgMemberId: mB.id,
-          period: 'total',
+          period: 'daily',
           periodAmountMicroUsd: 80_000_000,
         }),
       ]);

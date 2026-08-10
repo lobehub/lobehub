@@ -237,7 +237,7 @@ describe('Aico organization lifecycle (Phase 2)', () => {
     await expect(
       orgModel.allocateMemberCredit({
         periodAmountMicroUsd: 1000000,
-        period: 'total',
+        period: 'daily',
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: member.id,
@@ -268,7 +268,7 @@ describe('Aico organization lifecycle (Phase 2)', () => {
     });
     await orgModel.allocateMemberCredit({
       periodAmountMicroUsd: 5000000,
-      period: 'total',
+      period: 'daily',
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: member.id,

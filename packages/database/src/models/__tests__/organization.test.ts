@@ -185,7 +185,7 @@ describe('OrganizationModel', () => {
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: member.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 10_000_000,
     });
     expect(Number(budget.periodAmountMicroUsd)).toBe(10_000_000);
@@ -196,8 +196,9 @@ describe('OrganizationModel', () => {
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: member.id,
-        period: 'total',
-        periodAmountMicroUsd: 15_000_000,
+        period: 'daily',
+        // set-cap delta = $20 but only $10 remains in org wallet
+        periodAmountMicroUsd: 30_000_000,
       }),
     ).rejects.toThrow('INSUFFICIENT_ORG_BALANCE');
   });

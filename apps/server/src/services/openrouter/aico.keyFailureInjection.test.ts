@@ -67,6 +67,9 @@ class ControllableOpenRouterClient implements OpenRouterManagementClient {
         limitRemaining: params.limitUsd,
         name: params.name,
         usage: 0,
+        usageDaily: 0,
+        usageMonthly: 0,
+        usageWeekly: 0,
       } as any;
     }
     const hash = `ctrl_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
@@ -78,6 +81,9 @@ class ControllableOpenRouterClient implements OpenRouterManagementClient {
       limitRemaining: params.limitUsd,
       name: params.name,
       usage: 0,
+      usageDaily: 0,
+      usageMonthly: 0,
+      usageWeekly: 0,
     };
     this.keys.set(hash, row);
     return { ...row };
@@ -215,7 +221,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       isActive: true,
       orgId: org.id,
       orgMemberId: ownerMember.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 0,
       reservedMicroUsd: 0,
     });
@@ -293,7 +299,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       isActive: true,
       orgId: org.id,
       orgMemberId: ownerMember.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 20_000_000,
       reservedMicroUsd: 20_000_000,
     });
@@ -333,7 +339,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       isActive: true,
       orgId: org.id,
       orgMemberId: ownerMember.id,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 10_000_000,
       reservedMicroUsd: 10_000_000,
     });
@@ -396,7 +402,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       orgMemberId: ownerMember.id,
       pendingPeriod: 'monthly',
       pendingPeriodAmountMicroUsd: 30_000_000,
-      period: 'total',
+      period: 'daily',
       periodAmountMicroUsd: 10_000_000,
       reservedMicroUsd: 40_000_000,
     });

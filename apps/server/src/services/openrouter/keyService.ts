@@ -289,9 +289,15 @@ export class AicoOpenRouterKeyService {
   };
 
   /**
-   * Authoritative period settlement read — unlike {@link reclaimMemberKey} it
-   * leaves the key enabled, so a renewal can settle the closing period without
-   * interrupting a member whose next period is about to be funded.
+   * Authoritative period settlement read for renewal.
+   * Does not itself enable/disable the OpenRouter key — renewal already
+   * disables keys at the start of `renewal_pending` and re-enables only after
+   * the next period is funded.
+   *
+   * Boundary safety (AICO-140): prefer `limit_remaining` and period usage
+   * counters. If OpenRouter has already reset for the new cycle (period usage
+   * near 0 / remaining ≈ full limit while Aico still has closing-cycle
+   * settledUsage), use Aico's last settled usage so we do not over-refund.
    */
   settleMemberPeriod = async (
     orgMemberId: string,
@@ -300,20 +306,66 @@ export class AicoOpenRouterKeyService {
     if (!budget?.openrouterKeyId) return null;
 
     const info = await this.client.getKey(budget.openrouterKeyId);
-    const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
-    // Settle the closing cycle only — leave pending next-period funds untouched.
     const currentCycle = this.currentCycleLimitMicro(budget);
-    const remaining =
+    const priorSettled = Math.max(0, Number(budget.settledUsageMicroUsd ?? 0));
+
+    const periodUsageUsd =
+      budget.period === 'daily'
+        ? info.usageDaily
+        : budget.period === 'weekly'
+          ? info.usageWeekly
+          : budget.period === 'monthly'
+            ? info.usageMonthly
+            : null;
+
+    const periodUsageMicro =
+      periodUsageUsd == null ? null : Number(openRouterUsdToMicroFloor(periodUsageUsd));
+
+    const limitMicro =
+      info.limit == null ? currentCycle : Number(openRouterUsdToMicroFloor(info.limit));
+    const remainingFromOr =
       info.limitRemaining == null
-        ? Math.max(0, currentCycle - usageMicro)
+        ? null
         : Number(openRouterUsdToMicroFloor(info.limitRemaining));
+
+    // Detect post-reset OR counters while Aico still holds closing-period spend.
+    const looksReset =
+      priorSettled > 0 &&
+      ((periodUsageMicro != null && periodUsageMicro < priorSettled / 2) ||
+        (remainingFromOr != null &&
+          limitMicro > 0 &&
+          remainingFromOr >= Math.floor(limitMicro * 0.95) &&
+          priorSettled > Math.floor(currentCycle * 0.05)));
+
+    let usageMicro: number;
+    let remainingMicro: number;
+
+    if (looksReset) {
+      usageMicro = Math.min(priorSettled, currentCycle);
+      remainingMicro = Math.max(0, currentCycle - usageMicro);
+    } else if (remainingFromOr != null) {
+      remainingMicro = Math.max(0, remainingFromOr);
+      usageMicro = Math.max(0, currentCycle - remainingMicro);
+      if (periodUsageMicro != null) {
+        usageMicro = Math.min(currentCycle, Math.max(usageMicro, periodUsageMicro));
+        remainingMicro = Math.max(0, currentCycle - usageMicro);
+      }
+    } else if (periodUsageMicro != null) {
+      usageMicro = Math.min(currentCycle, Math.max(0, periodUsageMicro));
+      remainingMicro = Math.max(0, currentCycle - usageMicro);
+    } else {
+      usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
+      // Lifetime `usage` can exceed one cycle — clamp to current cycle.
+      usageMicro = Math.min(currentCycle, Math.max(0, usageMicro));
+      remainingMicro = Math.max(0, currentCycle - usageMicro);
+    }
 
     await this.orgModel.syncMemberBudgetUsage({
       orgMemberId,
       settledUsageMicroUsd: usageMicro,
     });
 
-    return { remainingMicroUsd: Math.max(0, remaining), usageMicroUsd: usageMicro };
+    return { remainingMicroUsd: remainingMicro, usageMicroUsd: usageMicro };
   };
 
   /**
