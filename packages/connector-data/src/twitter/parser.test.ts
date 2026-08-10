@@ -91,6 +91,19 @@ describe('X response parsers', () => {
     ]);
   });
 
+  /** @example X recent-search metadata with zero results becomes valid empty evidence. */
+  it('normalizes an explicit zero-result response', () => {
+    // ROOT CAUSE:
+    //
+    // X omits the `data` collection when a recent search has no matching posts and returns only
+    // `{ meta: { result_count: 0 } }`. Treating every missing collection as malformed made a
+    // successful empty search count as a failed Understanding source operation.
+    //
+    // Before: parseTwitterPosts({ data: { meta: { result_count: 0 } } }, 10) returned undefined.
+    // After: the explicit zero-result metadata is normalized to an empty post collection.
+    expect(parseTwitterPosts({ data: { meta: { result_count: 0 } } }, 10)).toEqual([]);
+  });
+
   /** @example A non-empty malformed collection is rejected instead of becoming empty evidence. */
   it('rejects a recent-search collection with no valid posts', () => {
     expect(parseTwitterPosts({ data: { data: [{ unexpected: true }] } }, 10)).toBeUndefined();

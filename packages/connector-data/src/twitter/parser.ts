@@ -150,7 +150,13 @@ export const parseTwitterPosts = (
       if (Array.isArray(record.tweets)) return record.tweets;
     })
     .find((candidate): candidate is unknown[] => candidate !== undefined);
-  if (!collection) return;
+  if (!collection) {
+    const isExplicitlyEmpty = records.some((record) => {
+      const meta = toRecord(record.meta);
+      return boundedNumber(meta?.result_count) === 0;
+    });
+    return isExplicitlyEmpty ? [] : undefined;
+  }
   const finiteLimit = Number.isFinite(maxCandidates) ? Math.floor(maxCandidates) : 0;
   const limit = Math.min(Math.max(0, finiteLimit), 100);
   const posts = new Map<string, TwitterPost>();
