@@ -481,14 +481,14 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.addAgentToGroup('test-group', 'test-agent', {
         order: 5,
-        role: 'moderator',
+        role: 'assistant',
       });
 
       expect(result.chatGroupId).toBe('test-group');
       expect(result.agentId).toBe('test-agent');
       expect(result.userId).toBe(userId);
       expect(result.order).toBe(5);
-      expect(result.role).toBe('moderator');
+      expect(result.role).toBe('assistant');
     });
 
     it('should add agent with default options', async () => {
@@ -963,11 +963,11 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.updateAgentInGroup('update-agent-group', 'update-agent', {
         order: 5,
-        role: 'moderator',
+        role: 'assistant',
       });
 
       expect(result.order).toBe(5);
-      expect(result.role).toBe('moderator');
+      expect(result.role).toBe('assistant');
       expect(result.updatedAt).toBeInstanceOf(Date);
     });
   });
