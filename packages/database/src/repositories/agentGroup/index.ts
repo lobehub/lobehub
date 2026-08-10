@@ -909,6 +909,11 @@ export class AgentGroupRepository {
    * with sessions and knowledge bases a group transfer does not touch), so it
    * leaves them behind and clones them instead. Callers ask this first so the
    * user hears about that before it happens rather than after.
+   *
+   * Reports only members the caller could already see on the roster. A member
+   * hidden from them is under-reported rather than exposed — it is invisible
+   * to this caller everywhere else too, so naming it here would make a
+   * confirmation dialog the one place a private agent leaks.
    */
   async listReferencedMembers(groupIds: string[]): Promise<
     {
@@ -937,9 +942,20 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      // Scoped on the GROUP: seeing a roster is a group-level read, and a
-      // caller who cannot see the group learns nothing about its members.
-      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.groupOwnership()))
+      .where(
+        and(
+          inArray(chatGroupsAgents.chatGroupId, groupIds),
+          // Scoped on the GROUP: seeing a roster is a group-level read, and a
+          // caller who cannot see the group learns nothing about its members.
+          this.groupOwnership(),
+          // AND on the member agent, exactly as the roster reads do
+          // (`memberAgentVisibility`). Seeing the group is not enough: a member
+          // whose owner has since flipped it back to `private` is hidden from
+          // the roster, and this warning must not be the one surface that
+          // hands out its title and avatar.
+          this.agentOwnership(),
+        ),
+      )
       .orderBy(chatGroupsAgents.order, chatGroupsAgents.agentId);
 
     return rows

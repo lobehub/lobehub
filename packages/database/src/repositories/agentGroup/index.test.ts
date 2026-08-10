@@ -2356,4 +2356,77 @@ describe('AgentGroupRepository', () => {
       );
     });
   });
+
+  describe('listReferencedMembers', () => {
+    const workspaceId = 'lrm-ws';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Referenced Member WS',
+        primaryOwnerId: userId,
+        slug: 'lrm-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'lrm-group',
+        title: 'Roster',
+        userId,
+        visibility: 'public',
+        workspaceId,
+      });
+
+      await serverDB.insert(agents).values([
+        // Another member's agent, still shared with the workspace.
+        {
+          id: 'lrm-public',
+          title: 'Shared Member',
+          userId: otherUserId,
+          virtual: false,
+          visibility: 'public',
+          workspaceId,
+        },
+        // Same, but its owner has since taken it private again.
+        {
+          id: 'lrm-private',
+          title: 'Secret Member',
+          userId: otherUserId,
+          virtual: false,
+          visibility: 'private',
+          workspaceId,
+        },
+        // Group-owned: travels with the group, so never "referenced".
+        {
+          id: 'lrm-owned',
+          title: 'Owned Member',
+          userId,
+          virtual: true,
+          workspaceId,
+        },
+      ]);
+
+      await serverDB.insert(chatGroupsAgents).values([
+        { agentId: 'lrm-public', chatGroupId: 'lrm-group', order: 0, userId, workspaceId },
+        { agentId: 'lrm-private', chatGroupId: 'lrm-group', order: 1, userId, workspaceId },
+        { agentId: 'lrm-owned', chatGroupId: 'lrm-group', order: 2, userId, workspaceId },
+      ]);
+    });
+
+    it('omits a member the caller cannot see on the roster', async () => {
+      // Seeing the GROUP is not enough. The roster itself hides a member whose
+      // owner flipped it back to private, so this pre-transfer warning must not
+      // become the one surface that hands out its title and avatar.
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      const rows = await wsRepo.listReferencedMembers(['lrm-group']);
+
+      expect(rows.map((row) => row.agentId)).toEqual(['lrm-public']);
+    });
+
+    it('returns nothing for a group the caller cannot see', async () => {
+      const strangerRepo = new AgentGroupRepository(serverDB, otherUserId);
+
+      await expect(strangerRepo.listReferencedMembers(['lrm-group'])).resolves.toEqual([]);
+    });
+  });
 });
