@@ -117,6 +117,36 @@ export function defineConfig(config: CustomNextConfig) {
           headers: [
             {
               key: 'Cache-Control',
+              value:
+                'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value:
+                'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable',
+            },
+          ],
+          source: '/_spa/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value:
+                'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value:
+                'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable',
+            },
+          ],
+          source: '/_spa-auth/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
               value: 'public, max-age=31536000, immutable',
             },
             {
