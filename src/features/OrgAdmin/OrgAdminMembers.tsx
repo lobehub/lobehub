@@ -18,6 +18,7 @@ import {
   FxTopupFields,
   type FxTopupFormValues,
 } from '@/features/AicoBilling/FxTopupFields';
+import { groupedNumberInputProps } from '@/features/AicoBilling/groupedNumberInput';
 import { aicoPanelStyles } from '@/features/AicoPanels';
 import { presentInviteLink } from '@/features/OrgAdmin/InviteLinkModal';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
@@ -538,10 +539,10 @@ export const OrgAdminMembers = () => {
                     />
                   </Form.Item>
                   <Form.Item
+                    label={inviteType === 'phone' ? t('org.invite.phone') : t('org.invite.email')}
                     name="identifierValue"
                     rules={[{ required: true }]}
                     style={{ flex: 1, minWidth: 220 }}
-                    label={inviteType === 'phone' ? t('org.invite.phone') : t('org.invite.email')}
                   >
                     <Input
                       autoComplete={inviteType === 'phone' ? 'tel' : 'email'}
@@ -626,7 +627,12 @@ export const OrgAdminMembers = () => {
                     rules={[{ required: true }]}
                     style={{ minWidth: 140 }}
                   >
-                    <InputNumber min={0.01} step={0.5} style={{ width: '100%' }} />
+                    <InputNumber
+                      {...groupedNumberInputProps}
+                      min={0.01}
+                      step={0.5}
+                      style={{ width: '100%' }}
+                    />
                   </Form.Item>
                 </Flexbox>
                 <Button disabled={readOnly} htmlType="submit" loading={busy} type="primary">

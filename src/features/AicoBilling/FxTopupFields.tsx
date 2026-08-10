@@ -6,6 +6,8 @@ import { type FormInstance } from 'antd/es/form';
 import { createStaticStyles } from 'antd-style';
 import { useTranslation } from 'react-i18next';
 
+import { groupedNumberInputProps } from './groupedNumberInput';
+
 export type FxTopupChargeField = 'toman' | 'usd';
 
 export interface FxTopupFormValues {
@@ -111,6 +113,7 @@ export const FxTopupFields = ({
       <div className={styles.row}>
         <Form.Item label={t(tomanLabelKey)} name="amountToman" style={{ marginBottom: 0 }}>
           <InputNumber
+            {...groupedNumberInputProps}
             disabled={disabled}
             min={tomanMin}
             step={1000}
@@ -125,6 +128,7 @@ export const FxTopupFields = ({
         </Form.Item>
         <Form.Item label={t(usdLabelKey)} name="amountUsd" style={{ marginBottom: 0 }}>
           <InputNumber
+            {...groupedNumberInputProps}
             disabled={disabled}
             min={usdMin}
             step={0.5}
