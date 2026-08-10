@@ -309,7 +309,7 @@ export class MCPService {
         throw new TRPCError({
           cause: error,
           code: 'SERVICE_UNAVAILABLE',
-          message: errorMessage,
+          message: 'Failed to initialize MCP client',
         });
       }
 
@@ -323,7 +323,8 @@ export class MCPService {
       throw new TRPCError({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
-        message: errorMessage, // Use complete error message directly
+        // DATA-015: generic client message; details stay in server logs above
+        message: 'Failed to initialize MCP client',
       });
     }
   }

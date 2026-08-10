@@ -44,8 +44,8 @@ describe('ApiKeyModel', () => {
       expect(result.id).toBeDefined();
       expect(result.name).toBe(params.name);
       expect(result.enabled).toBe(params.enabled);
-      expect(result.key).toBeDefined();
-      expect(result.key).not.toMatch(/^sk-lh-[\da-z]{16}$/);
+      // Show-once plaintext on create
+      expect(result.key).toMatch(/^sk-lh-[\da-z]{16}$/);
       expect(result.userId).toBe(userId);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
@@ -53,6 +53,7 @@ describe('ApiKeyModel', () => {
       });
       expect(apiKey).toMatchObject({ ...params, userId });
       expect(apiKey?.key).toContain(':');
+      expect(apiKey?.key).not.toBe(result.key);
       expect(apiKey?.keyHash).toMatch(/^[\da-f]{64}$/);
     });
 
@@ -139,13 +140,14 @@ describe('ApiKeyModel', () => {
   });
 
   describe('query', () => {
-    it('should query API keys for the user', async () => {
+    it('should query API keys for the user with masked secrets only', async () => {
       await apiKeyModel.create({ name: 'Key 1', enabled: true });
       await apiKeyModel.create({ name: 'Key 2', enabled: true });
 
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
-      expect(keys[0].key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(keys[0].key).toBe('sk-lh-****************');
+      expect(keys[0].key).not.toMatch(/^sk-lh-[\da-z]{16}$/);
     });
 
     it('should query API keys ordered by updatedAt desc', async () => {
@@ -171,7 +173,7 @@ describe('ApiKeyModel', () => {
       expect(keys[0].name).toBe('User 1 Key');
     });
 
-    it('should keep the list available when one API key cannot be decrypted', async () => {
+    it('lists keys without decrypting vault ciphertext after secret rotation', async () => {
       const staleKey = await apiKeyModel.create({ name: 'Stale Key', enabled: true });
 
       process.env.KEY_VAULTS_SECRET = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
@@ -183,9 +185,14 @@ describe('ApiKeyModel', () => {
       const freshResult = keys.find(({ id }) => id === freshKey.id);
 
       expect(keys).toHaveLength(2);
-      expect(staleResult).toMatchObject({ key: '', keyDecryptionFailed: true });
-      expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
-      expect(freshResult?.key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(staleResult).toMatchObject({
+        key: 'sk-lh-****************',
+        keyDecryptionFailed: false,
+      });
+      expect(freshResult).toMatchObject({
+        key: 'sk-lh-****************',
+        keyDecryptionFailed: false,
+      });
     });
   });
 

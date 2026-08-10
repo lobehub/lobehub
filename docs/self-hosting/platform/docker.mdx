@@ -75,14 +75,14 @@ Here is the process for deploying the LobeHub server database version on a Linux
   APP_URL=https://your-prod-domain.com
 
   # DB required environment variables
-  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  KEY_VAULTS_SECRET=<generate with: openssl rand -base64 32>
   # Postgres database connection string
   # Format: postgres://username:password@host:port/dbname; if your pg instance is a Docker container, use the container name
   DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
 
   # Authentication (Better Auth)
   # Session encryption key (generate with: openssl rand -base64 32)
-  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  AUTH_SECRET=<generate with: openssl rand -base64 32>
   # JWKS key for signing and verifying JWTs
   JWKS_KEY='{"keys":[...]}'
 
@@ -139,8 +139,8 @@ The script command you need to execute is:
 ```shell
 $ docker run -it -d --name lobehub -p 3210:3210 \
   -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
-  -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
-  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e KEY_VAULTS_SECRET=<generate with: openssl rand -base64 32> \
+  -e AUTH_SECRET=<generate with: openssl rand -base64 32> \
   -e JWKS_KEY='{"keys":[...]}' \
   -e APP_URL=http://localhost:3210 \
   -e S3_ACCESS_KEY_ID=xxxxxxxxxx \

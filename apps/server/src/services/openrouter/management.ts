@@ -46,7 +46,12 @@ class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`OpenRouter Management API ${res.status}: ${body || res.statusText}`);
+      // DATA-013: do not embed upstream response bodies in Error.message
+      console.warn('[openrouter] management API error', {
+        bodyPreview: body.slice(0, 200),
+        status: res.status,
+      });
+      throw new Error(`OpenRouter Management API ${res.status}: ${res.statusText}`);
     }
 
     if (res.status === 204) return undefined as T;
@@ -116,7 +121,12 @@ export class RemoteOpenRouterManagementClient implements OpenRouterManagementCli
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`Control plane OpenRouter proxy ${res.status}: ${body || res.statusText}`);
+      // DATA-013: do not embed upstream response bodies in Error.message
+      console.warn('[openrouter] control-plane proxy error', {
+        bodyPreview: body.slice(0, 200),
+        status: res.status,
+      });
+      throw new Error(`Control plane OpenRouter proxy ${res.status}: ${res.statusText}`);
     }
 
     if (res.status === 204) return undefined as T;

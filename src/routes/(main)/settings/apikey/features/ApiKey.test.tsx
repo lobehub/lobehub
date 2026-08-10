@@ -111,7 +111,7 @@ const makeItem = (over: Partial<ApiKeyItem> = {}): ApiKeyItem => ({
   enabled: true,
   id: 'key-1',
   isMine: true,
-  key: 'lb-plain-secret',
+  key: 'sk-lh-****************',
   lastUsedAt: null,
   name: 'My Key',
   updatedAt: new Date('2026-01-01'),
@@ -169,7 +169,7 @@ describe('ApiKey', () => {
     renderPage();
 
     expect(await screen.findByText('My Key')).toBeInTheDocument();
-    expect(screen.getByText('lb-plain-secret')).toBeInTheDocument();
+    expect(screen.getByText('sk-lh-****************')).toBeInTheDocument();
     expect(screen.getByRole('switch')).toBeChecked();
   });
 
@@ -288,7 +288,7 @@ describe('ApiKey', () => {
     ).toBeEnabled();
 
     const mineRow = screen.getByText('My Key').closest('tr')!;
-    expect(within(mineRow).getByText('lb-plain-secret')).toBeInTheDocument();
+    expect(within(mineRow).getByText('sk-lh-****************')).toBeInTheDocument();
     expect(within(mineRow).getByRole('button', { name: 'edit-text' })).toBeEnabled();
     expect(within(mineRow).getByRole('switch')).toBeEnabled();
   });

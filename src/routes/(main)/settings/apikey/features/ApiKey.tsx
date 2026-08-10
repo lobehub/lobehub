@@ -98,7 +98,8 @@ const ApiKey: FC = () => {
     if (!canCreate) return;
     createApiKeyModal({
       onSubmit: async (values) => {
-        await createMutation.mutateAsync(values);
+        const created = await createMutation.mutateAsync(values);
+        return { key: created.key };
       },
     });
   };
