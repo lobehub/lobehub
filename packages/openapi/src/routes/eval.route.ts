@@ -23,6 +23,10 @@ app.post(
   requireAuth,
   requireWrite,
   requireApiKeyScope('model:invoke'),
+  // An internal run pre-creates real chat topics through `TopicModel`, and the
+  // QStash workflow keeps writing topic/message state, so a restricted key needs
+  // the same `chat:write` gate as `/responses` and the tRPC agent-run entries.
+  requireApiKeyScope('chat:write'),
   zValidator('json', CreateEvalRunRequestSchema),
   async (c) => new EvalController().createRun(c),
 );
