@@ -16,13 +16,25 @@ import { chatGroups } from './chatGroup';
 import { topics } from './topic';
 
 /**
- * `copy`-job payload. The column itself is nullable, and NULL is what encodes
- * "this job type carries no payload" — so a payload that exists at all must
- * carry its `agents` map.
+ * Per-job payload, keyed by job `type`. The column is nullable, and NULL
+ * encodes "this job carries nothing beyond its columns" — which is still the
+ * common case for a plain agent transfer.
+ *
+ * - `copy` jobs always carry `agents` (and `group` when copying a chat group).
+ * - `transfer` jobs carry `agentIdRemap` only when a GROUP transfer left
+ *   referenced members behind and took clones instead.
+ *
+ * The two field sets never co-occur; both are optional so each job type can
+ * ignore the other's, and every reader already guards with `?.`.
  */
 export interface AgentHistoryJobPayload {
+  /**
+   * Group-transfer member redirections: rewrite `messages.agent_id` /
+   * `target_id` from the member left behind onto the clone that replaced it.
+   */
+  agentIdRemap?: { newAgentId: string; sourceAgentId: string }[];
   /** Agents duplicated by this job, for guards that only need the id map. */
-  agents: { newAgentId: string; sourceAgentId: string }[];
+  agents?: { newAgentId: string; sourceAgentId: string }[];
   /**
    * Present only for a chat-group copy. Its presence is the discriminator the
    * drain uses to pick the group remap (every member agent maps through

@@ -555,6 +555,7 @@
   "userPanel.workspaceSetting": "Workspace Settings",
   "userPanel.workspaceUsage": "Workspace Usage",
   "version": "Version",
+  "viewExecutionDetails": "View execution details",
   "visibilityConfirm.irreversible": " (irreversible)",
   "visibilityConfirm.makePrivate.itemAccess": "Other workspace members lose access immediately",
   "visibilityConfirm.makePrivate.itemLoaded": "Content others have already loaded can’t be pulled back",

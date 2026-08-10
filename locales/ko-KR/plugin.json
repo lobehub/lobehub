@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "프로그램 확인",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "검증 방법",
   "builtins.lobe-delivery-checker.verifyPlan.required": "필수",
+  "builtins.lobe-goal.apiName.createGoal": "목표 시작",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "에이전트 일괄 생성",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "에이전트 생성",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "그룹 생성",

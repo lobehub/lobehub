@@ -1,5 +1,6 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -9,8 +10,17 @@ import type {
 } from '../schemas';
 import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import type { GroupMemberRole } from '../utils/groupMembership';
+import {
+  GROUP_SUPERVISOR_ROLE,
+  isOwnedMembership,
+  resolveGroupMembershipType,
+} from '../utils/groupMembership';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/** Slugs owned by builtin provisioning; a group delete must never reach one. */
+const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
 
 export class ChatGroupModel {
   private userId: string;
@@ -416,7 +426,7 @@ export class ChatGroupModel {
   async addAgentToGroup(
     groupId: string,
     agentId: string,
-    options?: { order?: number; role?: string },
+    options?: { order?: number; role?: GroupMemberRole },
   ): Promise<NewChatGroupAgent> {
     const params: NewChatGroupAgent = {
       agentId,
@@ -562,8 +572,34 @@ export class ChatGroupModel {
   async updateAgentInGroup(
     groupId: string,
     agentId: string,
-    updates: Partial<Pick<NewChatGroupAgent, 'order' | 'role'>>,
+    updates: Partial<Pick<NewChatGroupAgent, 'enabled' | 'order'>> & { role?: GroupMemberRole },
   ): Promise<NewChatGroupAgent> {
+    // A supervisor is the group's own synthetic orchestrator: every path that
+    // creates one creates a fresh virtual agent for it, and the delete/transfer
+    // paths rely on `supervisor ⟹ owned`. Promoting a `referenced` member would
+    // break that invariant and put a member's personal agent on the group's
+    // lifecycle, so it is refused rather than silently reclassified.
+    if (updates.role === GROUP_SUPERVISOR_ROLE) {
+      const [row] = await this.db
+        .select({ role: chatGroupsAgents.role, virtual: agents.virtual })
+        .from(chatGroupsAgents)
+        .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+        .where(
+          and(
+            eq(chatGroupsAgents.chatGroupId, groupId),
+            eq(chatGroupsAgents.agentId, agentId),
+            this.agentsOwnership(),
+          ),
+        );
+
+      if (row && resolveGroupMembershipType(row) !== 'owned') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only a group-owned member can act as the group supervisor',
+        });
+      }
+    }
+
     const [result] = await this.db
       .update(chatGroupsAgents)
       .set({ ...updates, updatedAt: new Date() })
@@ -581,22 +617,109 @@ export class ChatGroupModel {
 
   // ******* Delete Methods ******* //
 
-  async delete(id: string): Promise<ChatGroupItem> {
-    // Agents are automatically deleted due to CASCADE constraint
-    const [result] = await this.db
-      .delete(chatGroups)
-      .where(and(eq(chatGroups.id, id), this.ownership()))
-      .returning();
+  /**
+   * Agent ids that die with the given groups.
+   *
+   * `agents` has NO foreign key to `chat_groups` — the cascade only reaches the
+   * junction — so deleting a group leaves its synthetic supervisor and its
+   * group-built members behind forever: `virtual: true` hides them from every
+   * list, so nothing will ever surface or reclaim them.
+   *
+   * Read from the RAW junction rows, with no visibility or ownership predicate
+   * on the member agent. Those predicates belong to reads: a member another
+   * workspace user flipped back to `private` is still owned by this group, and
+   * filtering it out here is precisely how the previous service-level cleanup
+   * leaked. The caller has already proven it may delete the group itself.
+   */
+  private findOwnedMemberAgentIds = async (
+    executor: LobeChatDatabase,
+    groupIds: string[],
+  ): Promise<string[]> => {
+    if (groupIds.length === 0) return [];
 
-    if (!result) {
-      throw new Error('Chat group not found or access denied');
-    }
+    const rows = await executor
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), isOwnedMembership()));
 
-    return result;
+    return [...new Set(rows.map((row) => row.agentId))];
+  };
+
+  /**
+   * Builtin agents (Inbox, the agent builders, …) are provisioned per user and
+   * are `virtual` like a group's own members, so `owned` on a malformed
+   * junction row would be enough to take one down with a group. Their reserved
+   * slugs are the one thing that always tells them apart — a cheap belt to the
+   * `owned` braces, on a delete whose blast radius is somebody's Inbox.
+   */
+  private deleteOwnedMemberAgents = async (
+    executor: LobeChatDatabase,
+    agentIds: string[],
+  ): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+
+    const deleted = await executor
+      .delete(agents)
+      .where(
+        and(
+          inArray(agents.id, agentIds),
+          eq(agents.virtual, true),
+          // A NULL slug predates slug generation and is not a builtin;
+          // `NOT IN` alone would evaluate to NULL and skip those rows.
+          or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+        ),
+      )
+      .returning({ id: agents.id });
+
+    return deleted.map((row) => row.id);
+  };
+
+  /**
+   * Delete a group together with the agents that only existed to serve it.
+   *
+   * Returns the deleted owned-agent ids so callers can report them; the delete
+   * itself needs no follow-up.
+   */
+  async delete(id: string): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
+    return this.db.transaction(async (trx) => {
+      // Collect BEFORE the delete: the junction rows cascade away with the
+      // group, taking the only record of which agents were group-owned.
+      const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, [id]);
+
+      const [result] = await trx
+        .delete(chatGroups)
+        .where(and(eq(chatGroups.id, id), this.ownership()))
+        .returning();
+
+      if (!result) {
+        throw new Error('Chat group not found or access denied');
+      }
+
+      // Same transaction as the group delete: a cleanup that can be interrupted
+      // between the two statements is a leak with extra steps.
+      const deletedOwnedAgentIds = await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+
+      return { deletedOwnedAgentIds, group: result };
+    });
   }
 
   async deleteAll(): Promise<void> {
-    await this.db.delete(chatGroups).where(this.ownership());
+    await this.db.transaction(async (trx) => {
+      const groupIds = await trx
+        .select({ id: chatGroups.id })
+        .from(chatGroups)
+        .where(this.ownership());
+
+      const ownedAgentIds = await this.findOwnedMemberAgentIds(
+        trx,
+        groupIds.map((group) => group.id),
+      );
+
+      await trx.delete(chatGroups).where(this.ownership());
+
+      await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+    });
   }
 
   // ******* Agent Query Methods ******* //

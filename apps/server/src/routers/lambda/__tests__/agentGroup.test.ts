@@ -518,14 +518,14 @@ describe('agentGroupRouter', () => {
       const mockInput = {
         groupId: 'group-1',
         agentId: 'agent-1',
-        updates: { order: 2, role: 'leader' },
+        updates: { order: 2, role: 'participant' as const },
       };
 
       const mockResult = {
         agentId: 'agent-1',
         chatGroupId: 'group-1',
         order: 2,
-        role: 'leader',
+        role: 'participant',
       };
 
       chatGroupModelMock.updateAgentInGroup.mockResolvedValue(mockResult);
@@ -535,9 +535,25 @@ describe('agentGroupRouter', () => {
 
       expect(chatGroupModelMock.updateAgentInGroup).toHaveBeenCalledWith('group-1', 'agent-1', {
         order: 2,
-        role: 'leader',
+        role: 'participant',
       });
       expect(result).toEqual(mockResult);
+    });
+
+    it('should reject a role outside the known set', async () => {
+      // `role` used to be `z.string()`, so a typo reached the DB and then read
+      // back everywhere as "not a supervisor" — including in the delete and
+      // transfer paths that key their lifecycle decisions on it.
+      const caller = agentGroupRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.updateAgentInGroup({
+          agentId: 'agent-1',
+          groupId: 'group-1',
+          updates: { role: 'leader' as never },
+        }),
+      ).rejects.toThrow();
+      expect(chatGroupModelMock.updateAgentInGroup).not.toHaveBeenCalled();
     });
 
     it('should update agent with enabled flag', async () => {

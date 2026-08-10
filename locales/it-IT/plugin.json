@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "Controllo programma",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "Metodo di verifica",
   "builtins.lobe-delivery-checker.verifyPlan.required": "Obbligatorio",
+  "builtins.lobe-goal.apiName.createGoal": "Avvia obiettivo",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Crea agenti in blocco",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Crea agente",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Crea gruppo",

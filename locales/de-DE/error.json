@@ -120,6 +120,7 @@
   "stt.responseError": "Dienstanfrage fehlgeschlagen. Bitte Konfiguration prüfen.",
   "supervisor.decisionFailed": "Der Gruppen-Host funktioniert nicht. Bitte Host-Konfiguration prüfen.",
   "testConnectionFailed": "Verbindungstest fehlgeschlagen: {{error}}",
+  "transfer.agentOwnedByGroup": "Dieser Agent gehört zu einer Chat-Gruppe und kann nicht eigenständig verschoben werden. Verschieben Sie stattdessen die Gruppe oder entfernen Sie den Agenten zuerst aus der Gruppe.",
   "transfer.copyInProgress": "Eine vorherige Kopie dieses Agenten dupliziert noch seine Historie. Versuchen Sie es erneut, sobald der Vorgang abgeschlossen ist.",
   "transfer.noPermission": "Sie haben keine Berechtigung, diese Ressource zu verschieben.",
   "transfer.ownerOnly": "Nur Workspace-Besitzer können Ressourcen übertragen, die von anderen Mitgliedern erstellt wurden.",

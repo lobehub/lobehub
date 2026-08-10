@@ -1,4 +1,10 @@
 export const TransferErrorCode = {
+  /**
+   * The agent belongs to a chat group (it is the group's supervisor, or a
+   * member the group itself built) and has no life outside it. The error data
+   * carries the groups so the surface can name them.
+   */
+  AgentOwnedByGroup: 'AGENT_OWNED_BY_GROUP',
   CopyInProgress: 'COPY_IN_PROGRESS',
   FileStorageLimitExceeded: 'FILE_STORAGE_LIMIT_EXCEEDED',
   NoPermission: 'NO_PERMISSION',

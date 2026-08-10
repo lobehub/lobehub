@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -983,7 +983,8 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.delete('delete-test');
 
-      expect(result.id).toBe('delete-test');
+      expect(result.group.id).toBe('delete-test');
+      expect(result.deletedOwnedAgentIds).toEqual([]);
 
       // Verify group was deleted
       const groups = await serverDB
@@ -1023,6 +1024,157 @@ describe('ChatGroupModel', () => {
         .from(chatGroupsAgents)
         .where(eq(chatGroupsAgents.chatGroupId, 'cascade-delete-group'));
       expect(groupAgents).toHaveLength(0);
+    });
+
+    it('should delete group-owned member agents and keep referenced ones', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'owned-cleanup-group', title: 'Owned Cleanup', userId });
+
+        await trx.insert(agentsTable).values([
+          // Group-built members: the supervisor plus a virtual member. Neither
+          // has any existence outside this group.
+          { id: 'owned-supervisor', title: 'Supervisor', userId, virtual: true },
+          { id: 'owned-member', title: 'Owned Member', userId, virtual: true },
+          // Someone's own agent, merely linked in.
+          { id: 'referenced-member', title: 'Referenced Member', userId, virtual: false },
+        ]);
+
+        await trx.insert(chatGroupsAgents).values([
+          {
+            agentId: 'owned-supervisor',
+            chatGroupId: 'owned-cleanup-group',
+            role: 'supervisor',
+            userId,
+          },
+          {
+            agentId: 'owned-member',
+            chatGroupId: 'owned-cleanup-group',
+            userId,
+          },
+          {
+            agentId: 'referenced-member',
+            chatGroupId: 'owned-cleanup-group',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await chatGroupModel.delete('owned-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds.sort()).toEqual(['owned-member', 'owned-supervisor']);
+
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(inArray(agentsTable.id, ['owned-supervisor', 'owned-member', 'referenced-member']));
+      expect(survivors).toEqual([{ id: 'referenced-member' }]);
+    });
+
+    it('should classify members by agents.virtual', async () => {
+      // `agents.virtual` is the whole judgement: it is the only thing keeping
+      // this delete from either leaking or over-deleting.
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'legacy-cleanup-group', title: 'Legacy Cleanup', userId });
+
+        await trx.insert(agentsTable).values([
+          { id: 'legacy-virtual', title: 'Legacy Virtual', userId, virtual: true },
+          { id: 'legacy-real', title: 'Legacy Real', userId, virtual: false },
+        ]);
+
+        await trx.insert(chatGroupsAgents).values([
+          { agentId: 'legacy-virtual', chatGroupId: 'legacy-cleanup-group', userId },
+          { agentId: 'legacy-real', chatGroupId: 'legacy-cleanup-group', userId },
+        ]);
+      });
+
+      const result = await chatGroupModel.delete('legacy-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual(['legacy-virtual']);
+
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(inArray(agentsTable.id, ['legacy-virtual', 'legacy-real']));
+      expect(survivors).toEqual([{ id: 'legacy-real' }]);
+    });
+
+    it('should clean up an owned member another workspace user made private', async () => {
+      // The previous service-level cleanup read the roster through a
+      // visibility-scoped query, so this member was invisible to the deleter
+      // and leaked every time.
+      const wsModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'ws-cleanup-group',
+          title: 'Workspace Cleanup',
+          userId,
+          workspaceId,
+        });
+
+        await trx.insert(agentsTable).values({
+          id: 'ws-private-owned',
+          title: 'Private Owned',
+          userId: otherUserId,
+          virtual: true,
+          visibility: 'private',
+          workspaceId,
+        });
+
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'ws-private-owned',
+          chatGroupId: 'ws-cleanup-group',
+          userId: otherUserId,
+          workspaceId,
+        });
+      });
+
+      const result = await wsModel.delete('ws-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual(['ws-private-owned']);
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, 'ws-private-owned'));
+      expect(survivors).toEqual([]);
+    });
+
+    it('should never delete a builtin agent that ended up on a roster', async () => {
+      // `owned` should be enough on its own; the slug guard is the backstop for
+      // a malformed row, and losing someone's Inbox to a group delete is not a
+      // failure mode worth leaving to one predicate.
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'builtin-cleanup-group', title: 'Builtin Cleanup', userId });
+
+        await trx.insert(agentsTable).values({
+          id: 'builtin-inbox',
+          slug: 'inbox',
+          title: 'Inbox',
+          userId,
+          virtual: true,
+        });
+
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'builtin-inbox',
+          chatGroupId: 'builtin-cleanup-group',
+          userId,
+        });
+      });
+
+      const result = await chatGroupModel.delete('builtin-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual([]);
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, 'builtin-inbox'));
+      expect(survivors).toEqual([{ id: 'builtin-inbox' }]);
     });
 
     it('should not delete groups belonging to other users', async () => {

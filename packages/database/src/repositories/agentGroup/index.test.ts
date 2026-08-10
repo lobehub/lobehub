@@ -1633,15 +1633,35 @@ describe('AgentGroupRepository', () => {
       });
       expect(group!.workspaceId).toBe(targetWorkspaceId);
 
-      const memberAgents = await serverDB.query.agents.findMany({
-        where: (a, { inArray }) => inArray(a.id, ['transfer-supervisor', 'transfer-member']),
+      // The supervisor is group-owned and travels; `transfer-member` is a
+      // standalone agent this group merely referenced, so it stays put and the
+      // group takes a copy of it instead.
+      const supervisor = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'transfer-supervisor'),
       });
-      expect(memberAgents.every((agent) => agent.workspaceId === targetWorkspaceId)).toBe(true);
+      expect(supervisor!.workspaceId).toBe(targetWorkspaceId);
+
+      const referencedMember = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'transfer-member'),
+      });
+      expect(referencedMember!.workspaceId).toBe(workspaceId);
 
       const junctions = await serverDB.query.chatGroupsAgents.findMany({
         where: (cga, { eq }) => eq(cga.chatGroupId, 'transfer-group'),
       });
       expect(junctions.every((junction) => junction.workspaceId === targetWorkspaceId)).toBe(true);
+      expect(junctions.some((junction) => junction.agentId === 'transfer-member')).toBe(false);
+
+      const clonedRow = junctions.find((junction) => junction.agentId !== 'transfer-supervisor')!;
+      const clone = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, clonedRow.agentId),
+      });
+      // Hidden from the target's agent list — it exists for this group only.
+      expect(clone).toMatchObject({
+        title: 'Member',
+        virtual: true,
+        workspaceId: targetWorkspaceId,
+      });
 
       const topic = await serverDB.query.topics.findFirst({
         where: (t, { eq }) => eq(t.id, 'transfer-topic'),
@@ -1655,6 +1675,11 @@ describe('AgentGroupRepository', () => {
       expect(topic!.workspaceId).toBe(targetWorkspaceId);
       expect(thread!.workspaceId).toBe(targetWorkspaceId);
       expect(message!.workspaceId).toBe(targetWorkspaceId);
+
+      // `threads.agent_id` is ON DELETE CASCADE: left pointing at the member
+      // that stayed behind, this moved thread would disappear the day its
+      // owner deleted that agent.
+      expect(thread!.agentId).toBe(clonedRow.agentId);
 
       // Comments denormalize the topic's workspaceId — they must follow the move
       const [comment] = await serverDB

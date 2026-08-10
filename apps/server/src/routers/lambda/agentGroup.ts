@@ -24,6 +24,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import { GROUP_MEMBER_ROLES } from '@/database/utils/groupMembership';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
@@ -723,6 +724,19 @@ export const agentGroupRouter = router({
       }
     }),
 
+  /**
+   * Members these groups only reference (the roster's `External` rows).
+   *
+   * Asked before a transfer: those agents stay in the source scope and the
+   * group takes clones of them instead, which is a visible enough change that
+   * the user should agree to it up front.
+   */
+  listReferencedMembers: agentGroupProcedure
+    .input(z.object({ groupIds: z.array(z.string()).min(1).max(100) }))
+    .query(async ({ input, ctx }) => {
+      return ctx.agentGroupRepo.listReferencedMembers([...new Set(input.groupIds)]);
+    }),
+
   transferGroup: agentGroupProcedureWrite
     .input(
       z.object({
@@ -889,7 +903,12 @@ export const agentGroupRouter = router({
         updates: z.object({
           enabled: z.boolean().optional(),
           order: z.number().optional(),
-          role: z.string().optional(),
+          // Closed set rather than free text: `role` decides how the runtime
+          // treats a member, and `supervisor` in particular carries the
+          // lifecycle invariant the delete/transfer paths rely on. An unknown
+          // string here used to be accepted and then quietly behave as
+          // "not a supervisor" everywhere.
+          role: z.enum(GROUP_MEMBER_ROLES).optional(),
         }),
       }),
     )

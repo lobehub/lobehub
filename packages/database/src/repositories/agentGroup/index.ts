@@ -12,6 +12,8 @@ import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
   getAgentTransferSyncMessageThreshold,
+  remapMessageAgentIdsForTopics,
+  remapResidualMessageAgentIds,
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from '../../models/agentTransferJob';
@@ -41,6 +43,7 @@ import type { LobeChatDatabase } from '../../type';
 import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { copyMessagesInDatabase, type IdPair } from '../../utils/copyMessagesInDatabase';
+import { GROUP_SUPERVISOR_ROLE, resolveGroupMembershipType } from '../../utils/groupMembership';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -79,9 +82,15 @@ export interface SupervisorAgentConfig {
  * Result of checking agents before removal
  */
 export interface RemoveAgentsCheckResult {
-  /** Agent IDs that are not virtual and can be safely removed from group */
+  /**
+   * `referenced` members: leaving the group only drops the link, the agent
+   * itself lives on.
+   */
   nonVirtualAgentIds: string[];
-  /** Virtual agents that will be permanently deleted along with their messages */
+  /**
+   * `owned` members: built for this group, so leaving it destroys them along
+   * with their messages. Surfaced so the UI can confirm before that happens.
+   */
   virtualAgents: Array<Pick<AgentItem, 'avatar' | 'description' | 'id' | 'title'>>;
 }
 
@@ -397,7 +406,7 @@ export class AgentGroupRepository {
         agentId: supervisorAgent.id,
         chatGroupId: group.id,
         order: -1, // Supervisor always first (negative order)
-        role: 'supervisor',
+        role: GROUP_SUPERVISOR_ROLE,
         userId: this.userId,
         workspaceId: this.workspaceId ?? null,
       });
@@ -529,7 +538,7 @@ export class AgentGroupRepository {
       agentId: supervisorAgent.id,
       chatGroupId: group.id,
       order: -1, // Supervisor always first (negative order)
-      role: 'supervisor',
+      role: GROUP_SUPERVISOR_ROLE,
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     };
@@ -559,12 +568,15 @@ export class AgentGroupRepository {
   }
 
   /**
-   * Check which agents are virtual before removing them from a group.
-   * This allows the frontend to show a confirmation dialog for virtual agents.
+   * Split a removal request into members that merely get unlinked and members
+   * that die with the link, so the frontend can confirm the destructive half.
+   *
+   * Judged through the shared `resolveGroupMembershipType`, joined to the
+   * membership row in THIS group so the supervisor rule applies.
    *
    * @param groupId - The chat group ID
    * @param agentIds - Array of agent IDs to check
-   * @returns Object containing virtual and non-virtual agent lists
+   * @returns Object containing owned (deleted) and referenced (unlinked) lists
    */
   async checkAgentsBeforeRemoval(
     groupId: string,
@@ -574,25 +586,31 @@ export class AgentGroupRepository {
       return { nonVirtualAgentIds: [], virtualAgents: [] };
     }
 
-    // Get agent details for the specified IDs
+    // Get agent details for the specified IDs, joined to their membership row
+    // in THIS group.
     const agentDetails = await this.db
       .select({
         avatar: agents.avatar,
         description: agents.description,
         id: agents.id,
         name: agents.name,
+        role: chatGroupsAgents.role,
         slug: agents.slug,
         title: agents.title,
         virtual: agents.virtual,
       })
       .from(agents)
+      .innerJoin(
+        chatGroupsAgents,
+        and(eq(chatGroupsAgents.agentId, agents.id), eq(chatGroupsAgents.chatGroupId, groupId)),
+      )
       .where(and(this.agentOwnership(), inArray(agents.id, agentIds)));
 
     const virtualAgents: RemoveAgentsCheckResult['virtualAgents'] = [];
     const nonVirtualAgentIds: string[] = [];
 
     for (const agent of agentDetails) {
-      if (agent.virtual) {
+      if (resolveGroupMembershipType(agent) === 'owned') {
         const meta = normalizeInboxAgentMeta(
           { avatar: agent.avatar, title: agent.title },
           { slug: agent.slug },
@@ -732,15 +750,20 @@ export class AgentGroupRepository {
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
       .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
-    // 3. Separate supervisor, virtual members, and non-virtual members
+    // 3. Separate supervisor, owned members, and referenced members. This is
+    //    the same three-way split every other path now shares: an owned member
+    //    has no life outside its group, so the copy needs its own; a referenced
+    //    member is a standalone agent both groups can point at.
     let sourceSupervisor: (typeof groupAgentsWithDetails)[number] | undefined;
     const virtualMembers: (typeof groupAgentsWithDetails)[number][] = [];
     const nonVirtualMembers: (typeof groupAgentsWithDetails)[number][] = [];
 
     for (const row of groupAgentsWithDetails) {
-      if (row.role === 'supervisor') {
+      if (row.role === GROUP_SUPERVISOR_ROLE) {
         sourceSupervisor = row;
-      } else if (row.agent.virtual) {
+      } else if (
+        resolveGroupMembershipType({ role: row.role, virtual: row.agent.virtual }) === 'owned'
+      ) {
         virtualMembers.push(row);
       } else {
         nonVirtualMembers.push(row);
@@ -843,11 +866,11 @@ export class AgentGroupRepository {
           agentId: newSupervisor.id,
           chatGroupId: newGroup.id,
           order: -1,
-          role: 'supervisor',
+          role: GROUP_SUPERVISOR_ROLE,
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,
         },
-        // Virtual members (using new copied agents)
+        // Owned members (using new copied agents)
         ...virtualMembers.map((member) => ({
           agentId: newVirtualAgentMap.get(member.agent.id)!,
           chatGroupId: newGroup.id,
@@ -857,7 +880,7 @@ export class AgentGroupRepository {
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,
         })),
-        // Non-virtual members (referencing same agents - only add relationship)
+        // Referenced members (pointing at the same agents - only add relationship)
         ...nonVirtualMembers.map((member) => ({
           agentId: member.agent.id,
           chatGroupId: newGroup.id,
@@ -876,6 +899,58 @@ export class AgentGroupRepository {
         supervisorAgentId: newSupervisor.id,
       };
     });
+  }
+
+  /**
+   * Members these groups merely reference — the ones the roster shows as
+   * `External`.
+   *
+   * A group transfer cannot take them along (they are their owners' agents,
+   * with sessions and knowledge bases a group transfer does not touch), so it
+   * leaves them behind and clones them instead. Callers ask this first so the
+   * user hears about that before it happens rather than after.
+   */
+  async listReferencedMembers(groupIds: string[]): Promise<
+    {
+      agentId: string;
+      avatar: string | null;
+      backgroundColor: string | null;
+      groupId: string;
+      title: string | null;
+    }[]
+  > {
+    if (groupIds.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        agentId: chatGroupsAgents.agentId,
+        // Avatar + background travel with the name so the confirmation can show
+        // each member the way the roster does; a bare name in a warning box is
+        // the one thing on that step with no visual anchor.
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        groupId: chatGroupsAgents.chatGroupId,
+        role: chatGroupsAgents.role,
+        title: agents.title,
+        virtual: agents.virtual,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      // Scoped on the GROUP: seeing a roster is a group-level read, and a
+      // caller who cannot see the group learns nothing about its members.
+      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.groupOwnership()))
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.agentId);
+
+    return rows
+      .filter((row) => resolveGroupMembershipType(row) === 'referenced')
+      .map((row) => ({
+        agentId: row.agentId,
+        avatar: row.avatar,
+        backgroundColor: row.backgroundColor,
+        groupId: row.groupId,
+        title: row.title,
+      }));
   }
 
   /**
@@ -960,11 +1035,32 @@ export class AgentGroupRepository {
       if (!lockedSource) return null;
 
       const memberRows = await trx
-        .select({ agentId: chatGroupsAgents.agentId })
+        .select({
+          agent: agents,
+          agentId: chatGroupsAgents.agentId,
+          role: chatGroupsAgents.role,
+        })
         .from(chatGroupsAgents)
+        .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
         .where(eq(chatGroupsAgents.chatGroupId, groupId));
 
       const agentIds = memberRows.map((row) => row.agentId);
+
+      // Members split by who owns their lifecycle. Owned members were built for
+      // this group and travel with it; referenced members are standalone agents
+      // that merely joined, and moving them would drag their own sessions,
+      // knowledge bases and cron jobs out from under them — all of which live
+      // outside anything a group transfer touches.
+      const referencedMembers: typeof memberRows = [];
+      const ownedAgentIds: string[] = [];
+      for (const row of memberRows) {
+        const membership = resolveGroupMembershipType({
+          role: row.role,
+          virtual: row.agent.virtual,
+        });
+        if (membership === 'owned') ownedAgentIds.push(row.agentId);
+        else referencedMembers.push(row);
+      }
 
       // Same lock-then-guard as AgentModel.transferAgents: serialize with a
       // concurrent transfer of any member agent BEFORE consulting the pending
@@ -1023,21 +1119,22 @@ export class AgentGroupRepository {
         })
         .where(eq(chatGroups.id, groupId));
 
+      // The junction rows belong to the GROUP, so all of them follow it —
+      // including the rows about to be repointed at clones below.
+      //
+      // Note what is deliberately NOT here any more: this used to also
+      // `DELETE FROM chat_groups_agents WHERE agent_id IN (members) AND
+      // chat_group_id <> this group`, silently evicting every member from every
+      // OTHER group it belonged to. That only ever made sense as a crude way to
+      // stop a moved agent from dangling in a group left behind — which is now
+      // structurally impossible: owned members cannot be in a second group, and
+      // referenced members no longer move at all.
       await trx
         .update(chatGroupsAgents)
         .set(ownershipUpdate)
         .where(eq(chatGroupsAgents.chatGroupId, groupId));
 
-      if (agentIds.length > 0) {
-        await trx
-          .delete(chatGroupsAgents)
-          .where(
-            and(
-              inArray(chatGroupsAgents.agentId, agentIds),
-              not(eq(chatGroupsAgents.chatGroupId, groupId)),
-            ),
-          );
-
+      if (ownedAgentIds.length > 0) {
         await trx
           .update(agents)
           .set({
@@ -1049,7 +1146,7 @@ export class AgentGroupRepository {
             sessionGroupId: null,
             updatedAt: new Date(),
           })
-          .where(inArray(agents.id, agentIds));
+          .where(inArray(agents.id, ownedAgentIds));
 
         // This path moves member agents itself instead of going through
         // `AgentModel.transferAgents`, so it has to repeat that method's
@@ -1058,7 +1155,57 @@ export class AgentGroupRepository {
         // and reappear if the agent ever comes back.
         await trx
           .delete(agentLabelAssignments)
-          .where(inArray(agentLabelAssignments.agentId, agentIds));
+          .where(inArray(agentLabelAssignments.agentId, ownedAgentIds));
+      }
+
+      // Referenced members stay put; the group gets its own copy of each in the
+      // target scope, and the roster row is repointed at that copy.
+      //
+      // This is the mirror image of what an AGENT transfer does — there the
+      // agent leaves and the group loses a member. The rule behind both is the
+      // same: whoever is the subject of the operation is kept whole. Moving an
+      // agent is about the agent, and the group is collateral; moving a group is
+      // about the group, which has to arrive usable, with every voice in its
+      // history still resolvable. Do not "fix" one to match the other.
+      const agentRemapPairs: { newAgentId: string; sourceAgentId: string }[] = [];
+      if (referencedMembers.length > 0) {
+        const clones = await trx
+          .insert(agents)
+          .values(
+            referencedMembers.map((member) => ({
+              ...this.buildCopiedAgent(
+                member.agent,
+                targetWorkspaceId,
+                targetUserId,
+                'Agent',
+                targetVisibility,
+              ),
+              // The clone exists for this group and nothing else: hidden from
+              // the target's agent list, and never offered as a member
+              // candidate elsewhere (`buildQueryAgentsWhere` filters virtual).
+              // `buildCopiedAgent` would otherwise inherit the source's
+              // `virtual: false` and publish a second copy of a private agent
+              // into the target scope.
+              pinned: false,
+              virtual: true,
+            })),
+          )
+          .returning({ id: agents.id });
+
+        for (const [index, member] of referencedMembers.entries()) {
+          const newAgentId = clones[index].id;
+          agentRemapPairs.push({ newAgentId, sourceAgentId: member.agentId });
+
+          await trx
+            .update(chatGroupsAgents)
+            .set({ agentId: newAgentId })
+            .where(
+              and(
+                eq(chatGroupsAgents.chatGroupId, groupId),
+                eq(chatGroupsAgents.agentId, member.agentId),
+              ),
+            );
+        }
       }
 
       // `updatedAt` is read here, BEFORE the ownership update: the update below
@@ -1100,6 +1247,31 @@ export class AgentGroupRepository {
           .where(inArray(threads.topicId, movedTopicIds));
       }
 
+      // Repoint the group's own rows from each cloned-away member onto its
+      // clone. `topics.agent_id` and `threads.agent_id` are ON DELETE CASCADE,
+      // so leaving them aimed at an agent that stayed behind is not merely
+      // cosmetic: the day its owner deletes it, these moved rows go with it.
+      // One statement per pair — the pair count is the group's External member
+      // count, i.e. a handful.
+      for (const { newAgentId, sourceAgentId } of agentRemapPairs) {
+        await trx
+          .update(topics)
+          .set({ agentId: newAgentId, updatedAt: topics.updatedAt })
+          .where(and(eq(topics.groupId, groupId), eq(topics.agentId, sourceAgentId)));
+        await trx
+          .update(threads)
+          .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+          .where(and(eq(threads.groupId, groupId), eq(threads.agentId, sourceAgentId)));
+        if (movedTopicIds.length > 0) {
+          await trx
+            .update(threads)
+            .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+            .where(
+              and(inArray(threads.topicId, movedTopicIds), eq(threads.agentId, sourceAgentId)),
+            );
+        }
+      }
+
       // Message scope rewrite — same fast/slow split as
       // `AgentModel.transferAgents`: rewriting a message row maintains every
       // message index (incl. the multi-GB BM25 index), so a heavy group's
@@ -1126,9 +1298,20 @@ export class AgentGroupRepository {
           { agentIds: [], groupIds: [groupId], sessionIds: [] },
           targetScope,
         );
+        await remapMessageAgentIdsForTopics(trx, movedTopicIds, agentRemapPairs);
+        await remapResidualMessageAgentIds(trx, [groupId], agentRemapPairs);
       } else {
         transferJobId = await AgentTransferJobModel.createJob(trx, {
-          agentIds,
+          // Must mirror the synchronous branch above: the drain applies these
+          // to the same rows it rewrites, topic by topic.
+          agentIdRemap: agentRemapPairs,
+          // The roster AS IT NOW STANDS in the target scope: members that
+          // travelled, plus the clones that replaced the ones that didn't.
+          // Registering the left-behind originals instead would guard an agent
+          // this job no longer writes to, while leaving the clones — whose
+          // deletion mid-drain WOULD cascade away the very messages still being
+          // remapped onto them — unguarded.
+          agentIds: [...ownedAgentIds, ...agentRemapPairs.map((pair) => pair.newAgentId)],
           groupIds: [groupId],
           // Must mirror the synchronous branch above exactly: residual by
           // GROUP only. Member agents are covered (junction rows above) for
@@ -1271,10 +1454,14 @@ export class AgentGroupRepository {
           agentId: newSupervisor.id,
           chatGroupId: newGroup.id,
           order: -1,
-          role: 'supervisor',
+          role: GROUP_SUPERVISOR_ROLE,
           userId: targetUserId,
           workspaceId: targetWorkspaceId,
         },
+        // A copy duplicates EVERY member into the target scope, and the copies
+        // keep the source's `virtual` flag (`buildCopiedAgent`), so each copy
+        // resolves to the same membership its source had — the copy's
+        // `External` badges match the original's row for row.
         ...sourceMembers.map((member) => ({
           agentId: memberAgentIdMap.get(member.agent.id)!,
           chatGroupId: newGroup.id,

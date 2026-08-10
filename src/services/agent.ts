@@ -87,6 +87,16 @@ export interface CreateAgentOnlyResult {
   agentId: string;
 }
 
+interface AgentGroupMembershipImpactRef {
+  agentId: string;
+  groupAvatar: string | null;
+  groupBackgroundColor: string | null;
+  groupId: string;
+  groupTitle: string | null;
+  /** `false` when the caller may not see the group; its identity is withheld. */
+  groupVisible: boolean;
+}
+
 class AgentService {
   /**
    * Check if an agent with the given marketIdentifier already exists
@@ -337,6 +347,19 @@ class AgentService {
    */
   prioritizeTransferTopic = async (topicId: string): Promise<{ pending: boolean }> => {
     return lambdaClient.agent.prioritizeTransferTopic.mutate({ topicId });
+  };
+
+  /**
+   * Chat groups a move would affect: `blocked` refuses the move outright,
+   * `leaving` is the silent side effect worth confirming first.
+   */
+  getGroupMembershipImpact = async (
+    agentIds: string[],
+  ): Promise<{
+    blocked: AgentGroupMembershipImpactRef[];
+    leaving: AgentGroupMembershipImpactRef[];
+  }> => {
+    return lambdaClient.agent.getGroupMembershipImpact.query({ agentIds });
   };
 
   transferAgent = async (
