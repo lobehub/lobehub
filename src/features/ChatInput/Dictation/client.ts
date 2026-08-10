@@ -105,7 +105,8 @@ export class RealtimeDictationClient {
     }
 
     this.#setSnapshot({ retryable: false, status: 'requesting_permission' });
-    this.#abortController = new AbortController();
+    const abortController = new AbortController();
+    this.#abortController = abortController;
 
     try {
       const stream = await this.#dependencies.requestMicrophone();
@@ -115,11 +116,26 @@ export class RealtimeDictationClient {
       }
 
       this.#setSnapshot({ retryable: false, status: 'connecting' });
-      const capture = await this.#dependencies.createCapture(stream);
-      this.#capture = capture;
-      const session = await this.#dependencies.createSession(this.#abortController.signal);
+      const capturePromise = this.#dependencies.createCapture(stream).then(
+        async (capture) => {
+          if (runId === this.#runId) {
+            this.#capture = capture;
+          } else {
+            await capture.cancel().catch(() => undefined);
+          }
+          return capture;
+        },
+        (error) => {
+          abortController.abort();
+          throw error;
+        },
+      );
+      const [capture, session] = await Promise.all([
+        capturePromise,
+        this.#dependencies.createSession(abortController.signal),
+      ]);
       if (runId !== this.#runId) {
-        await capture.cancel();
+        await capture.cancel().catch(() => undefined);
         return;
       }
 

@@ -7,6 +7,7 @@ import {
   REALTIME_ASR_LIMITS,
   type RealtimeAsrServerEvent,
   type RealtimeAsrSessionResponse,
+  RealtimeDictationError,
 } from './contract';
 import type { DictationEditorAdapter } from './editor';
 
@@ -125,6 +126,91 @@ const createFixture = () => {
 
 describe('RealtimeDictationClient', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('starts audio initialization and session admission together after permission', async () => {
+    let resolveCapture!: (capture: RealtimeAudioCapture) => void;
+    let resolveSession!: (session: RealtimeAsrSessionResponse) => void;
+    const capture: RealtimeAudioCapture = {
+      cancel: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const capturePromise = new Promise<RealtimeAudioCapture>((resolve) => {
+      resolveCapture = resolve;
+    });
+    const sessionPromise = new Promise<RealtimeAsrSessionResponse>((resolve) => {
+      resolveSession = resolve;
+    });
+    const createCapture = vi.fn(() => capturePromise);
+    const createSession = vi.fn(() => sessionPromise);
+    const createWebSocket = vi.fn(() => new FakeSocket() as unknown as RealtimeAsrWebSocket);
+    const client = new RealtimeDictationClient({
+      createCapture,
+      createSession,
+      createWebSocket,
+      editor: {
+        begin: vi.fn(() => ({ anchor: 0, prefix: '', suffix: '' })),
+        dispose: vi.fn(),
+        finalize: vi.fn(),
+        render: vi.fn(),
+      },
+      requestMicrophone: vi
+        .fn()
+        .mockResolvedValue({ getTracks: () => [] } as unknown as MediaStream),
+    });
+
+    const startPromise = client.start();
+    await vi.waitFor(() => {
+      expect(createCapture).toHaveBeenCalledOnce();
+      expect(createSession).toHaveBeenCalledOnce();
+    });
+
+    resolveCapture(capture);
+    resolveSession(session());
+    await startPromise;
+
+    expect(createWebSocket).toHaveBeenCalledOnce();
+    expect(client.getSnapshot().status).toBe('connecting');
+  });
+
+  it('releases a late audio capture when concurrent session admission fails', async () => {
+    let resolveCapture!: (capture: RealtimeAudioCapture) => void;
+    const capture: RealtimeAudioCapture = {
+      cancel: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const client = new RealtimeDictationClient({
+      createCapture: vi.fn(
+        () =>
+          new Promise<RealtimeAudioCapture>((resolve) => {
+            resolveCapture = resolve;
+          }),
+      ),
+      createSession: vi
+        .fn()
+        .mockRejectedValue(new RealtimeDictationError('SESSION_CREATE_FAILED', true)),
+      createWebSocket: vi.fn(() => new FakeSocket() as unknown as RealtimeAsrWebSocket),
+      editor: {
+        begin: vi.fn(() => ({ anchor: 0, prefix: '', suffix: '' })),
+        dispose: vi.fn(),
+        finalize: vi.fn(),
+        render: vi.fn(),
+      },
+      requestMicrophone: vi
+        .fn()
+        .mockResolvedValue({ getTracks: () => [] } as unknown as MediaStream),
+    });
+
+    await client.start();
+    expect(client.getSnapshot()).toMatchObject({
+      errorCode: 'SESSION_CREATE_FAILED',
+      status: 'error',
+    });
+
+    resolveCapture(capture);
+    await vi.waitFor(() => expect(capture.cancel).toHaveBeenCalledOnce());
+  });
 
   it('authenticates, applies partial/final events, and waits for completion on stop', async () => {
     const fixture = createFixture();
