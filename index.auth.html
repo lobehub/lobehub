@@ -69,8 +69,11 @@
         var hl = new URLSearchParams(location.search).get('hl');
         var m = document.cookie.match(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/);
         var cookie = m ? decodeURIComponent(m[1]) : '';
+        // Aico default is Persian. Match server parseBrowserLanguage: when DEFAULT_LANG
+        // is not en-US, do not follow navigator.language for the `auto` cookie value.
         var locale = hl || cookie || 'fa-IR';
-        if (locale === 'auto') locale = navigator.language || 'fa-IR';
+        if (locale === 'auto') locale = 'fa-IR';
+        if (locale.toLowerCase().indexOf('fa') === 0) locale = 'fa-IR';
         if (hl && !cookie) {
           document.cookie =
             'LOBE_LOCALE=' + encodeURIComponent(hl) + ';path=/;max-age=7776000;SameSite=Lax';

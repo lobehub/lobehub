@@ -31,7 +31,7 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         height={'100%'}
         width={'100%'}
       >
-        <Flexbox horizontal align={'center'} padding={16} width={'100%'}>
+        <Flexbox horizontal align={'center'} flex={'none'} padding={16} width={'100%'}>
           <a aria-label={BRANDING_NAME} href={'/'} style={{ display: 'inline-flex' }}>
             <ProductLogo size={40} />
           </a>
@@ -41,11 +41,26 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
             {children}
           </Flexbox>
         ) : (
-          <Center height={'100%'} padding={16} width={'100%'}>
-            {children}
-          </Center>
+          // Keep locale/theme footer visible: tall signup forms must scroll inside
+          // this pane instead of Center height=100% + overflow:hidden clipping.
+          <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }} width={'100%'}>
+            <Center
+              padding={16}
+              style={{ boxSizing: 'border-box', minHeight: '100%' }}
+              width={'100%'}
+            >
+              {children}
+            </Center>
+          </Flexbox>
         )}
-        <Flexbox horizontal align={'center'} justify={'space-between'} padding={16} width={'100%'}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={'none'}
+          justify={'space-between'}
+          padding={16}
+          width={'100%'}
+        >
           <Flexbox horizontal align={'center'}>
             <AuthLangButton size={18} />
             <Divider className={styles.divider} orientation={'vertical'} />

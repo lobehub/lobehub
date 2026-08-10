@@ -68,4 +68,15 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     expect(result.current.markdownProps.animated).toBe(false);
     expect(result.current.markdownProps.enableStream).toBe(false);
   });
+
+  it('uses word-level stream animation so Persian cursive joining is preserved', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ enableStream: true, id: 'a5', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+    expect(result.current.markdownProps.streamAnimationGranularity).toBe('word');
+  });
 });

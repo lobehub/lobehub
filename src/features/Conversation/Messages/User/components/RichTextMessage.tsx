@@ -13,7 +13,10 @@ interface RichTextMessageProps {
 }
 
 const LINE_HEIGHT = 1.6;
-const style: CSSProperties = { '--common-line-height': LINE_HEIGHT } as CSSProperties;
+const style: CSSProperties = {
+  '--common-line-height': LINE_HEIGHT,
+  'unicodeBidi': 'plaintext',
+} as CSSProperties;
 const EXTRA_NODES = [ActionTagNode, ReferTopicNode, LocalFileTagNode];
 
 const RichTextMessage = memo<RichTextMessageProps>(({ editorState }) => {

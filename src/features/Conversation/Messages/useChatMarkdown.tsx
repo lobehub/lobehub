@@ -72,6 +72,9 @@ export const useChatMarkdown = ({
         rehypePlugins,
         remarkPlugins,
         showFootnotes: !citations?.length || citations.every((item) => item.title !== item.url),
+        // Per-character stream spans break Arabic/Persian cursive joining (سلام → س ل ا م).
+        // Word granularity keeps each word in one text node — same idea as onboarding PlainTypewriter.
+        streamAnimationGranularity: 'word',
       }) satisfies Partial<MarkdownProps>,
     [animated, citations, components, enableStream],
   );
