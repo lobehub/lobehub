@@ -476,6 +476,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     finishEmbedding={finishEmbedding}
                     id={chunkTargetId}
                     isInView={isInView}
+                    metadata={metadata}
                     name={name}
                     size={size}
                     url={url}

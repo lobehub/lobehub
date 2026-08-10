@@ -54,6 +54,7 @@
   "FileManager.emptyStatus.actions.knowledgeBase": "新建资源库",
   "FileManager.emptyStatus.or": "或者",
   "FileManager.emptyStatus.title": "把文件或文件夹拖到这里",
+  "FileManager.image.loadFailed": "预览暂时加载不出来",
   "FileManager.noFolders": "还没有文件夹",
   "FileManager.search.noResults": "未找到文件",
   "FileManager.search.placeholder": "搜索文件...",

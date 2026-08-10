@@ -65,6 +65,7 @@ export default {
   'FileManager.emptyStatus.actions.knowledgeBase': 'Create Library',
   'FileManager.emptyStatus.or': 'or',
   'FileManager.emptyStatus.title': 'Drag files or folders here',
+  'FileManager.image.loadFailed': 'Preview unavailable',
   'FileManager.noFolders': 'No folders available',
   'FileManager.search.noResults': 'No files found',
   'FileManager.search.placeholder': 'Search files...',
