@@ -5,7 +5,6 @@ import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   BookOpenIcon,
-  LayoutDashboardIcon,
   ListTodoIcon,
   MessageSquareIcon,
   PlusIcon,
@@ -76,7 +75,6 @@ const ProjectSidebarContent = memo(() => {
       })),
     [detail?.agents],
   );
-  const projectRootPath = `/project/${projectId}`;
   const projectTasksPath = getProjectTasksPath(projectId!);
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
@@ -96,12 +94,6 @@ const ProjectSidebarContent = memo(() => {
       header={header}
       body={
         <Flexbox gap={8} paddingInline={4}>
-          <NavItem
-            active={pathname === projectRootPath}
-            icon={LayoutDashboardIcon}
-            title={t('overview.title')}
-            onClick={() => navigate(`/project/${projectId}`)}
-          />
           <NavItem
             active={pathname === projectTasksPath}
             icon={ListTodoIcon}
@@ -132,9 +124,10 @@ const ProjectSidebarContent = memo(() => {
             >
               {coordinatorAgentId && (
                 <NavItem
+                  active={pathname === getProjectConversationPath(projectId!)}
                   icon={PlusIcon}
                   title={t('sidebar.newConversation')}
-                  onClick={() => navigate(getProjectConversationPath(coordinatorAgentId))}
+                  onClick={() => navigate(getProjectConversationPath(projectId!))}
                 />
               )}
               {conversationSWR.error ? (
@@ -148,11 +141,12 @@ const ProjectSidebarContent = memo(() => {
               ) : conversations?.length ? (
                 conversations.map((conversation) => (
                   <NavItem
+                    active={pathname === getProjectConversationPath(projectId!, conversation.id)}
                     icon={MessageSquareIcon}
                     key={conversation.id}
                     title={conversation.title || t('sidebar.untitledConversation')}
                     onClick={() =>
-                      navigate(getProjectConversationPath(coordinatorAgentId!, conversation.id))
+                      navigate(getProjectConversationPath(projectId!, conversation.id))
                     }
                   />
                 ))

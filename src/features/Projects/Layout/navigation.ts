@@ -1,10 +1,10 @@
 export const getProjectAgentPath = (agentId: string) => `/agent/${agentId}`;
 
-export const getProjectConversationPath = (agentId: string, topicId?: string) =>
-  topicId ? `/agent/${agentId}/${topicId}` : getProjectAgentPath(agentId);
+export const getProjectConversationPath = (projectId: string, topicId?: string) =>
+  topicId ? `/project/${projectId}/conversation/${topicId}` : `/project/${projectId}`;
 
-export const getProjectConversationStartPath = (agentId: string, message: string) =>
-  `${getProjectConversationPath(agentId)}?message=${encodeURIComponent(message)}`;
+export const getProjectConversationStartPath = (projectId: string, message: string) =>
+  `${getProjectConversationPath(projectId)}?message=${encodeURIComponent(message)}`;
 
 export const getProjectLibraryPath = (projectId: string, libraryId: string) =>
   `/project/${projectId}/library/${libraryId}`;

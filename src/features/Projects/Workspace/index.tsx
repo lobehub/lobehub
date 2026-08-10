@@ -98,7 +98,7 @@ const ProjectWorkspace = memo(() => {
     const content = message.trim();
     if (!content) return;
 
-    navigate(getProjectConversationStartPath(detail.project.coordinatorAgentId, content));
+    navigate(getProjectConversationStartPath(projectId!, content));
   };
 
   return (

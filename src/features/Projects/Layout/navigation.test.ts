@@ -19,13 +19,11 @@ describe('project workspace navigation', () => {
     expect(getProjectAcceptancePath('prj_1')).toBe('/project/prj_1/acceptance');
   });
 
-  it('builds new and existing project conversation routes for the coordinator', () => {
-    expect(getProjectConversationPath('agt_coordinator')).toBe('/agent/agt_coordinator');
-    expect(getProjectConversationPath('agt_coordinator', 'tpc_1')).toBe(
-      '/agent/agt_coordinator/tpc_1',
-    );
-    expect(getProjectConversationStartPath('agt_coordinator', 'Plan Q3 & ship')).toBe(
-      '/agent/agt_coordinator?message=Plan%20Q3%20%26%20ship',
+  it('builds new and existing conversation routes inside the project', () => {
+    expect(getProjectConversationPath('prj_1')).toBe('/project/prj_1');
+    expect(getProjectConversationPath('prj_1', 'tpc_1')).toBe('/project/prj_1/conversation/tpc_1');
+    expect(getProjectConversationStartPath('prj_1', 'Plan Q3 & ship')).toBe(
+      '/project/prj_1?message=Plan%20Q3%20%26%20ship',
     );
   });
 });
