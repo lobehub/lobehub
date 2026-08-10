@@ -7,6 +7,7 @@ import {
   trackOnboardingCompleted,
   trackOnboardingMarketplacePicked,
   trackOnboardingMarketplaceShown,
+  trackOnboardingStarted,
   trackOnboardingStepCompleted,
   trackOnboardingStepViewed,
 } from './index';
@@ -80,6 +81,24 @@ describe('onboardingMetrics', () => {
         spm: ONBOARDING_METRICS_SPM.STEP_VIEWED,
         step: 'telemetry',
         stepIndex: 1,
+      },
+    });
+  });
+
+  it('fires onboarding_started with the versioned session context', () => {
+    trackOnboardingStarted({
+      flow: 'web',
+      onboarding_session_id: 'session-1',
+      onboarding_version: 2,
+    });
+
+    expect(track).toHaveBeenCalledWith({
+      name: ONBOARDING_METRICS_EVENTS.STARTED,
+      properties: {
+        flow: 'web',
+        onboarding_session_id: 'session-1',
+        onboarding_version: 2,
+        spm: ONBOARDING_METRICS_SPM.STARTED,
       },
     });
   });

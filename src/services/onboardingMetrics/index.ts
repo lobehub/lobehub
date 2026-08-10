@@ -4,6 +4,7 @@ export const ONBOARDING_METRICS_EVENTS = {
   COMPLETED: 'onboarding_completed',
   MARKETPLACE_PICKED: 'onboarding_marketplace_picked',
   MARKETPLACE_SHOWN: 'onboarding_marketplace_shown',
+  STARTED: 'onboarding_started',
   STEP_COMPLETED: 'onboarding_step_completed',
   STEP_VIEWED: 'onboarding_step_viewed',
 } as const;
@@ -12,6 +13,7 @@ export const ONBOARDING_METRICS_SPM = {
   COMPLETED: 'onboarding.completed',
   MARKETPLACE_PICKED: 'onboarding.marketplace.picked',
   MARKETPLACE_SHOWN: 'onboarding.marketplace.shown',
+  STARTED: 'onboarding.started',
   STEP_COMPLETED: 'onboarding.step.completed',
   STEP_VIEWED: 'onboarding.step.viewed',
 } as const;
@@ -57,13 +59,23 @@ export type OnboardingStep =
 
 export interface OnboardingStepPayload extends Record<string, unknown> {
   flow: OnboardingFlow;
+  onboarding_session_id?: string;
+  onboarding_version?: number;
   skipped?: boolean;
   step: OnboardingStep;
   stepIndex?: number;
 }
 
+export interface OnboardingStartedPayload extends Record<string, unknown> {
+  flow: Exclude<OnboardingFlow, 'common'>;
+  onboarding_session_id: string;
+  onboarding_version: number;
+}
+
 export interface OnboardingCompletedPayload extends Record<string, unknown> {
   flow: Exclude<OnboardingFlow, 'common'>;
+  onboarding_session_id?: string;
+  onboarding_version?: number;
   skipped?: boolean;
   targetUrl?: string;
 }
@@ -72,6 +84,13 @@ export const trackOnboardingStepViewed = (payload: OnboardingStepPayload): void 
   emit(ONBOARDING_METRICS_EVENTS.STEP_VIEWED, {
     ...payload,
     spm: ONBOARDING_METRICS_SPM.STEP_VIEWED,
+  });
+};
+
+export const trackOnboardingStarted = (payload: OnboardingStartedPayload): void => {
+  emit(ONBOARDING_METRICS_EVENTS.STARTED, {
+    ...payload,
+    spm: ONBOARDING_METRICS_SPM.STARTED,
   });
 };
 
