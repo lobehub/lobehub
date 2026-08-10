@@ -226,6 +226,34 @@ describe('OrganizationModel', () => {
       orgModel.updateMemberRole({ memberId: ownerMember.id, orgId: org.id, role: 'admin' }),
     ).rejects.toThrow('Cannot demote the last owner');
   });
+
+  it('transfers ownership atomically via updateMemberRole (AUTHZ-001)', async () => {
+    const org = await orgModel.createOrganization({ name: 'Transfer Org', ownerUserId: ownerId });
+    await orgModel.assignManager({ orgId: org.id, role: 'admin', userId: adminId });
+    await orgModel.assignManager({ orgId: org.id, role: 'member', userId: memberId });
+
+    const members = await orgModel.listMembers(org.id);
+    const memberRow = members.find((m) => m.userId === memberId)!;
+
+    const updated = await orgModel.updateMemberRole({
+      memberId: memberRow.id,
+      orgId: org.id,
+      role: 'owner',
+    });
+    expect(updated?.role).toBe('owner');
+
+    const after = await orgModel.listMembers(org.id);
+    expect(after.find((m) => m.userId === memberId)?.role).toBe('owner');
+    expect(after.find((m) => m.userId === ownerId)?.role).toBe('admin');
+
+    const orgRow = await orgModel.getById(org.id);
+    expect(orgRow?.ownerUserId).toBe(memberId);
+
+    // Cannot demote the sole remaining owner.
+    await expect(
+      orgModel.updateMemberRole({ memberId: memberRow.id, orgId: org.id, role: 'admin' }),
+    ).rejects.toThrow('Cannot demote the last owner');
+  });
 });
 
 describe('AicoBillingModel', () => {

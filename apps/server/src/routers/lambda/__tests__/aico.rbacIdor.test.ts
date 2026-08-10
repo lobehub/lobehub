@@ -590,4 +590,131 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const mine = await ownerCaller.getMine();
     expect(mine.find((o) => o.id === created.id)).toBeUndefined();
   });
+
+  describe('privilege escalation (AUTHZ-004)', () => {
+    it('member cannot promote themselves via updateMemberRole', async () => {
+      const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+      const created = await ownerCaller.create({ name: 'Escalation Org' });
+      const invite = await ownerCaller.inviteMember({
+        identifierType: 'email',
+        identifierValue: 'member@rbac.test',
+        orgId: created.id,
+        role: 'member',
+      });
+      const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
+      await memberCaller.acceptInvite({ token: invite.inviteUrl.split('/invite/').at(-1)! });
+
+      const members = await ownerCaller.listMembers({ orgId: created.id });
+      const me = members.members.find((m) => m.userId === memberId)!;
+
+      await expect(
+        memberCaller.updateMemberRole({ memberId: me.id, orgId: created.id, role: 'admin' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        memberCaller.updateMemberRole({ memberId: me.id, orgId: created.id, role: 'owner' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('org admin cannot transfer ownership or promote anyone to owner', async () => {
+      const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+      const created = await ownerCaller.create({ name: 'Admin Escalation Org' });
+
+      const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+      const adminMember = await platformCaller.assignManager({
+        orgId: created.id,
+        role: 'admin',
+        userId: strangerId,
+      });
+
+      const invite = await ownerCaller.inviteMember({
+        identifierType: 'email',
+        identifierValue: 'member@rbac.test',
+        orgId: created.id,
+        role: 'member',
+      });
+      const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
+      await memberCaller.acceptInvite({ token: invite.inviteUrl.split('/invite/').at(-1)! });
+
+      const members = await ownerCaller.listMembers({ orgId: created.id });
+      const memberRow = members.members.find((m) => m.userId === memberId)!;
+
+      const adminCaller = organizationRouter.createCaller(createTestContext(strangerId));
+      await expect(
+        adminCaller.updateMemberRole({
+          memberId: memberRow.id,
+          orgId: created.id,
+          role: 'owner',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Only owner can transfer ownership' });
+      await expect(
+        adminCaller.updateMemberRole({
+          memberId: adminMember.id,
+          orgId: created.id,
+          role: 'owner',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Only owner can transfer ownership' });
+    });
+
+    it('org owner and admin cannot add platform admins', async () => {
+      const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+      await ownerCaller.create({ name: 'Platform Gate Org' });
+
+      const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+      await platformCaller.assignManager({
+        orgId: (await ownerCaller.getMine())[0]!.id,
+        role: 'admin',
+        userId: memberId,
+      });
+
+      const ownerPlatformAttempt = platformAdminRouter.createCaller(createTestContext(ownerId));
+      await expect(
+        ownerPlatformAttempt.addPlatformAdmin({ userId: memberId }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const adminPlatformAttempt = platformAdminRouter.createCaller(createTestContext(memberId));
+      await expect(
+        adminPlatformAttempt.addPlatformAdmin({ userId: strangerId }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('owner can transfer ownership via updateMemberRole (AUTHZ-001)', async () => {
+      const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+      const created = await ownerCaller.create({ name: 'Transfer RBAC Org' });
+      const invite = await ownerCaller.inviteMember({
+        identifierType: 'email',
+        identifierValue: 'member@rbac.test',
+        orgId: created.id,
+        role: 'member',
+      });
+      const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
+      await memberCaller.acceptInvite({ token: invite.inviteUrl.split('/invite/').at(-1)! });
+
+      const members = await ownerCaller.listMembers({ orgId: created.id });
+      const memberRow = members.members.find((m) => m.userId === memberId)!;
+      const ownerRow = members.members.find((m) => m.userId === ownerId)!;
+
+      await ownerCaller.updateMemberRole({
+        memberId: memberRow.id,
+        orgId: created.id,
+        role: 'owner',
+      });
+
+      const after = await ownerCaller.listMembers({ orgId: created.id });
+      expect(after.members.find((m) => m.userId === memberId)?.role).toBe('owner');
+      expect(after.members.find((m) => m.userId === ownerId)?.role).toBe('admin');
+
+      // New owner can manage; demoted former owner is now admin-only for delete.
+      await expect(
+        organizationRouter.createCaller(createTestContext(ownerId)).deleteOrganization({
+          confirmName: 'Transfer RBAC Org',
+          orgId: created.id,
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const newOwnerCaller = organizationRouter.createCaller(createTestContext(memberId));
+      const mine = await newOwnerCaller.getMine();
+      expect(mine.find((o) => o.id === created.id)?.myRole).toBe('owner');
+      expect(ownerRow.id).toBeTruthy();
+    });
+  });
 });
