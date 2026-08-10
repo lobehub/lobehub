@@ -636,4 +636,20 @@ describe('systemStatusSelectors', () => {
       });
     });
   });
+
+  describe('homeGoalsCollapsed', () => {
+    // The goals card opens by default: a first-time viewer must see the goals,
+    // not an unexplained folded header.
+    it('reads as open when the viewer has never folded the card', () => {
+      const s: GlobalState = merge(initialState, { status: {} });
+
+      expect(systemStatusSelectors.homeGoalsCollapsed(s)).toBe(false);
+    });
+
+    it('keeps the card folded once the viewer put it away', () => {
+      const s: GlobalState = merge(initialState, { status: { homeGoalsCollapsed: true } });
+
+      expect(systemStatusSelectors.homeGoalsCollapsed(s)).toBe(true);
+    });
+  });
 });

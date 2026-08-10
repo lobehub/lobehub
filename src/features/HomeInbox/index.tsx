@@ -61,11 +61,14 @@ interface InboxSection {
   actionAlwaysVisible?: boolean;
   /** Trailing marker on the heading, e.g. the team-view "only mine" chip. */
   badge?: ReactNode;
+  /** Section folded to its heading. Needs `onCollapsedChange` to be operable. */
+  collapsed?: boolean;
   count?: number;
   key: string;
   /** Omitted when the section labels itself (the running card names its own count). */
   label?: string;
   node: ReactNode;
+  onCollapsedChange?: (collapsed: boolean) => void;
   /** Section carries its own card shell — the rail renders it verbatim. */
   selfShelled?: boolean;
   subtitle?: string;
@@ -186,6 +189,9 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     [acceptanceStatuses.data, goals, goalsResolved, showGoals],
   );
 
+  const goalsCollapsed = useGlobalStore(systemStatusSelectors.homeGoalsCollapsed);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
@@ -302,10 +308,13 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // absence from the rail leaves it with no home at all.
   if (goalEntries.length > 0)
     sections.push({
+      collapsed: goalsCollapsed,
       count: goalEntries.length,
       key: 'goals',
       label: t('inbox.goals.title'),
       node: <GoalsRailCard bare={isRail} entries={goalEntries} />,
+      onCollapsedChange: (next) =>
+        updateSystemStatus({ homeGoalsCollapsed: next }, 'toggleHomeGoals'),
     });
 
   if (!isMain && !hideNeedsYou && needsYou.length > 0)
@@ -523,10 +532,12 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           action,
           actionAlwaysVisible,
           badge,
+          collapsed,
           count,
           key,
           label,
           node,
+          onCollapsedChange,
           selfShelled,
           subtitle,
         }) => {
@@ -536,6 +547,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             return (
               <RailCard
                 action={action}
+                collapsed={collapsed}
                 count={count}
                 key={key}
                 title={
@@ -546,6 +558,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                     </>
                   )
                 }
+                onCollapsedChange={onCollapsedChange}
               >
                 {node}
               </RailCard>
@@ -557,6 +570,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             <GroupBlock
               action={action}
               actionAlwaysVisible={actionAlwaysVisible || key === toggleSectionKey}
+              collapsed={collapsed}
               count={count}
               key={key}
               title={
@@ -568,6 +582,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                   {badge}
                 </>
               }
+              onCollapsedChange={onCollapsedChange}
             >
               {node}
             </GroupBlock>

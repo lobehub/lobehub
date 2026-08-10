@@ -370,6 +370,7 @@ const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel
 const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? true;
 const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
 const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
+const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
 const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
 const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
@@ -468,6 +469,7 @@ export const systemStatusSelectors = {
   hiddenHomeWidgets,
   hiddenSidebarSections,
   hidePWAInstaller,
+  homeGoalsCollapsed,
   homeRecentsCount,
   homeSelectedAgentId,
   homeTaskCount,
