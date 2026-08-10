@@ -1085,6 +1085,18 @@ export class AgentGroupRepository {
         else referencedMembers.push(row);
       }
 
+      // Same lock-then-guard as AgentModel.transferAgents: serialize with a
+      // concurrent transfer of any member agent BEFORE consulting the pending
+      // job table, so two racing transfers cannot both pass the guard.
+      if (agentIds.length > 0) {
+        await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(inArray(agents.id, agentIds))
+          .orderBy(asc(agents.id))
+          .for('update');
+      }
+
       // `memberRows` is read RAW — the partition above must see every member,
       // including ones hidden from this caller. But a referenced member is
       // about to be CLONED into the target scope, systemRole and config and
@@ -1097,9 +1109,17 @@ export class AgentGroupRepository {
       // a blank systemRole is a silent behavior change, and dropping it would
       // leave the moved history attributed to an agent in the source scope
       // (`messages.agent_id` cascades). Neither is the caller's to choose.
+      //
+      // Deliberately AFTER the lock above, and re-read rather than reusing
+      // `memberRows`: that snapshot predates the lock, so an owner committing
+      // `visibility = 'private'` in between would have been checked as public
+      // and then cloned from the stale row. Once the rows are locked, that
+      // update blocks until this transaction ends, so what is checked here is
+      // what gets cloned below.
+      const lockedReferencedAgents = new Map<string, AgentItem>();
       if (referencedMembers.length > 0) {
         const visibleMembers = await trx
-          .select({ id: agents.id })
+          .select()
           .from(agents)
           .where(
             and(
@@ -1116,18 +1136,8 @@ export class AgentGroupRepository {
         if (visibleMembers.length !== referencedMembers.length) {
           throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
         }
-      }
 
-      // Same lock-then-guard as AgentModel.transferAgents: serialize with a
-      // concurrent transfer of any member agent BEFORE consulting the pending
-      // job table, so two racing transfers cannot both pass the guard.
-      if (agentIds.length > 0) {
-        await trx
-          .select({ id: agents.id })
-          .from(agents)
-          .where(inArray(agents.id, agentIds))
-          .orderBy(asc(agents.id))
-          .for('update');
+        for (const agent of visibleMembers) lockedReferencedAgents.set(agent.id, agent);
       }
       // Both guards are needed: the agent one catches a member agent migrating
       // on its own, the group one catches this group's own backfill (and is
@@ -1229,8 +1239,9 @@ export class AgentGroupRepository {
           .insert(agents)
           .values(
             referencedMembers.map((member) => ({
+              // The row read under the lock above, not the pre-lock snapshot.
               ...this.buildCopiedAgent(
-                member.agent,
+                lockedReferencedAgents.get(member.agentId) ?? member.agent,
                 targetWorkspaceId,
                 targetUserId,
                 'Agent',
@@ -1447,31 +1458,50 @@ export class AgentGroupRepository {
       (row) =>
         resolveGroupMembershipType({ role: row.role, virtual: row.agent.virtual }) !== 'owned',
     );
-    if (referencedSourceMembers.length > 0) {
-      const visibleMembers = await this.db
-        .select({ id: agents.id })
-        .from(agents)
-        .where(
-          and(
-            inArray(
-              agents.id,
-              referencedSourceMembers.map((row) => row.agent.id),
-            ),
-            this.agentOwnership(),
-          ),
-        );
-
-      if (visibleMembers.length !== referencedSourceMembers.length) {
-        throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
-      }
-    }
-
     // Only apply visibility when copying INTO a workspace — in personal
     // scope visibility is a no-op and the DB defaults win.
     const targetVisibility =
       targetWorkspaceId && options.targetVisibility ? options.targetVisibility : undefined;
 
     return this.db.transaction(async (trx) => {
+      // Lock the referenced members, then check them — same ordering as the
+      // transfer path. Outside the transaction (or before the lock) this is a
+      // TOCTOU: an owner committing `visibility = 'private'` after the check
+      // would still be cloned, config and all, from the pre-check snapshot.
+      const lockedReferencedSourceAgents = new Map<string, AgentItem>();
+      if (referencedSourceMembers.length > 0) {
+        await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(
+            inArray(
+              agents.id,
+              referencedSourceMembers.map((row) => row.agent.id),
+            ),
+          )
+          .orderBy(asc(agents.id))
+          .for('update');
+
+        const visibleMembers = await trx
+          .select()
+          .from(agents)
+          .where(
+            and(
+              inArray(
+                agents.id,
+                referencedSourceMembers.map((row) => row.agent.id),
+              ),
+              this.agentOwnership(),
+            ),
+          );
+
+        if (visibleMembers.length !== referencedSourceMembers.length) {
+          throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
+        }
+
+        for (const agent of visibleMembers) lockedReferencedSourceAgents.set(agent.id, agent);
+      }
+
       if (options.includeConversationHistory) {
         // Lock-then-guard on the SOURCE group, mirroring the agent copy path.
         // The lock re-asserts the source scope rather than matching by id
@@ -1531,7 +1561,10 @@ export class AgentGroupRepository {
           .values(
             sourceMembers.map((member) =>
               this.buildCopiedAgent(
-                member.agent,
+                // Referenced members clone from the row read under the lock
+                // above; owned members were never in question and keep their
+                // pre-transaction snapshot.
+                lockedReferencedSourceAgents.get(member.agent.id) ?? member.agent,
                 targetWorkspaceId,
                 targetUserId,
                 'Agent',
