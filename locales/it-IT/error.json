@@ -122,6 +122,7 @@
   "testConnectionFailed": "Connessione di test fallita: {{error}}",
   "transfer.agentOwnedByGroup": "Questo agente appartiene a un gruppo di chat e non può essere spostato da solo. Sposta invece il gruppo o rimuovi prima l'agente dal gruppo.",
   "transfer.copyInProgress": "Una copia precedente di questo agente sta ancora duplicando la sua cronologia. Riprova una volta completata.",
+  "transfer.groupHasInaccessibleMember": "Questo gruppo include un membro a cui non hai accesso. Chiedi al proprietario di condividerlo con l'area di lavoro o rimuovilo dal gruppo, quindi riprova.",
   "transfer.noPermission": "Non hai l'autorizzazione per spostare questa risorsa.",
   "transfer.ownerOnly": "Solo i proprietari dello spazio di lavoro possono trasferire risorse create da altri membri.",
   "transfer.resourceNotFound": "Questa risorsa non esiste più o non hai più accesso. Aggiorna e riprova.",

@@ -237,6 +237,8 @@ export default {
   'tts.responseError': 'Service request failed, please check the configuration or try again',
   'transfer.agentOwnedByGroup':
     'This agent belongs to a chat group and cannot be moved on its own. Move the group instead, or remove the agent from it first.',
+  'transfer.groupHasInaccessibleMember':
+    'This group includes a member you do not have access to. Ask its owner to share it with the workspace, or remove it from the group, then try again.',
   'transfer.noPermission': "You don't have permission to move this resource.",
   'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
   'transfer.resourceNotFound':

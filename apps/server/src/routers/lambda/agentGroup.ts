@@ -15,7 +15,10 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
-import { AgentGroupRepository } from '@/database/repositories/agentGroup';
+import {
+  AgentGroupRepository,
+  GROUP_HAS_INACCESSIBLE_MEMBER,
+} from '@/database/repositories/agentGroup';
 import type { ResourceAccessLevel } from '@/database/schemas';
 import {
   DEFAULT_RESOURCE_ACCESS_LEVELS,
@@ -831,6 +834,15 @@ export const agentGroupRouter = router({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
             message: "Only workspace owners can transfer a group carrying others' content",
+          });
+        }
+        if (error instanceof Error && error.message === GROUP_HAS_INACCESSIBLE_MEMBER) {
+          throw new TRPCError({
+            // No group or member id in the payload: which member is hidden is
+            // exactly what the caller is not entitled to learn.
+            cause: { data: { code: TransferErrorCode.GroupHasInaccessibleMember } },
+            code: 'FORBIDDEN',
+            message: 'This group includes a member you do not have access to',
           });
         }
         if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {

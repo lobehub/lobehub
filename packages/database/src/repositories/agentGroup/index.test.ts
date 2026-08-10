@@ -20,7 +20,7 @@ import { topicCommentMentions, topicComments } from '../../schemas/topicComment'
 import { users } from '../../schemas/user';
 import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
-import { AgentGroupRepository } from './index';
+import { AgentGroupRepository, GROUP_HAS_INACCESSIBLE_MEMBER } from './index';
 
 const userId = 'agent-group-test-user';
 const otherUserId = 'other-agent-group-user';
@@ -2421,6 +2421,24 @@ describe('AgentGroupRepository', () => {
       const rows = await wsRepo.listReferencedMembers(['lrm-group']);
 
       expect(rows.map((row) => row.agentId)).toEqual(['lrm-public']);
+    });
+
+    it('refuses to transfer a group holding a member the caller cannot see', async () => {
+      // The clone path would otherwise copy that member's title, systemRole and
+      // config into a scope the caller can read — the roster hides it, and so
+      // does `listReferencedMembers`, so the transfer must not be the way
+      // around that.
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      await expect(wsRepo.transferToWorkspace('lrm-group', null, userId)).rejects.toThrow(
+        GROUP_HAS_INACCESSIBLE_MEMBER,
+      );
+
+      // Nothing moved.
+      const group = await serverDB.query.chatGroups.findFirst({
+        where: (g, { eq }) => eq(g.id, 'lrm-group'),
+      });
+      expect(group!.workspaceId).toBe(workspaceId);
     });
 
     it('returns nothing for a group the caller cannot see', async () => {

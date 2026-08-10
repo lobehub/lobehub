@@ -54,6 +54,13 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
  */
 export const AGENT_GROUP_COPY_SOURCE_MOVED = 'AGENT_GROUP_COPY_SOURCE_MOVED';
 
+/**
+ * Transfer rejected: the group references a member agent this caller cannot
+ * see, and moving the group would clone that agent — config and all — into a
+ * scope the caller can read.
+ */
+export const GROUP_HAS_INACCESSIBLE_MEMBER = 'GROUP_HAS_INACCESSIBLE_MEMBER';
+
 interface CopyAgentGroupToWorkspaceOptions {
   includeConversationHistory?: boolean;
   newTitle?: string;
@@ -1078,6 +1085,39 @@ export class AgentGroupRepository {
         else referencedMembers.push(row);
       }
 
+      // `memberRows` is read RAW — the partition above must see every member,
+      // including ones hidden from this caller. But a referenced member is
+      // about to be CLONED into the target scope, systemRole and config and
+      // all, which would hand the caller a full copy of an agent whose owner
+      // has since made it private. The roster hides such a member, and so does
+      // `listReferencedMembers`; the transfer must not become the way around
+      // that.
+      //
+      // Refuse rather than clone a redacted shell: a member that answers with
+      // a blank systemRole is a silent behavior change, and dropping it would
+      // leave the moved history attributed to an agent in the source scope
+      // (`messages.agent_id` cascades). Neither is the caller's to choose.
+      if (referencedMembers.length > 0) {
+        const visibleMembers = await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(
+            and(
+              inArray(
+                agents.id,
+                referencedMembers.map((row) => row.agentId),
+              ),
+              this.agentOwnership(),
+            ),
+          );
+
+        // Deliberately a bare count, and the error names nobody: which member
+        // is hidden is itself the thing being withheld.
+        if (visibleMembers.length !== referencedMembers.length) {
+          throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
+        }
+      }
+
       // Same lock-then-guard as AgentModel.transferAgents: serialize with a
       // concurrent transfer of any member agent BEFORE consulting the pending
       // job table, so two racing transfers cannot both pass the guard.
@@ -1390,6 +1430,41 @@ export class AgentGroupRepository {
 
     const sourceSupervisor = groupAgentsWithDetails.find((row) => row.role === 'supervisor');
     const sourceMembers = groupAgentsWithDetails.filter((row) => row.role !== 'supervisor');
+
+    // Same guard, same reason as `transferToWorkspace`: a copy duplicates each
+    // member through `buildCopiedAgent`, systemRole and config included, into a
+    // scope this caller reads. The roster hides a member whose owner has since
+    // made it private, so copying the group must not be the way to read it.
+    //
+    // Scoped to REFERENCED members, matching the transfer guard. An owned
+    // member is the group's own machinery — the supervisor and the members its
+    // builder made — and has always travelled with the group; it is not
+    // somebody's separate agent being read through a side door.
+    //
+    // `duplicate` needs no guard at all: it re-links referenced members rather
+    // than copying them, so no config crosses a scope.
+    const referencedSourceMembers = sourceMembers.filter(
+      (row) =>
+        resolveGroupMembershipType({ role: row.role, virtual: row.agent.virtual }) !== 'owned',
+    );
+    if (referencedSourceMembers.length > 0) {
+      const visibleMembers = await this.db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(
+          and(
+            inArray(
+              agents.id,
+              referencedSourceMembers.map((row) => row.agent.id),
+            ),
+            this.agentOwnership(),
+          ),
+        );
+
+      if (visibleMembers.length !== referencedSourceMembers.length) {
+        throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
+      }
+    }
 
     // Only apply visibility when copying INTO a workspace — in personal
     // scope visibility is a no-op and the DB defaults win.
