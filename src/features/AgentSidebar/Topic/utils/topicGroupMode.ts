@@ -6,22 +6,22 @@ import type { TopicGroupMode } from '@/types/topic';
 type HeterogeneousAgentType = HeterogeneousProviderConfig['type'];
 
 /**
- * CLI agents declared to default to folder/project grouping in the shared
- * descriptor catalog (`defaultTopicGroupMode: 'byProject'`). Derived from the
- * catalog so agents added later inherit the behavior automatically.
+ * Topic-grouping default declared per CLI agent in the shared descriptor
+ * catalog (`defaultTopicGroupMode`). Derived from the catalog so agents added
+ * later inherit the behavior automatically.
  */
-const PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES = new Set<HeterogeneousAgentType>(
-  HETEROGENEOUS_AGENT_CONFIGS.filter(
-    ({ defaultTopicGroupMode }) => defaultTopicGroupMode === 'byProject',
-  ).map(({ type }) => type),
+const DEFAULT_TOPIC_GROUP_MODE_BY_AGENT_TYPE = new Map<HeterogeneousAgentType, TopicGroupMode>(
+  HETEROGENEOUS_AGENT_CONFIGS.flatMap(({ defaultTopicGroupMode, type }) =>
+    defaultTopicGroupMode ? [[type, defaultTopicGroupMode]] : [],
+  ),
 );
 
 export const getDefaultTopicGroupModeByAgentType = (
   fallbackMode: TopicGroupMode,
   agentType?: HeterogeneousAgentType,
 ): TopicGroupMode =>
-  agentType && PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES.has(agentType)
-    ? 'byProject'
+  agentType
+    ? (DEFAULT_TOPIC_GROUP_MODE_BY_AGENT_TYPE.get(agentType) ?? fallbackMode)
     : fallbackMode;
 
 export const resolveAgentTopicGroupMode = ({
