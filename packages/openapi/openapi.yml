@@ -3726,7 +3726,15 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/File"
+                    additionalProperties: false
+                    properties:
+                      file:
+                        $ref: "#/components/schemas/File"
+                      parsed:
+                        type: object
+                    required:
+                      - file
+                    type: object
                   message:
                     type: string
                   success:
@@ -3800,7 +3808,15 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/File"
+                    additionalProperties: false
+                    properties:
+                      file:
+                        $ref: "#/components/schemas/File"
+                      parsed:
+                        type: object
+                    required:
+                      - file
+                    type: object
                   message:
                     type: string
                   success:
@@ -4392,7 +4408,55 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/File"
+                    additionalProperties: false
+                    properties:
+                      failed:
+                        items:
+                          additionalProperties: false
+                          properties:
+                            error:
+                              type: string
+                            name:
+                              type: string
+                          required:
+                            - error
+                            - name
+                          type: object
+                        type: array
+                      successful:
+                        items:
+                          additionalProperties: false
+                          properties:
+                            file:
+                              $ref: "#/components/schemas/File"
+                            parsed:
+                              type: object
+                          required:
+                            - file
+                          type: object
+                        type: array
+                      summary:
+                        additionalProperties: false
+                        properties:
+                          failed:
+                            minimum: 0
+                            type: integer
+                          successful:
+                            minimum: 0
+                            type: integer
+                          total:
+                            minimum: 0
+                            type: integer
+                        required:
+                          - failed
+                          - successful
+                          - total
+                        type: object
+                    required:
+                      - failed
+                      - successful
+                      - summary
+                    type: object
                   message:
                     type: string
                   success:
@@ -4474,7 +4538,45 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/File"
+                    additionalProperties: false
+                    properties:
+                      failed:
+                        items:
+                          additionalProperties: false
+                          properties:
+                            error:
+                              type: string
+                            fileId:
+                              type: string
+                          required:
+                            - error
+                            - fileId
+                          type: object
+                        type: array
+                      files:
+                        items:
+                          additionalProperties: false
+                          properties:
+                            file:
+                              $ref: "#/components/schemas/File"
+                            parsed:
+                              type: object
+                          required:
+                            - file
+                          type: object
+                        type: array
+                      success:
+                        minimum: 0
+                        type: integer
+                      total:
+                        minimum: 0
+                        type: integer
+                    required:
+                      - failed
+                      - files
+                      - success
+                      - total
+                    type: object
                   message:
                     type: string
                   success:

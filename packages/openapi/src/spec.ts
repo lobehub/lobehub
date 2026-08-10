@@ -554,6 +554,74 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
     });
   }
 
+  // The file controllers wrap their payloads instead of returning the bare
+  // resource, so the one-segment fallback below would advertise `File` and make
+  // generated clients mistype every one of these. Keep these explicit.
+  if (group === 'files') {
+    const fileDetail: SchemaObject = {
+      additionalProperties: false,
+      properties: { file: ref('File'), parsed: { type: 'object' } },
+      required: ['file'],
+      type: 'object',
+    };
+
+    if ((method === 'post' && rest === '') || (method === 'get' && rest === '{id}')) {
+      return successEnvelope(fileDetail);
+    }
+
+    if (method === 'post' && rest === 'batches') {
+      return successEnvelope({
+        additionalProperties: false,
+        properties: {
+          failed: {
+            items: {
+              additionalProperties: false,
+              properties: { error: { type: 'string' }, name: { type: 'string' } },
+              required: ['error', 'name'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          successful: { items: fileDetail, type: 'array' },
+          summary: {
+            additionalProperties: false,
+            properties: {
+              failed: { minimum: 0, type: 'integer' },
+              successful: { minimum: 0, type: 'integer' },
+              total: { minimum: 0, type: 'integer' },
+            },
+            required: ['failed', 'successful', 'total'],
+            type: 'object',
+          },
+        },
+        required: ['failed', 'successful', 'summary'],
+        type: 'object',
+      });
+    }
+
+    if (method === 'post' && rest === 'queries') {
+      return successEnvelope({
+        additionalProperties: false,
+        properties: {
+          failed: {
+            items: {
+              additionalProperties: false,
+              properties: { error: { type: 'string' }, fileId: { type: 'string' } },
+              required: ['error', 'fileId'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          files: { items: fileDetail, type: 'array' },
+          success: { minimum: 0, type: 'integer' },
+          total: { minimum: 0, type: 'integer' },
+        },
+        required: ['failed', 'files', 'success', 'total'],
+        type: 'object',
+      });
+    }
+  }
+
   const isResourceOperation = rest === '' || !rest.includes('/');
   return isResourceOperation
     ? successEnvelope(ref(resource.schema))
