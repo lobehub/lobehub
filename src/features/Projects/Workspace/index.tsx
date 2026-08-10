@@ -1,56 +1,98 @@
 'use client';
 
-import { Block, Center, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BookOpenIcon, BotIcon, CheckSquareIcon, FolderKanbanIcon, PlusIcon } from 'lucide-react';
+import { BookOpenIcon, BotIcon, CheckSquareIcon, FolderKanbanIcon, SendIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import NavItem from '@/features/NavPanel/components/NavItem';
-import {
-  getProjectAgentPath,
-  getProjectConversationStartPath,
-  getProjectLibraryPath,
-  getProjectTasksPath,
-} from '@/features/Projects/Layout/navigation';
+import { getProjectConversationStartPath } from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
+  composer: css`
+    overflow: hidden;
+
+    min-height: 180px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 20px;
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+  composerFooter: css`
+    padding-block: 10px 12px;
+    padding-inline: 20px 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   content: css`
     overflow: auto;
 
     width: 100%;
-    max-width: 1200px;
+    max-width: 920px;
     margin-inline: auto;
-    padding: 32px;
-  `,
-  composer: css`
-    min-height: 154px;
-  `,
-  dashboard: css`
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-    gap: 16px;
+    padding-block: 56px;
+    padding-inline: 40px;
 
-    @media (width <= 900px) {
-      grid-template-columns: 1fr;
+    @media (width <= 720px) {
+      padding-block: 32px;
+      padding-inline: 20px;
     }
   `,
-  resourceList: css`
-    min-height: 196px;
-    padding: 20px;
+  contextItem: css`
+    flex: 1;
+
+    min-width: 180px;
+    padding-block: 14px;
+    padding-inline: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  prompt: css`
+    cursor: pointer;
+
+    padding-block: 6px;
+    padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 999px;
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition:
+      color ${cssVar.motionDurationMid},
+      border-color ${cssVar.motionDurationMid};
+
+    &:hover {
+      border-color: ${cssVar.colorPrimaryBorder};
+      color: ${cssVar.colorPrimary};
+    }
   `,
   shell: css`
     overflow: hidden;
     height: 100%;
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
+  `,
+  textarea: css`
+    padding: 20px !important;
+    border: 0 !important;
+
+    font-size: 16px !important;
+
+    background: transparent !important;
+    box-shadow: none !important;
   `,
 }));
 
@@ -84,136 +126,119 @@ const ProjectWorkspace = memo(() => {
       </Center>
     );
 
-  const sections = [
-    { icon: CheckSquareIcon, items: detail.tasks ?? [], key: 'tasks', title: t('sections.tasks') },
-    { icon: BotIcon, items: detail.agents ?? [], key: 'agents', title: t('sections.agents') },
-    {
-      icon: BookOpenIcon,
-      items: detail.knowledgeBases ?? [],
-      key: 'knowledgeBases',
-      title: t('sections.knowledgeBases'),
-    },
-  ];
   const startConversation = () => {
     const content = message.trim();
     if (!content) return;
 
     navigate(getProjectConversationStartPath(projectId!, content));
   };
+  const prompts = [
+    t('overview.prompts.planMilestone'),
+    t('overview.prompts.findBlockers'),
+    t('overview.prompts.summarizeProgress'),
+  ];
+  const contextItems = [
+    {
+      count: detail.tasks?.length ?? 0,
+      icon: CheckSquareIcon,
+      label: t('sections.tasks'),
+    },
+    {
+      count: detail.agents?.length ?? 0,
+      icon: BotIcon,
+      label: t('sections.agents'),
+    },
+    {
+      count: detail.knowledgeBases?.length ?? 0,
+      icon: BookOpenIcon,
+      label: t('sections.knowledgeBases'),
+    },
+  ];
 
   return (
     <Flexbox className={styles.shell} flex={1}>
-      <Flexbox className={styles.content} flex={1} gap={24}>
-        <Flexbox gap={6}>
-          <Text fontSize={28} weight={650}>
-            {detail.project.name}
+      <Flexbox className={styles.content} flex={1} gap={28}>
+        <Flexbox gap={10}>
+          <Text fontSize={30} weight={650}>
+            {t('overview.nextActionTitle')}
           </Text>
-          <Text type="secondary">{detail.project.description || t('overview.noDescription')}</Text>
+          <Text type="secondary">
+            {t('overview.nextActionDescription', { name: detail.project.name })}
+          </Text>
         </Flexbox>
-        <Block
-          className={styles.composer}
-          padding={0}
-          style={{ overflow: 'hidden' }}
-          variant="filled"
-        >
+
+        <Flexbox className={styles.composer}>
           <TextArea
-            autoSize={{ maxRows: 6, minRows: 3 }}
+            autoFocus
+            autoSize={{ maxRows: 8, minRows: 5 }}
+            className={styles.textarea}
             placeholder={t('overview.composerPlaceholder')}
-            style={{ background: 'transparent', border: 0, boxShadow: 'none', padding: 16 }}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') startConversation();
             }}
           />
-          <Flexbox horizontal justify="flex-end" padding={12}>
-            <Button disabled={!message.trim()} type="primary" onClick={startConversation}>
+          <Flexbox
+            horizontal
+            align="center"
+            className={styles.composerFooter}
+            justify="space-between"
+          >
+            <Text fontSize={12} type="secondary">
+              {t('overview.sendHint')}
+            </Text>
+            <Button
+              disabled={!message.trim()}
+              icon={SendIcon}
+              type="primary"
+              onClick={startConversation}
+            >
               {t('overview.startConversation')}
             </Button>
           </Flexbox>
-        </Block>
-        <Flexbox horizontal gap={12} wrap="wrap">
-          {sections.map(({ icon, items, key, title }) => (
-            <Block key={key} style={{ minWidth: 220, padding: 16 }} variant="filled">
-              <Flexbox gap={12}>
-                <Flexbox horizontal align="center" gap={8}>
-                  <Icon icon={icon} />
-                  <Text weight={600}>{title}</Text>
-                </Flexbox>
-                <Text fontSize={28} weight={650}>
-                  {items.length}
-                </Text>
-              </Flexbox>
-            </Block>
+        </Flexbox>
+
+        <Flexbox horizontal gap={8} wrap="wrap">
+          {prompts.map((prompt) => (
+            <button
+              className={styles.prompt}
+              key={prompt}
+              type="button"
+              onClick={() => setMessage(prompt)}
+            >
+              {prompt}
+            </button>
           ))}
         </Flexbox>
-        <div className={styles.dashboard}>
-          <Block className={styles.resourceList} variant="filled">
-            <Flexbox gap={12}>
-              <Text fontSize={16} weight={600}>
-                {t('overview.tasksTitle')}
-              </Text>
-              {(detail.tasks ?? []).length === 0 ? (
-                <Flexbox align="center" flex={1} gap={10} justify="center" padding={24}>
-                  <Icon icon={CheckSquareIcon} size={28} />
-                  <Text type="secondary">{t('overview.tasksEmpty')}</Text>
-                  <Button icon={PlusIcon} onClick={() => navigate(getProjectTasksPath(projectId!))}>
-                    {t('overview.openTasks')}
-                  </Button>
-                </Flexbox>
-              ) : (
-                (detail.tasks ?? []).map((task) => (
-                  <NavItem
-                    key={task.id}
-                    title={task.name || task.instruction}
-                    onClick={() => navigate(`/task/${task.id}`)}
-                  />
-                ))
-              )}
-            </Flexbox>
-          </Block>
-          <Flexbox gap={16}>
-            <Block className={styles.resourceList} variant="filled">
-              <Flexbox gap={8}>
-                <Text fontSize={16} weight={600}>
-                  {t('sections.agents')}
-                </Text>
-                {(detail.agents ?? []).length === 0 ? (
-                  <Text type="secondary">{t('sidebar.agentsEmpty')}</Text>
-                ) : (
-                  (detail.agents ?? []).map(({ agent, binding }) => (
-                    <NavItem
-                      description={binding.role || undefined}
-                      icon={BotIcon}
-                      key={agent.id}
-                      title={agent.title}
-                      onClick={() => navigate(getProjectAgentPath(agent.id))}
-                    />
-                  ))
-                )}
-              </Flexbox>
-            </Block>
-            <Block className={styles.resourceList} variant="filled">
-              <Flexbox gap={8}>
-                <Text fontSize={16} weight={600}>
-                  {t('sections.knowledgeBases')}
-                </Text>
-                {(detail.knowledgeBases ?? []).length === 0 ? (
-                  <Text type="secondary">{t('sidebar.librariesEmpty')}</Text>
-                ) : (
-                  (detail.knowledgeBases ?? []).map(({ knowledgeBase }) => (
-                    <NavItem
-                      icon={BookOpenIcon}
-                      key={knowledgeBase.id}
-                      title={knowledgeBase.name}
-                      onClick={() => navigate(getProjectLibraryPath(projectId!, knowledgeBase.id))}
-                    />
-                  ))
-                )}
-              </Flexbox>
-            </Block>
+
+        <Flexbox gap={12}>
+          <Flexbox gap={4}>
+            <Text fontSize={16} weight={600}>
+              {t('overview.contextTitle')}
+            </Text>
+            <Text fontSize={13} type="secondary">
+              {detail.project.description || t('overview.noDescription')}
+            </Text>
           </Flexbox>
-        </div>
+          <Flexbox horizontal gap={12} wrap="wrap">
+            {contextItems.map(({ count, icon, label }) => (
+              <Flexbox
+                horizontal
+                align="center"
+                className={styles.contextItem}
+                gap={10}
+                key={label}
+              >
+                <Icon icon={icon} size={18} />
+                <Text weight={500}>{label}</Text>
+                <Text style={{ marginInlineStart: 'auto' }} type="secondary">
+                  {count}
+                </Text>
+              </Flexbox>
+            ))}
+          </Flexbox>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );
