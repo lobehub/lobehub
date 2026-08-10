@@ -551,6 +551,32 @@ describe('ChatGroupModel', () => {
       expect(rosters[0].chatGroupId).toBe('owner-group');
     });
 
+    it('should refuse a builtin agent joining a group', async () => {
+      // Builtins are `virtual` too, so membership rules would classify one as
+      // group-OWNED — and removal deletes owned members. Adding your Inbox to
+      // a group and then leaving would delete the Inbox.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({ id: 'builtin-add-group', title: 'B', userId });
+        await trx.insert(agentsTable).values({
+          id: 'my-inbox',
+          slug: 'inbox',
+          title: 'Inbox',
+          userId,
+          virtual: true,
+        });
+      });
+
+      await expect(
+        chatGroupModel.addAgentsToGroup('builtin-add-group', ['my-inbox']),
+      ).rejects.toThrow(/builtin agent cannot join/);
+
+      const roster = await serverDB
+        .select()
+        .from(chatGroupsAgents)
+        .where(eq(chatGroupsAgents.agentId, 'my-inbox'));
+      expect(roster).toHaveLength(0);
+    });
+
     it('should let a freshly built virtual agent join its first group', async () => {
       // The group agent builder creates `virtual: true` and adds it here. The
       // invariant is "exactly one group", not "never joins one" — rejecting

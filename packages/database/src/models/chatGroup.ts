@@ -473,6 +473,7 @@ export class ChatGroupModel {
       const visibleAgents = await this.db
         .select({
           id: agents.id,
+          slug: agents.slug,
           userId: agents.userId,
           virtual: agents.virtual,
           visibility: agents.visibility,
@@ -518,6 +519,23 @@ export class ChatGroupModel {
       // product does, since the member picker filters virtual agents
       // (`buildQueryAgentsWhere`), leaving this enforced by a query rather
       // than by the write until now.
+      // Builtins (Inbox, the agent builders) are provisioned per user and are
+      // `virtual` like a group's own members, so the membership rules would
+      // classify one as group-OWNED the moment it joined a roster — and
+      // `removeAgentsFromGroup` deletes owned members. Letting someone add
+      // their Inbox to a group and then leave the group would delete the
+      // Inbox. They are nobody's group member; refuse at the door.
+      const builtinAgentId = agentIds.find((id) => {
+        const slug = visibleById.get(id)?.slug;
+        return !!slug && RESERVED_BUILTIN_AGENT_SLUGS.includes(slug);
+      });
+      if (builtinAgentId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A builtin agent cannot join a chat group',
+        });
+      }
+
       const virtualAgentIds = agentIds.filter((id) => visibleById.get(id)?.virtual);
       if (virtualAgentIds.length > 0) {
         const [poached] = await this.db

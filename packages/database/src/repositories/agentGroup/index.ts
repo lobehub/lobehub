@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, asc, count, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, ne, not, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   AGENT_COPY_IN_PROGRESS,
@@ -52,6 +52,9 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
  * Copy-with-history rejected: the source group left this scope between the
  * ownership read and the row lock (a concurrent transfer committed).
  */
+/** Slugs owned by builtin provisioning; a roster removal must never reach one. */
+const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
+
 export const AGENT_GROUP_COPY_SOURCE_MOVED = 'AGENT_GROUP_COPY_SOURCE_MOVED';
 
 /**
@@ -710,9 +713,22 @@ export class AgentGroupRepository {
       // Note: Virtual agents are standalone (no associated sessions), so we can delete them directly
       // The messages sent by these agents in the group chat will remain (orphaned agentId reference)
       if (deleteVirtualAgents && virtualAgentIds.length > 0) {
-        await trx
-          .delete(agents)
-          .where(and(this.agentOwnership(), inArray(agents.id, virtualAgentIds)));
+        await trx.delete(agents).where(
+          and(
+            this.agentOwnership(),
+            inArray(agents.id, virtualAgentIds),
+            // Same backstop as `ChatGroupModel.delete`: builtins (Inbox, the
+            // agent builders) are `virtual` too, so a malformed roster row
+            // would otherwise classify one as this group's own and take it
+            // down on removal. `addAgentsToGroup` refuses them at the door;
+            // this is the belt to that brace, on a delete whose blast radius
+            // is somebody's Inbox.
+            //
+            // A NULL slug predates slug generation and is not a builtin;
+            // `NOT IN` alone would evaluate to NULL and skip those rows.
+            or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+          ),
+        );
       }
 
       return {

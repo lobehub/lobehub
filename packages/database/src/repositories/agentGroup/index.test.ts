@@ -2357,6 +2357,32 @@ describe('AgentGroupRepository', () => {
     });
   });
 
+  describe('removeAgentsFromGroup builtin backstop', () => {
+    it('never deletes a builtin agent that ended up on a roster', async () => {
+      // `addAgentsToGroup` refuses builtins at the door; this is the belt to
+      // that brace, for a row that got there some other way. The blast radius
+      // is somebody's Inbox.
+      await serverDB.insert(chatGroups).values({ id: 'bb-group', title: 'BB', userId });
+      await serverDB.insert(agents).values({
+        id: 'bb-inbox',
+        slug: 'inbox',
+        title: 'Inbox',
+        userId,
+        virtual: true,
+      });
+      await serverDB
+        .insert(chatGroupsAgents)
+        .values({ agentId: 'bb-inbox', chatGroupId: 'bb-group', userId });
+
+      await agentGroupRepo.removeAgentsFromGroup('bb-group', ['bb-inbox'], true);
+
+      const survivors = await serverDB.query.agents.findMany({
+        where: (a, { eq }) => eq(a.id, 'bb-inbox'),
+      });
+      expect(survivors).toHaveLength(1);
+    });
+  });
+
   describe('listReferencedMembers', () => {
     const workspaceId = 'lrm-ws';
 
