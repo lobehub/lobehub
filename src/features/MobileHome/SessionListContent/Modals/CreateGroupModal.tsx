@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
-import { useSessionStore } from '@/store/session';
+import { useHomeStore } from '@/store/home';
 
 interface CreateGroupContentProps {
   id: string;
@@ -18,26 +18,20 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
   const { allowed: canCreate } = usePermission('create_content');
 
   const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
-  const [updateSessionGroup, addCustomGroup] = useSessionStore((s) => [
-    s.updateSessionGroupId,
-    s.addSessionGroup,
-  ]);
+  const [addGroup, updateAgentGroup] = useHomeStore((s) => [s.addGroup, s.updateAgentGroup]);
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    // Enter fires as fast as the user repeats it — a second pass while
-    // `addCustomGroup` is in flight would create a second group and move the
-    // session into whichever request settles last.
     if (!canCreate || loading) return;
     if (input.length === 0 || input.length > 20 || input.trim() === '')
       return toast.warning(t('sessionGroup.tooLong'));
 
     setLoading(true);
     try {
-      const groupId = await addCustomGroup(input);
-      await updateSessionGroup(id, groupId);
+      const groupId = await addGroup(input);
+      await updateAgentGroup(id, groupId);
       toggleExpandSessionGroup(groupId, true);
       toast.success(t('sessionGroup.createSuccess'));
       close();

@@ -12,11 +12,13 @@ export interface AgentListState {
   /**
    * Whether all agents drawer is open
    */
+  agentSearchKeywords?: string;
   allAgentsDrawerOpen: boolean;
   /**
    * Whether the agent list has been initialized
    */
   isAgentListInit: boolean;
+  isAgentSearching: boolean;
   /**
    * Pinned agents and chat groups
    */
@@ -45,7 +47,9 @@ export interface AgentListState {
 
 export const initialAgentListState: AgentListState = {
   agentGroups: [],
+  agentSearchKeywords: undefined,
   allAgentsDrawerOpen: false,
+  isAgentSearching: false,
   isAgentListInit: false,
   pinnedAgents: [],
   privateAgentGroups: [],

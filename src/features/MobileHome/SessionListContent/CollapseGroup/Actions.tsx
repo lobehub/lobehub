@@ -8,8 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useSessionStore } from '@/store/session';
+import { useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ css }) => ({
   modalRoot: css`
@@ -35,10 +36,10 @@ const Actions = memo<ActionsProps>(
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-    const [createSession, removeSessionGroup] = useSessionStore((s) => [
-      s.createSession,
-      s.removeSessionGroup,
-    ]);
+    const createAgent = useAgentStore((s) => s.createAgent);
+    const removeGroup = useHomeStore((s) => s.removeGroup);
+    const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+    const pinAgent = useHomeStore((s) => s.pinAgent);
 
     const [createGroup] = useAgentGroupStore((s) => [s.createGroup]);
 
@@ -60,7 +61,11 @@ const Actions = memo<ActionsProps>(
         domEvent.stopPropagation();
         const creatingToast = toast.loading(t('sessionGroup.creatingAgent'));
 
-        await createSession({ group: id, pinned: isPinned });
+        const result = await createAgent({ groupId: id });
+        if (isPinned && result?.agentId) {
+          await pinAgent(result.agentId, true);
+        }
+        await refreshAgentList();
 
         creatingToast.close();
         toast.success(t('sessionGroup.createAgentSuccess'));
@@ -145,7 +150,7 @@ const Actions = memo<ActionsProps>(
               okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 if (!id) return;
-                await removeSessionGroup(id);
+                await removeGroup(id);
               },
               title: t('delete', { ns: 'common' }),
             });

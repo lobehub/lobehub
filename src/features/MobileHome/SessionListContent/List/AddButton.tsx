@@ -1,33 +1,39 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActionSWR } from '@/libs/swr';
-import { sessionKeys } from '@/libs/swr/keys';
+import { useAgentStore } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { useSessionStore } from '@/store/session';
 
 const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
   const { t } = useTranslation('chat');
-  const createSession = useSessionStore((s) => s.createSession);
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { mutate, isValidating } = useActionSWR(sessionKeys.createSession(groupId), () => {
-    return createSession({ group: groupId });
-  });
+  const [loading, setLoading] = useState(false);
 
   return (
     <Flexbox flex={1} padding={mobile ? 16 : 0}>
       <Button
         block
         icon={Plus}
-        loading={isValidating}
+        loading={loading}
         type={'fill'}
         style={{
           marginTop: 8,
         }}
-        onClick={() => mutate()}
+        onClick={async () => {
+          setLoading(true);
+          try {
+            await createAgent({ groupId });
+            await refreshAgentList();
+          } finally {
+            setLoading(false);
+          }
+        }}
       >
         {t('newAgent')}
       </Button>

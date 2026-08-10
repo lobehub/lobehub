@@ -5,8 +5,8 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSessionStore } from '@/store/session';
-import { sessionGroupSelectors } from '@/store/session/selectors';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 interface RenameGroupContentProps {
   id: string;
@@ -16,8 +16,9 @@ const RenameGroupContent = memo<RenameGroupContentProps>(({ id }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { close } = useModalContext();
 
-  const updateSessionGroupName = useSessionStore((s) => s.updateSessionGroupName);
-  const group = useSessionStore((s) => sessionGroupSelectors.getGroupById(id)(s), isEqual);
+  const updateGroupName = useHomeStore((s) => s.updateGroupName);
+  const groups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const group = groups.find((g) => g.id === id);
 
   const [input, setInput] = useState<string>(group?.name ?? '');
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ const RenameGroupContent = memo<RenameGroupContentProps>(({ id }) => {
 
     setLoading(true);
     try {
-      await updateSessionGroupName(id, input);
+      await updateGroupName(id, input);
       toast.success(t('sessionGroup.renameSuccess'));
       close();
     } finally {

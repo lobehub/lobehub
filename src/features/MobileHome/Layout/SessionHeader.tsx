@@ -7,15 +7,18 @@ import { memo } from 'react';
 import { useNavigate } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
+import { AGENT_CHAT_URL } from '@/const/index';
 import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import UserAvatar from '@/features/User/UserAvatar';
-import { useSessionStore } from '@/store/session';
+import { useAgentStore } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
 import { styles } from './SessionHeader/style';
 
 const Header = memo(() => {
-  const [createSession] = useSessionStore((s) => [s.createSession]);
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const navigate = useNavigate();
 
   return (
@@ -31,7 +34,13 @@ const Header = memo(() => {
         <ActionIcon
           icon={MessageSquarePlus}
           size={MOBILE_HEADER_ICON_SIZE}
-          onClick={() => createSession()}
+          onClick={async () => {
+            const result = await createAgent({});
+            await refreshAgentList();
+            if (result?.agentId) {
+              navigate(AGENT_CHAT_URL(result.agentId, true));
+            }
+          }}
         />
       }
     />
