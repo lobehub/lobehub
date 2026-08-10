@@ -589,9 +589,12 @@ export class GatewayActionImpl {
           // builtin builder agent (no groupId in its ConversationContext, so the
           // message map key and the group's own chat stay separate), which left
           // the server runtime with no idea which group it was editing.
-          // The context value wins: it is the same one that keyed this run's
-          // message bucket, so a mid-run navigation cannot make the server stamp
-          // a different group onto the topic than the panel is reading from.
+          // The context value wins, and every surface that opens this scope sets
+          // it from its own route/group: it is fixed for the run, so a mid-run
+          // navigation cannot make the server stamp a different group than the
+          // panel is reading from. The `activeGroupId` fallback is a last resort
+          // for a caller that forgot — it is sampled here, AFTER the async
+          // preflight above, so it can already be stale by this point.
           ...(executionContext.scope === 'group_agent_builder' && {
             editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
           }),

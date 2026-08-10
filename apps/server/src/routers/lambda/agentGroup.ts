@@ -864,12 +864,18 @@ export const agentGroupRouter = router({
               ? 'edit'
               : LEGACY_VIEWER_ACCESS_LEVELS.agentGroup
             : DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup);
-        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
-          'agentGroup',
-          input.groupId,
-          targetAccessLevel,
-          ctx.userId,
-        );
+        // `transferToWorkspace` makes the moved supervisor / generated members
+        // public in the target too, so they need the same cascade as the
+        // publish paths — otherwise their own ACL falls back to the agent
+        // default (`edit`) and target members can edit the owned agents of a
+        // use/view-only group.
+        await applyGroupAccessLevel({
+          accessLevel: targetAccessLevel,
+          ctx,
+          groupId: input.groupId,
+          permissionModel: new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId),
+          workspaceId: input.targetWorkspaceId,
+        });
       }
 
       return result;

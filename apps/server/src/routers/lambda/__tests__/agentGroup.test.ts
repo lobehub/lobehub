@@ -11,6 +11,10 @@ import * as ChatGroupServiceModule from '@/server/services/agentGroup';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { canPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 
 import {
   getWorkspaceAgentParentGroupIds,
@@ -19,6 +23,11 @@ import {
 import { agentGroupRouter } from '../agentGroup';
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+// Both read the DB directly; `mockCtx.serverDB` is a bare object.
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: vi.fn().mockResolvedValue(true),
+  isWorkspacePrimaryOwner: vi.fn().mockResolvedValue(true),
+}));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
   getWorkspaceAgentParentGroupIds: vi.fn().mockResolvedValue([]),
   getWorkspaceGroupVirtualAgentIds: vi.fn().mockResolvedValue([]),
@@ -54,6 +63,8 @@ describe('agentGroupRouter', () => {
     vi.restoreAllMocks();
     vi.mocked(getWorkspaceAgentParentGroupIds).mockResolvedValue([]);
     vi.mocked(getWorkspaceGroupVirtualAgentIds).mockResolvedValue([]);
+    vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(true);
+    vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(true);
 
     agentModelMock = {
       batchCreate: vi.fn(),
@@ -76,6 +87,8 @@ describe('agentGroupRouter', () => {
       createGroupWithSupervisor: vi.fn(),
       findByIdWithAgents: vi.fn(),
       removeAgentsFromGroup: vi.fn(),
+      transferHasForeignRows: vi.fn().mockResolvedValue(false),
+      transferToWorkspace: vi.fn(),
     };
 
     userModelMock = {
@@ -685,6 +698,30 @@ describe('agentGroupRouter', () => {
 
       it('on publishGroupToWorkspace', async () => {
         await agentGroupRouter.createCaller(mockCtx).publishGroupToWorkspace({ id: 'cg_1' });
+
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_sup',
+          'use',
+          userId,
+        );
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_member',
+          'use',
+          userId,
+        );
+      });
+
+      it('on transferGroup into the target workspace', async () => {
+        agentGroupRepoMock.transferToWorkspace = vi.fn().mockResolvedValue({ success: true });
+
+        await agentGroupRouter.createCaller(mockCtx).transferGroup({
+          groupId: 'cg_1',
+          targetAccessLevel: 'use',
+          targetVisibility: 'public',
+          targetWorkspaceId: 'ws_2',
+        });
 
         expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
           'agent',

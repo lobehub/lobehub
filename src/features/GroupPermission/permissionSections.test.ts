@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveGroupPermissionSections } from './permissionSections';
 
-const state = (overrides: Parameters<typeof resolveGroupPermissionSections>[0]) => ({
+const state = (overrides: Partial<Parameters<typeof resolveGroupPermissionSections>[0]>) => ({
   accessError: undefined,
   canManageAccess: true,
   hasSupervisor: true,
