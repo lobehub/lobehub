@@ -33,8 +33,12 @@ export const resolveBillboardAction = (value: unknown): BillboardAction | null =
 };
 
 const billboardActionHandlers: Record<BillboardAction, () => Promise<void> | void> = {
-  openChangelog: () => openChangelogModal(),
-  openFeedback: () => openFeedbackModal(),
+  openChangelog: () => {
+    openChangelogModal();
+  },
+  openFeedback: () => {
+    openFeedbackModal();
+  },
   resetOnboarding: async () => {
     await getUserStoreState().resetOnboarding();
     window.location.href = '/onboarding';
