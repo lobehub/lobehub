@@ -30,9 +30,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
+    overflow: hidden;
+
+    border-radius: 9999px;
+
     color: ${cssVar.colorWhite};
+
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+
     transition:
       color 160ms ease,
       background 160ms ease,
