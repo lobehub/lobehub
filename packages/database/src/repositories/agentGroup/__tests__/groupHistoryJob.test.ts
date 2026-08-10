@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { AgentModel } from '../../../models/agent';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../../../models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
@@ -258,6 +259,39 @@ describe('group transfer slow path (async backfill job)', () => {
     const [finished] = await serverDB.query.agentHistoryJobs.findMany();
     expect(finished).toMatchObject({ completedTopics: 2, status: 'completed', totalTopics: 2 });
     expect(await AgentTransferJobModel.findPendingJobForGroup(serverDB, groupId)).toBeUndefined();
+  });
+
+  it('blocks deleting a left-behind member until the remap drains', async () => {
+    // `memberId` did not move, so the job does not cover it — but until the
+    // drain reaches each topic, those rows still carry
+    // `messages.agent_id = memberId`, and that column is ON DELETE CASCADE.
+    // Deleting it here would destroy the moved history mid-rescue.
+    await seedGroupWithHistory();
+
+    const result = await new AgentGroupRepository(serverDB, userId).transferToWorkspace(
+      groupId,
+      wsId,
+      userId,
+    );
+
+    // Not registered as a covered agent: it never moved, and the migration
+    // badge reads that junction.
+    expect(await AgentTransferJobModel.hasPendingJobForAgents(serverDB, [memberId])).toBe(false);
+    // ...but the delete guard still sees it.
+    expect(await AgentTransferJobModel.hasPendingRemapForSourceAgents(serverDB, [memberId])).toBe(
+      true,
+    );
+
+    await expect(new AgentModel(serverDB, userId).delete(memberId)).rejects.toThrow(
+      AGENT_TRANSFER_IN_PROGRESS,
+    );
+
+    await AgentTransferJobModel.drain(serverDB, result!.transferJobId!);
+
+    // Once the remap has landed, the original is free again.
+    expect(await AgentTransferJobModel.hasPendingRemapForSourceAgents(serverDB, [memberId])).toBe(
+      false,
+    );
   });
 
   it('defers the member remap to the drain, on exactly the rows it rewrites', async () => {

@@ -1323,10 +1323,16 @@ export class AgentGroupRepository {
           agentIdRemap: agentRemapPairs,
           // The roster AS IT NOW STANDS in the target scope: members that
           // travelled, plus the clones that replaced the ones that didn't.
-          // Registering the left-behind originals instead would guard an agent
-          // this job no longer writes to, while leaving the clones — whose
-          // deletion mid-drain WOULD cascade away the very messages still being
-          // remapped onto them — unguarded.
+          // Deliberately NOT the left-behind originals: this junction is also
+          // what the migration badge reads, and an agent that never moved
+          // should not advertise a migration.
+          //
+          // Their deletion still has to be blocked for the drain's duration —
+          // until it reaches a topic, that topic's rows still point at the
+          // original, and `messages.agent_id` cascades. That guard hangs off
+          // `payload.agentIdRemap` instead, via
+          // `hasPendingRemapForSourceAgents`, so it constrains the delete
+          // without touching the badge.
           agentIds: [...ownedAgentIds, ...agentRemapPairs.map((pair) => pair.newAgentId)],
           groupIds: [groupId],
           // Must mirror the synchronous branch above exactly: residual by

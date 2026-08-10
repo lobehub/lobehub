@@ -373,6 +373,52 @@ export class AgentTransferJobModel {
   };
 
   /**
+   * Agents a pending group transfer is still remapping AWAY from.
+   *
+   * Deliberately separate from {@link hasPendingJobForAgents}: these agents did
+   * not move and are not covered by the job, so registering them in the
+   * junction would light the migration badge on an agent whose own history is
+   * sitting still ({@link findPendingJobForAgent} keys off that same table).
+   * But until the drain reaches every topic, undrained rows still carry
+   * `messages.agent_id = sourceAgentId`, and that column is ON DELETE CASCADE —
+   * so deleting one of these mid-drain would take the moved history with it,
+   * the very rows the remap was about to rescue.
+   *
+   * Guard the delete; leave the badge alone.
+   */
+  static hasPendingRemapForSourceAgents = async (
+    db: Transaction | LobeChatDatabase,
+    agentIds: string[],
+  ): Promise<boolean> => {
+    if (agentIds.length === 0) return false;
+
+    const [row] = await db
+      .select({ id: agentHistoryJobs.id })
+      .from(agentHistoryJobs)
+      .where(
+        and(
+          eq(agentHistoryJobs.status, 'pending'),
+          eq(agentHistoryJobs.type, 'transfer'),
+          // COALESCE covers both a NULL payload (the common case for a plain
+          // agent transfer) and a payload that carries no remap.
+          sql`EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(
+              COALESCE(${agentHistoryJobs.payload} -> 'agentIdRemap', '[]'::jsonb)
+            ) AS remap
+            WHERE remap ->> 'sourceAgentId' IN (${sql.join(
+              agentIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})
+          )`,
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
+
+  /**
    * Any of the chat groups already covered by an unfinished job?
    *
    * Not redundant with {@link hasPendingJobForAgents}: a group's guard cannot

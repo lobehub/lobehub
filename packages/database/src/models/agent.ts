@@ -996,6 +996,16 @@ export class AgentModel {
         throw new Error(AGENT_TRANSFER_IN_PROGRESS);
       }
 
+      // Not covered above: a group transfer that left this agent behind and
+      // took a clone does NOT register it as a covered agent (it never moved).
+      // But its id is still the live value of `messages.agent_id` on every
+      // topic the drain has not reached yet, and that column cascades — so
+      // deleting it now would destroy the moved group history the remap is
+      // partway through rescuing.
+      if (await AgentTransferJobModel.hasPendingRemapForSourceAgents(trx, [agentId])) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
       // A pending copy job still reads this agent's topics — deleting it would
       // cascade them away and the copy would silently complete with empty
       // conversations. Surface the in-progress state instead.
