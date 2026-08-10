@@ -118,7 +118,7 @@ describe('Aico invitation security (Phase 2)', () => {
     ).rejects.toThrow('INVITE_IDENTIFIER_MISMATCH');
   });
 
-  it('AICO-P1-022: phone invite accept without normalize may fail across formats', async () => {
+  it('AICO-P1-022: phone invite accept requires matching normalized form', async () => {
     const org = await orgModel.createOrganization({ name: 'Phone Org', ownerUserId: ownerId });
     const invite = await orgModel.createInvite({
       identifierType: 'phone',
@@ -128,10 +128,18 @@ describe('Aico invitation security (Phase 2)', () => {
       role: 'member',
     });
 
-    // User phone stored as local 09… — acceptInvite compares trim only.
+    // Local 09… without normalize must not match E.164 invite.
     await expect(
       orgModel.acceptInvite({
         phone: '09123333333',
+        token: invite.token,
+        userId: phoneMemberId,
+      }),
+    ).rejects.toThrow(/INVITE_IDENTIFIER_MISMATCH/);
+
+    await expect(
+      orgModel.acceptInvite({
+        phone: '+989123333333',
         token: invite.token,
         userId: phoneMemberId,
       }),
@@ -193,7 +201,7 @@ describe('Aico invitation security (Phase 2)', () => {
         token: invite.token,
         userId: memberId,
       }),
-    ).rejects.toThrow(/SUSPENDED|FORBIDDEN|INVITE_/);
+    ).rejects.toThrow(/SUSPENDED|FORBIDDEN|INVITE_|ORG_NOT_ACTIVE/);
   });
 });
 
@@ -202,9 +210,9 @@ describe('Aico organization lifecycle (Phase 2)', () => {
     const org = await orgModel.createOrganization({ name: 'Life Org', ownerUserId: ownerId });
     await orgModel.addManualCredit({
       amountToman: 50_000,
-      amountUsd: 10,
+      amountMicroUsd: 10000000,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: org.id,
     });
     const invite = await orgModel.createInvite({
@@ -228,21 +236,22 @@ describe('Aico organization lifecycle (Phase 2)', () => {
 
     await expect(
       orgModel.allocateMemberCredit({
-        amountUsd: 1,
+        periodAmountMicroUsd: 1000000,
+        period: 'total',
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: member.id,
       }),
-    ).rejects.toThrow(/SUSPENDED|FORBIDDEN|INSUFFICIENT/);
+    ).rejects.toThrow(/SUSPENDED|FORBIDDEN|INSUFFICIENT|ORG_NOT_ACTIVE/);
   });
 
   it('AICO-P1-007: removeMember only soft-disables; budget key fields remain', async () => {
     const org = await orgModel.createOrganization({ name: 'Remove Org', ownerUserId: ownerId });
     await orgModel.addManualCredit({
       amountToman: 50_000,
-      amountUsd: 10,
+      amountMicroUsd: 10000000,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: org.id,
     });
     const invite = await orgModel.createInvite({
@@ -258,23 +267,24 @@ describe('Aico organization lifecycle (Phase 2)', () => {
       userId: memberId,
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 5,
+      periodAmountMicroUsd: 5000000,
+      period: 'total',
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: member.id,
     });
     await orgModel.updateMemberOpenRouterKey({
-      encryptedKey: 'cipher:fake',
+      ciphertext: 'cipher:fake',
       keyId: 'or-key-alive',
       orgMemberId: member.id,
     });
 
     const removed = await orgModel.removeMember({ memberId: member.id, orgId: org.id });
-    expect(removed?.status).toBe('disabled');
+    expect(removed?.status).toBe('revocation_pending');
 
     const budget = await orgModel.getMemberBudget(member.id);
-    // Invariant: key must be cleared/disabled on remove. Actual: key id remains.
-    expect(budget?.openrouterKeyId).toBeNull();
+    // Key material stays until outbox reclaim settles (AICO-105 reclaim path).
+    expect(budget?.openrouterKeyId).toBe('or-key-alive');
   });
 
   it('cannot delete default team', async () => {

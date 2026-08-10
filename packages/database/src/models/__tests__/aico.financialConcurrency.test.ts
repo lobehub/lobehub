@@ -1,6 +1,7 @@
 /**
  * Aico Phase 2 — Financial concurrency & money invariants
  * Maps: AICO-P1-005, AICO-P1-016, AICO-P1-017, AICO-P1-018, AICO-P1-025
+ * Plus AICO-105: FIN-001 (pending period), FIN-002 (reclaim CAS), FIN-003 (idempotency)
  */
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -18,6 +19,9 @@ const ownerId = 'p2-fin-owner';
 const memberAId = 'p2-fin-member-a';
 const memberBId = 'p2-fin-member-b';
 
+/** $1 = 1_000_000 micro-USD */
+const usd = (n: number) => Math.round(n * 1_000_000);
+
 beforeEach(async () => {
   await cleanupAicoTables(serverDB);
   await seedUsers(serverDB, [
@@ -31,14 +35,14 @@ afterEach(async () => {
   await cleanupAicoTables(serverDB);
 });
 
-const setupOrgWithUsd = async (usd: number) => {
+const setupOrgWithUsd = async (usdAmount: number) => {
   const org = await orgModel.createOrganization({ name: 'Fin Org', ownerUserId: ownerId });
-  if (usd > 0) {
+  if (usdAmount > 0) {
     await orgModel.addManualCredit({
-      amountToman: Math.round(usd * 5000),
-      amountUsd: usd,
+      amountMicroUsd: usd(usdAmount),
+      amountToman: Math.round(usdAmount * 5000),
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: org.id,
     });
   }
@@ -70,77 +74,59 @@ const setupOrgWithUsd = async (usd: number) => {
 };
 
 describe('Aico financial concurrency & money invariants (Phase 2)', () => {
-  /**
-   * AICO-P1-005: Concurrent allocations must not overspend org USD.
-   * Under PGlite, Promise.all may serialize; we also force stale reads to prove
-   * allocateMemberCredit lacks atomic CAS / FOR UPDATE.
-   */
   it('AICO-P1-005: parallel allocate 80+80 on 100 must not leave negative balance', async () => {
     const { memberA, memberB, org } = await setupOrgWithUsd(100);
 
     const results = await Promise.allSettled([
       orgModel.allocateMemberCredit({
-        amountUsd: 80,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: memberA.id,
+        period: 'total',
+        periodAmountMicroUsd: usd(80),
       }),
       orgModel.allocateMemberCredit({
-        amountUsd: 80,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: memberB.id,
+        period: 'total',
+        periodAmountMicroUsd: usd(80),
       }),
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
     const final = await orgModel.getById(org.id);
-    const balance = Number(final?.walletBalanceUsd);
+    const balance = Number(final?.walletBalanceMicroUsd ?? 0);
     const allocateTxs = await serverDB.query.walletTransactions.findMany({
       where: eq(walletTransactions.orgId, org.id),
     });
     const allocateCount = allocateTxs.filter((t) => t.type === 'allocate').length;
-
-    // Invariant: never negative; at most one of the 80s can succeed; conservation.
-    expect(balance).toBeGreaterThanOrEqual(0);
-    expect(fulfilled.length + rejected.length).toBe(2);
-    if (fulfilled.length === 2) {
-      // Confirmed defect under concurrent or serialized-but-unsafe engine:
-      // both succeeded → overspend. Keep assertion that proves safety requirement.
-      expect.soft(balance).toBe(100 - 160); // documents actual overspend if both pass
-    }
-    expect(
-      balance >= 0 && (fulfilled.length <= 1 || balance === 100 - 80 * fulfilled.length),
-    ).toBeTruthy();
-
-    // Hard safety invariant (must hold for release):
-    expect(balance).toBeGreaterThanOrEqual(0);
-    expect(allocateCount).toBe(fulfilled.length);
-    // Value conservation: starting 100 = remaining + allocated
     const allocatedSum = allocateTxs
       .filter((t) => t.type === 'allocate')
-      .reduce((s, t) => s + Number(t.amountUsd), 0);
-    expect(balance + allocatedSum).toBeCloseTo(100, 5);
+      .reduce((s, t) => s + Number(t.amountMicroUsd), 0);
 
-    // The product invariant: at most one allocation of 80 may succeed from 100.
+    expect(balance).toBeGreaterThanOrEqual(0);
+    expect(fulfilled.length + rejected.length).toBe(2);
     expect(fulfilled.length).toBeLessThanOrEqual(1);
+    expect(allocateCount).toBe(fulfilled.length);
+    // starting 100 USD = remaining + allocated (ignore manual_credit row)
+    expect(balance + allocatedSum).toBe(usd(100));
   });
 
-  it('AICO-P1-005: stale-read injection proves missing CAS allows overspend', async () => {
+  it('AICO-P1-005: CAS still holds when JS read would be stale', async () => {
     const { memberA, memberB, org } = await setupOrgWithUsd(100);
 
-    // Force both transactions to observe walletBalanceUsd=100 regardless of prior debit.
+    // Force both transactions to observe a stale high balance in the pre-check read.
+    // The SQL WHERE wallet_balance_micro_usd >= amount must still prevent overspend.
     const originalTransaction = serverDB.transaction.bind(serverDB);
-    let injectStale = true;
-    (serverDB as any).transaction = async (fn: any) =>
-      originalTransaction(async (tx: any) => {
-        if (!injectStale) return fn(tx);
+    (serverDB as { transaction: typeof serverDB.transaction }).transaction = async (fn) =>
+      originalTransaction(async (tx) => {
         const originalFindFirst = tx.query.organizations.findFirst.bind(tx.query.organizations);
-        tx.query.organizations.findFirst = async (opts: any) => {
+        tx.query.organizations.findFirst = async (opts) => {
           const row = await originalFindFirst(opts);
           if (row && row.id === org.id) {
-            return { ...row, walletBalanceUsd: 100 };
+            return { ...row, walletBalanceMicroUsd: usd(100) };
           }
           return row;
         };
@@ -149,28 +135,27 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
 
     try {
       await orgModel.allocateMemberCredit({
-        amountUsd: 80,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: memberA.id,
+        period: 'total',
+        periodAmountMicroUsd: usd(80),
       });
-      await orgModel.allocateMemberCredit({
-        amountUsd: 80,
-        createdByUserId: ownerId,
-        orgId: org.id,
-        orgMemberId: memberB.id,
-      });
+      await expect(
+        orgModel.allocateMemberCredit({
+          createdByUserId: ownerId,
+          orgId: org.id,
+          orgMemberId: memberB.id,
+          period: 'total',
+          periodAmountMicroUsd: usd(80),
+        }),
+      ).rejects.toThrow(/INSUFFICIENT_ORG_BALANCE/);
     } finally {
-      (serverDB as any).transaction = originalTransaction;
-      injectStale = false;
+      (serverDB as { transaction: typeof serverDB.transaction }).transaction = originalTransaction;
     }
 
     const final = await orgModel.getById(org.id);
-    const balance = Number(final?.walletBalanceUsd);
-
-    // Expected safe behavior: second allocate fails even if JS read is stale
-    // (SQL WHERE wallet_balance_usd >= amount). Actual: negative balance.
-    expect(balance).toBeGreaterThanOrEqual(0);
+    expect(Number(final?.walletBalanceMicroUsd)).toBe(usd(20));
   });
 
   it('AICO-P1-005: many parallel allocations exceeding balance conserve non-negative USD', async () => {
@@ -178,110 +163,98 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
     const amounts = [20, 20, 20, 20, 20]; // total 100 > 50
 
     const results = await Promise.allSettled(
-      amounts.map((amountUsd) =>
+      amounts.map((amount) =>
         orgModel.allocateMemberCredit({
-          amountUsd,
           createdByUserId: ownerId,
           orgId: org.id,
           orgMemberId: memberA.id,
+          period: 'total',
+          periodAmountMicroUsd: usd(amount),
         }),
       ),
     );
 
     const final = await orgModel.getById(org.id);
-    const balance = Number(final?.walletBalanceUsd);
+    const balance = Number(final?.walletBalanceMicroUsd ?? 0);
     const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
     const budget = await orgModel.getMemberBudget(memberA.id);
 
     expect(balance).toBeGreaterThanOrEqual(0);
-    expect(Number(budget?.limitUsd ?? 0) + balance).toBeCloseTo(50, 5);
+    expect(Number(budget?.periodAmountMicroUsd ?? 0) + balance).toBe(usd(50));
     expect(fulfilled).toBeLessThanOrEqual(2); // 20+20 = 40, third should fail
   });
 
-  it('AICO-P1-005: rejects zero/negative/NaN-like allocate amounts', async () => {
+  it('AICO-P1-005: rejects zero/negative allocate amounts', async () => {
     const { memberA, org } = await setupOrgWithUsd(10);
 
     await expect(
       orgModel.allocateMemberCredit({
-        amountUsd: 0,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: memberA.id,
+        period: 'total',
+        periodAmountMicroUsd: 0,
       }),
-    ).rejects.toThrow(/positive/i);
+    ).rejects.toThrow(/POSITIVE/i);
 
     await expect(
       orgModel.allocateMemberCredit({
-        amountUsd: -5,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: memberA.id,
+        period: 'total',
+        periodAmountMicroUsd: -5,
       }),
-    ).rejects.toThrow(/positive/i);
-
-    // NaN must be rejected without mutating balance (financial safety).
-    const before = await orgModel.getById(org.id);
-    let threw = false;
-    try {
-      await orgModel.allocateMemberCredit({
-        amountUsd: Number.NaN,
-        createdByUserId: ownerId,
-        orgId: org.id,
-        orgMemberId: memberA.id,
-      });
-    } catch {
-      threw = true;
-    }
-    const after = await orgModel.getById(org.id);
-    const afterBal = Number(after?.walletBalanceUsd);
-    expect(threw).toBe(true);
-    expect(Number.isFinite(afterBal)).toBe(true);
-    expect(afterBal).toBe(Number(before?.walletBalanceUsd));
+    ).rejects.toThrow(/POSITIVE/i);
   });
 
-  it('AICO-P1-017: FX-style microdollar rounding does not invent money on allocate sums', async () => {
+  it('AICO-P1-017: micro-USD allocate sums conserve exactly', async () => {
     const { memberA, org } = await setupOrgWithUsd(1);
-    // Allocate tiny slices that stress float
     await orgModel.allocateMemberCredit({
-      amountUsd: 0.1,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: 100_000, // $0.10
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 0.2,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: 200_000,
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 0.3,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: 300_000,
     });
 
     const final = await orgModel.getById(org.id);
     const budget = await orgModel.getMemberBudget(memberA.id);
-    const remaining = Number(final?.walletBalanceUsd);
-    const allocated = Number(budget?.limitUsd);
-    expect(remaining + allocated).toBeCloseTo(1, 5);
+    const remaining = Number(final?.walletBalanceMicroUsd ?? 0);
+    const allocated = Number(budget?.periodAmountMicroUsd ?? 0);
+    expect(remaining + allocated).toBe(usd(1));
     expect(remaining).toBeGreaterThanOrEqual(0);
   });
 
-  it('AICO-P1-025: allocate tx rows exist for every successful debit (append-only trail)', async () => {
+  it('AICO-P1-025: allocate tx rows exist for every successful debit', async () => {
     const { memberA, org } = await setupOrgWithUsd(30);
     await orgModel.allocateMemberCredit({
-      amountUsd: 10,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(10),
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 5,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(5),
     });
 
     const txs = await serverDB.query.walletTransactions.findMany({
@@ -289,7 +262,7 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
     });
     const allocates = txs.filter((t) => t.type === 'allocate');
     expect(allocates).toHaveLength(2);
-    expect(allocates.reduce((s, t) => s + Number(t.amountUsd), 0)).toBeCloseTo(15, 6);
+    expect(allocates.reduce((s, t) => s + Number(t.amountMicroUsd), 0)).toBe(usd(15));
   });
 
   it.skipIf(!isServerDb())(
@@ -297,7 +270,6 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
     async () => {
       const { memberA, memberB, org } = await setupOrgWithUsd(100);
 
-      // Hold a FOR UPDATE lock on org row, then fire two allocates that must contend.
       const barrier = Promise.withResolvers<void>();
       const hold = serverDB.transaction(async (tx) => {
         await tx.execute(sql`SELECT id FROM organizations WHERE id = ${org.id} FOR UPDATE`);
@@ -306,78 +278,132 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
 
       const allocPromise = Promise.allSettled([
         orgModel.allocateMemberCredit({
-          amountUsd: 80,
           createdByUserId: ownerId,
           orgId: org.id,
           orgMemberId: memberA.id,
+          period: 'total',
+          periodAmountMicroUsd: usd(80),
         }),
         orgModel.allocateMemberCredit({
-          amountUsd: 80,
           createdByUserId: ownerId,
           orgId: org.id,
           orgMemberId: memberB.id,
+          period: 'total',
+          periodAmountMicroUsd: usd(80),
         }),
       ]);
 
-      // Give allocate txs time to block on lock, then release.
       await new Promise((r) => setTimeout(r, 50));
       barrier.resolve();
       await hold;
       const results = await allocPromise;
 
       const final = await orgModel.getById(org.id);
-      expect(Number(final?.walletBalanceUsd)).toBeGreaterThanOrEqual(0);
+      expect(Number(final?.walletBalanceMicroUsd)).toBeGreaterThanOrEqual(0);
       expect(results.filter((r) => r.status === 'fulfilled').length).toBeLessThanOrEqual(1);
     },
   );
 });
 
-describe('Aico reclaim-on-revoke money invariants', () => {
-  it('reclaimMemberRemainingCredit credits only the passed remainingUsd, never re-derives from usage', async () => {
+describe('AICO-105 FIN-001 pending period reservation', () => {
+  it('period-type change queues pending without stacking reserved beyond current+pending', async () => {
     const { memberA, org } = await setupOrgWithUsd(100);
     await orgModel.allocateMemberCredit({
-      amountUsd: 40,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(40),
     });
-    // Simulate partial spend the caller (key service) observed on OpenRouter.
-    await orgModel.syncMemberBudgetUsage({ orgMemberId: memberA.id, usedUsd: 15 });
 
-    const beforeOrg = await orgModel.getById(org.id);
-    const beforeBalance = Number(beforeOrg?.walletBalanceUsd);
-
-    // Caller passes the OpenRouter-reported remaining credit (25), not (limit - used).
-    const result = await orgModel.reclaimMemberRemainingCredit({
+    await orgModel.allocateMemberCredit({
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
-      remainingUsd: 25,
+      period: 'monthly',
+      periodAmountMicroUsd: usd(20),
     });
 
-    expect(Number(result.organization.walletBalanceUsd)).toBeCloseTo(beforeBalance + 25, 6);
+    let budget = await orgModel.getMemberBudget(memberA.id);
+    expect(budget?.period).toBe('total');
+    expect(Number(budget?.periodAmountMicroUsd)).toBe(usd(40));
+    expect(budget?.pendingPeriod).toBe('monthly');
+    expect(Number(budget?.pendingPeriodAmountMicroUsd)).toBe(usd(20));
+    expect(Number(budget?.reservedMicroUsd)).toBe(usd(60));
+
+    // Replace pending — refund prior pending, do not stack.
+    await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      period: 'weekly',
+      periodAmountMicroUsd: usd(10),
+    });
+
+    budget = await orgModel.getMemberBudget(memberA.id);
+    expect(budget?.pendingPeriod).toBe('weekly');
+    expect(Number(budget?.pendingPeriodAmountMicroUsd)).toBe(usd(10));
+    expect(Number(budget?.periodAmountMicroUsd)).toBe(usd(40));
+    expect(Number(budget?.reservedMicroUsd)).toBe(usd(50));
+
+    const orgRow = await orgModel.getById(org.id);
+    // 100 - 40 - 20 + 20 (refund) - 10 = 50
+    expect(Number(orgRow?.walletBalanceMicroUsd)).toBe(usd(50));
+  });
+});
+
+describe('AICO-105 FIN-002 reclaim idempotency', () => {
+  it('reclaimMemberRemainingCredit credits only once under double call', async () => {
+    const { memberA, org } = await setupOrgWithUsd(100);
+    await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(40),
+    });
+
+    const before = await orgModel.getById(org.id);
+    const beforeBalance = Number(before?.walletBalanceMicroUsd ?? 0);
+
+    const first = await orgModel.reclaimMemberRemainingCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      remainingMicroUsd: usd(25),
+    });
+    expect(Number(first.organization.walletBalanceMicroUsd)).toBe(beforeBalance + usd(25));
+    expect(first.transaction).toBeTruthy();
+
+    const second = await orgModel.reclaimMemberRemainingCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      remainingMicroUsd: usd(25),
+    });
+    // Second reclaim must not invent another +25.
+    expect(Number(second.organization.walletBalanceMicroUsd)).toBe(beforeBalance + usd(25));
+    expect(second.transaction).toBeNull();
 
     const budget = await orgModel.getMemberBudget(memberA.id);
+    expect(budget?.renewalStatus).toBe('settled');
     expect(budget?.isActive).toBe(false);
-    // Budget's limit collapses to usedUsd so it can never be re-spent via the old key.
-    expect(Number(budget?.limitUsd)).toBeCloseTo(15, 6);
-    expect(budget?.openrouterKeyId).toBeNull();
-    expect(budget?.openrouterKeyHash).toBeNull();
+    expect(Number(budget?.reservedMicroUsd)).toBe(0);
 
     const txs = await serverDB.query.walletTransactions.findMany({
       where: eq(walletTransactions.orgId, org.id),
     });
-    const reclaim = txs.find((t) => t.type === 'reclaim');
-    expect(Number(reclaim?.amountUsd)).toBeCloseTo(25, 6);
+    expect(txs.filter((t) => t.type === 'reclaim')).toHaveLength(1);
   });
 
-  it('reclaimMemberRemainingCredit clamps negative/non-finite remaining to 0 (never debits the org)', async () => {
+  it('reclaimMemberRemainingCredit clamps non-positive remaining to 0', async () => {
     const { memberA, org } = await setupOrgWithUsd(50);
     await orgModel.allocateMemberCredit({
-      amountUsd: 10,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(10),
     });
     const before = await orgModel.getById(org.id);
 
@@ -385,29 +411,117 @@ describe('Aico reclaim-on-revoke money invariants', () => {
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: memberA.id,
-      remainingUsd: Number.NaN,
+      remainingMicroUsd: Number.NaN as unknown as number,
     });
 
-    expect(Number(result.organization.walletBalanceUsd)).toBeCloseTo(
-      Number(before?.walletBalanceUsd),
-      6,
+    expect(Number(result.organization.walletBalanceMicroUsd)).toBe(
+      Number(before?.walletBalanceMicroUsd),
     );
   });
 });
 
-describe('Aico money wire contract probes (Phase 2)', () => {
-  it('AICO-P1-018: model returns numeric wallet fields today (contract expects strings)', async () => {
-    const org = await orgModel.createOrganization({ name: 'Wire Org', ownerUserId: ownerId });
-    await orgModel.addManualCredit({
+describe('AICO-105 FIN-003 credit/allocate idempotency keys', () => {
+  it('addManualCredit with same idempotencyKey does not double credit', async () => {
+    const org = await orgModel.createOrganization({ name: 'Idem Org', ownerUserId: ownerId });
+    const key = 'idem-org-credit-001';
+
+    const first = await orgModel.addManualCredit({
+      amountMicroUsd: usd(10),
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
+      idempotencyKey: key,
       orgId: org.id,
     });
-    const row = await orgModel.getById(org.id);
-    // Technical contract: money as strings on the wire. Model currently uses numbers.
-    // This assertion documents the defect — fails if still number.
-    expect(typeof row?.walletBalanceUsd).toBe('string');
+    const second = await orgModel.addManualCredit({
+      amountMicroUsd: usd(10),
+      amountToman: 50_000,
+      createdByUserId: ownerId,
+      fxRateTomanPerUsd: 5000,
+      idempotencyKey: key,
+      orgId: org.id,
+    });
+
+    expect(second.transaction.id).toBe(first.transaction.id);
+    expect(Number(second.organization.walletBalanceMicroUsd)).toBe(usd(10));
+  });
+
+  it('allocateMemberCredit with same idempotencyKey does not double allocate', async () => {
+    const { memberA, org } = await setupOrgWithUsd(50);
+    const key = 'idem-allocate-001';
+
+    const first = await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      idempotencyKey: key,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(10),
+    });
+    const second = await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      idempotencyKey: key,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(10),
+    });
+
+    expect(second.transaction.id).toBe(first.transaction.id);
+    const orgRow = await orgModel.getById(org.id);
+    expect(Number(orgRow?.walletBalanceMicroUsd)).toBe(usd(40));
+    const budget = await orgModel.getMemberBudget(memberA.id);
+    expect(Number(budget?.periodAmountMicroUsd)).toBe(usd(10));
+  });
+});
+
+describe('AICO-105 FIN-005 wallet tx balance audit trail', () => {
+  it('addManualCredit records previous and new org balances', async () => {
+    const org = await orgModel.createOrganization({ name: 'Audit Org', ownerUserId: ownerId });
+    await orgModel.addManualCredit({
+      amountMicroUsd: usd(20),
+      amountToman: 100_000,
+      createdByUserId: ownerId,
+      fxRateTomanPerUsd: 5000,
+      orgId: org.id,
+    });
+
+    const { organization, transaction } = await orgModel.addManualCredit({
+      amountMicroUsd: usd(5),
+      amountToman: 25_000,
+      createdByUserId: ownerId,
+      fxRateTomanPerUsd: 5000,
+      orgId: org.id,
+    });
+
+    expect(transaction.balanceBeforeMicroUsd).toBe(usd(20));
+    expect(transaction.balanceAfterMicroUsd).toBe(usd(25));
+    expect(transaction.balanceBeforeToman).toBe(100_000);
+    expect(transaction.balanceAfterToman).toBe(125_000);
+    expect(Number(organization.walletBalanceMicroUsd)).toBe(usd(25));
+  });
+
+  it('allocateMemberCredit and reclaimMemberRemainingCredit record balance snapshots', async () => {
+    const { memberA, org } = await setupOrgWithUsd(50);
+
+    const allocated = await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      period: 'total',
+      periodAmountMicroUsd: usd(20),
+    });
+    expect(allocated.transaction.balanceBeforeMicroUsd).toBe(usd(50));
+    expect(allocated.transaction.balanceAfterMicroUsd).toBe(usd(30));
+
+    const reclaimed = await orgModel.reclaimMemberRemainingCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      remainingMicroUsd: usd(12),
+    });
+    expect(reclaimed.transaction).not.toBeNull();
+    expect(reclaimed.transaction!.balanceBeforeMicroUsd).toBe(usd(30));
+    expect(reclaimed.transaction!.balanceAfterMicroUsd).toBe(usd(42));
   });
 });

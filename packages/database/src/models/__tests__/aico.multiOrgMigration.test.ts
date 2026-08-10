@@ -65,37 +65,39 @@ describe('Aico multi-organization billing context (Phase 2)', () => {
 
     await orgModel.addManualCredit({
       amountToman: 50_000,
-      amountUsd: 10,
+      amountMicroUsd: 10000000,
       createdByUserId: ownerA,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: orgA.id,
     });
     await orgModel.addManualCredit({
       amountToman: 250_000,
-      amountUsd: 50,
+      amountMicroUsd: 50000000,
       createdByUserId: ownerB,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: orgB.id,
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 5,
+      periodAmountMicroUsd: 5000000,
+      period: 'total',
       createdByUserId: ownerA,
       orgId: orgA.id,
       orgMemberId: meA.id,
     });
     await orgModel.allocateMemberCredit({
-      amountUsd: 40,
+      periodAmountMicroUsd: 40000000,
+      period: 'total',
       createdByUserId: ownerB,
       orgId: orgB.id,
       orgMemberId: meB.id,
     });
     await orgModel.updateMemberOpenRouterKey({
-      encryptedKey: 'enc-org-a',
+      ciphertext: 'enc-org-a',
       keyId: 'key-org-a',
       orgMemberId: meA.id,
     });
     await orgModel.updateMemberOpenRouterKey({
-      encryptedKey: 'enc-org-b',
+      ciphertext: 'enc-org-b',
       keyId: 'key-org-b',
       orgMemberId: meB.id,
     });
@@ -109,7 +111,7 @@ describe('Aico multi-organization billing context (Phase 2)', () => {
         const me = members.find((m) => m.userId === userId && m.status === 'active');
         if (!me) continue;
         const budget = await orgModel.getMemberBudget(me.id);
-        if (budget?.openrouterKeyHash && budget.isActive) {
+        if (budget?.openrouterKeyId && budget.isActive) {
           picks.push(budget.openrouterKeyId!);
           break;
         }
@@ -169,9 +171,7 @@ describe('Aico migration & schema safety (Phase 2)', () => {
     const sqlPath = join(__dirname, '../../../migrations/0132_shocking_blizzard.sql');
     const body = readFileSync(sqlPath, 'utf8');
     expect(body).toContain('user_trials_phone_fingerprint_idx');
-    expect(body).not.toMatch(
-      /CREATE UNIQUE INDEX "user_trials_phone_fingerprint/,
-    );
+    expect(body).not.toMatch(/CREATE UNIQUE INDEX "user_trials_phone_fingerprint/);
   });
 
   it('AICO-P1-015: recordUsage can write rows but chat path does not call it (probe after manual record)', async () => {

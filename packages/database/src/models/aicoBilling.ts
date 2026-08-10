@@ -120,6 +120,8 @@ export class AicoBillingModel {
     createdByUserId: string;
     description?: string;
     fxRateTomanPerUsd: number;
+    /** Optional client idempotency key — unique in wallet_transactions.gateway_ref_id (FIN-003). */
+    idempotencyKey?: string;
     userId: string;
   }) => {
     if (!Number.isInteger(params.amountToman) || params.amountToman <= 0) {
@@ -132,35 +134,67 @@ export class AicoBillingModel {
       throw new Error('INVALID_FX_RATE');
     }
 
+    if (params.idempotencyKey) {
+      const existingTx = await this.db.query.walletTransactions.findFirst({
+        where: eq(walletTransactions.gatewayRefId, params.idempotencyKey),
+      });
+      if (existingTx) {
+        if (existingTx.userId !== params.userId || existingTx.type !== 'manual_credit') {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT');
+        }
+        const wallet = await this.getOrCreateUserWallet(params.userId);
+        return { transaction: existingTx, wallet };
+      }
+    }
+
     return this.db.transaction(async (tx) => {
       await tx.insert(userWallets).values({ userId: params.userId }).onConflictDoNothing({
         target: userWallets.userId,
       });
 
-      const [txRow] = await tx
-        .insert(walletTransactions)
-        .values({
-          amountMicroUsd: params.amountMicroUsd,
-          amountToman: params.amountToman,
-          createdByUserId: params.createdByUserId,
-          description: params.description ?? 'Manual credit',
-          fxRateTomanPerUsd: params.fxRateTomanPerUsd,
-          type: 'manual_credit',
-          userId: params.userId,
-        })
-        .returning();
+      try {
+        const before = await tx.query.userWallets.findFirst({
+          where: eq(userWallets.userId, params.userId),
+        });
+        const balanceBeforeMicroUsd = Number(before?.balanceMicroUsd ?? 0);
+        const balanceBeforeToman = Number(before?.balanceToman ?? 0);
 
-      const [wallet] = await tx
-        .update(userWallets)
-        .set({
-          balanceMicroUsd: sql`${userWallets.balanceMicroUsd} + ${params.amountMicroUsd}`,
-          balanceToman: sql`${userWallets.balanceToman} + ${params.amountToman}`,
-          isActive: true,
-        })
-        .where(eq(userWallets.userId, params.userId))
-        .returning();
+        const [wallet] = await tx
+          .update(userWallets)
+          .set({
+            balanceMicroUsd: sql`${userWallets.balanceMicroUsd} + ${params.amountMicroUsd}`,
+            balanceToman: sql`${userWallets.balanceToman} + ${params.amountToman}`,
+            isActive: true,
+          })
+          .where(eq(userWallets.userId, params.userId))
+          .returning();
 
-      return { transaction: txRow, wallet };
+        const [txRow] = await tx
+          .insert(walletTransactions)
+          .values({
+            amountMicroUsd: params.amountMicroUsd,
+            amountToman: params.amountToman,
+            balanceAfterMicroUsd: Number(wallet?.balanceMicroUsd ?? 0),
+            balanceAfterToman: Number(wallet?.balanceToman ?? 0),
+            balanceBeforeMicroUsd,
+            balanceBeforeToman,
+            createdByUserId: params.createdByUserId,
+            description: params.description ?? 'Manual credit',
+            fxRateTomanPerUsd: params.fxRateTomanPerUsd,
+            gatewayRefId: params.idempotencyKey ?? null,
+            type: 'manual_credit',
+            userId: params.userId,
+          })
+          .returning();
+
+        return { transaction: txRow, wallet };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (params.idempotencyKey && /gateway_ref|unique|duplicate/i.test(message)) {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT', { cause: error });
+        }
+        throw error;
+      }
     });
   };
 

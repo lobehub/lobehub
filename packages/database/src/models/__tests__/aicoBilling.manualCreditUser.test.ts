@@ -43,6 +43,10 @@ describe('AicoBillingModel.manualCreditUser', () => {
     expect(transaction.description).toBe('Platform adjustment');
     expect(transaction.createdByUserId).toBe(adminId);
     expect(transaction.userId).toBe(userId);
+    expect(transaction.balanceBeforeMicroUsd).toBe(0);
+    expect(transaction.balanceAfterMicroUsd).toBe(5_000_000);
+    expect(transaction.balanceBeforeToman).toBe(0);
+    expect(transaction.balanceAfterToman).toBe(25_000);
     expect(wallet.balanceToman).toBe(25_000);
     expect(wallet.balanceMicroUsd).toBe(5_000_000);
     expect(wallet.isActive).toBe(true);

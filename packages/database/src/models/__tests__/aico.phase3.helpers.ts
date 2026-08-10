@@ -7,8 +7,8 @@ import { expect } from 'vitest';
 
 import {
   memberBudgets,
-  organizations,
   organizationMembers,
+  organizations,
   organizationTeamMembers,
   organizationTeams,
   usageLogs,
@@ -144,9 +144,9 @@ export type IntegrityReport = {
  */
 export const collectAicoDataIntegrity = async (db: LobeChatDatabase): Promise<IntegrityReport> => {
   const negativeOrgs = await db
-    .select({ id: organizations.id, usd: organizations.walletBalanceUsd })
+    .select({ id: organizations.id, usd: organizations.walletBalanceMicroUsd })
     .from(organizations)
-    .where(sql`CAST(${organizations.walletBalanceUsd} AS double precision) < 0`);
+    .where(sql`${organizations.walletBalanceMicroUsd} < 0`);
 
   const fingerprintDupes = await db.execute(sql`
     SELECT phone_fingerprint AS fp, COUNT(*)::int AS c
@@ -203,8 +203,8 @@ export const expectReleaseInvariants = (report: IntegrityReport) => {
 export {
   cleanupAicoTables,
   memberBudgets,
-  organizations,
   organizationMembers,
+  organizations,
   organizationTeamMembers,
   organizationTeams,
   usageLogs,
