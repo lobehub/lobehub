@@ -679,6 +679,40 @@ export class OrganizationModel {
       }
     }
 
+    // Ownership transfer must demote the incumbent and update organizations.owner_user_id
+    // atomically — same invariant as assignManager (AUTHZ-001).
+    if (params.role === 'owner') {
+      return this.db.transaction(async (tx) => {
+        await tx
+          .update(organizations)
+          .set({ ownerUserId: member.userId })
+          .where(eq(organizations.id, params.orgId));
+
+        await tx
+          .update(organizationMembers)
+          .set({ role: 'admin' })
+          .where(
+            and(
+              eq(organizationMembers.orgId, params.orgId),
+              eq(organizationMembers.role, 'owner'),
+              eq(organizationMembers.status, 'active'),
+            ),
+          );
+
+        const [updated] = await tx
+          .update(organizationMembers)
+          .set({ role: 'owner' })
+          .where(
+            and(
+              eq(organizationMembers.id, params.memberId),
+              eq(organizationMembers.orgId, params.orgId),
+            ),
+          )
+          .returning();
+        return updated ?? null;
+      });
+    }
+
     const [updated] = await this.db
       .update(organizationMembers)
       .set({ role: params.role })
