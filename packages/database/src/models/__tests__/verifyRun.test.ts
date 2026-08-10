@@ -145,6 +145,28 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     expect(stuck.map((r) => r.id)).not.toContain(runId);
   });
 
+  it('resumes after the cursor so unrecoverable rows cannot starve newer ones', async () => {
+    // The sweep leaves some rows untouched, and an untouched row keeps its
+    // timestamp. Paging past it is the only thing that lets the scan reach the
+    // runs behind it.
+    const first = await buildRun('op-page-1');
+    const second = await buildRun('op-page-2');
+    await new VerifyRunModel(serverDB, userId).updateStatus(first, 'verifying');
+    await new VerifyRunModel(serverDB, userId).updateStatus(second, 'verifying');
+    await backdate(first, 20 * 60 * 1000);
+    await backdate(second, 10 * 60 * 1000);
+
+    const olderThan = new Date(Date.now() - 5 * 60 * 1000);
+    const [head] = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, { limit: 1 });
+    expect(head.id).toBe(first);
+
+    const next = await VerifyRunModel.findStuckVerifying(serverDB, olderThan, {
+      after: { id: head.id, updatedAt: head.updatedAt },
+      limit: 1,
+    });
+    expect(next.map((r) => r.id)).toEqual([second]);
+  });
+
   it('ignores operation-less rounds — there is no rollup to address', async () => {
     const run = await new VerifyRunModel(serverDB, userId).create({ status: 'verifying' });
     await backdate(run.id, 10 * 60 * 1000);

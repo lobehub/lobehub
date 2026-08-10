@@ -6,7 +6,20 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -532,31 +545,49 @@ export class VerifyRunModel {
   };
 
   /**
-   * Every run stranded in `verifying` since before `olderThan`, across all
-   * owners — the sweep's input (see `sweepStuckVerifyRuns`).
+   * One page of runs stranded in `verifying` since before `olderThan`, across
+   * all owners — the sweep's input (see `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
    * Operation-less rounds are excluded — the rollup is addressed by operation,
    * so there is nothing to recompute for them.
+   *
+   * Paged on the `(updatedAt, id)` keyset rather than returning a fixed oldest-N
+   * slice. The sweep deliberately leaves some rows untouched (a check whose
+   * verifier is still live), and an untouched row keeps its timestamp — so a
+   * single oldest-N read would hand back the same unrecoverable rows every tick
+   * and starve every newer stranded run behind them. `id` breaks ties so rows
+   * sharing a timestamp can't be skipped or repeated at a page boundary.
    */
   static findStuckVerifying = async (
     db: LobeChatDatabase,
     olderThan: Date,
-    limit = 200,
-  ): Promise<VerifyRunItem[]> =>
-    db
+    options?: { after?: { id: string; updatedAt: Date }; limit?: number },
+  ): Promise<VerifyRunItem[]> => {
+    const { after, limit = 200 } = options ?? {};
+    const conditions = [
+      eq(verifyRuns.status, 'verifying'),
+      lt(verifyRuns.updatedAt, olderThan),
+      isNotNull(verifyRuns.operationId),
+    ];
+
+    if (after) {
+      conditions.push(
+        or(
+          gt(verifyRuns.updatedAt, after.updatedAt),
+          and(eq(verifyRuns.updatedAt, after.updatedAt), gt(verifyRuns.id, after.id)),
+        )!,
+      );
+    }
+
+    return db
       .select()
       .from(verifyRuns)
-      .where(
-        and(
-          eq(verifyRuns.status, 'verifying'),
-          lt(verifyRuns.updatedAt, olderThan),
-          isNotNull(verifyRuns.operationId),
-        ),
-      )
-      .orderBy(asc(verifyRuns.updatedAt))
+      .where(and(...conditions))
+      .orderBy(asc(verifyRuns.updatedAt), asc(verifyRuns.id))
       .limit(limit);
+  };
 
   /** Update the denormalized rollup. Always go through the service-layer chokepoint. */
   updateStatus = async (runId: string, status: VerifyRunStatus | null): Promise<void> => {
