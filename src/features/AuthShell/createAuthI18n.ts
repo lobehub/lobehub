@@ -16,6 +16,8 @@ import defaultError from '@/locales/default/error';
 import defaultMarketAuth from '@/locales/default/marketAuth';
 import defaultOauth from '@/locales/default/oauth';
 import { normalizeLocale } from '@/locales/resources';
+import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
+import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
 const mergeNamespace = (
   fallbackResources: Record<string, unknown>,
@@ -46,6 +48,8 @@ const bundledDefaultResources = {
 type AuthI18nNamespace = keyof typeof defaultResources;
 
 const isAllowedNamespace = (ns: string): ns is AuthI18nNamespace => ns in defaultResources;
+
+const authNamespaces = Object.keys(defaultResources);
 
 type LocaleModule = { default?: Record<string, string> } | Record<string, string>;
 
@@ -102,13 +106,28 @@ const loadFaNamespace = async (ns: AuthI18nNamespace) => {
 export const loadAuthNamespace = async (lng: string, ns: string) => {
   const safeNamespace = isAllowedNamespace(ns) ? ns : 'auth';
   const normalizedLocale = normalizeLocale(lng);
+  const english = defaultResources[safeNamespace] as Record<string, unknown>;
 
   try {
     if (normalizedLocale === 'zh-CN') {
-      return unwrapLocaleModule(await loadZhNamespace(safeNamespace));
+      return mergeNamespace(english, unwrapLocaleModule(await loadZhNamespace(safeNamespace)));
     }
     if (normalizedLocale === 'fa-IR') {
-      return unwrapLocaleModule(await loadFaNamespace(safeNamespace));
+      return mergeNamespace(english, unwrapLocaleModule(await loadFaNamespace(safeNamespace)));
+    }
+    if (normalizedLocale !== 'en-US') {
+      // Visible locales like fr-FR (and any other non-English) load from locales/.
+      return mergeNamespace(
+        english,
+        unwrapESMModule(
+          await loadI18nNamespaceModule({
+            defaultLang: DEFAULT_LANG,
+            lng: normalizedLocale,
+            normalizeLocale,
+            ns: safeNamespace,
+          }),
+        ) as Record<string, unknown>,
+      );
     }
   } catch {
     // fall through to bundled default namespace
@@ -123,12 +142,14 @@ export const createAuthI18n = (lang?: string) => {
     .use(initReactI18next)
     .use(resourcesToBackend(loadAuthNamespace));
 
-  // With ns: [] and the en-US fallback bundled, i18next considers every namespace
-  // "loaded" and never asks the backend after a language switch — fetch explicitly.
+  const initialLang = normalizeLocale(lang);
+
+  // With ns: [] and partialBundledLanguages, i18next may not re-read the backend after
+  // a language switch — fetch explicitly for every locale, including DEFAULT_LANG (fa-IR),
+  // so switching back to Persian after English/French actually reloads Persian copy.
   instance.on('languageChanged', (lng) => {
     const locale = normalizeLocale(lng);
-    if (locale === DEFAULT_LANG) return;
-    void instance.reloadResources([locale], Object.keys(defaultResources));
+    void instance.reloadResources([locale], authNamespaces);
   });
 
   return {
@@ -141,7 +162,7 @@ export const createAuthI18n = (lang?: string) => {
         initAsync,
         interpolation: { escapeValue: false },
         keySeparator: false,
-        lng: lang,
+        lng: initialLang,
         ns: [],
         // Bundle fa-IR synchronously so the first render never suspends: with the
         // default useSuspense=true and no Suspense boundary above AuthShell, every

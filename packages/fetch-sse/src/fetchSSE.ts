@@ -216,7 +216,16 @@ const createSmoothMessage = (params: {
   };
 
   const pushToQueue = (text: string) => {
-    outputQueue.push(...text.split(''));
+    // Grapheme-safe enqueue so Persian/emoji/combining marks are not split mid-cluster.
+    // (Cursive joining itself is preserved by contiguous string buffers; char-based
+    // DOM wraps are handled separately via streamAnimationGranularity: 'word'.)
+    if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+      for (const part of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) {
+        outputQueue.push(part.segment);
+      }
+      return;
+    }
+    outputQueue.push(...Array.from(text));
   };
 
   const flushQueue = () => {

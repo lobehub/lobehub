@@ -2,7 +2,7 @@ import { useLexicalComposerContext } from '@lobehub/editor';
 import { $getRoot, $isElementNode } from 'lexical';
 import { type FC, useEffect } from 'react';
 
-import { getTextDirectionFromFirstStrong } from './getTextDirectionFromFirstStrong';
+import { getTextDirectionFromFirstStrong } from '@/utils/textDirection';
 
 const AUTO_DIR_TAG = 'chat-input-auto-direction';
 

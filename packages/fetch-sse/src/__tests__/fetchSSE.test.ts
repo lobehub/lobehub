@@ -152,6 +152,35 @@ describe('fetchSSE', () => {
     });
   });
 
+  it('should smooth-stream Persian without splitting grapheme clusters', async () => {
+    const mockOnMessageHandle = vi.fn();
+    const mockOnFinish = vi.fn();
+    const persian = 'سلام';
+
+    (fetchEventSource as any).mockImplementationOnce(
+      async (url: string, options: FetchEventSourceInit) => {
+        options.onopen!({ clone: () => ({ ok: true, headers: new Headers() }) } as any);
+        options.onmessage!({ event: 'text', data: JSON.stringify(persian) } as any);
+      },
+    );
+
+    await fetchSSE('/', {
+      onMessageHandle: mockOnMessageHandle,
+      onFinish: mockOnFinish,
+      responseAnimation: 'smooth',
+    });
+
+    const allTexts = mockOnMessageHandle.mock.calls
+      .map((call) => call[0])
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text);
+
+    expect(allTexts.join('')).toBe(persian);
+    // Each smooth delta should be a whole grapheme (not a UTF-16 half or empty).
+    expect(allTexts.every((t) => t.length > 0)).toBe(true);
+    expect(mockOnFinish).toHaveBeenCalledWith(persian, expect.objectContaining({ type: 'done' }));
+  });
+
   it('should not handle text events', async () => {
     const mockOnMessageHandle = vi.fn();
     const mockOnFinish = vi.fn();

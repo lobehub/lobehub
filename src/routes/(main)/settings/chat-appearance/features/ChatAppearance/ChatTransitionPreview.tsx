@@ -65,7 +65,12 @@ const ChatTransitionPreview = memo<ChatTransitionPreviewProps>(({ mode }) => {
 
   return (
     <Flexbox height={180}>
-      <Markdown enableStream animated={mode === 'fadeIn'} variant={'chat'}>
+      <Markdown
+        enableStream
+        animated={mode === 'fadeIn'}
+        streamAnimationGranularity={'word'}
+        variant={'chat'}
+      >
         {streamedContent}
       </Markdown>
     </Flexbox>
