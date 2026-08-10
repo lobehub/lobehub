@@ -3685,7 +3685,9 @@ export type GetApiV1MessagesCountResponses = {
      * Successful response
      */
     200: {
-        data?: Message;
+        data?: {
+            count: number;
+        };
         message?: string;
         success: true;
         timestamp: string;
@@ -4068,7 +4070,7 @@ export type PostApiV1MessagesRepliesResponses = {
      * Successful response
      */
     200: {
-        data?: Message;
+        data?: Message | null;
         message?: string;
         success: true;
         timestamp: string;
@@ -5950,7 +5952,9 @@ export type GetApiV1UsersMeResponses = {
      * Successful response
      */
     200: {
-        data?: User;
+        data?: User | {
+            id: string;
+        };
         message?: string;
         success: true;
         timestamp: string;

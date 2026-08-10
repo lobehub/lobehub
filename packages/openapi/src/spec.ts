@@ -622,7 +622,41 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
     }
   }
 
-  const isResourceOperation = rest === '' || !rest.includes('/');
+  if (group === 'messages' && rest === 'count') {
+    return successEnvelope({
+      additionalProperties: false,
+      properties: { count: { minimum: 0, type: 'integer' } },
+      required: ['count'],
+      type: 'object',
+    });
+  }
+
+  // Returns the created message, or nothing when generation produced no reply.
+  if (group === 'messages' && rest === 'replies') {
+    return successEnvelope({ anyOf: [ref('Message'), { type: 'null' }] });
+  }
+
+  // A caller without `user:read` deliberately receives only `{ id }`.
+  if (group === 'users' && rest === 'me') {
+    return successEnvelope({
+      anyOf: [
+        ref('User'),
+        {
+          additionalProperties: false,
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+          type: 'object',
+        },
+      ],
+    });
+  }
+
+  // Only true resource operations get the resource schema: the collection root
+  // and the `{id}` item. Every other single segment is a named sub-operation
+  // (`count`, `me`, `batches`, …) whose payload is its own shape, so it must be
+  // described explicitly above — falling back to a permissive object here keeps
+  // an undescribed route merely vague rather than confidently wrong.
+  const isResourceOperation = rest === '' || rest === '{id}';
   return isResourceOperation
     ? successEnvelope(ref(resource.schema))
     : successEnvelope({ additionalProperties: true, type: 'object' });

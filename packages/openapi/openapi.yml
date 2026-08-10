@@ -6425,7 +6425,14 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/Message"
+                    additionalProperties: false
+                    properties:
+                      count:
+                        minimum: 0
+                        type: integer
+                    required:
+                      - count
+                    type: object
                   message:
                     type: string
                   success:
@@ -7116,7 +7123,9 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/Message"
+                    anyOf:
+                      - $ref: "#/components/schemas/Message"
+                      - type: "null"
                   message:
                     type: string
                   success:
@@ -10248,7 +10257,15 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/User"
+                    anyOf:
+                      - $ref: "#/components/schemas/User"
+                      - additionalProperties: false
+                        properties:
+                          id:
+                            type: string
+                        required:
+                          - id
+                        type: object
                   message:
                     type: string
                   success:
