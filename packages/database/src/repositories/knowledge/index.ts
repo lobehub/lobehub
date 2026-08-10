@@ -1,7 +1,8 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNull, ne, notExists, or, type SQL, sql } from 'drizzle-orm';
+import { alias, type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
@@ -9,6 +10,114 @@ import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } fro
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+/**
+ * Both UNION arms reach the same two tables, and the file arm joins `documents`
+ * to pick up the derived page that backs a file — so the tables are aliased
+ * once here and every predicate below is an ordinary typed drizzle condition.
+ */
+const f = alias(files, 'f');
+const d = alias(documents, 'd');
+
+/**
+ * The two arms of the resource UNION.
+ *
+ * A UNION matches columns by position, so the arms must expose the same keys in
+ * the same order and with compatible types. Keeping them as two literals side
+ * by side (rather than generating them) makes a mismatch visible in review; TS
+ * catches it at the `unionAll` call either way.
+ *
+ * Plain column references carry their own output name (`f.chunk_task_id` →
+ * `chunk_task_id`), which is what the sort keys reference — `ORDER BY` on a set
+ * operation can only name an output column. Only fields whose output name has
+ * to differ from the source column, or that are expressions, get an explicit
+ * `.as()`: `f.id` would otherwise collide with the `id` column, and every
+ * `users` column would land under its bare name.
+ */
+const fileArmColumns = {
+  chunkTaskId: f.chunkTaskId,
+  content: d.content,
+  createdAt: f.createdAt,
+  documentId: sql<string | null>`${d.id}`.as('document_id'),
+  editorData: d.editorData,
+  embeddingTaskId: f.embeddingTaskId,
+  fileId: sql<string | null>`${f.id}`.as('file_id'),
+  fileType: f.fileType,
+  // A file that backs a derived page is addressed by the page id.
+  id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
+  metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
+  name: f.name,
+  size: f.size,
+  slug: d.slug,
+  sourceType: sql<'file' | 'document'>`'file'`.as('source_type'),
+  updatedAt: f.updatedAt,
+  uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
+  uploaderFullName: sql<string | null>`${users.fullName}`.as('uploader_full_name'),
+  uploaderId: sql<string | null>`${users.id}`.as('uploader_id'),
+  uploaderUsername: sql<string | null>`${users.username}`.as('uploader_username'),
+  url: f.url,
+  userId: f.userId,
+  visibility: f.visibility,
+};
+
+const documentArmColumns = {
+  chunkTaskId: sql<string | null>`NULL::uuid`.as('chunk_task_id'),
+  content: d.content,
+  createdAt: d.createdAt,
+  documentId: sql<string | null>`${d.id}`.as('document_id'),
+  editorData: d.editorData,
+  embeddingTaskId: sql<string | null>`NULL::uuid`.as('embedding_task_id'),
+  fileId: d.fileId,
+  fileType: d.fileType,
+  id: d.id,
+  metadata: d.metadata,
+  name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
+  size: sql<number>`${d.totalCharCount}`.as('size'),
+  slug: d.slug,
+  sourceType: sql<'file' | 'document'>`'document'`.as('source_type'),
+  updatedAt: d.updatedAt,
+  uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
+  uploaderFullName: sql<string | null>`${users.fullName}`.as('uploader_full_name'),
+  uploaderId: sql<string | null>`${users.id}`.as('uploader_id'),
+  uploaderUsername: sql<string | null>`${users.username}`.as('uploader_username'),
+  url: sql<string>`${d.source}`.as('url'),
+  userId: d.userId,
+  visibility: d.visibility,
+};
+
+/** One row as the UNION returns it, before it is shaped into a `KnowledgeItem`. */
+interface KnowledgeRow {
+  chunkTaskId: string | null;
+  content: string | null;
+  createdAt: Date;
+  documentId: string | null;
+  editorData: Record<string, any> | null;
+  embeddingTaskId: string | null;
+  fileId: string | null;
+  fileType: string;
+  id: string;
+  metadata: Record<string, any> | null;
+  name: string;
+  size: number;
+  slug: string | null;
+  sourceType: 'file' | 'document';
+  updatedAt: Date;
+  uploaderAvatar: string | null;
+  uploaderFullName: string | null;
+  uploaderId: string | null;
+  uploaderUsername: string | null;
+  url: string | null;
+  userId: string | null;
+  visibility: 'private' | 'public' | null;
+}
+
+/** Sort keys the client may pass, mapped to the UNION's output column names. */
+const SORTABLE_COLUMNS: Record<string, string> = {
+  createdAt: 'created_at',
+  name: 'name',
+  size: 'size',
+  updatedAt: 'updated_at',
+};
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -56,6 +165,53 @@ interface KnowledgeQueryParams extends QueryFileListParams {
 }
 
 /**
+ * `metadata` is the one column still selected through an expression (the file
+ * arm coalesces the page's metadata over the file's), so it skips drizzle's
+ * jsonb decoder and the drivers disagree on what they hand back — neon returns
+ * a string, node-postgres a parsed object. Everything else is a plain column
+ * and arrives already decoded.
+ */
+const toJson = (value: unknown): Record<string, any> | null => {
+  if (typeof value !== 'string') return (value as Record<string, any> | null) ?? null;
+
+  try {
+    return JSON.parse(value);
+  } catch (e) {
+    console.error('[KnowledgeRepo] Failed to parse JSON column:', e);
+    return null;
+  }
+};
+
+const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
+  chunkTaskId: row.chunkTaskId,
+  content: row.content,
+  createdAt: row.createdAt,
+  documentId: row.documentId,
+  editorData: row.editorData,
+  embeddingTaskId: row.embeddingTaskId,
+  fileId: row.fileId,
+  fileType: row.fileType,
+  id: row.id,
+  metadata: toJson(row.metadata),
+  name: row.name,
+  size: Number(row.size),
+  slug: row.slug,
+  sourceType: row.sourceType,
+  updatedAt: row.updatedAt,
+  uploader: row.uploaderId
+    ? {
+        avatar: row.uploaderAvatar,
+        fullName: row.uploaderFullName,
+        id: row.uploaderId,
+        username: row.uploaderUsername,
+      }
+    : null,
+  url: row.url ?? undefined,
+  userId: row.userId,
+  visibility: row.visibility,
+});
+
+/**
  * Resources Repository - combines files and documents into a unified interface
  */
 export class KnowledgeRepo {
@@ -73,33 +229,63 @@ export class KnowledgeRepo {
     this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
-  private fileOwnershipSql = (alias: 'f' = 'f') => {
-    if (!this.workspaceId) {
-      return sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+  private scope = () => ({ userId: this.userId, workspaceId: this.workspaceId });
+
+  private fileScope = () => buildWorkspaceWhere(this.scope(), f);
+
+  private documentScope = () => buildWorkspaceWhere(this.scope(), d);
+
+  /**
+   * Filters shared by both arms. `visibility` narrows the ownership-scoped pool;
+   * rows predating the column count as public.
+   */
+  private commonFilters = (
+    { creatorUserId, parentId, q, visibility }: KnowledgeQueryParams,
+    cols: {
+      names: AnyPgColumn[];
+      parentId: AnyPgColumn;
+      userId: AnyPgColumn;
+      visibility: AnyPgColumn;
+    },
+  ): (SQL | undefined)[] => [
+    creatorUserId ? eq(cols.userId, creatorUserId) : undefined,
+    parentId === undefined
+      ? undefined
+      : parentId === null
+        ? isNull(cols.parentId)
+        : eq(cols.parentId, parentId),
+    q ? or(...cols.names.map((name) => ilike(name, `%${q}%`))) : undefined,
+    visibility === 'private' ? eq(cols.visibility, 'private') : undefined,
+    visibility === 'public'
+      ? or(eq(cols.visibility, 'public'), isNull(cols.visibility))
+      : undefined,
+  ];
+
+  private fileArm = (where: (SQL | undefined)[], knowledgeBaseId?: string) => {
+    let query = this.db.select(fileArmColumns).from(f).$dynamic();
+
+    if (knowledgeBaseId) {
+      query = query.innerJoin(
+        knowledgeBaseFiles,
+        and(
+          eq(knowledgeBaseFiles.fileId, f.id),
+          eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+        ),
+      );
     }
 
-    // Workspace mode: members see all public rows; private rows are scoped to
-    // their creator. Mirrors `buildWorkspaceWhere` for the raw-SQL UNION paths.
-    return sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId} AND (
-      ${sql.raw(`${alias}.visibility`)} IS NULL
-      OR ${sql.raw(`${alias}.visibility`)} = 'public'
-      OR (${sql.raw(`${alias}.visibility`)} = 'private' AND ${sql.raw(`${alias}.user_id`)} = ${this.userId})
-    )`;
+    return query
+      .leftJoin(d, eq(d.fileId, f.id))
+      .leftJoin(users, eq(users.id, f.userId))
+      .where(and(this.fileScope(), ...where));
   };
 
-  private documentOwnershipSql = (alias: 'd' | 'documents' = 'd') => {
-    if (!this.workspaceId) {
-      return sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
-    }
-
-    // Workspace mode: members see all public rows; private rows are scoped to
-    // their creator. Mirrors `buildWorkspaceWhere` for the raw-SQL UNION paths.
-    return sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId} AND (
-      ${sql.raw(`${alias}.visibility`)} IS NULL
-      OR ${sql.raw(`${alias}.visibility`)} = 'public'
-      OR (${sql.raw(`${alias}.visibility`)} = 'private' AND ${sql.raw(`${alias}.user_id`)} = ${this.userId})
-    )`;
-  };
+  private documentArm = (where: (SQL | undefined)[]) =>
+    this.db
+      .select(documentArmColumns)
+      .from(d)
+      .leftJoin(users, eq(users.id, d.userId))
+      .where(and(this.documentScope(), ne(d.sourceType, 'file'), ...where));
 
   /**
    * Query combined results from files and documents tables
@@ -131,105 +317,49 @@ export class KnowledgeRepo {
     // Visibility filter is only meaningful in workspace mode. Personal-mode
     // rows have `visibility` set to the schema default and are already fully
     // scoped by `workspace_id IS NULL AND user_id = caller`.
-    const effectiveVisibility = this.workspaceId ? visibility : undefined;
-
-    // Build file query
-    const fileQuery = this.buildFileQuery({
-      category,
+    const shared: KnowledgeQueryParams = {
       creatorUserId,
-      knowledgeBaseId,
       parentId: resolvedParentId,
       q,
-      showFilesInKnowledgeBase,
-      sortType,
-      sorter,
-      visibility: effectiveVisibility,
-    });
+      visibility: this.workspaceId ? visibility : undefined,
+    };
 
-    // Build document query (notes)
-    const documentQuery = this.buildDocumentQuery({
-      category,
-      creatorUserId,
+    const fileArm = this.fileArm(
+      [
+        ...this.commonFilters(shared, {
+          names: [f.name],
+          parentId: f.parentId,
+          userId: f.userId,
+          visibility: f.visibility,
+        }),
+        this.fileCategoryFilter(category),
+        // Exclude files in knowledge base if needed
+        !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
+      ],
       knowledgeBaseId,
-      parentId: resolvedParentId,
-      q,
-      sortType,
-      sorter,
-      visibility: effectiveVisibility,
-    });
+    );
 
-    // Combine both queries with UNION ALL
-    const combinedQuery = sql`
-      (${fileQuery})
-      UNION ALL
-      (${documentQuery})
-    `;
+    const documentArm = this.documentArm([
+      ...this.commonFilters(shared, {
+        names: [d.title, d.filename],
+        parentId: d.parentId,
+        userId: d.userId,
+        visibility: d.visibility,
+      }),
+      this.documentCategoryFilter(category),
+      // Inside a knowledge base only standalone rows (folders and notes with no
+      // backing file) belong to the document arm — documents that do have a file
+      // already come back through the file arm.
+      knowledgeBaseId ? isNull(d.fileId) : undefined,
+      knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+    ]);
 
-    // Add final ordering and pagination
-    const orderClause = this.buildOrderClause(sortType, sorter);
-    const finalQuery = sql`
-      SELECT * FROM (${combinedQuery}) as combined
-      ORDER BY ${orderClause}
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
+    const rows = await unionAll(fileArm, documentArm)
+      .orderBy(this.orderBy(sortType, sorter))
+      .limit(limit)
+      .offset(offset);
 
-    const result = await this.db.execute(finalQuery);
-
-    const mappedResults = result.rows.map((row: any) => {
-      // Parse editor_data if it's a string (raw SQL returns JSONB as string)
-      let editorData = row.editor_data;
-      if (typeof editorData === 'string') {
-        try {
-          editorData = JSON.parse(editorData);
-        } catch (e) {
-          console.error('[KnowledgeRepo] Failed to parse editor_data:', e);
-          editorData = null;
-        }
-      }
-
-      // Parse metadata if it's a string (raw SQL returns JSONB as string)
-      let metadata = row.metadata;
-      if (typeof metadata === 'string') {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch (e) {
-          console.error('[KnowledgeRepo] Failed to parse metadata:', e);
-          metadata = null;
-        }
-      }
-
-      return {
-        chunkTaskId: row.chunk_task_id,
-        content: row.content,
-        createdAt: new Date(row.created_at),
-        documentId: row.document_id,
-        editorData,
-        embeddingTaskId: row.embedding_task_id,
-        fileId: row.file_id,
-        fileType: row.file_type,
-        id: row.id,
-        metadata,
-        name: row.name,
-        size: Number(row.size),
-        slug: row.slug,
-        sourceType: row.source_type,
-        updatedAt: new Date(row.updated_at),
-        uploader: row.uploader_id
-          ? {
-              avatar: row.uploader_avatar,
-              fullName: row.uploader_full_name,
-              id: row.uploader_id,
-              username: row.uploader_username,
-            }
-          : null,
-        url: row.url,
-        userId: row.user_id,
-        visibility: row.visibility,
-      };
-    });
-
-    return mappedResults;
+    return rows.map(toKnowledgeItem);
   }
 
   /**
@@ -242,163 +372,25 @@ export class KnowledgeRepo {
    * left the resource home with an empty "recent pages" section.
    */
   async queryRecent(limit: number = 12, kind?: RecentItemKind): Promise<KnowledgeItem[]> {
-    // Derived pages live in the documents table; their backing file row is not
-    // a file the user uploaded, so it never belongs to the file list.
-    const fileKindCondition =
-      kind === 'file' ? sql` AND f.file_type != ${CUSTOM_DOCUMENT_FILE_TYPE}` : sql``;
-    // Folders are containers, not pages.
-    const pageKindCondition =
-      kind === 'page' ? sql` AND file_type != ${CUSTOM_FOLDER_FILE_TYPE}` : sql``;
+    const fileArm = this.fileArm([
+      this.notInAnyKnowledgeBase(),
+      // Derived pages live in the documents table; their backing file row is not
+      // a file the user uploaded, so it never belongs to the file list.
+      kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
+    ]);
 
-    const fileQuery = sql`
-      SELECT
-        COALESCE(d.id, f.id) as id,
-        f.id as file_id,
-        d.id as document_id,
-        f.name,
-        f.file_type,
-        f.size,
-        f.url,
-        f.created_at,
-        f.updated_at,
-        f.chunk_task_id,
-        f.embedding_task_id,
-        d.editor_data,
-        d.content,
-        d.slug,
-        COALESCE(d.metadata, f.metadata) as metadata,
-        f.user_id,
-        f.visibility,
-        u.id as uploader_id,
-        u.full_name as uploader_full_name,
-        u.username as uploader_username,
-        u.avatar as uploader_avatar,
-        'file' as source_type
-      FROM ${files} f
-      LEFT JOIN ${documents} d
-        ON f.id = d.file_id
-      LEFT JOIN ${users} u
-        ON f.user_id = u.id
-      WHERE ${this.fileOwnershipSql('f')}
-        AND NOT EXISTS (
-          SELECT 1 FROM ${knowledgeBaseFiles}
-          WHERE ${knowledgeBaseFiles.fileId} = f.id
-        )${fileKindCondition}
-    `;
+    const documentArm = this.documentArm([
+      isNull(d.knowledgeBaseId),
+      // Folders are containers, not pages.
+      kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+    ]);
 
-    const documentQuery = sql`
-      SELECT
-        id,
-        file_id,
-        id as document_id,
-        COALESCE(title, filename, 'Untitled') as name,
-        file_type,
-        total_char_count as size,
-        source as url,
-        created_at,
-        updated_at,
-        NULL as chunk_task_id,
-        NULL as embedding_task_id,
-        editor_data,
-        content,
-        slug,
-        metadata,
-        user_id,
-        visibility,
-        uploader_id,
-        uploader_full_name,
-        uploader_username,
-        uploader_avatar,
-        'document' as source_type
-      FROM (
-        SELECT
-          documents.*,
-          u.id as uploader_id,
-          u.full_name as uploader_full_name,
-          u.username as uploader_username,
-          u.avatar as uploader_avatar
-        FROM ${documents}
-        LEFT JOIN ${users} u
-          ON documents.user_id = u.id
-      ) documents
-      WHERE ${this.documentOwnershipSql('documents')}
-        AND source_type != ${'file'}
-        AND knowledge_base_id IS NULL${pageKindCondition}
-    `;
+    const recent =
+      kind === 'file' ? fileArm : kind === 'page' ? documentArm : unionAll(fileArm, documentArm);
 
-    const sourceQuery =
-      kind === 'file'
-        ? sql`(${fileQuery})`
-        : kind === 'page'
-          ? sql`(${documentQuery})`
-          : sql`
-        (${fileQuery})
-        UNION ALL
-        (${documentQuery})
-      `;
+    const rows = await recent.orderBy(this.orderBy(SortType.Desc, 'updatedAt')).limit(limit);
 
-    const combinedQuery = sql`
-      SELECT * FROM (
-        ${sourceQuery}
-      ) as combined
-      ORDER BY updated_at DESC
-      LIMIT ${limit}
-    `;
-
-    const result = await this.db.execute(combinedQuery);
-
-    const mappedResults = result.rows.map((row: any) => {
-      // Parse editor_data if it's a string
-      let editorData = row.editor_data;
-      if (typeof editorData === 'string') {
-        try {
-          editorData = JSON.parse(editorData);
-        } catch {
-          editorData = null;
-        }
-      }
-
-      // Parse metadata if it's a string
-      let metadata = row.metadata;
-      if (typeof metadata === 'string') {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch {
-          metadata = null;
-        }
-      }
-
-      return {
-        chunkTaskId: row.chunk_task_id,
-        content: row.content,
-        createdAt: new Date(row.created_at),
-        documentId: row.document_id,
-        editorData,
-        embeddingTaskId: row.embedding_task_id,
-        fileId: row.file_id,
-        fileType: row.file_type,
-        id: row.id,
-        metadata,
-        name: row.name,
-        size: Number(row.size),
-        slug: row.slug,
-        sourceType: row.source_type,
-        updatedAt: new Date(row.updated_at),
-        uploader: row.uploader_id
-          ? {
-              avatar: row.uploader_avatar,
-              fullName: row.uploader_full_name,
-              id: row.uploader_id,
-              username: row.uploader_username,
-            }
-          : null,
-        url: row.url,
-        userId: row.user_id,
-        visibility: row.visibility,
-      };
-    });
-
-    return mappedResults;
+    return rows.map(toKnowledgeItem);
   }
 
   /**
@@ -446,10 +438,7 @@ export class KnowledgeRepo {
 
     if (document.fileType === DOCUMENT_FOLDER_TYPE) {
       const children = await this.db.query.documents.findMany({
-        where: and(
-          eq(documents.parentId, id),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
-        ),
+        where: and(eq(documents.parentId, id), buildWorkspaceWhere(this.scope(), documents)),
       });
 
       for (const child of children) {
@@ -457,10 +446,7 @@ export class KnowledgeRepo {
       }
 
       const childFiles = await this.db.query.files.findMany({
-        where: and(
-          eq(files.parentId, id),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
-        ),
+        where: and(eq(files.parentId, id), buildWorkspaceWhere(this.scope(), files)),
       });
 
       for (const file of childFiles) {
@@ -475,409 +461,43 @@ export class KnowledgeRepo {
     await this.documentModel.delete(id);
   };
 
-  private buildFileQuery({
-    category,
-    creatorUserId,
-    q,
-    knowledgeBaseId,
-    showFilesInKnowledgeBase,
-    parentId,
-    visibility,
-  }: KnowledgeQueryParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [this.fileOwnershipSql('f')];
+  private notInAnyKnowledgeBase = () =>
+    notExists(this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, f.id)));
 
-    if (creatorUserId) {
-      whereConditions.push(sql`f.user_id = ${creatorUserId}`);
-    }
+  private fileCategoryFilter = (category?: string): SQL | undefined => {
+    if (!category || category === FilesTabs.All) return undefined;
 
-    // Parent ID filter
-    if (parentId !== undefined) {
-      if (parentId === null) {
-        whereConditions.push(sql`f.parent_id IS NULL`);
-      } else {
-        whereConditions.push(sql`f.parent_id = ${parentId}`);
-      }
-    }
+    const filter = buildFileCategoryFilter(f.fileType, category as FilesTabs);
+    if (filter === 'all') return undefined;
+    // `false` drops the arm from the UNION — a category the table can't serve.
+    return filter === 'none' ? sql`false` : filter;
+  };
 
-    // Search filter
-    if (q) {
-      whereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
-    }
+  /**
+   * Document rows only surface under All and Pages; every file-oriented category
+   * (Documents included) excludes the table entirely.
+   */
+  private documentCategoryFilter = (category?: string): SQL | undefined => {
+    if (!category || category === FilesTabs.All) return undefined;
 
-    // Visibility filter — narrows the ownership-scoped pool. Explicit private
-    // rows with no `visibility` column still surface under 'public' since the
-    // schema default + backfill treats them as public.
-    if (visibility === 'private') {
-      whereConditions.push(sql`f.visibility = 'private'`);
-    } else if (visibility === 'public') {
-      whereConditions.push(sql`(f.visibility = 'public' OR f.visibility IS NULL)`);
-    }
+    const filter = buildDocumentCategoryFilter(d.fileType, category as FilesTabs);
+    if (filter === 'all') return undefined;
+    return filter === 'none' ? sql`false` : filter;
+  };
 
-    // Category filter
-    if (category && category !== FilesTabs.All) {
-      const categoryFilter = buildFileCategoryFilter(sql.raw('f.file_type'), category as FilesTabs);
-      if (categoryFilter === 'none') {
-        whereConditions.push(sql`false`);
-      } else if (categoryFilter !== 'all') {
-        whereConditions.push(categoryFilter);
-      }
-    }
+  /**
+   * Both halves of the sort have to be supplied to take effect — a `sorter`
+   * without a `sortType` falls back to newest-first, as it always has.
+   *
+   * `sql.raw` is required rather than a column reference: after a set operation
+   * `ORDER BY` may only name an output column, and `"f"."name"` is not one. The
+   * value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
+   */
+  private orderBy = (sortType?: string, sorter?: string): SQL => {
+    if (!sorter || !sortType || !(sorter in SORTABLE_COLUMNS)) return desc(sql.raw('created_at'));
 
-    // Knowledge base filter
-    if (knowledgeBaseId) {
-      // Build where conditions using proper table references (f.column instead of files.column)
-      const kbWhereConditions: any[] = [this.fileOwnershipSql('f')];
+    const direction = sortType.toLowerCase() === SortType.Asc ? asc : desc;
 
-      if (creatorUserId) {
-        kbWhereConditions.push(sql`f.user_id = ${creatorUserId}`);
-      }
-
-      // Parent ID filter
-      if (parentId !== undefined) {
-        if (parentId === null) {
-          kbWhereConditions.push(sql`f.parent_id IS NULL`);
-        } else {
-          kbWhereConditions.push(sql`f.parent_id = ${parentId}`);
-        }
-      }
-
-      // Search filter
-      if (q) {
-        kbWhereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
-      }
-
-      // Category filter
-      if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-        const categoryFilter = buildFileCategoryFilter(
-          sql.raw('f.file_type'),
-          category as FilesTabs,
-        );
-        if (categoryFilter === 'none') {
-          kbWhereConditions.push(sql`false`);
-        } else if (categoryFilter !== 'all') {
-          kbWhereConditions.push(categoryFilter);
-        }
-      }
-
-      if (visibility === 'private') {
-        kbWhereConditions.push(sql`f.visibility = 'private'`);
-      } else if (visibility === 'public') {
-        kbWhereConditions.push(sql`(f.visibility = 'public' OR f.visibility IS NULL)`);
-      }
-
-      return sql`
-        SELECT
-          COALESCE(d.id, f.id) as id,
-          f.id as file_id,
-          d.id as document_id,
-          f.name,
-          f.file_type,
-          f.size,
-          f.url,
-          f.created_at,
-          f.updated_at,
-          f.chunk_task_id,
-          f.embedding_task_id,
-          d.editor_data,
-          d.content,
-          d.slug,
-          COALESCE(d.metadata, f.metadata) as metadata,
-          f.user_id,
-          f.visibility,
-          u.id as uploader_id,
-          u.full_name as uploader_full_name,
-          u.username as uploader_username,
-          u.avatar as uploader_avatar,
-          'file' as source_type
-        FROM ${files} f
-        INNER JOIN ${knowledgeBaseFiles} kbf
-          ON f.id = kbf.file_id
-          AND kbf.knowledge_base_id = ${knowledgeBaseId}
-        LEFT JOIN ${documents} d
-          ON f.id = d.file_id
-        LEFT JOIN ${users} u
-          ON f.user_id = u.id
-        WHERE ${sql.join(kbWhereConditions, sql` AND `)}
-      `;
-    }
-
-    // Exclude files in knowledge base if needed
-    if (!showFilesInKnowledgeBase) {
-      whereConditions.push(
-        sql`
-          NOT EXISTS (
-                    SELECT 1 FROM ${knowledgeBaseFiles}
-                    WHERE ${knowledgeBaseFiles.fileId} = f.id
-                  )
-        `,
-      );
-    }
-
-    return sql`
-      SELECT
-        COALESCE(d.id, f.id) as id,
-        f.id as file_id,
-        d.id as document_id,
-        f.name,
-        f.file_type,
-        f.size,
-        f.url,
-        f.created_at,
-        f.updated_at,
-        f.chunk_task_id,
-        f.embedding_task_id,
-        d.editor_data,
-        d.content,
-        d.slug,
-        COALESCE(d.metadata, f.metadata) as metadata,
-        f.user_id,
-        f.visibility,
-        u.id as uploader_id,
-        u.full_name as uploader_full_name,
-        u.username as uploader_username,
-        u.avatar as uploader_avatar,
-        'file' as source_type
-      FROM ${files} f
-      LEFT JOIN ${documents} d
-        ON f.id = d.file_id
-      LEFT JOIN ${users} u
-        ON f.user_id = u.id
-      WHERE ${sql.join(whereConditions, sql` AND `)}
-    `;
-  }
-
-  private buildDocumentQuery({
-    category,
-    creatorUserId,
-    q,
-    knowledgeBaseId,
-    parentId,
-    visibility,
-  }: KnowledgeQueryParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [
-      this.documentOwnershipSql('documents'),
-      sql`${documents.sourceType} != ${'file'}`,
-    ];
-
-    if (creatorUserId) {
-      whereConditions.push(sql`${documents.userId} = ${creatorUserId}`);
-    }
-
-    // Parent ID filter
-    if (parentId !== undefined) {
-      if (parentId === null) {
-        whereConditions.push(sql`${documents.parentId} IS NULL`);
-      } else {
-        whereConditions.push(sql`${documents.parentId} = ${parentId}`);
-      }
-    }
-
-    // Search filter
-    if (q) {
-      whereConditions.push(
-        sql`(${documents.title} ILIKE ${`%${q}%`} OR ${documents.filename} ILIKE ${`%${q}%`})`,
-      );
-    }
-
-    if (visibility === 'private') {
-      whereConditions.push(sql`${documents.visibility} = 'private'`);
-    } else if (visibility === 'public') {
-      whereConditions.push(
-        sql`(${documents.visibility} = 'public' OR ${documents.visibility} IS NULL)`,
-      );
-    }
-
-    // Category filter — document rows only surface under All and Pages; every
-    // file-oriented category (Documents included) excludes the table entirely.
-    if (category && category !== FilesTabs.All) {
-      const categoryFilter = buildDocumentCategoryFilter(documents.fileType, category as FilesTabs);
-      if (categoryFilter !== 'all' && categoryFilter !== 'none') {
-        whereConditions.push(categoryFilter);
-      } else if (categoryFilter === 'none') {
-        // Exclude documents from other categories (Images, Videos, Audios, Websites)
-        return sql`
-          SELECT
-            NULL::varchar(30) as id,
-            NULL::varchar(30) as file_id,
-            NULL::varchar(30) as document_id,
-            NULL::text as name,
-            NULL::varchar(255) as file_type,
-            NULL::integer as size,
-            NULL::text as url,
-            NULL::timestamp with time zone as created_at,
-            NULL::timestamp with time zone as updated_at,
-            NULL::uuid as chunk_task_id,
-            NULL::uuid as embedding_task_id,
-            NULL::jsonb as editor_data,
-            NULL::text as content,
-            NULL::varchar(255) as slug,
-            NULL::jsonb as metadata,
-            NULL::text as user_id,
-            NULL::text as visibility,
-            NULL::text as uploader_id,
-            NULL::text as uploader_full_name,
-            NULL::text as uploader_username,
-            NULL::text as uploader_avatar,
-            NULL::text as source_type
-          WHERE false
-        `;
-      }
-    }
-
-    // Knowledge base filter for documents
-    // Documents are linked to knowledge bases through files table via fileId
-    if (knowledgeBaseId) {
-      // Build where conditions using proper table references (d.column instead of documents.column)
-      const kbWhereConditions: any[] = [this.documentOwnershipSql('d')];
-
-      if (creatorUserId) {
-        kbWhereConditions.push(sql`d.user_id = ${creatorUserId}`);
-      }
-
-      // Parent ID filter
-      if (parentId !== undefined) {
-        if (parentId === null) {
-          kbWhereConditions.push(sql`d.parent_id IS NULL`);
-        } else {
-          kbWhereConditions.push(sql`d.parent_id = ${parentId}`);
-        }
-      }
-
-      // Search filter
-      if (q) {
-        kbWhereConditions.push(sql`(d.title ILIKE ${`%${q}%`} OR d.filename ILIKE ${`%${q}%`})`);
-      }
-
-      if (visibility === 'private') {
-        kbWhereConditions.push(sql`d.visibility = 'private'`);
-      } else if (visibility === 'public') {
-        kbWhereConditions.push(sql`(d.visibility = 'public' OR d.visibility IS NULL)`);
-      }
-
-      // Category filter (document rows only surface under All / Pages — see above)
-      if (category && category !== FilesTabs.All) {
-        const categoryFilter = buildDocumentCategoryFilter(
-          sql.raw('d.file_type'),
-          category as FilesTabs,
-        );
-        if (categoryFilter !== 'all' && categoryFilter !== 'none') {
-          kbWhereConditions.push(categoryFilter);
-        } else if (categoryFilter === 'none') {
-          // Exclude documents from other categories (Images, Videos, Audios, Websites).
-          // Keep the NULL placeholder column set aligned with the other UNION
-          // branches so PostgreSQL doesn't complain about mismatched arity.
-          return sql`
-            SELECT
-              NULL::varchar(30) as id,
-              NULL::varchar(30) as file_id,
-              NULL::varchar(30) as document_id,
-              NULL::text as name,
-              NULL::varchar(255) as file_type,
-              NULL::integer as size,
-              NULL::text as url,
-              NULL::timestamp with time zone as created_at,
-              NULL::timestamp with time zone as updated_at,
-              NULL::uuid as chunk_task_id,
-              NULL::uuid as embedding_task_id,
-              NULL::jsonb as editor_data,
-              NULL::text as content,
-              NULL::varchar(255) as slug,
-              NULL::jsonb as metadata,
-              NULL::text as user_id,
-              NULL::text as visibility,
-              NULL::text as uploader_id,
-              NULL::text as uploader_full_name,
-              NULL::text as uploader_username,
-              NULL::text as uploader_avatar,
-              NULL::text as source_type
-            WHERE false
-          `;
-        }
-      }
-
-      // When in a knowledge base, return standalone documents (folders and notes without fileId)
-      // that have the knowledgeBaseId column set. Documents with fileId are already
-      // returned by the file query via their linked file records.
-      kbWhereConditions.push(sql`d.file_id IS NULL`, sql`d.knowledge_base_id = ${knowledgeBaseId}`);
-
-      return sql`
-        SELECT
-          d.id,
-          d.file_id,
-          d.id as document_id,
-          COALESCE(d.title, d.filename, 'Untitled') as name,
-          d.file_type,
-          d.total_char_count as size,
-          d.source as url,
-          d.created_at,
-          d.updated_at,
-          NULL as chunk_task_id,
-          NULL as embedding_task_id,
-          d.editor_data,
-          d.content,
-          d.slug,
-          d.metadata,
-          d.user_id,
-          d.visibility,
-          u.id as uploader_id,
-          u.full_name as uploader_full_name,
-          u.username as uploader_username,
-          u.avatar as uploader_avatar,
-          'document' as source_type
-        FROM ${documents} d
-        LEFT JOIN ${users} u
-          ON d.user_id = u.id
-        WHERE ${sql.join(kbWhereConditions, sql` AND `)}
-      `;
-    }
-
-    return sql`
-      SELECT
-        documents.id,
-        documents.file_id,
-        documents.id as document_id,
-        COALESCE(documents.title, documents.filename, 'Untitled') as name,
-        documents.file_type,
-        documents.total_char_count as size,
-        documents.source as url,
-        documents.created_at,
-        documents.updated_at,
-        NULL as chunk_task_id,
-        NULL as embedding_task_id,
-        documents.editor_data,
-        documents.content,
-        documents.slug,
-        documents.metadata,
-        documents.user_id,
-        documents.visibility,
-        u.id as uploader_id,
-        u.full_name as uploader_full_name,
-        u.username as uploader_username,
-        u.avatar as uploader_avatar,
-        'document' as source_type
-      FROM ${documents}
-      LEFT JOIN ${users} u
-        ON documents.user_id = u.id
-      WHERE ${sql.join(whereConditions, sql` AND `)}
-    `;
-  }
-
-  private buildOrderClause(
-    sortType?: string,
-    sorter?: string,
-  ): ReturnType<typeof sql.raw> | ReturnType<typeof sql> {
-    const sortableFields: Record<string, string> = {
-      createdAt: 'created_at',
-      name: 'name',
-      size: 'size',
-      updatedAt: 'updated_at',
-    };
-
-    if (sorter && sortType && sorter in sortableFields) {
-      const direction = sortType.toLowerCase() === SortType.Asc ? 'ASC' : 'DESC';
-      return sql.raw(`${sortableFields[sorter]} ${direction}`);
-    }
-
-    return sql.raw('created_at DESC');
-  }
+    return direction(sql.raw(SORTABLE_COLUMNS[sorter]));
+  };
 }
