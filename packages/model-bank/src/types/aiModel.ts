@@ -224,6 +224,11 @@ export interface Pricing {
    * Fallback approximate per-video price (USD) when detailed pricing table is unavailable
    */
   approximatePricePerVideo?: number;
+  /**
+   * Positive model-specific audio input token rate used for duration-based pre-flight estimates.
+   * Authoritative billing continues to use provider-reported usage.
+   */
+  audioTokensPerSecond?: number;
   currency?: ModelPriceCurrency;
   units: PricingUnit[];
 }

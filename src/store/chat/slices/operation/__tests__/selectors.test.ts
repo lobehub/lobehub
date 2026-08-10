@@ -28,6 +28,11 @@ describe('Operation Selectors', () => {
         expect(QUEUE_BLOCKING_OPERATION_TYPES).toContain(type);
       }
     });
+
+    it('queues later turns behind voice upload without locking the composer', () => {
+      expect(QUEUE_BLOCKING_OPERATION_TYPES).toContain('uploadVoiceMessage');
+      expect(INPUT_LOADING_OPERATION_TYPES).not.toContain('uploadVoiceMessage');
+    });
   });
 
   describe('getRunningQueueBlockingOperationIds', () => {

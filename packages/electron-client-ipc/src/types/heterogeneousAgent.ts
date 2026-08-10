@@ -25,6 +25,7 @@ export const HeterogeneousAgentSessionErrorCode = {
   RateLimit: 'rate_limit',
   ResumeCwdMismatch: 'resume_cwd_mismatch',
   ResumeThreadNotFound: 'resume_thread_not_found',
+  WorkingDirectoryNotFound: 'working_directory_not_found',
 } as const;
 
 export type HeterogeneousAgentSessionErrorCode =

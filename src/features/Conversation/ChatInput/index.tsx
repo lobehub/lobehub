@@ -1,5 +1,6 @@
 'use client';
 
+import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
@@ -38,6 +39,7 @@ import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
+import { sendVoiceMessage } from './sendVoiceMessage';
 import {
   getContextWindowMessages,
   getConversationChatInputUiState,
@@ -46,6 +48,7 @@ import {
 import GoalArmedChip from './VerifyTray/GoalArmedChip';
 import { useGoalArmStore } from './VerifyTray/goalArmStore';
 import GoalTray from './VerifyTray/GoalTray';
+import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -185,6 +188,7 @@ const ChatInput = memo<ChatInputProps>(
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    const canRecordVoiceMessage = useCanSendVoiceMessage(context);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -402,6 +406,29 @@ const ChatInput = memo<ChatInputProps>(
         : undefined),
     };
 
+    const handleVoiceMessageSend = useCallback(
+      (recording: VoiceMessageRecording) => {
+        if (operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState())) {
+          return false;
+        }
+
+        return Boolean(
+          useChatStore.getState().sendVoiceMessage({
+            canSend: canSendVoiceMessage,
+            context,
+            recording,
+            send: (file, { context: targetContext, messageId, signal }) =>
+              sendVoiceMessage(sendMessage, file, {
+                context: targetContext,
+                optimisticUserMessageId: messageId,
+                signal,
+              }),
+          }),
+        );
+      },
+      [context, sendMessage],
+    );
+
     const defaultContent = (
       <WideScreenContainer
         style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
@@ -469,6 +496,7 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        canRecordVoiceMessage={canRecordVoiceMessage}
         contextSelectionKey={contextKey}
         contextWindowMessages={contextWindowMessages}
         draftKey={contextKey}
@@ -489,6 +517,7 @@ const ChatInput = memo<ChatInputProps>(
         }}
         onMarkdownContentChange={updateInputMessage}
         onSend={handleSend}
+        onVoiceMessageSend={handleVoiceMessageSend}
       >
         {children ?? defaultContent}
       </ChatInputProvider>

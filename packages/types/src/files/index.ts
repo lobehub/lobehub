@@ -2,6 +2,11 @@ export enum FilesTabs {
   All = 'all',
   Audios = 'audios',
   Documents = 'documents',
+  /**
+   * Raw data files that are neither media nor human-readable documents,
+   * e.g. json / zip / octet-stream uploads.
+   */
+  Files = 'files',
   Home = 'home',
   Images = 'images',
   Pages = 'pages',

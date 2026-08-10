@@ -1,7 +1,7 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '2';
+export const VERIFY_PLAN_PROMPT_VERSION = '3';
 /** Bump when the judge prompt meaningfully changes. */
 export const VERIFY_JUDGE_PROMPT_VERSION = '2';
 /** Bump when the report prompt meaningfully changes. */
@@ -27,7 +27,9 @@ export const buildPlanPrompt = ({
     'Given the run goal, propose a concise set of verification criteria — each a single pass/fail standard that determines whether the delivered work satisfies the user’s explicit requirements.',
     'Guidelines:',
     `- Propose at most ${maxCriteria} criteria. Fewer, sharper criteria are better than many vague ones.`,
+    '- Every criterion must be an outcome the USER can judge — what the delivery does, shows, or produces. Never propose the repo’s own programmatic gates as criteria: unit / integration / regression tests, test suites, coverage, type-checks, lint, or a clean build. Those are preconditions of shipping, not acceptance items, and they are dropped before the acceptance page renders.',
     '- First enumerate every deliverable and artifact needed to prove the criterion. Put each one in requiredEvidence with its type, semantic modality, source scope, and a concrete capture hint. Use [] only when the final text answer alone is sufficient.',
+    '- requiredEvidence types: screenshot / gif / video for what the user sees, audio for a delivered sound (TTS output, a voice reply, an alert tone), text / markdown / dom_snapshot / transcript otherwise. A deliverable the user listens to needs audio evidence — describing it in prose does not prove it.',
     '- Choose verifierType: "llm" only when all required evidence is inline text, or a single image modality that a multimodal judge can directly inspect. Choose "agent" whenever evidence spans multiple modalities/files, requires opening a document or attachment, exceeds a normal prompt, or needs active investigation. Choose "program" only for strictly deterministic command checks.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',

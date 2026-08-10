@@ -6,7 +6,7 @@ import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
+import { requireAnyPermission } from '../middleware/permission-check';
 import {
   CreateUserRequestSchema,
   UpdateUserRequestSchema,
@@ -26,8 +26,17 @@ UserRoutes.get(
   '/me',
   describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
   requireAuth,
-  // no RBAC permission, but restricted API keys still need the user domain
-  requireApiKeyScope('user:read'),
+  // Deliberately reachable by every authenticated caller, including restricted
+  // API keys holding no `user:read` — please do not add a scope gate here.
+  // This is how `lh login` resolves a userId from a freshly minted key
+  // (`apps/cli/src/auth/apiKey.ts`); gating the route strands the holder of a
+  // valid key outside the product with a scope error, same reason GitHub keeps
+  // `/user` open to any token.
+  //
+  // Reachability is not disclosure: the payload is scoped inside
+  // `UserController.getCurrentUser` — a key without `user:read` receives only
+  // `{ id }`, and `messageCount` additionally needs `chat:read`. Widen there,
+  // under a scope check, rather than by gating the route. See LOBE-12934.
   async (c) => {
     const userController = new UserController();
     return await userController.getCurrentUser(c);

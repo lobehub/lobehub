@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Cleanup Git Worktrees'
+  short_description: 'Safely audit and clean completed Git worktrees'
+  default_prompt: 'Use $cleanup-git-worktrees to audit and safely remove completed worktrees and stale local branches.'

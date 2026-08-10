@@ -122,6 +122,28 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * The agent whose Profile page this Agent Builder conversation was started
+   * from (mirrors `ExecAgentAppContext.editingAgentId`).
+   *
+   * Recorded for the same reason as {@link editingGroupId} — see there.
+   */
+  editingAgentId?: string;
+  /**
+   * The group whose Profile page this Group Agent Builder conversation was
+   * started from (mirrors `ExecAgentAppContext.editingGroupId`).
+   *
+   * Builder panels run on one builtin agent shared by every target, and their
+   * topics carry no `groupId` / `sessionId` on purpose — those columns would
+   * pull the builder's side-conversation into the target's own chat read path.
+   * So nothing else in the row records what the conversation was configuring.
+   *
+   * Showing the builder's full build history in one list is intentional, so
+   * nothing filters on this today. It is captured because it can only be
+   * captured now: the association exists solely at run time, and a topic
+   * written without it can never be attributed afterwards.
+   */
+  editingGroupId?: string;
+  /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
    * replicas only use the value when it belongs to the current operation —
@@ -225,6 +247,17 @@ export interface ChatTopicMetadata {
    * `runningOperation`); every reader treats a nullish value as "not scheduled".
    */
   scheduledRun?: TopicScheduledRun | null;
+  /**
+   * Short-lived ownership marker used while a task result is being appended
+   * and its continuation is being dispatched. Callback deliveries acquire
+   * this only when `runningOperation` is empty, which serializes callback
+   * bursts behind the foreground turn without holding a database transaction
+   * open while the agent operation starts.
+   */
+  taskCallbackReservation?: {
+    messageId: string;
+    reservedAt: string;
+  } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
@@ -454,6 +487,13 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
+  taskCallbackReservation: z
+    .object({
+      messageId: z.string(),
+      reservedAt: z.string(),
+    })
+    .nullable()
+    .optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
@@ -581,6 +621,12 @@ export interface CreateTopicParams {
 export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
+  /**
+   * Scope an `agentId` query to the builder conversations that configured one
+   * target — see `ChatTopicMetadata.editingGroupId`. Ignored without `agentId`.
+   */
+  editingAgentId?: string | null;
+  editingGroupId?: string | null;
   /**
    * Exclude topics by status (e.g. ['completed'])
    */

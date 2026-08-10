@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "메타데이터가 저장되지 않았습니다. 다시 시도하거나 계속 편집하세요.",
   "skillFrontmatter.title": "스킬 메타데이터",
   "slash.compact": "컨텍스트 압축",
+  "slash.goal": "목표 설정",
+  "slash.goal.desc": "편집 가능한 수락 기준으로 목표를 계획하고 시작하세요",
   "slash.h1": "제목 1",
   "slash.h2": "제목 2",
   "slash.h3": "제목 3",

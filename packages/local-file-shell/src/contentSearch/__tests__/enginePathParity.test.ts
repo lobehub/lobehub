@@ -59,6 +59,12 @@ beforeAll(async () => {
   await mkdir(path.join(repo, 'build'), { recursive: true });
   await writeFile(path.join(repo, '.gitignore'), 'dist/\n*.log\n');
   await writeFile(path.join(repo, 'src', 'a.ts'), 'needle\n');
+  await writeFile(
+    path.join(repo, 'src', 'ctx.ts'),
+    ['one', 'two', 'ctxmark first', 'four', 'five', 'six', 'seven', 'ctxmark second', 'nine'].join(
+      '\n',
+    ) + '\n',
+  );
   await writeFile(path.join(repo, 'src', 'noisy.log'), 'needle\n');
   await writeFile(path.join(repo, 'dist', 'b.js'), 'needle\n');
   await writeFile(path.join(repo, 'dist', 'sub', 'c.js'), 'needle\n');
@@ -143,6 +149,29 @@ describe('content search engine parity', () => {
         [...r.matches].sort(),
         `${engine} should search an explicitly scoped ignored dir`,
       ).toEqual([path.join(repo, 'dist', 'b.js'), path.join(repo, 'dist', 'sub', 'c.js')]);
+    }
+  }, 60_000);
+
+  it('reports the real match count for a file-scoped search with context lines', async () => {
+    // Regression: with `-A`/`-B` the match count comes from a second `-c` run,
+    // which used the raw scope as its `cwd`. A file scope made that spawn throw
+    // and the catch silently returned 0 — so the summary said "Found 0 matches"
+    // while the output right below it contained the match lines, and the agent
+    // reading the summary kept retrying with new patterns.
+    const file = path.join(repo, 'src', 'ctx.ts');
+
+    for (const engine of engines) {
+      const r = await search(engine, {
+        '-A': 2,
+        '-B': 2,
+        '-n': true,
+        'output_mode': 'content',
+        'pattern': 'ctxmark',
+        'scope': file,
+      } as GrepContentParams);
+
+      expect(r.total_matches, `${engine} miscounted a file-scoped context search`).toBe(2);
+      expect(r.matches.length, `${engine} should include context lines`).toBeGreaterThan(2);
     }
   }, 60_000);
 

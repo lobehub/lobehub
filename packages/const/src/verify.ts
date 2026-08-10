@@ -125,6 +125,66 @@ export const normalizeVerifySurface = (value: string): VerifySurface | null => {
 };
 
 /**
+ * Names of the repo's own automated test suites and static-analysis gates. A
+ * check built on one of these is a *precondition of shipping*, not something a
+ * human accepts: "138 unit tests pass" tells the reviewer nothing about whether
+ * the delivery is right, and a page full of them buries the two or three checks
+ * that actually needed a person to look.
+ *
+ * ASCII entries match on word boundaries (so `lint` never fires on `client`);
+ * CJK entries match as plain substrings, which is how those words are written.
+ */
+const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
+  // test kinds
+  /\bunit[\s-]?tests?\b/i,
+  /\bintegration[\s-]?tests?\b/i,
+  /\bregression[\s-]?tests?\b/i,
+  /\bsnapshot[\s-]?tests?\b/i,
+  /\btest[\s-]?(?:suite|case)s?\b/i,
+  /\bcode coverage\b|\btest coverage\b/i,
+  // "the tests pass" in its ordinary phrasings — the subject is the suite even
+  // when no runner or kind is named ("All tests pass", "tests are green").
+  /\btests?\s+(?:pass(?:es|ed|ing)?|(?:are\s+|is\s+)?green)\b/i,
+  // runners
+  /\b(?:vitest|jest|mocha|pytest|junit|rspec|phpunit|karma|ava)\b/i,
+  /\b(?:npm|pnpm|yarn|bun|bunx|go|cargo|make)\s+(?:run\s+)?tests?\b/i,
+  // this repo's own composite gate ("bun run check", with or without flags)
+  /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
+  // static analysis / build / CI gates
+  /\btype[\s-]?check(?:s|ing)?\b/i,
+  /\b(?:tsc|tsgo|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
+  /\blint(?:s|ing)?\b/i,
+  /\bcompiles?\s+(?:cleanly|without errors)\b/i,
+  /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,
+  /\bci\s+(?:is\s+)?(?:pass(?:es|ed|ing)?|green)\b/i,
+  /\bformat(?:ting)?\s+(?:is\s+)?(?:clean|correct)\b/i,
+  // Chinese
+  /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
+];
+
+/**
+ * Whether a proposed acceptance check is really one of the repo's programmatic
+ * test / static-analysis gates rather than a delivery outcome a person accepts.
+ *
+ * Pass every field that names the check — title, category, and the plan item's
+ * `method` — because the give-away is as often in the how ("run `bun run test`")
+ * as in the what.
+ *
+ * This does NOT mean "the verifier is a program": a CLI behavior check asserted
+ * by a command is a perfectly good acceptance item. It means the *subject* of
+ * the check is the test suite itself.
+ */
+export const isProgrammaticTestCheck = (...fields: (string | null | undefined)[]): boolean => {
+  const text = fields.filter(Boolean).join(' \n ');
+  if (!text.trim()) return false;
+  return PROGRAMMATIC_TEST_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+/** Why a programmatic-test check was dropped — shared by every surface that drops one. */
+export const PROGRAMMATIC_TEST_CHECK_HINT =
+  'Unit / integration tests, type-checks and lint gates are preconditions of shipping, not acceptance items — they are noise on the acceptance page. Report them in the narrative (report.md) instead, and keep the checks for outcomes a person can judge.';
+
+/**
  * The product object being accepted. Kept polymorphic so the acceptance aggregate
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
@@ -179,6 +239,10 @@ export const verifyEvidenceTypes = [
   'screenshot',
   'gif',
   'video',
+  // A delivered or captured sound: TTS output, a recorded voice reply, an
+  // alert tone. Plays inline on the acceptance page — without it, audio
+  // deliverables could only be published as an unplayable "text" blob.
+  'audio',
   'text',
   // Prose evidence (root-cause write-ups, structured findings) — rendered as
   // body markdown instead of the monospace raw-text box `text` gets.
@@ -200,6 +264,21 @@ export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number]
 
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
+
+/**
+ * Round budget applied when the user left a goal's round cap untouched.
+ *
+ * A goal has *two* independent budgets and they must never be written from one
+ * value: this one caps the outer loop (how many task topics the goal may spawn,
+ * `tasks.config.goal.maxIterations`), while {@link DEFAULT_MAX_REPAIR_ROUNDS}
+ * caps the inner auto-repair loop *within* a single round
+ * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
+ * of agent runs a goal can pay for.
+ */
+export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+
+/** Bounds the round budget a goal may be created with. */
+export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;
 
 /**
  * The LobeHub conversation an ingested report was authored in. Lets the report

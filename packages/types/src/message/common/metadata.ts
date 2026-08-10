@@ -185,7 +185,18 @@ export const MessageWorkMetadataSchema = z.object({
   userMessageId: z.string().optional(),
 });
 
+export const AgentDispatchMetadataSchema = z.object({
+  kind: z.enum(['callAgent']),
+  visibility: z.literal('internal'),
+});
+
+export interface AgentDispatchMetadata {
+  kind: 'callAgent';
+  visibility: 'internal';
+}
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
+  agentDispatch: AgentDispatchMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
@@ -273,6 +284,11 @@ export interface MessageMetadata {
    * AgentCouncil: its member responses render as one parallel-streaming block.
    */
   agentCouncil?: boolean;
+  /**
+   * Explicit transport semantics for an internal cross-agent dispatch turn.
+   * Renderers consume this marker instead of inferring intent from the message tree.
+   */
+  agentDispatch?: AgentDispatchMetadata;
   /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded

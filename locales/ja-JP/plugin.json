@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "プログラムチェック",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "検証方法",
   "builtins.lobe-delivery-checker.verifyPlan.required": "必須",
+  "builtins.lobe-goal.apiName.createGoal": "目標を開始",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "エージェントを一括作成",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "エージェントを作成",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "グループを作成",

@@ -1,4 +1,4 @@
-import { type OpenAIChatMessage } from '@lobechat/types';
+import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
@@ -11,6 +11,8 @@ export type SendButtonHandler = (params: {
   getEditorData: () => Record<string, any> | undefined;
   getMarkdownContent: () => string;
 }) => Promise<void> | void;
+
+export type VoiceMessageSendHandler = (recording: VoiceMessageRecording) => boolean;
 
 export interface SendButtonProps {
   disabled?: boolean;
@@ -54,8 +56,10 @@ export const DEFAULT_CHAT_INPUT_FEATURE = {
 } as const satisfies Required<ChatInputFeature>;
 
 export interface PublicState {
+  activeAudioInputMode?: 'dictation' | 'voiceMessage';
   agentId?: string;
   allowExpand?: boolean;
+  canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
   contextWindowMessages?: ContextWindowMessage[];
   draftKey?: string;
@@ -67,6 +71,7 @@ export interface PublicState {
   mobile?: boolean;
   onMarkdownContentChange?: (content: string) => void;
   onSend?: SendButtonHandler;
+  onVoiceMessageSend?: VoiceMessageSendHandler;
   /**
    * Live send gate consulted by `handleSendButton` instead of
    * `sendButtonProps.disabled`. The disabled flag mirrors editor content
@@ -89,6 +94,7 @@ export interface PublicState {
 export interface State extends PublicState {
   _savedEditorState?: Record<string, any>;
   editor?: IEditor;
+  goalMode: boolean;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
   isContentEmpty: boolean;
@@ -97,9 +103,11 @@ export interface State extends PublicState {
 }
 
 export const initialState: State = {
+  activeAudioInputMode: undefined,
   allowExpand: true,
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,
+  goalMode: false,
   inputCompletionErrorDismissed: false,
   isContentEmpty: false,
   leftActions: [],

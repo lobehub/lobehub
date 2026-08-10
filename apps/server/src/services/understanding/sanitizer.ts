@@ -51,6 +51,10 @@ const canonicalErrors: Record<string, { code: string; operation: string }> = {
     operation: 'recent_repositories',
   },
   GMAIL_SEARCH_FAILED: { code: 'GMAIL_SEARCH_FAILED', operation: 'search' },
+  NOTION_PAGE_CONTENT_FAILED: {
+    code: 'NOTION_PAGE_CONTENT_FAILED',
+    operation: 'page_content',
+  },
   UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED: {
     code: 'UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED',
     operation: 'authorize',

@@ -12,6 +12,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentModel } from '../agent';
 import type { CreateProjectInput } from '../project';
 import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
@@ -44,12 +45,28 @@ describe('ProjectModel', () => {
   it('creates, lists, updates, and deletes a project in the owner scope', async () => {
     const project = await createProject(model, { description: 'A large effort', name: 'Apollo' });
     expect(project.status).toBe('backlog');
+    expect(project.coordinatorAgentId).toBeTruthy();
+    expect(
+      await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
+    ).toEqual([expect.objectContaining({ virtual: true })]);
+    expect(await new AgentModel(serverDB, userId).queryAgents()).not.toContainEqual(
+      expect.objectContaining({ id: project.coordinatorAgentId }),
+    );
+    expect(await model.listAgents(project.id)).toEqual([
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: project.coordinatorAgentId }),
+        binding: expect.objectContaining({ role: 'coordinator' }),
+      }),
+    ]);
     expect(await model.list()).toEqual([expect.objectContaining({ id: project.id })]);
 
     const updated = await model.update(project.id, { name: 'Apollo 2' });
     expect(updated?.name).toBe('Apollo 2');
     expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
+    expect(
+      await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
+    ).toHaveLength(0);
   });
 
   it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {
@@ -156,9 +173,15 @@ describe('ProjectModel', () => {
       instruction: 'Use project knowledge',
       projectId: project.id,
     });
-    expect(await model.listAgents(project.id)).toEqual([
-      expect.objectContaining({ binding: expect.objectContaining({ role: 'reviewer' }) }),
-    ]);
+    expect(await model.listAgents(project.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ binding: expect.objectContaining({ role: 'coordinator' }) }),
+        expect.objectContaining({ binding: expect.objectContaining({ role: 'reviewer' }) }),
+      ]),
+    );
+    await expect(model.removeAgent(project.id, project.coordinatorAgentId)).rejects.toThrow(
+      'The project coordinator cannot be removed',
+    );
     expect(await model.listKnowledgeBases(project.id)).toHaveLength(1);
     expect(await model.getEnabledKnowledgeBaseIdsForTask(task.id)).toEqual([]);
     await model.addKnowledgeBase(project.id, { enabled: true, knowledgeBaseId: knowledgeBase.id });

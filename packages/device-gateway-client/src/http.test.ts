@@ -320,6 +320,7 @@ describe('GatewayHttpClient', () => {
 
       const result = await client.dispatchAgentRun({
         agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
         jwt: 'jwt',
         operationId: 'op-1',
         prompt: 'run',
@@ -331,7 +332,7 @@ describe('GatewayHttpClient', () => {
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/agent/run',
         expect.objectContaining({
-          body: expect.stringContaining('"operationId":"op-1"'),
+          body: expect.stringContaining('"assistantMessageId":"asst-1"'),
         }),
       );
     });
@@ -344,6 +345,7 @@ describe('GatewayHttpClient', () => {
 
       const result = await client.dispatchAgentRun({
         agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
         jwt: 'jwt',
         operationId: 'op-1',
         prompt: 'run',
@@ -365,6 +367,7 @@ describe('GatewayHttpClient', () => {
 
       const result = await client.dispatchAgentRun({
         agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
         jwt: 'jwt',
         operationId: 'op-1',
         prompt: 'run',
@@ -383,6 +386,7 @@ describe('GatewayHttpClient', () => {
 
       const result = await client.dispatchAgentRun({
         agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
         jwt: 'jwt',
         operationId: 'op-1',
         prompt: 'run',
@@ -402,6 +406,7 @@ describe('GatewayHttpClient', () => {
 
       const result = await client.dispatchAgentRun({
         agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
         jwt: 'jwt',
         operationId: 'op-1',
         prompt: 'run',

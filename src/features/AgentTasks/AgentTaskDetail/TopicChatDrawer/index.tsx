@@ -65,7 +65,9 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     const runningOperation = useTaskStore(
       (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
     );
-    useGatewayReconnect(topicId, runningOperation);
+    // Pass this drawer's agent explicitly — the run drawer also mounts on the
+    // home surface, where the chat store's `activeAgentId` is unset.
+    useGatewayReconnect(topicId, runningOperation, agentId);
 
     const itemContent = useCallback(
       (index: number, id: string) => (

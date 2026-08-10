@@ -100,16 +100,20 @@ export const useHasDraft = (key: string | undefined): boolean =>
     () => false,
   );
 
-export const getDraft = (key: string): Record<string, unknown> | undefined => {
+export const getDraftEntry = (key: string): ChatInputDraftEntry | undefined => {
   if (!key) return undefined;
-  return readAll()[key]?.json;
+  return readAll()[key];
 };
 
-export const saveDraft = (key: string, json: Record<string, unknown>): void => {
+export const getDraft = (key: string): Record<string, unknown> | undefined =>
+  getDraftEntry(key)?.json;
+
+export const saveDraft = (key: string, json: Record<string, unknown>): number | undefined => {
   if (!key) return;
 
   const map = readAll();
-  map[key] = { json, updatedAt: Date.now() };
+  const updatedAt = Math.max(Date.now(), (map[key]?.updatedAt ?? 0) + 1);
+  map[key] = { json, updatedAt };
 
   const keys = Object.keys(map);
   if (keys.length > MAX_DRAFTS) {
@@ -121,8 +125,9 @@ export const saveDraft = (key: string, json: Record<string, unknown>): void => {
       });
   }
 
-  writeAll(map);
+  if (!writeAll(map)) return;
   syncDraftKeys(map);
+  return updatedAt;
 };
 
 export const removeDraft = (key: string): void => {
@@ -134,4 +139,21 @@ export const removeDraft = (key: string): void => {
   delete map[key];
   writeAll(map);
   syncDraftKeys(map);
+};
+
+export const removeDraftIfUnchanged = (
+  key: string,
+  expectedUpdatedAt: number | undefined,
+): boolean => {
+  if (!key) return false;
+
+  const map = readAll();
+  const entry = map[key];
+  if (entry?.updatedAt !== expectedUpdatedAt) return false;
+  if (!entry) return true;
+
+  delete map[key];
+  if (!writeAll(map)) return false;
+  syncDraftKeys(map);
+  return true;
 };

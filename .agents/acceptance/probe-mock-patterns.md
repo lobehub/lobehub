@@ -566,6 +566,22 @@ agent-browser --session "$RUN_SESSION" \
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
 
+### Agent-browser navigation hangs after an orphaned Next child keeps the port
+
+**Situation:** an isolated full-stack dev launcher exits, but its Next child
+continues listening without returning HTTP responses. `agent-browser open`,
+`get url`, and even session close can then appear to hang because navigation
+never settles.
+
+**Doesn't work:** repeatedly recreating browser sessions or assuming the
+browser daemon is the root cause while `curl --max-time` to the target route
+also receives zero bytes.
+
+**Works:** inspect the exact listener with `lsof`, confirm its command and
+working tree, terminate only that run-owned process tree, then restart through
+`init-dev-env.sh dev` and reseed the isolated browser auth. A successful HTTP
+probe must precede browser assertions.
+
 ### Leftover React Scan instrumentation poisons every screenshot
 
 **Situation:** capturing UI evidence in a dev instance the user (or an earlier
@@ -679,6 +695,36 @@ LOBE_DESKTOP_VITE_PORT=5175 \
 Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
+
+### `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+
+**Situation:** after a successful ingest, wanting to re-check a field from its JSON
+output (evidence count, acceptanceId).
+
+**Doesn't work:** running the same `ingest` command again "just to see the output".
+Every invocation creates a new immutable round on the acceptance — the re-run
+publishes a byte-identical duplicate round that reviewers then see twice.
+
+**Works:** re-read state with the read-only commands — `acceptance run list`,
+`acceptance run get <runId>`, `acceptance view <id> --json`. If a duplicate was
+minted by mistake, `acceptance run delete <runId> --yes` (newest timestamp = the
+accident) restores the round history; this is data correction of an operator
+error, distinct from the forbidden overwrite-a-real-round.
+
+### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+
+**Situation:** starting the dev server from a harness-managed background command in a
+worktree, then waiting for readiness.
+
+**Doesn't work:** trusting the background task's captured output (it can stay 0 bytes
+while the detached process tree lives on), or polling the default port. Worktrees
+allocate dynamic ports, so probing `localhost:3010` waits forever while the server is
+already up elsewhere; a retry then fails with "an owned dev server is already running".
+
+**Works:** treat `.records/runtime/` as the source of truth — it records `PID`,
+`SERVER_PORT` and `SPA_PORT` for the owned instance. Read the port from there and poll
+that. For a long-lived start prefer a detached `screen -dmS <name> … >> .records/logs/x.log`
+so the log lands in a stable file; `stop-dev` still stops the recorded PID tree either way.
 
 ### Cold SWR cache: clearing then reloading is undone by the outgoing page
 
@@ -1065,6 +1111,44 @@ every `[startAt, endAt)` from that. When a day view comes back empty, diff the
 client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
 
+### An `ActionIcon` is not a `<button>` — select it by its lucide class, click through agent-browser
+
+**Situation:** driving an icon-only affordance inside a popover or panel (`ActionIcon`
+from `@lobehub/ui`: refresh, calendar, more, …).
+
+**Doesn't work:** three separate near-misses, each of which reads as "the affordance
+does not exist" rather than as a driving error:
+
+- `pop.querySelectorAll('button')` misses it. `ActionIcon` renders a `div`/`span`
+  wrapper (`class="lobe-flex …"` around `span.anticon`), so a button-only sweep of a
+  popover reports zero controls and invites the wrong conclusion that the entry was
+  never rendered.
+- `el.click()` on that wrapper `div` resolves and returns, but no handler runs — the
+  React `onClick` sits on an inner node, so the tab-clicking recipe above does not
+  transfer to icon buttons.
+- `agent-browser click --x <n> --y <n>` is not a thing; `click` only takes a CSS
+  selector, XPath, or an `@eN` snapshot ref, and coordinates fail with the generic
+  `Element not found`, which reads as a missing element rather than a bad invocation.
+
+**Works:** find the icon by its lucide class, tag it, and let agent-browser do the
+real click:
+
+```bash
+agent-browser --cdp 9222 eval '(() => {
+  const pop = [...document.querySelectorAll("[role=dialog]")].pop();
+  pop.querySelector("svg.lucide-calendar-days").setAttribute("data-qc", "entry");
+  return "tagged";
+})()'
+agent-browser --cdp 9222 click "[data-qc=entry]"
+```
+
+Enumerate candidates with `pop.querySelectorAll("button,[role=button],span[role]")`
+and read each node's `svg` class when the icon's identity is unknown. Two follow-ons
+worth knowing: a stray click on a tagged text node can dismiss the popover (re-open
+and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped cell
+needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
+dispatched `pointerover`+`mouseover` pair) before its content mounts.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
@@ -1085,3 +1169,66 @@ timestamps before suspecting the query.
   work / Works and evidence for every mechanism claim.
 - Promote product-independent findings to the generic skill layer rather than
   duplicating them here.
+
+### Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+
+**Situation:** capturing light- and dark-mode evidence in the seeded `agent-browser`
+web session (settings UI navigation is slow and the theme control moved between
+releases; an earlier round wrongly concluded the web session "cannot switch to
+dark").
+
+**Doesn't work:** driving the settings UI to flip appearance, or editing user
+settings server-side (the provider is `next-themes` with `defaultTheme="system"` —
+the server does not own it).
+
+**Works:** set the next-themes key directly, then reload the target route in the
+same session:
+
+```bash
+agent-browser --session lobehub-dev eval "localStorage.setItem('theme','dark')"
+agent-browser --session lobehub-dev open "$SERVER_URL/<route>" # re-render applies html[data-theme]
+```
+
+`'light'` / removal (`localStorage.removeItem('theme')` → back to system) work the
+same way. Restore BEFORE stopping the dev server — once the server is down the
+document becomes sourceless and `localStorage` access throws SecurityError, so the
+override stays behind for the next run. Assert the applied theme via
+`document.documentElement.dataset.theme`, not the storage value.
+
+### A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+
+**Situation:** a long worktree-based session where the harness occasionally resets the
+shell cwd back to the main repo root (e.g. after a `cd /tmp` in a compound command).
+
+**Doesn't work:** running `git add -A && git commit` (or `bun run check`) without an
+explicit `cd` into the worktree. The commands succeed against the MAIN repo — the
+commit lands on whatever branch the user has checked out there, staging their
+unrelated dirty files, while the intended worktree change stays uncommitted. The
+only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
+"Everything up-to-date" because the worktree branch ref never moved.
+
+**Works:** in any worktree session, prefix every git/check command with an explicit
+`cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
+before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
+restores the user's branch and leaves their working tree as it was (verify against
+the session-start `gitStatus` snapshot); nothing needs force-pushing because the
+wrong-branch push was a no-op.
+
+### Electron dev 的 BackendProxy 指向登录快照里持久化的 server 端口 — 铸会话 + CDP 注入 cookie
+
+**Situation:** worktree 里起 Electron surface 验证纯前端改动，renderer 一切正常但
+`app-probe.sh server-auth` 返回 502，用户状态 `isUserStateInit` 一直 false（受它门控的
+UI—— 如 Labs 分栏 —— 静默不渲染，store 状态看起来 "设置了但没生效"）。
+
+**Doesn't work:** 把 dev server 起在 3010 或 test-env.sh 解析出的动态端口。桌面主进程的
+BackendProxy 目标端口持久化在登录快照的 userData 里（`/tmp/electron-dev.log` 里
+`BackendProxy upstream fetch failed ... http://localhost:<port>` 是唯一真相），与当前
+ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已失效 —— 重启 Electron 重种快照
+也救不回来。
+
+**Works:** 三步：① 从日志读出 BackendProxy 的目标端口，`PORT=<该端口>` 起 dev server；
+② 用 web-seed 同款 curl 铸 better-auth 会话（`POST /api/auth/sign-in/email`，seeded 用户；
+从 renderer 内 fetch 会因 app\://origin 被 403，必须 curl）；③ 把 `better-auth.session_data`
+/ `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
+`http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
+server-auth 200、`isUserStateInit` true。

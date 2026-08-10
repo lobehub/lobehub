@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "元數據未保存。請重試或繼續編輯。",
   "skillFrontmatter.title": "技能元數據",
   "slash.compact": "壓縮上下文",
+  "slash.goal": "設定目標",
+  "slash.goal.desc": "規劃並開始一個目標，附可編輯的接受標準",
   "slash.h1": "一級標題",
   "slash.h2": "二級標題",
   "slash.h3": "三級標題",

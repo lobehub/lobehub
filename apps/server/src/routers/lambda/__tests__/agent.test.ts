@@ -13,6 +13,7 @@ import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -496,7 +497,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'copied-agent',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
       // Folder placement is shared state, carried by AgentModel.duplicate's
@@ -555,7 +556,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });
@@ -701,7 +702,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });

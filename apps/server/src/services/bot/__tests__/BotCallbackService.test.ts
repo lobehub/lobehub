@@ -582,6 +582,14 @@ describe('BotCallbackService', () => {
       expect(mockEditMessage).not.toHaveBeenCalled();
     });
 
+    it('should fail strict proactive delivery when completion has no content', async () => {
+      const body = makeBody({ reason: 'completed', type: 'completion' });
+
+      await expect(service.handleCallback(body, { strictDelivery: true })).rejects.toThrow(
+        'Creator callback completed without deliverable content',
+      );
+    });
+
     it('should edit progress message with final reply content', async () => {
       const body = makeBody({
         cost: 0.005,
@@ -631,6 +639,20 @@ describe('BotCallbackService', () => {
       // Reply must reach the user via createMessage fallback
       expect(mockCreateMessage).toHaveBeenCalledWith(
         expect.stringContaining('The actual answer the user needs.'),
+      );
+    });
+
+    it('should fail strict proactive delivery when the platform rejects the reply', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('message to edit not found'));
+      mockCreateMessage.mockRejectedValueOnce(new Error('Discord channel unavailable'));
+      const body = makeBody({
+        lastAssistantContent: 'A result that must reach the creator.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body, { strictDelivery: true })).rejects.toThrow(
+        'Discord channel unavailable',
       );
     });
 
@@ -685,6 +707,27 @@ describe('BotCallbackService', () => {
       // The loop must keep going past the rejected chunk — at least 2 createMessage
       // calls are expected (one rejected, one or more after it).
       expect(mockCreateMessage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should resume strict delivery after the last checkpointed chunk', async () => {
+      const onChunkDelivered = vi.fn().mockResolvedValue(undefined);
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
+      const body = makeBody({
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body, {
+        deliveredChunkCount: 1,
+        onChunkDelivered,
+        strictDelivery: true,
+      });
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).toHaveBeenCalled();
+      expect(onChunkDelivered).toHaveBeenCalledWith(2);
+      expect(onChunkDelivered).not.toHaveBeenCalledWith(1);
     });
 
     it('should not throw when sending interrupted message fails', async () => {

@@ -255,6 +255,15 @@ describe('hetero exec command', () => {
 
     const call = mockSpawnAgent.mock.calls[0][0];
     expect(call.operationId).toBe('op-server-allocated');
+    expect(call.includePartialMessages).toBe(true);
+  });
+
+  it('does not request Claude partial-message framing for other heterogeneous agents', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi']);
+
+    expect(mockSpawnAgent.mock.calls[0][0].includePartialMessages).toBe(false);
   });
 
   it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
@@ -776,6 +785,38 @@ describe('hetero exec command', () => {
       topicId: 'topic-1',
     });
     expect(mockHeteroFinishMutate.mock.calls[0][0].error.body).toBeUndefined();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('preserves a working-directory error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockRejectedValue(
+      Object.assign(new Error('Working directory does not exist: /deleted/worktree'), {
+        code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { code: 'working_directory_not_found' },
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

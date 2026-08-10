@@ -27,6 +27,7 @@ type ConvertMessageContentOptions = {
   model?: string;
   provider?: string;
   reasoningSignatureScope?: SignatureScope;
+  supportsAudioInput?: boolean;
   strictToolPairing?: boolean;
   thoughtSignatureScope?: SignatureScope;
 };
@@ -37,14 +38,79 @@ const isDeepSeekModel = (model: string | undefined) =>
 type OpenAICompatibleContentPart =
   ExtendedChatCompletionContentPart | OpenAI.ChatCompletionContentPart | UserMessageContentPart;
 
+type ConvertibleMessageContentPart =
+  | ExtendedChatCompletionContentPart
+  | OpenAI.ChatCompletionContentPart
+  | Extract<UserMessageContentPart, { type: 'audio_url' }>;
+
+const OPENAI_AUDIO_INPUT_MAX_BYTES = 20 * 1024 * 1024;
+
+const detectOpenAIAudioFormat = (base64: string): 'mp3' | 'wav' | undefined => {
+  const header = Buffer.from(base64.replaceAll(/\s/g, '').slice(0, 64), 'base64');
+
+  if (
+    header.length >= 12 &&
+    header.toString('ascii', 0, 4) === 'RIFF' &&
+    header.toString('ascii', 8, 12) === 'WAVE'
+  ) {
+    return 'wav';
+  }
+
+  if (header.length >= 3 && header.toString('ascii', 0, 3) === 'ID3') return 'mp3';
+
+  const hasMpegFrameSync = header.length >= 2 && header[0] === 0xff && (header[1] & 0xe0) === 0xe0;
+  const hasMpegAudioLayer = header.length >= 2 && ((header[1] >> 1) & 0x03) !== 0;
+  if (hasMpegFrameSync && hasMpegAudioLayer) return 'mp3';
+
+  return undefined;
+};
+
+const convertAudioContent = async (
+  content: Extract<UserMessageContentPart, { type: 'audio_url' }>,
+  options?: ConvertMessageContentOptions,
+): Promise<OpenAI.ChatCompletionContentPartInputAudio> => {
+  if (!options?.supportsAudioInput) {
+    throw new TypeError('Audio input is not supported by this provider runtime');
+  }
+
+  const { base64, type } = parseDataUri(content.audio_url.url);
+
+  if (type === 'base64') {
+    const format = base64 ? detectOpenAIAudioFormat(base64) : undefined;
+    if (!base64 || !format) {
+      throw new TypeError('OpenAI audio input only supports base64 WAV or MP3 data');
+    }
+
+    return { input_audio: { data: base64, format }, type: 'input_audio' };
+  }
+
+  if (type === 'url') {
+    // imageUrlToBase64 is a generic binary downloader with SSRF-safe server fetching and
+    // magic-byte MIME detection. The OpenAI adapter narrows the result to WAV/MP3 below.
+    const converted = await imageUrlToBase64(content.audio_url.url, {
+      maxBytes: OPENAI_AUDIO_INPUT_MAX_BYTES,
+    });
+    const format = detectOpenAIAudioFormat(converted.base64);
+    if (!format) {
+      throw new TypeError('OpenAI audio input only supports WAV or MP3 files');
+    }
+
+    return { input_audio: { data: converted.base64, format }, type: 'input_audio' };
+  }
+
+  throw new TypeError(`Invalid audio URL: ${content.audio_url.url}`);
+};
+
 const isInternalThinkingContentPart = (
   content: OpenAICompatibleContentPart,
 ): content is Extract<UserMessageContentPart, { type: 'thinking' }> => content.type === 'thinking';
 
 export const convertMessageContent = async (
-  content: OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart,
+  content: ConvertibleMessageContentPart,
   options?: ConvertMessageContentOptions,
 ): Promise<OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart> => {
+  if (content.type === 'audio_url') return convertAudioContent(content, options);
+
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 
@@ -158,9 +224,7 @@ export const convertOpenAIMessages = async (
             : await Promise.all(
                 (message.content || [])
                   .filter((c) => !isInternalThinkingContentPart(c as OpenAICompatibleContentPart))
-                  .map((c) =>
-                    convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
-                  ),
+                  .map((c) => convertMessageContent(c as ConvertibleMessageContentPart, options)),
               ),
         role: msg.role,
       };
@@ -427,6 +491,9 @@ export const convertOpenAIResponseInputs = async (
                     video_url: video.video_url.url,
                     type: 'input_video',
                   };
+                }
+                if (c.type === 'audio_url') {
+                  throw new TypeError('OpenAI raw audio input requires the Chat Completions API');
                 }
                 const image = await convertMessageContent(
                   c as OpenAI.ChatCompletionContentPart,

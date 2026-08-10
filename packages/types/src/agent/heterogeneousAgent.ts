@@ -1,3 +1,5 @@
+import type { TopicGroupMode } from '../topic/topic';
+
 export interface HeterogeneousAgentAuthDescriptor {
   docsUrl: string;
   errorMessage: string;
@@ -19,6 +21,13 @@ export interface HeterogeneousAgentInstallDescriptor {
 export interface LocalHeterogeneousAgentDescriptor {
   auth: HeterogeneousAgentAuthDescriptor;
   defaultCommand: string;
+  /**
+   * Topic-list grouping the agent's conversations fall back to when neither the
+   * agent nor the user has pinned an explicit mode. CLI agents run anchored to a
+   * working directory, so folder-based `byProject` grouping is the natural
+   * default for them. Omit to inherit the global user preference.
+   */
+  defaultTopicGroupMode?: TopicGroupMode;
   iconId: string;
   install: HeterogeneousAgentInstallDescriptor;
   kind: 'local-cli';
@@ -50,6 +59,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'amp login',
     },
     defaultCommand: 'amp',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Amp',
     install: {
       commands: [
@@ -78,6 +88,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'claude',
     },
     defaultCommand: 'claude',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'ClaudeCode',
     install: {
       commands: [
@@ -102,6 +113,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'codex',
     },
     defaultCommand: 'codex',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Codex',
     install: {
       commands: ['npm install -g @openai/codex', 'brew install --cask codex'],
@@ -127,6 +139,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'opencode auth login',
     },
     defaultCommand: 'opencode',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'OpenCode',
     install: {
       commands: ['curl -fsSL https://opencode.ai/install | bash'],
@@ -150,6 +163,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'pi',
     },
     defaultCommand: 'pi',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Pi',
     install: {
       commands: ['npm install -g @earendil-works/pi-coding-agent'],
@@ -170,6 +184,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'qodercli login',
     },
     defaultCommand: 'qodercli',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Qoder',
     install: {
       commands: [

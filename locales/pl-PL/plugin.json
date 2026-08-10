@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "Kontrola programu",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "Metoda weryfikacji",
   "builtins.lobe-delivery-checker.verifyPlan.required": "Wymagane",
+  "builtins.lobe-goal.apiName.createGoal": "Rozpocznij cel",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Utwórz wielu agentów",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Utwórz agenta",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Utwórz grupę",

@@ -15,11 +15,11 @@ import { useElectronStore } from '@/store/electron';
  */
 export const useRegisterDesktopTabHotkeys = () => {
   const switchToTabByIndex = useCallback((index: number) => {
-    const { tabs, activateTab } = useElectronStore.getState();
+    const { tabs, switchTab } = useElectronStore.getState();
     if (index < 0 || index >= tabs.length) return;
 
     const target = tabs[index];
-    activateTab(target.id);
+    switchTab(target.id);
   }, []);
 
   // Mod+1 through Mod+9
@@ -43,14 +43,14 @@ export const useRegisterDesktopTabHotkeys = () => {
     'ctrl+tab',
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const nextIndex = (currentIndex + 1) % tabs.length;
       const target = tabs[nextIndex];
 
-      activateTab(target.id);
+      switchTab(target.id);
     },
     {
       enableOnFormTags: true,
@@ -63,14 +63,14 @@ export const useRegisterDesktopTabHotkeys = () => {
     'ctrl+shift+tab',
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
       const target = tabs[prevIndex];
 
-      activateTab(target.id);
+      switchTab(target.id);
     },
     {
       enableOnFormTags: true,

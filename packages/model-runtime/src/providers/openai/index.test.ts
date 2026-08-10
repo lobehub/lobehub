@@ -285,6 +285,45 @@ describe('LobeOpenAI', () => {
   });
 
   describe('chatCompletion.handlePayload', () => {
+    it('should force raw audio input through Chat Completions and send input_audio', async () => {
+      const wavBase64 = 'UklGRjAwMDBXQVZFZm10IA==';
+
+      await instance.chat({
+        enabledSearch: true,
+        messages: [
+          {
+            content: [
+              {
+                audio_url: {
+                  mimeType: 'audio/wav',
+                  url: `data:audio/wav;base64,${wavBase64}`,
+                },
+                type: 'audio_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        model: 'o1-pro',
+        temperature: 0.7,
+      });
+
+      expect(instance['client'].responses.create).not.toHaveBeenCalled();
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledTimes(1);
+      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      expect(createCall.messages).toEqual([
+        {
+          content: [
+            {
+              input_audio: { data: wavBase64, format: 'wav' },
+              type: 'input_audio',
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
     it('should use responses API for responsesAPIModels without enabledSearch', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],

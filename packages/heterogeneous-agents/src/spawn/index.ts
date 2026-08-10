@@ -21,6 +21,7 @@ export {
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
+  HETERO_WORKING_DIRECTORY_NOT_FOUND,
   isHeteroStatusGuideErrorData,
 } from './classifyProcessFailure';
 export {

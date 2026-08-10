@@ -4,6 +4,17 @@ import { RequestTrigger } from '../../agentRuntime';
 import { MessageMetadataSchema } from './metadata';
 
 describe('MessageMetadataSchema', () => {
+  it('preserves explicit internal agent-dispatch semantics', () => {
+    const parsed = MessageMetadataSchema.parse({
+      agentDispatch: { kind: 'callAgent', visibility: 'internal' },
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({
+      agentDispatch: { kind: 'callAgent', visibility: 'internal' },
+    });
+  });
+
   it('preserves request trigger metadata during runtime parsing', () => {
     const parsed = MessageMetadataSchema.parse({
       trigger: RequestTrigger.Onboarding,

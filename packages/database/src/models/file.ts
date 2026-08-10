@@ -13,6 +13,7 @@ import {
   ne,
   notExists,
   or,
+  sql,
   sum,
 } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
@@ -35,6 +36,7 @@ import {
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -222,6 +224,39 @@ export class FileModel {
     return await (trx ? executeInTransaction(trx) : this.db.transaction(executeInTransaction));
   };
 
+  /**
+   * Delete a transient upload only while no persisted message or session references it.
+   * Locking the file row serializes this cleanup with foreign-key inserts, so a late send either
+   * wins ownership and preserves the file or observes the deletion and fails atomically.
+   */
+  deleteUnreferenced = async (id: string, removeGlobalFile: boolean = true) => {
+    return this.db.transaction(async (trx) => {
+      const [file] = await trx
+        .select({ id: files.id })
+        .from(files)
+        .where(and(eq(files.id, id), this.ownership()))
+        .limit(1)
+        .for('update');
+      if (!file) return;
+
+      const [messageReference] = await trx
+        .select({ id: messagesFiles.fileId })
+        .from(messagesFiles)
+        .where(eq(messagesFiles.fileId, id))
+        .limit(1);
+      if (messageReference) return;
+
+      const [sessionReference] = await trx
+        .select({ id: filesToSessions.fileId })
+        .from(filesToSessions)
+        .where(eq(filesToSessions.fileId, id))
+        .limit(1);
+      if (sessionReference) return;
+
+      return this.delete(id, removeGlobalFile, trx);
+    });
+  };
+
   deleteGlobalFile = async (hashId: string) => {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
@@ -342,15 +377,11 @@ export class FileModel {
       visibility ? eq(files.visibility, visibility) : undefined,
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-      const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-      if (Array.isArray(fileTypePrefix)) {
-        // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        whereClause = and(
-          whereClause,
-          or(...fileTypePrefix.map((prefix) => ilike(files.fileType, `${prefix}%`))),
-        );
-      } else {
-        whereClause = and(whereClause, ilike(files.fileType, `${fileTypePrefix}%`));
+      const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);
+      if (categoryFilter === 'none') {
+        whereClause = and(whereClause, sql`false`);
+      } else if (categoryFilter !== 'all') {
+        whereClause = and(whereClause, categoryFilter);
       }
     }
 
@@ -612,32 +643,6 @@ export class FileModel {
           eq(files.visibility, fromVisibility),
         ),
       );
-  };
-
-  /**
-   * get the corresponding file type prefix according to FilesTabs
-   */
-  private getFileTypePrefix = (category: FilesTabs): string | string[] => {
-    switch (category) {
-      case FilesTabs.Audios: {
-        return 'audio';
-      }
-      case FilesTabs.Documents: {
-        return ['application', 'custom'];
-      }
-      case FilesTabs.Images: {
-        return 'image';
-      }
-      case FilesTabs.Videos: {
-        return 'video';
-      }
-      case FilesTabs.Websites: {
-        return 'text/html';
-      }
-      default: {
-        return '';
-      }
-    }
   };
 
   findByNames = async (fileNames: string[]) =>

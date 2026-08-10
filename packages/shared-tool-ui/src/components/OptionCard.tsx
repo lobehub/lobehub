@@ -61,11 +61,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   optionLabel: css`
     font-weight: 500;
   `,
+  // One step above the hover tint is enough — the checkmark carries the
+  // selection signal, so a heavy fill just reads as a muddy block. The hover
+  // override repeats the same fill: it must outrank `.option:hover` (which
+  // would otherwise drop the row to the lighter unselected tint), and no
+  // darkening keeps the selected row flat — it's already "on".
   optionSelected: css`
-    background: ${cssVar.colorFillSecondary};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      background: ${cssVar.colorFill};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   recommendedBadge: css`

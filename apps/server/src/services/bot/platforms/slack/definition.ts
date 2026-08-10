@@ -1,5 +1,6 @@
 import { channelDocUrl } from '@lobechat/const';
 
+import { PLATFORM_UNSUPPORTED_MESSAGE_APIS } from '../messageCapabilities';
 import type { PlatformDefinition } from '../types';
 import { SlackClientFactory } from './client';
 import { DEFAULT_SLACK_CONNECTION_MODE } from './const';
@@ -15,5 +16,6 @@ export const slack: PlatformDefinition = {
     setupGuideUrl: channelDocUrl('slack'),
   },
   schema,
+  unsupportedMessageApis: PLATFORM_UNSUPPORTED_MESSAGE_APIS.slack,
   clientFactory: new SlackClientFactory(),
 };

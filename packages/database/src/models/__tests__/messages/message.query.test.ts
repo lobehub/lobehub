@@ -388,6 +388,64 @@ describe('MessageModel Query Tests', () => {
       );
     });
 
+    it('materializes safe audio metadata and only validated duration in both query paths', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values({
+          content: 'message with audio',
+          createdAt: new Date('2023-01-01'),
+          id: 'audio-duration-message',
+          role: 'user',
+          userId,
+        });
+        await trx.insert(files).values([
+          {
+            fileType: 'audio/mpeg',
+            id: 'audio-duration-valid',
+            metadata: { durationMs: 2500, transcript: 'must-not-leak' },
+            name: 'valid.mp3',
+            size: 1000,
+            url: 'files/valid.mp3',
+            userId,
+          },
+          {
+            fileType: 'audio/mpeg',
+            id: 'audio-duration-invalid',
+            metadata: { durationMs: -1, recording: 'must-not-leak' },
+            name: 'invalid.mp3',
+            size: 1000,
+            url: 'files/invalid.mp3',
+            userId,
+          },
+        ]);
+        await trx.insert(messagesFiles).values([
+          { fileId: 'audio-duration-valid', messageId: 'audio-duration-message', userId },
+          { fileId: 'audio-duration-invalid', messageId: 'audio-duration-message', userId },
+        ]);
+      });
+
+      const queried = (await messageModel.query()).find(
+        (message) => message.id === 'audio-duration-message',
+      );
+      const queriedById = (await messageModel.queryByIds(['audio-duration-message']))[0];
+
+      for (const message of [queried, queriedById]) {
+        expect(message?.audioList).toHaveLength(2);
+        expect(message?.audioList?.find((audio) => audio.id === 'audio-duration-valid')).toEqual({
+          alt: 'valid.mp3',
+          durationMs: 2500,
+          id: 'audio-duration-valid',
+          mimeType: 'audio/mpeg',
+          url: 'files/valid.mp3',
+        });
+        expect(message?.audioList?.find((audio) => audio.id === 'audio-duration-invalid')).toEqual({
+          alt: 'invalid.mp3',
+          id: 'audio-duration-invalid',
+          mimeType: 'audio/mpeg',
+          url: 'files/invalid.mp3',
+        });
+      }
+    });
+
     it('should include translate, tts and other extra fields in query result', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {
@@ -3294,6 +3352,63 @@ describe('MessageModel Query Tests', () => {
       expect(await otherModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
       // unknown topic yields undefined
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  describe('isMessageDescendantOf', () => {
+    it('distinguishes a newer callback sibling from an advancement of the active branch', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        { id: 'shell', userId, topicId: 'topic1', role: 'assistant', content: '' },
+        {
+          id: 'tool',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          content: 'result',
+          parentId: 'shell',
+        },
+        {
+          id: 'active',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'main',
+          parentId: 'tool',
+        },
+        {
+          id: 'callback',
+          userId,
+          topicId: 'topic1',
+          role: 'taskCallback',
+          content: 'done',
+          parentId: 'shell',
+        },
+        {
+          id: 'callback-reply',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'reactive',
+          parentId: 'callback',
+        },
+      ]);
+
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'active',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(false);
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'callback',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(true);
     });
   });
 

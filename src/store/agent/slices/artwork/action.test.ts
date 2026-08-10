@@ -131,6 +131,100 @@ describe('AgentArtworkAction', () => {
     );
   });
 
+  it('attaches every style reference when the model has no image input cap', async () => {
+    vi.mocked(getAiInfraStoreState).mockReturnValue({
+      enabledImageModelList: [
+        {
+          children: [
+            {
+              abilities: {},
+              id: 'gemini-3.1-flash-lite-image:image',
+              parameters: {
+                aspectRatio: { default: 'auto', enum: ['auto', '1:1', '16:9'] },
+                imageUrls: { default: [] },
+                prompt: { default: '' },
+              },
+            },
+          ],
+          id: 'google',
+          name: 'Google',
+          source: 'builtin',
+        },
+      ],
+    } as unknown as ReturnType<typeof getAiInfraStoreState>);
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockResolvedValue({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    } as never);
+    vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+      generation: { asset: { url: 'https://example.com/avatar.webp' } },
+      status: AsyncTaskStatus.Success,
+    } as never);
+    useAgentStore.setState({ updateAgentMetaById: vi.fn().mockResolvedValue(undefined) });
+
+    await useAgentStore.getState().generateAgentArtwork({
+      ...input,
+      referenceImageUrl: 'https://example.com/background.webp',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(imageService.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          aspectRatio: '1:1',
+          imageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+          prompt: expect.stringContaining('as the target character style'),
+        }),
+      }),
+    );
+    const { prompt } = vi.mocked(imageService.createImage).mock.calls[0][0].params;
+    expect(prompt).not.toContain('attached existing profile background');
+  });
+
+  it('truncates style references to the model image input cap', async () => {
+    vi.mocked(getAiInfraStoreState).mockReturnValue({
+      enabledImageModelList: [
+        {
+          children: [
+            {
+              abilities: {},
+              id: 'gpt-image-2',
+              parameters: { imageUrls: { default: [], maxCount: 1 }, prompt: { default: '' } },
+            },
+          ],
+          id: 'openai',
+          name: 'OpenAI',
+          source: 'builtin',
+        },
+      ],
+    } as unknown as ReturnType<typeof getAiInfraStoreState>);
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockResolvedValue({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    } as never);
+    vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+      generation: { asset: { url: 'https://example.com/avatar.webp' } },
+      status: AsyncTaskStatus.Success,
+    } as never);
+    useAgentStore.setState({ updateAgentMetaById: vi.fn().mockResolvedValue(undefined) });
+
+    await useAgentStore.getState().generateAgentArtwork({
+      ...input,
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(imageService.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          imageUrls: ['https://example.com/ref-a.webp'],
+          prompt: expect.stringContaining('as the target character style'),
+        }),
+      }),
+    );
+  });
+
   it('keeps a retryable error state when generation cannot start', async () => {
     vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
     vi.mocked(imageService.createImage).mockResolvedValue({ success: false } as never);

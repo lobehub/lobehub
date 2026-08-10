@@ -1,4 +1,4 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import type { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
@@ -134,27 +134,6 @@ const resolveAgentBuiltinMarkers = async (
 };
 
 /**
- * The builtin agents a workspace *collaborates on* — the ones members open and
- * configure from the UI (Lobe AI, the Agent / Group Agent builders, the page
- * agent's Copilot panel).
- *
- * Deliberately NOT the whole of `BUILTIN_AGENT_SLUGS`: the internal automation
- * agents (`nightly-review`, `self-reflection`, `self-feedback-intent`,
- * `skill-management`, `verify-agent`, `task-agent`, the onboarding agents, the
- * group supervisor) have no configuration surface, and letting any member
- * repoint their persisted model / chatConfig would silently change background
- * automation for the entire workspace. They keep the ordinary creator + General
- * access rules, which still allow every member to *use* them (the resource
- * default is `use`).
- */
-const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
-  BUILTIN_AGENT_SLUGS.agentBuilder,
-  BUILTIN_AGENT_SLUGS.groupAgentBuilder,
-  BUILTIN_AGENT_SLUGS.inbox,
-  BUILTIN_AGENT_SLUGS.pageAgent,
-]);
-
-/**
  * Whether the resource is a workspace-level builtin agent that members are meant
  * to configure together.
  *
@@ -162,7 +141,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * created lazily by whichever member happens to trigger them first, so
  * `agents.user_id` records an accident of timing rather than authorship, and no
  * `resource_permissions` row is ever written for them (their effective General
- * access falls back to the `use` default). Treating them as creator-owned locks
+ * access falls back to the resource default). Treating them as creator-owned locks
  * every other member out of the Agent Builder, of Lobe AI's config page, and of
  * the Page Copilot's own settings, so they are governed by workspace
  * capability instead: anyone holding `agent:update:{owner,all}` may
@@ -186,15 +165,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
 export const isCollaborativeBuiltinAgent = (
   resourceType: PermissionResourceType,
   meta: ResourceMeta,
-): boolean =>
-  resourceType === 'agent' &&
-  !!meta.workspaceId &&
-  // `virtual` is what provisioning writes; a legacy row that merely holds a
-  // reserved slug (the passthrough config endpoint used to allow that) stays an
-  // ordinary agent, so no migration is needed to keep it out of the bypass.
-  meta.virtual === true &&
-  !!meta.slug &&
-  COLLABORATIVE_BUILTIN_AGENT_SLUGS.has(meta.slug);
+): boolean => resourceType === 'agent' && isCollaborativeBuiltinAgentRow(meta);
 
 const getRbacAction = (
   resourceType: PermissionResourceType,
@@ -282,7 +253,9 @@ export const canPerformResourceAction = async (params: {
   const isSharedWorkspaceAgent =
     !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
   // The bypass exists because these rows have no `resource_permissions` row and
-  // would silently fall back to the `use` default. An owner who *explicitly* sets
+  // would silently inherit whatever the resource default happens to be — today
+  // that default is `edit` and the bypass is a no-op, but it must not become a
+  // lockout again if the default is ever lowered. An owner who *explicitly* sets
   // a level still means it — otherwise the General-access control would persist a
   // value it never enforces — so only the implicit default is overridden.
   const hasExplicitAccessLevel = isSharedWorkspaceAgent
@@ -305,7 +278,7 @@ export const canPerformResourceAction = async (params: {
 
   if (isCreator) return true;
   // Collaboratively-configured workspace infrastructure is not creator-owned
-  // content, so the *implicit* `use` default must not lock members out. An
+  // content, so an *implicit* default below `edit` must not lock members out. An
   // explicitly configured level falls through to the comparison below.
   if (bypassesImplicitDefault) return true;
   if (isPrivate) return false;

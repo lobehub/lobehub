@@ -279,6 +279,12 @@ export class HomeInputActionImpl {
         await sendMessage({
           context: {
             agentId: groupAgentBuilderId,
+            // Name the group explicitly rather than letting the transport read
+            // `chatStore.activeGroupId`: the navigation above may not have
+            // mounted the group layout yet, and an unset id here would create
+            // the builder topic without its `editingGroupId` marker — invisible
+            // in every group's topic list afterwards.
+            editingGroupId: group.id,
             scope: 'group_agent_builder',
             ...(workspaceSlug ? { workspaceSlug } : {}),
           },

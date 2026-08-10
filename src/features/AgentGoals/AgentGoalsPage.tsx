@@ -9,13 +9,15 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useVerifyStore } from '@/store/verify';
 
+import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
+import GoalEmptyState from './GoalEmptyState';
+import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
 import { getGoalPresentation } from './goalPresentation';
 import { shouldShowGoal } from './goalViewModel';
@@ -106,12 +108,12 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
   }, [acceptanceBundleMap, acceptanceBySubjectMap, filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
-  const openCreateGoal = () => {
-    createTaskModal({
+  const openCreateGoal = (seed?: GoalExampleSeed) => {
+    createGoalModal({
       agentId,
-      goal: true,
-      lockAssignee: true,
-      showInlineToggle: false,
+      initialRequirement: seed?.requirement,
+      initialRoundBudget: seed?.roundBudget,
+      initialTitle: seed?.title,
       onCreated: () => void refreshGoals(agentId),
     });
   };
@@ -121,7 +123,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
       <NavHeader
         left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />}
         right={
-          <Button icon={PlusIcon} size={'small'} onClick={openCreateGoal}>
+          <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
             {t('goalPage.create')}
           </Button>
         }
@@ -137,22 +139,23 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
             <NeuralNetworkLoading />
           </Flexbox>
         ) : error ? (
-          <Flexbox align={'center'} flex={1} gap={12} justify={'center'}>
-            <Text type={'secondary'}>{t('goalList.loadError')}</Text>
-            <ActionIcon
-              icon={RefreshCwIcon}
-              title={t('goalList.retry')}
-              onClick={() => void refreshGoals(agentId)}
-            />
-          </Flexbox>
-        ) : goals.length === 0 ? (
           <Block padding={32} variant={'outlined'}>
-            <Empty description={t('goalPage.emptyDescription')} title={t('goalPage.emptyTitle')}>
-              <Button icon={PlusIcon} onClick={openCreateGoal}>
-                {t('goalPage.create')}
+            <Flexbox align={'center'} gap={12}>
+              <Text weight={600}>{t('goalList.loadError')}</Text>
+              <Text fontSize={13} type={'secondary'}>
+                {t('goalList.loadErrorDescription')}
+              </Text>
+              <Button
+                icon={RefreshCwIcon}
+                size={'small'}
+                onClick={() => void refreshGoals(agentId)}
+              >
+                {t('goalList.retry')}
               </Button>
-            </Empty>
+            </Flexbox>
           </Block>
+        ) : goals.length === 0 ? (
+          <GoalEmptyState onCreate={openCreateGoal} />
         ) : (
           <>
             <Flexbox className={styles.overview}>

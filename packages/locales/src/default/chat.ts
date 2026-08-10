@@ -1,8 +1,10 @@
 export default {
   'ModelSwitch.title': 'Model',
   'active': 'Active',
+  'audioPlayer.download': 'Download audio',
   'audioPlayer.pause': 'Pause audio',
   'audioPlayer.play': 'Play audio',
+  'audioPlayer.seek': 'Seek audio',
   'agentBuilder.installPlugin.authRequired': 'Cloud MCP requires sign-in to continue',
   'agentBuilder.installPlugin.cancel': 'Cancel',
   'agentBuilder.installPlugin.clickApproveToConnect':
@@ -320,6 +322,43 @@ export default {
   'heteroAgent.claudeQuota.accountActive': 'In use',
   'heteroAgent.claudeQuota.accountSwitch': 'Switch',
   'heteroAgent.claudeQuota.accounts': 'Accounts',
+  'heteroAgent.claudeQuota.calendar.burnout.exhausted': 'Exhausted — resets {{time}}',
+  'heteroAgent.claudeQuota.calendar.burnout.safe':
+    'On current pace this window ends around {{percent}}%',
+  'heteroAgent.claudeQuota.calendar.burnout.willExhaust':
+    'On current pace, quota runs out around {{time}}',
+  'heteroAgent.claudeQuota.calendar.capacityUsed': 'Capacity used',
+  'heteroAgent.claudeQuota.calendar.dayShare': 'Used {{percent}}% of this window',
+  'heteroAgent.claudeQuota.calendar.dayTokens': '{{tokens}} tokens · {{cost}}',
+  'heteroAgent.claudeQuota.calendar.accountUnavailable':
+    'The quota account for this snapshot is unavailable',
+  'heteroAgent.claudeQuota.calendar.currentWindow': 'Current window',
+  'heteroAgent.claudeQuota.calendar.empty':
+    'Not enough usage history yet — run a few tasks and check back.',
+  'heteroAgent.claudeQuota.calendar.entry': 'Usage calendar',
+  'heteroAgent.claudeQuota.calendar.legendLess': 'Light',
+  'heteroAgent.claudeQuota.calendar.legendMore': 'Heavy',
+  'heteroAgent.claudeQuota.calendar.legendReset': 'Window reset',
+  'heteroAgent.claudeQuota.calendar.monthSpend': 'Daily spend',
+  'heteroAgent.claudeQuota.calendar.noLedgerSpend': 'No token usage recorded in this window',
+  'heteroAgent.claudeQuota.calendar.noLedgerSpendHint':
+    'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
+  'heteroAgent.claudeQuota.calendar.noLedgerSpendShort': 'History not recorded',
+  'heteroAgent.claudeQuota.calendar.partialCost': 'at least {{cost}}',
+  'heteroAgent.claudeQuota.calendar.pace': 'Even pace',
+  'heteroAgent.claudeQuota.calendar.pastWindow': 'Last observed window',
+  'heteroAgent.claudeQuota.calendar.rateLimited': 'Rate limited',
+  'heteroAgent.claudeQuota.calendar.resetAt': 'Window resets at {{time}}',
+  'heteroAgent.claudeQuota.calendar.sessionWindow': 'Session (5h)',
+  'heteroAgent.claudeQuota.calendar.sessionHistory': '5-hour windows',
+  'heteroAgent.claudeQuota.calendar.sessionHistoryHint': 'Recent 7 days · each cell is one window',
+  'heteroAgent.claudeQuota.calendar.title': 'Claude Code usage calendar',
+  'heteroAgent.claudeQuota.calendar.usedOfWindow': 'of this window used',
+  'heteroAgent.claudeQuota.calendar.weeklyHistory': 'Weekly windows',
+  'heteroAgent.claudeQuota.calendar.weeklyHistoryHint': 'Recent windows',
+  'heteroAgent.claudeQuota.calendar.windowSpend': '{{tokens}} tokens · {{cost}} this window',
+  'heteroAgent.claudeQuota.calendar.unpricedCost': 'cost unavailable',
+  'heteroAgent.claudeQuota.calendar.windowUtilization': '{{percent}}% used',
   'heteroAgent.claudeQuota.manage.addHint':
     'Sign in to the Claude Code CLI and the account shows up here automatically.',
   'heteroAgent.claudeQuota.manage.autoNoAccount': 'No eligible account — enable one below.',
@@ -594,6 +633,7 @@ export default {
     'The current model doesn’t support continuing an assistant message. Try regenerating instead.',
   'messageAction.copyOperationId': 'Copy Operation ID',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
+  'messageAction.regenerateAlreadyRunning': 'This message is already being regenerated.',
   'messageAction.interrupted': 'Interrupted',
   'messageAction.interruptedHint': 'What should I do instead?',
   'messageAction.deleteDisabledByThreads': 'This message has a subtopic and can’t be deleted',
@@ -796,6 +836,12 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'workingDirectoryGuide.actions.retry': 'Retry',
+  'workingDirectoryGuide.desc':
+    'The working directory saved for this conversation no longer exists.',
+  'workingDirectoryGuide.hint':
+    'Choose an existing folder from the working directory selector, then retry this message.',
+  'workingDirectoryGuide.title': 'Working directory unavailable',
   'opencodeInstallGuide.actions.openDocs': 'Open Install Guide',
   'opencodeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'opencodeInstallGuide.afterInstall':
@@ -838,8 +884,8 @@ export default {
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
   'newQoderAgent': 'Add Qoder',
-  'newPlatformAgent': 'Connect an Agent',
-  'newPlatformAgentDesc': 'Connect Claude Code, Codex, Hermes, OpenClaw, and other agents',
+  'newPlatformAgent': 'Connect External Agents',
+  'newPlatformAgentDesc': 'Connect Claude Code, OpenClaw, and other agents',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
@@ -1273,6 +1319,11 @@ export default {
   'taskDetail.acceptance.loadError': 'Could not load delivery acceptance.',
   'taskDetail.acceptance.multimodalLlm': 'Multimodal LLM',
   'taskDetail.acceptance.openReport': 'Acceptance report',
+  'taskDetail.acceptance.remove': 'Remove acceptance',
+  'taskDetail.acceptance.removeConfirm.content':
+    "This removes the task's acceptance goal, checklist, and recorded acceptance results. Task artifacts are unaffected.",
+  'taskDetail.acceptance.removeConfirm.ok': 'Remove',
+  'taskDetail.acceptance.removeConfirm.title': 'Remove delivery acceptance?',
   'taskDetail.acceptance.retry': 'Retry',
   'taskDetail.acceptance.requiredEvidence': 'Required evidence',
   'taskDetail.acceptance.reviewError': 'Could not save this review.',
@@ -1428,6 +1479,43 @@ export default {
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
+  'createGoal.addCriterion': 'Add criterion',
+  'createGoal.costBudgetHint':
+    'Stops once total spend reaches this amount; leave blank for no cap.',
+  'createGoal.costBudgetLabel': 'Cost budget',
+  'createGoal.costBudgetPlaceholder': 'No cap',
+  'createGoal.createFailed': 'Failed to create goal',
+  'createGoal.back': 'Back',
+  'createGoal.budgetTitle': 'Budget',
+  'createGoal.contextLabel': 'Context for the Agent',
+  'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
+  'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
+  'createGoal.criteriaHint': 'Review and edit these before the goal starts',
+  'createGoal.criteriaTitle': 'Acceptance criteria',
+  'createGoal.describeTitle': 'What outcome do you want?',
+  'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
+  'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
+  'createGoal.instructionPlaceholder':
+    'Add any context the agent needs — scope, constraints, where to look…',
+  'createGoal.next': 'Next',
+  'createGoal.preparing': 'Preparing plan…',
+  'createGoal.regenerate': 'Draft again',
+  'createGoal.removeCriterion': 'Remove criterion',
+  'createGoal.reviewStep': 'Step 2 of 2 · Complete the execution plan',
+  'createGoal.requirementHint': 'Judged at the end of every round',
+  'createGoal.requirementLabel': 'What counts as done',
+  'createGoal.requirementPlaceholder':
+    'Write it so it can be ticked off: what has to exist, where the boundary is, what makes it pass.',
+  'createGoal.roundBudget.rounds': '{{count}} rounds',
+  'createGoal.roundBudget.uncapped': 'No cap',
+  'createGoal.roundBudgetHint':
+    'If it runs out without reaching the goal, it stops and waits for you.',
+  'createGoal.roundBudgetLabel': 'Round budget',
+  'createGoal.roundsUnit': 'rounds',
+  'createGoal.roundBudgetUncappedHint':
+    'It keeps going until the goal is reached — watch the cost.',
+  'createGoal.submit': 'Create goal',
+  'createGoal.titlePlaceholder': 'Goal title',
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
@@ -1444,10 +1532,49 @@ export default {
   'createTask.visibility.privateAgentLocked': 'Private agents can only run private tasks.',
   'createTask.visibility.private': 'Private',
   'createTask.visibility.workspace': 'Workspace',
+  'goalEmpty.create': 'Create your first goal',
+  'goalEmpty.examples.backlog.requirement':
+    'Tag each item with a type and priority, dedupe into one table, and list the 10 most frequent issues.',
+  'goalEmpty.examples.backlog.tag': 'One-off cleanup',
+  'goalEmpty.examples.backlog.title':
+    "Turn this quarter's user feedback into one categorized table",
+  'goalEmpty.examples.digest.requirement':
+    'At least 5 notable developments, each with a date, a one-line summary and a source link, compiled into a ready-to-read brief.',
+  'goalEmpty.examples.digest.tag': 'Recurring delivery',
+  'goalEmpty.examples.digest.title':
+    "Give me last week's AI industry highlights every Monday morning",
+  'goalEmpty.examples.metric.requirement':
+    'At least 20 ideas, each with a headline, an angle and a target reader, deduped and excluding anything already published.',
+  'goalEmpty.examples.metric.tag': 'Reach a target count',
+  'goalEmpty.examples.metric.title': 'Build up 20 workable article ideas for the newsletter',
+  'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
+  'goalEmpty.examplesHint': 'Click to prefill',
+  'goalEmpty.examplesTitle': 'Start from an example',
+  'goalEmpty.howTitle': 'What happens after you create one',
+  'goalEmpty.judge.bad':
+    '“Keep an eye on competitors” — that is an activity, not an outcome. The agent can never tell when it is done.',
+  'goalEmpty.judge.good':
+    '“Ship a weekly digest covering 5 named products, each with a source link” — a deliverable, a boundary, a verdict.',
+  'goalEmpty.lead':
+    "Spell out the outcome you want and what counts as done. The agent takes it from there — working round after round, checking each attempt against your bar until it's actually met.",
+  'goalEmpty.loop':
+    'Not passed? It carries this round’s verdict into the next one and keeps going, until the goal is reached or the round budget runs out. Rounds and cost stay visible, and you can pause at any time.',
+  'goalEmpty.step1.desc':
+    'Write down the outcome and how it will be judged. The more checkable it is, the less the agent drifts.',
+  'goalEmpty.step1.title': 'Set the outcome and the bar',
+  'goalEmpty.step2.desc':
+    'Each round is one full agent run; its output, time and cost all hang off this goal.',
+  'goalEmpty.step2.title': 'The agent runs a round on its own',
+  'goalEmpty.step3.desc':
+    'Every check is judged one by one. All passed means achieved; anything needing your call stops at pending acceptance.',
+  'goalEmpty.step3.title': 'Acceptance runs every round',
+  'goalEmpty.title': 'Chase goals without limits',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.empty': 'No goals yet',
-  'goalList.loadError': 'Could not load goals.',
+  'goalList.loadError': 'Could not load goals',
+  'goalList.loadErrorDescription':
+    'The service is temporarily unavailable. Your goals are not lost.',
   'goalList.retry': 'Retry',
   'goalList.roundProgress': 'Round {{current}}/{{total}}',
   'goalList.status.achieved': 'Achieved',
@@ -1512,8 +1639,6 @@ export default {
   'goalPage.description':
     'Track what this agent is pursuing and how close each goal is to acceptance.',
   'goalPage.create': 'Create goal',
-  'goalPage.emptyDescription': 'Goals created for this agent will appear here with their progress.',
-  'goalPage.emptyTitle': 'No goals yet',
   'goalPage.filteredEmptyDescription': 'Switch to All to review completed or canceled goals.',
   'goalPage.filteredEmptyTitle': 'No open goals',
   'goalPage.filter.active': 'In progress',
@@ -1690,6 +1815,8 @@ export default {
   'tool.intervention.viewParameters': 'View parameters ({{count}})',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
+  'tool.intervention.questionSkipped': 'You skipped this question',
+  'tool.intervention.toolSkipped': 'You skipped this step',
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',
   'toolAuth.hint':
@@ -1753,6 +1880,8 @@ export default {
   'turnProcess.done_other': 'Ran {{count}} steps',
   'turnProcess.ranFor_one': 'Ran {{count}} step ({{duration}})',
   'turnProcess.ranFor_other': 'Ran {{count}} steps ({{duration}})',
+  'turnProcess.viewFullRecordWithSteps_one': 'Executed {{count}} step · View full record',
+  'turnProcess.viewFullRecordWithSteps_other': 'Executed {{count}} steps · View full record',
   'untitledAgent': 'Untitled Agent',
   'untitledGroup': 'Untitled Group',
   'updateAgent': 'Update Agent Information',
@@ -1780,6 +1909,36 @@ export default {
     'Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.',
   'upload.validation.videoSizeExceeded':
     'Video file size must not exceed {{maxSize}}. Current file size is {{actualSize}}.',
+  'voiceMessage.action': 'Send voice message',
+  'voiceMessage.cancel': 'Cancel recording',
+  'voiceMessage.cancelUpload': 'Cancel voice message upload',
+  'voiceMessage.delete': 'Delete recording',
+  'voiceMessage.duration': 'Recording duration: {{duration}}',
+  'voiceMessage.error.not_supported':
+    'Voice recording is not supported in this browser. Try the latest Chrome or Safari.',
+  'voiceMessage.error.permission_denied':
+    'Microphone access is blocked. Allow it in browser site settings, then retry.',
+  'voiceMessage.error.recording_failed': 'Recording failed. Check your microphone and retry.',
+  'voiceMessage.otherAudioModeActive': 'Finish the other microphone session first.',
+  'voiceMessage.ready': 'Recording ready to send',
+  'voiceMessage.recording': 'Recording voice message',
+  'voiceMessage.requesting': 'Requesting microphone access…',
+  'voiceMessage.replyInProgress':
+    'Wait for the current response to finish before recording another voice message.',
+  'voiceMessage.retry': 'Retry voice message',
+  'voiceMessage.send': 'Send voice message',
+  'voiceMessage.statusLabel': 'Voice message recorder',
+  'voiceMessage.status.sendFailed': 'Send failed',
+  'voiceMessage.status.sending': 'Sending…',
+  'voiceMessage.status.unsupported': 'Switch models to retry',
+  'voiceMessage.status.uploadFailed': 'Upload failed',
+  'voiceMessage.status.uploading': 'Uploading… {{progress}}%',
+  'voiceMessage.stopping': 'Finishing recording…',
+  'voiceMessage.tooShort': 'Record for at least {{duration}} ms',
+  'voiceMessage.unsupported':
+    'The current model or Agent cannot accept original audio. Switch to an audio-capable model.',
+  'voiceMessage.uploadFailed': 'Upload failed. The recording is kept locally.',
+  'voiceMessage.uploading': 'Uploading voice message…',
   'viewMode.fullWidth': 'Full Width',
   'viewMode.normal': 'Standard',
   'viewMode.wideScreen': 'Widescreen',
@@ -2130,6 +2289,7 @@ export default {
   'verifyConfig.generateFailed': 'Failed to generate acceptance plan',
   'verifyConfig.generating': 'Breaking down acceptance criteria…',
   'verifyConfig.manualAdd': 'Add manually',
+  'verifyConfig.moreActions': 'More actions',
   'verifyConfig.optional': 'Optional',
   'verifyConfig.regenerate': 'Regenerate',
   'verifyConfig.removeCriterion': 'Remove criterion',

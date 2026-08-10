@@ -34,7 +34,11 @@ import {
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
-import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
+import {
+  groupPermissionRouteMeta,
+  groupProfileRouteMeta,
+  groupRouteMeta,
+} from '@/routes/(main)/group/features/routeMeta';
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -240,6 +244,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             handle: { meta: groupProfileRouteMeta },
             path: 'profile',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/group/permission'),
+              'Desktop > Agent Group > Permission',
+            ),
+            handle: { meta: groupPermissionRouteMeta },
+            path: 'permission',
           },
           {
             element: groupChatElement,
@@ -479,6 +491,32 @@ export const sharedMainAreaChildren: RouteObject[] = [
             index: true,
           },
           ...BusinessResourceRoutes,
+          // /resource/page needs a static segment: the dynamic `:category`
+          // ties with the workspace mirror `/:workspaceSlug/page` on route
+          // score, and the workspace tree would swallow it into a slug 404.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Pages',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: 'page',
+          },
+          // Category views share the home page: /resource/documents, /resource/images, …
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Category',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: ':category',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),

@@ -4,6 +4,7 @@ import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { AgentHistoryJobTopicPayload } from '../schemas';
 import {
   agentHistoryJobAgents,
+  agentHistoryJobGroups,
   agentHistoryJobs,
   agentHistoryJobTopics,
   messages,
@@ -38,18 +39,27 @@ export const getAgentCopySyncMessageThreshold = (): number => {
 export interface CreateAgentCopyJobParams {
   /** Source→target agent pairs duplicated by this job (job payload). */
   agents: { newAgentId: string; sourceAgentId: string }[];
+  /**
+   * Set for a chat-group copy: the source group being forked and the target
+   * group its conversations are re-parented onto. Its presence switches the
+   * drain to the group remap — every member agent maps through `agents`, which
+   * for a group is a MAP, not one pair.
+   */
+  group?: { newGroupId: string; sourceGroupId: string };
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
   /**
    * Per-topic work units. `newTopicId` is the already-created target topic
    * shell (what the queue row, status polls and gray-out UI key on);
    * `sourceTopicId` is where the drain copies threads/messages from.
+   * `newAgentId` / `sourceAgentId` are the agent-copy coordinates and are
+   * omitted for a group copy (see `group`).
    */
   topics: {
     activityAt: Date;
-    newAgentId: string;
+    newAgentId?: string;
     newTopicId: string;
-    sourceAgentId: string;
+    sourceAgentId?: string;
     sourceTopicId: string;
   }[];
 }
@@ -77,8 +87,10 @@ export class AgentCopyJobModel {
       .insert(agentHistoryJobs)
       .values({
         agentIds: params.agents.map((pair) => pair.newAgentId),
-        groupIds: [],
-        payload: { agents: params.agents },
+        // Like `agentIds`, the junction below records the TARGET side: the
+        // badge and gray-out belong to the copied group, not the source.
+        groupIds: params.group ? [params.group.newGroupId] : [],
+        payload: { agents: params.agents, ...(params.group ? { group: params.group } : {}) },
         sessionIds: [],
         sourceUserId: params.source.userId,
         sourceWorkspaceId: params.source.workspaceId,
@@ -94,6 +106,11 @@ export class AgentCopyJobModel {
         .insert(agentHistoryJobAgents)
         .values(params.agents.map((pair) => ({ agentId: pair.newAgentId, jobId: job.id })));
     }
+    if (params.group) {
+      await trx
+        .insert(agentHistoryJobGroups)
+        .values({ groupId: params.group.newGroupId, jobId: job.id });
+    }
     // Chunked so a pathological agent (tens of thousands of topics) cannot
     // blow the Postgres per-statement parameter cap (65535; ~5 params/row).
     const TOPIC_INSERT_CHUNK = 5000;
@@ -103,8 +120,8 @@ export class AgentCopyJobModel {
           activityAt: topic.activityAt,
           jobId: job.id,
           payload: {
-            newAgentId: topic.newAgentId,
-            sourceAgentId: topic.sourceAgentId,
+            ...(topic.newAgentId ? { newAgentId: topic.newAgentId } : {}),
+            ...(topic.sourceAgentId ? { sourceAgentId: topic.sourceAgentId } : {}),
             sourceTopicId: topic.sourceTopicId,
           },
           topicId: topic.newTopicId,
@@ -142,6 +159,35 @@ export class AgentCopyJobModel {
       );
     const wanted = new Set(sourceAgentIds);
     return rows.some((row) => row.payload?.agents?.some((pair) => wanted.has(pair.sourceAgentId)));
+  };
+
+  /**
+   * Group counterpart of {@link hasPendingCopyJobForSourceAgents}: does any
+   * unfinished copy job still read conversations out of one of these groups?
+   *
+   * The member-agent guard above does not cover this. A group copy queues
+   * topics by GROUP, so a group whose roster is empty (or whose members were
+   * removed after the copy started) has no agent row to match, yet its topics
+   * are still being read.
+   */
+  static hasPendingCopyJobForSourceGroups = async (
+    db: Transaction | LobeChatDatabase,
+    sourceGroupIds: string[],
+    sourceUserId?: string,
+  ): Promise<boolean> => {
+    if (sourceGroupIds.length === 0) return false;
+    const rows = await db
+      .select({ payload: agentHistoryJobs.payload })
+      .from(agentHistoryJobs)
+      .where(
+        and(
+          eq(agentHistoryJobs.status, 'pending'),
+          eq(agentHistoryJobs.type, 'copy'),
+          sourceUserId ? eq(agentHistoryJobs.sourceUserId, sourceUserId) : undefined,
+        ),
+      );
+    const wanted = new Set(sourceGroupIds);
+    return rows.some((row) => !!row.payload?.group && wanted.has(row.payload.group.sourceGroupId));
   };
 
   /**
@@ -185,30 +231,47 @@ export class AgentCopyJobModel {
         return { done: true };
       }
 
-      // The payload TYPE requires all three coordinates, but the column holds
+      // The payload TYPE guarantees `sourceTopicId`, but the column holds
       // whatever the row happens to carry — widen to Partial and re-check.
       const { newAgentId, sourceAgentId, sourceTopicId }: Partial<AgentHistoryJobTopicPayload> =
         next.payload ?? {};
+      const group = job.payload?.group;
       const source = { userId: job.sourceUserId, workspaceId: job.sourceWorkspaceId };
       const target = { userId: job.targetUserId, workspaceId: job.targetWorkspaceId };
       // A queue row without copy coordinates is unrecoverable garbage — drop it
-      // instead of wedging the whole job on an infinite retry.
-      if (newAgentId && sourceAgentId && sourceTopicId) {
+      // instead of wedging the whole job on an infinite retry. A group unit
+      // needs only the source topic: its agent remap is the job-level map.
+      const hasCoordinates = group
+        ? !!sourceTopicId
+        : !!(newAgentId && sourceAgentId && sourceTopicId);
+      if (hasCoordinates) {
         const sourceTopicExists = await AgentCopyJobModel.sourceTopicExists(
           trx,
           source,
-          sourceTopicId,
+          sourceTopicId!,
         );
 
         if (sourceTopicExists) {
-          await AgentCopyJobModel.copyTopicContents(trx, {
-            newAgentId,
-            newTopicId: next.topicId,
-            source,
-            sourceAgentId,
-            sourceTopicId,
-            target,
-          });
+          await (group
+            ? AgentCopyJobModel.copyGroupTopicContents(trx, {
+                agentIdPairs: (job.payload?.agents ?? []).map((pair): IdPair => [
+                  pair.sourceAgentId,
+                  pair.newAgentId,
+                ]),
+                newGroupId: group.newGroupId,
+                newTopicId: next.topicId,
+                source,
+                sourceTopicId: sourceTopicId!,
+                target,
+              })
+            : AgentCopyJobModel.copyTopicContents(trx, {
+                newAgentId: newAgentId!,
+                newTopicId: next.topicId,
+                source,
+                sourceAgentId: sourceAgentId!,
+                sourceTopicId: sourceTopicId!,
+                target,
+              }));
         } else {
           // The user deleted the conversation while the copy was queued.
           // Deleting is explicit intent, so it is never blocked — but leaving
@@ -384,6 +447,101 @@ export class AgentCopyJobModel {
       messageIdPairs,
       childScope: (table) => buildWorkspaceWhere(sourceCtx, table),
       targetIdExpr: sql`case when ${messages.targetId} = ${unit.sourceAgentId} then ${unit.newAgentId} else ${messages.targetId} end`,
+      targetUserId: unit.target.userId,
+      targetWorkspaceId: unit.target.workspaceId,
+      threadIdPairs: [...threadIdMap.entries()],
+      topicIdPairs: [[unit.sourceTopicId, unit.newTopicId]],
+    });
+  };
+
+  /**
+   * Group variant of {@link copyTopicContents}: duplicate one source GROUP
+   * topic's threads and messages into an existing target topic shell.
+   *
+   * The remap differs in kind, not degree. An agent copy has exactly one
+   * source→target agent, so it can inline a `case when agent_id = source`
+   * expression; a group conversation carries rows from every member, so the
+   * whole `agentIdPairs` map is joined (`_amap` / `_amap_target`) and members
+   * outside it collapse to NULL. `target_id` also has the literal `'user'`
+   * sentinel to preserve. Mirrors the synchronous
+   * `AgentGroupRepository.copyGroupConversationHistory`, scoped to one topic.
+   */
+  private static copyGroupTopicContents = async (
+    trx: Transaction,
+    unit: {
+      agentIdPairs: IdPair[];
+      newGroupId: string;
+      newTopicId: string;
+      source: AgentTransferTargetScope;
+      sourceTopicId: string;
+      target: AgentTransferTargetScope;
+    },
+  ) => {
+    const sourceCtx = {
+      userId: unit.source.userId,
+      workspaceId: unit.source.workspaceId ?? undefined,
+    };
+    const agentIdMap = new Map(unit.agentIdPairs);
+    const mapAgentId = (agentId?: null | string) =>
+      agentId ? (agentIdMap.get(agentId) ?? null) : null;
+
+    const sourceThreads = await trx.query.threads.findMany({
+      orderBy: (thread, { asc }) => [asc(thread.createdAt)],
+      where: and(buildWorkspaceWhere(sourceCtx, threads), eq(threads.topicId, unit.sourceTopicId)),
+    });
+    const threadIdMap = new Map(
+      sourceThreads.map((thread) => [thread.id, idGenerator('threads', 16)]),
+    );
+
+    // Message bodies never leave the database — only ids are fetched to build
+    // the remap tables for the in-database copy.
+    const messageIdPairs: IdPair[] = (
+      await trx.query.messages.findMany({
+        columns: { id: true },
+        where: and(
+          buildWorkspaceWhere(sourceCtx, messages),
+          eq(messages.topicId, unit.sourceTopicId),
+        ),
+      })
+    ).map(({ id }) => [id, idGenerator('messages')]);
+    const messageIdMap = new Map(messageIdPairs);
+
+    if (sourceThreads.length > 0) {
+      const { fixups: threadFixups, rows: threadRows } = splitCrossBatchSelfReferences(
+        sourceThreads.map((thread) => ({
+          ...thread,
+          agentId: mapAgentId(thread.agentId),
+          clientId: null,
+          groupId: unit.newGroupId,
+          id: threadIdMap.get(thread.id)!,
+          parentThreadId: thread.parentThreadId
+            ? (threadIdMap.get(thread.parentThreadId) ?? null)
+            : null,
+          sourceMessageId: thread.sourceMessageId
+            ? (messageIdMap.get(thread.sourceMessageId) ?? null)
+            : null,
+          topicId: unit.newTopicId,
+          userId: unit.target.userId,
+          workspaceId: unit.target.workspaceId,
+        })),
+        ['parentThreadId'],
+      );
+
+      await insertInBatches(threadRows, (batch) => trx.insert(threads).values(batch));
+
+      for (const fixup of threadFixups) {
+        await trx.update(threads).set(fixup.patch).where(eq(threads.id, fixup.id));
+      }
+    }
+
+    await copyMessagesInDatabase({
+      agentIdExpr: sql`_amap.new_id`,
+      agentIdPairs: unit.agentIdPairs,
+      executor: trx,
+      groupId: unit.newGroupId,
+      messageIdPairs,
+      childScope: (table) => buildWorkspaceWhere(sourceCtx, table),
+      targetIdExpr: sql`case when ${messages.targetId} = 'user' then ${messages.targetId} else _amap_target.new_id end`,
       targetUserId: unit.target.userId,
       targetWorkspaceId: unit.target.workspaceId,
       threadIdPairs: [...threadIdMap.entries()],

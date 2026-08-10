@@ -143,7 +143,7 @@ const Header = memo(() => {
 
   // History-backfill chip in the center slot; the hook shares one SWR key with
   // the rest of the migration UI, so this adds no extra polling.
-  const { data: transferJob } = useAgentTransferJob(agentId);
+  const { data: transferJob } = useAgentTransferJob({ agentId });
 
   return (
     <div className={headerStyles.container}>

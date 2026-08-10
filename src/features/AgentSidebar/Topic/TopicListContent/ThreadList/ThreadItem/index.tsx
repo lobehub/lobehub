@@ -1,8 +1,10 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { CornerDownRight } from 'lucide-react';
+import type { DragEvent } from 'react';
 import { memo, useCallback } from 'react';
 
+import { startThreadDrag } from '@/features/ChatInput/InputEditor/ReferTopic/threadDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useChatStore } from '@/store/chat';
 
@@ -15,6 +17,7 @@ export interface ThreadItemProps {
   id: string;
   index: number;
   isSubagent?: boolean;
+  sourceMessageId?: string;
   title: string;
 }
 
@@ -23,7 +26,7 @@ export interface ThreadItemProps {
 // while the row background/highlight stays full-width.
 const SUBAGENT_PADDING_INLINE_START = 32;
 
-const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
+const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessageId }) => {
   const [editing, activeThreadId] = useChatStore((s) => [
     s.threadRenamingId === id,
     s.activeThreadId,
@@ -43,8 +46,16 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
     navigateToThread(id);
   }, [editing, id, navigateToThread]);
 
+  const handleDragStart = useCallback(
+    (event: DragEvent) => {
+      startThreadDrag(event, { sourceMessageId, threadId: id, threadTitle: title });
+    },
+    [id, title, sourceMessageId],
+  );
+
   const dropdownMenu = useThreadItemDropdownMenu({
     id,
+    sourceMessageId,
     toggleEditing,
   });
 
@@ -53,6 +64,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
   return (
     <>
       <NavItem
+        draggable
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active && !isInAgentSubRoute}
         contextMenuItems={dropdownMenu}
@@ -68,6 +80,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
           ...(isSubagent && { paddingInlineStart: SUBAGENT_PADDING_INLINE_START }),
         }}
         onClick={handleClick}
+        onDragStart={handleDragStart}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
     </>

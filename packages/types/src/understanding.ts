@@ -228,6 +228,39 @@ export interface OnboardingUnderstandingPollingResult {
   writing?: UnderstandingWritingState;
 }
 
+/** A durable-workflow stage exposed as a progress-only SSE signal. */
+export type OnboardingGenerationProgressPhase =
+  | 'collecting-sources'
+  | 'generating-understanding'
+  | 'generating-detailed-persona'
+  | 'recommending-tasks'
+  | 'completed'
+  | 'partial'
+  | 'failed';
+
+/** Progress state for one durable onboarding generation step. */
+export type OnboardingGenerationProgressStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/**
+ * Progress-only event emitted by the onboarding generation SSE subscription.
+ *
+ * The event intentionally carries no generated content. Clients must refresh the polling
+ * endpoints after receiving it because persisted polling state remains authoritative.
+ */
+export interface OnboardingGenerationProgressEvent {
+  /** Coarse workflow phase for lightweight progress feedback. */
+  phase: OnboardingGenerationProgressPhase;
+  /** Current session that owns the persisted Understanding state. */
+  sessionId: string;
+  /** Per-step states; phases may overlap while independent durable work is running. */
+  steps: {
+    collectSources: OnboardingGenerationProgressStepStatus;
+    detailedPersona: OnboardingGenerationProgressStepStatus;
+    taskRecommendations: OnboardingGenerationProgressStepStatus;
+    understanding: OnboardingGenerationProgressStepStatus;
+  };
+}
+
 export interface OnboardingUnderstandingTopicInput {
   topicId: string;
 }

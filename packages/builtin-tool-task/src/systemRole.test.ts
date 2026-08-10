@@ -3,12 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { systemPrompt } from './systemRole';
 
 describe('systemPrompt', () => {
-  it('hands successful goal execution off instead of duplicating it in the origin conversation', () => {
-    expect(systemPrompt).toContain('the work has been handed off to a separate task topic');
-    expect(systemPrompt).toContain(
-      'do not perform, reproduce, preview, or self-check the requested work in the current conversation',
-    );
-    expect(systemPrompt).toContain('its live card shows progress');
+  it('does not instruct the task tool to run the goal workflow', () => {
+    expect(systemPrompt).not.toContain('**createGoal**');
   });
 
   it('starts a configured cron schedule by default without running it immediately', () => {

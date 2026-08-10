@@ -5,7 +5,7 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquarePlusIcon, TargetIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSk
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
+import { enterGoalMode } from '../goalMode';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
 import { type ActionTagData, BUILTIN_COMMANDS } from './types';
 import { useInstalledSkillsAndTools } from './useInstalledSkillsAndTools';
@@ -44,6 +45,7 @@ const COMMAND_ICONS: Record<string, any> = {
 export const useSlashActionItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
   const editorInstance = useChatInputStore((s) => s.editor);
+  const setGoalMode = useChatInputStore((s) => s.setGoalMode);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   // Resolve the active working directory so we can surface filesystem skills.
@@ -232,6 +234,17 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       // Built-in commands — line-start only
       if (isAtLineStart) {
+        allItems.push({
+          icon: TargetIcon,
+          key: 'goal',
+          label: t('slash.goal' as any),
+          metadata: {
+            category: 'command',
+            description: t('slash.goal.desc' as any, { defaultValue: '' }),
+            type: 'goal',
+          },
+          onSelect: (editor: IEditor) => enterGoalMode(editor, setGoalMode, true),
+        } as SlashItem);
         for (const action of BUILTIN_COMMANDS) {
           if (action.type === 'newTopic' && !activeTopicId) continue;
           allItems.push(makeCommandItem(action) as SlashItem);
@@ -269,6 +282,14 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       return allItems;
     },
-    [t, editorInstance, activeTopicId, projectSkills, installedSkills, agentDocumentSkills],
+    [
+      t,
+      editorInstance,
+      activeTopicId,
+      projectSkills,
+      installedSkills,
+      agentDocumentSkills,
+      setGoalMode,
+    ],
   );
 };
