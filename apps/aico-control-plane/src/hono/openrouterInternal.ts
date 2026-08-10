@@ -2,19 +2,13 @@ import { Hono } from 'hono';
 
 import { createOpenRouterManagementClient } from '@/server/services/openrouter/management';
 
+import { assertBearerServiceToken } from './serviceToken';
+
 const unauthorized = () =>
   new Response(JSON.stringify({ error: 'unauthorized' }), {
     headers: { 'Content-Type': 'application/json' },
     status: 401,
   });
-
-const assertServiceToken = (req: Request): boolean => {
-  const expected = process.env.AICO_CONTROL_PLANE_SERVICE_TOKEN;
-  if (!expected) return false;
-  const header = req.headers.get('authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-  return Boolean(token) && token === expected;
-};
 
 /**
  * Token-gated OpenRouter Management API proxy for the product server.
@@ -24,7 +18,7 @@ export const createOpenRouterInternalApp = () => {
   const app = new Hono();
 
   app.use('*', async (c, next) => {
-    if (!assertServiceToken(c.req.raw)) return unauthorized();
+    if (!assertBearerServiceToken(c.req.raw)) return unauthorized();
     return next();
   });
 

@@ -43,8 +43,10 @@ const MIME_BY_EXT: Record<string, string> = {
 const safeSpaPath = (requestPath: string): string | null => {
   const decoded = decodeURIComponent(requestPath.split('?')[0] || '/');
   const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\//, '');
-  const full = path.normalize(path.join(spaRoot, relative));
-  if (!full.startsWith(spaRoot)) return null;
+  const rootResolved = path.resolve(spaRoot);
+  const full = path.resolve(rootResolved, relative);
+  const rootPrefix = rootResolved.endsWith(path.sep) ? rootResolved : `${rootResolved}${path.sep}`;
+  if (full !== rootResolved && !full.startsWith(rootPrefix)) return null;
   return full;
 };
 

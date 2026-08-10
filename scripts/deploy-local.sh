@@ -88,8 +88,10 @@ Environment:
                           (intentional wipe / first bootstrap after delete)
   MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
                           the last known good snapshot (users dropped, etc.)
-  AICO_CONTROL_PLANE_SERVICE_TOKEN   Shared product↔control-plane token (default: devtok)
-  AICO_CONTROL_PLANE_PORT            Host port for control plane (default: 3020)
+  AICO_CONTROL_PLANE_SERVICE_TOKEN   Shared product↔control-plane token
+                          (moz generates a strong random token if missing/weak;
+                           `devtok` is rejected)
+  AICO_CONTROL_PLANE_PORT            Host port for control plane (default: 3020; bound to 127.0.0.1)
   OPENROUTER_MANAGEMENT_API_KEY      Set in repo .env — loaded only by control plane
 
 Backups:
@@ -463,6 +465,48 @@ compose_in_deploy_dir() {
 
 CONTROL_PLANE_CONTAINER="aico-control-plane"
 
+# Upsert KEY=VALUE in an env file (create file if missing).
+upsert_env_kv() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  mkdir -p "$(dirname "$file")"
+  touch "$file"
+  if grep -qE "^${key}=" "$file" 2>/dev/null; then
+    # portable-ish in-place replace
+    local tmp
+    tmp="$(mktemp)"
+    awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' "$file" >"$tmp"
+    mv "$tmp" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >>"$file"
+  fi
+}
+
+# Strong shared token required — never use the old `devtok` placeholder.
+ensure_control_plane_service_token() {
+  local root_env="$ROOT/.env"
+  local deploy_env="$DEPLOY_DIR/.env"
+  local tok=""
+
+  tok="$(grep -E '^AICO_CONTROL_PLANE_SERVICE_TOKEN=' "$root_env" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -z "$tok" ]]; then
+    tok="$(grep -E '^AICO_CONTROL_PLANE_SERVICE_TOKEN=' "$deploy_env" 2>/dev/null | cut -d= -f2- || true)"
+  fi
+
+  if [[ -z "$tok" || "$tok" == "devtok" || ${#tok} -lt 24 ]]; then
+    tok="$(openssl rand -hex 32)"
+    echo "==> Generated AICO_CONTROL_PLANE_SERVICE_TOKEN (was missing/weak)"
+    upsert_env_kv "$root_env" "AICO_CONTROL_PLANE_SERVICE_TOKEN" "$tok"
+    upsert_env_kv "$deploy_env" "AICO_CONTROL_PLANE_SERVICE_TOKEN" "$tok"
+  else
+    # Keep deploy/.env in sync so compose --env-file sees it
+    upsert_env_kv "$deploy_env" "AICO_CONTROL_PLANE_SERVICE_TOKEN" "$tok"
+  fi
+
+  export AICO_CONTROL_PLANE_SERVICE_TOKEN="$tok"
+}
+
 ensure_control_plane_build() {
   echo "==> Building control-plane SPA + API"
   cd "$ROOT"
@@ -690,6 +734,7 @@ fi
 
 load_panachat_data_dir
 ensure_panachat_data_env
+ensure_control_plane_service_token
 
 if [[ $STATUS -eq 1 ]]; then
   set +e

@@ -133,12 +133,20 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
   const clientMetadata = parseClientMetadata(request.headers);
 
-  // we have a special header to debug the api endpoint in development mode
-  // IT WON'T GO INTO PRODUCTION ANYMORE
+  // Dev-only mock / debug header auth. Disabled on the control plane so a
+  // published :3020 with NODE_ENV=development cannot elevate to platformAdmin
+  // via `lobe-auth-dev-backend-api` / ENABLE_MOCK_DEV_USER from repo .env.
   const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
   const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
+  const controlPlaneBlocksDevAuthBypass =
+    process.env.AICO_IS_CONTROL_PLANE === '1' &&
+    process.env.AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH !== '1';
 
-  if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+  if (
+    process.env.NODE_ENV === 'development' &&
+    !controlPlaneBlocksDevAuthBypass &&
+    (isDebugApi || isMockUser)
+  ) {
     return createContextInner({
       clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,

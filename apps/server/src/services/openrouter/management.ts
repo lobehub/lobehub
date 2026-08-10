@@ -257,8 +257,13 @@ export const createOpenRouterManagementClient = (
     return new HttpOpenRouterManagementClient(aicoEnv.OPENROUTER_MANAGEMENT_API_KEY);
   }
 
-  // `AICO_OPENROUTER_MOCK` is a non-production QA convenience only — ignored in production.
-  if (!isProduction && aicoEnv.AICO_OPENROUTER_MOCK) {
+  // `AICO_OPENROUTER_MOCK` is a non-production QA convenience — ignored in
+  // production except on the control plane when explicitly allowed for local moz
+  // (no real management key yet).
+  if (
+    aicoEnv.AICO_OPENROUTER_MOCK &&
+    (!isProduction || (isControlPlane && process.env.AICO_ALLOW_INSECURE_CONTROL_PLANE === '1'))
+  ) {
     return new MockOpenRouterManagementClient();
   }
 

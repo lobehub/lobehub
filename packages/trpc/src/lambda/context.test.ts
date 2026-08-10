@@ -464,4 +464,39 @@ describe('createLambdaContext', () => {
     expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
     expect(mockGetSession).not.toHaveBeenCalled();
   });
+
+  it('should not apply mock-dev auth bypass on the control plane', async () => {
+    const prev = {
+      allow: process.env.AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH,
+      isCp: process.env.AICO_IS_CONTROL_PLANE,
+      mock: process.env.ENABLE_MOCK_DEV_USER,
+      mockId: process.env.MOCK_DEV_USER_ID,
+      nodeEnv: process.env.NODE_ENV,
+    };
+    process.env.NODE_ENV = 'development';
+    process.env.AICO_IS_CONTROL_PLANE = '1';
+    process.env.ENABLE_MOCK_DEV_USER = '1';
+    process.env.MOCK_DEV_USER_ID = 'user_mock_admin';
+    delete process.env.AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH;
+
+    try {
+      const request = new NextRequest('https://example.com/trpc/lambda', {
+        headers: { 'lobe-auth-dev-backend-api': '1' },
+      });
+      const context = await createLambdaContext(request);
+      // Falls through to session auth — not the mock user id
+      expect(context.userId).not.toBe('user_mock_admin');
+      expect(mockGetSession).toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = prev.nodeEnv;
+      if (prev.isCp === undefined) delete process.env.AICO_IS_CONTROL_PLANE;
+      else process.env.AICO_IS_CONTROL_PLANE = prev.isCp;
+      if (prev.mock === undefined) delete process.env.ENABLE_MOCK_DEV_USER;
+      else process.env.ENABLE_MOCK_DEV_USER = prev.mock;
+      if (prev.mockId === undefined) delete process.env.MOCK_DEV_USER_ID;
+      else process.env.MOCK_DEV_USER_ID = prev.mockId;
+      if (prev.allow === undefined) delete process.env.AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH;
+      else process.env.AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH = prev.allow;
+    }
+  });
 });

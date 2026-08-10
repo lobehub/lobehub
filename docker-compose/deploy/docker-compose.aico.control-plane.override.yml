@@ -6,12 +6,18 @@
 #
 # Runtime uses the repo bind-mount so `node dist/standalone.js` can resolve
 # monorepo node_modules (same pattern as local `bun run dev:control-plane`).
+#
+# Security defaults:
+# - Strong random AICO_CONTROL_PLANE_SERVICE_TOKEN required (moz generates if missing)
+# - NODE_ENV=production so tRPC mock-auth bypass is off
+# - Port published on 127.0.0.1 only (not all interfaces)
+# - Dev mock user env cleared even if present in repo .env
 
 services:
   lobe:
     environment:
       AICO_CONTROL_PLANE_URL: http://aico-control-plane:3020
-      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-devtok}
+      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:?set AICO_CONTROL_PLANE_SERVICE_TOKEN}
       # Browser origin of the control-plane UI (any host/domain later)
       AICO_CONTROL_PLANE_UI_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
       # Clear management key on the product container even if present in env_file.
@@ -34,7 +40,7 @@ services:
       AICO_IS_CONTROL_PLANE: '1'
       AICO_CONTROL_PLANE_PORT: '3020'
       HONO_HOST: '0.0.0.0'
-      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-devtok}
+      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:?set AICO_CONTROL_PLANE_SERVICE_TOKEN}
       OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY:-}
       # Prefer the compose network DB/Redis, not host-only URLs from repo .env
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
@@ -50,13 +56,20 @@ services:
       APP_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
       AICO_CONTROL_PLANE_UI_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://localhost:${AICO_CONTROL_PLANE_PORT:-3020}}
       INTERNAL_APP_URL: ${INTERNAL_APP_URL:-http://lobe:3210}
-      # HTTP public URL → non-__Secure cookies; override with 0 behind HTTPS TLS
+      # HTTP public URL → non-__Secure cookies; set 0 when PUBLIC_URL is https://
       AICO_INSECURE_AUTH_COOKIES: ${AICO_INSECURE_AUTH_COOKIES:-1}
-      # development allows OpenRouter mock when management key is unset (local moz)
-      NODE_ENV: ${CONTROL_PLANE_NODE_ENV:-development}
+      # production disables tRPC ENABLE_MOCK_DEV_USER / debug-header bypass
+      NODE_ENV: ${CONTROL_PLANE_NODE_ENV:-production}
+      # Clear any mock-auth flags leaked from repo .env
+      ENABLE_MOCK_DEV_USER: '0'
+      MOCK_DEV_USER_ID: ''
+      AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH: '0'
+      # Local OpenRouter mock without a real management key (requires allow flag)
       AICO_OPENROUTER_MOCK: ${AICO_OPENROUTER_MOCK:-1}
+      AICO_ALLOW_INSECURE_CONTROL_PLANE: ${AICO_ALLOW_INSECURE_CONTROL_PLANE:-1}
     ports:
-      - '${AICO_CONTROL_PLANE_PORT:-3020}:3020'
+      # Loopback only — do not publish admin/API on all interfaces
+      - '127.0.0.1:${AICO_CONTROL_PLANE_PORT:-3020}:3020'
     depends_on:
       postgresql:
         condition: service_healthy

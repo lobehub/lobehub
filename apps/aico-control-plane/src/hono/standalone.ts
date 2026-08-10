@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 
 import honoApp from './index';
+import { assertServiceTokenConfigured } from './serviceToken';
 
 type HonoStandaloneGlobal = typeof globalThis & {
   __aicoControlPlaneServer?: Server;
@@ -97,6 +98,9 @@ const closePreviousServer = (previousServer: Server | undefined) =>
   });
 
 const startServer = async () => {
+  // Fail closed before binding — weak/default tokens must never gate /internal/*.
+  assertServiceTokenConfigured();
+
   const standaloneGlobal = globalThis as HonoStandaloneGlobal;
 
   await closePreviousServer(standaloneGlobal.__aicoControlPlaneServer);
