@@ -21,6 +21,7 @@ import {
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
 import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
+import { hashPhoneOtpVerificationValue, phoneOtpEquals } from '@/libs/better-auth/phoneOtpHash';
 import { aicoBanMessage } from '@/libs/better-auth/plugins/aico-ban-message';
 import { authAbuseSignal } from '@/libs/better-auth/plugins/auth-abuse-signal';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
@@ -238,6 +239,21 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           },
         },
       },
+      /**
+       * DATA-001: Better Auth phone plugin stores OTP plaintext. Hash digit OTPs at insert
+       * so `verifications.value` is never a usable code. Email OTPs use `storeOTP: "hashed"`
+       * and do not match the plain-digit pattern.
+       */
+      verification: {
+        create: {
+          before: async (verification) => ({
+            data: {
+              ...verification,
+              value: hashPhoneOtpVerificationValue(String(verification.value ?? '')),
+            },
+          }),
+        },
+      },
       user: {
         create: {
           after: async (user) => {
@@ -326,6 +342,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         expiresIn: OTP_EXPIRES_IN,
         otpLength: 6,
         allowedAttempts: 3,
+        // DATA-002: never persist usable OTP plaintext in `verifications`
+        storeOTP: 'hashed',
         // Don't automatically send OTP on sign up - let mobile client manually trigger it
         sendVerificationOnSignUp: false,
         async sendVerificationOTP({ email, otp }) {
@@ -373,6 +391,36 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             console.error('[sms] failed to send OTP', { phone: phoneFingerprint, error });
             throw error;
           }
+        },
+        /**
+         * DATA-001: compare against hashed OTP (see verification.create before-hook).
+         * Replaces BA plaintext equality while preserving attempt limits.
+         */
+        verifyOTP: async ({ phoneNumber: rawPhone, code }, ctx) => {
+          if (!ctx) return false;
+          const phone = normalizeIranianPhoneNumber(rawPhone) ?? rawPhone;
+          const row = await ctx.context.internalAdapter.findVerificationValue(phone);
+          if (!row || row.expiresAt < new Date()) return false;
+
+          const colon = row.value.lastIndexOf(':');
+          const storedHash = colon === -1 ? row.value : row.value.slice(0, colon);
+          const attemptsRaw = colon === -1 ? '0' : row.value.slice(colon + 1);
+          const attempts = Number.parseInt(attemptsRaw || '0', 10);
+          const allowedAttempts = 3;
+
+          if (Number.isFinite(attempts) && attempts >= allowedAttempts) {
+            await ctx.context.internalAdapter.deleteVerificationByIdentifier(phone);
+            return false;
+          }
+
+          if (!phoneOtpEquals(code, storedHash)) {
+            await ctx.context.internalAdapter.updateVerificationByIdentifier(phone, {
+              value: `${storedHash}:${attempts + 1}`,
+            });
+            return false;
+          }
+
+          return true;
         },
       }),
       passkey({

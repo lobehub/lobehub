@@ -196,6 +196,7 @@ describe('AICO-102 authentication security controls', () => {
         allowedAttempts: 3,
         expiresIn: 300,
         otpLength: 6,
+        storeOTP: 'hashed',
       }),
     );
     expect(phoneNumber).toHaveBeenCalledWith(
@@ -203,6 +204,7 @@ describe('AICO-102 authentication security controls', () => {
         allowedAttempts: 3,
         expiresIn: 300,
         otpLength: 6,
+        verifyOTP: expect.any(Function),
       }),
     );
   });

@@ -1,4 +1,9 @@
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import {
+  generateApiKey,
+  isApiKeyExpired,
+  MASKED_API_KEY_PLACEHOLDER,
+  validateApiKeyFormat,
+} from '@lobechat/utils/apiKey';
 import { hashApiKey } from '@lobechat/utils/server';
 import { and, desc, eq, getTableColumns } from 'drizzle-orm';
 
@@ -66,7 +71,8 @@ export class ApiKeyModel {
       )
       .returning();
 
-    return result;
+    // DATA-009: plaintext is returned only on create (show-once).
+    return { ...result, key };
   };
 
   delete = async (id: string) => {
@@ -78,10 +84,8 @@ export class ApiKeyModel {
   };
 
   /**
-   * List keys visible in the current scope. In workspace mode the caller sees
-   * every key row (with its creator), but the decrypted plaintext is returned
-   * only for the caller's own keys. Other owners' rows come back with an empty
-   * `key`; the router owns the workspace authorization policy.
+   * List keys visible in the current scope. Never returns decryptable plaintext
+   * (DATA-009) — only a masked placeholder. The router owns workspace authZ.
    */
   query = async () => {
     const rows = await this.db
@@ -96,36 +100,17 @@ export class ApiKeyModel {
       .where(this.ownership())
       .orderBy(desc(apiKeys.updatedAt));
 
-    const gateKeeper = await this.getGateKeeper();
+    return rows.map(({ creatorEmail, creatorFullName, creatorUsername, ...apiKey }) => {
+      const isMine = apiKey.userId === this.userId;
 
-    return Promise.all(
-      rows.map(async ({ creatorEmail, creatorFullName, creatorUsername, ...apiKey }) => {
-        const isMine = apiKey.userId === this.userId;
-
-        let key = '';
-        let keyDecryptionFailed = false;
-        if (isMine) {
-          const decrypted = await gateKeeper.decrypt(apiKey.key);
-
-          if (!decrypted.wasAuthentic) {
-            keyDecryptionFailed = true;
-            console.error('Failed to decrypt API key; returning the key as unavailable', {
-              apiKeyId: apiKey.id,
-            });
-          } else {
-            key = decrypted.plaintext;
-          }
-        }
-
-        return {
-          ...apiKey,
-          creator: creatorFullName || creatorUsername || creatorEmail || null,
-          isMine,
-          key,
-          keyDecryptionFailed,
-        };
-      }),
-    );
+      return {
+        ...apiKey,
+        creator: creatorFullName || creatorUsername || creatorEmail || null,
+        isMine,
+        key: isMine ? MASKED_API_KEY_PLACEHOLDER : '',
+        keyDecryptionFailed: false,
+      };
+    });
   };
 
   findByKey = async (key: string) => {

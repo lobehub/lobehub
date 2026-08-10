@@ -89,7 +89,8 @@ const handler = async (req: NextRequest) => {
     // `lobe-oidc:route` namespace, which is disabled in production, so 500s otherwise
     // land with no application-layer error signature (monitoring blind spot).
     console.error(`[OIDC Route] Error handling ${req.method} ${requestUrl.pathname}:`, error);
-    return new NextResponse(`Internal Server Error: ${(error as Error).message}`, { status: 500 });
+    // DATA-007: never echo raw error.message (SQL / paths / internals) to clients
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 };
 

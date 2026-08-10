@@ -23,6 +23,9 @@ export default {
   'apikey.form.fields.name.placeholder': 'Please enter API Key name',
   'apikey.form.submit': 'Create',
   'apikey.form.title': 'Create API Key',
+  'apikey.form.createdHint':
+    'Copy this API key now. For security, it will not be shown again after you close this dialog.',
+  'apikey.form.createdDone': 'Done',
   'apikey.list.actions.create': 'Create API Key',
   'apikey.list.actions.delete': 'Delete',
   'apikey.list.actions.deleteConfirm.actions.cancel': 'Cancel',

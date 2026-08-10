@@ -49,6 +49,22 @@ export function isApiKeyExpired(expiresAt: Date | null): boolean {
 }
 
 /**
+ * Mask an API key for list/display responses (DATA-009).
+ * Keeps the `sk-lh-` prefix so the UI still shows the key format.
+ */
+export function maskApiKey(key: string): string {
+  if (!key) return '';
+  const prefixEnd = key.lastIndexOf('-') + 1;
+  if (prefixEnd <= 0) return '*'.repeat(Math.min(key.length, 16));
+  return `${key.slice(0, prefixEnd)}${'*'.repeat(Math.max(0, key.length - prefixEnd))}`;
+}
+
+/**
+ * Canonical mask for listed LobeHub API keys when plaintext is unavailable.
+ */
+export const MASKED_API_KEY_PLACEHOLDER = 'sk-lh-****************';
+
+/**
  * Validate API Key format
  * @param key - API Key to validate
  * @returns Whether the key has a valid format

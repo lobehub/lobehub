@@ -149,7 +149,8 @@ describe('createSSEWriter', () => {
   });
 
   describe('writeError', () => {
-    it('should write error event with Error object', () => {
+    it('should write error event with Error object and stack in development', () => {
+      vi.stubEnv('NODE_ENV', 'development');
       const mockController = { enqueue: vi.fn() };
       const writer = createSSEWriter(mockController as any);
       const error = new Error('Something went wrong');
@@ -168,6 +169,22 @@ describe('createSSEWriter', () => {
       expect(mockController.enqueue).toHaveBeenCalledWith(
         expect.stringContaining('"stack":"Error: Something went wrong'),
       );
+      vi.unstubAllEnvs();
+    });
+
+    it('should omit stack traces outside development (DATA-003)', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const mockController = { enqueue: vi.fn() };
+      const writer = createSSEWriter(mockController as any);
+      const error = new Error('Something went wrong');
+      error.stack = 'Error: Something went wrong\n  at test.ts:10';
+
+      writer.writeError(error, 'op-prod', 'processing', 1);
+
+      const call = mockController.enqueue.mock.calls[0][0] as string;
+      expect(call).toContain('"error":"Something went wrong"');
+      expect(call).not.toContain('"stack"');
+      vi.unstubAllEnvs();
     });
 
     it('should write error event without stack trace when not available', () => {

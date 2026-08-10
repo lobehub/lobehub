@@ -227,10 +227,12 @@ export type StreamErrorContext = {
  *   one this enrichment is meant to diagnose.
  */
 const buildStreamErrorPayload = (error: Error, context?: StreamErrorContext): string => {
+  const includeStack = process.env.NODE_ENV !== 'production';
   const payload: Record<string, unknown> = {
     message: error.message,
     name: error.name,
-    stack: error.stack,
+    // DATA-008: omit stack traces from client-facing stream errors in production
+    ...(includeStack ? { stack: error.stack } : {}),
   };
 
   if (context?.provider) payload.provider = context.provider;

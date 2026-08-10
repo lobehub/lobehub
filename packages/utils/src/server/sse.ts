@@ -76,7 +76,10 @@ export function createSSEWriter(controller: ReadableStreamDefaultController<stri
           data: {
             error: error.message || String(error),
             phase: phase || 'unknown',
-            ...(error.stack && { stack: error.stack }),
+            // DATA-003: never send stack traces to clients outside development
+            ...(process.env.NODE_ENV === 'development' && error.stack
+              ? { stack: error.stack }
+              : {}),
           },
           operationId,
           timestamp,

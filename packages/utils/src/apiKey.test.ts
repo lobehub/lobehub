@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
+import { generateApiKey, isApiKeyExpired, maskApiKey, validateApiKeyFormat } from './apiKey';
 
 describe('apiKey', () => {
   describe('generateApiKey', () => {
@@ -128,6 +128,13 @@ describe('apiKey', () => {
     it('should validate generated keys', () => {
       const generatedKey = generateApiKey();
       expect(validateApiKeyFormat(generatedKey)).toBe(true);
+    });
+  });
+
+  describe('maskApiKey', () => {
+    it('masks the secret while keeping the format prefix', () => {
+      expect(maskApiKey('sk-lh-abcdef0123456789')).toBe('sk-lh-****************');
+      expect(maskApiKey('')).toBe('');
     });
   });
 });
