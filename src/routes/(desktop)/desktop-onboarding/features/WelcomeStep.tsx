@@ -1,6 +1,6 @@
 'use client';
 
-import { BRANDING_INBOX_NAME } from '@lobechat/business-const';
+import { getLocalizedBrandingInboxName } from '@lobechat/business-const';
 import { type IconProps } from '@lobehub/ui';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -19,7 +19,8 @@ interface WelcomeStepProps {
 }
 
 const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
-  const { t } = useTranslation('onboarding');
+  const { t, i18n } = useTranslation('onboarding');
+  const brandInboxName = getLocalizedBrandingInboxName(i18n.language);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const handleNext = () => {
@@ -57,7 +58,7 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
             pauseDuration={16_000}
             typingSpeed={64}
             sentences={[
-              t('telemetry.title', { name: BRANDING_INBOX_NAME }),
+              t('telemetry.title', { name: brandInboxName }),
               t('telemetry.title2'),
               t('telemetry.title3'),
             ]}

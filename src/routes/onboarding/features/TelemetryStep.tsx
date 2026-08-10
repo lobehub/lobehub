@@ -1,6 +1,6 @@
 'use client';
 
-import { BRANDING_INBOX_NAME, BRANDING_NAME } from '@lobechat/business-const';
+import { getLocalizedBrandingInboxName, getLocalizedBrandingName } from '@lobechat/business-const';
 import { type IconProps } from '@lobehub/ui';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
@@ -20,7 +20,9 @@ interface TelemetryStepProps {
 }
 
 const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
-  const { t } = useTranslation('onboarding');
+  const { t, i18n } = useTranslation('onboarding');
+  const brandName = getLocalizedBrandingName(i18n.language);
+  const brandInboxName = getLocalizedBrandingInboxName(i18n.language);
   const [check, setCheck] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
@@ -66,7 +68,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
             pauseDuration={16_000}
             typingSpeed={64}
             sentences={[
-              t('telemetry.title', { name: BRANDING_INBOX_NAME }),
+              t('telemetry.title', { name: brandInboxName }),
               t('telemetry.title2'),
               t('telemetry.title3'),
             ]}
@@ -121,12 +123,12 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
       />
       <Flexbox gap={8}>
         <Text as={'p'} color={cssVar.colorTextSecondary}>
-          {t('telemetry.rows.privacy.desc', { appName: BRANDING_NAME })}
+          {t('telemetry.rows.privacy.desc', { appName: brandName })}
         </Text>
         <Flexbox horizontal align="center" gap={8}>
           <Switch checked={check} size={'small'} onChange={(v) => setCheck(v)} />
           <Text fontSize={12} type={check ? undefined : 'secondary'}>
-            {t('telemetry.rows.privacy.title', { appName: BRANDING_NAME })}
+            {t('telemetry.rows.privacy.title', { appName: brandName })}
           </Text>
         </Flexbox>
       </Flexbox>

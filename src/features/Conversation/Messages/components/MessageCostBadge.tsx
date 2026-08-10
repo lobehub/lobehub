@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 28px;
     border-radius: 6px;
 
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
 
     :hover {
       background: ${cssVar.colorFillTertiary};

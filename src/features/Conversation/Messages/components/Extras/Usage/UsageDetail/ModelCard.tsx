@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
+import { formatBrandedProviderId } from '@/components/Branding/brandedModelId';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -57,7 +58,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             <Flexbox horizontal align={'center'} gap={8} style={{ lineHeight: '12px' }}>
               {displayName || id}
             </Flexbox>
-            <span className={styles.desc}>{provider}</span>
+            <span className={styles.desc}>{formatBrandedProviderId(provider)}</span>
           </Flexbox>
         </Flexbox>
         {!!pricing && (

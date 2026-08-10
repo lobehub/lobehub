@@ -19,3 +19,13 @@ export const formatBrandedModelId = (modelId: string): string => {
   const rest = modelId.replace(/^openrouter\/?/i, '');
   return rest ? `${getBrandingModelSlug()}/${rest}` : getBrandingModelSlug();
 };
+
+/** True when this runtime provider id should show as product brand in the UI. */
+export const isBrandedOpenRouterProvider = (provider?: string): boolean =>
+  Boolean(isCustomBranding && provider && /^openrouter$/i.test(provider.trim()));
+
+/** Display-only provider label; runtime/API ids stay `openrouter`. */
+export const formatBrandedProviderId = (provider: string): string => {
+  if (!isBrandedOpenRouterProvider(provider)) return provider;
+  return BRANDING_NAME;
+};
