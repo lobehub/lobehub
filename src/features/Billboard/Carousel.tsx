@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
-import { isBillboardAction, runBillboardAction } from './actions';
+import { resolveBillboardAction, runBillboardAction } from './actions';
 import { resolveBillboardItem } from './locale';
 
 type BillboardItem = GlobalBillboardItem;
@@ -143,7 +143,7 @@ const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position:
       [item, i18n.language],
     );
 
-    const action = isBillboardAction(item.action) ? item.action : null;
+    const action = resolveBillboardAction(item.action);
 
     const trackCtaClick = useCallback(
       (extra: Record<string, unknown>) => {
@@ -164,7 +164,9 @@ const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position:
     const handleActionClick = useCallback(() => {
       if (!action) return;
       trackCtaClick({ action });
-      runBillboardAction(action);
+      // handlers may be async (e.g. resetOnboarding persists before navigating);
+      // a failed action must never surface as an unhandled rejection on the card
+      void Promise.resolve(runBillboardAction(action)).catch(() => {});
     }, [action, trackCtaClick]);
 
     const handleLinkClick = useCallback(() => {

@@ -1,10 +1,17 @@
+import type * as LobechatConst from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BILLBOARD_ACTIONS, isBillboardAction, runBillboardAction } from './actions';
+import {
+  BILLBOARD_ACTIONS,
+  isBillboardAction,
+  resolveBillboardAction,
+  runBillboardAction,
+} from './actions';
 
-const { openChangelogModal, openFeedbackModal } = vi.hoisted(() => ({
+const { openChangelogModal, openFeedbackModal, resetOnboarding } = vi.hoisted(() => ({
   openChangelogModal: vi.fn(),
   openFeedbackModal: vi.fn(),
+  resetOnboarding: vi.fn(),
 }));
 
 vi.mock('@/components/ChangelogModal', () => ({
@@ -15,6 +22,10 @@ vi.mock('@/components/ChangelogModal', () => ({
 vi.mock('@/components/FeedbackModal', () => ({
   default: openFeedbackModal,
   openFeedbackModal,
+}));
+
+vi.mock('@/store/user', () => ({
+  getUserStoreState: () => ({ resetOnboarding }),
 }));
 
 beforeEach(() => {
@@ -42,6 +53,37 @@ describe('isBillboardAction', () => {
   });
 });
 
+describe('resolveBillboardAction', () => {
+  it('should resolve every registered action on web', () => {
+    for (const action of BILLBOARD_ACTIONS) {
+      expect(resolveBillboardAction(action)).toBe(action);
+    }
+  });
+
+  it('should return null for unknown values so the CTA falls back to linkUrl', () => {
+    expect(resolveBillboardAction('notARealAction')).toBeNull();
+    expect(resolveBillboardAction(null)).toBeNull();
+    expect(resolveBillboardAction(undefined)).toBeNull();
+  });
+
+  it('should not resolve web-only actions on desktop', async () => {
+    vi.resetModules();
+    vi.doMock('@lobechat/const', async (importOriginal) => ({
+      ...((await importOriginal()) as typeof LobechatConst),
+      isDesktop: true,
+    }));
+
+    try {
+      const desktopActions = await import('./actions');
+      expect(desktopActions.resolveBillboardAction('resetOnboarding')).toBeNull();
+      expect(desktopActions.resolveBillboardAction('openChangelog')).toBe('openChangelog');
+    } finally {
+      vi.doUnmock('@lobechat/const');
+      vi.resetModules();
+    }
+  });
+});
+
 describe('runBillboardAction', () => {
   it('should open the changelog modal for openChangelog', () => {
     runBillboardAction('openChangelog');
@@ -57,9 +99,15 @@ describe('runBillboardAction', () => {
     expect(openChangelogModal).not.toHaveBeenCalled();
   });
 
-  it('should have a runnable handler for every registered action', () => {
+  it('should reset onboarding progress for resetOnboarding', async () => {
+    await runBillboardAction('resetOnboarding');
+
+    expect(resetOnboarding).toHaveBeenCalledTimes(1);
+  });
+
+  it('should have a runnable handler for every registered action', async () => {
     for (const action of BILLBOARD_ACTIONS) {
-      expect(() => runBillboardAction(action)).not.toThrow();
+      await expect(Promise.resolve(runBillboardAction(action))).resolves.not.toThrow();
     }
   });
 });
