@@ -212,6 +212,12 @@ const renewOrg = async (params: {
   //    compare-and-swap so the roster is funded all-or-none.
   try {
     await db.transaction(async (tx) => {
+      const orgBefore = await tx.query.organizations.findFirst({
+        where: eq(organizations.id, orgId),
+      });
+      if (!orgBefore) throw new Error('ORG_NOT_FOUND');
+      let runningBalanceMicroUsd = Number(orgBefore.walletBalanceMicroUsd ?? 0);
+
       if (refundedMicroUsd > 0) {
         await tx
           .update(organizations)
@@ -226,9 +232,13 @@ const renewOrg = async (params: {
           const member = await tx.query.organizationMembers.findFirst({
             where: eq(organizationMembers.id, b.memberId),
           });
+          const balanceBeforeMicroUsd = runningBalanceMicroUsd;
+          runningBalanceMicroUsd += amount;
           await tx.insert(walletTransactions).values({
             amountMicroUsd: amount,
             amountToman: 0,
+            balanceAfterMicroUsd: runningBalanceMicroUsd,
+            balanceBeforeMicroUsd,
             description: `Period refund for member ${b.memberId}`,
             orgId,
             orgMemberId: b.memberId,
@@ -252,7 +262,11 @@ const renewOrg = async (params: {
         )
         .returning();
       if (!funded) throw new Error('INSUFFICIENT_ORG_BALANCE');
+      runningBalanceMicroUsd = Number(funded.walletBalanceMicroUsd ?? 0);
 
+      // Attribute the gross debit across per-member renewal ledger rows (reverse order of apply).
+      // Snapshot after CAS first, then walk renewals so each row shows progressive before/after.
+      let attributed = runningBalanceMicroUsd + grossRequiredMicroUsd;
       for (const b of budgets) {
         const window = computePeriodWindow(b.nextPeriod, now);
         await tx
@@ -275,9 +289,14 @@ const renewOrg = async (params: {
         const member = await tx.query.organizationMembers.findFirst({
           where: eq(organizationMembers.id, b.memberId),
         });
+        const amount = b.nextPeriodAmountMicroUsd;
+        const balanceBeforeMicroUsd = attributed;
+        attributed -= amount;
         await tx.insert(walletTransactions).values({
-          amountMicroUsd: b.nextPeriodAmountMicroUsd,
+          amountMicroUsd: amount,
           amountToman: 0,
+          balanceAfterMicroUsd: attributed,
+          balanceBeforeMicroUsd,
           description: `Period renewal for member ${b.memberId}`,
           orgId,
           orgMemberId: b.memberId,

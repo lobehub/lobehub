@@ -352,6 +352,14 @@ export const walletTransactions = pgTable(
     type: text('type').notNull(),
     amountToman: bigint('amount_toman', { mode: 'number' }).notNull().default(0),
     amountMicroUsd: bigint('amount_micro_usd', { mode: 'number' }).notNull().default(0),
+    /**
+     * Wallet balance snapshot for audit trail (FIN-005).
+     * Org txs → organization wallet; personal txs → user wallet.
+     */
+    balanceBeforeMicroUsd: bigint('balance_before_micro_usd', { mode: 'number' }),
+    balanceAfterMicroUsd: bigint('balance_after_micro_usd', { mode: 'number' }),
+    balanceBeforeToman: bigint('balance_before_toman', { mode: 'number' }),
+    balanceAfterToman: bigint('balance_after_toman', { mode: 'number' }),
     /** Toman per 1 USD at conversion time (integer). */
     fxRateTomanPerUsd: bigint('fx_rate_toman_per_usd', { mode: 'number' }),
     renewalBatchId: text('renewal_batch_id'),
@@ -368,6 +376,10 @@ export const walletTransactions = pgTable(
     index('wallet_transactions_user_id_idx').on(t.userId),
     index('wallet_transactions_created_at_idx').on(t.createdAt),
     index('wallet_transactions_renewal_batch_id_idx').on(t.renewalBatchId),
+    /** FIN-003: optional client idempotency key for credit / allocate mutations. */
+    uniqueIndex('wallet_transactions_gateway_ref_uidx')
+      .on(t.gatewayRefId)
+      .where(sql`${t.gatewayRefId} IS NOT NULL`),
   ],
 );
 

@@ -223,6 +223,7 @@ export const platformAdminRouter = router({
     .input(
       topupAmountInputSchema.extend({
         description: z.string().max(500).optional(),
+        idempotencyKey: z.string().min(8).max(128).optional(),
         orgId: z.string().min(1),
       }),
     )
@@ -235,6 +236,7 @@ export const platformAdminRouter = router({
           createdByUserId: ctx.userId,
           description: input.description,
           fxRateTomanPerUsd,
+          idempotencyKey: input.idempotencyKey,
           orgId: input.orgId,
           type: 'manual_credit',
         });
@@ -245,6 +247,7 @@ export const platformAdminRouter = router({
           metadata: {
             amountMicroUsd,
             amountToman,
+            idempotencyKey: input.idempotencyKey ?? null,
             transactionId: result.transaction.id,
           },
           organizationId: input.orgId,
@@ -279,6 +282,7 @@ export const platformAdminRouter = router({
       topupAmountInputSchema.extend({
         description: z.string().max(500).optional(),
         email: z.string().email().optional(),
+        idempotencyKey: z.string().min(8).max(128).optional(),
         publicCode: z.string().min(1).max(32).optional(),
         userId: z.string().min(1).optional(),
       }),
@@ -306,6 +310,7 @@ export const platformAdminRouter = router({
           createdByUserId: ctx.userId,
           description: input.description,
           fxRateTomanPerUsd,
+          idempotencyKey: input.idempotencyKey,
           userId,
         });
 
@@ -320,6 +325,7 @@ export const platformAdminRouter = router({
           metadata: {
             amountMicroUsd,
             amountToman,
+            idempotencyKey: input.idempotencyKey ?? null,
             targetUserId: userId,
             transactionId: result.transaction.id,
           },

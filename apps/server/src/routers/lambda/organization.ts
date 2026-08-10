@@ -699,6 +699,7 @@ export const organizationRouter = router({
         /** Decimal USD string preferred; integer micro-USD string also accepted via amountMicroUsd. */
         amountUsd: z.string().min(1).optional(),
         amountMicroUsd: z.string().regex(/^\d+$/).optional(),
+        idempotencyKey: z.string().min(8).max(128).optional(),
         orgId: z.string().min(1),
         orgMemberId: z.string().min(1),
         period: z.enum(['total', 'daily', 'weekly', 'monthly']).default('total'),
@@ -723,9 +724,18 @@ export const organizationRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AMOUNT' });
       }
 
+      if (
+        !Number.isSafeInteger(periodAmountMicroUsd) ||
+        periodAmountMicroUsd <= 0 ||
+        periodAmountMicroUsd > 100_000_000_000_000 // $100M micro-USD cap
+      ) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AMOUNT' });
+      }
+
       try {
         const result = await ctx.organizationModel.allocateMemberCredit({
           createdByUserId: ctx.userId,
+          idempotencyKey: input.idempotencyKey,
           orgId: input.orgId,
           orgMemberId: input.orgMemberId,
           period: input.period,
@@ -733,6 +743,21 @@ export const organizationRouter = router({
         });
         const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
         await keyService.ensureMemberKey(input.orgMemberId);
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'org.budget.allocate',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          metadata: {
+            idempotencyKey: input.idempotencyKey ?? null,
+            period: input.period,
+            periodAmountMicroUsd,
+            transactionId: result.transaction.id,
+          },
+          organizationId: input.orgId,
+          targetId: input.orgMemberId,
+          targetType: 'organization_member',
+          userAgent: ctx.userAgent,
+        });
         return {
           budgetPeriod: result.budget.period,
           budgetPeriodAmountMicroUsd: String(result.budget.periodAmountMicroUsd),

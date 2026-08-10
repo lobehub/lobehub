@@ -77,6 +77,34 @@ export class AicoOpenRouterKeyService {
     return !keyId || keyId.startsWith('mock_');
   }
 
+  /**
+   * Current-cycle spendable limit for OpenRouter (FIN-001).
+   * Pending next-period reservations inflate `reservedMicroUsd` but must not
+   * raise the live key limit until renewal applies them.
+   */
+  private currentCycleLimitMicro(budget: {
+    periodAmountMicroUsd?: number | null;
+    reservedMicroUsd?: number | null;
+  }): number {
+    const periodAmount = Number(budget.periodAmountMicroUsd ?? 0);
+    if (periodAmount > 0) return periodAmount;
+    return Number(budget.reservedMicroUsd ?? 0);
+  }
+
+  /** Best-effort retire a managed key before recreating (FIN-004). */
+  private async retireManagedKey(hash: string): Promise<void> {
+    try {
+      await this.client.updateKey({ disabled: true, hash });
+    } catch (error) {
+      console.warn('[aico] failed to disable stale OpenRouter key before recreate', error);
+    }
+    try {
+      await this.client.deleteKey(hash);
+    } catch (error) {
+      console.warn('[aico] failed to delete stale OpenRouter key before recreate', error);
+    }
+  }
+
   ensureUserKey = async (userId: string) => {
     return runExclusive(`user-key:${userId}`, async () => {
       const wallet = await this.billingModel.getOrCreateUserWallet(userId);
@@ -100,6 +128,7 @@ export class AicoOpenRouterKeyService {
           const message = error instanceof Error ? error.message : String(error);
           if (!/OpenRouter Management API (?:403|404)/.test(message)) throw error;
           console.warn('[aico] user OpenRouter key update failed; recreating', message);
+          await this.retireManagedKey(wallet.openrouterKeyId);
         }
       }
 
@@ -162,7 +191,8 @@ export class AicoOpenRouterKeyService {
 
       const period = (budget.period || 'total') as BudgetPeriod;
       const limitReset: OpenRouterKeyLimitReset = periodToOpenRouterLimitReset(period);
-      const limitMicro = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+      // FIN-001: never use reservedMicroUsd here — it may include pending next-period funds.
+      const limitMicro = this.currentCycleLimitMicro(budget);
       const limitUsd = microToOpenRouterLimitUsd(limitMicro);
       const shouldDisable =
         !budget.isActive ||
@@ -187,6 +217,7 @@ export class AicoOpenRouterKeyService {
           const message = error instanceof Error ? error.message : String(error);
           if (!/OpenRouter Management API (?:403|404)/.test(message)) throw error;
           console.warn('[aico] member OpenRouter key update failed; recreating', message);
+          await this.retireManagedKey(budget.openrouterKeyId);
         }
       }
 
@@ -240,16 +271,19 @@ export class AicoOpenRouterKeyService {
 
     const info = await this.client.getKey(budget.openrouterKeyId);
     const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
-    const reserved = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+    const currentCycle = this.currentCycleLimitMicro(budget);
+    const pendingHeld = Math.max(0, Number(budget.pendingPeriodAmountMicroUsd ?? 0));
     const remainingFromOr =
       info.limitRemaining == null
-        ? Math.max(0, reserved - usageMicro)
+        ? Math.max(0, currentCycle - usageMicro)
         : Number(openRouterUsdToMicroFloor(info.limitRemaining));
 
     await this.client.updateKey({ disabled: true, hash: budget.openrouterKeyId });
 
+    // Pending next-period reservation was never spendable on the OR key (FIN-001) —
+    // reclaim it from the wallet reservation in full.
     return {
-      remainingMicroUsd: Math.max(0, remainingFromOr),
+      remainingMicroUsd: Math.max(0, remainingFromOr) + pendingHeld,
       usageMicroUsd: usageMicro,
     };
   };
@@ -267,10 +301,11 @@ export class AicoOpenRouterKeyService {
 
     const info = await this.client.getKey(budget.openrouterKeyId);
     const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
-    const reserved = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+    // Settle the closing cycle only — leave pending next-period funds untouched.
+    const currentCycle = this.currentCycleLimitMicro(budget);
     const remaining =
       info.limitRemaining == null
-        ? Math.max(0, reserved - usageMicro)
+        ? Math.max(0, currentCycle - usageMicro)
         : Number(openRouterUsdToMicroFloor(info.limitRemaining));
 
     await this.orgModel.syncMemberBudgetUsage({

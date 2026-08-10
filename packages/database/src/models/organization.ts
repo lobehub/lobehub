@@ -538,6 +538,8 @@ export class OrganizationModel {
     createdByUserId: string;
     description?: string;
     fxRateTomanPerUsd?: number;
+    /** Optional client idempotency key — unique in wallet_transactions.gateway_ref_id (FIN-003). */
+    idempotencyKey?: string;
     orgId: string;
     type?: 'topup' | 'manual_credit' | 'refund';
   }) => {
@@ -545,37 +547,71 @@ export class OrganizationModel {
       throw new Error('AMOUNT_TOMAN_MUST_BE_POSITIVE_INTEGER');
     }
     const amountMicroUsd = params.amountMicroUsd ?? 0;
-    if (!Number.isInteger(amountMicroUsd) || amountMicroUsd < 0) {
-      throw new Error('AMOUNT_MICRO_USD_MUST_BE_NON_NEGATIVE_INTEGER');
+    if (!Number.isInteger(amountMicroUsd) || amountMicroUsd <= 0) {
+      throw new Error('AMOUNT_MICRO_USD_MUST_BE_POSITIVE_INTEGER');
     }
     const fxRateTomanPerUsd = params.fxRateTomanPerUsd ?? null;
     const type = params.type ?? 'manual_credit';
 
+    if (params.idempotencyKey) {
+      const existingTx = await this.db.query.walletTransactions.findFirst({
+        where: eq(walletTransactions.gatewayRefId, params.idempotencyKey),
+      });
+      if (existingTx) {
+        if (existingTx.orgId !== params.orgId || existingTx.type !== type) {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT');
+        }
+        const organization = await this.getById(params.orgId);
+        if (!organization) throw new Error('ORG_NOT_FOUND');
+        return { organization, transaction: existingTx };
+      }
+    }
+
     return this.db.transaction(async (tx) => {
-      const [txRow] = await tx
-        .insert(walletTransactions)
-        .values({
-          amountMicroUsd,
-          amountToman: params.amountToman,
-          createdByUserId: params.createdByUserId,
-          description: params.description,
-          fxRateTomanPerUsd,
-          orgId: params.orgId,
-          type,
-        })
-        .returning();
+      try {
+        const before = await tx.query.organizations.findFirst({
+          where: eq(organizations.id, params.orgId),
+        });
+        if (!before) throw new Error('ORG_NOT_FOUND');
+        const balanceBeforeMicroUsd = Number(before.walletBalanceMicroUsd ?? 0);
+        const balanceBeforeToman = Number(before.walletBalanceToman ?? 0);
 
-      const [org] = await tx
-        .update(organizations)
-        .set({
-          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${amountMicroUsd}`,
-          walletBalanceToman: sql`${organizations.walletBalanceToman} + ${params.amountToman}`,
-        })
-        .where(eq(organizations.id, params.orgId))
-        .returning();
-      if (!org) throw new Error('ORG_NOT_FOUND');
+        const [org] = await tx
+          .update(organizations)
+          .set({
+            walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${amountMicroUsd}`,
+            walletBalanceToman: sql`${organizations.walletBalanceToman} + ${params.amountToman}`,
+          })
+          .where(eq(organizations.id, params.orgId))
+          .returning();
+        if (!org) throw new Error('ORG_NOT_FOUND');
 
-      return { organization: org, transaction: txRow };
+        const [txRow] = await tx
+          .insert(walletTransactions)
+          .values({
+            amountMicroUsd,
+            amountToman: params.amountToman,
+            balanceAfterMicroUsd: Number(org.walletBalanceMicroUsd ?? 0),
+            balanceAfterToman: Number(org.walletBalanceToman ?? 0),
+            balanceBeforeMicroUsd,
+            balanceBeforeToman,
+            createdByUserId: params.createdByUserId,
+            description: params.description,
+            fxRateTomanPerUsd,
+            gatewayRefId: params.idempotencyKey ?? null,
+            orgId: params.orgId,
+            type,
+          })
+          .returning();
+
+        return { organization: org, transaction: txRow };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (params.idempotencyKey && /gateway_ref|unique|duplicate/i.test(message)) {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT', { cause: error });
+        }
+        throw error;
+      }
     });
   };
 
@@ -1159,6 +1195,8 @@ export class OrganizationModel {
    */
   allocateMemberCredit = async (params: {
     createdByUserId: string;
+    /** Optional client idempotency key — unique in wallet_transactions.gateway_ref_id (FIN-003). */
+    idempotencyKey?: string;
     orgId: string;
     orgMemberId: string;
     period: BudgetPeriod;
@@ -1167,6 +1205,28 @@ export class OrganizationModel {
     if (!isBudgetPeriod(params.period)) throw new Error('INVALID_PERIOD');
     if (!Number.isInteger(params.periodAmountMicroUsd) || params.periodAmountMicroUsd <= 0) {
       throw new Error('AMOUNT_MUST_BE_POSITIVE_INTEGER_MICRO_USD');
+    }
+    if (params.periodAmountMicroUsd > Number.MAX_SAFE_INTEGER) {
+      throw new Error('AMOUNT_TOO_LARGE');
+    }
+
+    if (params.idempotencyKey) {
+      const existingTx = await this.db.query.walletTransactions.findFirst({
+        where: eq(walletTransactions.gatewayRefId, params.idempotencyKey),
+      });
+      if (existingTx) {
+        if (existingTx.type !== 'allocate' || existingTx.orgId !== params.orgId) {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT');
+        }
+        const organization = await this.getById(params.orgId);
+        if (!organization) throw new Error('ORG_NOT_FOUND');
+        const budget = await this.getMemberBudgetForOrg({
+          orgId: params.orgId,
+          orgMemberId: params.orgMemberId,
+        });
+        if (!budget) throw new Error('BUDGET_NOT_FOUND');
+        return { budget, organization, transaction: existingTx };
+      }
     }
 
     return this.db.transaction(async (tx) => {
@@ -1225,6 +1285,16 @@ export class OrganizationModel {
           })
           .returning();
       } else if (existing.period === params.period) {
+        // Clearing a queued period change refunds that hold back to the org wallet.
+        const previousPending = Number(existing.pendingPeriodAmountMicroUsd ?? 0);
+        if (previousPending > 0) {
+          await tx
+            .update(organizations)
+            .set({
+              walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${previousPending}`,
+            })
+            .where(eq(organizations.id, params.orgId));
+        }
         [budget] = await tx
           .update(memberBudgets)
           .set({
@@ -1237,48 +1307,82 @@ export class OrganizationModel {
             pendingPeriodAmountMicroUsd: null,
             periodAmountMicroUsd: sql`${memberBudgets.periodAmountMicroUsd} + ${params.periodAmountMicroUsd}`,
             renewalStatus: 'active',
-            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} + ${params.periodAmountMicroUsd}`,
+            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} - ${previousPending} + ${params.periodAmountMicroUsd}`,
           })
           .where(eq(memberBudgets.id, existing.id))
           .returning();
       } else {
+        // Replace prior pending reservation (do not stack) and refund the old hold — FIN-001.
+        const previousPending = Number(existing.pendingPeriodAmountMicroUsd ?? 0);
+        if (previousPending > 0) {
+          await tx
+            .update(organizations)
+            .set({
+              walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${previousPending}`,
+            })
+            .where(eq(organizations.id, params.orgId));
+        }
         [budget] = await tx
           .update(memberBudgets)
           .set({
             isActive: true,
             pendingPeriod: params.period,
             pendingPeriodAmountMicroUsd: params.periodAmountMicroUsd,
-            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} + ${params.periodAmountMicroUsd}`,
+            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} - ${previousPending} + ${params.periodAmountMicroUsd}`,
           })
           .where(eq(memberBudgets.id, existing.id))
           .returning();
       }
 
-      const [txRow] = await tx
-        .insert(walletTransactions)
-        .values({
-          amountMicroUsd: params.periodAmountMicroUsd,
-          amountToman: 0,
-          createdByUserId: params.createdByUserId,
-          description: `Allocate period budget to member ${params.orgMemberId}`,
-          orgId: params.orgId,
-          orgMemberId: params.orgMemberId,
-          type: 'allocate',
-          userId: member.userId,
-        })
-        .returning();
+      const [freshOrg] = await tx
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, params.orgId))
+        .limit(1);
+      if (!freshOrg) throw new Error('ORG_NOT_FOUND');
 
-      return { budget, organization: updatedOrg, transaction: txRow };
+      // Balance after allocate (and any pending refund) vs balance before the CAS debit.
+      const balanceAfterMicroUsd = Number(freshOrg.walletBalanceMicroUsd ?? 0);
+      const balanceBeforeMicroUsd = balanceAfterMicroUsd + params.periodAmountMicroUsd;
+
+      try {
+        const [txRow] = await tx
+          .insert(walletTransactions)
+          .values({
+            amountMicroUsd: params.periodAmountMicroUsd,
+            amountToman: 0,
+            balanceAfterMicroUsd,
+            balanceBeforeMicroUsd,
+            createdByUserId: params.createdByUserId,
+            description: `Allocate period budget to member ${params.orgMemberId}`,
+            gatewayRefId: params.idempotencyKey ?? null,
+            orgId: params.orgId,
+            orgMemberId: params.orgMemberId,
+            type: 'allocate',
+            userId: member.userId,
+          })
+          .returning();
+
+        return { budget, organization: freshOrg, transaction: txRow };
+      } catch (error) {
+        // Unique gateway_ref_id race: another writer won — surface as conflict after rollback.
+        const message = error instanceof Error ? error.message : String(error);
+        if (params.idempotencyKey && /gateway_ref|unique|duplicate/i.test(message)) {
+          throw new Error('IDEMPOTENCY_KEY_CONFLICT', { cause: error });
+        }
+        throw error;
+      }
     });
   };
 
   /**
    * Reclaims a member's remaining reserved credit back to the org wallet on
    * revoke/remove, and clears the OpenRouter key material. Only the
-   * OpenRouter-reported `limit_remaining` is returned — the caller (key
-   * service) computes it and passes it in; this method never re-derives it
-   * from `reservedMicroUsd - settledUsageMicroUsd` to avoid double-crediting
-   * drift.
+   * OpenRouter-reported `limit_remaining` (plus any pending next-period hold)
+   * is returned — the caller (key service) computes it and passes it in.
+   *
+   * Idempotent (FIN-002): a second reclaim on an already-settled budget is a
+   * no-op and must not credit the org wallet again.
    */
   reclaimMemberRemainingCredit = async (params: {
     /** Null when reclaim runs from the background key outbox rather than a manager action. */
@@ -1308,20 +1412,45 @@ export class OrganizationModel {
         ),
       });
 
-      let budget: MemberBudgetItem | null = null;
+      let budget: MemberBudgetItem | null = existingBudget ?? null;
       if (existingBudget) {
-        [budget] = await tx
+        const [casBudget] = await tx
           .update(memberBudgets)
           .set({
             isActive: false,
             openrouterKeyCiphertext: null,
             openrouterKeyId: null,
+            pendingPeriod: null,
+            pendingPeriodAmountMicroUsd: null,
             renewalStatus: 'settled',
             reservedMicroUsd: 0,
           })
-          .where(eq(memberBudgets.id, existingBudget.id))
+          .where(
+            and(
+              eq(memberBudgets.id, existingBudget.id),
+              ne(memberBudgets.renewalStatus, 'settled'),
+            ),
+          )
           .returning();
+
+        if (!casBudget) {
+          // Already settled — return current org balance without inventing money.
+          const organization = await tx.query.organizations.findFirst({
+            where: eq(organizations.id, params.orgId),
+          });
+          if (!organization) throw new Error('ORG_NOT_FOUND');
+          return { budget: existingBudget, organization, transaction: null };
+        }
+        budget = casBudget;
       }
+
+      const balanceBeforeMicroUsd = Number(
+        (
+          await tx.query.organizations.findFirst({
+            where: eq(organizations.id, params.orgId),
+          })
+        )?.walletBalanceMicroUsd ?? 0,
+      );
 
       const [organization] = await tx
         .update(organizations)
@@ -1337,6 +1466,8 @@ export class OrganizationModel {
         .values({
           amountMicroUsd: remaining,
           amountToman: 0,
+          balanceAfterMicroUsd: Number(organization.walletBalanceMicroUsd ?? 0),
+          balanceBeforeMicroUsd,
           createdByUserId: params.createdByUserId ?? null,
           description: `Reclaim remaining credit from member ${params.orgMemberId}`,
           orgId: params.orgId,

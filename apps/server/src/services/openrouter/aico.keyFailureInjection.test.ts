@@ -376,4 +376,64 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     expect(JSON.stringify(result)).not.toContain(FAKE_SECRET);
     expect(result).not.toHaveProperty('key');
   });
+
+  it('FIN-001: ensureMemberKey OR limit uses periodAmount, not reserved with pending', async () => {
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const orgModel = new OrganizationModel(db);
+    const org = await orgModel.createOrganization({
+      name: 'Pending Limit Org',
+      ownerUserId: userId,
+    });
+    const members = await orgModel.listMembers(org.id);
+    const ownerMember = members[0];
+
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+
+    await db.insert(memberBudgets).values({
+      isActive: true,
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+      pendingPeriod: 'monthly',
+      pendingPeriodAmountMicroUsd: 30_000_000,
+      period: 'total',
+      periodAmountMicroUsd: 10_000_000,
+      reservedMicroUsd: 40_000_000,
+    });
+
+    await keys.ensureMemberKey(ownerMember.id);
+    const budget = await orgModel.getMemberBudget(ownerMember.id);
+    const key = client.keys.get(budget!.openrouterKeyId!);
+    // Must be current-cycle $10, not reserved $40.
+    expect(key.limit).toBe(10);
+  });
+
+  it('FIN-004: recreate after 404 disables/deletes the stale key hash', async () => {
+    const billing = new AicoBillingModel(db);
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
+      amountToman: 50_000,
+      createdByUserId: userId,
+      fxRateTomanPerUsd: 5000,
+      userId,
+    });
+    await keys.ensureUserKey(userId);
+    const wallet = await billing.getUserWallet(userId);
+    const staleHash = wallet!.openrouterKeyId!;
+    expect(client.keys.has(staleHash)).toBe(true);
+
+    // Next update looks like a vanished remote key — recreate path.
+    client.updateKey = async () => {
+      throw new Error('OpenRouter Management API 404: key not found');
+    };
+
+    await keys.ensureUserKey(userId);
+    expect(client.keys.has(staleHash)).toBe(false);
+    const after = await billing.getUserWallet(userId);
+    expect(after?.openrouterKeyId).toBeTruthy();
+    expect(after?.openrouterKeyId).not.toBe(staleHash);
+  });
 });

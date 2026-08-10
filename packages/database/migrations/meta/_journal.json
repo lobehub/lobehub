@@ -1001,6 +1001,20 @@
       "when": 1786277590791,
       "tag": "0142_aico_security_audit_and_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0143_aico_wallet_tx_gateway_ref_uidx",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786610000000,
+      "tag": "0144_aico_wallet_tx_balance_audit",
+      "breakpoints": true
     }
   ],
   "version": "6"
