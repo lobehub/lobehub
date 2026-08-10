@@ -551,6 +551,26 @@ describe('ChatGroupModel', () => {
       expect(rosters[0].chatGroupId).toBe('owner-group');
     });
 
+    it('should let a freshly built virtual agent join its first group', async () => {
+      // The group agent builder creates `virtual: true` and adds it here. The
+      // invariant is "exactly one group", not "never joins one" — rejecting
+      // every virtual agent breaks the builder outright.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({ id: 'builder-group', title: 'Builder', userId });
+        await trx.insert(agentsTable).values({
+          id: 'freshly-built',
+          title: 'Freshly Built',
+          userId,
+          virtual: true,
+        });
+      });
+
+      const result = await chatGroupModel.addAgentsToGroup('builder-group', ['freshly-built']);
+
+      expect(result.added).toHaveLength(1);
+      expect(result.added[0].agentId).toBe('freshly-built');
+    });
+
     it('should add multiple agents to group', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {

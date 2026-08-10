@@ -503,18 +503,35 @@ export class ChatGroupModel {
           // hidden it otherwise) but the group can't hold private members.
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
         }
-        if (row.virtual) {
-          // `resolveGroupMembershipType` treats a virtual member as OWNED by
-          // its group: the delete path takes it down with the group, and the
-          // transfer path rehomes it. Both are only safe while such an agent
-          // belongs to exactly one group.
-          //
-          // The member picker already excludes virtual agents
-          // (`buildQueryAgentsWhere`), so nothing in the product sends one
-          // here — but that made this an invariant enforced by a query rather
-          // than by the write. Sending a known group-built member or
-          // supervisor id would otherwise link it to a second group, and then
-          // deleting either group would delete an agent the other still uses.
+      }
+
+      // `resolveGroupMembershipType` treats a virtual member as OWNED by its
+      // group: the delete path takes it down with the group, the transfer path
+      // rehomes it. Both are sound only while such an agent belongs to exactly
+      // ONE group — otherwise deleting either group destroys an agent the
+      // other still lists.
+      //
+      // The invariant is "exactly one", not "never joins one": the group agent
+      // builder legitimately creates a `virtual: true` agent and adds it here,
+      // and that is its first and only membership. So reject only a virtual
+      // agent that is ALREADY on another group's roster — which nothing in the
+      // product does, since the member picker filters virtual agents
+      // (`buildQueryAgentsWhere`), leaving this enforced by a query rather
+      // than by the write until now.
+      const virtualAgentIds = agentIds.filter((id) => visibleById.get(id)?.virtual);
+      if (virtualAgentIds.length > 0) {
+        const [poached] = await this.db
+          .select({ agentId: chatGroupsAgents.agentId })
+          .from(chatGroupsAgents)
+          .where(
+            and(
+              inArray(chatGroupsAgents.agentId, virtualAgentIds),
+              ne(chatGroupsAgents.chatGroupId, groupId),
+            ),
+          )
+          .limit(1);
+
+        if (poached) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'A group-owned agent cannot join another group',
