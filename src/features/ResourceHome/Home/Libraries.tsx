@@ -17,29 +17,31 @@ import { useKnowledgeBaseStore } from '@/store/library';
 import SectionTitle from './SectionTitle';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
+  chip: css`
     cursor: pointer;
 
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    align-items: center;
 
-    padding: 16px;
+    min-width: 0;
+    padding-block: 14px;
+    padding-inline: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
     text-align: start;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     transition: all 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
       border-color: ${cssVar.colorBorder};
-      box-shadow: ${cssVar.boxShadowTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
-  createCard: css`
+  createChip: css`
     cursor: pointer;
 
     display: flex;
@@ -47,7 +49,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    min-height: 88px;
+    padding-block: 14px;
+    padding-inline: 16px;
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -67,18 +70,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 0.5;
     }
   `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 12px;
   `,
   name: css`
@@ -92,6 +86,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * How many libraries the quick-access row shows. The list is ordered by last
+ * update, so this is "the ones you are working in"; the sidebar stays the full
+ * index, which is why the home page must not repeat every library here.
+ */
+const MAX_LIBRARIES = 9;
+
+/**
+ * Quick access to the user's libraries — the everyday entry point of the
+ * library home, and the page's only library list.
+ */
 const Libraries = memo(() => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
@@ -120,15 +125,15 @@ const Libraries = memo(() => {
       <SectionTitle title={t('home.libraries')} />
       {isLoading ? (
         <div className={styles.grid}>
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 88, width: '100%' }} />
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton.Node active key={index} style={{ height: 52, width: '100%' }} />
           ))}
         </div>
       ) : (
         <div className={styles.grid}>
-          {data?.map((item) => (
+          {data?.slice(0, MAX_LIBRARIES).map((item) => (
             <button
-              className={styles.card}
+              className={styles.chip}
               key={item.id}
               type={'button'}
               onClick={() => {
@@ -136,15 +141,12 @@ const Libraries = memo(() => {
                 navigate(`/resource/library/${item.id}`);
               }}
             >
-              <Flexbox horizontal align={'center'} gap={8}>
-                <LibIcon size={18} />
-                <span className={styles.name}>{item.name}</span>
-              </Flexbox>
-              {item.description && <span className={styles.description}>{item.description}</span>}
+              <LibIcon size={18} />
+              <span className={styles.name}>{item.name}</span>
             </button>
           ))}
           <button
-            className={styles.createCard}
+            className={styles.createChip}
             disabled={!canCreate}
             type={'button'}
             onClick={handleCreate}

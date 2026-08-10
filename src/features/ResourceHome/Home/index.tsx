@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 import NavHeader from '@/features/NavHeader';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
 
-import FrequentLibraries from './FrequentLibraries';
 import Libraries from './Libraries';
 import RecentFiles from './RecentFiles';
 import RecentPages from './RecentPages';
@@ -29,9 +28,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 /**
- * The library-style landing page of /resource: quick library access, then
- * works → recent pages → libraries → recent files — instead of the flat
- * all-files table (which now lives at /resource/all).
+ * The library-style landing page of /resource: libraries (once — the sidebar
+ * holds the full index), then works → recent pages → recent files, instead of
+ * the flat all-files table (which now lives at /resource/all).
  */
 const ResourceHomeDashboard = memo(() => {
   const { t } = useTranslation('file');
@@ -45,10 +44,9 @@ const ResourceHomeDashboard = memo(() => {
       />
       <div className={styles.scroll}>
         <Flexbox className={styles.content} gap={40}>
-          <FrequentLibraries />
+          <Libraries />
           <RecentWorks />
           <RecentPages />
-          <Libraries />
           <RecentFiles />
         </Flexbox>
       </div>
