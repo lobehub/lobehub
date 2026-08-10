@@ -20,8 +20,11 @@ interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
   /**
    * Data sync callback, called when data is available (both cached and fresh data)
    * Used to sync data to Zustand store
+   *
+   * Return `false` when the destination is temporarily unable to consume the
+   * snapshot. The same key/data pair will then be retried on a later render.
    */
-  onData?: (data: T) => void;
+  onData?: (data: T) => boolean | void;
   /**
    * Whether to skip sync (optional, for conditional skipping)
    */
@@ -73,7 +76,9 @@ export function useClientDataSWRWithSync<T>(
       const lastSynced = lastSyncedRef.current;
       if (lastSynced?.key === serializedKey && Object.is(lastSynced.data, data)) return;
 
-      onData(data);
+      const consumed = onData(data);
+      if (consumed === false) return;
+
       lastSyncedRef.current = { data, key: serializedKey };
     },
     [onData, serializedKey, skipSync],

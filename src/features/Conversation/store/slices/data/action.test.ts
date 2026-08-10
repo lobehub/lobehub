@@ -747,10 +747,16 @@ describe('DataSlice', () => {
       store.getState().useFetchMessages(requestedContext);
       const options = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1)?.[2] as
         | {
-            onData?: (data: UIChatMessage[]) => void;
+            onData?: (data: UIChatMessage[]) => boolean | void;
             syncBeforePaint?: boolean;
           }
         | undefined;
+
+      const deferred = options?.onData?.(cachedMessages);
+
+      expect(deferred).toBe(false);
+      expect(store.getState().dbMessages).toEqual([]);
+      expect(store.getState().messagesInit).toBe(false);
 
       store.setState({ context: requestedContext, messagesInit: false });
       options?.onData?.(cachedMessages);

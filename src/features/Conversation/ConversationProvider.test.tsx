@@ -3,7 +3,7 @@
  */
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -179,6 +179,17 @@ const OverlayHeightSetter = () => {
   return <button onClick={() => setChatInputOverlayHeight(48)}>set overlay height</button>;
 };
 
+const HydratedProjection = ({ messages }: { messages: UIChatMessage[] }) => {
+  const storeApi = useConversationStoreApi();
+
+  useLayoutEffect(() => {
+    storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
+    storeApi.setState({ messagesInit: true });
+  }, [messages, storeApi]);
+
+  return null;
+};
+
 const renderChatList = (messages?: UIChatMessage[]) =>
   render(
     <ConversationProvider
@@ -322,6 +333,18 @@ describe('ConversationProvider', () => {
     renderChatList();
 
     expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
+  });
+
+  it('preserves a hydrated cache projection while the parent message bucket is one render behind', () => {
+    render(
+      <ConversationProvider context={oldContext} hasInitMessages={false}>
+        <HydratedProjection messages={oldMessages} />
+        <ChatList welcome={<div>WELCOME</div>} />
+      </ConversationProvider>,
+    );
+
+    expect(screen.queryByTestId('skeleton-list')).not.toBeInTheDocument();
+    expect(screen.getByTestId('virtualized-list')).toHaveTextContent('msg_old');
   });
 
   it('renders a retryable full-surface error when the first request fails', () => {

@@ -279,14 +279,14 @@ export const dataSlice: StateCreator<
           const storeContextKey = messageMapKey(get().context);
           if (contextKey !== storeContextKey) {
             log(
-              '[useFetchMessages] dropped stale result | requestContextKey=%s | storeContextKey=%s',
+              '[useFetchMessages] deferred result until context switch | requestContextKey=%s | storeContextKey=%s',
               contextKey,
               storeContextKey,
             );
-            return;
+            return false;
           }
 
-          // Defense-in-depth gate: drop any SWR onData while the
+          // Defense-in-depth gate: defer any SWR onData while the
           // topic is streaming. DB fan-out for chunk writes is async and lags
           // the WS push by anywhere from 100ms to several seconds; an SWR
           // refetch that lands inside that window returns the assistant row
@@ -300,7 +300,7 @@ export const dataSlice: StateCreator<
           // updatedAt comparison degenerates when server's pushed snapshot
           // carries a DB updatedAt equal to a later stale fetch's row.
           if (operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState()))
-            return;
+            return false;
 
           const prevDbMessages = get().dbMessages;
           const activeVoiceMessageIds = new Set(

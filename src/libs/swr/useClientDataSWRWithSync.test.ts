@@ -70,4 +70,31 @@ describe('useClientDataSWRWithSync', () => {
 
     expect(synchronizedIds).toEqual(['cached-a', 'cached-b']);
   });
+
+  it('retries a hydrated snapshot when the destination initially rejects it', () => {
+    const attempts: boolean[] = [];
+    let projected: typeof CACHED_A | undefined;
+    const { rerender } = renderHook(
+      ({ ready }: { ready: boolean }) => {
+        useClientDataSWRWithSync<{ id: string }[]>(KEY_A, null, {
+          onData: (data) => {
+            attempts.push(ready);
+            if (!ready) return false;
+
+            projected = data;
+          },
+          syncBeforePaint: true,
+        });
+      },
+      { initialProps: { ready: false }, wrapper: createWrapper() },
+    );
+
+    expect(attempts).toEqual([false]);
+    expect(projected).toBeUndefined();
+
+    rerender({ ready: true });
+
+    expect(attempts).toEqual([false, true]);
+    expect(projected).toBe(CACHED_A);
+  });
 });

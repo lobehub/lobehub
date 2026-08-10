@@ -84,9 +84,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('operationState', operationState!);
     useStoreUpdater('skipFetch', skipFetch!);
 
-    // When external messages are provided, mark as initialized
-    useStoreUpdater('messagesInit', skipFetch ? true : (hasInitMessages ?? false));
-
     // Reset store state before paint when context changes.
     // useLayoutEffect fires after commit but before browser paint, and React processes
     // store updates triggered here synchronously — so subscribers re-render before paint.
@@ -116,6 +113,19 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         }
       }
     }, [contextKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Initialization is a one-way settled-data signal within a conversation.
+    // A hydrated SWR snapshot may set it to true in a child layout effect while
+    // the parent ChatStore projection is still one render behind. Mirroring a
+    // stale `hasInitMessages=false` back into the store would then erase that
+    // cache hit and paint a skeleton. Context changes reset it explicitly in
+    // the layout effect above; external data only needs to promote it to true.
+    useLayoutEffect(() => {
+      if (!skipFetch && !hasInitMessages) return;
+      if (storeApi.getState().messagesInit) return;
+
+      storeApi.setState({ messagesInit: true });
+    }, [hasInitMessages, skipFetch, storeApi]);
 
     // Sync external messages into store
     useEffect(() => {
