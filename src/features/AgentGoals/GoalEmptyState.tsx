@@ -93,7 +93,7 @@ const styles = createStaticStyles(({ css }) => ({
      `&, &:hover, &:active`, so a single-class rule here loses the cascade and the
      hint renders at full text weight. */
   howHint: css`
-    align-self: flex-start;
+    margin-inline-end: -8px;
 
     &&,
     &&:active {
@@ -113,7 +113,6 @@ const styles = createStaticStyles(({ css }) => ({
   section: css`
     padding-block: 24px;
     padding-inline: 40px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -135,8 +134,8 @@ interface GoalEmptyStateProps {
  * "Goals will appear here" taught none of that, so this screen carries the
  * concept (what a goal is) and three seeded examples that demonstrate what a
  * *judgeable* outcome reads like. The mechanism — what happens round after
- * round — is one level down, behind the hint at the bottom, so the two things
- * that actually start a goal stay above the fold.
+ * round — is one level down, behind the hint sitting opposite the examples
+ * heading, so the two things that actually start a goal stay above the fold.
  */
 const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
   const { t } = useTranslation('chat');
@@ -163,9 +162,20 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
       </Flexbox>
 
       <Flexbox className={styles.section} gap={12}>
-        <Text fontSize={13} type={'secondary'} weight={600}>
-          {t('goalEmpty.examplesTitle')}
-        </Text>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Text fontSize={13} type={'secondary'} weight={600}>
+            {t('goalEmpty.examplesTitle')}
+          </Text>
+          <Button
+            className={styles.howHint}
+            icon={CircleHelpIcon}
+            size={'small'}
+            type={'text'}
+            onClick={() => createGoalHowItWorksModal()}
+          >
+            {t('goalEmpty.howHint')}
+          </Button>
+        </Flexbox>
         <div className={styles.exampleGrid}>
           {GOAL_EXAMPLE_KEYS.map((key) => {
             const seed = buildGoalExampleSeed(key, (localeKey) => t(localeKey as never));
@@ -224,16 +234,6 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
             <Text fontSize={12}>{t('goalEmpty.judge.good')}</Text>
           </Flexbox>
         </Flexbox>
-
-        <Button
-          className={styles.howHint}
-          icon={CircleHelpIcon}
-          size={'small'}
-          type={'text'}
-          onClick={() => createGoalHowItWorksModal()}
-        >
-          {t('goalEmpty.howHint')}
-        </Button>
       </Flexbox>
     </Block>
   );
