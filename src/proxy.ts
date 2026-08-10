@@ -54,6 +54,8 @@ export const config = {
 
     '/signup(.*)',
     '/signin(.*)',
+    '/terms(.*)',
+    '/privacy(.*)',
     '/verify-email(.*)',
     '/verify-phone(.*)',
     '/verify-im(.*)',

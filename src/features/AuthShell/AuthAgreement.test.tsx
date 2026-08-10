@@ -34,6 +34,8 @@ const expectLinksToOpenInNewTabs = () => {
   const links = screen.getAllByRole('link');
 
   expect(links).toHaveLength(2);
+  expect(links[0]?.getAttribute('href')).toBe('/terms');
+  expect(links[1]?.getAttribute('href')).toBe('/privacy');
   for (const link of links) {
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');

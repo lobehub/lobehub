@@ -371,6 +371,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
       .filter(([key]) => key.toUpperCase().startsWith('NEXT_PUBLIC_'))
       .map(([key, value]) => [`process.env.${key}`, JSON.stringify(value)]),
   );
+  const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
 
   return {
     '__CI__': process.env.CI === 'true' ? 'true' : 'false',
@@ -379,6 +380,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
     '__MOBILE__': JSON.stringify(options.isMobile),
     '__REACT_SCAN__': process.env.REACT_SCAN === 'true' ? 'true' : 'false',
     '__TEST__': 'false',
+    ...(appUrl ? { 'process.env.APP_URL': JSON.stringify(appUrl) } : {}),
     ...nextPublicDefine,
     // Keep a safe fallback so generic `process.env` access won't crash in browser runtime.
     'process.env': '{}',
