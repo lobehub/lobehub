@@ -1,5 +1,5 @@
 import type { QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, SortType } from '@lobechat/types';
+import { FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
 import {
   and,
   asc,
@@ -12,6 +12,7 @@ import {
   like,
   ne,
   notExists,
+  notInArray,
   or,
   sql,
   sum,
@@ -375,6 +376,10 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
+      // Artifacts owned by another surface (acceptance evidence) stay reachable
+      // by id, but never appear in a listing. Applied here rather than in
+      // `ownership()` so single-row reads and deletes still resolve them.
+      or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);

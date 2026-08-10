@@ -1,7 +1,20 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, SortType } from '@lobechat/types';
-import { and, asc, desc, eq, ilike, isNull, ne, notExists, or, type SQL, sql } from 'drizzle-orm';
+import { FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { alias, type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 
 import { DocumentModel } from '../../models/document';
@@ -231,7 +244,17 @@ export class KnowledgeRepo {
 
   private scope = () => ({ userId: this.userId, workspaceId: this.workspaceId });
 
-  private fileScope = () => buildWorkspaceWhere(this.scope(), f);
+  /**
+   * Scope predicate every file listing shares: ownership plus the exclusion of
+   * sources that belong to another surface (acceptance evidence). Kept as one
+   * helper so a new listing can't accidentally pick up ownership alone and
+   * start leaking hundreds of verification artifacts back into the library.
+   */
+  private fileScope = () =>
+    and(
+      buildWorkspaceWhere(this.scope(), f),
+      or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+    );
 
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
 

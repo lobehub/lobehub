@@ -1,6 +1,8 @@
 import type { VerifyEvidence } from '@lobechat/types';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { FileSource } from '@lobechat/types';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
+import { files } from '../schemas/file';
 import { verifyCheckResults, verifyEvidence } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -28,11 +30,43 @@ export class VerifyEvidenceModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyEvidence);
 
+  /**
+   * Attribute the backing file rows to the acceptance surface so the resource
+   * library stops listing them.
+   *
+   * Stamped here rather than at upload time on purpose: artifacts reach the
+   * `files` table through the generic `file.createFile` procedure, which every
+   * CLI version and every capturer shares. Tagging at the moment the artifact
+   * becomes evidence is the one funnel all of them pass through, so an outdated
+   * `lh` binary can't keep seeding untagged files into the library.
+   *
+   * Scoped like any other read: workspace mode covers all member files, personal
+   * mode only the caller's. `source IS NULL` keeps a generation-sourced file
+   * (attached as evidence) from losing its original attribution.
+   */
+  private markFilesAsEvidence = async (rows: CreateVerifyEvidence[]) => {
+    const fileIds = [...new Set(rows.map((r) => r.fileId).filter((id): id is string => !!id))];
+    if (fileIds.length === 0) return;
+
+    await this.db
+      .update(files)
+      .set({ source: FileSource.Acceptance })
+      .where(
+        and(
+          inArray(files.id, fileIds),
+          isNull(files.source),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        ),
+      );
+  };
+
   create = async (params: CreateVerifyEvidence) => {
     const [result] = await this.db
       .insert(verifyEvidence)
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
       .returning();
+
+    await this.markFilesAsEvidence([params]);
 
     return result;
   };
@@ -40,7 +74,7 @@ export class VerifyEvidenceModel {
   /** Batch-insert the artifacts captured by a single probe / verifier run. */
   createMany = async (rows: CreateVerifyEvidence[]) => {
     if (rows.length === 0) return [];
-    return this.db
+    const inserted = await this.db
       .insert(verifyEvidence)
       .values(
         rows.map((r) =>
@@ -48,6 +82,10 @@ export class VerifyEvidenceModel {
         ),
       )
       .returning();
+
+    await this.markFilesAsEvidence(rows);
+
+    return inserted;
   };
 
   findById = async (id: string) => {

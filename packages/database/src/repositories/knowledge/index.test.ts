@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FilesTabs } from '@lobechat/types';
+import { FileSource, FilesTabs } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -1302,6 +1302,60 @@ describe('KnowledgeRepo', () => {
       expect(ids).toContain('root-file');
       expect(ids).toContain('folder-1');
       expect(ids).not.toContain('child-file');
+    });
+  });
+
+  describe('acceptance evidence hiding', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'library-file',
+          fileType: 'text/plain',
+          name: 'notes.txt',
+          size: 100,
+          url: 'library-url',
+          userId,
+        },
+        {
+          id: 'evidence-file',
+          fileType: 'text/plain',
+          name: 'payload-execution.txt',
+          size: 100,
+          source: FileSource.Acceptance,
+          url: 'evidence-url',
+          userId,
+        },
+        {
+          id: 'generated-file',
+          fileType: 'image/png',
+          name: 'generated.png',
+          size: 100,
+          source: FileSource.ImageGeneration,
+          url: 'generated-url',
+          userId,
+        },
+      ]);
+    });
+
+    it('should hide acceptance evidence from the file list', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const ids = result.map((item) => item.fileId);
+      expect(ids).toContain('library-file');
+      expect(ids).toContain('generated-file');
+      expect(ids).not.toContain('evidence-file');
+    });
+
+    it('should hide acceptance evidence from recent items', async () => {
+      const result = await knowledgeRepo.queryRecent(50, 'file');
+
+      expect(result.map((item) => item.fileId)).not.toContain('evidence-file');
+    });
+
+    it('should still resolve acceptance evidence by id', async () => {
+      const result = await knowledgeRepo.findById('evidence-file', 'file');
+
+      expect(result?.name).toBe('payload-execution.txt');
     });
   });
 
