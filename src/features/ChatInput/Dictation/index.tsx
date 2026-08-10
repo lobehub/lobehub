@@ -30,15 +30,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
-    overflow: hidden;
-
-    border-radius: 9999px;
-
     color: ${cssVar.colorWhite};
-
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
-
     transition:
       color 160ms ease,
       background 160ms ease,
@@ -230,6 +224,7 @@ const Dictation = memo(() => {
           className={styles.listening}
           data-testid="voice-dictation-stop"
           icon={Mic}
+          style={{ borderRadius: '50%' }}
           title={t('voiceDictation.stop')}
           onClick={() => void client.stop()}
         />
