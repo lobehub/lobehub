@@ -25,4 +25,24 @@ describe('brandedModelId', () => {
     expect(isBrandedOpenRouterModelId('openrouter/auto')).toBe(false);
     expect(formatBrandedModelId('openrouter/auto')).toBe('openrouter/auto');
   });
+
+  it('rewrites openrouter provider label to branding name when custom branding is on', async () => {
+    vi.doMock('@/const/version', () => ({ isCustomBranding: true }));
+    const { formatBrandedProviderId, isBrandedOpenRouterProvider } =
+      await import('./brandedModelId');
+
+    expect(isBrandedOpenRouterProvider('openrouter')).toBe(true);
+    expect(isBrandedOpenRouterProvider('OpenRouter')).toBe(true);
+    expect(formatBrandedProviderId('openrouter')).toBe(BRANDING_NAME);
+    expect(formatBrandedProviderId('openai')).toBe('openai');
+  });
+
+  it('leaves provider labels unchanged when not custom branding', async () => {
+    vi.doMock('@/const/version', () => ({ isCustomBranding: false }));
+    const { formatBrandedProviderId, isBrandedOpenRouterProvider } =
+      await import('./brandedModelId');
+
+    expect(isBrandedOpenRouterProvider('openrouter')).toBe(false);
+    expect(formatBrandedProviderId('openrouter')).toBe('openrouter');
+  });
 });
