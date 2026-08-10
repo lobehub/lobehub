@@ -30,10 +30,22 @@ const buildRun = async (operationId: string, owner = userId) => {
   return run.id;
 };
 
-/** Move a run's `updated_at` back without tripping the `$onUpdate` stamp. */
+/**
+ * Move a run's `updated_at` back without tripping the `$onUpdate` stamp.
+ *
+ * Deliberately lands on a sub-millisecond remainder (`.xxx456`). `timestamptz`
+ * holds microseconds while a cursor read back through a JS `Date` carries only
+ * milliseconds, so a keyset that compares the raw column against the cursor
+ * fails exactly on rows like these — and `now()` produces one only by chance,
+ * which is how the bug reached CI green locally.
+ */
 const backdate = async (runId: string, ms: number) => {
   await serverDB.execute(
-    sql`update ${verifyRuns} set updated_at = now() - make_interval(secs => ${ms / 1000}) where id = ${runId}`,
+    sql`update ${verifyRuns}
+        set updated_at = date_trunc('second', now())
+                       - make_interval(secs => ${ms / 1000})
+                       + interval '123456 microseconds'
+        where id = ${runId}`,
   );
 };
 

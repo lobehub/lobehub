@@ -559,6 +559,15 @@ export class VerifyRunModel {
    * single oldest-N read would hand back the same unrecoverable rows every tick
    * and starve every newer stranded run behind them. `id` breaks ties so rows
    * sharing a timestamp can't be skipped or repeated at a page boundary.
+   *
+   * `updatedAt` is compared/ordered at **millisecond** precision, for the same
+   * reason {@link queryPage} does it: the cursor is read back off a row as a JS
+   * `Date` and so carries only milliseconds, while the column is `timestamptz`
+   * and holds microseconds. Comparing the raw column against the truncated
+   * cursor makes a row with a sub-millisecond remainder satisfy its own
+   * `>` bound — it is returned again on the next page, the cursor never gets
+   * past it, and the scan spins on that row instead of reaching the ones behind
+   * it. Truncating both sides keeps the keyset lossless.
    */
   static findStuckVerifying = async (
     db: LobeChatDatabase,
@@ -566,6 +575,10 @@ export class VerifyRunModel {
     options?: { after?: { id: string; updatedAt: Date }; limit?: number },
   ): Promise<VerifyRunItem[]> => {
     const { after, limit = 200 } = options ?? {};
+
+    // Millisecond-truncated updatedAt — the precision the cursor round-trips at.
+    const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
+
     const conditions = [
       eq(verifyRuns.status, 'verifying'),
       lt(verifyRuns.updatedAt, olderThan),
@@ -575,8 +588,8 @@ export class VerifyRunModel {
     if (after) {
       conditions.push(
         or(
-          gt(verifyRuns.updatedAt, after.updatedAt),
-          and(eq(verifyRuns.updatedAt, after.updatedAt), gt(verifyRuns.id, after.id)),
+          gt(updatedAtMs, after.updatedAt),
+          and(eq(updatedAtMs, after.updatedAt), gt(verifyRuns.id, after.id)),
         )!,
       );
     }
@@ -585,7 +598,7 @@ export class VerifyRunModel {
       .select()
       .from(verifyRuns)
       .where(and(...conditions))
-      .orderBy(asc(verifyRuns.updatedAt), asc(verifyRuns.id))
+      .orderBy(asc(updatedAtMs), asc(verifyRuns.id))
       .limit(limit);
   };
 
