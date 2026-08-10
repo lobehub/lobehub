@@ -1,5 +1,5 @@
 import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { uuid } from '@/utils/uuid';
 
@@ -44,6 +44,8 @@ interface TableImportConfig {
   // Unique constraint fields
   uniqueConstraints?: string[];
 }
+
+const IMPORT_BATCH_SIZE = 100;
 
 // Import table configuration
 const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
@@ -351,6 +353,56 @@ export class DataImporterRepos {
   }
 
   /**
+   * Restore self-references after all rows have been inserted and their IDs are mapped.
+   */
+  private async restoreSelfReferences(
+    trx: any,
+    table: any,
+    tableName: string,
+    tableData: any[],
+    selfReferences: NonNullable<TableImportConfig['selfReferences']>,
+  ) {
+    if (selfReferences.length === 0) return;
+
+    const idMap = this.idMaps[tableName];
+
+    for (let i = 0; i < tableData.length; i += IMPORT_BATCH_SIZE) {
+      const batch = tableData.slice(i, i + IMPORT_BATCH_SIZE);
+      const idsToUpdate = new Set<string>();
+      const valuesToSet: Record<string, any> = {};
+
+      for (const { field, sourceField = field } of selfReferences) {
+        const cases = batch.flatMap((record) => {
+          const recordId = idMap[record.id] ?? (record.clientId ? idMap[record.clientId] : null);
+          const referencedOriginalId = record[sourceField];
+
+          if (!recordId || referencedOriginalId === undefined) return [];
+
+          idsToUpdate.add(recordId);
+          const referencedId =
+            referencedOriginalId === null ? null : (idMap[referencedOriginalId] ?? null);
+
+          return [sql`WHEN ${table.id} = ${recordId} THEN ${referencedId}`];
+        });
+
+        if (cases.length > 0) {
+          valuesToSet[field] = sql`CASE ${sql.join(cases, sql` `)} ELSE ${table[field]} END`;
+        }
+      }
+
+      if (idsToUpdate.size === 0) continue;
+
+      // Keep imported timestamps stable instead of invoking the column's on-update value.
+      if ('updatedAt' in table) valuesToSet.updatedAt = sql`${table.updatedAt}`;
+
+      await trx
+        .update(table)
+        .set(valuesToSet)
+        .where(inArray(table.id, [...idsToUpdate]));
+    }
+  }
+
+  /**
    * Unified table data import function - Handles all types of tables
    */
   private async importTableData(
@@ -523,7 +575,7 @@ export class DataImporterRepos {
           }
         }
 
-        // Simplified processing of self-reference fields - directly set to null
+        // Temporarily clear self-references until every imported ID has been mapped.
         for (const selfRef of selfReferences) {
           const { field } = selfRef;
           if (newRecord[field] !== undefined) {
@@ -673,10 +725,10 @@ export class DataImporterRepos {
       filteredData.forEach((record) => delete record.newRecord._skip);
 
       // 6. Batch insert data
-      const BATCH_SIZE = 100;
+      const insertedOriginalIds = new Set<string>();
 
-      for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
-        const batch = filteredData.slice(i, i + BATCH_SIZE).filter(Boolean);
+      for (let i = 0; i < filteredData.length; i += IMPORT_BATCH_SIZE) {
+        const batch = filteredData.slice(i, i + IMPORT_BATCH_SIZE).filter(Boolean);
 
         const itemsToInsert = batch.map((item) => item.newRecord);
         const originalIds = batch.map((item) => item.originalId);
@@ -700,6 +752,7 @@ export class DataImporterRepos {
           }
 
           result.added += insertResult.length;
+          originalIds.forEach((id) => insertedOriginalIds.add(id));
 
           // Establish ID mapping relationship (only for non-composite key tables)
           if (!isCompositeKey) {
@@ -734,6 +787,14 @@ export class DataImporterRepos {
           result.errors += batch.length;
         }
       }
+
+      await this.restoreSelfReferences(
+        trx,
+        table,
+        tableName,
+        tableData.filter((record) => insertedOriginalIds.has(record.id)),
+        selfReferences,
+      );
 
       return result;
     } catch (error) {
