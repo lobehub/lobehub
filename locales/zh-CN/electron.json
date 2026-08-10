@@ -126,7 +126,7 @@
   "tab.overflow": "另有 {{count}} 个标签页",
   "tab.pin": "固定标签页",
   "tab.resizeSplitView": "调整分栏宽度",
-  "tab.running": "智能体运行中",
+  "tab.running": "助理运行中",
   "tab.unpin": "取消固定",
   "tab.unread": "新消息",
   "updater.checkingUpdate": "检查新版本",
