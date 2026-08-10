@@ -1,36 +1,11 @@
 import type { EvalRunMetrics, EvalRunTopicResult } from '@lobechat/types';
 import { z } from 'zod';
 
-const EvalCaseSelectionSchema = z
-  .object({
-    caseIds: z.array(z.string().trim().min(1).max(255)).max(10_000).optional(),
-    mode: z.enum(['all', 'include', 'exclude']),
-  })
-  .superRefine((value, ctx) => {
-    const ids = value.caseIds ?? [];
-    if (value.mode === 'all' && ids.length > 0) {
-      ctx.addIssue({ code: 'custom', message: 'caseIds must be empty when mode is all' });
-    }
-    if (value.mode === 'include' && ids.length === 0) {
-      ctx.addIssue({ code: 'custom', message: 'caseIds are required when mode is include' });
-    }
-    if (new Set(ids).size !== ids.length) {
-      ctx.addIssue({ code: 'custom', message: 'caseIds must be unique' });
-    }
-  })
-  .transform((value) => {
-    if (value.mode === 'all') return undefined;
-    if (value.mode === 'exclude' && !value.caseIds?.length) return undefined;
-    return value;
-  });
-
 export const CreateEvalRunRequestSchema = z
   .object({
     config: z
       .object({
-        caseSelection: EvalCaseSelectionSchema.optional(),
         k: z.number().int().min(1).max(10).optional(),
-        maxConcurrency: z.number().int().min(1).max(20).optional(),
         maxSteps: z.number().int().min(1).max(1000).optional(),
         timeout: z
           .number()

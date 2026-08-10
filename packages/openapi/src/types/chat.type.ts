@@ -35,7 +35,6 @@ export const ChatServiceParamsSchema = z
       .min(1, 'Message list cannot be empty')
       .max(1000),
     model: z.string().min(1).max(150).nullish(),
-    n: z.number().int().min(1).max(16).optional(),
     presence_penalty: z.number().min(-2).max(2).optional(),
     provider: z.string().min(1).max(64).nullish(),
     stream: z.boolean().nullish(),

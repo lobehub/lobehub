@@ -13,7 +13,6 @@ describe('ChatServiceParamsSchema', () => {
     const result = ChatServiceParamsSchema.parse({
       frequency_penalty: -0.5,
       messages: [message],
-      n: 2,
       presence_penalty: 0.5,
       stream: false,
       top_p: 0.8,
@@ -21,11 +20,18 @@ describe('ChatServiceParamsSchema', () => {
 
     expect(result).toMatchObject({
       frequency_penalty: -0.5,
-      n: 2,
       presence_penalty: 0.5,
       stream: false,
       top_p: 0.8,
     });
+  });
+
+  // `n` never reached ChatStreamPayload and this endpoint returns a single content
+  // string, so accepting it would promise multiple choices and deliver one.
+  it('does not accept a multi-choice n parameter', () => {
+    const result = ChatServiceParamsSchema.parse({ messages: [message], n: 2 });
+
+    expect(result).not.toHaveProperty('n');
   });
 
   it('rejects streaming because /chat returns a JSON envelope', () => {

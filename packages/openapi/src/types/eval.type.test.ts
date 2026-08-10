@@ -8,29 +8,32 @@ describe('CreateEvalRunRequestSchema', () => {
   it('accepts bounded asynchronous run configuration', () => {
     const parsed = CreateEvalRunRequestSchema.parse({
       ...base,
-      config: { k: 3, maxConcurrency: 5, maxSteps: 50, timeout: 120_000 },
+      config: { k: 3, maxSteps: 50, timeout: 120_000 },
       id: 'external-idempotency-key',
     });
     expect(parsed.config?.k).toBe(3);
   });
 
-  it('rejects invalid case selections and execution bounds', () => {
+  it('rejects out-of-range execution bounds', () => {
+    expect(CreateEvalRunRequestSchema.safeParse({ ...base, config: { k: 11 } }).success).toBe(
+      false,
+    );
     expect(
-      CreateEvalRunRequestSchema.safeParse({
-        ...base,
-        config: { caseSelection: { mode: 'include' } },
-      }).success,
+      CreateEvalRunRequestSchema.safeParse({ ...base, config: { maxSteps: 1001 } }).success,
     ).toBe(false);
     expect(
-      CreateEvalRunRequestSchema.safeParse({ ...base, config: { maxConcurrency: 21 } }).success,
+      CreateEvalRunRequestSchema.safeParse({ ...base, config: { timeout: 1000 } }).success,
     ).toBe(false);
   });
 
-  it('canonicalizes an all-cases selection to omission', () => {
-    const parsed = CreateEvalRunRequestSchema.parse({
-      ...base,
-      config: { caseSelection: { mode: 'all' } },
-    });
-    expect(parsed.config?.caseSelection).toBeUndefined();
+  // Only knobs the run path actually honors belong in the public contract.
+  // `caseSelection` is storage-only for internal runs (this endpoint always creates
+  // `mode: 'internal'`, which pre-creates topics for every case), and
+  // `maxConcurrency` is consumed nowhere — accepting either would silently run the
+  // whole dataset or no-op.
+  it.each(['caseSelection', 'maxConcurrency'])('rejects the inert config knob %s', (key) => {
+    const config = key === 'caseSelection' ? { caseSelection: { mode: 'all' } } : { [key]: 5 };
+
+    expect(CreateEvalRunRequestSchema.safeParse({ ...base, config }).success).toBe(false);
   });
 });

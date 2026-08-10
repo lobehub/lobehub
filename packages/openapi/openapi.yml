@@ -2871,10 +2871,6 @@ paths:
                       minLength: 1
                       maxLength: 150
                     - type: "null"
-                n:
-                  type: integer
-                  minimum: 1
-                  maximum: 16
                 presence_penalty:
                   type: number
                   minimum: -2
@@ -3370,32 +3366,10 @@ paths:
                 config:
                   type: object
                   properties:
-                    caseSelection:
-                      type: object
-                      properties:
-                        caseIds:
-                          maxItems: 10000
-                          type: array
-                          items:
-                            type: string
-                            minLength: 1
-                            maxLength: 255
-                        mode:
-                          type: string
-                          enum:
-                            - all
-                            - include
-                            - exclude
-                      required:
-                        - mode
                     k:
                       type: integer
                       minimum: 1
                       maximum: 10
-                    maxConcurrency:
-                      type: integer
-                      minimum: 1
-                      maximum: 20
                     maxSteps:
                       type: integer
                       minimum: 1
