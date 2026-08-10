@@ -175,6 +175,25 @@ disclosure is not expressible in that field.
 **Correct approach:** set `"verifier": "llm"` and carry the multimodal disclosure in
 the plan item's `method` prose alongside `"requiredEvidence": ["screenshot"]`.
 
+### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
+
+**Wrong approach:** verify working-tree changes that have no PR of their own, then
+ingest without stating that, assuming the round carries no PR because `result.json`
+omits `pullRequest` (or sets it to `null`).
+
+**Why it fails:** the ingest resolves the PR from `branch` whenever the field is
+absent OR null, so a long-lived branch that already owns a PR stamps every round
+with it. The page then presents an unrelated PR as the provenance of this
+verification, and deleting the run and re-ingesting reproduces the same stamp.
+Two rounds later nobody can tell which delivery the evidence belongs to.
+
+**Correct approach:** before publishing a round for uncommitted work, decide the
+provenance explicitly — commit and open the real PR first, or state in `report.md`
+that this round has no PR and that any PR shown belongs to other work on the same
+branch. Also re-read `branch` / `commit` at publish time rather than trusting the
+scaffold: a session that spans a branch switch fills them from whatever is checked
+out when `report-init.sh` ran.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -291,6 +310,25 @@ count the versions under `node_modules/<pkg>` and every `packages/*/node_modules
 and require one distinct value — never from the root manifest. Remember `apps/desktop`
 and `apps/cli` are standalone installs that a root install never covers.
 
+### L-S0b — Reading a first-boot renderer crash as a defect of the change under test
+
+**Wrong approach:** treat the Electron dev instance's first renderer boot as
+representative, and diagnose a `ReferenceError: Cannot access '<X>' before
+initialization` thrown from the desktop router config as a bug in the branch.
+
+**Why it fails:** the desktop Vite renderer can serve a partially initialized
+module graph on the very first boot after a cold start (dependency optimization
+runs concurrently with the first evaluation). The app stays on the HTML loading
+shell with `rootChildren: 0` while the stores are already exposed, which reads
+exactly like a broken route tree. A single `location.reload()` boots it cleanly
+with no code change.
+
+**Correct approach:** on a first-boot renderer error, reload once and re-probe
+before drawing any conclusion. Only if the error survives a reload does it belong
+to the code. Never attribute it to the change under test without that A/B — and
+note that `electron-dev.sh start` reports "Ready" even when the renderer never
+became interactive, so its own readiness line is not the gate.
+
 ### L-S1 — Publishing to an assumed server target
 
 **Wrong approach:** strip a server environment variable and treat `lh whoami` as
@@ -390,6 +428,18 @@ process restart is trustworthy.
 the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*` chunk
 from the dev server and grep for a marker of the fix — or restart the dev server
 process outright and re-verify.
+
+**Same failure, second shape — a dev server that was already running when the run
+started.** A leftover server can be listening on a port that no longer matches what
+`test-env.sh` resolves, serving a dep graph optimized against a different config. The
+SPA then dies at the ErrorBoundary with `TypeError: Failed to fetch dynamically
+imported module: …/_layout/index.tsx`, which reads exactly like a broken route tree in
+the branch under test — while every module in that graph still returns 200 to `curl`,
+because the served copy and the requested copy disagree, not the source. Before
+attributing any module-load failure to the change under test, compare the running
+server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` and
+restart before diagnosing anything. The restarted server is then yours to stop at
+teardown even though you did not start the original.
 
 ---
 
