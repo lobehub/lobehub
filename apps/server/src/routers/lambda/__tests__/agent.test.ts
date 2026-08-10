@@ -345,6 +345,41 @@ describe('agentRouter', () => {
         },
       ]);
     });
+
+    // Regression: `visibility` is workspace-scoped — buildWorkspaceWhere ignores
+    // the column in personal mode while it still defaults to 'public', so
+    // forcing the public scope there filtered personal rows by a value that
+    // carries no meaning.
+    it('sends no visibility scope in personal mode, even for a public agent', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller(mockCtx);
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+      expect(knowledgeBaseModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+    });
+
+    it('forces the workspace scope for a public agent inside a workspace', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'public' }),
+      );
+    });
   });
 
   describe('createAgentFiles', () => {

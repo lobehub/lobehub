@@ -622,8 +622,17 @@ export const agentRouter = router({
       // in the model layer, and (b) hard-force `visibility='public'` when
       // the agent is public — the client tab is a UX aid, not a gate.
       const agentVisibility = await ctx.agentModel.getAgentVisibility(input.agentId);
-      const effectiveVisibility =
-        agentVisibility === 'public' ? ('public' as const) : input.visibility;
+
+      // `visibility` is workspace-scoped. In personal mode buildWorkspaceWhere
+      // ignores the column entirely (every row is implicitly private to its
+      // owner) while the column still defaults to 'public', so forcing a scope
+      // here would filter personal rows by a value that carries no meaning.
+      // Only workspace agents get a visibility scope.
+      const effectiveVisibility = ctx.workspaceId
+        ? agentVisibility === 'public'
+          ? ('public' as const)
+          : input.visibility
+        : undefined;
 
       const knowledgeBases = await ctx.knowledgeBaseModel.query({
         callerAgentVisibility: agentVisibility,
