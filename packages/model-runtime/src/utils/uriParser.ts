@@ -1,3 +1,4 @@
+import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 
 interface UriParserResult {
@@ -152,7 +153,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       url,
       {
         headers: {
-          'User-Agent': 'LobeChat/1.0 (https://lobehub.com)',
+          'User-Agent': `${BRANDING_NAME}/1.0 (${OFFICIAL_URL})`,
         },
         method: 'HEAD',
       },

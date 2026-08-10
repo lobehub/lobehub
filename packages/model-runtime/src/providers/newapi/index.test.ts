@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BRANDING_NAME } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -658,7 +659,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should export params with correct defaultHeaders', () => {
       expect(params.defaultHeaders).toEqual({
-        'X-Client': 'LobeHub',
+        'X-Client': BRANDING_NAME,
       });
     });
 

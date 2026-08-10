@@ -1,4 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/const';
+import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import { uniqueId } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
@@ -19,7 +19,7 @@ export interface HigressModelCard {
 export const params = {
   constructorOptions: {
     defaultHeaders: {
-      'HTTP-Referer': 'https://lobehub.com',
+      'HTTP-Referer': OFFICIAL_URL,
       'X-Title': BRANDING_NAME,
       'x-Request-Id': uniqueId('lobe-chat-'),
     },

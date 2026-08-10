@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BRANDING_NAME } from '@lobechat/const';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParse from '../../utils/modelParse';
@@ -138,7 +139,7 @@ describe('LobeAiHubMixAI', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',
-            'APP-Code': 'LobeHub',
+            'APP-Code': BRANDING_NAME,
           }),
         }),
       );
@@ -162,7 +163,7 @@ describe('LobeAiHubMixAI', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',
-            'APP-Code': 'LobeHub',
+            'APP-Code': BRANDING_NAME,
           }),
         }),
       );

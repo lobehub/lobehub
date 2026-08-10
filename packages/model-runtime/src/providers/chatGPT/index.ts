@@ -36,7 +36,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
           ...options.defaultHeaders,
           ...(chatgptAccountId && { 'ChatGPT-Account-Id': chatgptAccountId }),
           'User-Agent': USER_AGENT,
-          'originator': 'lobehub',
+          'originator': BRANDING_NAME.toLowerCase(),
           'session-id': crypto.randomUUID(),
           'version': CURRENT_VERSION,
         },

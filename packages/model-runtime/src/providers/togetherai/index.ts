@@ -1,3 +1,4 @@
+import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
@@ -9,8 +10,8 @@ export const params = {
   baseURL: 'https://api.together.xyz/v1',
   constructorOptions: {
     defaultHeaders: {
-      'HTTP-Referer': 'https://chat-preview.lobehub.com',
-      'X-Title': 'Lobe Chat',
+      'HTTP-Referer': OFFICIAL_URL,
+      'X-Title': BRANDING_NAME,
     },
   },
   debug: {
