@@ -112,7 +112,7 @@ describe('buildHeteroSpawnArgs', () => {
     expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
   });
 
-  it('forwards Qoder native args and model while leaving effort to the CLI default', () => {
+  it('forwards Qoder native args, model, and reasoning effort', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--verbose'],
       effort: 'high',
@@ -120,15 +120,23 @@ describe('buildHeteroSpawnArgs', () => {
       type: 'qoder',
     };
 
-    expect(buildHeteroSpawnArgs(provider)).toEqual(['--verbose', '--model', 'qoder-model']);
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--verbose',
+      '--model',
+      'qoder-model',
+      '--reasoning-effort',
+      'high',
+    ]);
     expect(buildHeteroExecArgs(provider)).toEqual([
       '--agent-arg=--verbose',
       '--model',
       'qoder-model',
+      '--effort',
+      'high',
     ]);
   });
 
-  it('preserves a Qoder model from native args and does not inject Default', () => {
+  it('preserves Qoder model and reasoning effort from native args without injecting duplicates', () => {
     expect(
       buildHeteroSpawnArgs({
         args: ['-m', 'native-model'],
@@ -143,6 +151,20 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'qoder',
       }),
     ).toEqual(['--agent-arg=--model=native-model']);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--reasoning-effort', 'max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--reasoning-effort', 'max']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--reasoning-effort=max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--agent-arg=--reasoning-effort=max']);
     expect(
       buildHeteroSpawnArgs({
         model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,

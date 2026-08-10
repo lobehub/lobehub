@@ -139,7 +139,10 @@ const buildExtraArgs = (
             : options.type === 'pi'
               ? [...(options.model ? ['--model', options.model] : [])]
               : options.type === 'qoder'
-                ? [...(options.model ? ['--model', options.model] : [])]
+                ? [
+                    ...(options.model ? ['--model', options.model] : []),
+                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                  ]
                 : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 

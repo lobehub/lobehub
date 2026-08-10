@@ -99,8 +99,21 @@ const CODEX_MAX_REASONING_EFFORT_LEVELS = [
 const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
 const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
 
+/**
+ * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--reasoning-effort <level>` flag.
+ */
+export const QODER_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number];
+
+export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
+
 export type HeterogeneousReasoningEffort =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | QoderReasoningEffort
+  | HeterogeneousAgentDefaultSelection;
 
 /**
  * Codex speed modes, mirrored to the CLI config key `service_tier`.
@@ -279,6 +292,12 @@ interface CodexSelectionSource {
   speed?: string | null;
 }
 
+interface QoderSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
@@ -377,6 +396,9 @@ const isClaudeCodeReasoningEffort = (
 const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
 
+const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
+  !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
+
 /**
  * Reasoning-effort levels exposed by a Codex model. Unknown and default model
  * selections use the conservative common set because their actual capability
@@ -465,6 +487,22 @@ const getExplicitCodexReasoningEffort = (
 ): CodexReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+export const resolveQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliFlagValue(source?.args, QODER_REASONING_EFFORT_FLAG) ?? source?.effort
+  )?.trim();
+  return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const getExplicitQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isQoderReasoningEffort(effort) ? effort : undefined;
 };
 
 const isCodexFastServiceTier = (value: string | undefined): boolean =>
@@ -590,6 +628,10 @@ export const buildHeteroSpawnArgs = (
     ) {
       extraArgs.push('--model', model);
     }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
+    }
   }
 
   if (extraArgs.length === 0) return provider.args;
@@ -691,6 +733,10 @@ export const buildHeteroExecArgs = (
       !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
     }
   }
 

@@ -212,7 +212,7 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('runs Qoder with its default command and forwards model but not effort', async () => {
+  it('runs Qoder with its default command and forwards model and effort', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
     await runCmd([
@@ -233,7 +233,7 @@ describe('hetero exec command', () => {
       expect.objectContaining({
         agentType: 'qoder',
         command: 'qodercli',
-        extraArgs: ['--model', 'Claude Sonnet 4.5'],
+        extraArgs: ['--model', 'Claude Sonnet 4.5', '--reasoning-effort', 'high'],
         prompt: 'do thing',
       }),
     );
