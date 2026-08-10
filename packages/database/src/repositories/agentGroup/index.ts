@@ -1464,11 +1464,38 @@ export class AgentGroupRepository {
       targetWorkspaceId && options.targetVisibility ? options.targetVisibility : undefined;
 
     return this.db.transaction(async (trx) => {
-      // Lock the referenced members, then check them — same ordering as the
-      // transfer path. Outside the transaction (or before the lock) this is a
-      // TOCTOU: an owner committing `visibility = 'private'` after the check
-      // would still be cloned, config and all, from the pre-check snapshot.
       const lockedReferencedSourceAgents = new Map<string, AgentItem>();
+
+      if (options.includeConversationHistory) {
+        // Lock-then-guard on the SOURCE group, mirroring the agent copy path.
+        // The lock re-asserts the source scope rather than matching by id
+        // alone: a transfer small enough to run inline leaves no pending job
+        // to catch, yet moves the group out of this scope entirely, and an
+        // id-only lock would happily queue a copy against now-stale topic ids.
+        const [lockedSource] = await trx
+          .select({ id: chatGroups.id })
+          .from(chatGroups)
+          .where(and(eq(chatGroups.id, groupId), this.groupOwnership()))
+          .for('update');
+        if (!lockedSource) throw new Error(AGENT_GROUP_COPY_SOURCE_MOVED);
+
+        // A pending transfer still owns this group's message rewrite: its
+        // topics would be copied mid-migration, and the copy's own drain would
+        // race the transfer's over the same rows.
+        if (await AgentTransferJobModel.hasPendingJobForGroups(trx, [groupId]))
+          throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+        if (await AgentCopyJobModel.hasPendingCopyJobForSourceGroups(trx, [groupId], this.userId))
+          throw new Error(AGENT_COPY_IN_PROGRESS);
+      }
+
+      // Lock the referenced members, then check them on the locked rows —
+      // otherwise an owner committing `visibility = 'private'` after the check
+      // is still cloned, config and all, from the pre-check snapshot.
+      //
+      // Ordered AFTER the group lock above, matching `transferToWorkspace`
+      // (group, then member agents). Taking the agent locks first would let a
+      // concurrent copy and transfer of the same group each hold what the
+      // other wants, and deadlock instead of meeting the pending-job guards.
       if (referencedSourceMembers.length > 0) {
         await trx
           .select({ id: agents.id })
@@ -1500,28 +1527,6 @@ export class AgentGroupRepository {
         }
 
         for (const agent of visibleMembers) lockedReferencedSourceAgents.set(agent.id, agent);
-      }
-
-      if (options.includeConversationHistory) {
-        // Lock-then-guard on the SOURCE group, mirroring the agent copy path.
-        // The lock re-asserts the source scope rather than matching by id
-        // alone: a transfer small enough to run inline leaves no pending job
-        // to catch, yet moves the group out of this scope entirely, and an
-        // id-only lock would happily queue a copy against now-stale topic ids.
-        const [lockedSource] = await trx
-          .select({ id: chatGroups.id })
-          .from(chatGroups)
-          .where(and(eq(chatGroups.id, groupId), this.groupOwnership()))
-          .for('update');
-        if (!lockedSource) throw new Error(AGENT_GROUP_COPY_SOURCE_MOVED);
-
-        // A pending transfer still owns this group's message rewrite: its
-        // topics would be copied mid-migration, and the copy's own drain would
-        // race the transfer's over the same rows.
-        if (await AgentTransferJobModel.hasPendingJobForGroups(trx, [groupId]))
-          throw new Error(AGENT_TRANSFER_IN_PROGRESS);
-        if (await AgentCopyJobModel.hasPendingCopyJobForSourceGroups(trx, [groupId], this.userId))
-          throw new Error(AGENT_COPY_IN_PROGRESS);
       }
 
       const [newGroup] = await trx
