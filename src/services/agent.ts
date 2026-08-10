@@ -91,7 +91,8 @@ interface AgentGroupMembershipImpactRef {
   agentId: string;
   groupAvatar: string | null;
   groupBackgroundColor: string | null;
-  groupId: string;
+  /** `null` when the caller may not see the group; identity is withheld. */
+  groupId: string | null;
   groupTitle: string | null;
   /** `false` when the caller may not see the group; its identity is withheld. */
   groupVisible: boolean;

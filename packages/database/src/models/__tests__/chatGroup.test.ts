@@ -515,6 +515,42 @@ describe('ChatGroupModel', () => {
   });
 
   describe('addAgentsToGroup', () => {
+    it('should refuse a group-owned agent joining a second group', async () => {
+      // `resolveGroupMembershipType` treats a virtual member as owned by ITS
+      // group — the delete path takes it down with the group, the transfer
+      // path rehomes it. Both are only sound while it belongs to one group.
+      // The member picker already filters virtual agents, which left this
+      // enforced by a query rather than by the write.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values([
+          { id: 'owner-group', title: 'Owner', userId },
+          { id: 'poacher-group', title: 'Poacher', userId },
+        ]);
+        await trx.insert(agentsTable).values({
+          id: 'group-built-member',
+          title: 'Group Built',
+          userId,
+          virtual: true,
+        });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'group-built-member',
+          chatGroupId: 'owner-group',
+          userId,
+        });
+      });
+
+      await expect(
+        chatGroupModel.addAgentsToGroup('poacher-group', ['group-built-member']),
+      ).rejects.toThrow(/cannot join another group/);
+
+      const rosters = await serverDB
+        .select()
+        .from(chatGroupsAgents)
+        .where(eq(chatGroupsAgents.agentId, 'group-built-member'));
+      expect(rosters).toHaveLength(1);
+      expect(rosters[0].chatGroupId).toBe('owner-group');
+    });
+
     it('should add multiple agents to group', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {

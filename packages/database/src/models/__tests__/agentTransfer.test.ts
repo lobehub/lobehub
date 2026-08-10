@@ -920,7 +920,8 @@ describe('AgentModel.transferAgent', () => {
           agentId: agent.id,
           groupAvatar: null,
           groupBackgroundColor: null,
-          groupId: 'hidden-group',
+          // Hidden as a unit: the id is identity too.
+          groupId: null,
           groupTitle: null,
           groupVisible: false,
         },

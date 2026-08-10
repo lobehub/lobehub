@@ -152,7 +152,12 @@ export interface AgentGroupMembershipRef {
   /** `null` when the group is not visible to the caller (see the read below). */
   groupAvatar: string | null;
   groupBackgroundColor: string | null;
-  groupId: string;
+  /**
+   * `null` when the group is not visible to the caller. The id is identity
+   * too: the membership still counts toward the guard, but a private group's
+   * identifier is no more the caller's to read than its name.
+   */
+  groupId: string | null;
   /** `null` when the group is not visible to the caller (see the read below). */
   groupTitle: string | null;
   /**
@@ -1937,7 +1942,9 @@ export class AgentModel {
         agentId: row.agentId,
         groupAvatar: row.visible ? row.avatar : null,
         groupBackgroundColor: row.visible ? row.backgroundColor : null,
-        groupId: row.groupId,
+        // Withheld as a unit — id included. This is the one place these refs
+        // are built, so the transfer error's `groups` payload is covered too.
+        groupId: row.visible ? row.groupId : null,
         groupTitle: row.visible ? row.title : null,
         groupVisible: !!row.visible,
       };

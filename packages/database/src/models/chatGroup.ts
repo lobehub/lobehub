@@ -474,6 +474,7 @@ export class ChatGroupModel {
         .select({
           id: agents.id,
           userId: agents.userId,
+          virtual: agents.virtual,
           visibility: agents.visibility,
         })
         .from(agents)
@@ -501,6 +502,23 @@ export class ChatGroupModel {
           // Caller owns this private agent (visibility predicate would have
           // hidden it otherwise) but the group can't hold private members.
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        }
+        if (row.virtual) {
+          // `resolveGroupMembershipType` treats a virtual member as OWNED by
+          // its group: the delete path takes it down with the group, and the
+          // transfer path rehomes it. Both are only safe while such an agent
+          // belongs to exactly one group.
+          //
+          // The member picker already excludes virtual agents
+          // (`buildQueryAgentsWhere`), so nothing in the product sends one
+          // here — but that made this an invariant enforced by a query rather
+          // than by the write. Sending a known group-built member or
+          // supervisor id would otherwise link it to a second group, and then
+          // deleting either group would delete an agent the other still uses.
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'A group-owned agent cannot join another group',
+          });
         }
       }
     }
