@@ -12,12 +12,16 @@ import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { canPerformResourceAction } from '@/server/services/resourcePermission';
 
-import { getWorkspaceAgentParentGroupIds } from '../_helpers/workspaceAgentGuard';
+import {
+  getWorkspaceAgentParentGroupIds,
+  getWorkspaceGroupVirtualAgentIds,
+} from '../_helpers/workspaceAgentGuard';
 import { agentGroupRouter } from '../agentGroup';
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
   getWorkspaceAgentParentGroupIds: vi.fn().mockResolvedValue([]),
+  getWorkspaceGroupVirtualAgentIds: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
@@ -49,6 +53,7 @@ describe('agentGroupRouter', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.mocked(getWorkspaceAgentParentGroupIds).mockResolvedValue([]);
+    vi.mocked(getWorkspaceGroupVirtualAgentIds).mockResolvedValue([]);
 
     agentModelMock = {
       batchCreate: vi.fn(),
@@ -667,6 +672,52 @@ describe('agentGroupRouter', () => {
         'use',
         userId,
       );
+    });
+
+    // `assertCanEditResource` authorizes an agent by its own ACL alone, so a
+    // virtual agent left without a row falls back to the agent default (`edit`)
+    // and stays editable by everyone despite a use-only group.
+    describe('cascades the level to group-owned virtual agents', () => {
+      beforeEach(() => {
+        vi.mocked(getWorkspaceGroupVirtualAgentIds).mockResolvedValue(['agt_sup', 'agt_member']);
+        resourcePermissionModelMock.getAccessLevel.mockResolvedValue('use');
+      });
+
+      it('on publishGroupToWorkspace', async () => {
+        await agentGroupRouter.createCaller(mockCtx).publishGroupToWorkspace({ id: 'cg_1' });
+
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_sup',
+          'use',
+          userId,
+        );
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_member',
+          'use',
+          userId,
+        );
+      });
+
+      it('on setGroupVisibility promotion', async () => {
+        await agentGroupRouter
+          .createCaller(mockCtx)
+          .setGroupVisibility({ id: 'cg_1', visibility: 'public' });
+
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_sup',
+          'use',
+          userId,
+        );
+        expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+          'agent',
+          'agt_member',
+          'use',
+          userId,
+        );
+      });
     });
   });
 

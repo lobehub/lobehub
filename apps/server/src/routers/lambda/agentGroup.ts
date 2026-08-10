@@ -22,6 +22,7 @@ import {
   LEGACY_VIEWER_ACCESS_LEVELS,
   RESOURCE_ACCESS_LEVELS_BY_TYPE,
 } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -46,6 +47,7 @@ import {
   redactGroupConfig,
   type ResourceConfigAccess,
 } from './_helpers/resourceConfigGuard';
+import { getWorkspaceGroupVirtualAgentIds } from './_helpers/workspaceAgentGuard';
 
 const resourceConfigGuardCtx = (ctx: {
   serverDB: Parameters<typeof getResourceConfigAccess>[0]['db'];
@@ -161,6 +163,45 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 // Write variant gates viewers out of chat-group mutations (create/update/
 // delete + member adds/removes). Reads keep the bare proc.
 const agentGroupProcedureWrite = agentGroupProcedure.use(withScopedPermission('agent:update'));
+
+/**
+ * Write a group's access level onto the group AND the group-owned virtual
+ * agents (supervisor + generated members).
+ *
+ * The cascade is not decorative: `assertCanEditResource` authorizes an agent by
+ * that agent's OWN ACL, with no parent-group term. A virtual agent left without
+ * a row falls back to the agent default (`edit`), so publishing a group as
+ * `use`/`view` while skipping the cascade leaves its supervisor editable by
+ * every member who can resolve its id — the group restriction would apply to
+ * the group resource only. Mirrors `resourcePermission.setGeneralAccess`;
+ * standalone agents linked into the group keep their own ACL.
+ */
+const applyGroupAccessLevel = async ({
+  accessLevel,
+  ctx,
+  groupId,
+  permissionModel,
+  workspaceId,
+}: {
+  accessLevel: ResourceAccessLevel;
+  ctx: { serverDB: LobeChatDatabase; userId: string };
+  groupId: string;
+  permissionModel: ResourcePermissionModel;
+  workspaceId: string;
+}): Promise<void> => {
+  const virtualAgentIds = await getWorkspaceGroupVirtualAgentIds({
+    db: ctx.serverDB,
+    groupId,
+    workspaceId,
+  });
+
+  await Promise.all([
+    permissionModel.setAccessLevel('agentGroup', groupId, accessLevel, ctx.userId),
+    ...virtualAgentIds.map((agentId) =>
+      permissionModel.setAccessLevel('agent', agentId, accessLevel, ctx.userId),
+    ),
+  ]);
+};
 
 export const agentGroupRouter = router({
   addAgentsToGroup: agentGroupProcedureWrite
@@ -900,7 +941,13 @@ export const agentGroupRouter = router({
           input.accessLevel ??
           (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
           DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
-        await permissionModel.setAccessLevel('agentGroup', input.id, accessLevel, ctx.userId);
+        await applyGroupAccessLevel({
+          accessLevel,
+          ctx,
+          groupId: input.id,
+          permissionModel,
+          workspaceId: ctx.workspaceId,
+        });
       }
       return result;
     }),
@@ -1002,7 +1049,13 @@ export const agentGroupRouter = router({
           input.accessLevel ??
           (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
           DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
-        await permissionModel.setAccessLevel('agentGroup', input.id, accessLevel, ctx.userId);
+        await applyGroupAccessLevel({
+          accessLevel,
+          ctx,
+          groupId: input.id,
+          permissionModel,
+          workspaceId: ctx.workspaceId,
+        });
       }
 
       return buildResourcePermissionState({
