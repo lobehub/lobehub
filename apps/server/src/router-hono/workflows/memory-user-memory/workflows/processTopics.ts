@@ -16,6 +16,7 @@ import {
   MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { appendHourlyWorkflowRunId, isHourlyMemoryExtractionCancelled } from './utils';
@@ -103,7 +104,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             return guard.response;
           }
 
-          const cancelled = await context.run(stepName, () =>
+          const cancelled = await runStep(context, stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
                 db,
@@ -132,7 +133,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
           return hourlyCancellationGuard.response;
         }
 
-        const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+        const hourlyCancelled = await runStep(context, hourlyCancellationStepName, () =>
           isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
         );
         if (hourlyCancelled) {
@@ -160,7 +161,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             return guard.response;
           }
 
-          const result = await context.run(stepName, () =>
+          const result = await runStep(context, stepName, () =>
             MemoryExtractionWorkflowService.triggerProcessTopic(
               userId,
               {
@@ -189,8 +190,10 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
           return hourlyPersonaCancellationGuard.response;
         }
 
-        const hourlyPersonaCancelled = await context.run(hourlyPersonaCancellationStepName, () =>
-          isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+        const hourlyPersonaCancelled = await runStep(
+          context,
+          hourlyPersonaCancellationStepName,
+          () => isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
         );
         if (hourlyPersonaCancelled) {
           span.setStatus({ code: SpanStatusCode.OK });
@@ -213,7 +216,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
           return personaUpdateGuard.response;
         }
 
-        const personaUpdateResult = await context.run(personaUpdateStepName, async () => {
+        const personaUpdateResult = await runStep(context, personaUpdateStepName, async () => {
           return MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
             extraHeaders: upstashWorkflowExtraHeaders,
             hourlyTaskId: payload.hourlyTaskId,

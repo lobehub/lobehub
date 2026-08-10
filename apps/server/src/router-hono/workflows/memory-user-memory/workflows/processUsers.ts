@@ -4,13 +4,15 @@ import { chunk } from 'es-toolkit/compat';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
-import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
   buildWorkflowPayloadInput,
   MemoryExtractionExecutor,
+  type MemoryExtractionPayloadInput,
   MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
+  type UserPaginationResult,
 } from '@/server/services/memory/userMemory/extract';
+import { parseWorkflowDate, runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import {
@@ -48,7 +50,7 @@ export const processUsersHandler = async (
     const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
     if (!guard.result) return guard.response;
 
-    const cancelled = await context.run(stepName, () =>
+    const cancelled = await runStep(context, stepName, () =>
       getServerDB().then((db) =>
         new AsyncTaskModel(
           db,
@@ -68,7 +70,7 @@ export const processUsersHandler = async (
   });
   if (!hourlyCancellationGuard.result) return hourlyCancellationGuard.response;
 
-  const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+  const hourlyCancelled = await runStep(context, hourlyCancellationStepName, () =>
     isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
   );
   if (hourlyCancelled) {
@@ -84,14 +86,23 @@ export const processUsersHandler = async (
   // this causes the Date object to be converted into string when passed as parameter from
   // context to child workflow. So we need to convert it back to Date object here.
   const userCursor = params.userCursor
-    ? { createdAt: new Date(params.userCursor.createdAt), id: params.userCursor.id }
+    ? {
+        createdAt: parseWorkflowDate(
+          params.userCursor.createdAt,
+          'Invalid cursor date when reading the user page cursor',
+        ),
+        id: params.userCursor.id,
+      }
     : undefined;
 
   const getUsersStepName = 'memory:user-memory:extract:get-users';
   const getUsersGuard = await checkGuard(context, WORKFLOW_PATH, { stepName: getUsersStepName });
   if (!getUsersGuard.result) return getUsersGuard.response;
 
-  const userBatch = await context.run(getUsersStepName, () =>
+  // NOTICE: the explicit type argument keeps both ternary branches on one shape. Left to inference
+  // the step returns a union, and `'cursor' in userBatch` then narrows against a member that has no
+  // `cursor` at all, which erases the cursor's own type.
+  const userBatch = await runStep<UserPaginationResult>(context, getUsersStepName, () =>
     params.userIds.length > 0
       ? { ids: params.userIds }
       : executor.getUsers(USER_PAGE_SIZE, userCursor),
@@ -120,7 +131,7 @@ export const processUsersHandler = async (
     const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
     if (!guard.result) return guard.response;
 
-    const result = await context.run(stepName, () =>
+    const result = await runStep(context, stepName, () =>
       MemoryExtractionWorkflowService.triggerProcessUserTopics(
         {
           ...buildWorkflowPayloadInput(params),
@@ -142,7 +153,7 @@ export const processUsersHandler = async (
     });
     if (!hourlyNextPageCancellationGuard.result) return hourlyNextPageCancellationGuard.response;
 
-    const hourlyNextPageCancelled = await context.run(hourlyNextPageCancellationStepName, () =>
+    const hourlyNextPageCancelled = await runStep(context, hourlyNextPageCancellationStepName, () =>
       isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
     );
     if (hourlyNextPageCancelled) {
@@ -158,7 +169,7 @@ export const processUsersHandler = async (
     const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
     if (!guard.result) return guard.response;
 
-    const result = await context.run(stepName, () =>
+    const result = await runStep(context, stepName, () =>
       MemoryExtractionWorkflowService.triggerProcessUsers(
         {
           ...buildWorkflowPayloadInput({

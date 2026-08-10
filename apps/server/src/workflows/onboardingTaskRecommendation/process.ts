@@ -8,6 +8,7 @@ import {
   type TaskRecommendationProviderResult,
   type TaskRecommendationService,
 } from '@/server/services/taskRecommendation/service';
+import { runStep } from '@/server/workflows/step';
 
 import {
   type ProcessOnboardingTaskRecommendationPayload,
@@ -47,7 +48,7 @@ export const processOnboardingTaskRecommendations = async (
 ) => {
   const payload = ProcessOnboardingTaskRecommendationPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const plan = await context.run('session:begin', () =>
+  const plan = await runStep(context, 'session:begin', () =>
     service.begin(payload.topicId, payload.sessionId, payload.sourceFingerprint),
   );
   await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
@@ -55,7 +56,8 @@ export const processOnboardingTaskRecommendations = async (
 
   const results = await Promise.all(
     plan.providerIds.map((providerId) =>
-      context.run(
+      runStep(
+        context,
         `provider:${providerId}:generate`,
         async (): Promise<TaskRecommendationProviderResult> => {
           try {
@@ -79,7 +81,7 @@ export const processOnboardingTaskRecommendations = async (
       ),
     ),
   );
-  const session = await context.run('session:commit', () =>
+  const session = await runStep(context, 'session:commit', () =>
     service.commit(payload.topicId, payload.sessionId, results),
   );
   await publishOnboardingGenerationProgress(payload.userId, payload.topicId);

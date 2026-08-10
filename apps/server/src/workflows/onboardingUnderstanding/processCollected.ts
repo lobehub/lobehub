@@ -14,6 +14,7 @@ import {
   createUnderstandingService,
   type UnderstandingService,
 } from '@/server/services/understanding/service';
+import { runStep } from '@/server/workflows/step';
 
 import {
   type ProcessCollectedUnderstandingPayload,
@@ -53,7 +54,7 @@ export const processCollectedUnderstanding = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const result = await context.run('collected:process', async () => {
+  const result = await runStep(context, 'collected:process', async () => {
     try {
       return await service.processCollected({
         expectedSourceFingerprint: payload.sourceFingerprint,
@@ -71,7 +72,7 @@ export const processCollectedUnderstanding = async (
   await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
   const triggerDetailedPersona = dependencies.triggerDetailedPersona;
   if (result.published && triggerDetailedPersona) {
-    await context.run('collected:trigger-detailed-persona', () =>
+    await runStep(context, 'collected:trigger-detailed-persona', () =>
       triggerDetailedPersona(payload, {
         workflowRunId: `onboarding-understanding-detailed-${createHash('sha256')
           .update(payload.sessionId)

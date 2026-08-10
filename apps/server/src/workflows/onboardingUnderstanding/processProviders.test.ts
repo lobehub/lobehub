@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeStepResult } from '@/server/workflows/testing/stepContext';
+
 import {
   failRunningUnderstandingProviders,
   processUnderstandingProviders,
@@ -49,7 +51,7 @@ const createContext = (requestPayload: unknown) => {
       requestPayload,
       run: async <T>(stepName: string, action: () => Promise<T>) => {
         steps.push(stepName);
-        return action();
+        return serializeStepResult(await action());
       },
     },
     invocations,

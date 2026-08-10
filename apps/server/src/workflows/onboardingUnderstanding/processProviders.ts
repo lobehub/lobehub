@@ -15,6 +15,7 @@ import {
 } from '@/server/services/understanding/service';
 import type { ProcessOnboardingTaskRecommendationPayload } from '@/server/workflows/onboardingTaskRecommendation';
 import { getTaskRecommendationFlowControlKey } from '@/server/workflows/onboardingTaskRecommendation/types';
+import { runStep } from '@/server/workflows/step';
 
 import {
   getUnderstandingWritingFlowControlKey,
@@ -83,7 +84,7 @@ export const processUnderstandingProviders = async (
 
   const providers = await Promise.all(
     payload.providers.map(async ({ id: providerId, revision }) => {
-      const result = await context.run(`provider:${providerId}:${revision}:process`, () =>
+      const result = await runStep(context, `provider:${providerId}:${revision}:process`, () =>
         service.processProvider({
           providerId,
           revision,
@@ -115,7 +116,7 @@ export const processUnderstandingProviders = async (
         ];
         if (payload.triggerTaskRecommendations !== false) {
           downstreamTasks.push(
-            context.run(`provider:${providerId}:recommend:${result.revision}`, () =>
+            runStep(context, `provider:${providerId}:recommend:${result.revision}`, () =>
               // NOTICE:
               // Cross-route workflow fan-out must use an absolute QStash trigger.
               // context.invoke only replaces the current URL's final path segment, which sent this

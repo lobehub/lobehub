@@ -15,6 +15,7 @@ import {
   MemoryExtractionExecutor,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { isHourlyMemoryExtractionCancelled } from './utils';
@@ -78,7 +79,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          const cancelled = await context.run(stepName, () =>
+          const cancelled = await runStep(context, stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
                 db,
@@ -103,7 +104,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          const hourlyCancelled = await context.run(stepName, () =>
+          const hourlyCancelled = await runStep(context, stepName, () =>
             isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
           );
           if (hourlyCancelled) {
@@ -130,7 +131,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          await context.run(stepName, () =>
+          await runStep(context, stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
               forceAll: payload.forceAll,
@@ -158,7 +159,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
               return guard.response;
             }
 
-            const hourlyCancelled = await context.run(stepName, () =>
+            const hourlyCancelled = await runStep(context, stepName, () =>
               isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
             );
             if (hourlyCancelled) {
@@ -181,7 +182,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
               return guard.response;
             }
 
-            const cancelled = await context.run(stepName, () =>
+            const cancelled = await runStep(context, stepName, () =>
               getServerDB().then((db) =>
                 new AsyncTaskModel(
                   db,
@@ -210,7 +211,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          await context.run(stepName, () =>
+          await runStep(context, stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
               forceAll: payload.forceAll,
@@ -236,7 +237,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          await context.run(stepName, () =>
+          await runStep(context, stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
                 db,

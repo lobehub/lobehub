@@ -11,6 +11,7 @@ import {
   MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { parseWorkflowDate, runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import {
@@ -56,7 +57,7 @@ export const hourlyWorkflowHandler = async (
     });
     if (!guard.result) return guard.response;
 
-    const result = await context.run(stepName, () =>
+    const result = await runStep(context, stepName, () =>
       MemoryExtractionWorkflowService.triggerHourlyTracked(
         {
           baseUrl,
@@ -86,7 +87,7 @@ export const hourlyWorkflowHandler = async (
   });
   if (!cancellationGuard.result) return cancellationGuard.response;
 
-  const cancelled = await context.run(cancellationStepName, () =>
+  const cancelled = await runStep(context, cancellationStepName, () =>
     isHourlyMemoryExtractionCancelled(hourlyTaskId),
   );
   if (cancelled) {
@@ -98,11 +99,14 @@ export const hourlyWorkflowHandler = async (
   }
 
   const parsedCursor = cursor
-    ? { createdAt: new Date(cursor.createdAt), id: cursor.id }
+    ? {
+        createdAt: parseWorkflowDate(
+          cursor.createdAt,
+          'Invalid cursor date for hourly memory extraction workflow',
+        ),
+        id: cursor.id,
+      }
     : undefined;
-  if (parsedCursor && Number.isNaN(parsedCursor.createdAt.getTime())) {
-    throw new Error('Invalid cursor date for hourly memory extraction workflow');
-  }
 
   const executor = await MemoryExtractionExecutor.create();
   const listUsersStepName = `memory:user-memory:hourly:list-users:${parsedCursor?.id || 'root'}`;
@@ -112,7 +116,7 @@ export const hourlyWorkflowHandler = async (
   });
   if (!listUsersGuard.result) return listUsersGuard.response;
 
-  const userBatch = await context.run(listUsersStepName, () =>
+  const userBatch = await runStep(context, listUsersStepName, () =>
     executor.getUsersForHourlyExtraction(USER_PAGE_SIZE, parsedCursor),
   );
 
@@ -144,7 +148,7 @@ export const hourlyWorkflowHandler = async (
       });
       if (!guard.result) return guard.response;
 
-      const result = await context.run(stepName, () =>
+      const result = await runStep(context, stepName, () =>
         MemoryExtractionWorkflowService.triggerProcessUsers(
           buildWorkflowPayloadInput(
             normalizeMemoryExtractionPayload({
@@ -170,7 +174,7 @@ export const hourlyWorkflowHandler = async (
     });
     if (!cancellationGuard.result) return cancellationGuard.response;
 
-    const cancelled = await context.run(cancellationStepName, () =>
+    const cancelled = await runStep(context, cancellationStepName, () =>
       isHourlyMemoryExtractionCancelled(hourlyTaskId),
     );
     if (cancelled) {
@@ -188,7 +192,7 @@ export const hourlyWorkflowHandler = async (
     });
     if (!guard.result) return guard.response;
 
-    const result = await context.run(stepName, () =>
+    const result = await runStep(context, stepName, () =>
       MemoryExtractionWorkflowService.triggerHourly(
         {
           baseUrl,

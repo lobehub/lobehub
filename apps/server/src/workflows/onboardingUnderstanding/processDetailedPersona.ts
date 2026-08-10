@@ -12,6 +12,7 @@ import {
   createUnderstandingService,
   type UnderstandingService,
 } from '@/server/services/understanding/service';
+import { runStep } from '@/server/workflows/step';
 
 import {
   type ProcessCollectedUnderstandingPayload,
@@ -65,7 +66,7 @@ export const processDetailedUnderstandingPersona = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const result = await context.run('detailed-persona:process', async () => {
+  const result = await runStep(context, 'detailed-persona:process', async () => {
     try {
       return await service.processDetailedPersona({
         expectedSourceFingerprint: payload.sourceFingerprint,

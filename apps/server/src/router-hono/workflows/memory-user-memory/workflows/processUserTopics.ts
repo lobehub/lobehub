@@ -13,6 +13,7 @@ import {
   MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { parseWorkflowDate, runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { appendHourlyWorkflowRunId, isHourlyMemoryExtractionCancelled } from './utils';
@@ -89,7 +90,7 @@ export const processUserTopicsHandler = async (
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      const cancelled = await context.run(stepName, () =>
+      const cancelled = await runStep(context, stepName, () =>
         getServerDB().then((db) =>
           new AsyncTaskModel(
             db,
@@ -109,7 +110,7 @@ export const processUserTopicsHandler = async (
     });
     if (!hourlyCancellationGuard.result) return hourlyCancellationGuard.response;
 
-    const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+    const hourlyCancelled = await runStep(context, hourlyCancellationStepName, () =>
       isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
     );
     if (hourlyCancelled) {
@@ -125,7 +126,10 @@ export const processUserTopicsHandler = async (
     const topicCursor =
       params.topicCursor && params.topicCursor.userId === userId
         ? {
-            createdAt: new Date(params.topicCursor.createdAt),
+            createdAt: parseWorkflowDate(
+              params.topicCursor.createdAt,
+              'Invalid topic cursor date in the process-user-topics payload',
+            ),
             id: params.topicCursor.id,
           }
         : undefined;
@@ -136,7 +140,7 @@ export const processUserTopicsHandler = async (
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      topicsFromPayload = await context.run(stepName, async () => {
+      topicsFromPayload = await runStep(context, stepName, async () => {
         const filtered = await activeExecutor.filterTopicIdsForUser(
           userId,
           params.topicIds,
@@ -152,10 +156,10 @@ export const processUserTopicsHandler = async (
     });
     if (!listTopicsGuard.result) return listTopicsGuard.response;
 
-    const topicBatch = await context.run<{
+    const topicBatch = await runStep<{
       cursor?: ListTopicsForMemoryExtractorCursor;
       ids: string[];
-    }>(listTopicsStepName, () =>
+    }>(context, listTopicsStepName, () =>
       topicsFromPayload && topicsFromPayload.length > 0
         ? Promise.resolve({ ids: topicsFromPayload })
         : activeExecutor.getTopicsForUser(
@@ -197,7 +201,7 @@ export const processUserTopicsHandler = async (
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      const result = await context.run(stepName, () =>
+      const result = await runStep(context, stepName, () =>
         MemoryExtractionWorkflowService.triggerProcessTopics(
           userId,
           {
@@ -225,8 +229,10 @@ export const processUserTopicsHandler = async (
         return hourlyNextPageCancellationGuard.response;
       }
 
-      const hourlyNextPageCancelled = await context.run(hourlyNextPageCancellationStepName, () =>
-        isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
+      const hourlyNextPageCancelled = await runStep(
+        context,
+        hourlyNextPageCancellationStepName,
+        () => isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
       );
       if (hourlyNextPageCancelled) {
         return {
@@ -241,17 +247,18 @@ export const processUserTopicsHandler = async (
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      const result = await context.run(stepName, () => {
-        // NOTICE: Upstash Workflow only supports serializable data into plain JSON,
-        // this causes the Date object to be converted into string when passed as parameter from
-        // context to child workflow. So we need to convert it back to Date object here.
-        const createdAt = new Date(cursor.createdAt);
-        if (Number.isNaN(createdAt.getTime())) {
-          throw new Error('Invalid cursor date when scheduling next topic page');
-        }
-
-        return scheduleNextPage(userId, createdAt, cursor.id, nextFanoutCount);
-      });
+      const result = await runStep(context, stepName, () =>
+        scheduleNextPage(
+          userId,
+          // The cursor crossed a step boundary, so its timestamp arrives as an ISO string.
+          parseWorkflowDate(
+            cursor.createdAt,
+            'Invalid cursor date when scheduling next topic page',
+          ),
+          cursor.id,
+          nextFanoutCount,
+        ),
+      );
       await appendHourlyWorkflowRunId(params.hourlyTaskId, result.workflowRunId);
     }
   }

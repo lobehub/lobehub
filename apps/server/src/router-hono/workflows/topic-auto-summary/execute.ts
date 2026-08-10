@@ -2,6 +2,7 @@ import type { WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
 import { TopicAutoSummaryService } from '@/server/services/topicAutoSummary';
+import { runStep } from '@/server/workflows/step';
 import type { ExecuteTopicAutoSummaryPayload } from '@/server/workflows/topicAutoSummary';
 
 export const executeTopicAutoSummary = async (
@@ -10,7 +11,7 @@ export const executeTopicAutoSummary = async (
   const { force, topicId, userId, workspaceId } = context.requestPayload ?? {};
   if (!topicId || !userId) return { error: 'Missing topicId or userId', summarized: false };
 
-  return context.run('topic-auto-summary:generate-and-save', async () => {
+  return runStep(context, 'topic-auto-summary:generate-and-save', async () => {
     const db = await getServerDB();
     return new TopicAutoSummaryService(db, userId, workspaceId).summarize(topicId, { force });
   });

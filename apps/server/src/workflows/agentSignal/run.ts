@@ -43,6 +43,7 @@ import type { ClientRuntimeCompleteHydrationDiagnostic } from '@/server/services
 import { resolveClientRuntimeCompleteFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeComplete';
 import type { ClientRuntimeStartHydrationDiagnostic } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
 import { resolveClientRuntimeStartFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
+import { runStep } from '@/server/workflows/step';
 
 import type { AgentSignalWorkflowRunPayload } from './types';
 
@@ -609,7 +610,8 @@ export const runAgentSignalWorkflow = async (
                       workspaceId: payload.workspaceId,
                     })
                   : undefined;
-                const executionResult = await context.run(
+                const executionResult = await runStep(
+                  context,
                   `agent-signal:execute:${normalizedSourceEvent.sourceType}:${normalizedSourceEvent.sourceId}`,
                   () =>
                     executeSourceEvent(
