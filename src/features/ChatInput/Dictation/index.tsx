@@ -2,7 +2,7 @@
 
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { LoaderCircle, Mic, RotateCcw, Square, X } from 'lucide-react';
+import { LoaderCircle, Mic, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useChatInputStore, useStoreApi } from '../store';
 import { isOtherAudioInputModeActive } from './mutualExclusion';
+import { getDictationControlMode } from './presentation';
 import { useRealtimeDictation } from './useRealtimeDictation';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -29,7 +30,55 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
-    color: ${cssVar.colorError};
+    color: ${cssVar.colorWhite};
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+    transition:
+      color 160ms ease,
+      background 160ms ease,
+      box-shadow 160ms ease,
+      transform 120ms ease;
+
+    &:hover {
+      color: ${cssVar.colorWhite};
+      background: ${cssVar.colorSuccessHover};
+      box-shadow: 0 0 0 4px ${cssVar.colorSuccessBgHover};
+    }
+
+    &:active {
+      transform: scale(0.94);
+      background: ${cssVar.colorSuccessActive};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorSuccess};
+      outline-offset: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  listeningControls: css`
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+  `,
+  listeningStatus: css`
+    position: absolute;
+
+    overflow: hidden;
+
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+
+    white-space: nowrap;
+
+    clip: rect(0, 0, 0, 0);
   `,
   spin: css`
     animation: dictation-spin 1s linear infinite;
@@ -71,6 +120,7 @@ const Dictation = memo(() => {
     ]);
   const { client, errorCode, retryable, status } = useRealtimeDictation(editor);
   const active = status !== 'idle' || activeAudioInputMode === 'dictation';
+  const controlMode = getDictationControlMode(status);
   const otherAudioModeActive = isOtherAudioInputModeActive(activeAudioInputMode, 'dictation');
 
   useEffect(() => {
@@ -157,21 +207,50 @@ const Dictation = memo(() => {
             ? t('voiceDictation.finalizing')
             : errorText;
 
-  return (
-    <div aria-label={t('voiceDictation.statusLabel')} className={styles.controls} role="group">
-      <span aria-live="polite" className={styles.status} role="status">
-        {statusText}
-      </span>
-      {status === 'listening' ? (
+  if (controlMode === 'listening') {
+    return (
+      <div
+        aria-label={t('voiceDictation.statusLabel')}
+        className={styles.listeningControls}
+        data-status="listening"
+        data-testid="voice-dictation-controls"
+        role="group"
+      >
+        <span aria-live="polite" className={styles.listeningStatus} role="status">
+          {statusText}
+        </span>
         <ChatInputAction
           aria-label={t('voiceDictation.stop')}
           className={styles.listening}
           data-testid="voice-dictation-stop"
-          icon={Square}
+          icon={Mic}
           title={t('voiceDictation.stop')}
           onClick={() => void client.stop()}
         />
-      ) : status === 'error' && retryable ? (
+        <ChatInputAction
+          aria-label={t('voiceDictation.cancel')}
+          className={styles.cancel}
+          data-testid="voice-dictation-cancel"
+          icon={X}
+          title={t('voiceDictation.cancel')}
+          onClick={() => void client.cancel()}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-label={t('voiceDictation.statusLabel')}
+      className={styles.controls}
+      data-status={status}
+      data-testid="voice-dictation-controls"
+      role="group"
+    >
+      <span aria-live="polite" className={styles.status} role="status">
+        {statusText}
+      </span>
+      {status === 'error' && retryable ? (
         <ChatInputAction
           aria-label={t('voiceDictation.retry')}
           data-testid="voice-dictation-retry"
