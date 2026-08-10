@@ -81,22 +81,10 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
     });
   }
 
-  if (c.get('authType') === 'apikey') {
-    // `workspace_members.role` is the single source of truth for built-in
-    // workspace roles.
-    const isWorkspaceAdmin = membership.role === 'owner' || membership.role === 'admin';
-
-    if (!isWorkspaceAdmin) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key requires an admin account',
-      });
-    }
-
-    if (!(await canUseWorkspaceApiKeys(workspaceId))) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key access is not available',
-      });
-    }
+  if (c.get('authType') === 'apikey' && !(await canUseWorkspaceApiKeys(workspaceId))) {
+    throw new HTTPException(403, {
+      message: 'Workspace API Key access is not available',
+    });
   }
 
   c.set('workspaceId', workspaceId);

@@ -10,7 +10,7 @@ import { auth } from '@/auth';
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
-import { hasWorkspaceAdminAccess } from '@/database/models/workspace';
+import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
@@ -224,19 +224,19 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
       });
     }
 
-    // Same gates as the OpenAPI workspace middleware: workspace API keys are
-    // Admin-or-higher, so the issuer must still hold admin status (a demoted or
-    // removed admin's key stops working), and a workspace that loses the
-    // workspace-API-key entitlement must not keep serving already-issued keys.
+    // Same gates as the OpenAPI workspace middleware: the issuer must remain
+    // an active member, and the workspace must retain its API-key entitlement.
+    // Current RBAC is evaluated later and intersects with the key's scopes, so
+    // a role downgrade automatically narrows even a full-access key.
     if (apiKeyAuth.workspaceId) {
       const db = await getServerDB();
-      const isAdmin = await hasWorkspaceAdminAccess(db, {
+      const isActiveMember = await hasActiveWorkspaceMembership(db, {
         userId: apiKeyAuth.userId,
         workspaceId: apiKeyAuth.workspaceId,
       });
 
-      if (!isAdmin) {
-        log('Workspace API key issuer is no longer a workspace admin; rejecting request');
+      if (!isActiveMember) {
+        log('Workspace API key issuer is no longer an active member; rejecting request');
 
         return createContextInner({
           ...commonContext,

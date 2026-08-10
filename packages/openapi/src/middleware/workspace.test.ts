@@ -215,13 +215,17 @@ describe('OpenAPI workspace middleware', () => {
     expect(response.status).toBe(200);
   });
 
-  it('rejects a workspace API Key after its issuer is demoted below Admin', async () => {
+  it('keeps a workspace API Key active after its issuer becomes a member', async () => {
     const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });
     mockWorkspaceMembersFindFirst.mockResolvedValueOnce({ role: 'member' });
 
     const response = await app.request('/workspace');
 
-    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      workspaceId: 'workspace-1',
+      workspaceRole: 'member',
+    });
+    expect(response.status).toBe(200);
   });
 
   it('rejects a different workspace header for a workspace API Key', async () => {

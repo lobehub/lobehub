@@ -22,6 +22,7 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
+import { useWorkspaceApiKeyPolicy } from '../WorkspaceApiKeyPolicyContext';
 import ApiKeyDetail from './ApiKeyDetail';
 import { ApiKeyDisplay, createApiKeyModal } from './index';
 
@@ -66,24 +67,23 @@ const ApiKey: FC = () => {
   const { t } = useTranslation('auth');
   const { t: tc } = useTranslation('common');
   const activeWorkspaceId = useActiveWorkspaceId();
+  const workspacePolicy = useWorkspaceApiKeyPolicy();
 
   const { allowed: canEdit, reason } = usePermission('create_content');
   // Desktop renders from app://renderer, where a relative href is denied by the
   // window-open handler — resolve the docs link against the active server origin.
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const docsHref = isDesktop ? urlJoin(remoteServerUrl, '/api/v1/docs') : '/api/v1/docs';
-  // Workspace API keys are shared admin config: the server gates every
-  // mutation (create included) at Admin-or-higher
-  // (`requireWorkspaceRoleWhenScoped('admin')`), with no per-row creator
-  // check — mirror that here so Admins can manage keys created by other
-  // members and Members don't get an enabled create flow that always 403s.
-  const { allowed: canManageKeys } = usePermission('manage_settings');
-  const canCreate = canEdit && (!activeWorkspaceId || canManageKeys);
-  const checkManageable = (_creatorUserId?: string | null) => !activeWorkspaceId || canManageKeys;
+  const canCreate = canEdit && (!activeWorkspaceId || workspacePolicy.canCreate);
+  const isMemberCreationRestricted =
+    !!activeWorkspaceId && !workspacePolicy.isAdmin && !workspacePolicy.canCreate;
   const manageTooltip = tc(
     'manageOnlyCreator',
     'Only the creator or a workspace owner can do this',
   );
+  const createTooltip = workspacePolicy.canCreate
+    ? reason
+    : t('apikey.list.actions.creationRestricted');
 
   const { data, isLoading, mutate } = useClientDataSWR<ApiKeyItem[]>(apiKeyKeys.list(), () =>
     lambdaClient.apiKey.getApiKeys.query(),
@@ -104,6 +104,7 @@ const ApiKey: FC = () => {
 
   const createMutation = useMutation({
     mutationFn: (params: CreateApiKeyParams) => lambdaClient.apiKey.createApiKey.mutate(params),
+    onError: notifyMutationError,
     onSuccess: () => {
       mutate();
     },
@@ -166,7 +167,7 @@ const ApiKey: FC = () => {
     },
     // Scopes are deliberately absent from the list: the column could only ever
     // truncate, and the detail drawer (row click) shows the full grant list.
-    ...(activeWorkspaceId
+    ...(activeWorkspaceId && workspacePolicy.isAdmin
       ? [
           {
             key: 'creator',
@@ -210,7 +211,7 @@ const ApiKey: FC = () => {
           </Button>
           <Button
             disabled={!canCreate}
-            title={canCreate ? undefined : canEdit ? manageTooltip : reason}
+            title={canCreate ? undefined : createTooltip}
             type="primary"
             onClick={handleCreate}
           >
@@ -225,21 +226,40 @@ const ApiKey: FC = () => {
         rowKey={(apiKey) => apiKey.id}
         emptyText={
           <Center height={240} width={'100%'}>
-            <Empty description={t('apikey.list.empty')} />
+            <Empty
+              description={t(
+                isMemberCreationRestricted
+                  ? 'apikey.list.restrictedEmpty.desc'
+                  : 'apikey.list.empty',
+              )}
+              title={
+                isMemberCreationRestricted ? t('apikey.list.restrictedEmpty.title') : undefined
+              }
+            />
           </Center>
         }
         onRowClick={(apiKey) => setDetailId(apiKey.id)}
       />
       <ApiKeyDetail
         apiKey={detailApiKey}
-        canManage={canEdit && (detailApiKey ? checkManageable(detailApiKey.userId) : false)}
+        canEdit={canEdit && !!detailApiKey && detailApiKey.isMine !== false}
         manageTooltip={canEdit ? manageTooltip : (reason ?? manageTooltip)}
         open={!!detailApiKey}
+        canDelete={
+          canEdit && !!detailApiKey && (detailApiKey.isMine !== false || workspacePolicy.isAdmin)
+        }
         onClose={() => setDetailId(undefined)}
-        onUpdate={(id, params) => updateMutation.mutate({ id, params })}
         onDelete={async (id) => {
           await deleteMutation.mutateAsync(id);
           setDetailId(undefined);
+        }}
+        onUpdate={async (id, params) => {
+          try {
+            await updateMutation.mutateAsync({ id, params });
+            return true;
+          } catch {
+            return false;
+          }
         }}
       />
     </div>

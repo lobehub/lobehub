@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { hashApiKey } from '@/utils/server/apiKeyHash';
 
 import { getTestDB } from '../../core/getTestDB';
-import { apiKeys, users } from '../../schemas';
+import { apiKeys, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ApiKeyModel } from '../apiKey';
 
@@ -187,6 +187,55 @@ describe('ApiKeyModel', () => {
       expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
       expect(freshResult?.key).toMatch(/^sk-lh-[\da-z]{16}$/);
     });
+
+    it('lets workspace admins list all keys while members only see their own', async () => {
+      const workspaceId = 'api-key-model-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'API Key Test Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const adminModel = new ApiKeyModel(serverDB, userId, workspaceId, { canManageAll: true });
+      const memberModel = new ApiKeyModel(serverDB, 'user2', workspaceId, {
+        canManageAll: false,
+      });
+      await adminModel.create({ enabled: true, name: 'Admin Key' });
+      await memberModel.create({ enabled: true, name: 'Member Key' });
+
+      const memberKeys = await memberModel.query();
+      const adminKeys = await adminModel.query();
+
+      expect(memberKeys.map(({ name }) => name)).toEqual(['Member Key']);
+      expect(adminKeys.map(({ name }) => name).sort()).toEqual(['Admin Key', 'Member Key']);
+      expect(adminKeys.find(({ name }) => name === 'Member Key')).toMatchObject({
+        isMine: false,
+        key: '',
+      });
+    });
+
+    it('prevents workspace members from reading, updating, or deleting another member key', async () => {
+      const workspaceId = 'api-key-model-ownership-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'API Key Ownership Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const adminModel = new ApiKeyModel(serverDB, userId, workspaceId, { canManageAll: true });
+      const memberModel = new ApiKeyModel(serverDB, 'user2', workspaceId, {
+        canManageAll: false,
+      });
+      const adminKey = await adminModel.create({ enabled: true, name: 'Admin Key' });
+
+      expect(await memberModel.findById(adminKey.id)).toBeUndefined();
+      await memberModel.update(adminKey.id, { name: 'Hijacked' });
+      await memberModel.delete(adminKey.id);
+
+      expect(await adminModel.findById(adminKey.id)).toMatchObject({ name: 'Admin Key' });
+    });
   });
 
   describe('findByKey', () => {
@@ -335,7 +384,7 @@ describe('ApiKeyModel', () => {
     });
 
     it('should only update API keys for the current user', async () => {
-      const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
+      await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
       const { id: key2 } = await anotherApiKeyModel.create({
