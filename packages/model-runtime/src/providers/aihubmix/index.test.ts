@@ -138,7 +138,7 @@ describe('LobeAiHubMixAI', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',
-            'APP-Code': 'LobeHub',
+            'APP-Code': 'Panachat',
           }),
         }),
       );
@@ -162,7 +162,7 @@ describe('LobeAiHubMixAI', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',
-            'APP-Code': 'LobeHub',
+            'APP-Code': 'Panachat',
           }),
         }),
       );

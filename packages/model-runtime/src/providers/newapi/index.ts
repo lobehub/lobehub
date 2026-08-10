@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
@@ -76,7 +77,7 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_NEWAPI_CHAT_COMPLETION === '1',
   },
   defaultHeaders: {
-    'X-Client': 'LobeHub',
+    'X-Client': BRANDING_NAME,
   },
   id: ModelProvider.NewAPI,
   models: async ({ client: openAIClient, options }) => {

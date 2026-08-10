@@ -19,7 +19,7 @@ export interface HigressModelCard {
 export const params = {
   constructorOptions: {
     defaultHeaders: {
-      'HTTP-Referer': 'https://lobehub.com',
+      'HTTP-Referer': 'https://chat.panafor.com',
       'X-Title': BRANDING_NAME,
       'x-Request-Id': uniqueId('lobe-chat-'),
     },

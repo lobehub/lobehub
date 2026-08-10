@@ -152,7 +152,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       url,
       {
         headers: {
-          'User-Agent': 'LobeChat/1.0 (https://lobehub.com)',
+          'User-Agent': 'Panachat/1.0 (https://chat.panafor.com)',
         },
         method: 'HEAD',
       },

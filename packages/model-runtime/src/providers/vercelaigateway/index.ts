@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
@@ -79,8 +80,8 @@ export const params = {
   },
   constructorOptions: {
     defaultHeaders: {
-      'http-referer': 'https://lobehub.com',
-      'x-title': 'LobeHub',
+      'http-referer': 'https://chat.panafor.com',
+      'x-title': BRANDING_NAME,
     },
   },
   debug: {
