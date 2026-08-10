@@ -686,3 +686,52 @@ export const aicoMasterMonitorState = pgTable('aico_master_monitor_state', {
 
 export type AicoMasterMonitorStateItem = typeof aicoMasterMonitorState.$inferSelect;
 export type NewAicoMasterMonitorState = typeof aicoMasterMonitorState.$inferInsert;
+
+/**
+ * Aico security audit trail for platform/org/billing/key mutations (MON-002).
+ * Do not store secrets (OTP, API keys, full phones) in metadata.
+ */
+export const aicoSecurityAuditLogs = pgTable(
+  'aico_security_audit_logs',
+  {
+    id: text('id')
+      .$defaultFn(() => createNanoId(16)())
+      .notNull()
+      .primaryKey(),
+    actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    organizationId: text('organization_id').references(() => organizations.id, {
+      onDelete: 'set null',
+    }),
+    /** success | failure */
+    result: text('result').notNull().default('success'),
+    /** trpc | job | auth | system */
+    source: text('source').notNull().default('trpc'),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('aico_security_audit_logs_action_idx').on(t.action),
+    index('aico_security_audit_logs_organization_id_idx').on(t.organizationId),
+    index('aico_security_audit_logs_actor_user_id_idx').on(t.actorUserId),
+    index('aico_security_audit_logs_created_at_idx').on(t.createdAt),
+  ],
+);
+
+export type AicoSecurityAuditLogItem = typeof aicoSecurityAuditLogs.$inferSelect;
+export type NewAicoSecurityAuditLog = typeof aicoSecurityAuditLogs.$inferInsert;
+
+/** Dedupe / cooldown state for ops security alerts (MON-003). */
+export const aicoSecurityAlertState = pgTable('aico_security_alert_state', {
+  id: text('id').notNull().primaryKey(),
+  lastAlertedAt: timestamptz('last_alerted_at'),
+  hitCount: integer('hit_count').notNull().default(0),
+  updatedAt: updatedAt(),
+});
+
+export type AicoSecurityAlertStateItem = typeof aicoSecurityAlertState.$inferSelect;
+export type NewAicoSecurityAlertState = typeof aicoSecurityAlertState.$inferInsert;

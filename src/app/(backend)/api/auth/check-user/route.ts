@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { users } from '@/database/schemas/user';
 import { serverDB } from '@/database/server';
+import { recordAuthAbuseSignal } from '@/server/services/aico/securityAlert';
 
 import { consumeCheckUserRateLimit } from './rateLimit';
 
@@ -29,6 +30,12 @@ export async function POST(req: NextRequest) {
   try {
     const clientKey = clientKeyFromRequest(req);
     if (!consumeCheckUserRateLimit(clientKey)) {
+      void recordAuthAbuseSignal(serverDB, {
+        key: clientKey,
+        kind: 'rate_limit',
+        threshold: 5,
+        windowMs: 5 * 60_000,
+      });
       return NextResponse.json(
         { error: 'Too many requests', exists: false },
         { status: 429, headers: { 'Retry-After': '60' } },

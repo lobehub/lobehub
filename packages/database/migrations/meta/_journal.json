@@ -994,6 +994,13 @@
       "when": 1786500000000,
       "tag": "0141_aico_member_budgets_org_id",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786277590791,
+      "tag": "0142_aico_security_audit_and_alerts",
+      "breakpoints": true
     }
   ],
   "version": "6"

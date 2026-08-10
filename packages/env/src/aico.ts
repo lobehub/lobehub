@@ -31,6 +31,11 @@ declare global {
        */
       AICO_OPENROUTER_MOCK?: string;
       /**
+       * Optional HTTPS webhook for Aico security ops alerts (MON-003).
+       * Receives JSON: { type, severity, summary, details, timestamp }.
+       */
+      AICO_SECURITY_ALERT_WEBHOOK_URL?: string;
+      /**
        * Toman per 1 USD — fallback FX rate used when the live-rate lookup fails.
        * Example: 50000 means 50,000 toman = $1.
        */
@@ -52,6 +57,7 @@ export const getAicoConfig = () => {
       AICO_CONTROL_PLANE_URL: z.string().url().optional(),
       AICO_IS_CONTROL_PLANE: z.boolean().optional().default(false),
       AICO_OPENROUTER_MOCK: z.boolean().optional().default(false),
+      AICO_SECURITY_ALERT_WEBHOOK_URL: z.string().url().optional(),
       AICO_TOMAN_PER_USD: z.coerce.number().positive().int().default(50_000),
       OPENROUTER_MANAGEMENT_API_KEY: z.string().optional(),
     },
@@ -61,6 +67,7 @@ export const getAicoConfig = () => {
       AICO_CONTROL_PLANE_URL: process.env.AICO_CONTROL_PLANE_URL,
       AICO_IS_CONTROL_PLANE: process.env.AICO_IS_CONTROL_PLANE === '1',
       AICO_OPENROUTER_MOCK: process.env.AICO_OPENROUTER_MOCK === '1',
+      AICO_SECURITY_ALERT_WEBHOOK_URL: process.env.AICO_SECURITY_ALERT_WEBHOOK_URL || undefined,
       AICO_TOMAN_PER_USD: process.env.AICO_TOMAN_PER_USD,
       OPENROUTER_MANAGEMENT_API_KEY: process.env.OPENROUTER_MANAGEMENT_API_KEY,
     },

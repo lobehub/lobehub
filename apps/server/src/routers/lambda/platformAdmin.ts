@@ -14,10 +14,12 @@ import { revokeOIDCArtifactsByUserId } from '@/libs/oidc-provider/access-control
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
+import { refreshAicoMasterMonitorState } from '@/server/services/aico/masterMonitor';
 import {
   resolveTopupAmount,
   topupAmountInputSchema,
 } from '@/server/services/aico/resolveTopupAmount';
+import { recordAicoSecurityEvent } from '@/server/services/aico/securityAudit';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { OpenRouterModelCatalogSyncService } from '@/server/services/openrouter/modelCatalogSync';
 
@@ -100,6 +102,16 @@ export const platformAdminRouter = router({
         ownerUserId,
         slug: input.slug,
       });
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'platform.org.create',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: { name: org.name, slug: org.slug },
+        organizationId: org.id,
+        targetId: org.id,
+        targetType: 'organization',
+        userAgent: ctx.userAgent,
+      });
       return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
     }),
 
@@ -127,11 +139,25 @@ export const platformAdminRouter = router({
       const org = await ctx.organizationModel.getById(input.orgId);
       if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
 
-      return ctx.organizationModel.assignManager({
-        orgId: input.orgId,
-        role: input.role,
-        userId,
-      });
+      return ctx.organizationModel
+        .assignManager({
+          orgId: input.orgId,
+          role: input.role,
+          userId,
+        })
+        .then(async (row) => {
+          await recordAicoSecurityEvent(ctx.serverDB, {
+            action: 'platform.org.assign_manager',
+            actorUserId: ctx.userId,
+            ipAddress: ctx.clientIp,
+            metadata: { role: input.role, targetUserId: userId },
+            organizationId: input.orgId,
+            targetId: userId,
+            targetType: 'user',
+            userAgent: ctx.userAgent,
+          });
+          return row;
+        });
     }),
 
   suspendOrganization: platformProcedure
@@ -145,6 +171,16 @@ export const platformAdminRouter = router({
         // not just at the next usage-sync poll.
         const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
         await keyService.disableAllOrgMemberKeys(input.orgId);
+
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'platform.org.suspend',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          organizationId: input.orgId,
+          targetId: input.orgId,
+          targetType: 'organization',
+          userAgent: ctx.userAgent,
+        });
 
         return row;
       } catch (error) {
@@ -163,6 +199,15 @@ export const platformAdminRouter = router({
       try {
         const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'active');
         if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'platform.org.activate',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          organizationId: input.orgId,
+          targetId: input.orgId,
+          targetType: 'organization',
+          userAgent: ctx.userAgent,
+        });
         return row;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -192,6 +237,20 @@ export const platformAdminRouter = router({
           fxRateTomanPerUsd,
           orgId: input.orgId,
           type: 'manual_credit',
+        });
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'platform.credit.org_add',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          metadata: {
+            amountMicroUsd,
+            amountToman,
+            transactionId: result.transaction.id,
+          },
+          organizationId: input.orgId,
+          targetId: result.transaction.id,
+          targetType: 'wallet_transaction',
+          userAgent: ctx.userAgent,
         });
         return {
           organization: {
@@ -254,6 +313,21 @@ export const platformAdminRouter = router({
         const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
         await keyService.ensureUserKey(userId);
 
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'platform.credit.user_add',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          metadata: {
+            amountMicroUsd,
+            amountToman,
+            targetUserId: userId,
+            transactionId: result.transaction.id,
+          },
+          targetId: userId,
+          targetType: 'user',
+          userAgent: ctx.userAgent,
+        });
+
         return {
           transaction: {
             ...result.transaction,
@@ -294,7 +368,18 @@ export const platformAdminRouter = router({
       if (!userId) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'userId or email is required' });
       }
-      return ctx.organizationModel.addPlatformAdmin(userId);
+      return ctx.organizationModel.addPlatformAdmin(userId).then(async (row) => {
+        await recordAicoSecurityEvent(ctx.serverDB, {
+          action: 'platform.admin.add',
+          actorUserId: ctx.userId,
+          ipAddress: ctx.clientIp,
+          metadata: { targetUserId: userId },
+          targetId: userId,
+          targetType: 'user',
+          userAgent: ctx.userAgent,
+        });
+        return row;
+      });
     }),
 
   listPlatformAdmins: platformProcedure.query(async ({ ctx }) => {
@@ -407,17 +492,16 @@ export const platformAdminRouter = router({
     }),
 
   getMasterAccountStatus: platformProcedure.query(async ({ ctx }) => {
-    // OpenRouter Management API has no documented master prepaid-balance endpoint.
-    // Never fabricate a real balance — report observed usage + unknown status.
     const usageMicro = await ctx.billingModel.sumUsageCostMicroUsd();
+    const status = await refreshAicoMasterMonitorState(ctx.serverDB, usageMicro);
     return {
       balanceUsd: null as string | null,
-      belowThreshold: null as boolean | null,
-      isStub: true,
-      lastSuccessfulCheckAt: null as string | null,
-      status: 'unknown' as const,
-      thresholdUsd: '100.000000',
-      totalObservedUsageUsd: microUsdToDecimalString(usageMicro),
+      belowThreshold: status.belowThreshold,
+      isStub: status.isStub,
+      lastSuccessfulCheckAt: status.lastSuccessfulCheckAt,
+      status: status.status,
+      thresholdUsd: status.thresholdUsd,
+      totalObservedUsageUsd: status.totalObservedUsageUsd,
     };
   }),
 
