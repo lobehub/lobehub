@@ -57,6 +57,12 @@ vi.mock('@/hooks/useFetchChatTopics', () => ({
   useFetchChatTopics: vi.fn(),
 }));
 
+// Freeze deferred work at its initial value so the test observes the first
+// committed navigation frame rather than React's follow-up render.
+vi.mock('@/hooks/useDeferredMount', () => ({
+  useDeferredMount: () => false,
+}));
+
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: 'create_content') => ({
     allowed: permissionMock[action],
@@ -138,6 +144,10 @@ vi.mock('./Item', () => ({
   default: () => <div data-testid="topic-item" />,
 }));
 
+vi.mock('./TopicListSkeleton', () => ({
+  default: () => <div data-testid="topic-list-skeleton" />,
+}));
+
 // Partial mock: keep every real export (e.g. `lobeStaticStylish`, which
 // `createStaticStyles` reads at import time in transitively-loaded modules like
 // ShareModal/useContainerStyles) and override only Flexbox. A full mock returning
@@ -155,8 +165,24 @@ describe('Agent topic list', () => {
     permissionMock.create_content = true;
     chatStoreStateMock.hasMore = true;
     chatStoreStateMock.isExpandingPageSize = false;
+    chatStoreStateMock.isUndefinedTopics = false;
     chatStoreStateMock.topicLength = 0;
     chatStoreStateMock.topics = [];
+  });
+
+  it('renders settled topic data in the first navigation frame', () => {
+    render(<TopicList />);
+
+    expect(screen.queryByTestId('topic-list-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'actions.addNewTopic' })).toBeInTheDocument();
+  });
+
+  it('renders a skeleton when the current topic data is unavailable', () => {
+    chatStoreStateMock.isUndefinedTopics = true;
+
+    render(<TopicList />);
+
+    expect(screen.getByTestId('topic-list-skeleton')).toBeInTheDocument();
   });
 
   it('opens the agent chat route from the empty start topic entry', () => {

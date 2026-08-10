@@ -9,8 +9,8 @@
  * SWR key — consumers never need to opt in per call.
  */
 
-import { useEffect, useRef } from 'react';
-import { type SWRConfiguration, type SWRResponse } from 'swr';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { type SWRConfiguration, type SWRResponse, unstable_serialize } from 'swr';
 
 import { useClientDataSWR } from './index';
 
@@ -26,6 +26,13 @@ interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
    * Whether to skip sync (optional, for conditional skipping)
    */
   skipSync?: boolean;
+  /**
+   * Synchronize cached data before browser paint.
+   *
+   * Use this when the Zustand projection controls the first-load surface and
+   * a passive effect would otherwise paint a stale loading state for one frame.
+   */
+  syncBeforePaint?: boolean;
 }
 
 /**
@@ -55,8 +62,22 @@ export function useClientDataSWRWithSync<T>(
   fetcher: (() => Promise<T>) | null,
   options?: UseClientDataSWRWithSyncOptions<T>,
 ): SWRResponse<T> {
-  const { onData, skipSync, onSuccess, ...swrOptions } = options || {};
-  const hasSyncedRef = useRef(false);
+  const { onData, skipSync, syncBeforePaint, onSuccess, ...swrOptions } = options || {};
+  const serializedKey = unstable_serialize(key);
+  const lastSyncedRef = useRef<{ data: T; key: string } | undefined>(undefined);
+
+  const syncData = useCallback(
+    (data: T) => {
+      if (!serializedKey || !onData || skipSync) return;
+
+      const lastSynced = lastSyncedRef.current;
+      if (lastSynced?.key === serializedKey && Object.is(lastSynced.data, data)) return;
+
+      onData(data);
+      lastSyncedRef.current = { data, key: serializedKey };
+    },
+    [onData, serializedKey, skipSync],
+  );
 
   const response = useClientDataSWR<T>(key, fetcher, {
     ...swrOptions,
@@ -64,27 +85,27 @@ export function useClientDataSWRWithSync<T>(
       // Call original onSuccess
       onSuccess?.(data, key, config);
       // Also sync via onData
-      if (onData && !skipSync) {
-        onData(data);
-        hasSyncedRef.current = true;
-      }
+      syncData(data);
     },
   });
 
   const { data } = response;
 
-  // When cached data is available, sync to store immediately
-  useEffect(() => {
-    if (data && onData && !skipSync && !hasSyncedRef.current) {
-      onData(data);
-      hasSyncedRef.current = true;
-    }
-  }, [data, onData, skipSync]);
+  // Loading projections that own the first-paint state consume hydrated cache
+  // data in the layout phase so a cache hit never paints as a loading frame.
+  useLayoutEffect(() => {
+    if (!syncBeforePaint || data === undefined) return;
 
-  // Reset sync state when key changes
+    syncData(data);
+  }, [data, syncBeforePaint, syncData]);
+
+  // Other projections retain passive synchronization to keep non-critical
+  // cached-data processing off the initial render path.
   useEffect(() => {
-    hasSyncedRef.current = false;
-  }, [key?.toString()]);
+    if (syncBeforePaint || data === undefined) return;
+
+    syncData(data);
+  }, [data, syncBeforePaint, syncData]);
 
   return response;
 }

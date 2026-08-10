@@ -890,6 +890,7 @@ export class ChatTopicActionImpl {
       },
       {
         // onData: responsible for state updates (fires for both cached and fresh data)
+        syncBeforePaint: true,
         onData: (result) => {
           if (!hasValidContainer) return;
 

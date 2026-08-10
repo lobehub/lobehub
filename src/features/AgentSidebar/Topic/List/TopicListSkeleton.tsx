@@ -5,8 +5,7 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 // Mirrors the grouped topic list frame (12px group caption + icon-led 36px
-// rows) so the deferred-mount frame reads as the layout it resolves into,
-// unlike the avatar-style generic SkeletonList.
+// rows) while the current container has no settled topic data.
 const GROUPS = [
   { header: 44, rows: ['82%', '58%', '70%'] },
   { header: 60, rows: ['64%', '76%', '48%', '68%'] },

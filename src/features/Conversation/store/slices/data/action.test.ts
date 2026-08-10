@@ -720,6 +720,46 @@ describe('DataSlice', () => {
       expect(onMessagesChange).not.toHaveBeenCalled();
     });
 
+    it('accepts hydrated data after the store switches to the requested conversation', () => {
+      vi.mocked(messageService.getMessages).mockReturnValue(new Promise<never>(() => {}));
+
+      const previousContext = {
+        agentId: 'test-session',
+        threadId: null,
+        topicId: 'topic-previous',
+      };
+      const requestedContext = {
+        agentId: 'test-session',
+        threadId: null,
+        topicId: 'topic-requested',
+      };
+      const cachedMessages: UIChatMessage[] = [
+        {
+          content: 'hydrated topic history',
+          createdAt: 1000,
+          id: 'msg-cached',
+          role: 'user',
+          updatedAt: 1000,
+        },
+      ];
+      const store = createStore({ context: previousContext });
+
+      store.getState().useFetchMessages(requestedContext);
+      const options = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1)?.[2] as
+        | {
+            onData?: (data: UIChatMessage[]) => void;
+            syncBeforePaint?: boolean;
+          }
+        | undefined;
+
+      store.setState({ context: requestedContext, messagesInit: false });
+      options?.onData?.(cachedMessages);
+
+      expect(options?.syncBeforePaint).toBe(true);
+      expect(store.getState().dbMessages).toEqual(cachedMessages);
+      expect(store.getState().messagesInit).toBe(true);
+    });
+
     it('should pass null threadId when provided as null', async () => {
       const mockMessages: UIChatMessage[] = [
         {
