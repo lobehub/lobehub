@@ -20,6 +20,7 @@ import {
   type FxTopupFormValues,
   resolveFxTopupPayload,
 } from '@/features/AicoBilling/FxTopupFields';
+import { groupedNumberInputProps } from '@/features/AicoBilling/groupedNumberInput';
 import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { useClientDataSWR } from '@/libs/swr';
 import { controlPlaneClient } from '@/libs/trpc/client/controlPlane';
@@ -562,14 +563,19 @@ export const PlatformAdminPanel = () => {
                   name="maxRequests"
                   style={{ minWidth: 160 }}
                 >
-                  <InputNumber min={1} style={{ width: '100%' }} />
+                  <InputNumber {...groupedNumberInputProps} min={1} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
                   label={t('platform.trialBudgetUsd')}
                   name="trialBudgetUsd"
                   style={{ minWidth: 160 }}
                 >
-                  <InputNumber min={0.01} step={0.1} style={{ width: '100%' }} />
+                  <InputNumber
+                    {...groupedNumberInputProps}
+                    min={0.01}
+                    step={0.1}
+                    style={{ width: '100%' }}
+                  />
                 </Form.Item>
               </div>
               <Form.Item label={t('platform.trialModels')} name="allowedModelIds">
