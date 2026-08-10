@@ -2,6 +2,7 @@ import type { WorkflowContext } from '@upstash/workflow';
 
 import { TopicSummaryModel } from '@/database/models/topicSummary';
 import { getServerDB } from '@/database/server';
+import { parseWorkflowDate, runStep } from '@/server/workflows/step';
 import {
   type DispatchTopicAutoSummaryPayload,
   TopicAutoSummaryWorkflow,
@@ -36,14 +37,20 @@ export const dispatchTopicAutoSummary = async (
   const remaining = Math.max(maxTopics - processed, 0);
   if (remaining === 0) return { processed, scheduled: 0, truncated: true };
 
+  // `runStep` types the result the way the workflow receives it after Upstash's JSON round trip, so
+  // `lastMessageUpdatedAt` reads as the ISO string it actually is rather than the model's `Date`.
   const listCandidates = async (cursor: DispatchTopicAutoSummaryPayload['cursor'], limit: number) =>
-    context.run(`topic-auto-summary:list:${cursor?.id ?? 'root'}`, async () => {
+    runStep(context, `topic-auto-summary:list:${cursor?.id ?? 'root'}`, async () => {
       const db = await getServerDB();
+
       return new TopicSummaryModel(db).listCandidates({
         cursor: cursor
           ? {
               id: cursor.id,
-              lastMessageUpdatedAt: new Date(cursor.lastMessageUpdatedAt),
+              lastMessageUpdatedAt: parseWorkflowDate(
+                cursor.lastMessageUpdatedAt,
+                'Invalid topic auto summary cursor timestamp',
+              ),
             }
           : undefined,
         force: payload.force,
@@ -67,7 +74,7 @@ export const dispatchTopicAutoSummary = async (
       if (last && hasNextPage)
         cursor = {
           id: last.id,
-          lastMessageUpdatedAt: last.lastMessageUpdatedAt.toISOString(),
+          lastMessageUpdatedAt: last.lastMessageUpdatedAt,
         };
       if (!last || !hasNextPage || candidates === remaining) break;
     }
@@ -90,7 +97,7 @@ export const dispatchTopicAutoSummary = async (
 
   await Promise.all(
     candidates.map((candidate) =>
-      context.run(`topic-auto-summary:schedule:${candidate.id}`, () =>
+      runStep(context, `topic-auto-summary:schedule:${candidate.id}`, () =>
         TopicAutoSummaryWorkflow.triggerExecute({
           force: payload.force,
           topicId: candidate.id,
@@ -106,12 +113,12 @@ export const dispatchTopicAutoSummary = async (
   const hasNextPage =
     candidates.length === Math.min(pageSize, remaining) && nextProcessed < maxTopics;
   if (last && hasNextPage) {
-    await context.run(`topic-auto-summary:next:${last.id}`, () =>
+    await runStep(context, `topic-auto-summary:next:${last.id}`, () =>
       TopicAutoSummaryWorkflow.triggerDispatch({
         ...payload,
         cursor: {
           id: last.id,
-          lastMessageUpdatedAt: last.lastMessageUpdatedAt.toISOString(),
+          lastMessageUpdatedAt: last.lastMessageUpdatedAt,
         },
         processed: nextProcessed,
       }),
