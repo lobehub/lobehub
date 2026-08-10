@@ -963,6 +963,12 @@ export class AgentGroupRepository {
         backgroundColor: agents.backgroundColor,
         groupId: chatGroupsAgents.chatGroupId,
         role: chatGroupsAgents.role,
+        // Needed by `resolveGroupMembershipType`: without it a builtin row on
+        // a roster reads as merely `virtual` — i.e. owned — and drops out of
+        // this warning, while the transfer (which does pass `slug`) treats it
+        // as referenced and clones it. The warning would omit the one row the
+        // move is about to act on.
+        slug: agents.slug,
         title: agents.title,
         virtual: agents.virtual,
       })

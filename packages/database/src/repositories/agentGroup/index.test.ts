@@ -2475,6 +2475,33 @@ describe('AgentGroupRepository', () => {
       ]);
     });
 
+    it('reports a builtin row the transfer would clone', async () => {
+      // The transfer passes `slug` and so treats a builtin on a roster as
+      // referenced (cloning it); this warning must classify it the same way,
+      // or it omits the exact row the move is about to act on.
+      await serverDB.insert(agents).values({
+        id: 'lrm-builtin',
+        slug: 'inbox',
+        title: 'Inbox',
+        userId,
+        virtual: true,
+        visibility: 'public',
+        workspaceId,
+      });
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'lrm-builtin',
+        chatGroupId: 'lrm-group',
+        order: 3,
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const rows = await wsRepo.listReferencedMembers(['lrm-group']);
+
+      expect(rows.map((row) => row.agentId)).toEqual(['lrm-public', 'lrm-builtin']);
+    });
+
     it('omits a member the caller cannot see on the roster', async () => {
       // Seeing the GROUP is not enough. The roster itself hides a member whose
       // owner flipped it back to private, so this pre-transfer warning must not
