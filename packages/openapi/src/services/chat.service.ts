@@ -397,8 +397,6 @@ export class ChatService extends BaseService {
       // Improve error logging with more detailed error information
       let errorDetails: any;
 
-      console.error('error', error);
-
       if (error instanceof Error) {
         errorDetails = {
           message: error.message,

@@ -8,6 +8,7 @@ import { type ApiKeyItem, type CreateApiKeyParams } from '@/types/apiKey';
 
 import { WorkspaceApiKeyPolicyContext } from '../WorkspaceApiKeyPolicyContext';
 import ApiKey from './ApiKey';
+import ScopeSelector from './ApiKeyModal/ScopeSelector';
 
 const hoisted = vi.hoisted(() => ({
   createApiKeyModal: vi.fn(),
@@ -184,6 +185,26 @@ const openDetail = async (name: string) => {
 };
 
 describe('ApiKey', () => {
+  it('offers MCP read/write and read-only usage scopes when access is restricted', () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <ScopeSelector
+        fullAccess={false}
+        selected={[]}
+        onFullAccessChange={vi.fn()}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+
+    const mcpGroup = screen.getByText('apikey.scopes.groups.mcp').parentElement!;
+    const usageGroup = screen.getByText('apikey.scopes.groups.usage').parentElement!;
+    expect(within(mcpGroup).getAllByRole('checkbox')).toHaveLength(2);
+    expect(within(usageGroup).getAllByRole('checkbox')).toHaveLength(1);
+
+    fireEvent.click(within(mcpGroup).getByRole('checkbox', { name: 'apikey.scopes.write' }));
+    expect(onSelectedChange).toHaveBeenCalledWith(['mcp:write', 'mcp:read']);
+  });
+
   it('shows loading, then empty state when the first fetch returns no keys', async () => {
     let resolveList!: (items: ApiKeyItem[]) => void;
     hoisted.trpc.getApiKeys.mockImplementation(
@@ -442,7 +463,9 @@ describe('ApiKey', () => {
 
   it('opens the detail drawer on row click listing only the granted scopes', async () => {
     hoisted.trpc.getApiKeys.mockResolvedValue([
-      makeItem({ scopes: ['model:read', 'model:invoke', 'agent:read'] }),
+      makeItem({
+        scopes: ['model:read', 'model:invoke', 'agent:read', 'mcp:read', 'mcp:write', 'usage:read'],
+      }),
     ]);
     renderPage();
     await screen.findByText('My Key');
@@ -453,7 +476,9 @@ describe('ApiKey', () => {
     expect(within(dialog).getByText('apikey.detail.title')).toBeInTheDocument();
     // one row per granted domain, actions collapsed — ungranted domains absent
     expect(within(dialog).getByText('apikey.scopes.groups.agent')).toBeInTheDocument();
+    expect(within(dialog).getByText('apikey.scopes.groups.mcp')).toBeInTheDocument();
     expect(within(dialog).getByText('apikey.scopes.groups.model')).toBeInTheDocument();
+    expect(within(dialog).getByText('apikey.scopes.groups.usage')).toBeInTheDocument();
     expect(within(dialog).queryByText('apikey.scopes.groups.chat')).toBeNull();
     expect(within(dialog).queryByText('apikey.scopes.groups.file')).toBeNull();
     // the model row collapses read + invoke onto one line (the `t` mock echoes

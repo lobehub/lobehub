@@ -92,6 +92,15 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
+   * Conflict error class
+   */
+  protected createConflictError(message: string): Error {
+    const error = new Error(message);
+    error.name = 'ConflictError';
+    return error;
+  }
+
+  /**
    * Not found error class
    */
   protected createNotFoundError(message: string): Error {
@@ -132,6 +141,7 @@ export abstract class BaseService implements IBaseService {
         'BusinessError',
         'AuthenticationError',
         'AuthorizationError',
+        'ConflictError',
         'NotFoundError',
         'ValidationError',
       ].includes(error.name)

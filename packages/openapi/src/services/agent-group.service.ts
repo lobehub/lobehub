@@ -5,6 +5,7 @@ import { sessionGroups } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { BaseService } from '../common/base.service';
+import { projectPublicAgentGroup } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   AgentGroupListResponse,
@@ -52,7 +53,7 @@ export class AgentGroupService extends BaseService {
 
       this.log('info', `Found ${agentGroupList.length} agent groups`);
 
-      return agentGroupList;
+      return agentGroupList.map(projectPublicAgentGroup);
     } catch (error) {
       this.handleServiceError(error, '获取助理分类列表');
     }
@@ -88,7 +89,7 @@ export class AgentGroupService extends BaseService {
         return null;
       }
 
-      return agentGroup;
+      return projectPublicAgentGroup(agentGroup);
     } catch (error) {
       this.handleServiceError(error, '获取助理分类详情');
     }

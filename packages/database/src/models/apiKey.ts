@@ -59,7 +59,9 @@ export class ApiKeyModel {
     return this.gateKeeperPromise;
   }
 
-  create = async (params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key' | 'keyHash'>) => {
+  private createRecord = async (
+    params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key' | 'keyHash'>,
+  ) => {
     const key = generateApiKey();
     const keyHash = hashApiKey(key);
     const gateKeeper = await this.getGateKeeper();
@@ -75,7 +77,21 @@ export class ApiKeyModel {
       )
       .returning();
 
-    return result;
+    return { key, record: result };
+  };
+
+  create = async (params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key' | 'keyHash'>) =>
+    (await this.createRecord(params)).record;
+
+  /**
+   * Create a key and reveal its plaintext exactly once to a trusted transport.
+   * List/detail methods continue to return only the stored encrypted record.
+   */
+  createWithPlaintext = async (
+    params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key' | 'keyHash'>,
+  ) => {
+    const { key, record } = await this.createRecord(params);
+    return { ...record, key };
   };
 
   delete = async (id: string) => {
@@ -140,6 +156,14 @@ export class ApiKeyModel {
         },
       ),
     );
+  };
+
+  /** Metadata-only list for public API transports that must never reveal keys. */
+  queryMetadata = async () => {
+    return this.db.query.apiKeys.findMany({
+      orderBy: desc(apiKeys.updatedAt),
+      where: this.ownership(),
+    });
   };
 
   findByKey = async (key: string) => {

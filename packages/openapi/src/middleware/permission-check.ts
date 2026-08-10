@@ -16,6 +16,13 @@ const log = debug('lobe-hono:permission-middleware');
 
 export interface PermissionCheckOptions {
   /**
+   * Explicit scope for API-key-authenticated requests when the public API
+   * capability does not map 1:1 to the RBAC resource used for issuer checks.
+   * This only changes the API key narrowing step; RBAC is still enforced.
+   */
+  apiKeyScope?: ApiKeyScope;
+
+  /**
    * Custom error message when permission check fails
    */
   errorMessage?: string;
@@ -56,13 +63,20 @@ export interface PermissionCheckOptions {
  * the key holds; `'AND'` needs all of them. Permissions that map to no scope
  * (api_key/rbac/roles) can never be satisfied by a restricted key.
  */
-const assertApiKeyScopesAllow = (c: Context, permissionCodes: string[], operator: 'AND' | 'OR') => {
+const assertApiKeyScopesAllow = (
+  c: Context,
+  permissionCodes: string[],
+  operator: 'AND' | 'OR',
+  apiKeyScope?: ApiKeyScope,
+) => {
   if (c.get('authType') !== 'apikey') return;
 
   const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
   if (isFullAccessApiKey(scopes)) return;
 
-  const requiredScopes = permissionCodes.map((code) => requiredApiKeyScopeForPermission(code));
+  const requiredScopes = apiKeyScope
+    ? [apiKeyScope]
+    : permissionCodes.map((code) => requiredApiKeyScopeForPermission(code));
   const satisfies = (scope: ApiKeyScope | null) => !!scope && hasApiKeyScope(scopes, scope);
   const allowed =
     operator === 'AND' ? requiredScopes.every(satisfies) : requiredScopes.some(satisfies);
@@ -144,7 +158,7 @@ const requirePermission = (options: PermissionCheckOptions) => {
       }
 
       // RBAC passed — now narrow by the API key's capability scopes
-      assertApiKeyScopesAllow(c, permissionCodes, operator);
+      assertApiKeyScopesAllow(c, permissionCodes, operator, options.apiKeyScope);
 
       log('Permission check passed for user %s', userId);
 
@@ -207,6 +221,24 @@ export const requireAllPermissions = (permissionCodes: string[], errorMessage?: 
  */
 export const requireAnyPermission = (permissionCodes: string[], errorMessage?: string) => {
   return requirePermission({
+    errorMessage,
+    operator: 'OR',
+    permissions: permissionCodes,
+  });
+};
+
+/**
+ * Require issuer RBAC while projecting the route onto an explicit API key
+ * scope. Use this for public capabilities such as MCP configuration or usage
+ * summaries whose RBAC permission belongs to a different internal resource.
+ */
+export const requireAnyPermissionWithApiKeyScope = (
+  permissionCodes: string[],
+  apiKeyScope: ApiKeyScope,
+  errorMessage?: string,
+) => {
+  return requirePermission({
+    apiKeyScope,
     errorMessage,
     operator: 'OR',
     permissions: permissionCodes,

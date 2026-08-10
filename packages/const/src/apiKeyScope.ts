@@ -24,7 +24,7 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
  * - `rbac:*`, member/role management — privilege escalation surface
- * - billing (spend / subscription / top-up / credits)
+ * - billing administration (spend / subscription / top-up / credits)
  */
 export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
@@ -39,6 +39,9 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  'mcp:read',
+  'mcp:write',
+  'usage:read',
   'workspace:read',
   'workspace:write',
   'user:read',
@@ -247,7 +250,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   topic: rw('chat:read', 'chat:write'),
   topicComment: rw('chat:read', 'chat:write'),
   upload: rw('file:read', 'file:write'),
-  usage: 'blocked',
+  usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),
   userMemories: rw('user:read', 'user:write'),
   userMemory: rw('user:read', 'user:write'),

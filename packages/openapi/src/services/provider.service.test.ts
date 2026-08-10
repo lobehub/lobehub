@@ -11,6 +11,11 @@ vi.mock('@/const/rbac', () => ({
   ALL_SCOPE: 'all',
 }));
 
+vi.mock('@lobechat/database', () => ({
+  buildWorkspacePayload: vi.fn(),
+  buildWorkspaceWhere: vi.fn(),
+}));
+
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: class {},
 }));

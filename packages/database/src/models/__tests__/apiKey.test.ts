@@ -68,6 +68,16 @@ describe('ApiKeyModel', () => {
 
       expect(result.expiresAt).toEqual(expiresAt);
     });
+
+    it('reveals plaintext only through the explicit one-time create method', async () => {
+      const created = await apiKeyModel.createWithPlaintext({ name: 'One-time Key' });
+
+      expect(created.key).toMatch(/^sk-lh-[\da-z]{16}$/);
+
+      const stored = await apiKeyModel.findById(created.id);
+      expect(stored?.key).not.toBe(created.key);
+      expect(stored?.key).toContain(':');
+    });
   });
 
   describe('delete', () => {
@@ -146,6 +156,14 @@ describe('ApiKeyModel', () => {
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
       expect(keys[0].key).toMatch(/^sk-lh-[\da-z]{16}$/);
+    });
+
+    it('keeps metadata queries free of decrypted plaintext', async () => {
+      const created = await apiKeyModel.createWithPlaintext({ name: 'Metadata Key' });
+      const [metadata] = await apiKeyModel.queryMetadata();
+
+      expect(metadata.key).not.toBe(created.key);
+      expect(metadata.key).toContain(':');
     });
 
     it('should query API keys ordered by updatedAt desc', async () => {
