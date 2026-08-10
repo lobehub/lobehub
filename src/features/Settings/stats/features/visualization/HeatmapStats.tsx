@@ -26,14 +26,7 @@ const formatDuration = (seconds?: number) => {
   return `${s}s`;
 };
 
-/**
- * Token-dimension summary row for the activity heatmap. The peak / streak figures
- * are derived from the daily token-heatmap series (same SWR key as the heatmap,
- * so the request is deduped); the longest-task duration comes from the agent
- * operations' wall-clock time. The cumulative token total lives in the overview
- * cards above, so it is intentionally not repeated here.
- */
-const HeatmapStats = memo(() => {
+const HeatmapStats = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
 
   const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
@@ -61,8 +54,6 @@ const HeatmapStats = memo(() => {
       }
     }
 
-    // Current streak: trailing consecutive active days. The last bucket (today)
-    // may legitimately be 0 because the day isn't over, so it doesn't break it.
     let current = 0;
     for (let i = data.length - 1; i >= 0; i -= 1) {
       if (data[i].count > 0) current += 1;
@@ -86,25 +77,40 @@ const HeatmapStats = memo(() => {
     { label: t('stats.heatmapStats.longestStreak'), value: days(stats.longest) },
   ];
 
+  // 2×2 grid layout
+  const containerStyle = {
+    display: 'grid',
+    gap: '6px 12px',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+  };
+
+  const renderItem = (item: (typeof items)[0]) => (
+    <Flexbox align={'center'} flex={1} gap={4} key={item.label}>
+      <div style={{ fontSize: 20, fontWeight: 'bold' }}>
+        {loading || item.loading ? (
+          <Skeleton.Button active size={'small'} style={{ width: 56 }} />
+        ) : (
+          item.value
+        )}
+      </div>
+      <div style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>{item.label}</div>
+    </Flexbox>
+  );
+
   return (
     <Block paddingBlock={16} paddingInline={8} variant={'outlined'}>
-      <Flexbox horizontal align={'center'} width={'100%'}>
-        {items.map((item, index) => (
-          <Fragment key={item.label}>
-            {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
-            <Flexbox align={'center'} flex={1} gap={4}>
-              <div style={{ fontSize: 20, fontWeight: 'bold' }}>
-                {loading || item.loading ? (
-                  <Skeleton.Button active size={'small'} style={{ width: 56 }} />
-                ) : (
-                  item.value
-                )}
-              </div>
-              <div style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>{item.label}</div>
-            </Flexbox>
-          </Fragment>
-        ))}
-      </Flexbox>
+      {mobile ? (
+        <div style={containerStyle}>{items.map(renderItem)}</div>
+      ) : (
+        <Flexbox horizontal align={'center'} width={'100%'}>
+          {items.map((item, index) => (
+            <Fragment key={item.label}>
+              {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
+              {renderItem(item)}
+            </Fragment>
+          ))}
+        </Flexbox>
+      )}
     </Block>
   );
 });

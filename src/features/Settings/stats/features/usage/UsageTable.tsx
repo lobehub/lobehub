@@ -39,6 +39,8 @@ interface SortState {
 const styles = createStaticStyles(({ css }) => ({
   // Line the footer up with InlineTable's first/last cells.
   pagination: css`
+    flex-wrap: wrap;
+    row-gap: 8px;
     padding-inline: 24px;
   `,
 }));
@@ -169,21 +171,23 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
 
   return (
     <>
-      <InlineTable
-        columns={columns}
-        dataSource={pageData}
-        loading={isLoading}
-        rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
-        size="small"
-        onChange={(_pagination, _filters, sorter) => {
-          const next = Array.isArray(sorter) ? sorter[0] : sorter;
-          const field = String(next?.columnKey ?? '');
-          setSort(next?.order && SORT_VALUES[field] ? { field, order: next.order } : null);
-          // A re-sort makes the current page a different set of rows; start
-          // from the top rather than dropping the reader into the middle.
-          setCurrentPage(1);
-        }}
-      />
+      <div style={{ minWidth: 0, overflowX: 'auto' }}>
+        <InlineTable
+          columns={columns}
+          dataSource={pageData}
+          loading={isLoading}
+          rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
+          size="small"
+          onChange={(_pagination, _filters, sorter) => {
+            const next = Array.isArray(sorter) ? sorter[0] : sorter;
+            const field = String(next?.columnKey ?? '');
+            setSort(next?.order && SORT_VALUES[field] ? { field, order: next.order } : null);
+            // A re-sort makes the current page a different set of rows; start
+            // from the top rather than dropping the reader into the middle.
+            setCurrentPage(1);
+          }}
+        />
+      </div>
       {total > 0 && (
         <TablePagination
           className={styles.pagination}
