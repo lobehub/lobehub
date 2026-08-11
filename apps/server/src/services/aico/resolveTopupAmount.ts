@@ -38,8 +38,11 @@ const microToSafeInteger = (micro: bigint, label: string): number => {
   return Number(micro);
 };
 
-export const resolveTopupAmount = async (input: TopupAmountInput) => {
-  const { rate, source } = await getTomanPerUsd();
+export const resolveTopupAmount = async (
+  input: TopupAmountInput,
+  options?: { adminRate?: number | null },
+) => {
+  const { rate, source } = await getTomanPerUsd(options?.adminRate);
   const fxRateTomanPerUsd = toIntegerFxRate(rate);
 
   if (input.amountToman != null) {

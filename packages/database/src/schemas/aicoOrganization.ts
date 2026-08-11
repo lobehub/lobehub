@@ -545,6 +545,24 @@ export const platformTrialConfig = pgTable('platform_trial_config', {
 export type PlatformTrialConfigItem = typeof platformTrialConfig.$inferSelect;
 export type NewPlatformTrialConfig = typeof platformTrialConfig.$inferInsert;
 
+/**
+ * Platform FX rate (toman per 1 USD). Single-row config edited by platform admins.
+ * Credits / topups use this rate — not a live market feed.
+ */
+export const platformFxConfig = pgTable('platform_fx_config', {
+  id: text('id').notNull().primaryKey().default('default'),
+  /** Integer toman per 1 USD (e.g. 187400). */
+  tomanPerUsd: bigint('toman_per_usd', { mode: 'number' }).notNull().default(187_400),
+  updatedByUserId: text('updated_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type PlatformFxConfigItem = typeof platformFxConfig.$inferSelect;
+export type NewPlatformFxConfig = typeof platformFxConfig.$inferInsert;
+
 export const userTrials = pgTable(
   'user_trials',
   {

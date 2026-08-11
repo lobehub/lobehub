@@ -1,6 +1,6 @@
 import { aicoEnv } from '@/envs/aico';
 
-export type FxRateSource = 'live' | 'env';
+export type FxRateSource = 'admin' | 'live' | 'env';
 
 export interface TomanPerUsdRate {
   /** Positive integer toman per 1 USD — safe for BigInt / integer money math. */
@@ -46,12 +46,20 @@ let fetchLiveRateImpl = async (): Promise<number> => {
 };
 
 /**
- * Toman-per-USD rate for topup conversion. Tries a live lookup (15min cache),
- * falling back to `AICO_TOMAN_PER_USD` on any failure — USD wallet balances
- * are the source of truth, so a stale/fallback FX rate never blocks a topup.
+ * Toman-per-USD rate for topup / credit conversion.
+ *
+ * Priority:
+ * 1. Platform admin rate (`platform_fx_config`) when provided by the caller
+ * 2. Live lookup (15min cache) — legacy fallback when no admin rate is wired
+ * 3. `AICO_TOMAN_PER_USD` env on any live failure
+ *
  * Always returns an integer rate so callers can safely use BigInt / FX math.
  */
-export const getTomanPerUsd = async (): Promise<TomanPerUsdRate> => {
+export const getTomanPerUsd = async (adminRate?: number | null): Promise<TomanPerUsdRate> => {
+  if (adminRate != null && Number.isFinite(adminRate) && adminRate > 0) {
+    return { rate: toIntegerTomanPerUsd(adminRate), source: 'admin' };
+  }
+
   const now = Date.now();
   if (cached && cached.expiresAt > now) {
     return { rate: cached.rate, source: 'live' };

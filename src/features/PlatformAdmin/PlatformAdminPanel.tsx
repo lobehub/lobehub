@@ -50,6 +50,7 @@ export const PlatformAdminPanel = () => {
     trialBudgetUsd?: number;
   }>();
   const [deactivateForm] = Form.useForm<{ reason: string; userId: string }>();
+  const [fxForm] = Form.useForm<{ tomanPerUsd: number }>();
   const [busy, setBusy] = useState(false);
 
   const { data, error, isLoading, mutate } = useClientDataSWR('aico-platform-orgs', () =>
@@ -60,7 +61,7 @@ export const PlatformAdminPanel = () => {
     'aico-platform-financials',
     () => controlPlaneClient.platformAdmin.getPlatformFinancials.query(),
   );
-  const { data: fx } = useClientDataSWR('aico-fx', () =>
+  const { data: fx, mutate: mutateFx } = useClientDataSWR('aico-fx', () =>
     controlPlaneClient.platformAdmin.getFxRate.query(),
   );
   const { data: master } = useClientDataSWR('aico-platform-master', () =>
@@ -93,6 +94,12 @@ export const PlatformAdminPanel = () => {
       });
     }
   }, [trialConfig, trialForm]);
+
+  useEffect(() => {
+    if (fx?.tomanPerUsd != null) {
+      fxForm.setFieldsValue({ tomanPerUsd: fx.tomanPerUsd });
+    }
+  }, [fx?.tomanPerUsd, fxForm]);
 
   if (error) {
     const code = (error as { data?: { code?: string } })?.data?.code;
@@ -154,6 +161,12 @@ export const PlatformAdminPanel = () => {
             value: usd(financials?.totalOpenRouterCostUsd ?? master?.totalObservedUsageUsd),
           }}
         />
+        <StatisticCard
+          title={t('platform.fxCard')}
+          statistic={{
+            value: Number(fx?.tomanPerUsd ?? 0).toLocaleString(),
+          }}
+        />
       </div>
 
       <div className={aicoPanelStyles.tabs}>
@@ -170,6 +183,51 @@ export const PlatformAdminPanel = () => {
           onChange={setTab}
         />
       </div>
+
+      {tab === 'overview' && (
+        <Block className={aicoPanelStyles.section} variant="outlined">
+          <Flexbox gap={12}>
+            <Text strong>{t('platform.fxTitle')}</Text>
+            <Text type="secondary">{t('platform.fxHint', { source: fx?.source ?? '—' })}</Text>
+            <Form
+              form={fxForm}
+              layout="inline"
+              onFinish={async (values) => {
+                setBusy(true);
+                try {
+                  await controlPlaneClient.platformAdmin.updateFxRate.mutate({
+                    tomanPerUsd: values.tomanPerUsd,
+                  });
+                  toast.success(t('platform.fxSaved'));
+                  await Promise.all([mutateFx(), mutateFinancials()]);
+                } catch (err) {
+                  toastAicoError(err, t, 'platform.fxFailed');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Form.Item
+                label={t('platform.fxLabel')}
+                name="tomanPerUsd"
+                rules={[{ required: true, type: 'number', min: 1 }]}
+              >
+                <InputNumber
+                  {...groupedNumberInputProps}
+                  max={10_000_000}
+                  min={1}
+                  style={{ minWidth: 180 }}
+                />
+              </Form.Item>
+              <Form.Item>
+                <Button htmlType="submit" loading={busy} type="primary">
+                  {t('platform.fxSave')}
+                </Button>
+              </Form.Item>
+            </Form>
+          </Flexbox>
+        </Block>
+      )}
 
       {tab === 'overview' && (
         <Block className={aicoPanelStyles.section} variant="outlined">

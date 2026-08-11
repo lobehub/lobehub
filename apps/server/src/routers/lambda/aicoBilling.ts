@@ -53,8 +53,9 @@ const toIntegerFxRate = (rate: number): number => {
 };
 
 export const aicoBillingRouter = router({
-  getFxRate: billingProcedure.query(async () => {
-    const { rate, source } = await getTomanPerUsd();
+  getFxRate: billingProcedure.query(async ({ ctx }) => {
+    const config = await ctx.billingModel.getFxConfig();
+    const { rate, source } = await getTomanPerUsd(config.tomanPerUsd);
     return { source, tomanPerUsd: toIntegerFxRate(rate) };
   }),
 

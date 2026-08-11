@@ -51,4 +51,10 @@ describe('getTomanPerUsd', () => {
     expect(Number.isInteger(result.rate)).toBe(true);
     expect(result.rate).toBeGreaterThan(0);
   });
+
+  it('prefers platform admin rate over live / env', async () => {
+    __setFxLiveFetchImplForTests(async () => 126_510);
+    const result = await getTomanPerUsd(187_400);
+    expect(result).toEqual({ rate: 187_400, source: 'admin' });
+  });
 });
