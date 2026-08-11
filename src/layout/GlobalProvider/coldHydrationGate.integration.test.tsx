@@ -1,11 +1,12 @@
 /**
  * @vitest-environment happy-dom
  *
- * Integration: CacheHydrationGate + the real tiered provider + a consumer.
+ * Integration: the legacy SWR cache gate and the Projection scope/view gates.
  *
- * The gate's whole job is to guarantee mount-after-hydrate: block first paint
- * until the active scope's IndexedDB cache has hydrated, so every consumer
- * mounted under it reads a populated Map. The pure-unit repro
+ * CacheHydrationGate guarantees mount-after-hydrate for legacy IndexedDB SWR
+ * entries. ProjectionHydrationGate now prepares trusted scope partitions only;
+ * each Projection consumer declares and hydrates its own bounded View Contract.
+ * The pure-unit repro
  * (`libs/swr/coldHydrationRace.test.tsx`) shows a consumer that subscribes
  * before hydration is permanently orphaned — so if the gate paints early, the
  * cold-open skeleton returns. This exercises that end to end.
@@ -20,9 +21,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from '@/libs/swr/localStorageProvider';
+import { homeDailyBriefViewContract } from '@/projection/modules/home/contracts';
 import { selectHomeDailyBrief } from '@/projection/modules/home/selectors';
 import { projectionRepository } from '@/projection/registry';
 import { useProjectionStore } from '@/projection/store';
+import { useProjectionViewHydration } from '@/projection/views/hook';
 import { setAppPainted, setAppReady } from '@/spa/atoms/app';
 import { useUserStore } from '@/store/user';
 
@@ -43,7 +46,14 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   isScopeTrusted: () => true,
   useCacheScope: () => mockScope,
 }));
-vi.mock('@/libs/bootTiming', () => ({ bootTiming: { mark: vi.fn(), recordSpan: vi.fn() } }));
+vi.mock('@/libs/bootTiming', () => ({
+  bootTiming: {
+    mark: vi.fn(),
+    recordSpan: vi.fn(),
+    span: vi.fn(async (_name: string, fn: () => unknown) => fn()),
+    spanSync: vi.fn((_name: string, fn: () => unknown) => fn()),
+  },
+}));
 
 const SCOPE = 'u1:personal';
 const ACCOUNT_SCOPE = 'u1:account';
@@ -65,6 +75,7 @@ let projectionProbed: unknown;
 const ProjectionProbe = () => {
   const userId = useUserStore((state) => state.user?.id);
   const accountScope = userId ? `${userId}:account` : mockScope;
+  useProjectionViewHydration(homeDailyBriefViewContract, {}, Boolean(userId), accountScope);
   projectionProbed = useProjectionStore((state) =>
     selectHomeDailyBrief(state.scopes[accountScope]),
   );
@@ -186,26 +197,28 @@ describe('CacheHydrationGate + provider + consumer', () => {
     expect(probed).toEqual(CACHED);
   });
 
-  it('hydrates the trusted Entity scope before its first private consumer render', async () => {
+  it('hydrates only the private consumer View Contract after trusted scopes are prepared', async () => {
     const snapshot = {
       data: { pairs: [{ hint: 'Cached hint', welcome: 'Cached welcome' }] },
       key: 'home.dailyBrief' as const,
       observedAt: 100,
       source: 'network' as const,
     };
-    const hydrate = vi
-      .spyOn(projectionRepository, 'hydrateScope')
-      .mockImplementation(async (scope) => ({
-        records: [],
-        indexes: [],
-        snapshots: scope === ACCOUNT_SCOPE ? [snapshot] : [],
-      }));
+    const hydrate = vi.spyOn(projectionRepository, 'hydrate').mockImplementation(async (scope) => ({
+      records: [],
+      indexes: [],
+      snapshots: scope === ACCOUNT_SCOPE ? [snapshot] : [],
+    }));
 
     render(
       createElement(
-        AppBootstrapGate,
-        null,
-        createElement(ProjectionHydrationGate, null, createElement(ProjectionProbe)),
+        SWRConfig,
+        { value: { provider: asProvider(() => new Map()) } },
+        createElement(
+          AppBootstrapGate,
+          null,
+          createElement(ProjectionHydrationGate, null, createElement(ProjectionProbe)),
+        ),
       ),
     );
 
@@ -217,8 +230,12 @@ describe('CacheHydrationGate + provider + consumer', () => {
     });
 
     await waitFor(() => expect(projectionProbed).toEqual(snapshot.data));
-    expect(hydrate).toHaveBeenCalledWith(SCOPE);
-    expect(hydrate).toHaveBeenCalledWith(ACCOUNT_SCOPE);
+    expect(hydrate).toHaveBeenCalledWith(ACCOUNT_SCOPE, {
+      indexes: undefined,
+      records: undefined,
+      snapshots: ['home.dailyBrief'],
+    });
+    expect(hydrate).not.toHaveBeenCalledWith(SCOPE, expect.anything());
   });
 
   it('never exposes the previous account snapshot while a new account scope hydrates', async () => {
@@ -238,30 +255,32 @@ describe('CacheHydrationGate + provider + consumer', () => {
     const secondAccountReady = new Promise<void>((resolve) => {
       releaseSecondAccount = resolve;
     });
-    const hydrate = vi
-      .spyOn(projectionRepository, 'hydrateScope')
-      .mockImplementation(async (scope) => {
-        if (scope === SECOND_ACCOUNT_SCOPE) await secondAccountReady;
-        return {
-          records: [],
-          indexes: [],
-          snapshots:
-            scope === ACCOUNT_SCOPE
-              ? [firstSnapshot]
-              : scope === SECOND_ACCOUNT_SCOPE
-                ? [secondSnapshot]
-                : [],
-        };
-      });
+    const hydrate = vi.spyOn(projectionRepository, 'hydrate').mockImplementation(async (scope) => {
+      if (scope === SECOND_ACCOUNT_SCOPE) await secondAccountReady;
+      return {
+        records: [],
+        indexes: [],
+        snapshots:
+          scope === ACCOUNT_SCOPE
+            ? [firstSnapshot]
+            : scope === SECOND_ACCOUNT_SCOPE
+              ? [secondSnapshot]
+              : [],
+      };
+    });
 
     act(() => {
       useUserStore.setState({ isLoaded: true, isSignedIn: true, user: { id: 'u1' } as never });
     });
     render(
       createElement(
-        AppBootstrapGate,
-        null,
-        createElement(ProjectionHydrationGate, null, createElement(ProjectionProbe)),
+        SWRConfig,
+        { value: { provider: asProvider(() => new Map()) } },
+        createElement(
+          AppBootstrapGate,
+          null,
+          createElement(ProjectionHydrationGate, null, createElement(ProjectionProbe)),
+        ),
       ),
     );
     await waitFor(() => expect(projectionProbed).toEqual(firstSnapshot.data));
@@ -272,8 +291,12 @@ describe('CacheHydrationGate + provider + consumer', () => {
     });
 
     expect(projectionProbed).toBeUndefined();
-    expect(hydrate).toHaveBeenCalledWith(SECOND_SCOPE);
-    expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE);
+    expect(hydrate).not.toHaveBeenCalledWith(SECOND_SCOPE, expect.anything());
+    expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE, {
+      indexes: undefined,
+      records: undefined,
+      snapshots: ['home.dailyBrief'],
+    });
 
     releaseSecondAccount();
     await waitFor(() => expect(projectionProbed).toEqual(secondSnapshot.data));

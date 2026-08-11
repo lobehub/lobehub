@@ -12,6 +12,12 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -43,8 +49,24 @@ const stripHintEllipsis = (hint: string): string => hint.replace(/\s*(?:\.{3,}|â
 const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   const agentState = useAgentStore.getState();
   if (agentState.agentMap[agentId]) return;
+  const scope = getCacheScope();
+  const observedAt = nextProjectionObservedAt();
   const config = await agentService.getAgentConfigById(agentId);
-  if (config) agentState.internal_dispatchAgentMap(agentId, config);
+  if (config) {
+    getProjectionStoreState().commitAgentConfig(
+      scope,
+      { ...config, id: config.id ?? agentId },
+      'network',
+      observedAt,
+    );
+  } else {
+    getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+  }
+  const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
+  if (record?.tombstoneAt) return;
+  const canonical = selectAgentProjection(record);
+  if (!canonical) return;
+  agentState.internal_dispatchAgentMap(agentId, canonical, { commitProjection: false });
 };
 
 interface PendingTaskRun {

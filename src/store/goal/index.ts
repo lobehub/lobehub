@@ -18,5 +18,3 @@ export const useGoalStore = createWithEqualityFn<GoalStore>()(
   })),
   shallow,
 );
-
-export { goalSelectors } from './selectors';

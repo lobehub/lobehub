@@ -6,7 +6,12 @@ import type {
 } from '@lobechat/types';
 import { isPlainRecord } from '@lobechat/utils/object';
 
+import { isAgentIndex } from '../modules/agent/validators';
+import { isBriefIndex } from '../modules/brief/validators';
+import { isChatIndex } from '../modules/chat/validators';
+import { isChatGroupIndex } from '../modules/chatGroup/validators';
 import { isHomeIndex, isHomeSnapshot } from '../modules/home/validators';
+import { isTaskIndex } from '../modules/task/validators';
 import { getProjectionStoreState } from '../store';
 import {
   createProjectionFragmentEditRecord,
@@ -227,7 +232,14 @@ const applyProjectionValueEdit = async ({
   };
 
   if (target.type === 'index') {
-    if (!isHomeIndex(candidate)) {
+    if (
+      !isAgentIndex(candidate) &&
+      !isBriefIndex(candidate) &&
+      !isChatGroupIndex(candidate) &&
+      !isChatIndex(candidate) &&
+      !isHomeIndex(candidate) &&
+      !isTaskIndex(candidate)
+    ) {
       throw new Error(`The edited field does not match the schema for index “${target.key}”.`);
     }
     await getProjectionStoreState().internal_commitProjectionForDevtools(target.scope, {

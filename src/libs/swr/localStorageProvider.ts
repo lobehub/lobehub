@@ -5,8 +5,8 @@
  * it, writes are transparently routed to a persistence *tier* chosen centrally
  * by the SWR key — consumers never opt in per call:
  *
- * - `idb`   → IndexedDB (see `localDataCache.ts`): large / important business
- *             entities (messages, topics, tasks, documents, agents). Loaded
+ * - `idb`   → IndexedDB (see `localDataCache.ts`): non-Projection payloads
+ *             such as messages and documents. Loaded
  *             asynchronously at boot, stored as independent rows — no 5MB cap.
  * - `local` → localStorage: small, frequently-changing list shells (recents).
  *             Loaded synchronously for instant first paint.
@@ -507,13 +507,7 @@ export const CACHE_TIERS = {
   /** Large / important business entities → IndexedDB. */
   idb: [
     'message:', // chat messages (conversation + legacy stores)
-    'topic:', // topic lists / agent view / search
-    'agent:available', // reusable agent picker data
-    'agent:config', // individual agent configuration
-    'agent:search', // agent search results
     'agent:document', // agent document lists + editors
-    'group:detail', // group detail (group list stays in localStorage)
-    'task:', // task lists + detail
     'document:', // editor document content
     'page:', // page detail / list / meta
     'notebook:', // notebook documents
@@ -524,7 +518,6 @@ export const CACHE_TIERS = {
     'fetchRecentTopics',
     'fetchRecentResources',
     'fetchRecentPages',
-    'group:list',
     'agentBuilder:suggestions', // builder opening-suggestion chips (skip LLM regen on revisit)
     'taskTemplate:', // home task-template recommendations
     'modelConfig:', // small remote model config shells used by home starter chips
@@ -558,7 +551,7 @@ export const swrCacheProvider = (
     localPatterns: [...CACHE_TIERS.local],
     onScopeHydrated,
     // Governs the localStorage tier only (recents-style shells); the IndexedDB
-    // tier (messages, topics, …) never expires. 7 days is plenty for recents.
+    // tier (messages, documents, …) never expires. 7 days is plenty for recents.
     ttl: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 };

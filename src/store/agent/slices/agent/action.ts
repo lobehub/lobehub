@@ -3,6 +3,7 @@ import { type AgentContextDocument } from '@lobechat/context-engine';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
+  type ProjectionSource,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
@@ -16,6 +17,18 @@ import type { PartialDeep } from 'type-fest';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  agentAvailableViewContract,
+  type AgentProjectionInput,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+  selectAgentSummary,
+  selectAvailableAgentsIndex,
+  useAgentProjectionState,
+  useProjectionViewHydration,
+} from '@/projection';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
@@ -154,6 +167,11 @@ export class AgentSliceActionImpl {
     };
 
     const result = await agentService.createAgent({ ...params, config });
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { ...config, id: result.agentId } as unknown as AgentProjectionInput,
+      'mutation',
+    );
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
@@ -237,7 +255,11 @@ export class AgentSliceActionImpl {
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
-    return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const result = await agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
+    getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+    return result;
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
@@ -393,29 +415,70 @@ export class AgentSliceActionImpl {
         ? agentConfigKeys.config(agentId)
         : null;
 
-    return useClientDataSWRWithSync<LobeAgentConfig>(
+    const projection = useAgentProjectionState(swrKey ? agentId : undefined);
+    const request = useClientDataSWRWithSync<LobeAgentConfig>(
       swrKey,
       async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         const data = await agentService.getAgentConfigById(agentId);
+        if (data) {
+          getProjectionStoreState().commitAgentConfig(
+            scope,
+            { ...data, id: data.id ?? agentId },
+            'network',
+            observedAt,
+          );
+        } else {
+          getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+        }
         return data as LobeAgentConfig;
       },
       {
         onData: (data) => {
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          let record = projectionStore.scopes[scope]?.records.agent[agentId];
+
           // A successful fetch that resolves to null means the agent doesn't
           // exist or the caller lost access (e.g. a workspace agent switched
           // back to private) — a settled state, not "still loading".
           if (!data) {
+            if (record && !record.tombstoneAt) {
+              this.#clearAgentNotFound(agentId);
+              return;
+            }
             this.#markAgentNotFound(agentId);
             return;
           }
+
+          // Runtime SWR cache entries from before this migration do not carry
+          // an observation marker. Seed only a missing Projection at epoch 0;
+          // every hydrated record, mutation, or tombstone therefore wins.
+          if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+            projectionStore.commitAgentConfig(
+              scope,
+              { ...data, id: data.id ?? agentId },
+              'network',
+              0,
+            );
+            record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
+          }
+          if (record?.tombstoneAt) {
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+
+          const canonical = selectAgentProjection(record) as LobeAgentConfig | undefined;
+          if (!canonical) return;
           this.#clearAgentNotFound(agentId);
           // This endpoint returns a complete, authoritative profile snapshot.
           // Replace the cached entry instead of applying patch semantics: fields
           // cleared on the server (for example editorData: null) may be omitted
           // from the response and must not survive from an older local profile.
-          if (!isEqual(this.#get().agentMap[agentId], data)) {
+          if (!isEqual(this.#get().agentMap[agentId], canonical)) {
             this.#set(
-              (state) => ({ agentMap: { ...state.agentMap, [agentId]: data } }),
+              (state) => ({ agentMap: { ...state.agentMap, [agentId]: canonical } }),
               false,
               'fetchAgentConfig',
             );
@@ -429,7 +492,7 @@ export class AgentSliceActionImpl {
           // agent, which would otherwise flash the conversation header/welcome
           // back to the inbox ("Lobe AI") agent.
           if (!this.#get().activeAgentId) {
-            this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
+            this.#set({ activeAgentId: canonical.id }, false, 'fetchAgentConfig');
           }
           this.#clearAgentConfigError(agentId);
         },
@@ -445,8 +508,14 @@ export class AgentSliceActionImpl {
             'fetchAgentConfig/error',
           );
         },
+        syncBeforePaint: true,
       },
     );
+
+    return {
+      ...request,
+      data: projection.hasRecord ? (projection.data as LobeAgentConfig | undefined) : undefined,
+    } as SWRResponse<LobeAgentConfig>;
   };
 
   /**
@@ -524,23 +593,68 @@ export class AgentSliceActionImpl {
         ? agentConfigKeys.config(agentId)
         : null;
 
-    return useClientDataSWRWithSync<LobeAgentConfig>(
+    const projection = useAgentProjectionState(swrKey ? agentId : undefined);
+    const request = useClientDataSWRWithSync<LobeAgentConfig>(
       swrKey,
       async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         const data = await agentService.getAgentConfigById(agentId);
+        if (data) {
+          getProjectionStoreState().commitAgentConfig(
+            scope,
+            { ...data, id: data.id ?? agentId },
+            'network',
+            observedAt,
+          );
+        } else {
+          getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+        }
         return data as LobeAgentConfig;
       },
       {
         onData: (data) => {
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          let record = projectionStore.scopes[scope]?.records.agent[agentId];
           if (!data) {
+            if (record && !record.tombstoneAt) {
+              this.#clearAgentNotFound(agentId);
+              return;
+            }
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+          if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+            projectionStore.commitAgentConfig(
+              scope,
+              { ...data, id: data.id ?? agentId },
+              'network',
+              0,
+            );
+            record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
+          }
+          if (record?.tombstoneAt) {
             this.#markAgentNotFound(agentId);
             return;
           }
           this.#clearAgentNotFound(agentId);
-          this.#get().internal_dispatchAgentMap(agentId, data);
+          const canonical = selectAgentProjection(record);
+          if (!canonical) return;
+          this.#get().internal_dispatchAgentMap(
+            agentId,
+            canonical as PartialDeep<LobeAgentConfig>,
+            { commitProjection: false },
+          );
         },
+        syncBeforePaint: true,
       },
     );
+
+    return {
+      ...request,
+      data: projection.hasRecord ? (projection.data as LobeAgentConfig | undefined) : undefined,
+    } as SWRResponse<LobeAgentConfig>;
   };
 
   useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentDocumentListItem[]> => {
@@ -554,12 +668,54 @@ export class AgentSliceActionImpl {
   };
 
   useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
+    useProjectionViewHydration(agentAvailableViewContract, {}, enabled);
     return useClientDataSWRWithSync<AvailableAgentItem[]>(
       enabled ? agentConfigKeys.available() : null,
-      () => agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }),
+      async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const data = await agentService.queryAgents({
+          limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
+        });
+        getProjectionStoreState().commitAvailableAgents(
+          scope,
+          data as AgentProjectionInput[],
+          { limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT },
+          observedAt,
+        );
+        return data;
+      },
       {
         onData: (data) => {
-          this.#set({ availableAgents: data }, false, 'useFetchAvailableAgents');
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          if (!selectAvailableAgentsIndex(projectionStore.scopes[scope])) {
+            projectionStore.commitAvailableAgents(
+              scope,
+              data as AgentProjectionInput[],
+              { limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT },
+              0,
+            );
+          }
+          const projectionScope = getProjectionStoreState().scopes[scope];
+          const index = selectAvailableAgentsIndex(projectionScope);
+          if (!index) return;
+          const canonical = index.refs.flatMap((ref) => {
+            const item = selectAgentSummary(projectionScope?.records.agent[ref.id]);
+            return item
+              ? [
+                  {
+                    avatar: item.avatar ?? null,
+                    backgroundColor: item.backgroundColor ?? null,
+                    description: item.description ?? null,
+                    id: item.id,
+                    name: item.name ?? null,
+                    title: item.title ?? null,
+                  },
+                ]
+              : [];
+          });
+          this.#set({ availableAgents: canonical }, false, 'useFetchAvailableAgents');
         },
         revalidateOnFocus: false,
       },
@@ -599,7 +755,15 @@ export class AgentSliceActionImpl {
     return request;
   };
 
-  internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {
+  internal_dispatchAgentMap = (
+    id: string,
+    config: PartialDeep<LobeAgentConfig>,
+    options?: {
+      commitProjection?: boolean;
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
     const agentMap = produce(this.#get().agentMap, (draft) => {
       if (!draft[id]) {
         draft[id] = config;
@@ -614,6 +778,14 @@ export class AgentSliceActionImpl {
     if (isEqual(this.#get().agentMap, agentMap)) return;
 
     this.#set({ agentMap }, false, 'dispatchAgentMap');
+    if (options?.commitProjection === false) return;
+
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { ...agentMap[id], id } as unknown as AgentProjectionInput,
+      options?.source ?? 'mutation',
+      options?.observedAt,
+    );
   };
 
   #mergeLatestAgencyConfigPatch = (

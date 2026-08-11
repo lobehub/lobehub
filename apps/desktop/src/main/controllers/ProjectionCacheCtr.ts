@@ -1,6 +1,7 @@
 import type {
   DesktopProjectionCommit,
   DesktopProjectionHydration,
+  DesktopProjectionHydrationRequest,
   DesktopProjectionScope,
 } from '@lobechat/electron-client-ipc';
 
@@ -26,7 +27,7 @@ export default class ProjectionCacheController extends ControllerModule {
   }
 
   @IpcMethod()
-  async hydrateScope({ scope }: DesktopProjectionScope): Promise<DesktopProjectionHydration> {
-    return this.service.hydrateScope(scope);
+  async hydrate(request: DesktopProjectionHydrationRequest): Promise<DesktopProjectionHydration> {
+    return this.service.hydrate(request);
   }
 }

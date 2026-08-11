@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -13,8 +14,17 @@ import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
 
+const PROJECTION_SCOPE = 'user-1:personal';
+
 // Mock zustand/traditional for store testing
 vi.mock('zustand/traditional');
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => PROJECTION_SCOPE,
+  isAnonymousScope: () => false,
+  isScopeTrusted: () => false,
+  useCacheScope: () => PROJECTION_SCOPE,
+}));
 
 // Mock agentService
 vi.mock('@/services/agent', () => ({
@@ -65,6 +75,7 @@ vi.mock('swr', async (importOriginal) => {
 beforeEach(() => {
   vi.clearAllMocks();
   setScopedMutate(vi.fn() as any);
+  useProjectionStore.setState({ scopes: {} });
   useAgentStore.setState({
     activeAgentId: undefined,
     agentMap: {},
@@ -281,6 +292,26 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('useFetchAgentConfig', () => {
+    it('never exposes the request DTO when a newer canonical Projection already exists', async () => {
+      getProjectionStoreState().commitAgentConfig(
+        PROJECTION_SCOPE,
+        { id: 'agent-1', title: 'Canonical title' },
+        'mutation',
+        Number.MAX_SAFE_INTEGER,
+      );
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
+        id: 'agent-1',
+        title: 'Stale request title',
+      } as any);
+
+      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data?.title).toBe('Canonical title'));
+      expect(result.current.data?.title).not.toBe('Stale request title');
+    });
+
     it('adopts the fetched agent as active when none is active yet', async () => {
       vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
         id: 'agent-1',
@@ -989,11 +1020,13 @@ describe('AgentSlice Actions', () => {
 
       vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
 
-      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
 
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
@@ -1025,11 +1058,13 @@ describe('AgentSlice Actions', () => {
       const mockAgentConfig = { id: 'agent-1', model: 'gpt-4' } as LobeAgentConfig;
       vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
 
-      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
 
       expect(useAgentStore.getState().agentConfigErrorMap['agent-1']).toBeUndefined();
     });
@@ -1074,11 +1109,13 @@ describe('AgentSlice Actions', () => {
       const mockAgentConfig = { id: 'agent-1', model: 'gpt-4' } as LobeAgentConfig;
       vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
 
-      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
 
       expect(useAgentStore.getState().agentNotFoundMap['agent-1']).toBeUndefined();
     });
@@ -1095,11 +1132,13 @@ describe('AgentSlice Actions', () => {
       useAgentStore.setState({ activeAgentId: 'agent-current' });
       vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
 
-      const { result } = renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-1'), {
+      renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-1'), {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
 
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-current');

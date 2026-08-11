@@ -344,7 +344,7 @@ describe('createCacheProvider — tiering', () => {
 
   it('exposes the central tier config keyed by domain prefix', () => {
     expect(CACHE_TIERS.idb).toContain('message:');
-    expect(CACHE_TIERS.idb).toContain('topic:');
+    expect(CACHE_TIERS.idb).not.toContain('topic:');
     expect(CACHE_TIERS.local).toContain('recent:list');
     expect(CACHE_TIERS.local).toContain('taskTemplate:');
     expect(CACHE_TIERS.local).toContain('modelConfig:');

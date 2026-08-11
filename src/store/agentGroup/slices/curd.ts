@@ -2,6 +2,8 @@ import { type LobeChatGroupConfig } from '@lobechat/types';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { chatGroupService } from '@/services/chatGroup';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { type StoreSetter } from '@/store/types';
@@ -29,6 +31,12 @@ export class ChatGroupCurdAction {
     this.#set = set;
     this.#get = get;
   }
+
+  #commitGroupMutation = (id: string): void => {
+    const group = this.#get().groupMap[id];
+    if (!group) return;
+    getProjectionStoreState().commitChatGroupDetail(getCacheScope(), group, 'mutation');
+  };
 
   /**
    * Append content chunk to streaming system prompt
@@ -84,6 +92,7 @@ export class ChatGroupCurdAction {
   updateGroup = async (id: string, value: Partial<ChatGroupItem>) => {
     await chatGroupService.updateGroup(id, value);
     this.#get().internal_dispatchChatGroup({ payload: { id, value }, type: 'updateGroup' });
+    this.#commitGroupMutation(id);
     await this.#get().refreshGroupDetail(id);
   };
 
@@ -109,6 +118,7 @@ export class ChatGroupCurdAction {
       payload: { id: group.id, value: { config: mergedConfig } },
       type: 'updateGroup',
     });
+    this.#commitGroupMutation(group.id);
 
     // Refresh groups to ensure consistency
     await this.#get().refreshGroupDetail(group.id);
@@ -130,6 +140,7 @@ export class ChatGroupCurdAction {
     await chatGroupService.updateGroup(id, meta);
     // Keep local store in sync immediately
     this.#get().internal_dispatchChatGroup({ payload: { id, value: meta }, type: 'updateGroup' });
+    this.#commitGroupMutation(id);
     await this.#get().refreshGroupDetail(id);
   };
 }

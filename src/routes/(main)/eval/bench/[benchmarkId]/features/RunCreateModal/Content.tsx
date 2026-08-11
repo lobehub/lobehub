@@ -6,13 +6,13 @@ import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
-import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FC, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { agentService } from '@/services/agent';
+import { useAgentDirectory } from '@/projection';
 import { useEvalStore } from '@/store/eval';
 
 const DEFAULT_MAX_STEPS = 100;
@@ -93,16 +93,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
 
   const isDatasetMode = !!datasetId && !!datasetName;
 
-  const [agents, setAgents] = useState<AgentOption[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-
-  useEffect(() => {
-    setLoadingAgents(true);
-    agentService
-      .queryAgents()
-      .then((list) => setAgents(list as AgentOption[]))
-      .finally(() => setLoadingAgents(false));
-  }, []);
+  const { data: agents = [], isLoading: loadingAgents } = useAgentDirectory();
 
   useEffect(() => {
     if (datasetId && !isDatasetMode) {

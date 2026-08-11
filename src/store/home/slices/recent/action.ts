@@ -41,6 +41,8 @@ export class RecentActionImpl {
     this.#set({ recents }, false, n('updateRecentTitle'));
     if (current?.type === 'topic') {
       getProjectionStoreState().updateTopicProjectionTitle(getCacheScope(), id, title);
+    } else if (current?.type === 'task') {
+      getProjectionStoreState().updateTaskProjectionName(getCacheScope(), id, title);
     }
   };
 

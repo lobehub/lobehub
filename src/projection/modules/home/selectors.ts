@@ -36,6 +36,7 @@ export const selectHomeSidebarItem = (
       ...access,
       id: ref.id,
       pinned: ref.pinned,
+      title: identity.title ?? null,
       type: 'group',
       unreadCount: ref.unreadCount,
       updatedAt: ref.updatedAt,
@@ -58,6 +59,7 @@ export const selectHomeSidebarItem = (
     ...runtime,
     id: ref.id,
     pinned: ref.pinned,
+    title: identity.title ?? null,
     type: 'agent',
     unreadCount: ref.unreadCount,
     updatedAt: ref.updatedAt,
@@ -129,6 +131,7 @@ export const selectHomeRecentTopic = (
   const routing = active?.fragments.routing?.data;
   const navigation = active?.fragments.navigation?.data;
   const preview = active?.fragments.preview?.data;
+  const ownership = active?.fragments.ownership?.data;
   if (!display || !activity || !routing || !navigation?.routePath) return undefined;
 
   return {
@@ -142,7 +145,7 @@ export const selectHomeRecentTopic = (
     title: display.title,
     type: 'topic',
     updatedAt: activity.updatedAt,
-    userId: preview?.userId,
+    userId: ownership?.userId,
   };
 };
 
@@ -176,7 +179,19 @@ export const selectHomeInboxTopic = (
   const status = active?.fragments.status?.data;
   const timing = active?.fragments.runTiming?.data;
   const preview = active?.fragments.preview?.data;
-  if (!display || !activity || !routing || !status || !timing || !preview) return undefined;
+  const ownership = active?.fragments.ownership?.data;
+  const triggerInfo = active?.fragments.triggerInfo?.data;
+  if (
+    !display ||
+    !activity ||
+    !routing ||
+    !status ||
+    !timing ||
+    !preview ||
+    !ownership ||
+    !triggerInfo
+  )
+    return undefined;
 
   return {
     ...display,
@@ -185,6 +200,8 @@ export const selectHomeInboxTopic = (
     ...status,
     ...timing,
     ...preview,
+    ...ownership,
+    ...triggerInfo,
     ...active.fragments.creation?.data,
     id: active.id,
   };

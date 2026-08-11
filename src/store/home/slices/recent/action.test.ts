@@ -14,6 +14,7 @@ const item = (id: string, title: string, type: 'task' | 'topic' = 'topic'): Rece
   ({ id, title, type }) as unknown as RecentItem;
 
 const projectionActions = {
+  updateTaskProjectionName: vi.fn(),
   updateTopicProjectionTitle: vi.fn(),
 };
 
@@ -146,8 +147,9 @@ describe('RecentActionImpl', () => {
       expect(mutateSpy).not.toHaveBeenCalled();
     });
 
-    it('does not reinterpret a Task recent as a Topic Projection mutation', () => {
+    it('renames a Task through its canonical Projection record', () => {
       useHomeStore.setState({ recents: [item('task-1', 'old', 'task')] });
+      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
 
       act(() => {
         useHomeStore.getState().updateRecentTitle('task-1', 'new');
@@ -155,6 +157,11 @@ describe('RecentActionImpl', () => {
 
       expect(useHomeStore.getState().recents).toEqual([item('task-1', 'new', 'task')]);
       expect(projectionActions.updateTopicProjectionTitle).not.toHaveBeenCalled();
+      expect(projectionActions.updateTaskProjectionName).toHaveBeenCalledWith(
+        'user-1:workspace-1',
+        'task-1',
+        'new',
+      );
     });
   });
 

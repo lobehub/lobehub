@@ -16,8 +16,18 @@ import { recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 
+import { nextProjectionObservedAt } from '../../core/ingest';
 import { buildAccountProjectionScope } from '../../core/scope';
 import { getProjectionStoreState, useProjectionStore } from '../../store';
+import { useProjectionViewHydration } from '../../views/hook';
+import {
+  homeBriefsViewContract,
+  homeDailyBriefViewContract,
+  homeInboxTopicsViewContract,
+  homeRecentTopicsViewContract,
+  homeSidebarViewContract,
+  homeTasksViewContract,
+} from './contracts';
 import {
   selectHomeBriefs,
   selectHomeInboxTopics,
@@ -43,6 +53,7 @@ const marker = (observedAt: number): ProjectionRequestMarker => ({ observedAt })
 export const useHomeSidebarRequest = (
   isLogin: boolean | undefined,
 ): HomeDataRequest & { scope: string } => {
+  useProjectionViewHydration(homeSidebarViewContract, {}, Boolean(isLogin));
   const scope = useCacheScope();
   const isInitialized = useProjectionStore((state) =>
     Boolean(selectHomeSidebar(state.scopes[scope])),
@@ -51,7 +62,7 @@ export const useHomeSidebarRequest = (
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin ? projectionKeys.sidebar(scope) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       const response = await homeService.getSidebarAgentList();
       getProjectionStoreState().ingestHomeSidebar(scope, response, observedAt);
       return marker(observedAt);
@@ -73,6 +84,7 @@ export const useHomeRecentTopicsRequest = (
   limit: number,
   view: HomeRecentTopicsView = 'mine',
 ): HomeDataRequest => {
+  useProjectionViewHydration(homeRecentTopicsViewContract, { limit, view }, Boolean(isLogin));
   const scope = useCacheScope();
   const isInitialized = useProjectionStore((state) =>
     Boolean(selectHomeRecentTopics(state.scopes[scope], limit, view)),
@@ -81,7 +93,7 @@ export const useHomeRecentTopicsRequest = (
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin ? projectionKeys.recentTopics(scope, limit, view) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       // Workspace topics are shared, so "mine" must be narrowed server-side —
       // client-filtering the top N of a team-wide feed could starve out the
       // viewer's own topics entirely.
@@ -105,6 +117,7 @@ const HOME_INBOX_STATUSES = ['running', 'unread'];
 export const useHomeInboxTopicsRequest = (
   isLogin: boolean | undefined,
 ): HomeDataRequest & { scope: string } => {
+  useProjectionViewHydration(homeInboxTopicsViewContract, {}, Boolean(isLogin));
   const scope = useCacheScope();
   const isInitialized = useProjectionStore((state) =>
     Boolean(selectHomeInboxTopics(state.scopes[scope])),
@@ -113,7 +126,7 @@ export const useHomeInboxTopicsRequest = (
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin ? projectionKeys.inboxTopics(scope) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       const items = await topicService.queryTopics({
         statuses: HOME_INBOX_STATUSES,
         withLastMessage: true,
@@ -134,6 +147,7 @@ export const useHomeInboxTopicsRequest = (
 };
 
 export const useHomeTasksRequest = (isLogin: boolean | undefined): HomeDataRequest => {
+  useProjectionViewHydration(homeTasksViewContract, {}, Boolean(isLogin));
   const scope = useCacheScope();
   const isInitialized = useProjectionStore((state) =>
     Boolean(selectHomeTasks(state.scopes[scope])),
@@ -142,7 +156,7 @@ export const useHomeTasksRequest = (isLogin: boolean | undefined): HomeDataReque
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin ? projectionKeys.tasks(scope) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       const result = await taskService.list({});
       getProjectionStoreState().ingestHomeTasks(scope, result.data, result.total, observedAt);
       return marker(observedAt);
@@ -159,6 +173,7 @@ export const useHomeTasksRequest = (isLogin: boolean | undefined): HomeDataReque
 };
 
 export const useHomeBriefsRequest = (isLogin: boolean | undefined): HomeDataRequest => {
+  useProjectionViewHydration(homeBriefsViewContract, {}, Boolean(isLogin));
   const scope = useCacheScope();
   const isInitialized = useProjectionStore((state) =>
     Boolean(selectHomeBriefs(state.scopes[scope])),
@@ -167,7 +182,7 @@ export const useHomeBriefsRequest = (isLogin: boolean | undefined): HomeDataRequ
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin ? projectionKeys.briefs(scope) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       const result = await briefService.listUnresolved();
       getProjectionStoreState().ingestHomeBriefs(scope, result.data, observedAt);
       return marker(observedAt);
@@ -189,6 +204,12 @@ export const useHomeDailyBriefData = (
 ): HomeSnapshotQuery<HomeDailyBriefResponse> => {
   const activeScope = useCacheScope();
   const accountScope = userId ? buildAccountProjectionScope(userId) : activeScope;
+  useProjectionViewHydration(
+    homeDailyBriefViewContract,
+    {},
+    Boolean(isLogin && userId),
+    accountScope,
+  );
   const snapshot = useProjectionStore(
     (state) => state.scopes[accountScope]?.snapshots['home.dailyBrief'],
   );
@@ -198,7 +219,7 @@ export const useHomeDailyBriefData = (
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin && userId ? homeKeys.dailyBrief(userId) : null,
     async () => {
-      const observedAt = Date.now();
+      const observedAt = nextProjectionObservedAt();
       const response = await homeService.getDailyBrief();
       getProjectionStoreState().ingestHomeDailyBrief(accountScope, response, observedAt);
       return marker(observedAt);

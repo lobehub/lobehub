@@ -98,4 +98,115 @@ describe('ProjectionStore mutation paths', () => {
     });
     expect(selectHomeBriefs(getProjectionStoreState().scopes[SCOPE])).toEqual([]);
   });
+
+  it('removes a deleted Topic from every canonical query index', () => {
+    const ref = { id: topic.id, kind: 'topic' as const };
+    getProjectionStoreState().internal_commitProjection(SCOPE, {
+      indexes: [
+        {
+          key: 'chat.sidebarTopics:inbox',
+          observedAt: 100,
+          persistRefLimit: 20,
+          refs: [ref],
+          signature: {},
+          source: 'network',
+          total: 1,
+        },
+        { key: 'home.inboxTopics', observedAt: 100, refs: [ref], source: 'network' },
+        {
+          key: 'home.recentTopics',
+          limit: 10,
+          observedAt: 100,
+          refs: [ref],
+          source: 'network',
+          view: 'mine',
+        },
+      ],
+    });
+
+    getProjectionStoreState().deleteChatTopicProjections(SCOPE, [topic.id], 200);
+    const scope = getProjectionStoreState().scopes[SCOPE];
+
+    expect(scope.indexes['chat.sidebarTopics:inbox']?.refs).toEqual([]);
+    expect(scope.indexes['chat.sidebarTopics:inbox']?.total).toBe(0);
+    expect(scope.indexes['home.inboxTopics']?.refs).toEqual([]);
+    expect(scope.indexes['home.recentTopics']?.refs).toEqual([]);
+    expect(scope.records.topic[topic.id].tombstoneAt).toBe(200);
+  });
+
+  it('removes deleted Agent and ChatGroup records from shared sidebar membership', () => {
+    const agentRef = {
+      id: 'agent-1',
+      kind: 'agent' as const,
+      pinned: true,
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    };
+    const groupRef = {
+      id: 'group-1',
+      kind: 'chatGroup' as const,
+      pinned: false,
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    };
+    getProjectionStoreState().internal_commitProjection(SCOPE, {
+      indexes: [
+        {
+          groups: [{ id: 'folder', items: [groupRef], name: 'Folder', sort: 0 }],
+          key: 'home.sidebar',
+          observedAt: 100,
+          pinned: [agentRef],
+          privateGroups: [],
+          privatePinned: [],
+          privateUngrouped: [],
+          source: 'network',
+          ungrouped: [],
+        },
+        {
+          key: 'agent.available',
+          observedAt: 100,
+          refs: [{ id: 'agent-1', kind: 'agent' }],
+          signature: {},
+          source: 'network',
+        },
+        {
+          key: 'agent.directory',
+          observedAt: 100,
+          refs: [{ id: 'agent-1', kind: 'agent' }],
+          signature: {},
+          source: 'network',
+        },
+        {
+          key: 'chatGroup.list',
+          observedAt: 100,
+          refs: [{ id: 'group-1', kind: 'chatGroup' }],
+          source: 'network',
+        },
+      ],
+    });
+
+    getProjectionStoreState().deleteAgentProjection(SCOPE, 'agent-1', 200);
+    getProjectionStoreState().deleteChatGroupProjection(SCOPE, 'group-1', 201);
+    const scope = getProjectionStoreState().scopes[SCOPE];
+
+    expect(scope.indexes['agent.available']?.refs).toEqual([]);
+    expect(scope.indexes['agent.directory']?.refs).toEqual([]);
+    expect(scope.indexes['chatGroup.list']?.refs).toEqual([]);
+    expect(scope.indexes['home.sidebar']?.pinned).toEqual([]);
+    expect(scope.indexes['home.sidebar']?.groups[0].items).toEqual([]);
+  });
+
+  it('removes deleted Task and Brief records from all migrated list indexes', () => {
+    getProjectionStoreState().ingestHomeTasks(SCOPE, [task], 1, 100);
+    getProjectionStoreState().commitTaskList(SCOPE, [task], 1, { visibility: 'all' }, 100);
+    getProjectionStoreState().ingestHomeBriefs(SCOPE, [brief], 100);
+    getProjectionStoreState().commitBriefNews(SCOPE, '2026-08-01', false, [brief], 100);
+
+    getProjectionStoreState().deleteTaskProjection(SCOPE, task.identifier, 200);
+    getProjectionStoreState().deleteBriefProjection(SCOPE, brief.id, 200);
+    const scope = getProjectionStoreState().scopes[SCOPE];
+
+    expect(scope.indexes['home.tasks']?.refs).toEqual([]);
+    expect(scope.indexes['task.list:__none__:all']?.refs).toEqual([]);
+    expect(scope.indexes['home.unresolvedBriefs']?.refs).toEqual([]);
+    expect(scope.indexes['brief.news:2026-08-01']?.refs).toEqual([]);
+  });
 });

@@ -15,6 +15,14 @@ import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  findTaskRecordByIdentity,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+  selectTaskDetail,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -135,7 +143,23 @@ const getPreviewData = async (
       };
     }
     case 'agent': {
-      return agentService.getAgentConfigById(reference.agentId);
+      const scope = getCacheScope();
+      const observedAt = nextProjectionObservedAt();
+      const data = await agentService.getAgentConfigById(reference.agentId);
+      if (data) {
+        getProjectionStoreState().commitAgentConfig(
+          scope,
+          { ...data, id: data.id ?? reference.agentId },
+          'network',
+          observedAt,
+        );
+      } else {
+        getProjectionStoreState().deleteAgentProjection(scope, reference.agentId, observedAt);
+      }
+      const recordId = data?.id ?? reference.agentId;
+      const record = getProjectionStoreState().scopes[scope]?.records.agent[recordId];
+      if (record?.tombstoneAt) return null;
+      return selectAgentProjection(record) ?? null;
     }
     case 'document': {
       const document = await documentService.getDocumentById(reference.documentId);
@@ -147,12 +171,23 @@ const getPreviewData = async (
         : null;
     }
     case 'task': {
+      const scope = getCacheScope();
+      const observedAt = nextProjectionObservedAt();
       const result = await taskService.getDetail(reference.taskId);
       const task = result.data;
-      return task
+      if (task) {
+        getProjectionStoreState().commitTaskDetail(scope, task, 'network', observedAt);
+      } else {
+        getProjectionStoreState().deleteTaskProjection(scope, reference.taskId, observedAt);
+      }
+      const projectionScope = getProjectionStoreState().scopes[scope];
+      const record = findTaskRecordByIdentity(projectionScope, reference.taskId);
+      if (record?.tombstoneAt) return null;
+      const canonical = selectTaskDetail(record);
+      return canonical
         ? {
-            description: task.description || task.instruction,
-            title: task.name || task.identifier,
+            description: canonical.description || canonical.instruction,
+            title: canonical.name || canonical.identifier,
           }
         : null;
     }

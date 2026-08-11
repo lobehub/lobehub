@@ -12,8 +12,17 @@ import useSWR from 'swr';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, projectionKeys, topicKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState } from '@/projection';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  chatTopicsViewContract,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectChatTopicListItem,
+  selectChatTopicsIndex,
+  selectChatTopicsItems,
+  useProjectionStore,
+  useProjectionViewHydration,
+} from '@/projection';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
@@ -128,6 +137,8 @@ export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
 export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
+  readonly #topicFetchObservedAt = new WeakMap<object, number>();
+  readonly #topicFetchScope = new WeakMap<object, string>();
 
   // Monotonic token for switchTopic. Each call increments it and captures a
   // local copy; after awaited work, a mismatch means a newer switch has
@@ -396,7 +407,7 @@ export class ChatTopicActionImpl {
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
     const projectionScope = getCacheScope();
-    const observedAt = Date.now();
+    const observedAt = nextProjectionObservedAt();
     await this.#get().internal_updateTopic(id, { title });
     getProjectionStoreState().updateTopicProjectionTitle(projectionScope, id, title, observedAt);
   };
@@ -721,8 +732,13 @@ export class ChatTopicActionImpl {
     // already has a live update path (or isn't loaded in the active bucket).
     if (stored?.status !== 'scheduled') return false;
 
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const fetched = await topicService.getTopicDetail(topicId);
-    if (!fetched) return false;
+    if (!fetched) {
+      getProjectionStoreState().deleteChatTopicProjections(scope, [topicId], observedAt);
+      return false;
+    }
 
     // Same funnel every other server-sourced row goes through. It matters most
     // here: `updateTopicStatus` dispatches `scheduled` optimistically and
@@ -734,9 +750,20 @@ export class ChatTopicActionImpl {
     // still reverts here.
     const fresh = this.#applyPendingStatusWrite(fetched);
     if (fresh.status !== fetched.status) return false;
+    getProjectionStoreState().commitChatTopicSearchResults(scope, [fresh], {
+      observedAt,
+      source: 'network',
+    });
+    const projectionScope = getProjectionStoreState().scopes[scope];
+    const record = projectionScope?.records.topic[topicId];
+    if (record?.tombstoneAt) return false;
+    const resolvedFresh = projectionScope
+      ? selectChatTopicListItem(projectionScope, topicId)
+      : undefined;
+    if (!resolvedFresh) return false;
 
     // Server still parked — nothing to fold in.
-    if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
+    if (resolvedFresh.status === 'scheduled' && resolvedFresh.metadata?.scheduledRun) return false;
 
     // Re-check after the await: a topic/agent switch mid-flight means the
     // active bucket no longer holds this row — don't patch a foreign bucket.
@@ -746,7 +773,7 @@ export class ChatTopicActionImpl {
       {
         id: topicId,
         type: 'updateTopic',
-        value: { metadata: fresh.metadata, status: fresh.status },
+        value: { metadata: resolvedFresh.metadata ?? undefined, status: resolvedFresh.status },
       },
       n('syncScheduledTopicRun'),
     );
@@ -842,6 +869,12 @@ export class ChatTopicActionImpl {
     const containerKey = topicMapKey({ agentId, groupId });
     const hasValidContainer = !!(groupId || agentId);
 
+    useProjectionViewHydration(
+      chatTopicsViewContract,
+      { containerKey, surface: 'sidebar', withDetails },
+      enable && hasValidContainer,
+    );
+
     return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
       enable && hasValidContainer
         ? topicKeys.list(containerKey, {
@@ -869,6 +902,8 @@ export class ChatTopicActionImpl {
           this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
         }
 
+        const projectionScopeName = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         const result = await topicService.getTopics({
           agentId,
           current: 0,
@@ -880,6 +915,8 @@ export class ChatTopicActionImpl {
           sortBy,
           withDetails,
         });
+        this.#topicFetchObservedAt.set(result, observedAt);
+        this.#topicFetchScope.set(result, projectionScopeName);
 
         // Reset expanding state after fetch completes
         if (isExpanding) {
@@ -898,11 +935,6 @@ export class ChatTopicActionImpl {
 
           const currentData = this.#get().topicDataMap[containerKey];
           const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
-
-          // Fire BEFORE the no-change early return below: on a cold boot the
-          // cached list arrives with no `currentData`, and that first delivery
-          // is exactly the sweep that must warm app-closed-while-running runs.
-          this.#prefetchUnreadTopicMessages(topics, currentData?.items, { agentId, groupId });
 
           const isRefreshingExpandedList =
             !!currentData &&
@@ -924,13 +956,76 @@ export class ChatTopicActionImpl {
               })()
             : topics;
 
-          const hasMore = totalCount > nextItems.length;
+          const observedAt = this.#topicFetchObservedAt.get(result);
+          const projectionScopeName = this.#topicFetchScope.get(result) ?? getCacheScope();
+          if (projectionScopeName !== getCacheScope()) {
+            getProjectionStoreState().commitChatTopicsPage(
+              projectionScopeName,
+              {
+                containerKey,
+                context: { agentId: agentId ?? null, groupId: groupId ?? null },
+                items: result.items,
+                page: 0,
+                pageSize,
+                signature: {
+                  excludeStatuses: effectiveExcludeStatuses,
+                  excludeTriggers: effectiveExcludeTriggers,
+                  isInbox,
+                  sortBy,
+                  withDetails,
+                },
+                surface: 'sidebar',
+                total: totalCount,
+              },
+              { observedAt: observedAt ?? 0, source: 'network' },
+            );
+            return;
+          }
+          const currentProjectionIndex = selectChatTopicsIndex(
+            getProjectionStoreState().scopes[projectionScopeName],
+            'sidebar',
+            containerKey,
+          );
+          if (observedAt !== undefined || !currentProjectionIndex) {
+            getProjectionStoreState().commitChatTopicsPage(
+              projectionScopeName,
+              {
+                containerKey,
+                context: { agentId: agentId ?? null, groupId: groupId ?? null },
+                items: nextItems,
+                page: 0,
+                pageSize,
+                signature: {
+                  excludeStatuses: effectiveExcludeStatuses,
+                  excludeTriggers: effectiveExcludeTriggers,
+                  isInbox,
+                  sortBy,
+                  withDetails,
+                },
+                surface: 'sidebar',
+                total: totalCount,
+              },
+              { observedAt: observedAt ?? 0, source: 'network' },
+            );
+          }
+
+          const projectionScope = getProjectionStoreState().scopes[projectionScopeName];
+          const projectionIndex = selectChatTopicsIndex(projectionScope, 'sidebar', containerKey);
+          const projectionItems = selectChatTopicsItems(projectionScope, projectionIndex);
+          if (!projectionIndex || !projectionItems) return;
+          const resolvedItems = projectionItems as ChatTopic[];
+          const resolvedTotal = projectionIndex.total;
+
+          this.#prefetchUnreadTopicMessages(resolvedItems, currentData?.items, {
+            agentId,
+            groupId,
+          });
 
           // no need to update map if the current key's data exists and is the same
           if (
             currentData &&
-            isEqual(nextItems, currentData.items) &&
-            currentData.total === totalCount &&
+            isEqual(resolvedItems, currentData.items) &&
+            currentData.total === resolvedTotal &&
             isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
             isEqual(currentData.excludeTriggers, effectiveExcludeTriggers)
           ) {
@@ -945,14 +1040,15 @@ export class ChatTopicActionImpl {
                   currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
                   excludeStatuses: effectiveExcludeStatuses,
                   excludeTriggers: effectiveExcludeTriggers,
-                  hasMore,
+                  hasMore: resolvedTotal > resolvedItems.length,
                   isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
                   isLoadingMore: false,
                   loadMoreError: undefined,
-                  items: nextItems,
+                  items: resolvedItems,
                   pageSize,
-                  total: totalCount,
+                  sortBy,
+                  total: resolvedTotal,
                   withDetails,
                 },
               },
@@ -1015,6 +1111,12 @@ export class ChatTopicActionImpl {
     const containerKey = topicMapKey({ agentId });
     const hasValidAgent = !!agentId;
 
+    useProjectionViewHydration(
+      chatTopicsViewContract,
+      { containerKey, surface: 'agentView', withDetails },
+      enable && hasValidAgent,
+    );
+
     return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
       enable && hasValidAgent
         ? topicKeys.agentView(containerKey, {
@@ -1025,12 +1127,17 @@ export class ChatTopicActionImpl {
       async () => {
         if (!agentId) return { items: [], total: 0 };
 
-        return topicService.getTopics({
+        const projectionScopeName = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const result = await topicService.getTopics({
           agentId,
           current: 0,
           pageSize,
           withDetails,
         });
+        this.#topicFetchObservedAt.set(result, observedAt);
+        this.#topicFetchScope.set(result, projectionScopeName);
+        return result;
       },
       {
         onData: (result) => {
@@ -1057,12 +1164,58 @@ export class ChatTopicActionImpl {
               })()
             : topics;
 
-          const hasMore = totalCount > nextItems.length;
+          const observedAt = this.#topicFetchObservedAt.get(result);
+          const projectionScopeName = this.#topicFetchScope.get(result) ?? getCacheScope();
+          if (projectionScopeName !== getCacheScope()) {
+            getProjectionStoreState().commitChatTopicsPage(
+              projectionScopeName,
+              {
+                containerKey,
+                context: { agentId: agentId ?? null },
+                items: result.items,
+                page: 0,
+                pageSize,
+                signature: { withDetails },
+                surface: 'agentView',
+                total: totalCount,
+              },
+              { observedAt: observedAt ?? 0, source: 'network' },
+            );
+            return;
+          }
+          const currentProjectionIndex = selectChatTopicsIndex(
+            getProjectionStoreState().scopes[projectionScopeName],
+            'agentView',
+            containerKey,
+          );
+          if (observedAt !== undefined || !currentProjectionIndex) {
+            getProjectionStoreState().commitChatTopicsPage(
+              projectionScopeName,
+              {
+                containerKey,
+                context: { agentId: agentId ?? null },
+                items: nextItems,
+                page: 0,
+                pageSize,
+                signature: { withDetails },
+                surface: 'agentView',
+                total: totalCount,
+              },
+              { observedAt: observedAt ?? 0, source: 'network' },
+            );
+          }
+
+          const projectionScope = getProjectionStoreState().scopes[projectionScopeName];
+          const projectionIndex = selectChatTopicsIndex(projectionScope, 'agentView', containerKey);
+          const projectionItems = selectChatTopicsItems(projectionScope, projectionIndex);
+          if (!projectionIndex || !projectionItems) return;
+          const resolvedItems = projectionItems as ChatTopic[];
+          const resolvedTotal = projectionIndex.total;
 
           if (
             currentData &&
-            isEqual(nextItems, currentData.items) &&
-            currentData.total === totalCount
+            isEqual(resolvedItems, currentData.items) &&
+            currentData.total === resolvedTotal
           ) {
             return;
           }
@@ -1073,13 +1226,13 @@ export class ChatTopicActionImpl {
                 ...this.#get().agentTopicsViewMap,
                 [containerKey]: {
                   currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
-                  hasMore,
+                  hasMore: resolvedTotal > resolvedItems.length,
                   isExpandingPageSize: false,
                   isLoadingMore: false,
                   loadMoreError: undefined,
-                  items: nextItems,
+                  items: resolvedItems,
                   pageSize,
-                  total: totalCount,
+                  total: resolvedTotal,
                   withDetails,
                 },
               },
@@ -1103,6 +1256,7 @@ export class ChatTopicActionImpl {
     const nextPage = (currentData.currentPage || 0) + 1;
     const pageSize = currentData.pageSize;
     const withDetails = currentData.withDetails;
+    const projectionScopeName = getCacheScope();
 
     this.#set(
       {
@@ -1116,6 +1270,7 @@ export class ChatTopicActionImpl {
     );
 
     try {
+      const observedAt = nextProjectionObservedAt();
       const result = await topicService.getTopics({
         agentId: activeAgentId,
         current: nextPage,
@@ -1123,8 +1278,53 @@ export class ChatTopicActionImpl {
         withDetails,
       });
 
-      const nextItems = [...currentData.items, ...result.items];
-      const hasMore = result.total > nextItems.length;
+      if (
+        !selectChatTopicsIndex(
+          getProjectionStoreState().scopes[projectionScopeName],
+          'agentView',
+          key,
+        )
+      ) {
+        getProjectionStoreState().commitChatTopicsPage(
+          projectionScopeName,
+          {
+            containerKey: key,
+            context: { agentId: activeAgentId },
+            items: currentData.items,
+            page: 0,
+            pageSize,
+            signature: { withDetails },
+            surface: 'agentView',
+            total: currentData.total,
+          },
+          { observedAt: 0, source: 'network' },
+        );
+      }
+      getProjectionStoreState().commitChatTopicsPage(
+        projectionScopeName,
+        {
+          containerKey: key,
+          context: { agentId: activeAgentId },
+          items: result.items,
+          page: nextPage,
+          pageSize,
+          signature: { withDetails },
+          surface: 'agentView',
+          total: result.total,
+        },
+        { observedAt, source: 'network' },
+      );
+
+      const projectionScope = getProjectionStoreState().scopes[projectionScopeName];
+      const projectionIndex = selectChatTopicsIndex(projectionScope, 'agentView', key);
+      const projectionItems = selectChatTopicsItems(projectionScope, projectionIndex);
+      if (!projectionIndex || !projectionItems) {
+        throw new Error('[Projection] Agent Topic page is incomplete after ingestion');
+      }
+      const resolvedItems = projectionItems as ChatTopic[];
+      const resolvedTotal = projectionIndex.total;
+      const projectedPage = Math.max(0, Math.ceil(resolvedItems.length / pageSize) - 1);
+      if (projectionScopeName !== getCacheScope()) return;
 
       this.#set(
         {
@@ -1132,12 +1332,12 @@ export class ChatTopicActionImpl {
             ...this.#get().agentTopicsViewMap,
             [key]: {
               ...currentData,
-              currentPage: nextPage,
-              hasMore,
+              currentPage: projectedPage,
+              hasMore: resolvedTotal > resolvedItems.length,
               isLoadingMore: false,
               loadMoreError: undefined,
-              items: nextItems,
-              total: result.total,
+              items: resolvedItems,
+              total: resolvedTotal,
             },
           },
         },
@@ -1180,6 +1380,7 @@ export class ChatTopicActionImpl {
 
     const currentPage = currentData?.currentPage || 0;
     const nextPage = currentPage + 1;
+    const projectionScopeName = getCacheScope();
 
     this.#set(
       {
@@ -1193,13 +1394,15 @@ export class ChatTopicActionImpl {
     );
 
     try {
-      const pageSize = useGlobalStore.getState().status.topicPageSize || 20;
+      const pageSize =
+        currentData?.pageSize || useGlobalStore.getState().status.topicPageSize || 20;
       const excludeTriggers = currentData?.excludeTriggers;
       const excludeStatuses = currentData?.excludeStatuses;
       // Carry `withDetails` from the initial fetch so subsequent pages have
       // the same column shape — otherwise the management page would mix
       // detail-rich rows with bare rows after scrolling.
       const withDetails = currentData?.withDetails;
+      const observedAt = nextProjectionObservedAt();
       const result = await topicService.getTopics({
         agentId: activeAgentId,
         current: nextPage,
@@ -1207,28 +1410,87 @@ export class ChatTopicActionImpl {
         excludeTriggers,
         groupId: activeGroupId,
         pageSize,
+        sortBy: currentData?.sortBy,
         withDetails,
       });
 
       const currentTopics = currentData?.items || [];
-      const nextItems = [...currentTopics, ...result.items];
-      const hasMore = result.total > nextItems.length;
+      if (
+        !selectChatTopicsIndex(
+          getProjectionStoreState().scopes[projectionScopeName],
+          'sidebar',
+          key,
+        )
+      ) {
+        getProjectionStoreState().commitChatTopicsPage(
+          projectionScopeName,
+          {
+            containerKey: key,
+            context: { agentId: activeAgentId ?? null, groupId: activeGroupId ?? null },
+            items: currentTopics,
+            page: 0,
+            pageSize,
+            signature: {
+              excludeStatuses,
+              excludeTriggers,
+              isInbox: currentData?.isInbox,
+              sortBy: currentData?.sortBy,
+              withDetails,
+            },
+            surface: 'sidebar',
+            total: currentData?.total ?? currentTopics.length,
+          },
+          { observedAt: 0, source: 'network' },
+        );
+      }
+      getProjectionStoreState().commitChatTopicsPage(
+        projectionScopeName,
+        {
+          containerKey: key,
+          context: { agentId: activeAgentId ?? null, groupId: activeGroupId ?? null },
+          items: result.items,
+          page: nextPage,
+          pageSize,
+          signature: {
+            excludeStatuses,
+            excludeTriggers,
+            isInbox: currentData?.isInbox,
+            sortBy: currentData?.sortBy,
+            withDetails,
+          },
+          surface: 'sidebar',
+          total: result.total,
+        },
+        { observedAt, source: 'network' },
+      );
+
+      const projectionScope = getProjectionStoreState().scopes[projectionScopeName];
+      const projectionIndex = selectChatTopicsIndex(projectionScope, 'sidebar', key);
+      const projectionItems = selectChatTopicsItems(projectionScope, projectionIndex);
+      if (!projectionIndex || !projectionItems) {
+        throw new Error('[Projection] Topic page is incomplete after ingestion');
+      }
+      const resolvedItems = projectionItems as ChatTopic[];
+      const resolvedTotal = projectionIndex.total;
+      const projectedPage = Math.max(0, Math.ceil(resolvedItems.length / pageSize) - 1);
+      if (projectionScopeName !== getCacheScope()) return;
 
       this.#set(
         {
           topicDataMap: {
             ...this.#get().topicDataMap,
             [key]: {
-              currentPage: nextPage,
+              currentPage: projectedPage,
               excludeStatuses,
               excludeTriggers,
-              hasMore,
+              hasMore: resolvedTotal > resolvedItems.length,
               isInbox: currentData?.isInbox,
               isLoadingMore: false,
               loadMoreError: undefined,
-              items: nextItems,
+              items: resolvedItems,
               pageSize,
-              total: result.total,
+              sortBy: currentData?.sortBy,
+              total: resolvedTotal,
               withDetails,
             },
           },
@@ -1264,23 +1526,61 @@ export class ChatTopicActionImpl {
       groupId?: string;
     } = {},
   ): SWRResponse<ChatTopic[]> => {
-    return useSWR<ChatTopic[]>(
+    const scope = useCacheScope();
+    const request = useSWR<ChatTopic[]>(
       keywords ? topicKeys.search(keywords, agentId, groupId) : null,
-      ([, keywords, agentId, groupId]: [string, string, string | undefined, string | undefined]) =>
-        topicService.searchTopics(keywords, agentId, groupId),
+      async ([, keywords, agentId, groupId]: [
+        string,
+        string,
+        string | undefined,
+        string | undefined,
+      ]) => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const items = await topicService.searchTopics(keywords, agentId, groupId);
+        getProjectionStoreState().commitChatTopicSearchResults(scope, items, {
+          observedAt,
+          source: 'network',
+        });
+        this.#topicFetchScope.set(items, scope);
+        return items;
+      },
       {
         onSuccess: (data) => {
           // Search rows render the same status icon as the sidebar — pin
           // pending status writes here too (no tmp-row re-prepend: optimistic
           // rows don't belong in search results).
+          const scope = this.#topicFetchScope.get(data) ?? getCacheScope();
+          if (scope !== getCacheScope()) return;
+          const projectionScope = getProjectionStoreState().scopes[scope];
+          const canonical = data.flatMap((item) => {
+            const record = projectionScope?.records.topic[item.id];
+            if (record?.tombstoneAt) return [];
+            const selected = projectionScope
+              ? selectChatTopicListItem(projectionScope, item.id)
+              : undefined;
+            return selected ? [selected] : [];
+          }) as ChatTopic[];
           this.#set(
-            { searchTopics: this.#reconcileFetchedTopics(data), isSearchingTopic: false },
+            { searchTopics: this.#reconcileFetchedTopics(canonical), isSearchingTopic: false },
             false,
             n('useSearchTopics(success)', { keywords }),
           );
         },
       },
     );
+    const canonical = useProjectionStore((state) => {
+      const projectionScope = state.scopes[scope];
+      if (!request.data || !projectionScope) return undefined;
+      return request.data.flatMap((item) => {
+        const record = projectionScope.records.topic[item.id];
+        if (record?.tombstoneAt) return [];
+        const selected = selectChatTopicListItem(projectionScope, item.id);
+        return selected ? [selected as ChatTopic] : [];
+      });
+    }, isEqual);
+
+    return { ...request, data: canonical } as SWRResponse<ChatTopic[]>;
   };
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
@@ -1343,6 +1643,13 @@ export class ChatTopicActionImpl {
   removeSessionTopics = async (scope: TopicBatchDeleteScope = 'own'): Promise<void> => {
     const { switchTopic, activeAgentId, refreshTopic } = this.#get();
     if (!activeAgentId) return;
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+    const topics = this.#get().topicDataMap[topicMapKey({ agentId: activeAgentId })]?.items ?? [];
+    const topicIds = topics
+      .filter((topic) => scope !== 'own' || topic.userId === currentUserId)
+      .map(({ id }) => id);
 
     await topicService.removeTopicsByAgentId(activeAgentId, scope);
     this.#set(
@@ -1356,6 +1663,7 @@ export class ChatTopicActionImpl {
       false,
       n('removeSessionTopics/detail'),
     );
+    getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
     void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
@@ -1369,11 +1677,19 @@ export class ChatTopicActionImpl {
     scope: TopicBatchDeleteScope = 'own',
   ): Promise<void> => {
     const { switchTopic, refreshTopic } = this.#get();
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+    const topics = this.#get().topicDataMap[topicMapKey({ groupId })]?.items ?? [];
+    const topicIds = topics
+      .filter((topic) => scope !== 'own' || topic.userId === currentUserId)
+      .map(({ id }) => id);
 
     await topicService.removeTopicsByGroupId(groupId, scope);
     // Topic detail rows don't carry their group id, so the safe invalidation
     // boundary for a group-wide delete is the whole by-id detail cache.
     this.#set({ topicDetailMap: {} }, false, n('removeGroupTopics/detail'));
+    getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this group)
     void evictMessageCache((ctx) => ctx.groupId === groupId);
@@ -1383,22 +1699,35 @@ export class ChatTopicActionImpl {
   };
 
   removeAllTopics = async (): Promise<void> => {
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const topicIds = Object.values(this.#get().topicDataMap).flatMap(({ items }) =>
+      items.map(({ id }) => id),
+    );
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
     this.#set({ topicDetailMap: {} }, false, n('removeAllTopics/detail'));
+    getProjectionStoreState().deleteChatTopicProjections(
+      projectionScope,
+      [...new Set(topicIds)],
+      observedAt,
+    );
     await refreshTopic();
     // every topic is gone — wipe all cached message lists
     void evictMessageCache(() => true);
   };
 
   removeTopic = async (id: string, removeFiles?: boolean): Promise<void> => {
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
     // remove topic (and optionally its uploaded attachments)
     await topicService.removeTopic(id, removeFiles);
+    getProjectionStoreState().deleteChatTopicProjections(projectionScope, [id], observedAt);
     this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     await refreshTopic();
     // drop the deleted topic's message cache so it doesn't orphan in IndexedDB
@@ -1409,6 +1738,8 @@ export class ChatTopicActionImpl {
   };
 
   removeUnstarredTopic = async (options?: RemoveUnstarredTopicOptions): Promise<void> => {
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const { refreshTopic, switchTopic } = this.#get();
     const topics = topicSelectors.currentUnFavTopics(this.#get());
     const currentUserId = userProfileSelectors.userId(useUserStore.getState());
@@ -1420,6 +1751,7 @@ export class ChatTopicActionImpl {
     topicIds.forEach((id) =>
       this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeUnstarredTopic'),
     );
+    getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // drop the deleted topics' message caches
     const removed = new Set(topicIds);
@@ -1699,20 +2031,24 @@ export class ChatTopicActionImpl {
           : currentTotal;
 
     const nextState: Record<string, unknown> = {};
+    let mainNextData: TopicData | undefined;
+    let viewNextData: TopicData | undefined;
 
     if (detailChanged) nextState.topicDetailMap = nextDetailMap;
 
     if (mainChanged) {
+      mainNextData = {
+        ...currentData,
+        currentPage: currentData?.currentPage ?? 0,
+        hasMore: total > nextItems.length,
+        isInbox: currentData?.isInbox,
+        items: nextItems,
+        pageSize: currentData?.pageSize ?? 20,
+        total,
+      };
       nextState.topicDataMap = {
         ...this.#get().topicDataMap,
-        [key]: {
-          ...currentData,
-          currentPage: currentData?.currentPage ?? 0,
-          hasMore: total > nextItems.length,
-          isInbox: currentData?.isInbox,
-          items: nextItems,
-          total,
-        },
+        [key]: mainNextData,
       };
     }
 
@@ -1724,18 +2060,57 @@ export class ChatTopicActionImpl {
           : payload.type === 'deleteTopic'
             ? Math.max(nextViewItems.length, viewTotal - 1)
             : viewTotal;
+      viewNextData = {
+        ...viewData,
+        hasMore: viewNextTotal > nextViewItems.length,
+        items: nextViewItems,
+        total: viewNextTotal,
+      };
       nextState.agentTopicsViewMap = {
         ...viewMap,
-        [key]: {
-          ...viewData,
-          hasMore: viewNextTotal > nextViewItems.length,
-          items: nextViewItems,
-          total: viewNextTotal,
-        },
+        [key]: viewNextData,
       };
     }
 
     this.#set(nextState, false, action ?? n(`dispatchTopic/${payload.type}`));
+
+    const changedId =
+      payload.type === 'addTopic'
+        ? payload.value.id
+        : payload.type === 'replaceTopicId'
+          ? payload.nextId
+          : payload.type === 'updateTopic'
+            ? payload.id
+            : undefined;
+    const commitCollection = (
+      data: TopicData,
+      items: ChatTopic[],
+      surface: 'agentView' | 'sidebar',
+    ) => {
+      getProjectionStoreState().commitChatTopicCollectionMutation(getCacheScope(), {
+        agentId: scopedAgentId ?? null,
+        changedId,
+        containerKey: key,
+        groupId: scopedGroupId ?? null,
+        items,
+        pageSize: data.pageSize,
+        replacedId: payload.type === 'replaceTopicId' ? payload.id : undefined,
+        signature: {
+          excludeStatuses: data.excludeStatuses,
+          excludeTriggers: data.excludeTriggers,
+          isInbox: data.isInbox,
+          sortBy: data.sortBy,
+          withDetails: data.withDetails,
+        },
+        surface,
+        total: data.total,
+      });
+    };
+
+    if (mainNextData) commitCollection(mainNextData, nextItems, 'sidebar');
+    if (viewNextData && nextViewItems) {
+      commitCollection(viewNextData, nextViewItems, 'agentView');
+    }
   };
 
   internal_updateTopics = (
@@ -1775,12 +2150,34 @@ export class ChatTopicActionImpl {
             isLoadingMore: false,
             items: nextItems,
             pageSize,
+            sortBy: currentData?.sortBy,
             total,
           },
         },
       },
       false,
       n('internal_updateTopics', { key, append }),
+    );
+
+    getProjectionStoreState().commitChatTopicsPage(
+      getCacheScope(),
+      {
+        containerKey: key,
+        context: { agentId: agentId ?? null, groupId: groupId ?? null },
+        items: nextItems,
+        page: 0,
+        pageSize,
+        signature: {
+          excludeStatuses: currentData?.excludeStatuses,
+          excludeTriggers: currentData?.excludeTriggers,
+          isInbox: currentData?.isInbox,
+          sortBy: currentData?.sortBy,
+          withDetails: currentData?.withDetails,
+        },
+        surface: 'sidebar',
+        total,
+      },
+      { observedAt: nextProjectionObservedAt(), source: 'network' },
     );
   };
 

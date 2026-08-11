@@ -1,4 +1,4 @@
-import { type ChatTopic } from '@/types/topic';
+import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
 
 /**
  * Unified topic data structure for each agent
@@ -24,6 +24,8 @@ export interface TopicData {
    * or cases where total items < pageSize.
    */
   pageSize: number;
+  /** Server-side ordering represented by the canonical Projection index signature. */
+  sortBy?: TopicQuerySortBy;
   total: number;
   /**
    * Tracks whether the first fetch for this container asked the server for

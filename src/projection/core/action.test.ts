@@ -1,6 +1,8 @@
-import type { TopicProjection } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ProjectionHydrationRequest, TopicProjection } from '@lobechat/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { projectionBootSpanNames } from '@/libs/bootMetrics/spanNames';
+import { bootTiming } from '@/libs/bootTiming';
 import type { StoreSetter } from '@/store/types';
 
 import type { ProjectionPersistence } from '../persistence/types';
@@ -57,6 +59,11 @@ const createActionHarness = (persistence: ProjectionPersistence) => {
 describe('ProjectionCoreAction', () => {
   beforeEach(() => {
     mocks.scopeTrusted = true;
+    bootTiming._reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('updates the live Store synchronously and persists the merged Projection exactly once', async () => {
@@ -68,7 +75,7 @@ describe('ProjectionCoreAction', () => {
     const harness = createActionHarness({
       clearScope: vi.fn(),
       commit,
-      hydrateScope: vi.fn(),
+      hydrate: vi.fn(),
     });
 
     const pending = harness
@@ -108,7 +115,7 @@ describe('ProjectionCoreAction', () => {
   it('honors an explicit DevTool scope without changing business persistence guards', async () => {
     mocks.scopeTrusted = false;
     const commit = vi.fn().mockResolvedValue(undefined);
-    const harness = createActionHarness({ clearScope: vi.fn(), commit, hydrateScope: vi.fn() });
+    const harness = createActionHarness({ clearScope: vi.fn(), commit, hydrate: vi.fn() });
 
     await harness
       .getState()
@@ -125,7 +132,7 @@ describe('ProjectionCoreAction', () => {
     const harness = createActionHarness({
       clearScope: vi.fn(),
       commit: vi.fn().mockRejectedValue(failure),
-      hydrateScope: vi.fn(),
+      hydrate: vi.fn(),
     });
 
     await expect(
@@ -138,5 +145,77 @@ describe('ProjectionCoreAction', () => {
 
     const record = harness.getState().scopes[SCOPE].records.topic['topic-1'];
     expect(record.fragments.display?.data).toEqual({ title: 'Visible' });
+  });
+
+  it('hydrates only the requested local fragments without writing them back to persistence', async () => {
+    const hydrate = vi.fn().mockResolvedValue({
+      indexes: [],
+      records: [
+        {
+          fragments: {
+            activity: {
+              data: { updatedAt: new Date('2026-08-11T00:00:00.000Z') },
+              observedAt: 25,
+              source: 'network',
+            },
+          },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      snapshots: [],
+    });
+    const commit = vi.fn();
+    const harness = createActionHarness({ clearScope: vi.fn(), commit, hydrate });
+    const request: ProjectionHydrationRequest = {
+      records: [{ fragments: ['activity'], ids: ['topic-1'], kind: 'topic' }],
+    };
+
+    await harness.getState().hydrateProjection(SCOPE, request);
+
+    expect(hydrate).toHaveBeenCalledWith(SCOPE, request);
+    expect(commit).not.toHaveBeenCalled();
+    expect(
+      harness.getState().scopes[SCOPE].records.topic['topic-1'].fragments.activity?.data.updatedAt,
+    ).toEqual(new Date('2026-08-11T00:00:00.000Z'));
+  });
+
+  it('measures hydration through the synchronous Zustand publication boundary', async () => {
+    vi.spyOn(performance, 'now')
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(40)
+      .mockReturnValueOnce(45)
+      .mockReturnValueOnce(50);
+    const harness = createActionHarness({
+      clearScope: vi.fn(),
+      commit: vi.fn(),
+      hydrate: vi.fn().mockResolvedValue({ indexes: [], records: [], snapshots: [] }),
+    });
+
+    await harness.getState().hydrateProjection(SCOPE, {
+      records: [{ fragments: ['activity'], ids: ['topic-1'], kind: 'topic' }],
+    });
+
+    expect(bootTiming.snapshot().spans).toEqual([
+      { durMs: 5, name: projectionBootSpanNames.storeInject, startMs: 40 },
+      { durMs: 40, name: projectionBootSpanNames.hydration, startMs: 10 },
+    ]);
+  });
+
+  it('prepares a scope without hydrating the entire durable partition', async () => {
+    const hydrate = vi.fn();
+    const harness = createActionHarness({ clearScope: vi.fn(), commit: vi.fn(), hydrate });
+
+    await harness.getState().prepareProjectionScope('user-1:workspace-2');
+
+    expect(hydrate).not.toHaveBeenCalled();
+    expect(harness.getState().scopes['user-1:workspace-2'].hydrationStatus).toBe('ready');
+    expect(harness.getState().scopes['user-1:workspace-2'].records).toEqual({
+      agent: {},
+      brief: {},
+      chatGroup: {},
+      task: {},
+      topic: {},
+    });
   });
 });

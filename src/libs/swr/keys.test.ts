@@ -98,16 +98,12 @@ describe('agentBuilderKeys', () => {
 });
 
 describe('taskKeys', () => {
-  // Regression for sidebar task list cache persists across navigation to skip skeleton: the sidebar task list used a `sidebar:` domain
-  // key that no CACHE_TIERS pattern matched, so it was memory-only and every
-  // fresh page load showed a skeleton. The key must route to a persisted tier
-  // (the provider matches patterns against the serialized SWR key).
-  it('routes the sidebar task-groups key to a persisted cache tier', () => {
+  it('retires task DTOs from SWR persistence after Projection migration', () => {
     const serialized = unstable_serialize(taskKeys.sidebarGroups('agent-1'));
     const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
       serialized.includes(pattern),
     );
-    expect(persisted).toBe(true);
+    expect(persisted).toBe(false);
   });
 });
 
@@ -139,6 +135,24 @@ describe('projectionKeys', () => {
     ).toBe(false);
   });
 
+  it('retires migrated entity DTOs from every SWR persistence tier', () => {
+    const migratedKeys = [
+      ['topic:list', 'agent-1'],
+      ['agent:available'],
+      ['agent:config', 'agent-1'],
+      ['agent:search', 'builder'],
+      ['group:detail', 'group-1'],
+      ['group:list', true],
+      ['task:list', '__all__', 'all'],
+    ].map(unstable_serialize);
+
+    for (const serialized of migratedKeys) {
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
+  });
+
   it('keeps request markers outside every SWR persistence tier', () => {
     const serializedKeys = [
       projectionKeys.sidebar('scope-1'),
@@ -146,6 +160,7 @@ describe('projectionKeys', () => {
       projectionKeys.inboxTopics('scope-1'),
       projectionKeys.tasks('scope-1'),
       projectionKeys.briefs('scope-1'),
+      projectionKeys.localView('scope-1', 'agent.directory'),
     ].map(unstable_serialize);
 
     for (const serialized of serializedKeys) {

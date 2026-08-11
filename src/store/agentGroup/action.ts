@@ -1,4 +1,7 @@
-import { type AgentGroupDetail } from '@lobechat/types';
+import {
+  type AgentGroupDetail,
+  type ChatGroupItem as ProjectionChatGroupItem,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
 import { type StateCreator } from 'zustand/vanilla';
@@ -6,6 +9,15 @@ import { type StateCreator } from 'zustand/vanilla';
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { groupKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  chatGroupListViewContract,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectChatGroupDetail,
+  selectChatGroupList,
+  useProjectionViewHydration,
+} from '@/projection';
 import { chatGroupService } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
@@ -27,6 +39,27 @@ const n = setNamespace('chatGroup');
 /**
  * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array if not present
  */
+const toLegacyChatGroupItem = (group: ProjectionChatGroupItem): ChatGroupItem => ({
+  accessedAt: group.accessedAt ?? group.updatedAt,
+  avatar: group.avatar ?? null,
+  backgroundColor: group.backgroundColor ?? null,
+  clientId: group.clientId ?? null,
+  config: (group.config as ChatGroupItem['config']) ?? null,
+  content: group.content ?? null,
+  createdAt: group.createdAt,
+  description: group.description ?? null,
+  editorData: group.editorData ?? null,
+  groupId: group.groupId ?? null,
+  id: group.id,
+  marketIdentifier: group.marketIdentifier ?? null,
+  pinned: group.pinned ?? null,
+  title: group.title ?? null,
+  updatedAt: group.updatedAt,
+  userId: group.userId,
+  visibility: group.visibility ?? 'public',
+  workspaceId: group.workspaceId ?? null,
+});
+
 const toAgentGroupDetail = (group: ChatGroupItem): AgentGroupDetail =>
   ({
     ...group,
@@ -96,31 +129,58 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   internal_fetchGroupDetail = async (groupId: string) => {
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const groupDetail = await chatGroupService.getGroupDetail(groupId);
     if (!groupDetail) {
+      getProjectionStoreState().deleteChatGroupProjection(scope, groupId, observedAt);
+      const projectionScope = getProjectionStoreState().scopes[scope];
+      const canonical = projectionScope
+        ? selectChatGroupDetail(projectionScope, groupId)
+        : undefined;
+      if (canonical) {
+        this.#clearGroupNotFound(groupId);
+        this.internal_dispatchChatGroup({
+          payload: { id: canonical.id, value: canonical },
+          type: 'updateGroup',
+        });
+        return;
+      }
       this.removeStaleGroup(groupId);
       this.#markGroupNotFound(groupId);
       return;
     }
+    getProjectionStoreState().commitChatGroupDetail(scope, groupDetail, 'network', observedAt);
+    const projectionScope = getProjectionStoreState().scopes[scope];
+    const record = projectionScope?.records.chatGroup[groupId];
+    if (record?.tombstoneAt) {
+      this.removeStaleGroup(groupId);
+      this.#markGroupNotFound(groupId);
+      return;
+    }
+    const resolvedGroup = projectionScope
+      ? selectChatGroupDetail(projectionScope, groupId)
+      : undefined;
+    if (!resolvedGroup) return;
     this.#clearGroupNotFound(groupId);
 
     // Update groupMap with full group detail including supervisorAgentId and agents
     this.internal_dispatchChatGroup({
-      payload: { id: groupDetail.id, value: groupDetail },
+      payload: { id: resolvedGroup.id, value: resolvedGroup },
       type: 'updateGroup',
     });
 
     // Sync group agents to agentStore for builtin agent resolution
     const agentStore = getAgentStoreState();
-    for (const agent of groupDetail.agents) {
-      agentStore.internal_dispatchAgentMap(agent.id, agent as any);
+    for (const agent of resolvedGroup.agents) {
+      agentStore.internal_dispatchAgentMap(agent.id, agent as any, { commitProjection: false });
     }
 
     // Set activeAgentId to supervisor for correct model resolution
-    if (groupDetail.supervisorAgentId) {
-      agentStore.setActiveAgentId(groupDetail.supervisorAgentId);
+    if (resolvedGroup.supervisorAgentId) {
+      agentStore.setActiveAgentId(resolvedGroup.supervisorAgentId);
       useChatStore.setState(
-        { activeAgentId: groupDetail.supervisorAgentId },
+        { activeAgentId: resolvedGroup.supervisorAgentId },
         false,
         'syncActiveAgentIdFromAgentGroup',
       );
@@ -128,8 +188,17 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   internal_updateGroupMaps = (groups: ChatGroupItem[]) => {
+    const scope = getCacheScope();
+    const projectionStore = getProjectionStoreState();
+    // Session rows are an indirect, partial ChatGroup source. They may seed an
+    // empty Projection, but must never outrank a typed ChatGroup request or a
+    // local edit that already owns the entity.
+    projectionStore.commitChatGroups(scope, groups, 0);
+    const canonicalGroups = selectChatGroupList(getProjectionStoreState().scopes[scope]);
+    if (!canonicalGroups) return;
+    const resolvedGroups = canonicalGroups.map(toLegacyChatGroupItem);
     // Build a candidate map from incoming groups
-    const incomingMap = groups.reduce(
+    const incomingMap = resolvedGroups.reduce(
       (map, group) => {
         map[group.id] = group;
         return map;
@@ -170,8 +239,14 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   loadGroups = async () => {
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const groups = await chatGroupService.getGroups();
-    this.internal_dispatchChatGroup({ payload: groups, type: 'loadGroups' });
+    getProjectionStoreState().commitChatGroups(scope, groups, observedAt);
+    const canonicalGroups = selectChatGroupList(getProjectionStoreState().scopes[scope]);
+    if (!canonicalGroups) return;
+    const resolvedGroups = canonicalGroups.map(toLegacyChatGroupItem);
+    this.internal_dispatchChatGroup({ payload: resolvedGroups, type: 'loadGroups' });
   };
 
   refreshGroupDetail = async (groupId: string) => {
@@ -190,34 +265,66 @@ class ChatGroupInternalAction implements ResetableStore {
     this.#set({ activeThreadAgentId: agentId }, false, 'toggleThread');
   };
 
-  useFetchGroupDetail = (enabled: boolean, groupId: string) =>
-    useClientDataSWRWithSync<AgentGroupDetail | null>(
+  useFetchGroupDetail = (enabled: boolean, groupId: string) => {
+    const request = useClientDataSWRWithSync<AgentGroupDetail | null>(
       enabled && groupId ? groupKeys.detail(groupId) : null,
       async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         const groupDetail = await chatGroupService.getGroupDetail(groupId);
         // Resolve to null instead of throwing: "gone / no access" is a settled
         // terminal state (rendered as a 404 card), not a retryable error.
         if (!groupDetail) {
-          this.removeStaleGroup(groupId);
+          getProjectionStoreState().deleteChatGroupProjection(scope, groupId, observedAt);
           return null;
         }
+        getProjectionStoreState().commitChatGroupDetail(scope, groupDetail, 'network', observedAt);
         return groupDetail;
       },
       {
         onData: (groupDetail) => {
           if (!groupDetail) {
+            const projectionScope = getProjectionStoreState().scopes[getCacheScope()];
+            const canonical = projectionScope
+              ? selectChatGroupDetail(projectionScope, groupId)
+              : undefined;
+            if (canonical) {
+              this.#clearGroupNotFound(groupId);
+              return;
+            }
+            this.removeStaleGroup(groupId);
             this.#markGroupNotFound(groupId);
             return;
           }
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          let projectionScope = projectionStore.scopes[scope];
+          let canonical = projectionScope
+            ? selectChatGroupDetail(projectionScope, groupId)
+            : undefined;
+          const record = projectionScope?.records.chatGroup[groupId];
+          if (!canonical && !record?.tombstoneAt) {
+            projectionStore.commitChatGroupDetail(scope, groupDetail, 'network', 0);
+            projectionScope = getProjectionStoreState().scopes[scope];
+            canonical = projectionScope
+              ? selectChatGroupDetail(projectionScope, groupId)
+              : undefined;
+          }
+          if (projectionScope?.records.chatGroup[groupId]?.tombstoneAt) {
+            this.#markGroupNotFound(groupId);
+            return;
+          }
+          const resolvedGroup = canonical;
+          if (!resolvedGroup) return;
           this.#clearGroupNotFound(groupId);
 
           // Update groupMap with detailed group info including agents
-          const currentGroup = this.#get().groupMap[groupDetail.id];
-          if (isEqual(currentGroup, groupDetail)) return;
+          const currentGroup = this.#get().groupMap[resolvedGroup.id];
+          if (isEqual(currentGroup, resolvedGroup)) return;
 
           const nextGroupMap = {
             ...this.#get().groupMap,
-            [groupDetail.id]: groupDetail,
+            [resolvedGroup.id]: resolvedGroup,
           };
 
           this.#set(
@@ -225,13 +332,13 @@ class ChatGroupInternalAction implements ResetableStore {
               groupMap: nextGroupMap,
             },
             false,
-            n('useFetchGroupDetail/onData', { groupId: groupDetail.id }),
+            n('useFetchGroupDetail/onData', { groupId: resolvedGroup.id }),
           );
 
           // Sync group agents to agentStore for builtin agent resolution (e.g., supervisor slug)
           // Use smart merge: only overwrite if server data is newer to prevent race conditions
           const agentStore = getAgentStoreState();
-          for (const agent of groupDetail.agents) {
+          for (const agent of resolvedGroup.agents) {
             const currentAgentInStore = agentStore.agentMap[agent.id];
 
             // Only overwrite if:
@@ -242,35 +349,56 @@ class ChatGroupInternalAction implements ResetableStore {
               new Date(agent.updatedAt) > new Date(currentAgentInStore.updatedAt || 0)
             ) {
               // AgentGroupMember extends AgentItem which shares fields with LobeAgentConfig
-              agentStore.internal_dispatchAgentMap(agent.id, agent as any);
+              agentStore.internal_dispatchAgentMap(agent.id, agent as any, {
+                commitProjection: false,
+              });
             }
           }
 
           // Set activeAgentId to supervisor for correct model resolution in sendMessage
-          if (groupDetail.supervisorAgentId) {
-            agentStore.setActiveAgentId(groupDetail.supervisorAgentId);
+          if (resolvedGroup.supervisorAgentId) {
+            agentStore.setActiveAgentId(resolvedGroup.supervisorAgentId);
             useChatStore.setState(
-              { activeAgentId: groupDetail.supervisorAgentId },
+              { activeAgentId: resolvedGroup.supervisorAgentId },
               false,
               'syncActiveAgentIdFromAgentGroup',
             );
           }
         },
+        syncBeforePaint: true,
       },
     );
 
+    return request;
+  };
+
   // SWR Hooks for data fetching
   // This is not used for now, as we are combining group in the session lambda's response
-  useFetchGroups = (enabled: boolean, isLogin: boolean) =>
-    useClientDataSWRWithSync<ChatGroupItem[]>(
+  useFetchGroups = (enabled: boolean, isLogin: boolean) => {
+    useProjectionViewHydration(chatGroupListViewContract, {}, enabled);
+    return useClientDataSWRWithSync<ChatGroupItem[]>(
       enabled ? groupKeys.list(isLogin) : null,
-      async () => chatGroupService.getGroups(),
+      async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const groups = await chatGroupService.getGroups();
+        getProjectionStoreState().commitChatGroups(scope, groups, observedAt);
+        return groups;
+      },
       {
         fallbackData: [],
         onData: (groups) => {
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          if (!selectChatGroupList(projectionStore.scopes[scope])) {
+            projectionStore.commitChatGroups(scope, groups, 0);
+          }
+          const selectedGroups = selectChatGroupList(getProjectionStoreState().scopes[scope]);
+          if (!selectedGroups) return;
+          const canonicalGroups = selectedGroups.map(toLegacyChatGroupItem);
           // Update both groups list and groupMap
           const currentMap = this.#get().groupMap;
-          const nextGroupMap = groups.reduce(
+          const nextGroupMap = canonicalGroups.reduce(
             (map, group) => {
               // Preserve existing agents data if available
               const existing = currentMap[group.id];
@@ -295,8 +423,10 @@ class ChatGroupInternalAction implements ResetableStore {
             n('useFetchGroups/onData'),
           );
         },
+        syncBeforePaint: true,
       },
     );
+  };
 }
 
 type PublicActions<T> = { [K in keyof T]: T[K] };

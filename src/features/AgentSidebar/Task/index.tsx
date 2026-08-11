@@ -9,6 +9,12 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  useTaskGroupListProjection,
+} from '@/projection';
 import { taskService } from '@/services/task';
 import { useAgentStore } from '@/store/agent';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
@@ -30,18 +36,37 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const agentId = useAgentStore((s) => s.activeAgentId);
+  const projectionSignature = useMemo(
+    () => ({ agentKey: agentId ? `${agentId}:sidebar` : undefined, visibility: 'all' as const }),
+    [agentId],
+  );
+  const projectionGroups = useTaskGroupListProjection(projectionSignature);
 
   const enabled = !!agentId;
-  const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
+  const { isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? taskKeys.sidebarGroups(agentId) : null,
-    async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS, hasGoal: false }),
-    {
-      fallbackData: { data: [], success: true },
-      revalidateOnFocus: false,
+    async ([, id]: [string, string]) => {
+      const scope = getCacheScope();
+      const observedAt = nextProjectionObservedAt();
+      const result = await taskService.groupList({
+        assigneeAgentId: id,
+        groups: SIDEBAR_GROUPS,
+        hasGoal: false,
+      });
+      getProjectionStoreState().commitTaskGroupList(
+        scope,
+        result.data,
+        { agentKey: `${id}:sidebar`, visibility: 'all' },
+        observedAt,
+      );
+      return result;
     },
+    { revalidateOnFocus: false },
   );
-  const taskGroups = useMemo(() => data?.data ?? [], [data?.data]);
+  const taskGroups = useMemo(
+    () => (projectionGroups as TaskGroupItem[] | undefined) ?? [],
+    [projectionGroups],
+  );
 
   const orderedGroups = useMemo(() => {
     const map = new Map(taskGroups.map((g) => [g.key, g]));

@@ -34,12 +34,14 @@ describe('BriefListActionImpl', () => {
   const projectionActions = {
     deleteBriefProjection: vi.fn(),
     resolveBriefProjectionsAsRead: vi.fn(),
+    scopes: {} as Record<string, unknown>,
     updateBriefReadState: vi.fn(),
     updateBriefResolution: vi.fn(),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    projectionActions.scopes = {};
     vi.spyOn(Date, 'now').mockReturnValue(100);
     vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
     vi.spyOn(projectionStore, 'getProjectionStoreState').mockReturnValue(
@@ -74,7 +76,7 @@ describe('BriefListActionImpl', () => {
       'user-1:workspace-1',
       [resolvedBrief.id],
       expect.any(String),
-      100,
+      expect.any(Number),
     );
   });
 
@@ -94,7 +96,7 @@ describe('BriefListActionImpl', () => {
       'user-1:workspace-1',
       brief.id,
       state.briefs[0].readAt,
-      100,
+      expect.any(Number),
     );
   });
 
@@ -123,7 +125,7 @@ describe('BriefListActionImpl', () => {
       'user-1:workspace-1',
       brief.id,
       resolution,
-      100,
+      expect.any(Number),
     );
   });
 
@@ -141,8 +143,30 @@ describe('BriefListActionImpl', () => {
     expect(projectionActions.deleteBriefProjection).toHaveBeenCalledWith(
       'user-1:workspace-1',
       deleted.id,
-      100,
+      expect.any(Number),
     );
+  });
+
+  it('keeps a Brief that a newer canonical edit preserved across deletion', async () => {
+    const brief = createBrief('brief-edited');
+    const state = { briefs: [brief], isBriefsInit: true };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
+    projectionActions.scopes = {
+      [SCOPE]: {
+        records: {
+          brief: {
+            [brief.id]: { fragments: {}, id: brief.id, kind: 'brief' },
+          },
+        },
+      },
+    };
+    vi.spyOn(briefService, 'delete').mockResolvedValue(undefined as never);
+
+    await action.deleteBrief(brief.id);
+
+    expect(state.briefs).toEqual([brief]);
+    expect(set).not.toHaveBeenCalled();
   });
 
   // The legacy-projection patch must land on the list the ids came from. On a
@@ -169,7 +193,7 @@ describe('BriefListActionImpl', () => {
       SCOPE,
       [brief.id],
       expect.any(String),
-      100,
+      expect.any(Number),
     );
   });
 

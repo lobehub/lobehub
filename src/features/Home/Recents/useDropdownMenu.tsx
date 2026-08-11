@@ -10,6 +10,8 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -75,8 +77,11 @@ export const useRecentItemDropdownMenu = (
     if (item.type === 'topic') {
       void confirmRemoveTopic({
         onConfirm: async (removeFiles) => {
+          const scope = getCacheScope();
+          const observedAt = nextProjectionObservedAt();
           // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
           await topicService.removeTopic(item.id, removeFiles);
+          getProjectionStoreState().deleteChatTopicProjections(scope, [item.id], observedAt);
           await refreshRecents();
         },
         topicIds: [item.id],
@@ -94,6 +99,8 @@ export const useRecentItemDropdownMenu = (
       okButtonProps: { danger: true },
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         switch (item.type) {
           case 'document': {
             await documentService.deleteDocument(item.id);
@@ -101,6 +108,7 @@ export const useRecentItemDropdownMenu = (
           }
           case 'task': {
             await taskService.delete(item.id);
+            getProjectionStoreState().deleteTaskProjection(scope, item.id, observedAt);
             break;
           }
         }

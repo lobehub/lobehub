@@ -10,7 +10,13 @@ import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import { useHomeAgentIdentity } from '@/projection';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+  useHomeAgentIdentity,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -83,10 +89,28 @@ const AgentSelect = memo(() => {
       const agentState = useAgentStore.getState();
       if (agentState.agentMap[agentId]) return;
 
+      const scope = getCacheScope();
+      const observedAt = nextProjectionObservedAt();
       agentService
         .getAgentConfigById(agentId)
         .then((config) => {
-          if (config) agentState.internal_dispatchAgentMap(agentId, config);
+          if (config) {
+            getProjectionStoreState().commitAgentConfig(
+              scope,
+              { ...config, id: config.id ?? agentId },
+              'network',
+              observedAt,
+            );
+          } else {
+            getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+          }
+          const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
+          if (record?.tombstoneAt) return;
+          const canonical = selectAgentProjection(record);
+          if (!canonical) return;
+          agentState.internal_dispatchAgentMap(agentId, canonical, {
+            commitProjection: false,
+          });
         })
         .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
     },

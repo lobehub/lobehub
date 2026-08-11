@@ -10,6 +10,8 @@ import { authSelectors } from '@/store/user/selectors';
 import { buildBootMetricsPayload } from './buildPayload';
 
 const SEEN_KEY = 'lobe:boot:seen';
+const BOOT_ACTIVITY_IDLE_MS = 100;
+const BOOT_ACTIVITY_TIMEOUT_MS = 8000;
 
 let sent = false;
 
@@ -147,7 +149,11 @@ export const startBootMetricsFinalize = (): void => {
       void 0;
     }
 
-    scheduleAfterFirstPaint(() => sendPayload(ingestUrl, cold));
+    scheduleAfterFirstPaint(() => {
+      void bootTiming
+        .waitForIdle({ idleMs: BOOT_ACTIVITY_IDLE_MS, timeoutMs: BOOT_ACTIVITY_TIMEOUT_MS })
+        .then(() => sendPayload(ingestUrl, cold));
+    });
 
     const pagehideHandler = () => {
       if (!sent) sendPayload(ingestUrl, cold);

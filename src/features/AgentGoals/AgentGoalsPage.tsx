@@ -11,7 +11,8 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useTaskGroupListProjection } from '@/projection';
+import { useGoalStore } from '@/store/goal';
 import { useVerifyStore } from '@/store/verify';
 
 import { createGoalModal } from './CreateGoalModal';
@@ -74,8 +75,12 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const goals = useGoalStore(goalSelectors.goalList(scopeId));
-  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
+  const projectionGroups = useTaskGroupListProjection({
+    agentKey: `${scopeId}:goals-page`,
+    visibility: 'all',
+  });
+  const goals = useMemo(() => projectionGroups?.[0]?.tasks ?? [], [projectionGroups]);
+  const isInitialized = projectionGroups !== undefined;
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);

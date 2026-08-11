@@ -1,10 +1,10 @@
 import dayjs from 'dayjs';
 import { type SWRResponse } from 'swr';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState } from '@/projection';
+import { getProjectionStoreState, nextProjectionObservedAt, useBriefNews } from '@/projection';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -54,9 +54,14 @@ export class BriefListActionImpl {
 
   deleteBrief = async (id: string) => {
     const scope = getCacheScope();
-    const observedAt = Date.now();
+    const observedAt = nextProjectionObservedAt();
     await briefService.delete(id);
     getProjectionStoreState().deleteBriefProjection(scope, id, observedAt);
+    const record = getProjectionStoreState().scopes[scope]?.records.brief[id];
+    // A newer local edit may have crossed this request and defeated its older
+    // tombstone. Projection stays canonical, so do not remove that active row
+    // from the legacy list after the commit has already resolved the conflict.
+    if (record && !record.tombstoneAt) return;
 
     const previous = this.#get().briefs;
     const briefs = previous.filter((b) => b.id !== id);
@@ -70,7 +75,7 @@ export class BriefListActionImpl {
 
   markBriefRead = async (id: string) => {
     const scope = getCacheScope();
-    const observedAt = Date.now();
+    const observedAt = nextProjectionObservedAt();
     const result = await briefService.markRead(id);
     const readAt = result.data.readAt ?? new Date().toISOString();
     this.internal_updateBrief(id, { readAt });
@@ -87,7 +92,7 @@ export class BriefListActionImpl {
     // Capture the scope these ids belong to *before* awaiting — a workspace
     // switch mid-request must not land the resolution in the next partition.
     const scope = getCacheScope();
-    const observedAt = Date.now();
+    const observedAt = nextProjectionObservedAt();
     const result = await briefService.resolveManyAsRead(ids);
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
@@ -111,7 +116,7 @@ export class BriefListActionImpl {
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
     const scope = getCacheScope();
-    const observedAt = Date.now();
+    const observedAt = nextProjectionObservedAt();
     const result = await briefService.resolve(id, { action, comment });
     const resolvedAction = result.data.resolvedAction ?? action ?? null;
     const resolvedAt = result.data.resolvedAt ?? new Date().toISOString();
@@ -151,27 +156,38 @@ export class BriefListActionImpl {
   };
 
   /**
-   * Day-scoped news digest (`insight` + `result`, resolved included). Lives in
-   * SWR only — no zustand bucket: the key already partitions by identity scope
-   * and day, the list is read-mostly, and the one mutation that touches it
-   * (mark-all-read) revalidates through the returned SWR handle. `day` is the
-   * viewer's local `YYYY-MM-DD`; the [start, end) instants are computed here so
-   * the server stays timezone-agnostic. `keepPreviousData` keeps the section
-   * stable while the user pages between days.
+   * Day-scoped news digest (`insight` + `result`, resolved included). SWR owns
+   * request orchestration while Projection owns rows, day membership, and the
+   * Electron warm cache. `day` is the viewer's local `YYYY-MM-DD`; the
+   * [start, end) instants are computed here so the server stays timezone-agnostic.
+   * `keepPreviousData` keeps the section stable while the user pages between days.
    */
-  useFetchNewsByDay = (enabled: boolean, scope: string, day: string): SWRResponse<NewsDay> =>
-    useClientDataSWR<NewsDay>(
+  useFetchNewsByDay = (enabled: boolean, scope: string, day: string): SWRResponse<NewsDay> => {
+    const projection = useBriefNews(day);
+    const request = useClientDataSWRWithSync<NewsDay>(
       enabled ? briefKeys.news(true, scope, day) : null,
       async () => {
+        const observedAt = nextProjectionObservedAt();
         const startAt = dayjs(day).startOf('day');
         const result = await briefService.listNewsByDay({
           endAt: startAt.add(1, 'day').toDate(),
           startAt: startAt.toDate(),
         });
-        return { day, hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
+        const news = result.data as BriefItem[];
+        getProjectionStoreState().commitBriefNews(scope, day, result.hasEarlier, news, observedAt);
+        return { day, hasEarlier: result.hasEarlier, news };
       },
-      { keepPreviousData: true },
+      {
+        keepPreviousData: true,
+        onData: (data) => {
+          getProjectionStoreState().commitBriefNews(scope, data.day, data.hasEarlier, data.news, 0);
+        },
+        syncBeforePaint: true,
+      },
     );
+    const retainedProjection = useBriefNews(request.data?.day ?? day);
+    return { ...request, data: projection ?? retainedProjection };
+  };
 }
 
 export type BriefListAction = Pick<BriefListActionImpl, keyof BriefListActionImpl>;

@@ -1,5 +1,11 @@
 import type { UIChatMessage } from '@lobechat/types';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
@@ -65,10 +71,26 @@ export class ChatForwardActionImpl {
       targets.map(async (target) => {
         const { id } = target;
         if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
+          const scope = getCacheScope();
+          const observedAt = nextProjectionObservedAt();
           const config = await agentService.getAgentConfigById(id);
-          if (!config) throw new Error(`Forwarding target agent not found: ${id}`);
-
-          getAgentStoreState().internal_dispatchAgentMap(id, config);
+          if (config) {
+            getProjectionStoreState().commitAgentConfig(
+              scope,
+              { ...config, id: config.id ?? id },
+              'network',
+              observedAt,
+            );
+          } else {
+            getProjectionStoreState().deleteAgentProjection(scope, id, observedAt);
+          }
+          const record = getProjectionStoreState().scopes[scope]?.records.agent[id];
+          if (record?.tombstoneAt) throw new Error(`Forwarding target agent not found: ${id}`);
+          const canonical = selectAgentProjection(record);
+          if (!canonical) throw new Error(`Forwarding target agent not found: ${id}`);
+          getAgentStoreState().internal_dispatchAgentMap(id, canonical, {
+            commitProjection: false,
+          });
         }
 
         const result = await this.#get().sendMessage({

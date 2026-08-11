@@ -23,7 +23,7 @@ const snapshot: ProjectionSnapshot = {
 };
 
 describe('createMemoryProjectionPersistence', () => {
-  it('round-trips the complete materialized Projection graph without durable Web storage', async () => {
+  it('hydrates only the indexes, records, and fragments declared by the view request', async () => {
     const persistence = createMemoryProjectionPersistence();
 
     await persistence.commit(scope, {
@@ -32,7 +32,13 @@ describe('createMemoryProjectionPersistence', () => {
       snapshots: [snapshot],
     });
 
-    await expect(persistence.hydrateScope(scope)).resolves.toEqual({
+    await expect(
+      persistence.hydrate(scope, {
+        indexes: ['home.inboxTopics'],
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+        snapshots: ['home.dailyBrief'],
+      }),
+    ).resolves.toEqual({
       indexes: [index],
       records: [record('Initial')],
       snapshots: [snapshot],
@@ -49,10 +55,18 @@ describe('createMemoryProjectionPersistence', () => {
       snapshots: [],
     });
 
-    await expect(persistence.hydrateScope(scope)).resolves.toMatchObject({
+    await expect(
+      persistence.hydrate(scope, {
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+      }),
+    ).resolves.toMatchObject({
       records: [{ fragments: { display: { data: { title: 'Newer' } } } }],
     });
-    await expect(persistence.hydrateScope('user-1:workspace-2')).resolves.toMatchObject({
+    await expect(
+      persistence.hydrate('user-1:workspace-2', {
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+      }),
+    ).resolves.toMatchObject({
       records: [{ fragments: { display: { data: { title: 'Other scope' } } } }],
     });
   });
@@ -68,19 +82,62 @@ describe('createMemoryProjectionPersistence', () => {
     await persistence.commit(scope, { indexes: [], records: [datedRecord], snapshots: [] });
     await persistence.commit('other', { indexes: [], records: [record('Other')], snapshots: [] });
 
-    const hydrated = await persistence.hydrateScope(scope);
+    const hydrated = await persistence.hydrate(scope, {
+      records: [{ fragments: ['activity'], ids: ['topic-1'], kind: 'topic' }],
+    });
     expect(
       (hydrated.records[0].fragments as typeof datedRecord.fragments).activity?.data.updatedAt,
     ).toEqual(updatedAt);
 
     await persistence.clearScope(scope);
-    await expect(persistence.hydrateScope(scope)).resolves.toEqual({
+    await expect(
+      persistence.hydrate(scope, {
+        records: [{ fragments: ['activity'], ids: ['topic-1'], kind: 'topic' }],
+      }),
+    ).resolves.toEqual({
       indexes: [],
       records: [],
       snapshots: [],
     });
-    await expect(persistence.hydrateScope('other')).resolves.toMatchObject({
+    await expect(
+      persistence.hydrate('other', {
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+      }),
+    ).resolves.toMatchObject({
       records: [{ id: 'topic-1' }],
     });
+  });
+
+  it('merges fragment requirements for repeated requests of the same record', async () => {
+    const persistence = createMemoryProjectionPersistence();
+    const multiFragmentRecord: ProjectionRecord = {
+      fragments: {
+        activity: {
+          data: { updatedAt: new Date('2026-08-11T00:00:00.000Z') },
+          observedAt: 2,
+          source: 'network',
+        },
+        display: { data: { title: 'Initial' }, observedAt: 1, source: 'network' },
+      },
+      id: 'topic-1',
+      kind: 'topic',
+    };
+    await persistence.commit(scope, {
+      indexes: [],
+      records: [multiFragmentRecord],
+      snapshots: [],
+    });
+
+    const hydrated = await persistence.hydrate(scope, {
+      records: [
+        { fragments: ['display'], ids: ['topic-1'], kind: 'topic' },
+        { fragments: ['activity'], ids: ['topic-1'], kind: 'topic' },
+      ],
+    });
+
+    expect(hydrated.records[0].fragments).toHaveProperty('display');
+    expect(hydrated.records[0].fragments).toHaveProperty('activity');
+    expect(hydrated.indexes).toEqual([]);
+    expect(hydrated.snapshots).toEqual([]);
   });
 });

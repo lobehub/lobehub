@@ -51,6 +51,12 @@ describe('ProjectionCacheService', () => {
     const commit: DesktopProjectionCommit = {
       indexes: [
         {
+          data: superjson.stringify({ refs: [{ id: 'agent-1', kind: 'agent' }], signature: {} }),
+          key: 'agent.directory',
+          observedAt: 6,
+          source: 'network',
+        },
+        {
           data: superjson.stringify({ refs: [] }),
           key: 'home.inboxTopics',
           observedAt: 6,
@@ -99,17 +105,29 @@ describe('ProjectionCacheService', () => {
 
     await projectionCache.commit(commit);
 
-    await expect(projectionCache.hydrateScope(scope)).resolves.toEqual({
+    await expect(
+      projectionCache.hydrate({
+        indexes: commit.indexes?.map((item) => item.key),
+        records: commit.records?.map((item) => ({
+          fragments: Object.keys(item.fragments),
+          ids: [item.id],
+          kind: item.kind,
+        })),
+        scope,
+        snapshots: commit.snapshots?.map((item) => item.key),
+      }),
+    ).resolves.toEqual({
       indexes: commit.indexes,
       records: commit.records,
       snapshots: commit.snapshots,
+      timing: { databaseReadMs: expect.any(Number) },
     });
     await expect(projectionCache.listCollections()).resolves.toEqual(
       expect.arrayContaining([
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.agent },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.brief },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.chatGroup },
-        { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.homeIndexes },
+        { entryCount: 2, name: DESKTOP_PROJECTION_CACHE_TABLES.homeIndexes },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.homeSnapshots },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.task },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.topic },
@@ -123,6 +141,87 @@ describe('ProjectionCacheService', () => {
     }>(entry.value);
     expect(inspected.scope).toBe(scope);
     expect(inspected.value.fragments.activity.data.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('hydrates only a declared View Contract and resolves Task route identifiers', async () => {
+    const scope = 'user-1:personal';
+    await projectionCache.commit({
+      indexes: [
+        {
+          data: superjson.stringify({ refs: [{ id: 'topic-1', kind: 'topic' }] }),
+          key: 'home.inboxTopics',
+          observedAt: 5,
+          source: 'network',
+        },
+        {
+          data: superjson.stringify({ refs: [{ id: 'agent-1', kind: 'agent' }] }),
+          key: 'agent.directory',
+          observedAt: 5,
+          source: 'network',
+        },
+      ],
+      records: [
+        {
+          fragments: {
+            display: fragment({ title: 'Requested' }, 2),
+            status: fragment({ status: 'running' }, 3),
+          },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+        {
+          fragments: { display: fragment({ title: 'Not requested' }, 2) },
+          id: 'topic-2',
+          kind: 'topic',
+        },
+        {
+          fragments: {
+            detail: fragment({ id: 'task-db-1', instruction: 'Cached detail' }, 4),
+            identity: fragment({ identifier: 'T-1' }, 4),
+          },
+          id: 'task-db-1',
+          kind: 'task',
+        },
+      ],
+      scope,
+      snapshots: [
+        {
+          data: superjson.stringify({ pairs: [{ hint: 'Hint', welcome: 'Welcome' }] }),
+          key: 'home.dailyBrief',
+          observedAt: 6,
+          source: 'network',
+        },
+      ],
+    });
+
+    const hydrated = await projectionCache.hydrate({
+      indexes: ['home.inboxTopics'],
+      records: [
+        { fragments: ['display'], ids: ['topic-1'], kind: 'topic' },
+        { fragments: ['detail', 'identity'], ids: ['T-1'], kind: 'task' },
+      ],
+      scope,
+    });
+
+    expect(hydrated.indexes).toHaveLength(1);
+    expect(hydrated.timing?.databaseReadMs).toBeGreaterThanOrEqual(0);
+    expect(hydrated.indexes[0].key).toBe('home.inboxTopics');
+    expect(hydrated.snapshots).toEqual([]);
+    expect(hydrated.records).toEqual([
+      {
+        fragments: {
+          detail: fragment({ id: 'task-db-1', instruction: 'Cached detail' }, 4),
+          identity: fragment({ identifier: 'T-1' }, 4),
+        },
+        id: 'task-db-1',
+        kind: 'task',
+      },
+      {
+        fragments: { display: fragment({ title: 'Requested' }, 2) },
+        id: 'topic-1',
+        kind: 'topic',
+      },
+    ]);
   });
 
   it('rejects unknown Fragment columns before starting the durable transaction', async () => {
@@ -139,10 +238,16 @@ describe('ProjectionCacheService', () => {
       }),
     ).rejects.toThrow('Unsupported topic fragment: unknown');
 
-    await expect(projectionCache.hydrateScope('user-1:personal')).resolves.toEqual({
+    await expect(
+      projectionCache.hydrate({
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+        scope: 'user-1:personal',
+      }),
+    ).resolves.toEqual({
       indexes: [],
       records: [],
       snapshots: [],
+      timing: { databaseReadMs: expect.any(Number) },
     });
   });
 
@@ -176,12 +281,23 @@ describe('ProjectionCacheService', () => {
 
     await projectionCache.clearScope('scope-1');
 
-    await expect(projectionCache.hydrateScope('scope-1')).resolves.toEqual({
+    await expect(
+      projectionCache.hydrate({
+        records: [{ fragments: ['identity'], ids: ['agent-1'], kind: 'agent' }],
+        scope: 'scope-1',
+      }),
+    ).resolves.toEqual({
       indexes: [],
       records: [],
       snapshots: [],
+      timing: { databaseReadMs: expect.any(Number) },
     });
-    await expect(projectionCache.hydrateScope('scope-2')).resolves.toMatchObject({
+    await expect(
+      projectionCache.hydrate({
+        records: [{ fragments: ['identity'], ids: ['agent-1'], kind: 'agent' }],
+        scope: 'scope-2',
+      }),
+    ).resolves.toMatchObject({
       records: [{ id: 'agent-1' }],
     });
   });

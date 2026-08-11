@@ -14,7 +14,12 @@ import type {
 } from '@lobechat/types';
 import superjson from 'superjson';
 
+import { isAgentIndex } from '../modules/agent/validators';
+import { isBriefIndex } from '../modules/brief/validators';
+import { isChatIndex } from '../modules/chat/validators';
+import { isChatGroupIndex } from '../modules/chatGroup/validators';
 import { isHomeIndex, isHomeSnapshot } from '../modules/home/validators';
+import { isTaskIndex } from '../modules/task/validators';
 import { isProjectionRecord } from '../records/validators';
 import type { HydratedProjection, MaterializedProjectionCommit } from './types';
 
@@ -89,7 +94,14 @@ const decodeIndex = (index: DesktopProjectionIndex): ProjectionIndex | undefined
       observedAt: index.observedAt,
       source: index.source,
     };
-    return isHomeIndex(candidate) ? candidate : undefined;
+    return isAgentIndex(candidate) ||
+      isBriefIndex(candidate) ||
+      isChatGroupIndex(candidate) ||
+      isChatIndex(candidate) ||
+      isHomeIndex(candidate) ||
+      isTaskIndex(candidate)
+      ? candidate
+      : undefined;
   } catch {
     return undefined;
   }

@@ -1,12 +1,16 @@
 import type { DesktopProjectionCommit } from '@lobechat/electron-client-ipc';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ProjectionHydrationRequest } from '@lobechat/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { projectionBootSpanNames } from '@/libs/bootMetrics/spanNames';
+import { bootTiming } from '@/libs/bootTiming';
 
 import { createElectronProjectionPersistence } from './electronAdapter';
 
 const mocks = vi.hoisted(() => ({
   clearScope: vi.fn(),
   commit: vi.fn(),
-  hydrateScope: vi.fn(),
+  hydrate: vi.fn(),
 }));
 
 vi.mock('@/utils/electron/ipc', () => ({
@@ -35,9 +39,14 @@ const materializedCommit = {
 describe('createElectronProjectionPersistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    bootTiming._reset();
     mocks.clearScope.mockResolvedValue(undefined);
     mocks.commit.mockResolvedValue(undefined);
-    mocks.hydrateScope.mockResolvedValue({ indexes: [], records: [], snapshots: [] });
+    mocks.hydrate.mockResolvedValue({ indexes: [], records: [], snapshots: [] });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('uses the dedicated entity-cache IPC and preserves structured fragment values', async () => {
@@ -48,16 +57,20 @@ describe('createElectronProjectionPersistence', () => {
     expect(payload.scope).toBe(scope);
     expect(payload.records?.[0]).toMatchObject({ id: 'topic-1', kind: 'topic' });
 
-    mocks.hydrateScope.mockResolvedValue({
+    mocks.hydrate.mockResolvedValue({
       indexes: [],
       records: payload.records,
       snapshots: [],
     });
-    const hydrated = await persistence.hydrateScope(scope);
+    const request: ProjectionHydrationRequest = {
+      records: [{ fragments: ['activity'], ids: ['topic-1'], kind: 'topic' }],
+    };
+    const hydrated = await persistence.hydrate(scope, request);
     expect(hydrated.records[0]).toEqual(materializedCommit.records[0]);
     const hydratedTopic = hydrated.records[0];
     if (hydratedTopic.kind !== 'topic') throw new Error('Expected a Topic Projection');
     expect(hydratedTopic.fragments.activity?.data.updatedAt).toBeInstanceOf(Date);
+    expect(mocks.hydrate).toHaveBeenCalledWith({ ...request, scope });
 
     await persistence.clearScope(scope);
     expect(mocks.clearScope).toHaveBeenCalledWith({ scope });
@@ -90,5 +103,31 @@ describe('createElectronProjectionPersistence', () => {
     releaseFirst();
     await Promise.all([first, second]);
     expect(mocks.commit).toHaveBeenCalledTimes(2);
+  });
+
+  it('measures IPC, main-process database read, and renderer decode separately', async () => {
+    vi.spyOn(performance, 'now')
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(130)
+      .mockReturnValueOnce(132)
+      .mockReturnValueOnce(182)
+      .mockReturnValueOnce(184)
+      .mockReturnValueOnce(190);
+    mocks.hydrate.mockResolvedValue({
+      indexes: [],
+      records: [],
+      snapshots: [],
+      timing: { databaseReadMs: 18 },
+    });
+    const persistence = createElectronProjectionPersistence();
+
+    await persistence.hydrate(scope, { indexes: ['home.sidebar'] });
+
+    expect(bootTiming.snapshot().spans).toEqual([
+      { durMs: 30, name: projectionBootSpanNames.queueWait, startMs: 100 },
+      { durMs: 50, name: projectionBootSpanNames.ipcRoundtrip, startMs: 132 },
+      { durMs: 18, name: projectionBootSpanNames.databaseRead, startMs: 164 },
+      { durMs: 6, name: projectionBootSpanNames.decode, startMs: 184 },
+    ]);
   });
 });

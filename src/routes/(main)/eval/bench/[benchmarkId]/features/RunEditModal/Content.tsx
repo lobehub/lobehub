@@ -7,14 +7,14 @@ import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
-import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FC, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { agentService } from '@/services/agent';
+import { useAgentDirectory } from '@/projection';
 import { useEvalStore } from '@/store/eval';
 
 const MAX_TIMEOUT_MINUTES = 240;
@@ -67,25 +67,14 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const [form] = Form.useForm();
   const kValue = Form.useWatch('k', form) ?? 1;
 
-  const [agents, setAgents] = useState<AgentOption[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-
   const canChangeConfig = run?.status === 'idle';
   const isFinished = run?.status === 'completed';
+  const { data: agents = [], isLoading: loadingAgents } = useAgentDirectory(canChangeConfig);
 
   const currentDataset = useMemo(
     () => datasetList.find((ds) => ds.id === run?.datasetId),
     [datasetList, run?.datasetId],
   );
-
-  useEffect(() => {
-    if (!canChangeConfig) return;
-    setLoadingAgents(true);
-    agentService
-      .queryAgents()
-      .then((list) => setAgents(list as AgentOption[]))
-      .finally(() => setLoadingAgents(false));
-  }, [canChangeConfig]);
 
   useEffect(() => {
     if (run) {

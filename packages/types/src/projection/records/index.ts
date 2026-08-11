@@ -19,5 +19,23 @@ export type TaskProjection = ProjectionRecordBase<'task', TaskProjectionFragment
 export type BriefProjection = ProjectionRecordBase<'brief', BriefProjectionFragments>;
 
 export type ProjectionKind = 'agent' | 'brief' | 'chatGroup' | 'task' | 'topic';
+export interface ProjectionFragmentMap {
+  agent: AgentProjectionFragments;
+  brief: BriefProjectionFragments;
+  chatGroup: ChatGroupProjectionFragments;
+  task: TaskProjectionFragments;
+  topic: TopicProjectionFragments;
+}
+export type ProjectionFragmentName<K extends ProjectionKind> = Extract<
+  keyof ProjectionFragmentMap[K],
+  string
+>;
+export interface ProjectionRecordMap {
+  agent: AgentProjection;
+  brief: BriefProjection;
+  chatGroup: ChatGroupProjection;
+  task: TaskProjection;
+  topic: TopicProjection;
+}
 export type ProjectionRecord =
   AgentProjection | BriefProjection | ChatGroupProjection | TaskProjection | TopicProjection;

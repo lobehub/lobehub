@@ -1,10 +1,24 @@
-import type { CreateTaskGoalInput, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type {
+  CreateTaskGoalInput,
+  ProjectionSource,
+  TaskDetailData,
+  TaskDetailSubtask,
+} from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  findTaskRecordByIdentity,
+  getProjectionStoreState,
+  selectTaskDetail,
+  taskDetailViewContract,
+  useProjectionViewHydration,
+} from '@/projection';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
@@ -142,10 +156,24 @@ export class TaskDetailSliceActionImpl {
       throw new Error('No task identifier provided and no current task context.');
     }
 
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const result = await taskService.getDetail(resolvedId);
     const detail = result.data;
 
-    if (!detail) {
+    if (detail) {
+      getProjectionStoreState().commitTaskDetail(scope, detail, 'network', observedAt);
+    } else {
+      getProjectionStoreState().deleteTaskProjection(scope, resolvedId, observedAt);
+    }
+
+    const projectionScope = getProjectionStoreState().scopes[scope];
+    const record = findTaskRecordByIdentity(
+      projectionScope,
+      detail ? (detail.id ?? detail.identifier) : resolvedId,
+    );
+    const canonical = selectTaskDetail(record);
+    if (record?.tombstoneAt || !canonical) {
       // Mark the *resolved* not-found so the read side can tell it apart from a
       // network / 500 rejection (which propagates from `taskService.getDetail`
       // above with an HTTP status). Without this tag both would render the same
@@ -157,27 +185,27 @@ export class TaskDetailSliceActionImpl {
 
     this.internal_dispatchTaskDetail(
       {
-        id: detail.identifier,
+        id: canonical.identifier,
         type: 'setTaskDetail',
-        value: detail,
+        value: canonical,
       },
-      { instructionSource: 'external' },
+      { commitProjection: false, instructionSource: 'external' },
     );
 
     // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
     // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
-    if (resolvedId !== detail.identifier) {
+    if (resolvedId !== canonical.identifier) {
       this.internal_dispatchTaskDetail(
         {
           id: resolvedId,
           type: 'setTaskDetail',
-          value: detail,
+          value: canonical,
         },
-        { instructionSource: 'external' },
+        { commitProjection: false, instructionSource: 'external' },
       );
     }
 
-    return detail;
+    return canonical;
   };
 
   createTask = async (params: {
@@ -421,6 +449,8 @@ export class TaskDetailSliceActionImpl {
       return hasInFlightActivity(detail);
     });
 
+    useProjectionViewHydration(taskDetailViewContract, { id: taskId ?? '' }, Boolean(taskId));
+
     return useClientDataSWR(
       taskId ? taskKeys.detail(taskId) : null,
       async ([, id]: [string, string]) => this.fetchTaskDetail(id),
@@ -443,7 +473,12 @@ export class TaskDetailSliceActionImpl {
 
   internal_dispatchTaskDetail = (
     payload: TaskDetailDispatch,
-    options?: { instructionSource?: 'external' },
+    options?: {
+      commitProjection?: boolean;
+      instructionSource?: 'external';
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
   ): void => {
     const state = this.#get();
     const currentMap = state.taskDetailMap;
@@ -475,6 +510,7 @@ export class TaskDetailSliceActionImpl {
         false,
         `internal_dispatchTaskDetail/${payload.type}`,
       );
+      this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
       return;
     }
 
@@ -486,10 +522,39 @@ export class TaskDetailSliceActionImpl {
         false,
         `internal_dispatchTaskDetail/${payload.type}`,
       );
+      this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
       return;
     }
 
     this.#set({ taskDetailMap: nextMap }, false, `internal_dispatchTaskDetail/${payload.type}`);
+    this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
+  };
+
+  #commitTaskDetailChanges = (
+    previous: Record<string, TaskDetailData>,
+    next: Record<string, TaskDetailData>,
+    payload: TaskDetailDispatch,
+    options?: {
+      commitProjection?: boolean;
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
+    if (options?.commitProjection === false) return;
+    const scope = getCacheScope();
+    const observedAt = options?.observedAt ?? nextProjectionObservedAt();
+    if (payload.type === 'deleteTaskDetail') {
+      getProjectionStoreState().deleteTaskProjection(scope, payload.id, observedAt);
+    }
+    for (const [id, detail] of Object.entries(next)) {
+      if (detail === previous[id]) continue;
+      getProjectionStoreState().commitTaskDetail(
+        scope,
+        { ...detail, id: detail.id ?? id },
+        options?.source ?? 'mutation',
+        observedAt,
+      );
+    }
   };
 
   internal_refreshTaskDetail = async (id: string): Promise<void> => {

@@ -4,6 +4,7 @@ import type {
   DesktopProjectionCommit,
   DesktopProjectionFragment,
   DesktopProjectionHydration,
+  DesktopProjectionHydrationRequest,
   DesktopProjectionIndex,
   DesktopProjectionKind,
   DesktopProjectionRecord,
@@ -11,7 +12,8 @@ import type {
   DesktopProjectionSource,
 } from '@lobechat/electron-client-ipc';
 import { DESKTOP_PROJECTION_CACHE_TABLES } from '@lobechat/electron-client-ipc';
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import type { AnySQLiteColumn, AnySQLiteTable } from 'drizzle-orm/sqlite-core';
 import superjson from 'superjson';
 
 import {
@@ -29,28 +31,68 @@ import { ServiceModule } from './index';
 import LocalDatabaseService from './LocalDatabaseSrv';
 
 const SOURCES = new Set<DesktopProjectionSource>(['mutation', 'network', 'realtime']);
-const HOME_INDEX_KEYS = new Set([
+const STATIC_INDEX_KEYS = new Set([
+  'agent.available',
+  'agent.directory',
+  'chatGroup.list',
   'home.inboxTopics',
   'home.recentTopics',
   'home.sidebar',
   'home.tasks',
   'home.unresolvedBriefs',
 ]);
+const INDEX_PREFIXES = [
+  'agent.search:',
+  'brief.news:',
+  'chat.agentViewTopics:',
+  'chat.sidebarTopics:',
+  'task.groupList:',
+  'task.list:',
+];
+const isIndexKey = (key: string): boolean =>
+  STATIC_INDEX_KEYS.has(key) || INDEX_PREFIXES.some((prefix) => key.startsWith(prefix));
 const HOME_SNAPSHOT_KEYS = new Set(['home.dailyBrief']);
 const FRAGMENTS: Record<DesktopProjectionKind, ReadonlySet<string>> = {
-  agent: new Set(['access', 'identity', 'profile', 'routing', 'runtime']),
+  agent: new Set([
+    'access',
+    'configuration',
+    'identity',
+    'knowledge',
+    'lifecycle',
+    'profile',
+    'routing',
+    'runtime',
+  ]),
   brief: new Set(['actions', 'content', 'readState', 'relations', 'resolution']),
-  chatGroup: new Set(['access', 'identity']),
-  task: new Set(['assignment', 'description', 'display', 'identity', 'lifecycle']),
+  chatGroup: new Set(['access', 'configuration', 'identity', 'lifecycle', 'membership']),
+  task: new Set([
+    'assignment',
+    'description',
+    'detail',
+    'display',
+    'identity',
+    'lifecycle',
+    'participants',
+    'row',
+  ]),
   topic: new Set([
     'activity',
+    'analytics',
+    'completion',
     'creation',
+    'details',
     'display',
+    'generation',
+    'marking',
     'navigation',
+    'ordering',
+    'ownership',
     'preview',
     'routing',
     'runTiming',
     'status',
+    'summary',
+    'triggerInfo',
   ]),
 };
 
@@ -94,8 +136,7 @@ const assertCommit = (commit: DesktopProjectionCommit): void => {
   }
 
   for (const index of commit.indexes ?? []) {
-    if (!HOME_INDEX_KEYS.has(index.key))
-      throw new Error(`Unsupported Projection index: ${index.key}`);
+    if (!isIndexKey(index.key)) throw new Error(`Unsupported Projection index: ${index.key}`);
     assertObservation(index, index.key);
   }
 
@@ -104,6 +145,30 @@ const assertCommit = (commit: DesktopProjectionCommit): void => {
       throw new Error(`Unsupported Projection snapshot: ${snapshot.key}`);
     }
     assertObservation(snapshot, snapshot.key);
+  }
+};
+
+const assertHydrationRequest = (request: DesktopProjectionHydrationRequest): void => {
+  if (!request.scope) throw new Error('Projection cache scope is required');
+  for (const key of request.indexes ?? []) {
+    if (!isIndexKey(key)) throw new Error(`Unsupported Projection index: ${key}`);
+  }
+  for (const key of request.snapshots ?? []) {
+    if (!HOME_SNAPSHOT_KEYS.has(key)) {
+      throw new Error(`Unsupported Projection snapshot: ${key}`);
+    }
+  }
+  for (const record of request.records ?? []) {
+    const allowedFragments = FRAGMENTS[record.kind];
+    if (!allowedFragments) throw new Error(`Unsupported Projection kind: ${record.kind}`);
+    if (record.ids.some((id) => !id)) {
+      throw new Error(`Projection ${record.kind} hydration contains an empty entity id`);
+    }
+    for (const fragment of record.fragments) {
+      if (!allowedFragments.has(fragment)) {
+        throw new Error(`Unsupported ${record.kind} fragment: ${fragment}`);
+      }
+    }
   }
 };
 
@@ -126,7 +191,10 @@ const entityValues = (scope: string, record: DesktopProjectionRecord) => ({
 
 const agentValues = (scope: string, record: DesktopProjectionRecord) => {
   const access = fragmentValues(record.fragments.access);
+  const configuration = fragmentValues(record.fragments.configuration);
   const identity = fragmentValues(record.fragments.identity);
+  const knowledge = fragmentValues(record.fragments.knowledge);
+  const lifecycle = fragmentValues(record.fragments.lifecycle);
   const profile = fragmentValues(record.fragments.profile);
   const routing = fragmentValues(record.fragments.routing);
   const runtime = fragmentValues(record.fragments.runtime);
@@ -136,9 +204,18 @@ const agentValues = (scope: string, record: DesktopProjectionRecord) => {
     accessData: access.data,
     accessObservedAt: access.observedAt,
     accessSource: access.source,
+    configurationData: configuration.data,
+    configurationObservedAt: configuration.observedAt,
+    configurationSource: configuration.source,
     identityData: identity.data,
     identityObservedAt: identity.observedAt,
     identitySource: identity.source,
+    knowledgeData: knowledge.data,
+    knowledgeObservedAt: knowledge.observedAt,
+    knowledgeSource: knowledge.source,
+    lifecycleData: lifecycle.data,
+    lifecycleObservedAt: lifecycle.observedAt,
+    lifecycleSource: lifecycle.source,
     profileData: profile.data,
     profileObservedAt: profile.observedAt,
     profileSource: profile.source,
@@ -153,43 +230,85 @@ const agentValues = (scope: string, record: DesktopProjectionRecord) => {
 
 const chatGroupValues = (scope: string, record: DesktopProjectionRecord) => {
   const access = fragmentValues(record.fragments.access);
+  const configuration = fragmentValues(record.fragments.configuration);
   const identity = fragmentValues(record.fragments.identity);
+  const lifecycle = fragmentValues(record.fragments.lifecycle);
+  const membership = fragmentValues(record.fragments.membership);
 
   return {
     ...entityValues(scope, record),
     accessData: access.data,
     accessObservedAt: access.observedAt,
     accessSource: access.source,
+    configurationData: configuration.data,
+    configurationObservedAt: configuration.observedAt,
+    configurationSource: configuration.source,
     identityData: identity.data,
     identityObservedAt: identity.observedAt,
     identitySource: identity.source,
+    lifecycleData: lifecycle.data,
+    lifecycleObservedAt: lifecycle.observedAt,
+    lifecycleSource: lifecycle.source,
+    membershipData: membership.data,
+    membershipObservedAt: membership.observedAt,
+    membershipSource: membership.source,
   };
 };
 
 const topicValues = (scope: string, record: DesktopProjectionRecord) => {
   const activity = fragmentValues(record.fragments.activity);
+  const analytics = fragmentValues(record.fragments.analytics);
+  const completion = fragmentValues(record.fragments.completion);
   const creation = fragmentValues(record.fragments.creation);
+  const details = fragmentValues(record.fragments.details);
   const display = fragmentValues(record.fragments.display);
+  const generation = fragmentValues(record.fragments.generation);
+  const marking = fragmentValues(record.fragments.marking);
   const navigation = fragmentValues(record.fragments.navigation);
+  const ordering = fragmentValues(record.fragments.ordering);
+  const ownership = fragmentValues(record.fragments.ownership);
   const preview = fragmentValues(record.fragments.preview);
   const routing = fragmentValues(record.fragments.routing);
   const runTiming = fragmentValues(record.fragments.runTiming);
   const status = fragmentValues(record.fragments.status);
+  const summary = fragmentValues(record.fragments.summary);
+  const triggerInfo = fragmentValues(record.fragments.triggerInfo);
 
   return {
     ...entityValues(scope, record),
     activityData: activity.data,
     activityObservedAt: activity.observedAt,
     activitySource: activity.source,
+    analyticsData: analytics.data,
+    analyticsObservedAt: analytics.observedAt,
+    analyticsSource: analytics.source,
+    completionData: completion.data,
+    completionObservedAt: completion.observedAt,
+    completionSource: completion.source,
     creationData: creation.data,
     creationObservedAt: creation.observedAt,
     creationSource: creation.source,
+    detailsData: details.data,
+    detailsObservedAt: details.observedAt,
+    detailsSource: details.source,
     displayData: display.data,
     displayObservedAt: display.observedAt,
     displaySource: display.source,
+    generationData: generation.data,
+    generationObservedAt: generation.observedAt,
+    generationSource: generation.source,
+    markingData: marking.data,
+    markingObservedAt: marking.observedAt,
+    markingSource: marking.source,
     navigationData: navigation.data,
     navigationObservedAt: navigation.observedAt,
     navigationSource: navigation.source,
+    orderingData: ordering.data,
+    orderingObservedAt: ordering.observedAt,
+    orderingSource: ordering.source,
+    ownershipData: ownership.data,
+    ownershipObservedAt: ownership.observedAt,
+    ownershipSource: ownership.source,
     previewData: preview.data,
     previewObservedAt: preview.observedAt,
     previewSource: preview.source,
@@ -202,15 +321,24 @@ const topicValues = (scope: string, record: DesktopProjectionRecord) => {
     statusData: status.data,
     statusObservedAt: status.observedAt,
     statusSource: status.source,
+    summaryData: summary.data,
+    summaryObservedAt: summary.observedAt,
+    summarySource: summary.source,
+    triggerInfoData: triggerInfo.data,
+    triggerInfoObservedAt: triggerInfo.observedAt,
+    triggerInfoSource: triggerInfo.source,
   };
 };
 
 const taskValues = (scope: string, record: DesktopProjectionRecord) => {
   const assignment = fragmentValues(record.fragments.assignment);
   const description = fragmentValues(record.fragments.description);
+  const detail = fragmentValues(record.fragments.detail);
   const display = fragmentValues(record.fragments.display);
   const identity = fragmentValues(record.fragments.identity);
   const lifecycle = fragmentValues(record.fragments.lifecycle);
+  const participants = fragmentValues(record.fragments.participants);
+  const row = fragmentValues(record.fragments.row);
 
   return {
     ...entityValues(scope, record),
@@ -220,6 +348,9 @@ const taskValues = (scope: string, record: DesktopProjectionRecord) => {
     descriptionData: description.data,
     descriptionObservedAt: description.observedAt,
     descriptionSource: description.source,
+    detailData: detail.data,
+    detailObservedAt: detail.observedAt,
+    detailSource: detail.source,
     displayData: display.data,
     displayObservedAt: display.observedAt,
     displaySource: display.source,
@@ -229,6 +360,12 @@ const taskValues = (scope: string, record: DesktopProjectionRecord) => {
     lifecycleData: lifecycle.data,
     lifecycleObservedAt: lifecycle.observedAt,
     lifecycleSource: lifecycle.source,
+    participantsData: participants.data,
+    participantsObservedAt: participants.observedAt,
+    participantsSource: participants.source,
+    rowData: row.data,
+    rowObservedAt: row.observedAt,
+    rowSource: row.source,
   };
 };
 
@@ -278,7 +415,13 @@ const compactFragments = (
 const readAgent = (row: typeof projectionAgents.$inferSelect): DesktopProjectionRecord => ({
   fragments: compactFragments([
     ['access', readFragment(row.accessData, row.accessObservedAt, row.accessSource)],
+    [
+      'configuration',
+      readFragment(row.configurationData, row.configurationObservedAt, row.configurationSource),
+    ],
     ['identity', readFragment(row.identityData, row.identityObservedAt, row.identitySource)],
+    ['knowledge', readFragment(row.knowledgeData, row.knowledgeObservedAt, row.knowledgeSource)],
+    ['lifecycle', readFragment(row.lifecycleData, row.lifecycleObservedAt, row.lifecycleSource)],
     ['profile', readFragment(row.profileData, row.profileObservedAt, row.profileSource)],
     ['routing', readFragment(row.routingData, row.routingObservedAt, row.routingSource)],
     ['runtime', readFragment(row.runtimeData, row.runtimeObservedAt, row.runtimeSource)],
@@ -291,7 +434,16 @@ const readAgent = (row: typeof projectionAgents.$inferSelect): DesktopProjection
 const readChatGroup = (row: typeof projectionChatGroups.$inferSelect): DesktopProjectionRecord => ({
   fragments: compactFragments([
     ['access', readFragment(row.accessData, row.accessObservedAt, row.accessSource)],
+    [
+      'configuration',
+      readFragment(row.configurationData, row.configurationObservedAt, row.configurationSource),
+    ],
     ['identity', readFragment(row.identityData, row.identityObservedAt, row.identitySource)],
+    ['lifecycle', readFragment(row.lifecycleData, row.lifecycleObservedAt, row.lifecycleSource)],
+    [
+      'membership',
+      readFragment(row.membershipData, row.membershipObservedAt, row.membershipSource),
+    ],
   ]),
   id: row.entityId,
   kind: 'chatGroup',
@@ -301,16 +453,34 @@ const readChatGroup = (row: typeof projectionChatGroups.$inferSelect): DesktopPr
 const readTopic = (row: typeof projectionTopics.$inferSelect): DesktopProjectionRecord => ({
   fragments: compactFragments([
     ['activity', readFragment(row.activityData, row.activityObservedAt, row.activitySource)],
+    ['analytics', readFragment(row.analyticsData, row.analyticsObservedAt, row.analyticsSource)],
+    [
+      'completion',
+      readFragment(row.completionData, row.completionObservedAt, row.completionSource),
+    ],
     ['creation', readFragment(row.creationData, row.creationObservedAt, row.creationSource)],
+    ['details', readFragment(row.detailsData, row.detailsObservedAt, row.detailsSource)],
     ['display', readFragment(row.displayData, row.displayObservedAt, row.displaySource)],
+    [
+      'generation',
+      readFragment(row.generationData, row.generationObservedAt, row.generationSource),
+    ],
+    ['marking', readFragment(row.markingData, row.markingObservedAt, row.markingSource)],
     [
       'navigation',
       readFragment(row.navigationData, row.navigationObservedAt, row.navigationSource),
     ],
+    ['ordering', readFragment(row.orderingData, row.orderingObservedAt, row.orderingSource)],
+    ['ownership', readFragment(row.ownershipData, row.ownershipObservedAt, row.ownershipSource)],
     ['preview', readFragment(row.previewData, row.previewObservedAt, row.previewSource)],
     ['routing', readFragment(row.routingData, row.routingObservedAt, row.routingSource)],
     ['runTiming', readFragment(row.runTimingData, row.runTimingObservedAt, row.runTimingSource)],
     ['status', readFragment(row.statusData, row.statusObservedAt, row.statusSource)],
+    ['summary', readFragment(row.summaryData, row.summaryObservedAt, row.summarySource)],
+    [
+      'triggerInfo',
+      readFragment(row.triggerInfoData, row.triggerInfoObservedAt, row.triggerInfoSource),
+    ],
   ]),
   id: row.entityId,
   kind: 'topic',
@@ -327,9 +497,15 @@ const readTask = (row: typeof projectionTasks.$inferSelect): DesktopProjectionRe
       'description',
       readFragment(row.descriptionData, row.descriptionObservedAt, row.descriptionSource),
     ],
+    ['detail', readFragment(row.detailData, row.detailObservedAt, row.detailSource)],
     ['display', readFragment(row.displayData, row.displayObservedAt, row.displaySource)],
     ['identity', readFragment(row.identityData, row.identityObservedAt, row.identitySource)],
     ['lifecycle', readFragment(row.lifecycleData, row.lifecycleObservedAt, row.lifecycleSource)],
+    [
+      'participants',
+      readFragment(row.participantsData, row.participantsObservedAt, row.participantsSource),
+    ],
+    ['row', readFragment(row.rowData, row.rowObservedAt, row.rowSource)],
   ]),
   id: row.entityId,
   kind: 'task',
@@ -351,6 +527,34 @@ const readBrief = (row: typeof projectionBriefs.$inferSelect): DesktopProjection
   kind: 'brief',
   ...(row.tombstoneAt === null ? {} : { tombstoneAt: row.tombstoneAt }),
 });
+
+const selectRecordFragments = (
+  record: DesktopProjectionRecord,
+  requested: ReadonlySet<string>,
+): DesktopProjectionRecord => ({
+  ...record,
+  fragments: Object.fromEntries(
+    Object.entries(record.fragments).filter(([name]) => requested.has(name)),
+  ),
+});
+
+const requestedFragmentsForRecord = (
+  kind: DesktopProjectionKind,
+  record: DesktopProjectionRecord,
+  requests: Map<string, Set<string>>,
+): ReadonlySet<string> => {
+  const direct = requests.get(record.id);
+  if (direct || kind !== 'task') return direct ?? new Set();
+
+  const identity = record.fragments.identity;
+  if (!identity) return new Set();
+  try {
+    const { identifier } = superjson.parse<{ identifier?: unknown }>(identity.data);
+    return typeof identifier === 'string' ? (requests.get(identifier) ?? new Set()) : new Set();
+  } catch {
+    return new Set();
+  }
+};
 
 const inspectRecord = (scope: string, record: DesktopProjectionRecord): string =>
   superjson.stringify({
@@ -501,99 +705,115 @@ export default class ProjectionCacheService extends ServiceModule {
     );
   }
 
-  async hydrateScope(scope: string): Promise<DesktopProjectionHydration> {
+  async hydrate(request: DesktopProjectionHydrationRequest): Promise<DesktopProjectionHydration> {
+    assertHydrationRequest(request);
     const database = this.runtime.db;
-    const agentRows = await database
-      .select()
-      .from(projectionAgents)
-      .where(
-        and(
-          eq(projectionAgents.scope, scope),
-          eq(projectionAgents.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionAgents.entityId));
-    const briefRows = await database
-      .select()
-      .from(projectionBriefs)
-      .where(
-        and(
-          eq(projectionBriefs.scope, scope),
-          eq(projectionBriefs.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionBriefs.entityId));
-    const chatGroupRows = await database
-      .select()
-      .from(projectionChatGroups)
-      .where(
-        and(
-          eq(projectionChatGroups.scope, scope),
-          eq(projectionChatGroups.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionChatGroups.entityId));
-    const taskRows = await database
-      .select()
-      .from(projectionTasks)
-      .where(
-        and(
-          eq(projectionTasks.scope, scope),
-          eq(projectionTasks.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionTasks.entityId));
-    const topicRows = await database
-      .select()
-      .from(projectionTopics)
-      .where(
-        and(
-          eq(projectionTopics.scope, scope),
-          eq(projectionTopics.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionTopics.entityId));
-    const indexRows = await database
-      .select()
-      .from(projectionHomeIndexes)
-      .where(
-        and(
-          eq(projectionHomeIndexes.scope, scope),
-          eq(projectionHomeIndexes.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionHomeIndexes.key));
-    const snapshotRows = await database
-      .select()
-      .from(projectionHomeSnapshots)
-      .where(
-        and(
-          eq(projectionHomeSnapshots.scope, scope),
-          eq(projectionHomeSnapshots.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
-        ),
-      )
-      .orderBy(asc(projectionHomeSnapshots.key));
+    const recordsByKind = new Map<DesktopProjectionKind, Map<string, Set<string>>>();
+    for (const record of request.records ?? []) {
+      const byId = recordsByKind.get(record.kind) ?? new Map<string, Set<string>>();
+      for (const id of record.ids) {
+        const fragments = byId.get(id) ?? new Set<string>();
+        for (const fragment of record.fragments) fragments.add(fragment);
+        byId.set(id, fragments);
+      }
+      recordsByKind.set(record.kind, byId);
+    }
 
-    return {
+    const readRequested = async <T>(
+      kind: DesktopProjectionKind,
+      table: AnySQLiteTable & {
+        entityId: AnySQLiteColumn;
+        schemaVersion: AnySQLiteColumn;
+        scope: AnySQLiteColumn;
+      },
+      read: (row: T) => DesktopProjectionRecord,
+      matchIds?: (ids: string[]) => SQL | undefined,
+    ): Promise<DesktopProjectionRecord[]> => {
+      const byId = recordsByKind.get(kind);
+      if (!byId || byId.size === 0) return [];
+      const ids = [...byId.keys()];
+      const rows = (await database
+        .select()
+        .from(table)
+        .where(
+          and(
+            eq(table.scope, request.scope),
+            eq(table.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
+            matchIds?.(ids) ?? inArray(table.entityId, ids),
+          ),
+        )
+        .orderBy(asc(table.entityId))) as T[];
+      return rows.map((row) => {
+        const record = read(row);
+        return selectRecordFragments(record, requestedFragmentsForRecord(kind, record, byId));
+      });
+    };
+
+    const indexKeys = request.indexes ?? [];
+    const snapshotKeys = (request.snapshots ?? []) as 'home.dailyBrief'[];
+    const databaseReadStartedAt = performance.now();
+    const [agentRows, briefRows, chatGroupRows, taskRows, topicRows, indexRows, snapshotRows] =
+      await Promise.all([
+        readRequested('agent', projectionAgents, readAgent),
+        readRequested('brief', projectionBriefs, readBrief),
+        readRequested('chatGroup', projectionChatGroups, readChatGroup),
+        readRequested('task', projectionTasks, readTask, (ids) =>
+          or(
+            inArray(projectionTasks.entityId, ids),
+            inArray(
+              sql<string>`json_extract(${projectionTasks.identityData}, '$.json.identifier')`,
+              ids,
+            ),
+          ),
+        ),
+        readRequested('topic', projectionTopics, readTopic),
+        indexKeys.length === 0
+          ? []
+          : database
+              .select()
+              .from(projectionHomeIndexes)
+              .where(
+                and(
+                  eq(projectionHomeIndexes.scope, request.scope),
+                  eq(projectionHomeIndexes.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
+                  inArray(projectionHomeIndexes.key, indexKeys),
+                ),
+              )
+              .orderBy(asc(projectionHomeIndexes.key)),
+        snapshotKeys.length === 0
+          ? []
+          : database
+              .select()
+              .from(projectionHomeSnapshots)
+              .where(
+                and(
+                  eq(projectionHomeSnapshots.scope, request.scope),
+                  eq(projectionHomeSnapshots.schemaVersion, PROJECTION_CACHE_SCHEMA_VERSION),
+                  inArray(projectionHomeSnapshots.key, snapshotKeys),
+                ),
+              )
+              .orderBy(asc(projectionHomeSnapshots.key)),
+      ]);
+
+    const hydration: DesktopProjectionHydration = {
       indexes: indexRows.map(({ data, key, observedAt, source }) => ({
         data,
         key,
         observedAt,
         source,
       })),
-      records: [
-        ...agentRows.map(readAgent),
-        ...briefRows.map(readBrief),
-        ...chatGroupRows.map(readChatGroup),
-        ...taskRows.map(readTask),
-        ...topicRows.map(readTopic),
-      ],
+      records: [...agentRows, ...briefRows, ...chatGroupRows, ...taskRows, ...topicRows],
       snapshots: snapshotRows.map(({ data, key, observedAt, source }) => ({
         data,
         key,
         observedAt,
         source,
       })),
+    };
+
+    return {
+      ...hydration,
+      timing: { databaseReadMs: performance.now() - databaseReadStartedAt },
     };
   }
 

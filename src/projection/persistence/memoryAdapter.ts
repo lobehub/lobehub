@@ -1,4 +1,9 @@
-import type { ProjectionIndex, ProjectionRecord, ProjectionSnapshot } from '@lobechat/types';
+import type {
+  ProjectionHydrationRequest,
+  ProjectionIndex,
+  ProjectionRecord,
+  ProjectionSnapshot,
+} from '@lobechat/types';
 
 import type {
   HydratedProjection,
@@ -8,6 +13,40 @@ import type {
 
 const emptyHydration = (): HydratedProjection => ({ indexes: [], records: [], snapshots: [] });
 const clone = <T>(value: T): T => structuredClone(value);
+
+const selectHydration = (
+  hydration: HydratedProjection,
+  request: ProjectionHydrationRequest,
+): HydratedProjection => {
+  const indexKeys = new Set<string>(request.indexes ?? []);
+  const snapshotKeys = new Set<string>(request.snapshots ?? []);
+  const requestedRecords = new Map<string, Set<string>>();
+  for (const item of request.records ?? []) {
+    for (const id of item.ids) {
+      const key = `${item.kind}:${id}`;
+      const fragments = requestedRecords.get(key) ?? new Set<string>();
+      for (const fragment of item.fragments) fragments.add(fragment);
+      requestedRecords.set(key, fragments);
+    }
+  }
+
+  return {
+    indexes: hydration.indexes.filter((item) => indexKeys.has(item.key)).map(clone),
+    records: hydration.records.flatMap((record) => {
+      const fragments = requestedRecords.get(`${record.kind}:${record.id}`);
+      if (!fragments) return [];
+      return [
+        clone({
+          ...record,
+          fragments: Object.fromEntries(
+            Object.entries(record.fragments).filter(([name]) => fragments.has(name)),
+          ),
+        } as ProjectionRecord),
+      ];
+    }),
+    snapshots: hydration.snapshots.filter((item) => snapshotKeys.has(item.key)).map(clone),
+  };
+};
 
 /**
  * Web intentionally keeps Projection cache process-local. Network loading is an
@@ -50,6 +89,7 @@ export const createMemoryProjectionPersistence = (): ProjectionPersistence => {
         snapshots: [...snapshots.values()] as ProjectionSnapshot[],
       });
     },
-    hydrateScope: async (scope) => clone(scopes.get(scope) ?? emptyHydration()),
+    hydrate: async (scope, request) =>
+      selectHydration(scopes.get(scope) ?? emptyHydration(), request),
   };
 };

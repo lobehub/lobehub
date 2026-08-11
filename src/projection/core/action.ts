@@ -1,5 +1,7 @@
-import type { ProjectionCommit } from '@lobechat/types';
+import type { ProjectionCommit, ProjectionHydrationRequest } from '@lobechat/types';
 
+import { projectionBootSpanNames } from '@/libs/bootMetrics/spanNames';
+import { bootTiming } from '@/libs/bootTiming';
 import { isAnonymousScope, isScopeTrusted } from '@/libs/swr/useCacheScope';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -12,9 +14,23 @@ import { applyProjectionCommit, materializeProjectionCommit } from './reducer';
 const n = setNamespace('projection');
 const hydrationInFlight = new Map<string, Promise<void>>();
 
+const hydrationRequestKey = (scope: string, request: ProjectionHydrationRequest): string => {
+  const indexes = [...(request.indexes ?? [])].sort();
+  const records = (request.records ?? [])
+    .map(({ fragments, ids, kind }) => ({
+      fragments: [...fragments].sort(),
+      ids: [...ids].sort(),
+      kind,
+    }))
+    .sort((left, right) => left.kind.localeCompare(right.kind));
+  const snapshots = [...(request.snapshots ?? [])].sort();
+  return `${scope}:${JSON.stringify({ indexes, records, snapshots })}`;
+};
+
 type Setter = StoreSetter<ProjectionStore>;
 
 export interface ProjectionCoreAction {
+  hydrateProjection: (scope: string, request: ProjectionHydrationRequest) => Promise<void>;
   internal_commitProjection: (scope: string, commit: ProjectionCommit) => void;
   internal_commitProjectionForDevtools: (scope: string, commit: ProjectionCommit) => Promise<void>;
   prepareProjectionScope: (scope: string) => Promise<void>;
@@ -82,68 +98,57 @@ class ProjectionCoreActionImpl implements ProjectionCoreAction {
     }
   };
 
-  prepareProjectionScope = async (scope: string): Promise<void> => {
-    if (this.#get().scopes[scope]?.hydrationStatus === 'ready') return;
+  hydrateProjection = async (scope: string, request: ProjectionHydrationRequest): Promise<void> => {
+    if (!isScopeTrusted() || isAnonymousScope(scope)) return;
+    if (
+      (request.indexes?.length ?? 0) === 0 &&
+      (request.records?.length ?? 0) === 0 &&
+      (request.snapshots?.length ?? 0) === 0
+    ) {
+      return;
+    }
 
-    const existing = hydrationInFlight.get(scope);
+    const key = hydrationRequestKey(scope, request);
+    const existing = hydrationInFlight.get(key);
     if (existing) return existing;
 
-    const request = (async () => {
-      this.#set(
-        (state) => ({
-          scopes: {
-            ...state.scopes,
-            [scope]: {
-              ...(state.scopes[scope] ?? createEmptyProjectionScope()),
-              hydrationStatus: 'hydrating',
-            },
-          },
-        }),
-        false,
-        n('hydrate/start'),
-      );
-
-      try {
-        const hydrated =
-          !isScopeTrusted() || isAnonymousScope(scope)
-            ? { indexes: [], records: [], snapshots: [] }
-            : await this.#persistence.hydrateScope(scope);
-
-        this.#set(
-          (state) => {
-            const merged = applyProjectionCommit(state.scopes[scope], hydrated);
-            return {
+    const operation = bootTiming
+      .span(projectionBootSpanNames.hydration, async () => {
+        const hydration = await this.#persistence.hydrate(scope, request);
+        bootTiming.spanSync(projectionBootSpanNames.storeInject, () => {
+          this.#set(
+            (state) => ({
               scopes: {
                 ...state.scopes,
-                [scope]: { ...merged, hydrationStatus: 'ready' },
+                [scope]: applyProjectionCommit(state.scopes[scope], hydration),
               },
-            };
-          },
-          false,
-          n('hydrate/success'),
-        );
-      } catch (error) {
-        console.warn('[Projection] Failed to hydrate scope', error);
-        this.#set(
-          (state) => ({
-            scopes: {
-              ...state.scopes,
-              [scope]: {
-                ...(state.scopes[scope] ?? createEmptyProjectionScope()),
-                hydrationStatus: 'ready',
-              },
-            },
-          }),
-          false,
-          n('hydrate/fallback'),
-        );
-      } finally {
-        hydrationInFlight.delete(scope);
-      }
-    })();
+            }),
+            false,
+            n('hydrate/view'),
+          );
+        });
+      })
+      .finally(() => hydrationInFlight.delete(key));
 
-    hydrationInFlight.set(scope, request);
-    return request;
+    hydrationInFlight.set(key, operation);
+    return operation;
+  };
+
+  prepareProjectionScope = async (scope: string): Promise<void> => {
+    if (this.#get().scopes[scope]?.hydrationStatus === 'ready') return;
+    this.#set(
+      (state) => ({
+        scopes: {
+          ...state.scopes,
+          [scope]: {
+            ...(state.scopes[scope] ?? createEmptyProjectionScope()),
+            hydrationStatus: 'ready',
+          },
+        },
+      }),
+      false,
+      n('scope/ready'),
+    );
   };
 }
 

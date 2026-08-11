@@ -14,6 +14,13 @@
       "when": 1786440092073,
       "tag": "0001_marvelous_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786450616830,
+      "tag": "0002_naive_blizzard",
+      "breakpoints": true
     }
   ],
   "version": "7"

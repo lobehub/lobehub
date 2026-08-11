@@ -9,6 +9,7 @@ import type {
   ChatAudioItem,
   ChatImageItem,
   ChatThreadType,
+  ChatTopic,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -34,6 +35,13 @@ import {
 } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+  selectChatTopicListItem,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -153,6 +161,13 @@ export interface SendMessageResult {
 
 type SendMessageServerResponseMeta = SendMessageServerResponse & {
   __isPartialMessages?: boolean;
+};
+
+const toTopicTimestamp = (value: Date | number | string | undefined, fallback: number): number => {
+  if (typeof value === 'number') return value;
+  if (value === undefined) return fallback;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? fallback : timestamp;
 };
 
 interface OptimisticTopicPlaceholder {
@@ -363,10 +378,26 @@ export class ConversationLifecycleActionImpl {
     let agentState = getAgentStoreState();
     let agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
     if (directMentionRoute && !agentConfig) {
+      const scope = getCacheScope();
+      const observedAt = nextProjectionObservedAt();
       const targetAgentConfig = await agentService.getAgentConfigById(agentId);
-      if (!targetAgentConfig) throw new Error(`Mentioned agent not found: ${agentId}`);
-
-      agentState.internal_dispatchAgentMap(agentId, targetAgentConfig);
+      if (targetAgentConfig) {
+        getProjectionStoreState().commitAgentConfig(
+          scope,
+          { ...targetAgentConfig, id: targetAgentConfig.id ?? agentId },
+          'network',
+          observedAt,
+        );
+      } else {
+        getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+      }
+      const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
+      if (record?.tombstoneAt) throw new Error(`Mentioned agent not found: ${agentId}`);
+      const canonical = selectAgentProjection(record);
+      if (!canonical) throw new Error(`Mentioned agent not found: ${agentId}`);
+      agentState.internal_dispatchAgentMap(agentId, canonical, {
+        commitProjection: false,
+      });
       agentState = getAgentStoreState();
       agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
     }
@@ -1000,7 +1031,35 @@ export class ConversationLifecycleActionImpl {
     // lost, no error) — fall back to the server row. A topic this send is
     // about to create has no server row, so the lookup is skipped entirely.
     const existingTopic = await resolveExistingTopicForRun({
-      fetchTopicDetail: (id) => topicService.getTopicDetail(id),
+      fetchTopicDetail: async (id) => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const topic = await topicService.getTopicDetail(id);
+        if (topic) {
+          getProjectionStoreState().commitChatTopicSearchResults(scope, [topic], {
+            observedAt,
+            source: 'network',
+          });
+        } else {
+          getProjectionStoreState().deleteChatTopicProjections(scope, [id], observedAt);
+        }
+        const projectionScope = getProjectionStoreState().scopes[scope];
+        const record = projectionScope?.records.topic[id];
+        if (record?.tombstoneAt) return null;
+        const canonical = projectionScope
+          ? selectChatTopicListItem(projectionScope, id)
+          : undefined;
+        return canonical
+          ? ({
+              ...canonical,
+              createdAt: toTopicTimestamp(canonical.createdAt, topic?.createdAt ?? 0),
+              historySummary: canonical.historySummary ?? undefined,
+              metadata: canonical.metadata ?? undefined,
+              sessionId: canonical.sessionId ?? undefined,
+              updatedAt: toTopicTimestamp(canonical.updatedAt, topic?.updatedAt ?? 0),
+            } satisfies ChatTopic)
+          : topic;
+      },
       isHetero: !!heterogeneousProvider,
       storeTopic:
         operationContext.topicId && !willCreateNewTopic

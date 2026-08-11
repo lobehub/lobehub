@@ -8,6 +8,11 @@ import { useFetchTopics } from './useFetchTopics';
 const mockUseGlobalStore = vi.hoisted(() => vi.fn());
 const mockUseChatStore = vi.hoisted(() => vi.fn());
 const mockUseAgentStore = vi.hoisted(() => vi.fn());
+const mockUseChatTopicsIndex = vi.hoisted(() => vi.fn());
+
+vi.mock('@/projection', () => ({
+  useChatTopicsIndex: mockUseChatTopicsIndex,
+}));
 
 vi.mock('@/store/chat', () => ({
   useChatStore: mockUseChatStore,
@@ -38,6 +43,7 @@ describe('useFetchTopics', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseChatTopicsIndex.mockReturnValue(undefined);
     mockUseFetchTopicsFn.mockReturnValue({ isValidating: false, data: [] });
     mockUseGlobalStore.mockImplementation((selector) => selector({ topicPageSize: 20 }));
     // Default: not inbox agent
@@ -155,5 +161,26 @@ describe('useFetchTopics', () => {
       isInbox: false,
       pageSize: customPageSize,
     });
+  });
+
+  it('derives revalidation readiness from the Projection index, not the request DTO', () => {
+    mockUseChatStore.mockImplementation((selector) =>
+      selector({
+        activeAgentId: 'agent-1',
+        activeGroupId: undefined,
+        useFetchTopics: mockUseFetchTopicsFn,
+      }),
+    );
+    mockUseFetchTopicsFn.mockReturnValue({
+      data: { items: [{ id: 'stale-topic' }], total: 1 },
+      isValidating: true,
+    });
+
+    const missing = renderHook(() => useFetchTopics());
+    expect(missing.result.current.isRevalidating).toBe(false);
+
+    mockUseChatTopicsIndex.mockReturnValue({ key: 'chat.sidebarTopics:agent_agent-1' });
+    const hydrated = renderHook(() => useFetchTopics());
+    expect(hydrated.result.current.isRevalidating).toBe(true);
   });
 });

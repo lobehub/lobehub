@@ -56,6 +56,24 @@ export interface DesktopProjectionHydration {
   indexes: DesktopProjectionIndex[];
   records: DesktopProjectionRecord[];
   snapshots: DesktopProjectionSnapshot[];
+  timing?: DesktopProjectionHydrationTiming;
+}
+
+export interface DesktopProjectionHydrationTiming {
+  /** Main-process SQLite read and row-materialization duration. */
+  databaseReadMs: number;
+}
+
+export interface DesktopProjectionRecordHydrationRequest {
+  fragments: string[];
+  ids: string[];
+  kind: DesktopProjectionKind;
+}
+
+export interface DesktopProjectionHydrationRequest extends DesktopProjectionScope {
+  indexes?: string[];
+  records?: DesktopProjectionRecordHydrationRequest[];
+  snapshots?: string[];
 }
 
 export interface DesktopProjectionScope {

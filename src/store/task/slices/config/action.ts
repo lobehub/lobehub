@@ -1,5 +1,7 @@
 import type { CheckpointConfig, TaskAutomationMode, TaskDetailData } from '@lobechat/types';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
@@ -48,6 +50,12 @@ export class TaskConfigSliceActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  #commitTaskDetailMutation = (id: string): void => {
+    const detail = this.#get().taskDetailMap[id];
+    if (!detail) return;
+    getProjectionStoreState().commitTaskDetail(getCacheScope(), detail, 'mutation');
+  };
 
   // `getState` exposes only the taskDetailMap slice so the engine's patches
   // refer to keys under it — needed for `extractAffectedPaths` to produce
@@ -232,6 +240,7 @@ export class TaskConfigSliceActionImpl {
 
     try {
       await tx.commit();
+      this.#commitTaskDetailMutation(id);
     } catch (error) {
       // engine already rolled the optimistic patches back; just log.
       console.error('[TaskStore] Failed to update automation mode:', error);
@@ -287,6 +296,7 @@ export class TaskConfigSliceActionImpl {
 
     try {
       await tx.commit();
+      this.#commitTaskDetailMutation(id);
     } catch (error) {
       // engine already rolled the optimistic patches back; just log.
       console.error('[TaskStore] Failed to update schedule:', error);

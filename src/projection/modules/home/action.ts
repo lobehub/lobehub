@@ -12,6 +12,8 @@ import type {
 
 import type { StoreSetter } from '@/store/types';
 
+import { nextProjectionObservedAt } from '../../core/ingest';
+import { removeEntityFromProjectionIndex } from '../../records/indexMutations';
 import type { ProjectionStore } from '../../store';
 import {
   type HomeBriefInput,
@@ -28,7 +30,7 @@ type Setter = StoreSetter<ProjectionStore>;
 
 const observation = (
   source: ProjectionSource = 'mutation',
-  observedAt: number = Date.now(),
+  observedAt: number = nextProjectionObservedAt(),
 ): ProjectionObservation => ({ observedAt, source });
 
 const fragment = <T>(data: T, meta: ProjectionObservation): ProjectionFragment<T> => ({
@@ -147,7 +149,7 @@ class HomeProjectionActionImpl implements HomeProjectionAction {
     scope: string,
     id: string,
     resolution: Pick<BriefItem, 'resolvedAction' | 'resolvedAt' | 'resolvedComment'>,
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     const meta = observation('mutation', observedAt);
     const index = this.#get().scopes[scope]?.indexes['home.unresolvedBriefs'];
@@ -170,7 +172,7 @@ class HomeProjectionActionImpl implements HomeProjectionAction {
     scope: string,
     ids: string[],
     resolvedAt: string = new Date().toISOString(),
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     if (ids.length === 0) return;
     const index = this.#get().scopes[scope]?.indexes['home.unresolvedBriefs'];
@@ -199,14 +201,18 @@ class HomeProjectionActionImpl implements HomeProjectionAction {
     });
   };
 
-  deleteBriefProjection = (scope: string, id: string, observedAt: number = Date.now()): void => {
-    const index = this.#get().scopes[scope]?.indexes['home.unresolvedBriefs'];
-    const meta = observation('mutation', observedAt);
+  deleteBriefProjection = (
+    scope: string,
+    id: string,
+    observedAt: number = nextProjectionObservedAt(),
+  ): void => {
+    const indexes = Object.values(this.#get().scopes[scope]?.indexes ?? {}).flatMap((index) => {
+      if (!index) return [];
+      const next = removeEntityFromProjectionIndex(index, 'brief', new Set([id]), observedAt);
+      return next ? [next] : [];
+    });
     this.#get().internal_commitProjection(scope, {
-      indexes:
-        index?.key === 'home.unresolvedBriefs'
-          ? [{ ...index, ...meta, refs: index.refs.filter((ref) => ref.id !== id) }]
-          : undefined,
+      indexes,
       tombstones: [{ id, kind: 'brief', observedAt }],
     });
   };

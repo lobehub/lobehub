@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
 import { topicKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -1083,6 +1085,35 @@ describe('topic action', () => {
     });
   });
   describe('useSearchTopics', () => {
+    it('returns canonical Projection rows instead of a stale request DTO', async () => {
+      const id = 'canonical-search-topic';
+      getProjectionStoreState().commitChatTopicSearchResults(
+        getCacheScope(),
+        [
+          {
+            createdAt: 1,
+            id,
+            title: 'Canonical title',
+            updatedAt: 2,
+          },
+        ],
+        { observedAt: Number.MAX_SAFE_INTEGER, source: 'mutation' },
+      );
+      (topicService.searchTopics as Mock).mockResolvedValue([
+        {
+          createdAt: 1,
+          id,
+          title: 'Stale request title',
+          updatedAt: 2,
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStore().useSearchTopics('canonical', {}));
+
+      await waitFor(() => expect(result.current.data?.[0]?.title).toBe('Canonical title'));
+      expect(result.current.data?.[0]?.title).not.toBe('Stale request title');
+    });
+
     it('should search topics with the given keywords', async () => {
       const keywords = 'search-term';
       const searchResults = [{ id: 'searched-topic-id', title: 'Searched Topic' }];

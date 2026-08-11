@@ -137,4 +137,35 @@ describe('bootTiming', () => {
     expect(snap2.spans).toHaveLength(1);
     expect(snap2.marks['m']).not.toBe(9999);
   });
+
+  it('waitForIdle observes sequential async spans and resolves after the quiet window', async () => {
+    vi.useFakeTimers();
+    let releaseFirst!: () => void;
+    const first = bootTiming.span(
+      'first',
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+    let idle = false;
+    const waiting = bootTiming.waitForIdle({ idleMs: 20, timeoutMs: 1000 }).then(() => {
+      idle = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(idle).toBe(false);
+
+    releaseFirst();
+    await first;
+    const second = bootTiming.span('second', async () => undefined);
+    await second;
+    await vi.advanceTimersByTimeAsync(19);
+    expect(idle).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await waiting;
+    expect(idle).toBe(true);
+    vi.useRealTimers();
+  });
 });

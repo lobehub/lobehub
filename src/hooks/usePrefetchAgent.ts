@@ -3,6 +3,8 @@ import { useCallback } from 'react';
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { augmentKey, mutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
 import { agentService } from '@/services/agent';
 
 /**
@@ -21,9 +23,24 @@ export const usePrefetchAgent = () => {
       agentConfigKeys.config(agentId),
       getActiveWorkspaceId(),
     ) as readonly unknown[];
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const request = agentService.getAgentConfigById(agentId).then((data) => {
+      if (data) {
+        getProjectionStoreState().commitAgentConfig(
+          scope,
+          { ...data, id: data.id ?? agentId },
+          'network',
+          observedAt,
+        );
+      } else {
+        getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+      }
+      return data;
+    });
 
     // Populate the SWR cache without triggering re-renders on consuming hooks
-    mutate(key, agentService.getAgentConfigById(agentId), {
+    mutate(key, request, {
       // Don't revalidate if data already exists
       revalidate: false,
     });

@@ -8,11 +8,14 @@ import { buildAccountProjectionScope, useProjectionStore } from '@/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ensureProjectionLegacyBridge, syncProjectionLegacyStores } from './projectionLegacyBridge';
+
 /**
- * Hydrates the trusted identity scope before the first application surface
- * mounts. Later scope changes prepare their own partition without blanking the
- * running application; every Projection selector remains explicitly scoped, so
- * data from the previous identity can never be selected during that window.
+ * Prepares trusted identity partitions before the first application surface
+ * mounts. Entity data is intentionally not loaded here: each mounted surface
+ * hydrates its bounded View Contract. Later scope changes prepare their own
+ * empty partition without blanking the running application; every Projection
+ * selector remains explicitly scoped, so a previous identity cannot leak.
  */
 const ProjectionHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
@@ -27,8 +30,16 @@ const ProjectionHydrationGate = ({ children }: PropsWithChildren) => {
   const [released, setReleased] = useState(scopesReady);
 
   useEffect(() => {
-    void prepareProjectionScope(scope);
-    if (accountScope !== scope) void prepareProjectionScope(accountScope);
+    ensureProjectionLegacyBridge();
+    syncProjectionLegacyStores(scope);
+    const prepare = async () => {
+      await Promise.all([
+        prepareProjectionScope(scope),
+        ...(accountScope === scope ? [] : [prepareProjectionScope(accountScope)]),
+      ]);
+      syncProjectionLegacyStores(scope);
+    };
+    void prepare();
   }, [accountScope, prepareProjectionScope, scope]);
 
   useEffect(() => {

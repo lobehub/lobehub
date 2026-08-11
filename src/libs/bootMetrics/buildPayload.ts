@@ -1,3 +1,5 @@
+import { projectionBootSpanNames } from './spanNames';
+
 export interface BootMetricSpan {
   durMs: number;
   name: string;
@@ -43,6 +45,7 @@ export const BOOT_SPAN_NAMES: ReadonlySet<string> = new Set([
   'bundle',
   'store-gate',
   'fcp',
+  ...Object.values(projectionBootSpanNames),
 ]);
 
 const isFinitePositive = (n: number) => Number.isFinite(n) && n >= 0;

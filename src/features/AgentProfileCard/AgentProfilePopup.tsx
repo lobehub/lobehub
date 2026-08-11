@@ -15,6 +15,12 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { agentProfileKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  useAgentProjectionState,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
@@ -90,11 +96,28 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
 
-    const { data: fetched, isLoading } = useSWR(
+    const projection = useAgentProjectionState(open && canConfigure ? agentId : undefined);
+    const { isLoading } = useSWR(
       open && canConfigure ? agentProfileKeys.detail(agentId) : null,
-      () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
+      async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const data = await agentService.getAgentConfigById(agentId);
+        if (data) {
+          getProjectionStoreState().commitAgentConfig(
+            scope,
+            { ...data, id: data.id ?? agentId },
+            'network',
+            observedAt,
+          );
+        } else {
+          getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+        }
+        return data as FetchedAgent | null;
+      },
       { revalidateOnFocus: false },
     );
+    const fetched = projection.data as FetchedAgent | undefined;
 
     const merged: Partial<AgentPreview> = {
       avatar: fetched?.avatar ?? agent?.avatar,

@@ -1153,6 +1153,11 @@ export const projectionKeys = {
     'request:entity:home:inboxTopics',
     scope,
   ]),
+  localView: def('request:entity:localView', (scope: string, view: string) => [
+    'request:entity:localView',
+    scope,
+    view,
+  ]),
   recentTopics: def(
     'request:entity:home:recentTopics',
     (scope: string, limit: number, view: 'mine' | 'team') => [

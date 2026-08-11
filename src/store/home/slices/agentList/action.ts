@@ -2,9 +2,15 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys, projectionKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentSearchIndex,
+  useAgentSearchProjectionState,
+} from '@/projection';
 import { homeService } from '@/services/home';
 import { getAgentStoreState } from '@/store/agent';
 import { type HomeStore } from '@/store/home/store';
@@ -96,11 +102,34 @@ export class AgentListActionImpl {
   };
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
-    return useClientDataSWR<SidebarAgentItem[]>(agentConfigKeys.search(keyword), async () => {
-      if (!keyword) return [];
+    const projection = useAgentSearchProjectionState(keyword);
+    const request = useClientDataSWRWithSync<SidebarAgentItem[]>(
+      agentConfigKeys.search(keyword),
+      async () => {
+        if (!keyword) return [];
 
-      return homeService.searchAgents(keyword);
-    });
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const items = await homeService.searchAgents(keyword);
+        getProjectionStoreState().commitAgentSearch(scope, items, { keyword }, observedAt);
+        return items;
+      },
+      {
+        onData: (items) => {
+          const projectionStore = getProjectionStoreState();
+          const scope = getCacheScope();
+          if (!selectAgentSearchIndex(projectionStore.scopes[scope], keyword)) {
+            projectionStore.commitAgentSearch(scope, items, { keyword }, 0);
+          }
+        },
+        syncBeforePaint: true,
+      },
+    );
+
+    return {
+      ...request,
+      data: projection.hasIndex ? projection.data : undefined,
+    } as SWRResponse<SidebarAgentItem[]>;
   };
 }
 

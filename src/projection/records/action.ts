@@ -10,6 +10,7 @@ import type {
 
 import type { StoreSetter } from '@/store/types';
 
+import { nextProjectionObservedAt } from '../core/ingest';
 import type { ProjectionStore } from '../store';
 import { findTaskProjection } from './selectors';
 
@@ -22,7 +23,7 @@ interface ProjectionObservation {
 
 const observation = (
   source: ProjectionSource = 'mutation',
-  observedAt: number = Date.now(),
+  observedAt: number = nextProjectionObservedAt(),
 ): ProjectionObservation => ({ observedAt, source });
 
 const fragment = <T>(data: T, meta: ProjectionObservation): ProjectionFragment<T> => ({
@@ -35,6 +36,12 @@ export interface ProjectionRecordAction {
     scope: string,
     id: string,
     readAt: Date | string | null,
+    observedAt?: number,
+  ) => void;
+  updateTaskProjectionName: (
+    scope: string,
+    identity: string,
+    name: string,
     observedAt?: number,
   ) => void;
   updateTaskProjectionStatus: (
@@ -73,7 +80,7 @@ class ProjectionRecordActionImpl implements ProjectionRecordAction {
     id: string,
     status: ChatTopicStatus,
     source: ProjectionSource = 'mutation',
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     const meta = observation(source, observedAt);
     const record: TopicProjection = {
@@ -88,7 +95,7 @@ class ProjectionRecordActionImpl implements ProjectionRecordAction {
     scope: string,
     id: string,
     title: string,
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     const meta = observation('mutation', observedAt);
     const record: TopicProjection = {
@@ -104,7 +111,7 @@ class ProjectionRecordActionImpl implements ProjectionRecordAction {
     identity: string,
     status: TaskStatus,
     source: ProjectionSource = 'mutation',
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     const current = findTaskProjection(this.#get().scopes[scope], identity);
     if (!current) return;
@@ -117,11 +124,28 @@ class ProjectionRecordActionImpl implements ProjectionRecordAction {
     this.#get().internal_commitProjection(scope, { records: [record] });
   };
 
+  updateTaskProjectionName = (
+    scope: string,
+    identity: string,
+    name: string,
+    observedAt: number = nextProjectionObservedAt(),
+  ): void => {
+    const current = findTaskProjection(this.#get().scopes[scope], identity);
+    if (!current) return;
+    const meta = observation('mutation', observedAt);
+    const record: TaskProjection = {
+      fragments: { display: fragment({ name }, meta) },
+      id: current.id,
+      kind: 'task',
+    };
+    this.#get().internal_commitProjection(scope, { records: [record] });
+  };
+
   updateBriefReadState = (
     scope: string,
     id: string,
     readAt: BriefItem['readAt'],
-    observedAt: number = Date.now(),
+    observedAt: number = nextProjectionObservedAt(),
   ): void => {
     const meta = observation('mutation', observedAt);
     this.#get().internal_commitProjection(scope, {

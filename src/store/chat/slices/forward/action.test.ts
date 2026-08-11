@@ -1,6 +1,8 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
 import { useAgentStore } from '@/store/agent';
@@ -13,6 +15,7 @@ const message = (role: UIChatMessage['role'], content: string): UIChatMessage =>
 describe('ChatForwardAction', () => {
   beforeEach(() => {
     useAgentStore.setState({ agentMap: {} });
+    useProjectionStore.setState({ scopes: {} });
     vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
       async (id) => ({ id }) as never,
     );
@@ -88,6 +91,71 @@ describe('ChatForwardAction', () => {
     expect(result.succeeded).toEqual([]);
     expect(result.failed).toHaveLength(1);
     expect(result.failed[0].agentId).toBe('missing-agent');
+  });
+
+  it('does not overwrite a newer canonical Agent edit with an older network response', async () => {
+    let resolveConfig: (value: { id: string; model: string; title: string }) => void;
+    const configRequest = new Promise<{ id: string; model: string; title: string }>((resolve) => {
+      resolveConfig = resolve;
+    });
+    vi.mocked(agentService.getAgentConfigById).mockReturnValueOnce(configRequest as never);
+    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    const forwarding = action.forwardMessages({
+      header: 'Forwarded',
+      messages: [message('user', 'question')],
+      roleLabel: (role) => role,
+      targets: [{ id: 'agent-a' }],
+    });
+    await vi.waitFor(() => expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-a'));
+
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { id: 'agent-a', model: 'canonical-model', title: 'Edited in DevDock' },
+      'mutation',
+    );
+    resolveConfig!({ id: 'agent-a', model: 'stale-model', title: 'Stale network title' });
+
+    await forwarding;
+
+    expect(useAgentStore.getState().agentMap['agent-a']).toMatchObject({
+      model: 'canonical-model',
+      title: 'Edited in DevDock',
+    });
+  });
+
+  it('does not treat a stale not-found response as newer than an Agent edit', async () => {
+    let resolveConfig: (value: null) => void;
+    const configRequest = new Promise<null>((resolve) => {
+      resolveConfig = resolve;
+    });
+    vi.mocked(agentService.getAgentConfigById).mockReturnValueOnce(configRequest as never);
+    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    const forwarding = action.forwardMessages({
+      header: 'Forwarded',
+      messages: [message('user', 'question')],
+      roleLabel: (role) => role,
+      targets: [{ id: 'agent-a' }],
+    });
+    await vi.waitFor(() => expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-a'));
+
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { id: 'agent-a', model: 'canonical-model', title: 'Edited in DevDock' },
+      'mutation',
+    );
+    resolveConfig!(null);
+
+    const result = await forwarding;
+
+    expect(result.succeeded).toEqual([{ agentId: 'agent-a', topicId: 'new-topic' }]);
+    expect(useAgentStore.getState().agentMap['agent-a']).toMatchObject({
+      model: 'canonical-model',
+      title: 'Edited in DevDock',
+    });
   });
 
   it('loads topic messages before forwarding them', async () => {

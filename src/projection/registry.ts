@@ -7,7 +7,7 @@ let activePersistence = createMemoryProjectionPersistence();
 export const projectionRepository: ProjectionPersistence = {
   clearScope: (scope) => activePersistence.clearScope(scope),
   commit: (scope, commit) => activePersistence.commit(scope, commit),
-  hydrateScope: (scope) => activePersistence.hydrateScope(scope),
+  hydrate: (scope, request) => activePersistence.hydrate(scope, request),
 };
 
 export const registerProjectionPersistence = (persistence: ProjectionPersistence): (() => void) => {

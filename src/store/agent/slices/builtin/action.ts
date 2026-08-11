@@ -4,6 +4,12 @@ import { type PartialDeep } from 'type-fest';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectAgentProjection,
+} from '@/projection';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
@@ -37,9 +43,23 @@ export class BuiltinAgentSliceActionImpl {
   }
 
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     const data = await agentService.getBuiltinAgent(slug);
     if (data?.id) {
-      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+      getProjectionStoreState().commitAgentConfig(
+        scope,
+        { ...data, id: data.id },
+        'network',
+        observedAt,
+      );
+      const record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
+      if (record?.tombstoneAt) return;
+      const canonical = selectAgentProjection(record);
+      if (!canonical) return;
+      this.#get().internal_dispatchAgentMap(data.id, canonical as PartialDeep<LobeAgentConfig>, {
+        commitProjection: false,
+      });
       // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
       // so callers can rely on this as a real "ensure" path instead of just a
       // post-init refresh.
@@ -58,17 +78,41 @@ export class BuiltinAgentSliceActionImpl {
     return useOnlyFetchOnceSWR(
       context?.isLogin === false ? null : builtinAgentKeys.init(slug),
       async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         const data = await agentService.getBuiltinAgent(slug);
+        if (data?.id) {
+          getProjectionStoreState().commitAgentConfig(
+            scope,
+            { ...data, id: data.id },
+            'network',
+            observedAt,
+          );
+        }
 
         return data as AgentItem | null;
       },
       {
         onSuccess: (data: AgentItem | null) => {
           if (data?.id) {
+            const scope = getCacheScope();
+            const projectionStore = getProjectionStoreState();
+            let record = projectionStore.scopes[scope]?.records.agent[data.id];
+            if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+              projectionStore.commitAgentConfig(scope, { ...data, id: data.id }, 'network', 0);
+              record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
+            }
+            if (record?.tombstoneAt) return;
             // Update builtinAgentIdMap with the agent id
             // Update agentMap with the agent config
             // AgentItem contains all fields needed for LobeAgentConfig
-            this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+            const canonical = selectAgentProjection(record);
+            if (!canonical) return;
+            this.#get().internal_dispatchAgentMap(
+              data.id,
+              canonical as PartialDeep<LobeAgentConfig>,
+              { commitProjection: false },
+            );
 
             this.#set(
               { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },

@@ -151,7 +151,12 @@ export const materializeProjectionCommit = (
   const indexKeys = new Set((commit.indexes ?? []).map((index) => index.key));
   const indexes = Array.from(indexKeys)
     .map((key) => scopeState.indexes[key])
-    .filter((index): index is ProjectionIndex => Boolean(index));
+    .filter((index): index is ProjectionIndex => Boolean(index))
+    .map((index) => {
+      const { persistRefLimit, refs } = index as { persistRefLimit?: number; refs?: unknown[] };
+      if (!persistRefLimit || !Array.isArray(refs) || refs.length <= persistRefLimit) return index;
+      return { ...index, refs: refs.slice(0, persistRefLimit) } as ProjectionIndex;
+    });
 
   const snapshotKeys = new Set((commit.snapshots ?? []).map((snapshot) => snapshot.key));
   const snapshots = Array.from(snapshotKeys)

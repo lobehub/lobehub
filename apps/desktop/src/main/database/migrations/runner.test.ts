@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { localDatabaseMigrations } from './index';
 import { runLocalDatabaseMigrations } from './runner';
 import type { LocalDatabaseMigration } from './types';
 
@@ -111,5 +112,79 @@ describe('runLocalDatabaseMigrations', () => {
     expect(() => runLocalDatabaseMigrations(database!, migrations)).toThrow(
       'migration history is not contiguous',
     );
+  });
+
+  it('preserves existing Projection entity fragments when expanding the typed tables', () => {
+    database = new DatabaseSync(':memory:');
+    const previousMigrations = localDatabaseMigrations.slice(0, -1);
+    expect(previousMigrations.length).toBeGreaterThan(0);
+
+    runLocalDatabaseMigrations(database, previousMigrations);
+
+    const seeds = [
+      ['projection_agents', 'agent-1', 'identity'],
+      ['projection_briefs', 'brief-1', 'content'],
+      ['projection_chat_groups', 'group-1', 'identity'],
+      ['projection_tasks', 'task-1', 'display'],
+      ['projection_topics', 'topic-1', 'display'],
+    ] as const;
+
+    for (const [table, entityId, fragment] of seeds) {
+      database
+        .prepare(
+          `INSERT INTO ${table} (storage_id, entity_id, scope, ${fragment}_data, ${fragment}_observed_at, ${fragment}_source) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          `user-1:personal:${entityId}`,
+          entityId,
+          'user-1:personal',
+          JSON.stringify({ title: `${entityId} before upgrade` }),
+          100,
+          'network',
+        );
+    }
+
+    runLocalDatabaseMigrations(database, localDatabaseMigrations);
+
+    expect(
+      database
+        .prepare('SELECT entity_id, identity_data, configuration_data FROM projection_agents')
+        .get(),
+    ).toEqual({
+      configuration_data: null,
+      entity_id: 'agent-1',
+      identity_data: JSON.stringify({ title: 'agent-1 before upgrade' }),
+    });
+    expect(database.prepare('SELECT entity_id, content_data FROM projection_briefs').get()).toEqual(
+      {
+        content_data: JSON.stringify({ title: 'brief-1 before upgrade' }),
+        entity_id: 'brief-1',
+      },
+    );
+    expect(
+      database
+        .prepare('SELECT entity_id, identity_data, configuration_data FROM projection_chat_groups')
+        .get(),
+    ).toEqual({
+      configuration_data: null,
+      entity_id: 'group-1',
+      identity_data: JSON.stringify({ title: 'group-1 before upgrade' }),
+    });
+    expect(
+      database.prepare('SELECT entity_id, display_data, detail_data FROM projection_tasks').get(),
+    ).toEqual({
+      detail_data: null,
+      display_data: JSON.stringify({ title: 'task-1 before upgrade' }),
+      entity_id: 'task-1',
+    });
+    expect(
+      database
+        .prepare('SELECT entity_id, display_data, analytics_data FROM projection_topics')
+        .get(),
+    ).toEqual({
+      analytics_data: null,
+      display_data: JSON.stringify({ title: 'topic-1 before upgrade' }),
+      entity_id: 'topic-1',
+    });
   });
 });

@@ -1,5 +1,6 @@
 import type {
   ProjectionCommit,
+  ProjectionHydrationRequest,
   ProjectionIndex,
   ProjectionRecord,
   ProjectionSnapshot,
@@ -19,5 +20,5 @@ export interface HydratedProjection {
 export interface ProjectionPersistence {
   clearScope: (scope: string) => Promise<void>;
   commit: (scope: string, commit: MaterializedProjectionCommit) => Promise<void>;
-  hydrateScope: (scope: string) => Promise<HydratedProjection>;
+  hydrate: (scope: string, request: ProjectionHydrationRequest) => Promise<HydratedProjection>;
 }

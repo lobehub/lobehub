@@ -78,7 +78,7 @@ const fragment = <T>(data: T, observation: ProjectionObservation): ProjectionFra
   ...observation,
 });
 
-const sidebarRecord = (
+export const sidebarItemProjectionRecord = (
   item: SidebarAgentItem,
   observation: ProjectionObservation,
 ): AgentProjection | ChatGroupProjection => {
@@ -155,7 +155,7 @@ export const ingestHomeSidebar = (
   for (const item of buckets.flat()) unique.set(`${item.type}:${item.id}`, item);
 
   return {
-    records: Array.from(unique.values(), (item) => sidebarRecord(item, observation)),
+    records: Array.from(unique.values(), (item) => sidebarItemProjectionRecord(item, observation)),
     indexes: [
       {
         groups: response.groups.map(sidebarGroup),
@@ -179,12 +179,9 @@ const recentTopicRecord = (
     activity: fragment({ updatedAt: item.updatedAt }, observation),
     display: fragment({ title: item.title }, observation),
     navigation: fragment({ routePath: item.routePath }, observation),
+    ownership: fragment({ userId: item.userId }, observation),
     preview: fragment(
-      {
-        description: item.description,
-        lastAssistantMessage: item.lastAssistantMessage,
-        userId: item.userId,
-      },
+      { description: item.description, lastAssistantMessage: item.lastAssistantMessage },
       observation,
     ),
     routing: fragment({ agentId: item.agentId }, observation),
@@ -225,17 +222,12 @@ const inboxTopicRecord = (
     activity: fragment({ updatedAt: item.updatedAt }, observation),
     ...(item.createdAt ? { creation: fragment({ createdAt: item.createdAt }, observation) } : {}),
     display: fragment({ title: item.title }, observation),
-    preview: fragment(
-      {
-        lastAssistantMessage: item.lastAssistantMessage,
-        trigger: item.trigger,
-        userId: item.userId,
-      },
-      observation,
-    ),
+    ownership: fragment({ userId: item.userId }, observation),
+    preview: fragment({ lastAssistantMessage: item.lastAssistantMessage }, observation),
     routing: fragment({ agentId: item.agentId }, observation),
     runTiming: fragment({ runStartedAt: item.runStartedAt }, observation),
     status: fragment({ status: item.status }, observation),
+    triggerInfo: fragment({ trigger: item.trigger }, observation),
   },
   id: item.id,
   kind: 'topic',
@@ -285,7 +277,6 @@ const taskRecord = (item: TaskListItem, observation: ProjectionObservation): Tas
     assignment: fragment(
       {
         assigneeAgentId: item.assigneeAgentId,
-        participants: item.participants,
         visibility: item.visibility,
         workspaceId: item.workspaceId,
       },

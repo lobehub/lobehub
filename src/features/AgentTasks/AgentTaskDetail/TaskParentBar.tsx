@@ -1,10 +1,16 @@
-import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { TaskDetailData } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  useTaskDetailProjection,
+} from '@/projection';
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -32,47 +38,33 @@ const TaskParentBar = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
   const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
-
-  const [fetchedParentAgent, setFetchedParentAgent] = useState<
-    { agentId?: string | null; identifier: string } | undefined
-  >();
-  const [parentSubtasks, setParentSubtasks] = useState<TaskDetailSubtask[]>([]);
-  const [parentStatus, setParentStatus] = useState<TaskStatus>('backlog');
+  const parentDetail = useTaskDetailProjection(parent?.identifier);
+  const parentSubtasks = parentDetail?.subtasks ?? [];
+  const parentStatus = toTaskStatus(parentDetail?.status);
 
   useEffect(() => {
-    let isActive = true;
-    setFetchedParentAgent(undefined);
-    setParentSubtasks([]);
-    setParentStatus('backlog');
     if (!parent?.identifier) return;
 
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     taskService
       .getDetail(parent.identifier)
       .then((res) => {
-        if (!isActive) return;
-        const detail = res.data as TaskDetailData;
-        setFetchedParentAgent({ agentId: detail.agentId, identifier: parent.identifier });
-        setParentStatus(toTaskStatus(detail.status));
-        setParentSubtasks(detail.subtasks ?? []);
+        const detail = res.data as TaskDetailData | null;
+        if (detail) {
+          getProjectionStoreState().commitTaskDetail(scope, detail, 'network', observedAt);
+        } else {
+          getProjectionStoreState().deleteTaskProjection(scope, parent.identifier, observedAt);
+        }
       })
       .catch((err) => {
-        if (!isActive) return;
         console.error('[TaskParentBar] Failed to load parent subtasks', err);
       });
-
-    return () => {
-      isActive = false;
-    };
   }, [parent?.identifier]);
 
   if (!parent) return null;
 
-  const parentAgentId =
-    parent.agentId === undefined
-      ? fetchedParentAgent?.identifier === parent.identifier
-        ? fetchedParentAgent.agentId
-        : undefined
-      : parent.agentId;
+  const parentAgentId = parent.agentId === undefined ? parentDetail?.agentId : parent.agentId;
 
   return (
     <Flexbox horizontal align="center" gap={8}>
