@@ -38,8 +38,6 @@ export {
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
-  blindSlicePosition,
-  isBlindControlCheck,
   type PredictReviewParams,
   shouldSurfaceProposal,
   VerifyReviewPredictorService,

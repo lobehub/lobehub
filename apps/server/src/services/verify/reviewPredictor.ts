@@ -1,5 +1,4 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
-import { REVIEW_PREDICTION_BLIND_RATE } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import debug from 'debug';
@@ -43,69 +42,18 @@ export interface PredictReviewParams {
 }
 
 /**
- * Stable 0–1 position for a check result, used to carve out the blind control
- * slice. Deterministic in the id so a check does not flip in and out of the
- * control group across page loads — a reviewer must never see a proposal
- * appear on a check they were already judging cold.
- *
- * FNV-1a rather than anything cryptographic: this only needs even spread and
- * the same answer on the server and (potentially) the client.
- */
-export const blindSlicePosition = (checkResultId: string): number => {
-  let hash = 0x81_1c_9d_c5;
-  for (let index = 0; index < checkResultId.length; index += 1) {
-    hash ^= checkResultId.codePointAt(index)!;
-    hash = Math.imul(hash, 0x01_00_01_93) >>> 0;
-  }
-  // FNV-1a alone avalanches poorly in the HIGH bits, which are exactly the ones
-  // a 0-1 position reads. Measured over 200 ids differing only in their suffix
-  // it reached just 6 of 10 deciles, systematically missing both ends — so a
-  // family of related ids would skew toward or away from the control slice
-  // together. This final xorshift-multiply mix takes it to all 10.
-  // `>>> 0` after every xor: JS bitwise ops yield a SIGNED 32-bit int, so
-  // dropping it lets the top bit turn the result negative and the position
-  // lands outside 0-1 entirely.
-  hash = (hash ^ (hash >>> 16)) >>> 0;
-  hash = Math.imul(hash, 0x25_45_f4_91) >>> 0;
-  hash = (hash ^ (hash >>> 15)) >>> 0;
-  return hash / 0xff_ff_ff_ff;
-};
-
-/**
- * Whether this check falls in the blind control slice (see
- * {@link REVIEW_PREDICTION_BLIND_RATE} — disabled by default).
- *
- * `rate` is a parameter rather than a bare constant read so the behaviour stays
- * testable at any share while the shipped default is 0. Exported on its own
- * because the answer must be identical on the write path (skip predicting) and
- * the read path (hide a prediction written before the rate changed).
- */
-export const isBlindControlCheck = (
-  checkResultId: string,
-  rate: number = REVIEW_PREDICTION_BLIND_RATE,
-): boolean => rate > 0 && blindSlicePosition(checkResultId) < rate;
-
-/**
  * Whether a stored proposal should still be shown to the reviewer.
  *
- * Three independent reasons to withhold one, and each was a real defect when
- * missing:
- *  - the check is in the blind control slice, when one is enabled (a prediction
- *    may exist from before the rate changed);
+ * Both reasons to withhold one were real defects when missing:
  *  - the reviewer already answered this proposal — `not-an-issue` and
  *    `misidentified` deliberately leave the CHECK unjudged, so gating on the
  *    check's verdict alone resurrects a dismissed card on every reload;
  *  - the check itself has been ruled on, so the proposal has nothing left to ask.
  */
 export const shouldSurfaceProposal = (
-  prediction: { adjudication?: string | null; checkResultId: string },
+  prediction: { adjudication?: string | null },
   hasUserReview: boolean,
-  blindRate: number = REVIEW_PREDICTION_BLIND_RATE,
-): boolean => {
-  if (hasUserReview) return false;
-  if (prediction.adjudication) return false;
-  return !isBlindControlCheck(prediction.checkResultId, blindRate);
-};
+): boolean => !hasUserReview && !prediction.adjudication;
 
 /**
  * Produces an automated second opinion on a check the verifier already judged.
@@ -141,17 +89,12 @@ export class VerifyReviewPredictorService {
 
   /**
    * Re-judge one check. Returns null (rather than throwing) whenever the check
-   * cannot be judged — no visual evidence, blind slice, model failure — because
-   * this runs opportunistically behind the reviewer's own work and must never
-   * take a page down with it.
+   * cannot be judged — no visual evidence, model failure — because this runs
+   * opportunistically behind the reviewer's own work and must never take a page
+   * down with it.
    */
   async predict(params: PredictReviewParams) {
     const { checkResultId, modelConfig } = params;
-
-    if (isBlindControlCheck(checkResultId)) {
-      log('predict: %s is in the blind control slice, skipping', checkResultId);
-      return null;
-    }
 
     const result = await this.resultModel.findById(checkResultId);
     if (!result) return null;

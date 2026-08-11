@@ -284,29 +284,6 @@ export const reviewProposalEdits = [
 ] as const;
 export type ReviewProposalEdit = (typeof reviewProposalEdits)[number];
 
-/**
- * Share of checks deliberately shown with NO proposal, so the reviewer judges
- * them cold. **Off by default** — set above 0 only while collecting labels
- * intended for training.
- *
- * What it does and does NOT buy:
- *
- * Missed defects are already measurable without it, because a proposal is only
- * written when the model says `reject`. A check the model passed shows no card,
- * so a human rejecting it is an observable miss on its own.
- *
- * What only a blind slice can measure is whether the labels are still
- * INDEPENDENT of the model — how far a shown proposal moved the reviewer's own
- * judgement. Without some cold-judged population there is no way to estimate
- * that drift, and a model later trained on these labels is partly learning from
- * an earlier version of itself.
- *
- * That guarantee costs real product value (a fifth of reviewers see no help),
- * and it is not needed until a training set is actually being assembled — so it
- * ships disabled, with the mechanism intact.
- */
-export const REVIEW_PREDICTION_BLIND_RATE = 0;
-
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [
   'screenshot',
