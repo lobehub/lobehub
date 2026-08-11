@@ -24,7 +24,7 @@ import type {
   TopicProjection,
 } from '@lobechat/types';
 
-import { taskListProjectionRecord } from '../task/ingestors';
+import { taskListProjectionRecord } from '../task/records';
 
 export interface ProjectionObservation {
   observedAt: number;
