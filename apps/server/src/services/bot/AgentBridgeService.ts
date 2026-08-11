@@ -1582,11 +1582,16 @@ export class AgentBridgeService {
 
           log('executeWithCallback[local]: startup error: %s', extractErrorMessage(error));
 
-          // Stale topic_id FK violation: propagate so handleSubscribedMessage can
-          // clear thread state and retry as a fresh mention. Queue mode does the
-          // same bailout in executeWithHooksQueueMode.
+          // Stale cached topic: propagate so handleSubscribedMessage can clear
+          // thread state and retry as a fresh mention. Queue mode does the same
+          // bailout in executeWithHooksQueueMode — both the FK-violation form
+          // ("Failed query" on topic_id) and the topic-start reservation form
+          // ("Topic not found", a delete race after the pre-flight check).
           const errMsg = error instanceof Error ? error.message : String(error);
-          if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+          if (
+            (errMsg.includes('Failed query') && errMsg.includes('topic_id')) ||
+            errMsg.includes('Topic not found')
+          ) {
             stopGatewayTyping();
             reject(error);
             return;

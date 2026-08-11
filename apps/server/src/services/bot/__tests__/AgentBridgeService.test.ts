@@ -354,6 +354,35 @@ describe('AgentBridgeService', () => {
       const postedBodies = (thread.post as any).mock.calls.map((c: any[]) => c[0]?.markdown ?? '');
       expect(postedBodies.join('\n')).not.toContain('Agent Execution Failed');
     });
+
+    it('retries as a fresh mention on Topic not found in local (non-queue) mode too', async () => {
+      // Same delete race as above, but with the queue runtime disabled the
+      // error surfaces in executeWithCallback's local-mode catch — which used
+      // to swallow anything but the FK-violation form as a startup failure,
+      // leaving the dead topicId in thread state with no retry.
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      // Second call: abort so the local-mode promise resolves instead of
+      // waiting for a completion webhook that never comes in tests.
+      const abortError = new Error('Agent execution aborted');
+      abortError.name = 'AbortError';
+      mockExecAgent
+        .mockRejectedValueOnce(new Error('Topic not found: topic-1'))
+        .mockRejectedValueOnce(abortError);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      // The rethrow must reach handleSubscribedMessage and trigger the
+      // fresh-mention retry (second execAgent call without the dead topicId).
+      expect(mockExecAgent).toHaveBeenCalledTimes(2);
+      expect(mockExecAgent.mock.calls[1][0].appContext?.topicId).toBeUndefined();
+    });
   });
 
   describe('progress message gating by supportsMessageEdit', () => {

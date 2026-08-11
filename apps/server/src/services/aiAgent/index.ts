@@ -1469,9 +1469,17 @@ export class AiAgentService {
 
     // Explicit per-conversation mode switch (IM `/mode` command). Applied last
     // so it wins over the agent's own chatConfig, workspace member-mode
-    // overrides, and sub-agent chatConfig patches alike.
+    // overrides, and sub-agent chatConfig patches alike. `enableAgentMode` is
+    // kept in sync because the context engine gates agentic-only injectors
+    // (skill discovery, agent documents, agent-management context) on it, not
+    // on `toolMode` — otherwise `/mode chat` would keep agentic context while
+    // `/mode agent` on a chat-default agent would run tools without it.
     if (toolModeOverride) {
-      agentConfig.chatConfig = { ...agentConfig.chatConfig, toolMode: toolModeOverride };
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableAgentMode: toolModeOverride === 'agent',
+        toolMode: toolModeOverride,
+      };
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
