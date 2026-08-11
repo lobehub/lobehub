@@ -599,6 +599,12 @@ export class TaskModel {
 
   async list(options?: {
     assigneeAgentId?: string;
+    /**
+     * Narrow to tasks that run on their own — a cron schedule or a heartbeat.
+     * `automationMode` is the source of truth for that (the pattern/interval
+     * columns can hold leftovers from a mode the task no longer uses).
+     */
+    automated?: boolean;
     hasGoal?: boolean;
     limit?: number;
     offset?: number;
@@ -617,6 +623,7 @@ export class TaskModel {
       priorities,
       parentTaskId,
       assigneeAgentId,
+      automated,
       hasGoal,
       visibility,
       limit = 50,
@@ -628,6 +635,8 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (automated === true) conditions.push(isNotNull(tasks.automationMode));
+    if (automated === false) conditions.push(isNull(tasks.automationMode));
     if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
     if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) conditions.push(eq(tasks.visibility, visibility));

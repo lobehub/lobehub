@@ -287,6 +287,19 @@ export const taskKeys = {
     ],
   ),
   /**
+   * Home's automated-task roll-up: the tasks that fire on a schedule or a
+   * heartbeat. Kept off `list` because it is a different result set entirely —
+   * sharing the key would let one section's fetch overwrite the other's.
+   */
+  scheduledList: def(
+    'task:scheduledList',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:scheduledList',
+      agentKey,
+      visibility,
+    ],
+  ),
+  /**
    * AgentSidebar task panel. Lives in the `task:` domain (not a `sidebar:`
    * one) so the tiered cache provider persists it to IndexedDB and the second
    * open renders from cache instead of a skeleton.

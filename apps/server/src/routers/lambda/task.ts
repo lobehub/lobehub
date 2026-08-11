@@ -105,6 +105,9 @@ const updateSchema = z.object({
 
 const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
+  // true → only tasks driven by a schedule or heartbeat, false → only manual
+  // ones. Omitted leaves the set unnarrowed.
+  automated: z.boolean().optional(),
   hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),

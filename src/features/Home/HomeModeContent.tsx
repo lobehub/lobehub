@@ -10,7 +10,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
+import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import HomeInbox from '@/features/HomeInbox';
@@ -31,6 +33,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -38,6 +41,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
 import Time from './components/Time';
+import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
 import { resolveHomeChatContentState } from './homeChatContentState';
 import type { HomeMode } from './types';
@@ -238,6 +242,33 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
   ),
 );
 
+/**
+ * A task in the home list carries the same right-hand read as the Tasks page:
+ * how it is triggered, who runs it, when it last moved. Without that a task row
+ * is indistinguishable from a topic row, and the section reads as another feed
+ * rather than as work with an owner.
+ */
+const TaskRow = memo<{ task: TaskListItem }>(({ task }) => (
+  <Row
+    description={task.description || task.identifier}
+    href={taskDetailPath(task.identifier)}
+    icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
+    title={task.name || task.identifier}
+    trailing={
+      <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+        <TaskTriggerTag
+          automationMode={task.automationMode}
+          heartbeatInterval={task.heartbeatInterval}
+          schedulePattern={task.schedulePattern}
+          scheduleTimezone={task.scheduleTimezone}
+        />
+        <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
+        <Time date={task.updatedAt || task.createdAt} />
+      </Flexbox>
+    }
+  />
+));
+
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
@@ -254,21 +285,52 @@ const TaskContent = memo(() => {
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
-        <LoadingRows avatarSize={16} />
+        <LoadingRows withTime avatarSize={16} />
       ) : tasks.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
           {tasks.slice(0, taskCount).map((task) => (
-            <Row
-              description={task.description || task.identifier}
-              href={taskDetailPath(task.identifier)}
-              icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
-              key={task.identifier}
-              title={task.name || task.identifier}
-            />
+            <TaskRow key={task.identifier} task={task} />
           ))}
         </Flexbox>
+      )}
+    </GroupBlock>
+  );
+});
+
+/**
+ * The tasks that run without anyone pressing anything. They are the part of the
+ * task set that keeps moving while you are away, so they get their own block
+ * under the recent ones instead of being scattered through a list ordered by
+ * when they last happened to tick.
+ */
+const ScheduledTaskContent = memo(() => {
+  const { t } = useTranslation('home');
+  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
+  const scheduledSWR = useFetchScheduledTaskList();
+  const scheduled = useTaskStore(taskListSelectors.scheduledTaskList);
+  const scheduledTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
+  const scheduledInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
+  const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
+
+  // Automation is opt-in and most accounts have none. An empty block would be a
+  // permanent reminder of a feature you did not ask for, so the section only
+  // exists once something is actually scheduled — the loading skeleton aside,
+  // which has to hold its place until the answer arrives.
+  if (scheduledInit && scheduled.length === 0) return null;
+  if (scheduledSWR.error && !scheduledInit) return null;
+
+  return (
+    <GroupBlock count={scheduledTotal || undefined} title={t('dashboard.scheduledTask.title')}>
+      {scheduledInit ? (
+        <Flexbox gap={4}>
+          {scheduled.slice(0, taskCount).map((task) => (
+            <TaskRow key={task.identifier} task={task} />
+          ))}
+        </Flexbox>
+      ) : (
+        <LoadingRows withTime avatarSize={16} />
       )}
     </GroupBlock>
   );
@@ -283,6 +345,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const recentsHidden = hiddenWidgets.includes('recents');
   const tasksHidden = hiddenWidgets.includes('tasks');
+  const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
   const cacheScope = useCacheScope();
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
@@ -406,7 +469,17 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    if (!inlineRail) return tasksHidden ? null : <TaskContent />;
+    // Recent tasks answer "what is going on"; the scheduled block answers "what
+    // will happen without me" — the second question only makes sense after the
+    // first, so it always sits underneath.
+    const taskBlocks = (
+      <>
+        {!tasksHidden && <TaskContent />}
+        {!scheduledTasksHidden && <ScheduledTaskContent />}
+      </>
+    );
+
+    if (!inlineRail) return <Flexbox gap={32}>{taskBlocks}</Flexbox>;
 
     // The rail's sections sit beside task mode while it is open, so a folded
     // rail must not take them away here either: in flight and what happened
@@ -415,7 +488,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     return (
       <Flexbox gap={32}>
         <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
-        {!tasksHidden && <TaskContent />}
+        {taskBlocks}
         <Recommendations variant={'main'} />
       </Flexbox>
     );

@@ -98,6 +98,10 @@ const CustomizeModalContent = memo(() => {
               <Switch
                 aria-label={t(`dashboard.customize.widget.${key}`)}
                 checked={!isWidgetHidden(key)}
+                // The scheduled block is the second half of the task overview,
+                // so there is nothing for it to switch on while the first half
+                // is off.
+                disabled={key === 'scheduledTasks' && isWidgetHidden('tasks')}
                 onChange={() => toggleWidget(key)}
               />
             </SettingRow>

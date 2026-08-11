@@ -4,6 +4,7 @@ import {
   HOME_PRESETS,
   HOME_WIDGET_KEYS,
   isHomeMinimalLayout,
+  isHomeWidgetHidden,
   isWidgetSectionVisible,
   resolveHomePreset,
 } from './config';
@@ -95,6 +96,33 @@ describe('isHomeMinimalLayout', () => {
         showPortrait: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('isHomeWidgetHidden', () => {
+  // Everything a minimal-preset page stored before the scheduled block existed.
+  const LEGACY_ALL_HIDDEN = HOME_WIDGET_KEYS.filter((key) => key !== 'scheduledTasks');
+
+  it('hides the scheduled block along with the task list it belongs to', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['tasks'])).toBe(true);
+  });
+
+  it('lets the scheduled block be switched off on its own', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['scheduledTasks'])).toBe(true);
+    expect(isHomeWidgetHidden('tasks', ['scheduledTasks'])).toBe(false);
+  });
+
+  it('leaves both on when neither is listed', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['news'])).toBe(false);
+  });
+
+  it('does not grow a section back onto a page saved before the key existed', () => {
+    expect(resolveHomePreset({ hiddenWidgets: LEGACY_ALL_HIDDEN, showPortrait: false })).toBe(
+      'minimal',
+    );
+    expect(isHomeMinimalLayout({ hiddenWidgets: LEGACY_ALL_HIDDEN, showPortrait: false })).toBe(
+      true,
+    );
   });
 });
 

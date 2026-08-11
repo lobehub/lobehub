@@ -11,7 +11,12 @@ export const HOME_INBOX_WIDGET_KEYS = [
   'suggestions',
 ] as const;
 
-export const HOME_WIDGET_KEYS = [...HOME_INBOX_WIDGET_KEYS, 'recents', 'tasks'] as const;
+export const HOME_WIDGET_KEYS = [
+  ...HOME_INBOX_WIDGET_KEYS,
+  'recents',
+  'tasks',
+  'scheduledTasks',
+] as const;
 
 export type HomeInboxWidgetKey = (typeof HOME_INBOX_WIDGET_KEYS)[number];
 export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
@@ -54,8 +59,19 @@ interface HomeVisibilityState {
   showPortrait: boolean;
 }
 
+/**
+ * `scheduledTasks` rides on `tasks`: the two are one task overview split in
+ * half, so switching the main list off must not leave the other half standing
+ * under a different heading. It also keeps settings saved before this key
+ * existed meaningful — a stored "minimal" selection lists every widget that
+ * existed then, and without this fallback those pages would silently grow a
+ * section back and drop out of their preset.
+ */
+export const isHomeWidgetHidden = (key: HomeWidgetKey, hiddenWidgets: string[]): boolean =>
+  hiddenWidgets.includes(key) || (key === 'scheduledTasks' && hiddenWidgets.includes('tasks'));
+
 const hiddenKeySet = ({ hiddenWidgets }: HomeVisibilityState): Set<string> =>
-  new Set(HOME_WIDGET_KEYS.filter((key) => hiddenWidgets.includes(key)));
+  new Set(HOME_WIDGET_KEYS.filter((key) => isHomeWidgetHidden(key, hiddenWidgets)));
 
 export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | undefined => {
   const hidden = hiddenKeySet(state);
@@ -75,7 +91,8 @@ export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | u
 // dashboard: the greeting and the composer become one centered block. Derived
 // from the switches rather than stored, so it can never disagree with them.
 export const isHomeMinimalLayout = (state: HomeVisibilityState): boolean =>
-  !state.showPortrait && HOME_WIDGET_KEYS.every((key) => state.hiddenWidgets.includes(key));
+  !state.showPortrait &&
+  HOME_WIDGET_KEYS.every((key) => isHomeWidgetHidden(key, state.hiddenWidgets));
 
 // An error banner covers every widget whose content it reports on, not just the
 // one it is named after: the topic feed powers unread AND running, and the briefs

@@ -341,6 +341,32 @@ describe('TaskModel', () => {
       expect(total).toBe(5);
       expect(tasks).toHaveLength(2);
     });
+
+    it('should split automated tasks from manual ones', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const cron = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Nightly digest',
+        schedulePattern: '0 9 * * *',
+      });
+      const heartbeat = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        instruction: 'Keep watching',
+      });
+      const manual = await model.create({ instruction: 'One-off' });
+
+      const automated = await model.list({ automated: true });
+      expect(automated.total).toBe(2);
+      expect(automated.tasks.map((t) => t.id).sort()).toEqual([cron.id, heartbeat.id].sort());
+
+      const notAutomated = await model.list({ automated: false });
+      expect(notAutomated.total).toBe(1);
+      expect(notAutomated.tasks[0].id).toBe(manual.id);
+
+      // Omitting the flag must not narrow anything.
+      expect((await model.list()).total).toBe(3);
+    });
   });
 
   describe('groupList', () => {
