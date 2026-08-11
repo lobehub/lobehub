@@ -23,7 +23,7 @@ import {
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Fragment, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
@@ -48,11 +48,10 @@ import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import { enterGoalMode } from '../../InputEditor/goalMode';
+import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
-import GoalModeChip from '../GoalModeChip';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -289,7 +288,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
-  const { t: tVerify } = useTranslation('verify');
   const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
@@ -328,7 +326,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
-  const setGoalMode = useChatInputStore((s) => s.setGoalMode);
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
@@ -707,17 +704,19 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         ]
       : uploadItems;
 
-    // Goal creation has one canonical entry: put the composer in /goal mode.
-    // The agent then plans and calls lobe-goal.createGoal, regardless of whether
-    // this conversation already has a topic.
+    // Goal creation has one canonical entry: drop the goal chip at the head of
+    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
       ? [
           {
             icon: TargetIcon,
             key: 'set-topic-goal',
-            label: tVerify('acceptance.tray.menuSetGoal'),
+            // Same string as the chip it inserts: one label for the affordance,
+            // so the menu row and the chip can never drift apart.
+            label: tEditor('slash.goal'),
             onClick: () => {
-              enterGoalMode(editor, setGoalMode);
+              insertGoalTag(editor, tEditor('slash.goal'));
             },
           },
         ]
@@ -740,7 +739,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     canConfigureResource,
     effortItem,
     enableTopicAcceptance,
-    tVerify,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -759,7 +757,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     isParamsPanelActive,
     knowledgeEnabledCount,
     setShowTypoBar,
-    setGoalMode,
     showProviderSearch,
     showTypoBar,
     skillActivateMode,
@@ -789,20 +786,17 @@ const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
 
   return (
-    <Fragment>
-      <ChatInputAction
-        icon={PlusIcon}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title={t('plus.tooltip')}
-        tooltipProps={{ placement: 'top' }}
-        dropdown={{
-          menu: { useItems: usePlusMenuItems },
-          minWidth: 220,
-          placement: 'topLeft',
-        }}
-      />
-      <GoalModeChip />
-    </Fragment>
+    <ChatInputAction
+      icon={PlusIcon}
+      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      title={t('plus.tooltip')}
+      tooltipProps={{ placement: 'top' }}
+      dropdown={{
+        menu: { useItems: usePlusMenuItems },
+        minWidth: 220,
+        placement: 'topLeft',
+      }}
+    />
   );
 });
 

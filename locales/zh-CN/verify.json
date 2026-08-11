@@ -229,7 +229,6 @@
   "acceptance.tray.goalModal.save": "保存目标",
   "acceptance.tray.goalModal.setTitle": "设定目标",
   "acceptance.tray.goalSection": "目标",
-  "acceptance.tray.menuSetGoal": "设定目标",
   "acceptance.tray.saveFailed.network": "网络似乎离线,改动未保存。",
   "acceptance.tray.saveFailed.server": "改动保存失败,请重试。",
   "acceptance.tray.section.method": "怎么看",

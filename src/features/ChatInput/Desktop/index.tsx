@@ -154,7 +154,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // context-window token tag; without one, SendArea keeps it beside Send.
     const hasControlBar = Boolean(controlBarSlot) || showControlBar;
 
-    const [setExpand, setGoalMode] = useChatInputStore((s) => [s.setExpand, s.setGoalMode]);
+    const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
     const topicDrop = useTopicDrop();
     const workspaceFileDrop = useWorkspaceFileDrop();
@@ -175,8 +175,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     useEffect(() => {
       if (editor) editor.focus();
       setExpand(false);
-      setGoalMode(false);
-    }, [chatKey, editor, setExpand, setGoalMode]);
+    }, [chatKey, editor, setExpand]);
 
     const shouldShowContextContainer =
       leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;

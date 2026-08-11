@@ -116,7 +116,9 @@ describe('ChatInput store actions', () => {
     expect(getInputHistory()).toEqual([]);
   });
 
-  it('adds the hidden /goal prefix only when sending in goal mode', () => {
+  it('sends exactly what the document serializes to', () => {
+    // The composer no longer rewrites the text on the way out: markers like the
+    // goal chip are nodes in the document, so what is sent is what is shown.
     const onSend = vi.fn(({ clearContent, getMarkdownContent }) => {
       expect(getMarkdownContent()).toBe('/goal Ship the homepage');
       clearContent();
@@ -125,7 +127,7 @@ describe('ChatInput store actions', () => {
       cleanDocument: vi.fn(),
       focus: vi.fn(),
       getDocument: vi.fn((type: string) =>
-        type === 'markdown' ? 'Ship the homepage' : { root: {} },
+        type === 'markdown' ? '/goal Ship the homepage' : { root: {} },
       ),
     };
     const store = createStore({
@@ -133,12 +135,10 @@ describe('ChatInput store actions', () => {
       onSend,
     });
 
-    store.getState().setGoalMode(true);
     store.getState().handleSendButton();
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(editor.cleanDocument).toHaveBeenCalledOnce();
-    expect(store.getState().goalMode).toBe(false);
   });
 
   it('does not record history when the input history feature is disabled', () => {
