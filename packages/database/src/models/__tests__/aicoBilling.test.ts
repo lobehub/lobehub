@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  platformFxConfig,
   platformTrialConfig,
   trialAbuseBlocklist,
   userTrials,
@@ -19,6 +20,7 @@ const userId = 'aico-billing-user';
 beforeEach(async () => {
   await serverDB.delete(trialAbuseBlocklist);
   await serverDB.delete(userTrials);
+  await serverDB.delete(platformFxConfig);
   await serverDB.delete(platformTrialConfig);
   await serverDB.delete(walletTransactions);
   await serverDB.delete(userWallets);
@@ -29,6 +31,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(trialAbuseBlocklist);
   await serverDB.delete(userTrials);
+  await serverDB.delete(platformFxConfig);
   await serverDB.delete(platformTrialConfig);
   await serverDB.delete(walletTransactions);
   await serverDB.delete(userWallets);
@@ -57,5 +60,21 @@ describe('AicoBillingModel', () => {
     });
     expect(personal.preferredBillingSource).toBe('personal');
     expect(personal.preferredOrganizationId).toBeNull();
+  });
+
+  it('getFxConfig seeds 187400 and updateFxConfig persists admin rate', async () => {
+    const seeded = await model.getFxConfig();
+    expect(seeded.id).toBe('default');
+    expect(Number(seeded.tomanPerUsd)).toBe(187_400);
+
+    const updated = await model.updateFxConfig({
+      tomanPerUsd: 200_000,
+      updatedByUserId: userId,
+    });
+    expect(Number(updated.tomanPerUsd)).toBe(200_000);
+    expect(updated.updatedByUserId).toBe(userId);
+
+    const again = await model.getFxConfig();
+    expect(Number(again.tomanPerUsd)).toBe(200_000);
   });
 });

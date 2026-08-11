@@ -36,8 +36,9 @@ declare global {
        */
       AICO_SECURITY_ALERT_WEBHOOK_URL?: string;
       /**
-       * Toman per 1 USD — fallback FX rate used when the live-rate lookup fails.
-       * Example: 50000 means 50,000 toman = $1.
+       * Toman per 1 USD — fallback FX rate when platform_fx_config is unavailable.
+       * Example: 187400 means 187,400 toman = $1. Prefer setting the rate in the
+       * platform admin panel (platform_fx_config).
        */
       AICO_TOMAN_PER_USD?: string;
       /**
@@ -58,7 +59,7 @@ export const getAicoConfig = () => {
       AICO_IS_CONTROL_PLANE: z.boolean().optional().default(false),
       AICO_OPENROUTER_MOCK: z.boolean().optional().default(false),
       AICO_SECURITY_ALERT_WEBHOOK_URL: z.string().url().optional(),
-      AICO_TOMAN_PER_USD: z.coerce.number().positive().int().default(50_000),
+      AICO_TOMAN_PER_USD: z.coerce.number().positive().int().default(187_400),
       OPENROUTER_MANAGEMENT_API_KEY: z.string().optional(),
     },
     runtimeEnv: {

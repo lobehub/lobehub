@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
+  platformFxConfig,
   platformTrialConfig,
   trialAbuseBlocklist,
   usageLogs,
@@ -277,6 +278,44 @@ export class AicoBillingModel {
         totalTokens: params.totalTokens,
         userId: params.userId,
       })
+      .returning();
+    return row;
+  };
+
+  // ─── FX config ─────────────────────────────────────────────────────
+
+  getFxConfig = async () => {
+    const existing = await this.db.query.platformFxConfig.findFirst({
+      where: eq(platformFxConfig.id, 'default'),
+    });
+    if (existing) return existing;
+
+    const [created] = await this.db
+      .insert(platformFxConfig)
+      .values({ id: 'default', tomanPerUsd: 187_400 })
+      .onConflictDoNothing()
+      .returning();
+    return (
+      created ??
+      (await this.db.query.platformFxConfig.findFirst({
+        where: eq(platformFxConfig.id, 'default'),
+      }))!
+    );
+  };
+
+  updateFxConfig = async (params: { tomanPerUsd: number; updatedByUserId: string }) => {
+    const rate = Math.trunc(params.tomanPerUsd);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error('INVALID_FX_RATE');
+    }
+    await this.getFxConfig();
+    const [row] = await this.db
+      .update(platformFxConfig)
+      .set({
+        tomanPerUsd: rate,
+        updatedByUserId: params.updatedByUserId,
+      })
+      .where(eq(platformFxConfig.id, 'default'))
       .returning();
     return row;
   };

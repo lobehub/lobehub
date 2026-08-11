@@ -56,10 +56,37 @@ export const platformAdminRouter = router({
   }),
 
   /** FX helper for the control-plane admin UI (replaces aicoBilling.getFxRate there). */
-  getFxRate: platformProcedure.query(async () => {
-    const { rate, source } = await getTomanPerUsd();
+  getFxRate: platformProcedure.query(async ({ ctx }) => {
+    const config = await ctx.billingModel.getFxConfig();
+    const { rate, source } = await getTomanPerUsd(config.tomanPerUsd);
     return { source, tomanPerUsd: Math.round(rate) };
   }),
+
+  updateFxRate: platformProcedure
+    .input(
+      z.object({
+        tomanPerUsd: z.number().int().positive().max(10_000_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await ctx.billingModel.updateFxConfig({
+        tomanPerUsd: input.tomanPerUsd,
+        updatedByUserId: ctx.userId,
+      });
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'platform.fx.update',
+        actorUserId: ctx.userId,
+        ipAddress: ctx.clientIp,
+        metadata: { tomanPerUsd: row.tomanPerUsd },
+        targetId: 'default',
+        targetType: 'platform_fx_config',
+        userAgent: ctx.userAgent,
+      });
+      return {
+        source: 'admin' as const,
+        tomanPerUsd: Math.round(Number(row.tomanPerUsd)),
+      };
+    }),
 
   listOrganizations: platformProcedure
     .input(
@@ -229,7 +256,10 @@ export const platformAdminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
+        const fxConfig = await ctx.billingModel.getFxConfig();
+        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input, {
+          adminRate: fxConfig.tomanPerUsd,
+        });
         const result = await ctx.organizationModel.addManualCredit({
           amountMicroUsd,
           amountToman,
@@ -303,7 +333,10 @@ export const platformAdminRouter = router({
       }
 
       try {
-        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
+        const fxConfig = await ctx.billingModel.getFxConfig();
+        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input, {
+          adminRate: fxConfig.tomanPerUsd,
+        });
         const result = await ctx.billingModel.manualCreditUser({
           amountMicroUsd,
           amountToman,
@@ -447,15 +480,15 @@ export const platformAdminRouter = router({
         .optional(),
     )
     .query(async ({ ctx }) => {
-      const [txs, wallets, orgBalanceMicroUsd, totalOpenRouterCostMicroUsd, fx] = await Promise.all(
-        [
+      const [txs, wallets, orgBalanceMicroUsd, totalOpenRouterCostMicroUsd, fxConfig] =
+        await Promise.all([
           ctx.billingModel.listRecentTransactions(200),
           ctx.billingModel.listAllWallets(),
           ctx.organizationModel.getTotalWalletBalanceMicroUsd(),
           ctx.billingModel.sumUsageCostMicroUsd(),
-          getTomanPerUsd(),
-        ],
-      );
+          ctx.billingModel.getFxConfig(),
+        ]);
+      const fx = await getTomanPerUsd(fxConfig.tomanPerUsd);
       const topups = txs.filter((t) => t.type === 'topup' || t.type === 'manual_credit');
       const totalRevenueToman = topups.reduce((sum, t) => sum + Number(t.amountToman || 0), 0);
       const totalMicroCredited = Math.trunc(

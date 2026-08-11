@@ -1015,6 +1015,13 @@
       "when": 1786610000000,
       "tag": "0144_aico_wallet_tx_balance_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0145_aico_platform_fx_config",
+      "breakpoints": true
     }
   ],
   "version": "6"
