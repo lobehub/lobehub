@@ -31,13 +31,9 @@ const MemorySetting = memo(() => {
   const memorySettings: FormGroupItemType = {
     children: [
       {
-        children: (
-          <Tooltip title={reason}>
-            <Switch disabled={!canManageMemory} />
-          </Tooltip>
-        ),
+        children: <Switch disabled={!canManageMemory} />,
         desc: t('memory.enabled.desc'),
-        label: t('memory.enabled.title'),
+        label: <Tooltip title={reason}>{t('memory.enabled.title')}</Tooltip>,
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enabled',
@@ -79,7 +75,7 @@ const MemorySetting = memo(() => {
     <Form
       collapsible={false}
       form={form}
-      initialValues={memory}
+      initialValues={{ ...memory, enabled: memory?.enabled !== false }}
       items={[memorySettings]}
       itemsType={'group'}
       variant={'filled'}
