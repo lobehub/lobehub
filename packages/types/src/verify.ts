@@ -212,8 +212,9 @@ export interface ReviewPrediction {
   confidence?: number;
   createdAt: string;
   id: string;
-  /** e.g. `google/gemini-3.6-flash` — pins an opinion to what produced it. */
-  modelId: string;
+  /** Pins the opinion to what produced it, e.g. `gemini-3.6-flash`. */
+  model: string;
+  provider: string;
   /** Full reasoning, kept for training; not surfaced in the collapsed card. */
   rationale?: string;
 }

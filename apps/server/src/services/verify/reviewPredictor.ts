@@ -72,23 +72,26 @@ export const blindSlicePosition = (checkResultId: string): number => {
 };
 
 /**
- * Whether this check is in the blind control slice — the share deliberately
- * shown with no proposal so miss rate stays measurable.
+ * Whether this check falls in the blind control slice (see
+ * {@link REVIEW_PREDICTION_BLIND_RATE} — disabled by default).
  *
- * Exported (and tested) on its own because the answer must be identical on the
- * write path (skip predicting) and the read path (hide any prediction that
- * already exists, e.g. one written before the rate changed).
+ * `rate` is a parameter rather than a bare constant read so the behaviour stays
+ * testable at any share while the shipped default is 0. Exported on its own
+ * because the answer must be identical on the write path (skip predicting) and
+ * the read path (hide a prediction written before the rate changed).
  */
-export const isBlindControlCheck = (checkResultId: string): boolean =>
-  blindSlicePosition(checkResultId) < REVIEW_PREDICTION_BLIND_RATE;
+export const isBlindControlCheck = (
+  checkResultId: string,
+  rate: number = REVIEW_PREDICTION_BLIND_RATE,
+): boolean => rate > 0 && blindSlicePosition(checkResultId) < rate;
 
 /**
  * Whether a stored proposal should still be shown to the reviewer.
  *
  * Three independent reasons to withhold one, and each was a real defect when
  * missing:
- *  - the check is in the blind control slice (a prediction may exist from
- *    before the slice boundary moved);
+ *  - the check is in the blind control slice, when one is enabled (a prediction
+ *    may exist from before the rate changed);
  *  - the reviewer already answered this proposal — `not-an-issue` and
  *    `misidentified` deliberately leave the CHECK unjudged, so gating on the
  *    check's verdict alone resurrects a dismissed card on every reload;
@@ -97,10 +100,11 @@ export const isBlindControlCheck = (checkResultId: string): boolean =>
 export const shouldSurfaceProposal = (
   prediction: { adjudication?: string | null; checkResultId: string },
   hasUserReview: boolean,
+  blindRate: number = REVIEW_PREDICTION_BLIND_RATE,
 ): boolean => {
   if (hasUserReview) return false;
   if (prediction.adjudication) return false;
-  return !isBlindControlCheck(prediction.checkResultId);
+  return !isBlindControlCheck(prediction.checkResultId, blindRate);
 };
 
 /**
@@ -236,7 +240,8 @@ export class VerifyReviewPredictorService {
       comment: prediction.comment ?? undefined,
       confidence: prediction.confidence ?? undefined,
       latencyMs: Date.now() - startedAt,
-      modelId: `${modelConfig.provider}/${modelConfig.model}`,
+      model: modelConfig.model,
+      provider: modelConfig.provider,
       promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
       rationale: prediction.rationale ?? undefined,
     });

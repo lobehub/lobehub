@@ -165,7 +165,9 @@ const ProposalCard = memo<ProposalCardProps>(
                 {t('acceptance.proposal.misidentified')}
               </Button>
               <Flexbox flex={1} />
-              <span className={styles.muted}>{proposal.modelId}</span>
+              <span className={styles.muted}>
+                {proposal.provider}/{proposal.model}
+              </span>
             </Flexbox>
           </>
         )}

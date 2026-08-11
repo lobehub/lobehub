@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "9de575b8-3c68-4026-9714-9ce42998fda1",
+  "id": "4ebf2d65-02b8-4fd3-90c5-e530a3dafd46",
   "policies": {},
   "prevId": "5e08d9a7-4720-4250-aa8d-96fc9a3dd85a",
   "roles": {},
@@ -26122,8 +26122,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "model_id": {
-          "name": "model_id",
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -26254,11 +26260,17 @@
           "method": "btree",
           "with": {}
         },
-        "verify_review_predictions_model_id_idx": {
-          "name": "verify_review_predictions_model_id_idx",
+        "verify_review_predictions_model_idx": {
+          "name": "verify_review_predictions_model_idx",
           "columns": [
             {
-              "expression": "model_id",
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "model",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -26279,7 +26291,13 @@
               "nulls": "last"
             },
             {
-              "expression": "model_id",
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "model",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -65,7 +65,8 @@ export class VerifyReviewPredictionModel {
         },
         target: [
           verifyReviewPredictions.checkResultId,
-          verifyReviewPredictions.modelId,
+          verifyReviewPredictions.provider,
+          verifyReviewPredictions.model,
           verifyReviewPredictions.promptVersion,
         ],
       })

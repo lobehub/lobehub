@@ -678,8 +678,13 @@ export const verifyReviewPredictions = pgTable(
     /** Workspace this prediction belongs to (mirrors the result) — scopes listing + cascade. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
-    /** Producer, e.g. `google/gemini-3.6-flash`. Pins an opinion to what made it. */
-    modelId: text('model_id').notNull(),
+    /**
+     * The producer, split the same way every other model reference in the repo
+     * is (`{ provider, model }`) rather than one glued string — an opinion has
+     * to be filterable by provider on its own when comparing versions.
+     */
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
     /** Bumped whenever the judging prompt changes, so old opinions stay attributable. */
     promptVersion: text('prompt_version').notNull(),
 
@@ -724,13 +729,14 @@ export const verifyReviewPredictions = pgTable(
     index('verify_review_predictions_check_result_id_idx').on(t.checkResultId),
     index('verify_review_predictions_user_id_idx').on(t.userId),
     index('verify_review_predictions_workspace_id_idx').on(t.workspaceId),
-    index('verify_review_predictions_model_id_idx').on(t.modelId),
-    // One opinion per (result, model, prompt version): a retry or a concurrent
+    index('verify_review_predictions_model_idx').on(t.provider, t.model),
+    // One opinion per (result, provider+model, prompt version): a retry or a concurrent
     // worker must update in place rather than stack a second row, or the
     // agreement stats would double-count whichever check happened to be retried.
     uniqueIndex('verify_review_predictions_result_model_prompt_unique').on(
       t.checkResultId,
-      t.modelId,
+      t.provider,
+      t.model,
       t.promptVersion,
     ),
   ],

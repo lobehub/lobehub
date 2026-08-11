@@ -285,16 +285,27 @@ export const reviewProposalEdits = [
 export type ReviewProposalEdit = (typeof reviewProposalEdits)[number];
 
 /**
- * Share of checks deliberately shown with NO proposal, so the reviewer labels
- * them cold.
+ * Share of checks deliberately shown with NO proposal, so the reviewer judges
+ * them cold. **Off by default** — set above 0 only while collecting labels
+ * intended for training.
  *
- * This is not a rollout percentage — it is the only place miss rate stays
- * measurable. Once a reviewer only ever adjudicates proposals, "the problems the
- * model never raised" leave no trace, and the metric that matters most (missed
- * defects) silently reads as perfect. It also breaks the anchoring loop where
- * the dataset slowly collapses into the model's own opinions.
+ * What it does and does NOT buy:
+ *
+ * Missed defects are already measurable without it, because a proposal is only
+ * written when the model says `reject`. A check the model passed shows no card,
+ * so a human rejecting it is an observable miss on its own.
+ *
+ * What only a blind slice can measure is whether the labels are still
+ * INDEPENDENT of the model — how far a shown proposal moved the reviewer's own
+ * judgement. Without some cold-judged population there is no way to estimate
+ * that drift, and a model later trained on these labels is partly learning from
+ * an earlier version of itself.
+ *
+ * That guarantee costs real product value (a fifth of reviewers see no help),
+ * and it is not needed until a training set is actually being assembled — so it
+ * ships disabled, with the mechanism intact.
  */
-export const REVIEW_PREDICTION_BLIND_RATE = 0.2;
+export const REVIEW_PREDICTION_BLIND_RATE = 0;
 
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [

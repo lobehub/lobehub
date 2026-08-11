@@ -1,26 +1,25 @@
 import { randomUUID } from 'node:crypto';
 
-import { REVIEW_PREDICTION_BLIND_RATE } from '@lobechat/const/verify';
 import { describe, expect, it } from 'vitest';
 
 import { blindSlicePosition, isBlindControlCheck, shouldSurfaceProposal } from '../reviewPredictor';
 
 /**
- * The blind control slice is the only place missed defects stay observable —
- * once a reviewer only ever adjudicates proposals, the checks the model never
- * flagged leave no trace and miss rate silently reads as perfect. These tests
- * guard the two properties that makes it work: it must be stable per check, and
- * it must actually be ~20% of them.
+ * The blind control slice ships DISABLED (rate 0) — it exists to measure how far
+ * a shown proposal moves the reviewer's own judgement, which only matters once
+ * labels are being collected for training. These tests therefore pass an
+ * explicit rate: they guard the mechanism, not the shipped default.
  */
+const RATE = 0.2;
 describe('blind control slice', () => {
   it('is stable for the same check id', () => {
     // A check that flips in or out between page loads would show a proposal on
     // something the reviewer had already started judging cold, contaminating
     // the one unbiased population.
     const id = randomUUID();
-    const first = isBlindControlCheck(id);
+    const first = isBlindControlCheck(id, RATE);
     for (let index = 0; index < 50; index += 1) {
-      expect(isBlindControlCheck(id)).toBe(first);
+      expect(isBlindControlCheck(id, RATE)).toBe(first);
     }
   });
 
@@ -36,13 +35,13 @@ describe('blind control slice', () => {
     const sample = 4000;
     let blind = 0;
     for (let index = 0; index < sample; index += 1) {
-      if (isBlindControlCheck(randomUUID())) blind += 1;
+      if (isBlindControlCheck(randomUUID(), RATE)) blind += 1;
     }
     const rate = blind / sample;
     // Generous band: this asserts the hash spreads, not that it is a perfect
     // uniform source. A broken hash (all-or-nothing, or clustered) fails wide.
-    expect(rate).toBeGreaterThan(REVIEW_PREDICTION_BLIND_RATE - 0.05);
-    expect(rate).toBeLessThan(REVIEW_PREDICTION_BLIND_RATE + 0.05);
+    expect(rate).toBeGreaterThan(RATE - 0.05);
+    expect(rate).toBeLessThan(RATE + 0.05);
   });
 
   it('spreads ids that share a long prefix', () => {
@@ -71,7 +70,7 @@ describe('shouldSurfaceProposal', () => {
   const blind = (() => {
     for (let index = 0; index < 10_000; index += 1) {
       const id = `blind-candidate-${index}`;
-      if (isBlindControlCheck(id)) return id;
+      if (isBlindControlCheck(id, RATE)) return id;
     }
     throw new Error('no blind id found');
   })();
@@ -97,6 +96,10 @@ describe('shouldSurfaceProposal', () => {
   });
 
   it('withholds for a blind-control check even when a proposal exists', () => {
-    expect(shouldSurfaceProposal({ checkResultId: blind }, false)).toBe(false);
+    expect(shouldSurfaceProposal({ checkResultId: blind }, false, RATE)).toBe(false);
+  });
+
+  it('surfaces that same check once the blind slice is disabled (the shipped default)', () => {
+    expect(shouldSurfaceProposal({ checkResultId: blind }, false)).toBe(true);
   });
 });

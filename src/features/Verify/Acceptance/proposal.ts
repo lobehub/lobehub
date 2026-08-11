@@ -15,7 +15,8 @@ export interface CheckProposal {
   comment: string | null;
   confidence: number | null;
   id: string;
-  modelId: string;
+  model: string;
+  provider: string;
   rationale: string | null;
 }
 

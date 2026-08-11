@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS "verify_review_predictions" (
 	"check_result_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
 	"workspace_id" text,
-	"model_id" text NOT NULL,
+	"provider" text NOT NULL,
+	"model" text NOT NULL,
 	"prompt_version" text NOT NULL,
 	"action" text NOT NULL,
 	"confidence" numeric(3, 2),
@@ -28,5 +29,5 @@ ALTER TABLE "verify_review_predictions" ADD CONSTRAINT "verify_review_prediction
 CREATE INDEX IF NOT EXISTS "verify_review_predictions_check_result_id_idx" ON "verify_review_predictions" USING btree ("check_result_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "verify_review_predictions_user_id_idx" ON "verify_review_predictions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "verify_review_predictions_workspace_id_idx" ON "verify_review_predictions" USING btree ("workspace_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "verify_review_predictions_model_id_idx" ON "verify_review_predictions" USING btree ("model_id");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "verify_review_predictions_result_model_prompt_unique" ON "verify_review_predictions" USING btree ("check_result_id","model_id","prompt_version");
+CREATE INDEX IF NOT EXISTS "verify_review_predictions_model_idx" ON "verify_review_predictions" USING btree ("provider","model");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "verify_review_predictions_result_model_prompt_unique" ON "verify_review_predictions" USING btree ("check_result_id","provider","model","prompt_version");
