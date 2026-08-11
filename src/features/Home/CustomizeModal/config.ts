@@ -23,18 +23,24 @@ export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
 
 /**
  * A flat list of nine switches makes the reader hold the whole page in their
- * head to find one section. Grouped by the thing the section is *about*, each
- * switch is found by first deciding what you want less of — your assistants'
- * activity, your tasks, what the day reported — and only then which one.
+ * head to find one section. The grouping that lets you find one without
+ * reading them all is **where the section sits on Home** — you already know
+ * which part of the page you want less of, so the panel is read by pointing at
+ * it rather than by recalling a category name.
+ *
+ * That makes membership a fact about the page, not a taste call: the main
+ * column carries the agent feeds and the two task blocks, and the rail carries
+ * goals, running, news and suggestions (`RAIL_INBOX_PROPS` hides needs-you and
+ * unread from the rail; `ownsRailSections` decides the rest). A widget that
+ * moves columns must move groups with it.
  *
  * The order inside each group follows the page top-down, so scanning the panel
  * and scanning Home walk the same path.
  */
 export const HOME_WIDGET_GROUPS = [
-  { key: 'agent', widgets: ['recents', 'unread', 'running'] },
-  { key: 'task', widgets: ['goals', 'tasks', 'scheduledTasks'] },
-  { key: 'brief', widgets: ['needsYou', 'news'] },
-  { key: 'discover', widgets: ['suggestions'] },
+  { key: 'agent', widgets: ['recents', 'unread', 'needsYou'] },
+  { key: 'task', widgets: ['tasks', 'scheduledTasks'] },
+  { key: 'rail', widgets: ['goals', 'running', 'news', 'suggestions'] },
 ] as const satisfies ReadonlyArray<{ key: string; widgets: readonly HomeWidgetKey[] }>;
 
 export type HomeWidgetGroupKey = (typeof HOME_WIDGET_GROUPS)[number]['key'];

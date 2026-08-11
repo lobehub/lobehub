@@ -107,10 +107,17 @@ describe('HOME_WIDGET_GROUPS', () => {
     expect([...grouped].sort()).toEqual([...HOME_WIDGET_KEYS].sort());
   });
 
-  it('keeps the two task blocks together under the task group', () => {
-    const task = HOME_WIDGET_GROUPS.find((group) => group.key === 'task');
-    expect(task?.widgets).toContain('tasks');
-    expect(task?.widgets).toContain('scheduledTasks');
+  // The groups name where a section sits on Home, so membership is a fact about
+  // the page rather than a taste call. `RAIL_INBOX_PROPS` keeps needs-you and
+  // unread out of the rail, and `ownsRailSections` gives running / news /
+  // suggestions to it; goals renders in the rail card. Move a section between
+  // columns and this test is the thing that says the panel now lies.
+  it.each([
+    ['agent', ['recents', 'unread', 'needsYou']],
+    ['task', ['tasks', 'scheduledTasks']],
+    ['rail', ['goals', 'running', 'news', 'suggestions']],
+  ])('groups %s by where those sections render on Home', (key, widgets) => {
+    expect(HOME_WIDGET_GROUPS.find((group) => group.key === key)?.widgets).toEqual(widgets);
   });
 });
 
