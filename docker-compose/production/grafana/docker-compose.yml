@@ -19,8 +19,9 @@ services:
   postgresql:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
-    ports:
-      - '5432:5432'
+    # Do not publish DB ports to the host by default (INFRA / AICO-109).
+    # ports:
+    #   - '5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
     environment:

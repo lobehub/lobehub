@@ -40,11 +40,10 @@ services:
   postgresql:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
-    # Optional: Remove or change these ports if:
-    # - You don't need external database access
-    # - The ports conflict with other services on your host
-    ports:
-      - '5432:5432'
+    # Do not publish DB ports to the host by default (INFRA / AICO-109).
+    # Uncomment only for local debugging — never expose Postgres on public networks.
+    # ports:
+    #   - '5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
     command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
@@ -63,11 +62,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lobe-redis
-    # Optional: Remove or change these ports if:
-    # - You don't need external access
-    # - The ports conflict with other services on your host
-    ports:
-      - '6379:6379'
+    # Do not publish Redis ports to the host by default (INFRA / AICO-109).
+    # Uncomment only for local debugging — never expose Redis on public networks.
+    # ports:
+    #   - '6379:6379'
     command: redis-server --save 60 1000 --appendonly yes
     volumes:
       - 'redis_data:/data'

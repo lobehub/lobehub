@@ -134,7 +134,6 @@ COPY --from=app / /
 ENV NODE_ENV="production" \
     NODE_OPTIONS="--dns-result-order=ipv4first --use-openssl-ca" \
     NODE_EXTRA_CA_CERTS="" \
-    NODE_TLS_REJECT_UNAUTHORIZED="" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
 
 # Make the middleware rewrite through local as default

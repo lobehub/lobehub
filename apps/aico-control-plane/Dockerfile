@@ -15,5 +15,9 @@ COPY apps/aico-control-plane/src/web ./web
 COPY apps/aico-control-plane/package.json ./
 # Resolve external imports from the monorepo install (copied by moz packaging).
 COPY node_modules ./node_modules
+RUN groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid nodejs --home-dir /app --no-create-home nextjs \
+  && chown -R nextjs:nodejs /app
+USER nextjs
 EXPOSE 3020
 CMD ["node", "dist/standalone.js"]
