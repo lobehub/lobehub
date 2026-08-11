@@ -8,6 +8,7 @@ import { sandboxEnv } from '@/envs/sandbox';
 
 import type {
   SandboxProvider,
+  SandboxProviderCallContext,
   SandboxProviderCapabilities,
   SandboxProviderFileExportRequest,
   SandboxProviderFileExportResult,
@@ -46,6 +47,8 @@ const TSX_VERSION = '4.22.4';
 const INSTANCE_OPERATION_HEADROOM_MS = 60_000;
 const INSTANCE_OPERATION_START_MARGIN_MS = 5000;
 const MAX_INSTANCE_TIMEOUT_SEC = 3600;
+const MAX_INSTANCE_OPERATION_TIMEOUT_MS =
+  MAX_INSTANCE_TIMEOUT_SEC * 1000 - INSTANCE_OPERATION_HEADROOM_MS;
 const BACKGROUND_DIR = '/tmp/lobe-background';
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INSTANCE_CACHE_LIMIT = 1024;
@@ -345,13 +348,29 @@ export class TencentSandboxProvider implements SandboxProvider {
   async callTool(
     toolName: string,
     params: Record<string, unknown>,
+    context?: SandboxProviderCallContext,
   ): Promise<SandboxCallToolResult> {
     const configError = this.checkConfig();
     if (configError) return configError;
 
     try {
+      // Middleware bootstrap calls reserve the lifetime needed by the tool
+      // that follows, while dispatch still receives the bootstrap's original
+      // parameters and therefore keeps its own shorter execution timeout.
       const operationTimeoutMs = this.operationTimeoutMs(toolName, params);
-      const { sandbox, sessionExpiredAndRecreated } = await this.connect(operationTimeoutMs);
+      const reserveForTimeoutMs = context?.reserveFor
+        ? this.operationTimeoutMs(context.reserveFor.toolName, context.reserveFor.params)
+        : 0;
+      // Do not let a valid bootstrap become an invalid request just because
+      // the sequential reservation exceeds Tencent's hard instance limit. A
+      // near-limit follow-up is admitted only if enough lifetime actually
+      // remains after bootstrap; otherwise the normal on-demand check rejects
+      // it instead of silently running without initialized files.
+      const lifetimeBudgetMs =
+        reserveForTimeoutMs > 0 && operationTimeoutMs <= MAX_INSTANCE_OPERATION_TIMEOUT_MS
+          ? Math.min(operationTimeoutMs + reserveForTimeoutMs, MAX_INSTANCE_OPERATION_TIMEOUT_MS)
+          : operationTimeoutMs;
+      const { sandbox, sessionExpiredAndRecreated } = await this.connect(lifetimeBudgetMs);
       const { error, result, success } = await this.dispatch(sandbox, toolName, params);
 
       // `error` has to survive: the runtime builds the model-visible failure
@@ -963,7 +982,7 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     if (requiredTimeoutSec > MAX_INSTANCE_TIMEOUT_SEC) {
       throw new Error(
-        `timeout must not exceed ${(MAX_INSTANCE_TIMEOUT_SEC * 1000 - INSTANCE_OPERATION_HEADROOM_MS).toLocaleString('en-US')} milliseconds for Tencent sandboxes`,
+        `timeout must not exceed ${MAX_INSTANCE_OPERATION_TIMEOUT_MS.toLocaleString('en-US')} milliseconds for Tencent sandboxes`,
       );
     }
 

@@ -753,6 +753,49 @@ describe('TencentSandboxProvider', () => {
     });
   });
 
+  it('caps a bootstrap reservation without skipping file initialization', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-12T00:00:00Z'));
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
+    expiresInSec = 3600;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      const params = {
+        background: true,
+        command: 'near-limit-work',
+        timeout: 3_540_000,
+      };
+      const initialized = await provider.callTool(
+        'runCommand',
+        { command: 'initialize files', timeout: 120_000 },
+        { reserveFor: { params, toolName: 'runCommand' } },
+      );
+
+      expect(initialized.success).toBe(true);
+      expect(controlPlaneRequests[0]).toMatchObject({
+        action: 'acquire',
+        payload: { Timeout: 3600 },
+      });
+      expect(mocks.sandbox.commands.run).toHaveBeenCalledWith('initialize files', {
+        timeoutMs: 120_000,
+      });
+
+      await vi.advanceTimersByTimeAsync(120_000);
+      const rejected = await provider.callTool('runCommand', params);
+
+      expect(rejected.success).toBe(false);
+      expect(rejected.error?.message).toContain('remaining lifetime');
+      expect(calls.acquire).toBe(1);
+      expect(calls.update).toBe(0);
+      expect(calls.release).toBe(0);
+      expect(mocks.sandbox.commands.run).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('re-evaluates lifetime after sharing an in-flight acquisition', async () => {
     expiresInSec = 180;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());

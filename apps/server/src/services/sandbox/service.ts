@@ -42,7 +42,7 @@ export class SandboxMiddlewareService implements SandboxService {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
-    await this.ensureFilesInitialized();
+    await this.ensureFilesInitialized(toolName, params);
     return this.provider.callTool(toolName, params);
   }
 
@@ -58,7 +58,10 @@ export class SandboxMiddlewareService implements SandboxService {
    * band (e.g. in Redis), because that could skip the re-sync after a recycle and
    * leave the agent believing files exist when /mnt/data is empty.
    */
-  private async ensureFilesInitialized(): Promise<void> {
+  private async ensureFilesInitialized(
+    upcomingToolName: string,
+    upcomingParams: Record<string, unknown>,
+  ): Promise<void> {
     if (this.filesInitialized) return;
     this.filesInitialized = true;
 
@@ -86,10 +89,16 @@ export class SandboxMiddlewareService implements SandboxService {
       if (downloads.length === 0) return;
 
       const command = buildSandboxFilesInitCommand(downloads);
-      const result = await this.provider.callTool('runCommand', {
-        command,
-        timeout: SANDBOX_INIT_TIMEOUT_MS,
-      });
+      const result = await this.provider.callTool(
+        'runCommand',
+        {
+          command,
+          timeout: SANDBOX_INIT_TIMEOUT_MS,
+        },
+        {
+          reserveFor: { params: upcomingParams, toolName: upcomingToolName },
+        },
+      );
 
       log(
         'Sandbox file init for topic %s: %d files, success=%s',
