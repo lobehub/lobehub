@@ -1,17 +1,13 @@
 'use client';
 
-import { memo } from 'react';
-
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import VideoSidebarContent from './Content';
 
-const Sidebar = memo(() => (
+const Sidebar = () => (
   <NavPanelPortal navKey="video">
     <VideoSidebarContent />
   </NavPanelPortal>
-));
-
-Sidebar.displayName = 'VideoSidebar';
+);
 
 export default Sidebar;

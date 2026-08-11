@@ -243,13 +243,64 @@ describe('convertUsage', () => {
 
     // Assert
     expect(result).toEqual({
-      inputTextTokens: 100,
+      inputTextTokens: 80,
       inputAudioTokens: 20,
       totalInputTokens: 100,
       totalOutputTokens: 50,
       outputTextTokens: 50,
       totalTokens: 150,
     });
+  });
+
+  it('distinguishes omitted provider audio usage from an explicitly reported zero', () => {
+    const omitted = convertOpenAIUsage({
+      completion_tokens: 1,
+      prompt_tokens: 10,
+      total_tokens: 11,
+    } as OpenAI.Completions.CompletionUsage);
+    const reportedZero = convertOpenAIUsage({
+      completion_tokens: 1,
+      prompt_tokens: 10,
+      prompt_tokens_details: { audio_tokens: 0 },
+      total_tokens: 11,
+    } as OpenAI.Completions.CompletionUsage);
+
+    expect(omitted).not.toHaveProperty('inputAudioTokens');
+    expect(reportedZero).toHaveProperty('inputAudioTokens', 0);
+  });
+
+  it('should not double-charge aggregate OpenAI prompt tokens when audio has a dedicated unit', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+    const usageWithAudioInput = {
+      completion_tokens: 50,
+      prompt_tokens: 100,
+      prompt_tokens_details: { audio_tokens: 20 },
+      total_tokens: 150,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(usageWithAudioInput, { pricing });
+
+    expect(result.inputTextTokens).toBe(80);
+    expect(result.inputAudioTokens).toBe(20);
+    expect(result.cost).toBe(0.000_28);
+  });
+
+  it('does not guess cached audio tokens from OpenAI aggregate cache usage', () => {
+    const result = convertOpenAIUsage({
+      completion_tokens: 10,
+      prompt_tokens: 100,
+      prompt_tokens_details: { audio_tokens: 20, cached_tokens: 40 },
+      total_tokens: 110,
+    } as OpenAI.Completions.CompletionUsage);
+
+    expect(result.inputAudioTokens).toBe(20);
+    expect(result.inputCachedTokens).toBe(40);
+    expect(result).not.toHaveProperty('inputCachedAudioTokens');
   });
 
   it('should handle detailed output tokens correctly', () => {
@@ -330,7 +381,7 @@ describe('convertUsage', () => {
 
     // Assert
     expect(result).toEqual({
-      inputTextTokens: 150,
+      inputTextTokens: 100,
       inputAudioTokens: 50,
       inputCachedTokens: 40,
       inputCacheMissTokens: 140, // 180 - 40 (totalInputTokens - cachedTokens)

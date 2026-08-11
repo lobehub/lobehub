@@ -1,4 +1,17 @@
-import { and, desc, eq, inArray, isNull, ne, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+  type SQLWrapper,
+} from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
@@ -837,6 +850,10 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(files),
           ne(files.fileType, 'custom/document'),
+          // Acceptance evidence is hidden from the library, so it must stay out
+          // of search too — otherwise a query for "execution" returns hundreds
+          // of artifacts the user can't find anywhere else in the UI.
+          or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
           sql`${files.name} @@@ ${bm25Query}`,
         ),
       )

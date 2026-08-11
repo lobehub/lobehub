@@ -38,5 +38,7 @@ export {
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
+export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
+export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

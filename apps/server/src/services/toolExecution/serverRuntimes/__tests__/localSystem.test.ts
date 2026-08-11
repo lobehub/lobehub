@@ -225,6 +225,104 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ command: 'git status', cwd: '/Users/me/repo' });
     });
 
+    it('forwards the sandbox decision to runCommand', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).toEqual({
+        command: 'git status',
+        cwd: '/Users/me/repo',
+        sandbox: true,
+        sandboxNetwork: false,
+      });
+    });
+
+    it('never lets a model-supplied cwd become the fence root', async () => {
+      // The sandbox policy is built from `params.cwd` on the device, so this
+      // stripping is what stops a guessed or replayed `cwd` from choosing what
+      // the command is fenced to. `cwd` is off-manifest for every api, but the
+      // arg schema does not reject extra properties — pin the behaviour here so
+      // relaxing the strip can never silently hand the model its own fence.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'cat ~/.ssh/id_rsa',
+        cwd: '/Users/me',
+      });
+
+      expect(parseArgs().cwd).toBe('/Users/me/repo');
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
+    it('forwards the network allowance for a fenced run', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        localSandboxNetwork: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'npm install' });
+
+      expect(parseArgs().sandboxNetwork).toBe(true);
+    });
+
+    it('omits the network flag when the run is not fenced', async () => {
+      // `sandboxNetwork` is meaningless without a sandbox — don't add noise to
+      // an unfenced command's args.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: false,
+        localSandboxNetwork: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).not.toHaveProperty('sandboxNetwork');
+      expect(parseArgs().sandbox).toBe(false);
+    });
+
+    it('overrides a sandbox flag the model tried to set itself', async () => {
+      // The manifest never exposes `sandbox`, but a model that guesses the field
+      // must not be able to unfence its own commands — the run's context wins.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'rm -rf /', sandbox: false });
+
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
+    it('leaves runCommand untouched when the run is not sandboxed', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).not.toHaveProperty('sandbox');
+    });
+
     it('injects scope into search ops that honor it', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.grepContent]({ pattern: 'TODO' });

@@ -1,7 +1,7 @@
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { recentKeys, taskKeys } from './keys';
+import { agentBuilderKeys, recentKeys, taskKeys } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -50,6 +50,21 @@ describe('recentKeys', () => {
       serialized.includes(pattern),
     );
 
+    expect(persisted).toBe(true);
+  });
+});
+
+describe('agentBuilderKeys', () => {
+  // Regression: builder suggestion chips were memory-only (no CACHE_TIERS entry),
+  // so every page load showed a skeleton and paid a fresh LLM generation. The key
+  // must route to a persisted tier so revisits hydrate the last batch instead.
+  it('routes the builder suggestions key to a persisted cache tier', () => {
+    const serialized = unstable_serialize(
+      agentBuilderKeys.suggestions('agentBuilder', 'builder-1', 'target-1', 'zh-CN'),
+    );
+    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
+      serialized.includes(pattern),
+    );
     expect(persisted).toBe(true);
   });
 });

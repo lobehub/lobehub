@@ -154,12 +154,29 @@ export interface SendMessageParams {
    * This decouples sendMessage from store selectors.
    */
   messages?: UIChatMessage[];
-
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
+
   onlyAddUserMessage?: boolean;
+  /**
+   * Called once the send lifecycle owns the turn, either by persisting the user message or by
+   * placing it in the current conversation queue. Transient UI can release local resources after
+   * this acknowledgement because queued turns retain their uploaded file metadata.
+   */
+  onMessageAccepted?: () => void;
+  /**
+   * Called once the user message has been persisted, before the assistant run completes.
+   * UI flows that own separate transient content use this acknowledgement to release it
+   * without waiting for the full generation.
+   */
+  onMessagePersisted?: () => void;
+  /**
+   * ID of a pre-created local user message that the formal send lifecycle should adopt in place.
+   * This keeps an optimistic row stable while replacing its local preview with uploaded media.
+   */
+  optimisticUserMessageId?: string;
   /**
    * Page selections attached to the message (for Ask AI functionality)
    * These will be persisted to the database and injected via context-engine
@@ -170,6 +187,18 @@ export interface SendMessageParams {
    * If not provided, will be calculated from messages list.
    */
   parentId?: string;
+  /**
+   * Send a separate turn without consuming or clearing the active composer.
+   * Voice messages use this so the current text draft and pending attachments
+   * remain available after the audio-only turn is dispatched.
+   */
+  preserveComposer?: boolean;
+  /**
+   * Cancels the send before the conversation lifecycle accepts ownership of the turn.
+   * Once `onMessageAccepted` fires, later aborts are ignored and the existing runtime Stop flow
+   * owns any subsequent model execution.
+   */
+  signal?: AbortSignal;
 }
 
 export interface SendGroupMessageParams {

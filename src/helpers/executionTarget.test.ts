@@ -7,6 +7,7 @@ import {
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
   isHeterogeneousSandboxExecutionAvailable,
+  isLocalSandboxEnabled,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
@@ -1121,5 +1122,38 @@ describe('isDeviceLockedPlan', () => {
     ).toBe(false);
     expect(isDeviceLockedPlan({ kind: 'none', target: 'none' })).toBe(false);
     expect(isDeviceLockedPlan({ kind: 'sandbox', target: 'sandbox' })).toBe(false);
+  });
+});
+
+describe('isLocalSandboxEnabled', () => {
+  it('fences a local run that opted in', () => {
+    expect(
+      isLocalSandboxEnabled(cfg({ executionTarget: 'local', localSandbox: true }), 'local'),
+    ).toBe(true);
+  });
+
+  it('leaves an opted-out local run alone', () => {
+    expect(isLocalSandboxEnabled(cfg({ executionTarget: 'local' }), 'local')).toBe(false);
+    expect(
+      isLocalSandboxEnabled(cfg({ executionTarget: 'local', localSandbox: false }), 'local'),
+    ).toBe(false);
+  });
+
+  it('ignores the flag once the run resolved somewhere other than local', () => {
+    // A stored `localSandbox` survives a switch to Cloud Sandbox (so switching
+    // back restores it), and web/bot coercions move a `local` target to
+    // `sandbox` / `device` / `auto`. None of those runs touch the desktop
+    // sandbox, so claiming they are fenced would be a lie about a security
+    // guarantee.
+    const config = cfg({ executionTarget: 'local', localSandbox: true });
+
+    expect(isLocalSandboxEnabled(config, 'sandbox')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'device')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'auto')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'none')).toBe(false);
+  });
+
+  it('treats a missing config as unfenced', () => {
+    expect(isLocalSandboxEnabled(undefined, 'local')).toBe(false);
   });
 });

@@ -111,7 +111,11 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     diagnostics,
     sourceCount: 3,
   }));
-  providers.set('github', { collect: githubCollect, id: 'github' });
+  providers.set('github', {
+    collect: githubCollect,
+    connectionSource: 'composio',
+    id: 'github',
+  });
   providers.set('gmail', {
     collect: vi.fn(async () => ({
       context:
@@ -119,6 +123,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       diagnostics,
       sourceCount: 3,
     })),
+    connectionSource: 'composio',
     id: 'gmail',
   });
 
@@ -340,6 +345,7 @@ describe('UnderstandingService', () => {
         providers: [{ id: 'gmail', revision: 1 }],
         responseLanguage: 'zh-CN',
         sessionId: 'session-1',
+        startedAt: expect.any(Number),
         topicId: 'topic-1',
         userId: 'user-1',
       },
@@ -352,6 +358,7 @@ describe('UnderstandingService', () => {
         responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         sourceFingerprint: 'github@1',
+        startedAt: expect.any(Number),
         topicId: 'topic-1',
         userId: 'user-1',
       },
@@ -415,6 +422,7 @@ describe('UnderstandingService', () => {
         ],
         responseLanguage: 'zh-CN',
         sessionId: 'session-new',
+        startedAt: expect.any(Number),
         topicId: 'topic-1',
         userId: 'user-1',
       },

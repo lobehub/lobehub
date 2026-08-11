@@ -10,7 +10,7 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import ContentLoading from '@/components/Loading/ContentLoading';
+import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
@@ -83,7 +83,7 @@ const Layout: FC = () => {
               <DesktopHomeLayout>
                 <DesktopHome />
               </DesktopHomeLayout>
-              <Suspense fallback={<ContentLoading />}>
+              <Suspense fallback={<RouteSegmentSkeleton />}>
                 <Outlet />
               </Suspense>
             </DesktopLayoutContainer>

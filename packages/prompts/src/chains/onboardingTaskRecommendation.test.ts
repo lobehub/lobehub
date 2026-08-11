@@ -44,4 +44,29 @@ describe('chainOnboardingTaskRecommendation', () => {
       'require a later explicit user-approved action',
     );
   });
+
+  /** @example Notion guidance treats page access as evidence rather than edit authorization. */
+  it('keeps Notion recommendations read-only by default', () => {
+    const notion = DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.notion;
+    const principles = notion.principles.join('\n');
+
+    expect(principles).toContain('does not establish that the user authored');
+    expect(principles).toContain('Never edit pages');
+    expect(notion.staleWorkspacePrinciples.join('\n')).toContain(
+      'centered on coverage and freshness',
+    );
+    expect(notion.staleWorkspacePrinciples.join('\n')).toContain(
+      'Never claim that newer or unauthorized pages exist',
+    );
+  });
+
+  /** @example X guidance separates authorship and keeps public social actions user-approved. */
+  it('keeps X recommendations read-only by default', () => {
+    const twitter = DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.twitter;
+    const principles = twitter.principles.join('\n');
+
+    expect(principles).toContain('Keep authored posts distinct from third-party mentions');
+    expect(principles).toContain('Never post, reply, like, repost');
+    expect(twitter.examples.join('\n')).toContain('private prioritized shortlist');
+  });
 });

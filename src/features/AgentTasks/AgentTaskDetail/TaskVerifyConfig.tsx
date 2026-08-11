@@ -1,23 +1,21 @@
 'use client';
 
+import { ActionIcon, Block, Flexbox, Icon, SortableList, Tag, Text, TextArea } from '@lobehub/ui';
 import {
-  ActionIcon,
-  Block,
+  Button,
+  confirmModal,
+  Drawer,
   type DropdownItem,
   DropdownMenu,
-  Flexbox,
-  Icon,
-  SortableList,
-  Tag,
-  Text,
-  TextArea,
-} from '@lobehub/ui';
-import { Button, Checkbox, Drawer, Select, toast } from '@lobehub/ui/base-ui';
+  Select,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
   ChevronUp,
   MoreHorizontal,
+  Pencil,
   Plus,
   RotateCcw,
   ShieldCheck,
@@ -388,6 +386,22 @@ const TaskVerifyConfig = memo(() => {
     [drafts, commit],
   );
 
+  // One-click teardown of the whole acceptance config; collapses back to the
+  // "+" trigger instead of leaving an empty editor open.
+  const handleRemoveAll = useCallback(() => {
+    confirmModal({
+      content: t('taskDetail.acceptance.removeConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.acceptance.removeConfirm.ok'),
+      onOk: () => {
+        setEditing(false);
+        setExpanded(false);
+        commit([], { enabled: false, requirement: '' });
+      },
+      title: t('taskDetail.acceptance.removeConfirm.title'),
+    });
+  }, [commit, t]);
+
   // New criteria are authored in the detail modal, not via an inline empty row —
   // so a half-typed criterion never leaks into the read-only preview.
   const handleManualAdd = useCallback(() => {
@@ -623,6 +637,32 @@ const TaskVerifyConfig = memo(() => {
   // ---- C. configured ----
   const requirementText = requirement.trim();
 
+  // Reviewer contract: the configured header exposes ONE overflow trigger; enable,
+  // edit, and remove all live inside it so the title row stays a single affordance.
+  const headerMenuItems: DropdownItem[] = [
+    {
+      checked: enabled,
+      key: 'enabled',
+      label: t('verifyConfig.enable'),
+      onCheckedChange: handleToggleEnabled,
+      type: 'checkbox',
+    },
+    {
+      icon: <Icon icon={Pencil} />,
+      key: 'edit',
+      label: t('verifyConfig.edit'),
+      onClick: () => setEditing(true),
+    },
+    { type: 'divider' },
+    {
+      danger: true,
+      icon: <Icon icon={Trash} />,
+      key: 'remove',
+      label: t('taskDetail.acceptance.remove'),
+      onClick: handleRemoveAll,
+    },
+  ];
+
   // Title + verifier/required tags — the shared meta shown in both preview and edit rows.
   const renderCriterionMeta = (item: DraftItem) => (
     <>
@@ -643,17 +683,21 @@ const TaskVerifyConfig = memo(() => {
             controls stay on the right without changing the information hierarchy. */}
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <TaskAcceptanceHeader isOpen count={drafts.length} onToggle={() => setExpanded(false)} />
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Checkbox
-              aria-label={t('verifyConfig.enable')}
-              checked={enabled}
-              size={16}
-              onChange={handleToggleEnabled}
-            />
-            <Button size={'small'} type={'text'} onClick={() => setEditing((v) => !v)}>
-              {editing ? t('verifyConfig.done') : t('verifyConfig.edit')}
+          {editing ? (
+            // Editing is a mode, not a menu action — finishing it stays a visible
+            // button instead of hiding the only exit inside the overflow.
+            <Button size={'small'} type={'text'} onClick={() => setEditing(false)}>
+              {t('verifyConfig.done')}
             </Button>
-          </Flexbox>
+          ) : (
+            <DropdownMenu items={headerMenuItems} placement={'bottomRight'}>
+              <ActionIcon
+                icon={MoreHorizontal}
+                size={'small'}
+                title={t('verifyConfig.moreActions')}
+              />
+            </DropdownMenu>
+          )}
         </Flexbox>
 
         {/* requirement: read-only sentence by default; TextArea + regenerate in edit mode */}

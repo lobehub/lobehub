@@ -215,7 +215,7 @@ export class TaskRecommendationService {
     responseLanguage: string,
   ): Promise<TaskRecommendationProviderResult> => {
     const provider = this.dependencies.providers.get(providerId);
-    if (!provider || (providerId !== 'github' && providerId !== 'gmail')) {
+    if (!provider) {
       return {
         error: {
           code: 'TASK_RECOMMENDATION_PROVIDER_UNAVAILABLE',
@@ -235,17 +235,23 @@ export class TaskRecommendationService {
       };
     }
 
+    const effectiveLimit = collected.recommendationLimit
+      ? Math.min(limit, collected.recommendationLimit)
+      : limit;
     const output = await this.dependencies.writer.generate({
       context: collected.context,
-      guide: this.dependencies.configurator.providers[providerId],
-      limit,
+      guide: {
+        examples: provider.guide.examples,
+        principles: [...provider.guide.principles, ...(collected.promptPrinciples ?? [])],
+      },
+      limit: effectiveLimit,
       providerId,
       responseLanguage,
       writingGuide: this.dependencies.configurator.writing,
     });
     const allowedSources = new Map(collected.sources.map((source) => [source.url, source]));
     const recommendations = output
-      .slice(0, limit)
+      .slice(0, effectiveLimit)
       .map((item) => {
         const sources = [...new Set(item.sourceUrls)]
           .slice(0, this.dependencies.configurator.writing.maxSourcesPerRecommendation)

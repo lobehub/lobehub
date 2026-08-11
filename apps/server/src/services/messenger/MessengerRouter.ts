@@ -565,6 +565,27 @@ export class MessengerRouter {
           return;
         }
 
+        // Re-validate the active agent for the same reason: `activeAgentId` is
+        // a long-lived binding that goes stale when the agent is deleted or
+        // moved out of the active scope. Without this the run reaches the
+        // agent runtime, `resolveAgentConfigOrThrow` throws `Agent not found`,
+        // and the user gets a bare "Agent Execution Failed" with no operation
+        // id and no way to recover — on every single message.
+        if (
+          !(await new AgentModel(serverDB, link.userId, link.workspaceId ?? undefined).existsById(
+            link.activeAgentId,
+          ))
+        ) {
+          log(
+            'handle: active agent %s no longer resolves for user=%s workspace=%s',
+            link.activeAgentId,
+            link.userId,
+            link.workspaceId,
+          );
+          await replyToSender(systemStrings.staleAgent);
+          return;
+        }
+
         const featureAccess = await getBotFeatureAccessState({
           action: 'runtime',
           platform,

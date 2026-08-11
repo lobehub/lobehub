@@ -98,7 +98,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const MetaDivider = memo(() => <span aria-hidden className={styles.metaDivider} />);
+const MetaDivider = () => <span aria-hidden className={styles.metaDivider} />;
 
 const StatBlock = memo<{
   bordered?: boolean;

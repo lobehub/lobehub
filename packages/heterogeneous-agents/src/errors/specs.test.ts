@@ -31,7 +31,13 @@ describe('hetero error taxonomy', () => {
   });
 
   it('only emits guide codes the client can actually render', () => {
-    const renderable = new Set(['auth_required', 'cli_not_found', 'overloaded', 'rate_limit']);
+    const renderable = new Set([
+      'auth_required',
+      'cli_not_found',
+      'overloaded',
+      'rate_limit',
+      'working_directory_not_found',
+    ]);
     for (const spec of specs) {
       if (spec.guideCode) expect(renderable).toContain(spec.guideCode);
     }

@@ -9,6 +9,7 @@ import { useResourceManagerUrlSync } from '@/features/ResourceManager/hooks/useR
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   getResourceQueryVisibility,
+  getResourceSourceFilter,
   sortFileList,
 } from '@/features/ResourceManager/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
@@ -35,16 +36,25 @@ const ResourceExplorer = memo(() => {
   useResourceManagerUrlSync();
 
   // Get state from Resource Manager store
-  const [libraryId, category, viewMode, searchQuery, sorter, sortType, listVisibility] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.category,
-      s.viewMode,
-      s.searchQuery,
-      s.sorter,
-      s.sortType,
-      s.listVisibility,
-    ]);
+  const [
+    libraryId,
+    category,
+    viewMode,
+    searchQuery,
+    sorter,
+    sortType,
+    listVisibility,
+    sourceFilter,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.viewMode,
+    s.searchQuery,
+    s.sorter,
+    s.sortType,
+    s.listVisibility,
+    getResourceSourceFilter(s),
+  ]);
 
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
@@ -60,12 +70,13 @@ const ResourceExplorer = memo(() => {
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
+      sourceFilter,
       // The two-mode narrowing belongs to the resource home. A concrete
       // library supplies its own visibility boundary and must not inherit the
       // user's last home filter.
       visibility: getResourceQueryVisibility(libraryId, listVisibility),
     }),
-    [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility],
+    [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility, sourceFilter],
   );
 
   // Use SWR for data fetching with automatic caching and revalidation.

@@ -153,7 +153,7 @@ app.delete(
  * - keyword: string (optional) - Search keyword (matches file name)
  *
  * Notes:
- * - When neither page nor pageSize is provided, returns all data without pagination
+ * - When page/pageSize are omitted, defaults to page 1 with 20 items
  */
 app.get(
   '/:id/files',

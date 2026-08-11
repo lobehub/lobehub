@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
@@ -41,6 +42,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
     findByIds: vi.fn().mockResolvedValue([]),
     query: vi.fn().mockResolvedValue([]),
     delete: vi.fn().mockResolvedValue(undefined),
+    deleteUnreferenced: vi.fn().mockResolvedValue(undefined),
     deleteMany: vi.fn().mockResolvedValue([]),
     updateGlobalFile: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn().mockResolvedValue({} as any),
@@ -152,6 +154,7 @@ vi.mock('@/database/models/chunk', () => ({
 const mockFileModelCheckHash = vi.fn();
 const mockFileModelCreate = vi.fn();
 const mockFileModelDelete = vi.fn();
+const mockFileModelDeleteUnreferenced = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
@@ -166,6 +169,7 @@ vi.mock('@/database/models/file', () => ({
     checkHash: mockFileModelCheckHash,
     create: mockFileModelCreate,
     delete: mockFileModelDelete,
+    deleteUnreferenced: mockFileModelDeleteUnreferenced,
     deleteMany: mockFileModelDeleteMany,
     findById: mockFileModelFindById,
     findByIds: mockFileModelFindByIds,
@@ -188,10 +192,11 @@ vi.mock('@/database/models/knowledgeBase', () => ({
 const mockFileServiceGetFullFileUrl = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
+const mockFileServiceDeleteFile = vi.fn();
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({
-    deleteFile: vi.fn(),
+    deleteFile: mockFileServiceDeleteFile,
     deleteFiles: vi.fn(),
     getFileAccessUrl: mockFileServiceGetFileAccessUrl,
     getFullFileUrl: mockFileServiceGetFullFileUrl,
@@ -357,6 +362,48 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should persist a known upload source so the origin filter can see it', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: FileSource.PageEditor,
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: FileSource.PageEditor }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should drop an unrecognised source instead of failing the upload', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: 'some-future-client',
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: undefined }),
+        true,
+        routerMocks.transactionClient,
+      );
     });
 
     it('should refresh global file metadata when an existing hash points to a missing object', async () => {
@@ -823,6 +870,27 @@ describe('fileRouter', () => {
       await caller.removeFile({ id: 'invalid-id' });
 
       expect(ctx.fileService.deleteFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeUnreferencedFile', () => {
+    it('keeps object storage when the file became referenced before cleanup', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'voice-file', userId: 'test-user' });
+      mockFileModelDeleteUnreferenced.mockResolvedValue(undefined);
+
+      await caller.removeUnreferencedFile({ id: 'voice-file' });
+
+      expect(mockFileModelDeleteUnreferenced).toHaveBeenCalledWith('voice-file', false);
+      expect(mockFileServiceDeleteFile).not.toHaveBeenCalled();
+    });
+
+    it('removes object storage after the unreferenced database row is deleted', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'voice-file', userId: 'test-user' });
+      mockFileModelDeleteUnreferenced.mockResolvedValue({ url: 'voice/file.webm' });
+
+      await caller.removeUnreferencedFile({ id: 'voice-file' });
+
+      expect(mockFileServiceDeleteFile).toHaveBeenCalledWith('voice/file.webm');
     });
   });
 

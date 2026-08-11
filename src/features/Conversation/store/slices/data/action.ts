@@ -13,6 +13,10 @@ import {
 } from '@/services/message/cache';
 import { getChatStoreState } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import {
+  isLocalOnlyMessage,
+  mergeLocalMessagesByCreatedAt,
+} from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../action';
@@ -27,23 +31,36 @@ const log = debug('lobe-render:features:Conversation');
 const mergeFetchedMessagesWithLocalState = (
   fetchedMessages: UIChatMessage[],
   localMessages: UIChatMessage[],
+  activeVoiceMessageIds: ReadonlySet<string>,
 ): UIChatMessage[] => {
-  if (localMessages.length === 0 || fetchedMessages.length === 0) return fetchedMessages;
+  if (localMessages.length === 0) return fetchedMessages;
 
   const localById = new Map(localMessages.map((message) => [message.id, message]));
+  const fetchedIds = new Set(fetchedMessages.map((message) => message.id));
   let changed = false;
 
   const mergedMessages = fetchedMessages.map((message) => {
     const localMessage = localById.get(message.id);
 
     if (!localMessage) return message;
+    // Once the server returns this id, its persisted row replaces the local-only preview.
+    if (isLocalOnlyMessage(localMessage)) return message;
     if (localMessage.updatedAt <= message.updatedAt) return message;
 
     changed = true;
     return localMessage;
   });
 
-  return changed ? mergedMessages : fetchedMessages;
+  const missingLocalOnlyMessages = localMessages.filter(
+    (message) =>
+      isLocalOnlyMessage(message) &&
+      activeVoiceMessageIds.has(message.id) &&
+      !fetchedIds.has(message.id),
+  );
+
+  if (missingLocalOnlyMessages.length === 0) return changed ? mergedMessages : fetchedMessages;
+
+  return mergeLocalMessagesByCreatedAt(mergedMessages, missingLocalOnlyMessages);
 };
 
 /**
@@ -286,7 +303,14 @@ export const dataSlice: StateCreator<
             return;
 
           const prevDbMessages = get().dbMessages;
-          const mergedMessages = mergeFetchedMessagesWithLocalState(data, prevDbMessages);
+          const activeVoiceMessageIds = new Set(
+            Object.keys(getChatStoreState().voiceMessageUploadMap),
+          );
+          const mergedMessages = mergeFetchedMessagesWithLocalState(
+            data,
+            prevDbMessages,
+            activeVoiceMessageIds,
+          );
 
           // Parse messages using conversation-flow
           const { flatList } = parse(mergedMessages);

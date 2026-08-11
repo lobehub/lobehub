@@ -92,6 +92,15 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
+   * Conflict error class
+   */
+  protected createConflictError(message: string): Error {
+    const error = new Error(message);
+    error.name = 'ConflictError';
+    return error;
+  }
+
+  /**
    * Not found error class
    */
   protected createNotFoundError(message: string): Error {
@@ -132,6 +141,7 @@ export abstract class BaseService implements IBaseService {
         'BusinessError',
         'AuthenticationError',
         'AuthorizationError',
+        'ConflictError',
         'NotFoundError',
         'ValidationError',
       ].includes(error.name)
@@ -200,6 +210,31 @@ export abstract class BaseService implements IBaseService {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
+  }
+
+  /**
+   * Row-level creator check for workspace-shared rows, mirroring the tRPC
+   * routers' `assertWorkspaceRowManageable`. Model ownership predicates are
+   * workspace-wide, so a role gate alone lets any member mutate rows created by
+   * someone else. Callers holding the `:all` scope keep managing every row.
+   *
+   * @param rowUserId - `userId` of the row being mutated
+   * @param permissionKey - permission whose `:all` scope grants workspace-wide management
+   * @param resource - resource name used in the error message
+   */
+  protected async assertRowManageable(
+    rowUserId: string | null | undefined,
+    permissionKey: keyof typeof PERMISSION_ACTIONS,
+    resource: string,
+  ): Promise<void> {
+    // Personal mode: the model's ownership filter already scopes rows to the caller.
+    if (!this.workspaceId) return;
+    if (await this.hasGlobalPermission(permissionKey)) return;
+    if (rowUserId !== this.userId) {
+      throw this.createAuthorizationError(
+        `Only the creator or a workspace owner can modify this ${resource}`,
+      );
+    }
   }
 
   /**

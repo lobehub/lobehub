@@ -657,6 +657,17 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ identifier, messageId, params, type: PortalViewType.ToolUI });
   };
 
+  openTopicInPortal = (topicId: string): void => {
+    this.#get().pushPortalView({ topicId, type: PortalViewType.Topic });
+  };
+
+  closeTopicPortal = (): void => {
+    const { portalStack } = this.#get();
+    if (getCurrentViewType(portalStack) === PortalViewType.Topic) {
+      this.#get().popPortalView();
+    }
+  };
+
   openVerifyResult = (operationId: string, checkItemId: string): void => {
     this.#get().pushPortalView({ checkItemId, operationId, type: PortalViewType.VerifyResult });
   };

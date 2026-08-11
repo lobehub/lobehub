@@ -22,7 +22,7 @@ import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEd
 import { useOpenEditedFile } from './useOpenEditedFile';
 
 export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
-export const AGGREGATE_EDITED_FILE_ICON_SIZE = 56;
+export const AGGREGATE_EDITED_FILE_ICON_SIZE = 40;
 
 /** Fire a toggle on Enter/Space so the div-based expander is keyboard operable. */
 const toggleOnKey = (toggle: () => void) => (event: KeyboardEvent<HTMLDivElement>) => {
@@ -44,9 +44,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     cursor: pointer;
-    min-height: 84px;
-    padding-block: 14px;
-    padding-inline: 16px;
+    padding-block: 10px;
+    padding-inline: 12px;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
@@ -57,7 +56,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
     height: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
-    border-radius: 12px;
+    border-radius: 10px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -130,9 +129,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     min-width: 0;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.4;
+    font-size: 14px;
+    font-weight: 500;
   `,
   stats: css`
     font-weight: 500;
@@ -371,14 +369,14 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
         align={'center'}
         aria-expanded={expanded}
         className={styles.header}
-        gap={14}
+        gap={10}
         role={'button'}
         tabIndex={0}
         onClick={() => setExpanded((prev) => !prev)}
         onKeyDown={toggleOnKey(() => setExpanded((prev) => !prev))}
       >
         <Center className={styles.headerIcon}>
-          <FilePenLineIcon size={26} />
+          <FilePenLineIcon size={24} />
         </Center>
         <Flexbox flex={1} gap={3} style={{ minWidth: 0 }}>
           <Text ellipsis className={styles.title}>

@@ -273,12 +273,12 @@ export const COMPOSIO_APP_TYPES: ComposioAppType[] = [
     author: 'Composio',
     authorUrl: 'https://composio.dev',
     description:
-      'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience',
+      'X is a social media platform for sharing real-time updates, news, and engaging with your audience',
     icon: SiX,
     identifier: 'twitter',
-    label: 'X (Twitter)',
+    label: 'X',
     readme:
-      'Connect to X (Twitter) to post updates, manage your timeline, and engage with your audience. Create content, monitor mentions, and build your social media presence through conversational AI.',
+      'Connect to X to post updates, manage your timeline, and engage with your audience. Create content, monitor mentions, and build your social media presence through conversational AI.',
   },
   {
     appSlug: 'GITHUB',

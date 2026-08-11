@@ -153,6 +153,24 @@ describe('spawnAgent', () => {
     for (const event of events) expect(event.operationId).toBe('op-1');
   });
 
+  it('fails before spawn when the configured working directory no longer exists', async () => {
+    const missingCwd = path.join(os.tmpdir(), `lobehub-missing-cwd-${Date.now()}`);
+    const { spawnAgent } = await import('./spawnAgent');
+
+    await expect(
+      spawnAgent({
+        agentType: 'codex',
+        cwd: missingCwd,
+        operationId: 'op-missing-cwd',
+        prompt: 'hello',
+      }),
+    ).rejects.toMatchObject({
+      code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      workingDirectory: missingCwd,
+    });
+    expect(spawnCalls).toHaveLength(0);
+  });
+
   it('passes --include-partial-messages only when includePartialMessages=true', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');

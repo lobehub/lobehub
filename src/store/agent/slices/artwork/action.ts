@@ -120,9 +120,25 @@ export class AgentArtworkActionImpl {
       if (!selection) throw new Error('No image generation model is available');
 
       const { model, provider } = selection;
-      const referenceImageUrl = input.referenceImageUrl?.trim();
-      const supportsReferenceImage =
-        !!referenceImageUrl && !!model.parameters && 'imageUrls' in model.parameters;
+      const supportsImageInput = !!model.parameters && 'imageUrls' in model.parameters;
+      const imageInputLimit = supportsImageInput
+        ? (model.parameters?.imageUrls?.maxCount ?? Number.POSITIVE_INFINITY)
+        : 0;
+      // Style references win over the counterpart-artwork reference; the prompt
+      // builder applies the same precedence so wording matches attachments.
+      const styleReferenceImageUrls = (input.styleReferenceImageUrls ?? [])
+        .map((url) => url.trim())
+        .filter(Boolean)
+        .slice(0, imageInputLimit);
+      const referenceImageUrl =
+        styleReferenceImageUrls.length > 0 ? undefined : input.referenceImageUrl?.trim();
+      const supportsReferenceImage = !!referenceImageUrl && supportsImageInput;
+      const imageUrls =
+        styleReferenceImageUrls.length > 0
+          ? styleReferenceImageUrls
+          : supportsReferenceImage
+            ? [referenceImageUrl]
+            : undefined;
       const supportedSizes =
         model.parameters && 'size' in model.parameters ? model.parameters.size?.enum : undefined;
       const preferredSizes =
@@ -138,11 +154,12 @@ export class AgentArtworkActionImpl {
       const aspectRatio = input.kind === 'avatar' ? '1:1' : '16:9';
       const params = {
         ...(model.parameters && 'aspectRatio' in model.parameters ? { aspectRatio } : {}),
-        ...(supportsReferenceImage ? { imageUrls: [referenceImageUrl] } : {}),
+        ...(imageUrls ? { imageUrls } : {}),
         ...(size ? { size } : {}),
         prompt: buildAgentArtworkPrompt({
           ...input,
           referenceImageUrl: supportsReferenceImage ? referenceImageUrl : undefined,
+          styleReferenceImageUrls,
         }),
       };
       const result = await imageService.createImage({

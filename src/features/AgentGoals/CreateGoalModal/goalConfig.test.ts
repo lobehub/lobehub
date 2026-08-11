@@ -1,7 +1,21 @@
 import { DEFAULT_GOAL_MAX_ROUNDS, DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalTaskConfig } from './goalConfig';
+import { buildGoalTaskConfig, deriveInitialGoalCriterionTitle } from './goalConfig';
+
+describe('deriveInitialGoalCriterionTitle', () => {
+  it('uses the instruction when a free-form goal has no dedicated requirement', () => {
+    expect(deriveInitialGoalCriterionTitle('  ship the quarterly report  ')).toBe(
+      'ship the quarterly report',
+    );
+  });
+
+  it('prefers a seeded requirement when one is available', () => {
+    expect(
+      deriveInitialGoalCriterionTitle('ship the quarterly report', '  include all source links  '),
+    ).toBe('include all source links');
+  });
+});
 
 describe('buildGoalTaskConfig', () => {
   it('keeps the round budget and the repair budget independent', () => {

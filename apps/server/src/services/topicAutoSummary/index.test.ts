@@ -59,7 +59,9 @@ const createDb = () => {
 describe('TopicAutoSummaryService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getUserSettings.mockResolvedValue({});
+    mocks.getUserSettings.mockResolvedValue({
+      systemAgent: { topicAutoSummary: { enabled: true } },
+    });
     mocks.generateObject.mockResolvedValue({ description: 'Next steps', summary: 'Combined' });
     mocks.updateSummaryIfCurrent.mockResolvedValue(true);
   });
@@ -75,5 +77,27 @@ describe('TopicAutoSummaryService', () => {
       'Previous rolling summary:\nEarlier decision: use PostgreSQL.',
     );
     expect(request.messages[1].content).toContain('Recent conversation:\nUSER: What is next?');
+  });
+
+  it('skips a user who never opted in', async () => {
+    mocks.getUserSettings.mockResolvedValue({});
+    const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+    const result = await service.summarize('topic-1');
+
+    expect(result).toEqual({ reason: 'disabled', summarized: false });
+    expect(mocks.generateObject).not.toHaveBeenCalled();
+  });
+
+  it('still summarizes an opted-out user when forced', async () => {
+    mocks.getUserSettings.mockResolvedValue({
+      systemAgent: { topicAutoSummary: { enabled: false } },
+    });
+    const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+    const result = await service.summarize('topic-1', { force: true });
+
+    expect(result).toEqual({ summarized: true });
+    expect(mocks.generateObject).toHaveBeenCalled();
   });
 });

@@ -1,7 +1,16 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { AlertTriangle, Ban, Check, HandIcon, type LucideIcon, PauseIcon, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Ban,
+  Check,
+  CornerUpRight,
+  HandIcon,
+  type LucideIcon,
+  PauseIcon,
+  X,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,7 +58,13 @@ const StatusIndicator = memo<StatusIndicatorProps>(
         </Tooltip>
       );
     } else if (isReject) {
-      icon = (
+      // A user skip (e.g. AskUserQuestion) is a normal outcome, not a denial —
+      // keep the glyph and copy neutral instead of the rejection ban sign.
+      icon = intervention?.skipped ? (
+        <Tooltip title={t('tool.intervention.toolSkipped')}>
+          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} />
+        </Tooltip>
+      ) : (
         <Tooltip title={t('tool.intervention.toolRejected')}>
           <Icon color={cssVar.colorTextTertiary} icon={Ban} />
         </Tooltip>

@@ -20,7 +20,8 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  *
  * This helper mirrors the desktop in-process classifier
  * (`HeterogeneousAgentCtr.getSessionErrorPayload`) for the two guide codes a
- * process-level failure can produce: `cli_not_found` and `auth_required`.
+ * process-level failure can produce: `cli_not_found`,
+ * `working_directory_not_found`, and `auth_required`.
  * The returned shape is persisted verbatim as the `ChatMessageError.body`, so
  * it must carry `agentType` + `code` — that pair is what
  * `isHeterogeneousAgentStatusGuideError` gates the dedicated UI on.
@@ -30,12 +31,12 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  * Node reports a missing executable as an `ErrnoException` with
  * `code: 'ENOENT'` and message `spawn <command> ENOENT`. When only stderr text
  * is available (the raw error object was already flattened into the stderr
- * tail), match the message shape instead. Note ENOENT is also raised for a
- * missing `cwd` — same behavior as the desktop classifier; both mean "this
- * machine can't start the CLI as configured".
+ * tail), match the message shape instead. A missing `cwd` also produces
+ * ENOENT, so spawn sites validate it first and surface a distinct code.
  */
 const SPAWN_ENOENT_PATTERN = /\bspawn .+ ENOENT\b/;
 
+export const HETERO_WORKING_DIRECTORY_NOT_FOUND = 'HETERO_WORKING_DIRECTORY_NOT_FOUND';
 /**
  * Codes/agent types the client renders the dedicated status-guide card for.
  * Must stay in sync with `HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES` in
@@ -47,6 +48,7 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'cli_not_found',
   'overloaded',
   'rate_limit',
+  'working_directory_not_found',
 ]);
 const STATUS_GUIDE_AGENT_TYPES = new Set(
   HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type as string),
@@ -99,6 +101,15 @@ export const classifyHeteroProcessFailure = (
 
   // Unknown agent type → the client guide can't render it; don't classify.
   if (!isLocalHeterogeneousType(agentType)) return;
+
+  if (errnoCode === HETERO_WORKING_DIRECTORY_NOT_FOUND) {
+    return {
+      agentType,
+      code: 'working_directory_not_found',
+      message: detail || 'The configured working directory no longer exists.',
+      ...(detail ? { stderr: detail } : {}),
+    };
+  }
 
   if (errnoCode === 'ENOENT' || (detail && SPAWN_ENOENT_PATTERN.test(detail))) {
     return buildHeterogeneousAgentCliNotFoundError({

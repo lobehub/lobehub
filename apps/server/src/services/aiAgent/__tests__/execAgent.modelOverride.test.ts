@@ -64,8 +64,27 @@ vi.mock('@/database/models/plugin', () => ({
   })),
 }));
 
+// Builtin agents inject their own tools, so a run under a builtin slug reaches
+// connector resolution that the plain-agent cases never do.
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: vi.fn().mockImplementation(() => ({
+    queryByIdentifiers: vi.fn().mockResolvedValue([]),
+    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(() => ({
+    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+    queryByConnector: vi.fn().mockResolvedValue([]),
+    queryByConnectorIds: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
     findById: mockTopicFindById,
   })),
@@ -346,6 +365,37 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(mockIsResourceAuthorOrAdmin).toHaveBeenCalledWith(
       expect.objectContaining({ userId, workspaceId: 'workspace-1' }),
     );
+  });
+
+  it('uses the caller model preference on a collaborative builtin the caller created', async () => {
+    // The Agent Builder row is provisioned by whichever member opened the panel
+    // first; being that member (or an admin) must not pin everyone to their
+    // model, so the run reads this caller's own override. Chat/Agent mode keeps
+    // the ordinary author rule and stays shared.
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(true);
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+      slug: 'group-agent-builder',
+      userId,
+      virtual: true,
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+      agentModeOverrides: { 'agent-1': false },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
   });
 
   it('ignores the caller model preference when the workspace Agent is private', async () => {

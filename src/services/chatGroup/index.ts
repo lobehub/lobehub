@@ -6,6 +6,7 @@ import {
   type NewChatGroup,
   type NewChatGroupAgent,
 } from '@/database/schemas';
+import type { GroupMemberRole } from '@/database/utils/groupMembership';
 import { lambdaClient } from '@/libs/trpc/client';
 
 export interface GroupMemberConfig {
@@ -125,7 +126,7 @@ class ChatGroupService {
   updateAgentInGroup = (
     groupId: string,
     agentId: string,
-    updates: Partial<Pick<NewChatGroupAgent, 'order' | 'role'>>,
+    updates: { order?: number | null; role?: GroupMemberRole | null },
   ): Promise<NewChatGroupAgent> => {
     return lambdaClient.group.updateAgentInGroup.mutate({
       agentId,
@@ -152,16 +153,42 @@ class ChatGroupService {
     return lambdaClient.group.duplicateGroup.mutate({ groupId, newTitle });
   };
 
+  /**
+   * Members these groups only reference (`External` in the roster). A transfer
+   * leaves them where they are and clones them into the target scope.
+   */
+  listReferencedMembers = (
+    groupIds: string[],
+  ): Promise<
+    {
+      agentId: string;
+      avatar: string | null;
+      backgroundColor: string | null;
+      groupId: string;
+      title: string | null;
+    }[]
+  > => {
+    return lambdaClient.group.listReferencedMembers.query({ groupIds });
+  };
+
   transferGroup = (
     groupId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ groupId: string } | null> => {
+  ): Promise<{ groupId: string; transferJobId?: string | null } | null> => {
     return lambdaClient.group.transferGroup.mutate({
       groupId,
       targetVisibility,
       targetWorkspaceId,
     });
+  };
+
+  /**
+   * Async history-backfill progress for a transferred/copied group.
+   * `topicIds` caps the reported pending set to what the client can show.
+   */
+  getTransferJobStatus = async (groupId: string, topicIds: string[]) => {
+    return lambdaClient.group.getTransferJobStatus.query({ groupId, topicIds });
   };
 }
 

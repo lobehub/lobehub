@@ -74,6 +74,7 @@ const selectContextMessages = (messages: GmailMessage[]) => {
 export const GMAIL_PROFILE_QUERIES = GMAIL_PROFILE_SEARCHES.map(({ query }) => query);
 
 export const gmailUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'gmail',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGmailClient();

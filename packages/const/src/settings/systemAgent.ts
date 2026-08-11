@@ -39,10 +39,13 @@ export const DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
 };
 
+// Opt-in: summarizing runs unattended in the background and spends the user's
+// own budget, so it stays off until they turn it on. Model/provider follow the
+// branded defaults rather than a hardcoded pair, so the deployment's own
+// gateway resolves the credentials instead of a per-provider server env key.
 export const DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
-  enabled: true,
-  model: 'deepseek-v4-flash',
-  provider: 'deepseek',
+  ...DEFAULT_SYSTEM_AGENT_ITEM,
+  enabled: false,
 };
 
 export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = {

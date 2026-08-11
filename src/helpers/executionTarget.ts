@@ -225,6 +225,25 @@ export const resolveExecutionTarget = (
 };
 
 /**
+ * Whether this run's shell commands must go through the device sandbox.
+ *
+ * The stored flag alone is not the answer: `localSandbox` qualifies *local*
+ * execution, so it applies only once the effective target actually resolved to
+ * `local`. A config that carries the flag but ran into a web coercion, a bot
+ * trigger promotion, or a `device` selection is not sandboxed — pretending
+ * otherwise would claim a guarantee the run never had.
+ *
+ * Callers pass the target they already resolved (`resolveExecutionTarget` /
+ * `ExecutionPlan.target`) rather than re-deriving it, so the picker, the server
+ * device-proxy, and the desktop runner cannot drift apart on which runs are
+ * fenced.
+ */
+export const isLocalSandboxEnabled = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  effectiveTarget: DeviceExecutionTarget,
+): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
+
+/**
  * Derive the `runtimeMode` tool gate from the unified execution target:
  * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
  * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`

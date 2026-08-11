@@ -12,51 +12,6 @@ export const TaskManifest: BuiltinToolManifest = {
     // ==================== Task CRUD ====================
     {
       description:
-        'Create and immediately start a goal-driven task with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the task, persists the acceptance criteria, enables bounded automatic repair, and runs the current agent in a separate task topic. Once it succeeds, do not execute or reproduce the work in the current conversation; the live result card is the progress and result entry point.',
-      humanIntervention: 'required',
-      name: TaskApiName.createGoal,
-      parameters: {
-        properties: {
-          criteria: {
-            description:
-              'Concrete acceptance criteria derived from every explicit user requirement.',
-            items: {
-              properties: {
-                description: { type: 'string' },
-                instruction: {
-                  description: 'Detailed judging instruction. Omit for program checks.',
-                  type: 'string',
-                },
-                onFail: { enum: ['auto_repair', 'manual'], type: 'string' },
-                required: { type: 'boolean' },
-                title: { type: 'string' },
-                verifierConfig: { type: 'object' },
-                verifierType: { enum: ['agent', 'llm', 'program'], type: 'string' },
-              },
-              required: ['title'],
-              type: 'object',
-            },
-            type: 'array',
-          },
-          instruction: { description: 'Detailed task direction and constraints.', type: 'string' },
-          maxIterations: {
-            description:
-              'Maximum automatic execution/repair rounds. Default 3, minimum 2. Null means no user-specified cap.',
-            type: ['number', 'null'],
-          },
-          maxTotalCost: {
-            description: 'Optional total USD budget. Null means no user-specified cap.',
-            type: ['number', 'null'],
-          },
-          name: { description: 'Short task title.', type: 'string' },
-        },
-        required: ['name', 'instruction', 'criteria'],
-        type: 'object',
-      },
-      renderDisplayControl: 'expand',
-    },
-    {
-      description:
         'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier.',
       name: TaskApiName.createTask,
       parameters: {

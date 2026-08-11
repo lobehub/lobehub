@@ -69,6 +69,22 @@ Do not include irrelevant environment rows. Add a row when the run has another h
 prerequisite, such as a native app, gateway, fixture repository, or specific
 external account.
 
+## Case selection gate (hard rule)
+
+Every planned case MUST be a delivery outcome a person can judge — what the
+user sees, hears, reads, or receives. **Never plan a case whose subject is the
+repo's own programmatic gate**: unit / integration / regression tests, test
+suites, coverage, type-check, lint, format, or a clean build. Run those gates as
+part of your own diligence and report them as one line of narrative in
+`report.md` → Verification — they are preconditions of shipping, not things the
+user accepts, and `lh acceptance run ingest` drops them from the round (a
+gates-only round fails to publish entirely). A plan feedback that lists such a
+case wastes the user's approval on a row that will never reach the page.
+
+The gate is about the check's _subject_, not its verifier: a CLI behavior case
+asserted by a command is a good case (`verifier: "program"`); "`bun run test`
+is green" is not.
+
 When a check refines or replaces a requirement from an earlier Acceptance round,
 keep the old stable id if it is the same assertion. If the semantic assertion needs
 a new id, declare the replacement explicitly with `supersedes: ['old-check-id']`;

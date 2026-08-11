@@ -17,6 +17,7 @@ export interface StoreUpdaterProps extends Partial<PublicState> {
 const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     agentId,
+    canRecordVoiceMessage,
     chatInputEditorRef,
     contextSelectionKey,
     contextWindowMessages,
@@ -27,6 +28,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     leftActions,
     rightActions,
     onSend,
+    onVoiceMessageSend,
     onMarkdownContentChange,
     sendMenu,
     mentionItems,
@@ -40,6 +42,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const editor = useChatInputEditor();
 
     useStoreUpdater('agentId', agentId);
+    useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
     useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);
 
@@ -63,6 +66,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
     useStoreUpdater('onSend', onSend);
+    useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
 
     useEffect(() => {

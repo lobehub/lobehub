@@ -6,6 +6,7 @@ import { lazy, memo, Suspense, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
@@ -13,6 +14,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
@@ -28,6 +30,7 @@ import type { HomeMode } from './types';
 // no-op. Lazy so the home bundle doesn't pay for the chat stack until a run is
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
+const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -278,10 +281,14 @@ const Home = memo(() => {
   const [inputValue, setInputValue] = useState('');
 
   const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
+  const portalViewType = useChatStore(chatPortalSelectors.currentViewType);
+  const acceptancePortalOpen = isAcceptancePortalView(portalViewType);
   // Mount the drawer on first open and keep it mounted afterwards, so its
   // close animation can play instead of the panel vanishing with the state.
   const [drawerMounted, setDrawerMounted] = useState(false);
   if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
+  const [acceptanceDrawerMounted, setAcceptanceDrawerMounted] = useState(false);
+  if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
@@ -373,6 +380,11 @@ const Home = memo(() => {
       {drawerMounted && (
         <Suspense fallback={null}>
           <TopicChatDrawer />
+        </Suspense>
+      )}
+      {acceptanceDrawerMounted && (
+        <Suspense fallback={null}>
+          <AcceptancePortalDrawer />
         </Suspense>
       )}
     </Flexbox>

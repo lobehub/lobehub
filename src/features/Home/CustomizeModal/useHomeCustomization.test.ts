@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   HOME_PRESETS,
+  HOME_WIDGET_GROUPS,
   HOME_WIDGET_KEYS,
   isHomeMinimalLayout,
+  isHomeWidgetHidden,
   isWidgetSectionVisible,
   resolveHomePreset,
 } from './config';
@@ -95,6 +97,54 @@ describe('isHomeMinimalLayout', () => {
         showPortrait: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('HOME_WIDGET_GROUPS', () => {
+  const grouped = HOME_WIDGET_GROUPS.flatMap((group) => group.widgets);
+
+  it('gives every widget exactly one group, so none can fall out of the panel', () => {
+    expect([...grouped].sort()).toEqual([...HOME_WIDGET_KEYS].sort());
+  });
+
+  // The groups name where a section sits on Home, so membership is a fact about
+  // the page rather than a taste call. `RAIL_INBOX_PROPS` keeps needs-you and
+  // unread out of the rail, and `ownsRailSections` gives running / news /
+  // suggestions to it; goals renders in the rail card. Move a section between
+  // columns and this test is the thing that says the panel now lies.
+  it.each([
+    ['agent', ['recents', 'unread', 'needsYou']],
+    ['task', ['tasks', 'scheduledTasks']],
+    ['rail', ['goals', 'running', 'news', 'suggestions']],
+  ])('groups %s by where those sections render on Home', (key, widgets) => {
+    expect(HOME_WIDGET_GROUPS.find((group) => group.key === key)?.widgets).toEqual(widgets);
+  });
+});
+
+describe('isHomeWidgetHidden', () => {
+  // Everything a minimal-preset page stored before the scheduled block existed.
+  const LEGACY_ALL_HIDDEN = HOME_WIDGET_KEYS.filter((key) => key !== 'scheduledTasks');
+
+  it('hides the scheduled block along with the task list it belongs to', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['tasks'])).toBe(true);
+  });
+
+  it('lets the scheduled block be switched off on its own', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['scheduledTasks'])).toBe(true);
+    expect(isHomeWidgetHidden('tasks', ['scheduledTasks'])).toBe(false);
+  });
+
+  it('leaves both on when neither is listed', () => {
+    expect(isHomeWidgetHidden('scheduledTasks', ['news'])).toBe(false);
+  });
+
+  it('does not grow a section back onto a page saved before the key existed', () => {
+    expect(resolveHomePreset({ hiddenWidgets: LEGACY_ALL_HIDDEN, showPortrait: false })).toBe(
+      'minimal',
+    );
+    expect(isHomeMinimalLayout({ hiddenWidgets: LEGACY_ALL_HIDDEN, showPortrait: false })).toBe(
+      true,
+    );
   });
 });
 

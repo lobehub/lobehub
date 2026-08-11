@@ -5,10 +5,10 @@ import { Switch } from '@lobehub/ui/base-ui';
 import { Checkbox } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Check } from 'lucide-react';
-import { type FC } from 'react';
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ApiKeyScope } from '@/const/apiKeyScope';
+import type { ApiKeyScope } from '@/const/apiKeyScope';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   disabled: css`
@@ -80,11 +80,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 /**
- * Scope groups shown to the user. Each group carries a read and a write
- * scope; the model group additionally carries the money-burning
- * `model:invoke` tier.
+ * Scope groups shown to the user. Most domains carry read and write scopes;
+ * usage is intentionally read-only, while the model group additionally
+ * carries the money-burning `model:invoke` tier.
  */
-const SCOPE_GROUPS = [
+type ScopeGroupKey =
+  'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
+
+interface ScopeGroup {
+  readonly key: ScopeGroupKey;
+  readonly label: `apikey.scopes.groups.${ScopeGroupKey}`;
+  readonly read: ApiKeyScope;
+  readonly write?: ApiKeyScope;
+}
+
+const SCOPE_GROUPS: readonly ScopeGroup[] = [
   { key: 'agent', label: 'apikey.scopes.groups.agent', read: 'agent:read', write: 'agent:write' },
   { key: 'chat', label: 'apikey.scopes.groups.chat', read: 'chat:read', write: 'chat:write' },
   { key: 'model', label: 'apikey.scopes.groups.model', read: 'model:read', write: 'model:write' },
@@ -95,6 +105,8 @@ const SCOPE_GROUPS = [
     read: 'knowledge:read',
     write: 'knowledge:write',
   },
+  { key: 'mcp', label: 'apikey.scopes.groups.mcp', read: 'mcp:read', write: 'mcp:write' },
+  { key: 'usage', label: 'apikey.scopes.groups.usage', read: 'usage:read' },
   {
     key: 'workspace',
     label: 'apikey.scopes.groups.workspace',
@@ -102,7 +114,7 @@ const SCOPE_GROUPS = [
     write: 'workspace:write',
   },
   { key: 'user', label: 'apikey.scopes.groups.user', read: 'user:read', write: 'user:write' },
-] as const satisfies { key: string; label: string; read: ApiKeyScope; write: ApiKeyScope }[];
+];
 
 export interface ScopeOverviewProps {
   scopes: string[];
@@ -125,7 +137,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
   const grants = SCOPE_GROUPS.flatMap((group) => {
     const actions = [
       scopeSet.has(group.read) && t('apikey.scopes.read'),
-      scopeSet.has(group.write) && t('apikey.scopes.write'),
+      group.write && scopeSet.has(group.write) && t('apikey.scopes.write'),
       group.key === 'model' && scopeSet.has('model:invoke') && t('apikey.scopes.invoke'),
     ].filter(Boolean) as string[];
 
@@ -209,13 +221,15 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                   >
                     {t('apikey.scopes.read')}
                   </Checkbox>
-                  <Checkbox
-                    checked={selectedSet.has(group.write)}
-                    disabled={fullAccess}
-                    onChange={(e) => toggle(group.write, e.target.checked)}
-                  >
-                    {t('apikey.scopes.write')}
-                  </Checkbox>
+                  {group.write && (
+                    <Checkbox
+                      checked={selectedSet.has(group.write)}
+                      disabled={fullAccess}
+                      onChange={(e) => group.write && toggle(group.write, e.target.checked)}
+                    >
+                      {t('apikey.scopes.write')}
+                    </Checkbox>
+                  )}
                   {group.key === 'model' && (
                     <Checkbox
                       checked={selectedSet.has('model:invoke')}

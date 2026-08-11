@@ -380,7 +380,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
-    expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
+    expect(dispatchParams).toEqual(
+      expect.objectContaining({ assistantMessageId: 'msg-1', deviceId: 'device-1' }),
+    );
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
   });
 

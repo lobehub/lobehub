@@ -40,7 +40,7 @@ interface FakeThread {
 
 interface FakeTopicMetadata {
   heteroCurrentMsgId?: { msgId: string; operationId: string };
-  runningOperation: {
+  runningOperation?: {
     assistantMessageId: string;
     operationId: string;
     threadId?: string;
@@ -1529,6 +1529,51 @@ describe('HeterogeneousPersistenceHandler', () => {
         code: 'cli_not_found',
       });
       expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() projects the terminal error by assistant id after runningOperation was cleared', async () => {
+      // Gateway session completion can clear runningOperation before the CLI's
+      // heteroFinish request arrives. The producer-carried assistant id must
+      // keep that race from leaving an empty assistant with error=null.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.messages.get('asst-1')!.content = '...';
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {},
+      });
+
+      await h.handler.finish({
+        assistantMessageId: 'asst-1',
+        error: {
+          body: {
+            agentType: 'claude-code',
+            clearEchoedContent: true,
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          },
+          message: "You've hit your session limit",
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toMatchObject({
+        body: {
+          agentType: 'claude-code',
+          code: 'rate_limit',
+        },
+        message: "You've hit your session limit",
+        type: 'AgentRuntimeError',
+      });
+      expect(asst.content).toBe('');
     });
 
     it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {

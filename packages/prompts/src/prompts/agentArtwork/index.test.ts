@@ -54,10 +54,54 @@ describe('buildAgentArtworkPrompt', () => {
     expect(prompt).toContain('same identity system');
   });
 
-  it('defaults to the editorial style direction', () => {
+  it('defaults to the lobe mascot style direction', () => {
     const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar' });
 
-    expect(prompt).toContain('polished editorial illustration');
+    expect(prompt).toContain('one vivid contrasting solid background color');
+    expect(prompt).toContain('mascot-style 3D emoji character');
+    expect(prompt).toContain('never blank or babyish');
+    expect(prompt).toContain('friendly likeable color');
+    expect(prompt).not.toContain('smirk');
+  });
+
+  it('swaps the character-shaped lobe direction for a style-only one on covers', () => {
+    const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'background', style: 'lobe' });
+
+    expect(prompt).toContain('soft 3D cartoon world');
+    expect(prompt).not.toContain('big lively glossy eyes');
+  });
+
+  it('describes attached style references and fences off subjects and proportions', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'avatar',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(prompt).toContain('as the target character style');
+    expect(prompt).toContain('Do not copy their exact faces, hats, or subjects');
+  });
+
+  it('uses singular wording for a single style reference', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'background',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
+    });
+
+    expect(prompt).toContain('only as a rendering-style reference');
+  });
+
+  it('lets style references suppress the counterpart artwork reference', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'avatar',
+      referenceImageUrl: 'https://example.com/background.png',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
+    });
+
+    expect(prompt).toContain('as the target character style');
+    expect(prompt).not.toContain('attached existing profile background');
   });
 
   it('renders a distinct direction for every style preset', () => {
@@ -67,7 +111,8 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
     expect(prompts.find((p) => p.includes('watercolor'))).toBeTruthy();
-    expect(prompts.find((p) => p.includes('risograph'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('pixel art'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('die-cut sticker'))).toBeTruthy();
   });
 
   it('applies the chosen style to both avatar and background prompts', () => {
@@ -78,8 +123,8 @@ describe('buildAgentArtworkPrompt', () => {
       style: 'clay',
     });
 
-    expect(avatar).toContain('clay-style scene');
-    expect(background).toContain('clay-style scene');
+    expect(avatar).toContain('clay-style figure');
+    expect(background).toContain('clay-style figure');
   });
 
   it('steers the motif away from generic technology clichés in every prompt', () => {

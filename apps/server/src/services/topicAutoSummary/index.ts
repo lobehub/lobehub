@@ -57,7 +57,9 @@ export class TopicAutoSummaryService {
     const settings = await new UserModel(this.db, this.userId).getUserSettings();
     const systemAgent = settings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
     const config = systemAgent?.topicAutoSummary as Partial<SystemAgentItem> | undefined;
-    if (!options.force && config?.enabled === false)
+    // Opt-in, so an absent setting means disabled — the dispatch query filters on
+    // the same default, and this guard also covers replays that skip dispatch.
+    if (!options.force && config?.enabled !== true)
       return { reason: 'disabled', summarized: false };
 
     const ownership = this.workspaceId

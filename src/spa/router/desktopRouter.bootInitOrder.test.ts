@@ -1,11 +1,11 @@
 // Import ORDER is load-bearing and must not be reshuffled: the desktop boot
-// evaluates the navigation facade (`NavigatorRegistrar.desktop` → `appNavigate`
-// → `activeTabNavigate`) before the router config. If any of those statically
-// pull `desktopRouter.config` back in, the Electron adapter runs its top-level
-// `redirectElement(...)` while `@/utils/router` is still initializing and hits
-// a jsx-runtime TDZ ("Cannot access '_jsxDEV' before initialization"), leaving
-// the renderer white-screened. This test wires that order up so a regression in
-// the navigation import graph fails here instead of only on the packaged app.
+// evaluates structural fallbacks and the navigation facade
+// (`NavigatorRegistrar.desktop` → `appNavigate` → `activeTabNavigate`) before
+// the router config. If either graph statically pulls `desktopRouter.config`
+// back in, the Electron adapter can evaluate `redirectElement(...)` or a
+// platform route component while its dependency is still initializing and
+// leave the renderer white-screened with a TDZ error.
+import '@/components/Skeleton/RouteSegment';
 import '@/utils/NavigatorRegistrar.desktop';
 
 import { describe, expect, it } from 'vitest';

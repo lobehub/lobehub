@@ -46,9 +46,7 @@ const ChatLayout = memo(() => {
             style={{ minHeight: 0, minWidth: 0 }}
           >
             <ChatHeader />
-            <Flexbox flex={1} style={{ minHeight: 0, position: 'relative' }}>
-              <Outlet />
-            </Flexbox>
+            <Outlet />
           </Flexbox>
           <Portal />
           <AgentWorkingSidebar availableWidth={rowSize?.width} />

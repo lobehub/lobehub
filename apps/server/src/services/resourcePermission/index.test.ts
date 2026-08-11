@@ -402,7 +402,7 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(false);
     });
 
-    it('still lets every member use an internal builtin (resource default is use)', async () => {
+    it('still lets every member use an internal builtin at use-level access', async () => {
       permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
       effectiveAccessMock.mockResolvedValue('use');
 
@@ -610,7 +610,7 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(true);
     });
 
-    // The bypass covers the *implicit* `use` default only. An owner who explicitly
+    // The bypass covers the *implicit* resource default only. An owner who explicitly
     // narrows General access means it — otherwise that control would persist a value
     // it never enforces.
     it('enforces an explicitly configured access level on a collaborative builtin', async () => {

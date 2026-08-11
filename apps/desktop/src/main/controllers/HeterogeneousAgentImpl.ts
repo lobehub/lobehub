@@ -404,6 +404,23 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
+  private resolveSessionWorkingDirectory(session: AgentSession): string {
+    return session.cwd || electronApp.getPath('desktop');
+  }
+
+  private buildWorkingDirectoryMissingError(
+    session: AgentSession,
+    workingDirectory: string,
+  ): HeterogeneousAgentSessionError {
+    return {
+      agentType: session.agentType,
+      code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+      command: this.resolveSessionCommand(session),
+      message: `Working directory does not exist: ${workingDirectory}`,
+      workingDirectory,
+    };
+  }
+
   private buildCliAuthRequiredError(
     session: AgentSession,
     stderr: string,
@@ -492,6 +509,11 @@ export default class HeterogeneousAgentCtr {
 
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
+      const workingDirectory = this.resolveSessionWorkingDirectory(session);
+      if (!existsSync(workingDirectory)) {
+        return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+      }
+
       const cliMissingError = this.buildCliMissingError(session);
       if (cliMissingError) return cliMissingError;
     }
@@ -551,6 +573,11 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
+    const workingDirectory = this.resolveSessionWorkingDirectory(session);
+    if (!existsSync(workingDirectory)) {
+      return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+    }
+
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
     const command = this.resolveSessionCommand(session);
@@ -1084,6 +1111,7 @@ export default class HeterogeneousAgentCtr {
     let traceSession;
     let cwd: string;
     let initialCumulativeUsage: UsageData | undefined;
+    let resolvedCliSpawnPlan;
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
@@ -1111,6 +1139,11 @@ export default class HeterogeneousAgentCtr {
         promptInput,
         resumeSessionId: session.agentSessionId,
       });
+
+      resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+        session.resolvedCommandPath ?? session.command,
+        spawnPlan.args,
+      );
 
       // Fall back to the user's Desktop so the process never inherits
       // the Electron parent's cwd (which is `/` when launched from Finder).
@@ -1153,11 +1186,6 @@ export default class HeterogeneousAgentCtr {
       throw err;
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
-    const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
-      session.resolvedCommandPath ?? session.command,
-      cliArgs,
-    );
 
     logger.info(
       'Spawning agent:',
@@ -2001,6 +2029,7 @@ export default class HeterogeneousAgentCtr {
    */
   spawnLhHeteroExec(params: {
     agentType: string;
+    assistantMessageId?: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
@@ -2016,6 +2045,7 @@ export default class HeterogeneousAgentCtr {
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
+      assistantMessageId,
       args: extraArgs,
       cwd,
       imageList,
@@ -2071,6 +2101,7 @@ export default class HeterogeneousAgentCtr {
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
       LOBEHUB_JWT: jwt,
+      ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
     };
 

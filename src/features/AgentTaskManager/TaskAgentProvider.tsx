@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMatch, useSearchParams } from 'react-router';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import { ConversationProvider } from '@/features/Conversation';
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -103,7 +103,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const operationState = useOperationState(context);
 
-  if (!taskAgentId) return <Loading debugId="TaskAgentProvider" />;
+  if (!taskAgentId) return <ConversationSegmentSkeleton />;
 
   return (
     <TaskAgentSelectionContext value={selectTaskAgent}>

@@ -178,8 +178,8 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileWorkspaceDetailPage = memo(() => {
+export const MobileWorkspaceDetailPage = () => {
   return <WorkspaceDetailPage mobile={true} />;
-});
+};
 
 export default WorkspaceDetailPage;

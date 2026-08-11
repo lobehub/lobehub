@@ -34,8 +34,6 @@ import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
 interface ControlsProps {
-  setUpdating: (updating: boolean) => void;
-  updating: boolean;
   variant?: 'popover' | 'sidebar';
 }
 
@@ -470,7 +468,7 @@ interface ControlRowProps {
   tooltip?: string;
 }
 
-const ControlRow = memo<ControlRowProps>(({ action, children, muted, tag, title, tooltip }) => (
+const ControlRow = ({ action, children, muted, tag, title, tooltip }: ControlRowProps) => (
   <Flexbox className={cx('control-row', styles.rowRoot, muted && styles.muted)} gap={10}>
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
       <ControlLabel tag={tag} title={title} tooltip={tooltip} />
@@ -478,7 +476,7 @@ const ControlRow = memo<ControlRowProps>(({ action, children, muted, tag, title,
     </Flexbox>
     {children && <div className={styles.rowControl}>{children}</div>}
   </Flexbox>
-));
+);
 
 interface SectionHeaderProps {
   onToggle: () => void;
@@ -502,36 +500,46 @@ interface SliderFieldProps extends SliderConfig {
   value?: number;
 }
 
-const SliderField = memo<SliderFieldProps>(
-  ({ value, disabled, onChange, min, max, step, unlimitedInput, inputWidth = 56 }) => (
-    <SliderWithInput
-      changeOnWheel
-      className={styles.slider}
-      controls={false}
-      disabled={disabled}
-      gap={10}
-      max={max}
-      min={min}
-      size={'small'}
-      step={step}
-      style={{ height: 28 }}
-      unlimitedInput={unlimitedInput}
-      value={value}
-      styles={{
-        input: {
-          maxWidth: inputWidth,
-        },
-      }}
-      onChange={onChange}
-    />
-  ),
+const SliderField = ({
+  value,
+  disabled,
+  onChange,
+  min,
+  max,
+  step,
+  unlimitedInput,
+  inputWidth = 56,
+}: SliderFieldProps) => (
+  <SliderWithInput
+    changeOnWheel
+    className={styles.slider}
+    controls={false}
+    disabled={disabled}
+    gap={10}
+    max={max}
+    min={min}
+    size={'small'}
+    step={step}
+    style={{ height: 28 }}
+    unlimitedInput={unlimitedInput}
+    value={value}
+    styles={{
+      input: {
+        maxWidth: inputWidth,
+      },
+    }}
+    onChange={onChange}
+  />
 );
 
-const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popover' }) => {
+const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const { t } = useTranslation(['setting', 'components']);
   const agentId = useAgentId();
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
+  // Saving feedback belongs to this form. Keeping it here prevents a write from
+  // re-rendering whichever toolbar or sidebar merely hosts the panel.
+  const [updating, setUpdating] = useState(false);
 
   const config = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
@@ -1132,6 +1140,6 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
       </div>
     </div>
   );
-});
+};
 
 export default Controls;

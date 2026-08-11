@@ -1316,5 +1316,48 @@ Document content here.
 
       expect(result.messages).toEqual([{ content: 'Question', role: 'user' }]);
     });
+
+    it('should place additional contexts at the stable prefix and virtual tail', async () => {
+      const result = await new MessagesEngine(
+        createBasicParams({
+          additionalContexts: [
+            {
+              content: { text: 'Stable context.', type: 'text' },
+              placement: 'stable_prefix',
+              wrapper: { tag: 'stable_context' },
+            },
+            {
+              content: { text: 'Tail guidance.', type: 'text' },
+              placement: 'virtual_tail',
+              wrapper: { tag: 'tail_guidance' },
+            },
+          ],
+        }),
+      ).process();
+
+      expect(result.messages).toEqual([
+        {
+          content: '<stable_context>\nStable context.\n</stable_context>',
+          role: 'user',
+        },
+        { content: 'Hello', role: 'user' },
+        { content: 'Hi there!', role: 'assistant' },
+        {
+          content: '<tail_guidance>\nTail guidance.\n</tail_guidance>',
+          role: 'user',
+        },
+      ]);
+    });
+
+    it('should leave non-Graph output unchanged when Graph context is omitted', async () => {
+      const params = createBasicParams();
+      const baseline = await new MessagesEngine(params).process();
+      const withoutGraph = await new MessagesEngine({
+        ...params,
+        additionalContexts: undefined,
+      }).process();
+
+      expect(withoutGraph.messages).toEqual(baseline.messages);
+    });
   });
 });

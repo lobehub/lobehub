@@ -12,6 +12,7 @@ interface SupplementalOperation {
 }
 
 export const githubUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'github',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
