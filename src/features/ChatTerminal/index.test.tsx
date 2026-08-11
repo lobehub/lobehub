@@ -24,6 +24,12 @@ vi.mock('./Content', () => ({
   default: () => <div data-testid="terminal-content" />,
 }));
 
+// The panel registers its toggle hotkey on mount; the real hook reaches into
+// user/server-config stores that this store-level test doesn't provide.
+vi.mock('@/hooks/useHotkeys', () => ({
+  useToggleTerminalPanelHotkey: vi.fn(),
+}));
+
 const setShow = (showTerminalPanel: boolean) =>
   act(() => {
     useGlobalStore.setState({

@@ -66,7 +66,9 @@ describe('TerminalPanelToggle', () => {
     expect(mocks.toggleTerminalPanel).toHaveBeenCalledWith();
 
     mocks.showTerminalPanel = true;
-    rerender(<TerminalPanelToggle />);
+    // Key change forces a remount: the component is memoized and the mocked
+    // store is not reactive, so a plain rerender would be skipped by memo.
+    rerender(<TerminalPanelToggle key={'after-toggle'} />);
 
     expect(screen.getByTestId('terminal-panel-toggle')).toHaveAttribute('data-active', 'true');
   });
