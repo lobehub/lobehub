@@ -82,16 +82,19 @@ describe('device sandbox launch plan', () => {
   });
 
   it('maps the LobeHub policy to a fail-closed Sandbox Runtime configuration', () => {
-    expect(
-      createSrtConfig({
-        ...policy,
-        allowedNetworkDomains: ['api.github.com'],
-        allowNetwork: true,
-        deniedReadRoots: ['/tmp'],
-        deniedWriteRoots: ['/tmp'],
-        readableRoots: ['/tmp'],
-      }),
-    ).toEqual({
+    const config = createSrtConfig({
+      ...policy,
+      allowedNetworkDomains: ['api.github.com'],
+      allowNetwork: true,
+      deniedReadRoots: ['/tmp'],
+      deniedWriteRoots: ['/tmp'],
+      readableRoots: ['/tmp'],
+    });
+
+    // `windows` is asserted separately below: it carries an absolute path to the
+    // staged helper, which exists only on Windows and differs per machine.
+    const { windows: _windows, ...portable } = config;
+    expect(portable).toEqual({
       allowAppleEvents: false,
       allowPty: false,
       enableWeakerNestedSandbox: false,
@@ -112,5 +115,19 @@ describe('device sandbox launch plan', () => {
         strictAllowlist: true,
       },
     });
+  });
+
+  it('overrides the helper path on Windows and nowhere else', () => {
+    // The backend resolves its helper relative to its own package directory,
+    // which stops being a real location once bundled — so Windows must be told
+    // explicitly where the shipped binary is. Other platforms have nothing to
+    // relocate and must not carry a stray override.
+    const { windows } = createSrtConfig(policy);
+
+    if (process.platform === 'win32') {
+      expect(windows?.srtWin?.path).toMatch(/srt-win\.exe$/);
+    } else {
+      expect(windows).toBeUndefined();
+    }
   });
 });

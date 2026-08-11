@@ -304,6 +304,15 @@ const config = {
       from: 'node_modules/@anthropic-ai/sandbox-runtime/vendor',
       to: 'sandbox-runtime/vendor',
     },
+    // Carried alongside the binaries so the staging directory stays keyed on the
+    // backend's real version. Without it the version lookup falls back to the
+    // binary's size — which still works, but would defeat the per-version
+    // isolation in exactly the case it exists for: an installed app being
+    // updated.
+    {
+      from: 'node_modules/@anthropic-ai/sandbox-runtime/package.json',
+      to: 'sandbox-runtime/package.json',
+    },
   ],
 
   win: {
