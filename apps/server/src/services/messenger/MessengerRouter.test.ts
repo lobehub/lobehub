@@ -127,12 +127,14 @@ vi.mock('@/server/services/bot/AgentBridgeService', () => ({
 const mockListMessengerBindableAgents = vi.fn();
 const mockAgentExistsById = vi.fn();
 const mockAgentModelConstructor = vi.fn();
+const mockGetAgentConfigById = vi.fn();
 vi.mock('@/database/models/agent', () => ({
   AgentModel: class {
     constructor(...args: unknown[]) {
       mockAgentModelConstructor(...args);
     }
     existsById = (...args: any[]) => mockAgentExistsById(...args);
+    getAgentConfigById = (...args: any[]) => mockGetAgentConfigById(...args);
     listMessengerBindableAgents = (...args: any[]) => mockListMessengerBindableAgents(...args);
   },
 }));
@@ -159,7 +161,17 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {},
 }));
 vi.mock('@/server/services/bot/replyTemplate', () => ({
+  renderCommandReply: (key: string) => {
+    if (key === 'cmdModeSetAgent') return 'Switched to Agent Mode';
+    if (key === 'cmdModeSetChat') return 'Switched to Chat Mode';
+    if (key === 'cmdModeUsage') return 'Usage: /mode agent | chat';
+    return key;
+  },
   renderInlineError: (msg: string) => msg,
+  renderModeStatus: (mode?: 'agent' | 'chat') =>
+    mode
+      ? `Current mode: ${mode === 'agent' ? 'Agent Mode' : 'Chat Mode'}`
+      : 'Current mode: default',
 }));
 
 // Stub the binder classes (leaf modules) so the real platform definitions +
@@ -1090,6 +1102,209 @@ describe('MessengerRouter slash command dispatch', () => {
 
     expect(mockOpenDM).toHaveBeenCalledWith('U_ALICE');
     expect(dmThread.setState).toHaveBeenCalledWith({ topicId: undefined }, { replace: true });
+  });
+
+  it('/mode chat writes the DM thread state and confirms', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve(null),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeSlashEvent({
+        channel: { id: 'slack:D_DM', isDM: false },
+        command: '/mode',
+        text: 'chat',
+      }),
+    );
+
+    // Merge write (NOT replace) — switching mode must not clobber topicId.
+    expect(dmThread.setState).toHaveBeenCalledWith({ toolMode: 'chat' });
+    expect(mockSlackBinder.replyPrivately).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('Chat Mode'),
+    );
+  });
+
+  it('/mode without args renders the tap picker with the current mode marked', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve({ toolMode: 'agent', topicId: 'topic-1' }),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/mode' }));
+
+    expect(dmThread.setState).not.toHaveBeenCalled();
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledWith(
+      'D_DM',
+      expect.objectContaining({
+        action: 'mode',
+        entries: [
+          { id: 'agent', isActive: true, title: 'Agent Mode' },
+          { id: 'chat', isActive: false, title: 'Chat Mode' },
+        ],
+      }),
+    );
+  });
+
+  it('/mode without args marks the agent-config default when no override is set', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    // Active agent configured as chat-mode (enableAgentMode=false) — the
+    // picker must mark Chat Mode even though the thread has no override yet.
+    mockGetAgentConfigById.mockResolvedValue({ chatConfig: { enableAgentMode: false } });
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve(null),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/mode' }));
+
+    expect(mockGetAgentConfigById).toHaveBeenCalledWith('agt_main');
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledWith(
+      'D_DM',
+      expect.objectContaining({
+        action: 'mode',
+        entries: [
+          { id: 'agent', isActive: false, title: 'Agent Mode' },
+          { id: 'chat', isActive: true, title: 'Chat Mode' },
+        ],
+      }),
+    );
+  });
+
+  it('mode picker tap writes toolMode to the DM thread and re-renders the picker', async () => {
+    const router = new MessengerRouter();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = { id: 'slack:D_DM:', isDM: true, setState: vi.fn() };
+    const chatBot = { openDM: vi.fn().mockResolvedValue(dmThread) };
+    const acknowledgeCallback = vi.fn();
+    const binder = { ...mockSlackBinder, acknowledgeCallback };
+
+    await (router as any).handleCallbackAction(
+      binder,
+      slackCreds('T_ACME'),
+      { chatId: 'D_DM', data: 'messenger:mode:chat', fromUserId: 'U_ALICE', messageId: '1' },
+      chatBot,
+    );
+
+    expect(chatBot.openDM).toHaveBeenCalledWith('U_ALICE');
+    expect(dmThread.setState).toHaveBeenCalledWith({ toolMode: 'chat' });
+    expect(acknowledgeCallback).toHaveBeenCalledWith(
+      expect.objectContaining({ data: 'messenger:mode:chat' }),
+      expect.objectContaining({
+        toast: expect.stringContaining('Chat Mode'),
+        updatedPicker: expect.objectContaining({
+          action: 'mode',
+          entries: [
+            { id: 'agent', isActive: false, title: 'Agent Mode' },
+            { id: 'chat', isActive: true, title: 'Chat Mode' },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('mode picker tap from an unlinked user acks with the not-linked toast', async () => {
+    const router = new MessengerRouter();
+    mockFindLink.mockResolvedValue(null);
+    const chatBot = { openDM: vi.fn() };
+    const acknowledgeCallback = vi.fn();
+    const binder = { ...mockSlackBinder, acknowledgeCallback };
+
+    await (router as any).handleCallbackAction(
+      binder,
+      slackCreds('T_ACME'),
+      { chatId: 'D_DM', data: 'messenger:mode:agent', fromUserId: 'U_NOBODY', messageId: '1' },
+      chatBot,
+    );
+
+    expect(chatBot.openDM).not.toHaveBeenCalled();
+    expect(acknowledgeCallback).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ toast: expect.stringContaining('/start') }),
+    );
+  });
+
+  it('/mode from an unlinked user asks them to /start first', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(null);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ command: '/mode', text: 'chat' }));
+
+    expect(mockSlackBinder.replyPrivately).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('/start'),
+    );
+  });
+
+  it('/new slash preserves the /mode choice while clearing topicId', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve({ toolMode: 'chat', topicId: 'topic-1' }),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/new' }));
+
+    expect(dmThread.setState).toHaveBeenCalledWith(
+      { toolMode: 'chat', topicId: undefined },
+      { replace: true },
+    );
   });
 
   it('renders the picker as a regular DM message when /agents is invoked from a DM', async () => {

@@ -27,11 +27,13 @@ export interface AgentPickerEntry {
 /**
  * Which tap-action a picker's buttons emit. `switch` re-targets the active
  * agent (`/agents`); `scope` re-targets the active workspace scope
- * (`/switch`). The keyword becomes the middle segment of the button id —
- * `messenger:switch:<agentId>` vs `messenger:scope:<scopeId>` — so the
- * router's callback dispatch can tell the two pickers apart.
+ * (`/switch`); `mode` re-targets the conversation execution mode (`/mode`).
+ * The keyword becomes the middle segment of the button id —
+ * `messenger:switch:<agentId>` / `messenger:scope:<scopeId>` /
+ * `messenger:mode:<agent|chat>` — so the router's callback dispatch can tell
+ * the pickers apart.
  */
-export type MessengerPickerAction = 'switch' | 'scope';
+export type MessengerPickerAction = 'switch' | 'scope' | 'mode';
 
 /** Raw inbound platform update used for actions chat-sdk doesn't surface. */
 export interface InboundCallbackAction {

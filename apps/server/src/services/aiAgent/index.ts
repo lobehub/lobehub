@@ -503,6 +503,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
    */
   title?: string;
   /**
+   * Force the effective `chatConfig.toolMode` for this run. Set by IM bot
+   * conversations where the user explicitly switched mode via `/mode` —
+   * an explicit per-conversation choice, so it wins over the agent's own
+   * chatConfig AND workspace member-mode overrides.
+   */
+  toolModeOverride?: 'agent' | 'chat';
+  /**
    * Re-enter a topic-start reservation already acquired by an upstream caller,
    * such as TaskResultBridgeService.
    */
@@ -1288,6 +1295,7 @@ export class AiAgentService {
       hooks,
       instructions,
       chatConfigOverride,
+      toolModeOverride,
       model: modelOverride,
       provider: providerOverride,
       stream,
@@ -1457,6 +1465,13 @@ export class AiAgentService {
       // the merged chatConfig alone can't distinguish them from stale agent
       // values, which the reasoning-config migration ignores.
       agentConfig.subAgentChatConfigOverride = chatConfigOverride;
+    }
+
+    // Explicit per-conversation mode switch (IM `/mode` command). Applied last
+    // so it wins over the agent's own chatConfig, workspace member-mode
+    // overrides, and sub-agent chatConfig patches alike.
+    if (toolModeOverride) {
+      agentConfig.chatConfig = { ...agentConfig.chatConfig, toolMode: toolModeOverride };
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
