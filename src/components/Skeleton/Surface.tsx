@@ -2,7 +2,6 @@
 
 import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
 
 import SkeletonBar from './Bar';
 
@@ -34,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const HeaderSkeleton = memo(() => (
+const HeaderSkeleton = () => (
   <Flexbox
     horizontal
     align={'center'}
@@ -46,9 +45,9 @@ const HeaderSkeleton = memo(() => (
     <SkeletonBar height={20} width={144} />
     <SkeletonBar height={28} width={72} />
   </Flexbox>
-));
+);
 
-const ListSkeleton = memo(() => (
+const ListSkeleton = () => (
   <Flexbox gap={12} padding={16}>
     {Array.from({ length: 5 }).map((_, index) => (
       <Flexbox className={styles.card} gap={10} key={index} padding={16}>
@@ -61,9 +60,9 @@ const ListSkeleton = memo(() => (
       </Flexbox>
     ))}
   </Flexbox>
-));
+);
 
-const FormSkeleton = memo(() => (
+const FormSkeleton = () => (
   <Flexbox align={'center'} padding={24}>
     <FormGroup
       collapsible={false}
@@ -93,9 +92,9 @@ const FormSkeleton = memo(() => (
       </Flexbox>
     </FormGroup>
   </Flexbox>
-));
+);
 
-const GridSkeleton = memo(() => (
+const GridSkeleton = () => (
   <Grid gap={16} maxItemWidth={320} padding={16} rows={3}>
     {Array.from({ length: 6 }).map((_, index) => (
       <Flexbox gap={12} key={index} padding={16}>
@@ -105,9 +104,9 @@ const GridSkeleton = memo(() => (
       </Flexbox>
     ))}
   </Grid>
-));
+);
 
-const EditorSkeleton = memo(() => (
+const EditorSkeleton = () => (
   <Flexbox align={'center'} flex={1} padding={'32px 24px'}>
     <Flexbox
       className={styles.editor}
@@ -122,9 +121,9 @@ const EditorSkeleton = memo(() => (
       <SkeletonBar height={180} radius={12} />
     </Flexbox>
   </Flexbox>
-));
+);
 
-const SurfaceSkeleton = memo<SurfaceSkeletonProps>(({ header = true, variant = 'list' }) => (
+const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     {header && <HeaderSkeleton />}
     <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -134,8 +133,6 @@ const SurfaceSkeleton = memo<SurfaceSkeletonProps>(({ header = true, variant = '
       {variant === 'editor' && <EditorSkeleton />}
     </Flexbox>
   </Flexbox>
-));
-
-SurfaceSkeleton.displayName = 'SurfaceSkeleton';
+);
 
 export default SurfaceSkeleton;

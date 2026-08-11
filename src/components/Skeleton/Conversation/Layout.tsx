@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 
 import SkeletonBar from '../Bar';
 import ConversationSegmentSkeleton from './Segment';
 
-const ConversationLayoutSkeleton = memo(() => (
+const ConversationLayoutSkeleton = () => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     <Flexbox
       horizontal
@@ -21,8 +20,6 @@ const ConversationLayoutSkeleton = memo(() => (
     </Flexbox>
     <ConversationSegmentSkeleton />
   </Flexbox>
-));
-
-ConversationLayoutSkeleton.displayName = 'ConversationLayoutSkeleton';
+);
 
 export default ConversationLayoutSkeleton;

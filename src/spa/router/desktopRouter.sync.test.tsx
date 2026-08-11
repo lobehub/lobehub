@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
@@ -23,6 +23,7 @@ import {
   createMainAreaChildren as createElectronMainAreaChildren,
   desktopRoutes as electronDesktopRoutes,
 } from './desktopRouter.config.desktop';
+import { createMainAreaRouteFactory } from './desktopRouter.shared';
 
 type MainAreaFactory = () => RouteObject[];
 
@@ -65,6 +66,31 @@ async function readRouterSources() {
 }
 
 describe('desktop router shared definition', () => {
+  it('defers platform route factories until React renders their route elements', () => {
+    const createHomeElement = vi.fn(() => <div>Home</div>);
+    const createWorkspaceSettingsIndexElement = vi.fn(() => <div>Workspace settings</div>);
+    const createRoutes = createMainAreaRouteFactory({
+      createHomeElement,
+      createWorkspaceSettingsIndexElement,
+    });
+    const routes = createRoutes();
+
+    expect(createHomeElement).not.toHaveBeenCalled();
+    expect(createWorkspaceSettingsIndexElement).not.toHaveBeenCalled();
+
+    const rootHome = routes.find((route) => route.index);
+    const workspace = routes.find((route) => route.path === ':workspaceSlug');
+    const workspaceHome = workspace?.children?.find((route) => route.index);
+    const workspaceSettings = workspace?.children?.find((route) => route.path === 'settings');
+    const workspaceSettingsIndex = workspaceSettings?.children?.find((route) => route.index);
+
+    expect((rootHome?.element as ReactElement).type).toBe(createHomeElement);
+    expect((workspaceHome?.element as ReactElement).type).toBe(createHomeElement);
+    expect((workspaceSettingsIndex?.element as ReactElement).type).toBe(
+      createWorkspaceSettingsIndexElement,
+    );
+  });
+
   it('matches the nested acceptance check route on Web only', () => {
     const matches = matchRoutes(webDesktopRoutes, '/acceptance/acceptance-1/check/check-1');
 

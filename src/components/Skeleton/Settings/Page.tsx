@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 import { useLocation } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
@@ -11,7 +10,7 @@ import SkeletonBar from '../Bar';
 import SettingsProfileSkeleton from './Profile';
 import SettingsSectionSkeleton from './Section';
 
-const SettingsPageSkeleton = memo(() => {
+const SettingsPageSkeleton = () => {
   const { pathname } = useLocation();
   const tab = pathname.match(/\/settings\/([^/]+)/)?.[1] ?? 'profile';
   const profile = tab === 'profile';
@@ -26,8 +25,6 @@ const SettingsPageSkeleton = memo(() => {
       </SettingContainer>
     </Flexbox>
   );
-});
-
-SettingsPageSkeleton.displayName = 'SettingsPageSkeleton';
+};
 
 export default SettingsPageSkeleton;

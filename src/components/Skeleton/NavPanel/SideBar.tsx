@@ -2,7 +2,6 @@
 
 import { Center, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { isMacOS } from '@/utils/platform';
@@ -18,19 +17,19 @@ const headerContentHeight = (variant: SideBarHeaderVariant) => {
   return isMacDesktop ? 22 : 28;
 };
 
-export const SideBarHeaderSkeleton = memo<{ variant?: SideBarHeaderVariant }>(
-  ({ variant = 'breadcrumb' }) => (
-    <Flexbox horizontal align={'center'} flex={'none'} padding={'8px 6px'}>
-      <Flexbox flex={1} height={headerContentHeight(variant)} justify={'center'} paddingInline={6}>
-        <SkeletonBar height={variant === 'title' ? 18 : 14} width={variant === 'title' ? 96 : 72} />
-      </Flexbox>
+export const SideBarHeaderSkeleton = ({
+  variant = 'breadcrumb',
+}: {
+  variant?: SideBarHeaderVariant;
+}) => (
+  <Flexbox horizontal align={'center'} flex={'none'} padding={'8px 6px'}>
+    <Flexbox flex={1} height={headerContentHeight(variant)} justify={'center'} paddingInline={6}>
+      <SkeletonBar height={variant === 'title' ? 18 : 14} width={variant === 'title' ? 96 : 72} />
     </Flexbox>
-  ),
+  </Flexbox>
 );
 
-SideBarHeaderSkeleton.displayName = 'SideBarHeaderSkeleton';
-
-const SkeletonNavItem = memo<{ width: string }>(({ width }) => (
+const SkeletonNavItem = ({ width }: { width: string }) => (
   <Flexbox horizontal align={'center'} flex={'none'} gap={8} height={36} paddingInline={4}>
     <Center flex={'none'} height={28} width={28}>
       <SkeletonBar height={18} radius={cssVar.borderRadiusSM} width={18} />
@@ -39,24 +38,28 @@ const SkeletonNavItem = memo<{ width: string }>(({ width }) => (
       <SkeletonBar height={14} width={width} />
     </Flexbox>
   </Flexbox>
-));
-
-SkeletonNavItem.displayName = 'SkeletonNavItem';
+);
 
 const TITLE_WIDTHS = [56, 72, 48, 64];
 const ITEM_WIDTHS = ['62%', '44%', '70%', '52%', '66%', '48%', '58%', '74%'];
 
-const SkeletonRows = memo<{ count: number; gap?: number; paddingBlock?: number; seed?: number }>(
-  ({ count, seed = 0, paddingBlock = 1, gap = 1 }) => (
-    <Flexbox gap={gap} paddingBlock={paddingBlock}>
-      {Array.from({ length: count }).map((_, index) => (
-        <SkeletonNavItem key={index} width={ITEM_WIDTHS[(seed * 3 + index) % ITEM_WIDTHS.length]} />
-      ))}
-    </Flexbox>
-  ),
+const SkeletonRows = ({
+  count,
+  seed = 0,
+  paddingBlock = 1,
+  gap = 1,
+}: {
+  count: number;
+  gap?: number;
+  paddingBlock?: number;
+  seed?: number;
+}) => (
+  <Flexbox gap={gap} paddingBlock={paddingBlock}>
+    {Array.from({ length: count }).map((_, index) => (
+      <SkeletonNavItem key={index} width={ITEM_WIDTHS[(seed * 3 + index) % ITEM_WIDTHS.length]} />
+    ))}
+  </Flexbox>
 );
-
-SkeletonRows.displayName = 'SkeletonRows';
 
 export interface NavSkeletonShape {
   bodyGap?: number;
@@ -70,70 +73,66 @@ export interface NavSkeletonShape {
   search?: boolean;
 }
 
-export const NavSideBarSkeleton = memo<NavSkeletonShape>(
-  ({
-    bodyGap = 0,
-    bodyPaddingBlock = 0,
-    groups,
-    groupTitleHeight = 32,
-    headerVariant = 'breadcrumb',
-    leadingRows = 0,
-    navGap = 1,
-    navRows = 0,
-    search = false,
-  }) => {
-    const hasBody = search || leadingRows > 0 || !!groups?.length;
+export const NavSideBarSkeleton = ({
+  bodyGap = 0,
+  bodyPaddingBlock = 0,
+  groups,
+  groupTitleHeight = 32,
+  headerVariant = 'breadcrumb',
+  leadingRows = 0,
+  navGap = 1,
+  navRows = 0,
+  search = false,
+}: NavSkeletonShape) => {
+  const hasBody = search || leadingRows > 0 || !!groups?.length;
 
-    return (
-      <Flexbox data-testid={'nav-sidebar-skeleton'} gap={1} style={{ height: '100%' }}>
-        <SideBarHeaderSkeleton variant={headerVariant} />
-        {navRows > 0 && (
-          <Flexbox data-testid={'nav-sidebar-skeleton-nav'} flex={'none'} paddingInline={4}>
-            <SkeletonRows count={navRows} gap={navGap} paddingBlock={0} />
-          </Flexbox>
-        )}
-        {hasBody && (
-          <Flexbox
-            gap={bodyGap}
-            paddingBlock={bodyPaddingBlock}
-            paddingInline={4}
-            style={{ overflow: 'hidden' }}
-          >
-            {search && (
-              <Flexbox data-testid={'nav-sidebar-skeleton-search'} paddingInline={4}>
-                <SkeletonBar height={36} />
-              </Flexbox>
-            )}
-            {leadingRows > 0 && <SkeletonRows count={leadingRows} paddingBlock={0} />}
-            {!!groups?.length && (
-              <Flexbox gap={8}>
-                {groups.map((rows, groupIndex) => (
-                  <Flexbox key={groupIndex}>
-                    <Flexbox
-                      flex={'none'}
-                      height={groupTitleHeight}
-                      justify={'center'}
-                      paddingBlock={4}
-                      paddingInline={'8px 4px'}
-                    >
-                      <SkeletonBar
-                        height={12}
-                        width={TITLE_WIDTHS[groupIndex % TITLE_WIDTHS.length]}
-                      />
-                    </Flexbox>
-                    {rows > 0 && <SkeletonRows count={rows} seed={groupIndex} />}
+  return (
+    <Flexbox data-testid={'nav-sidebar-skeleton'} gap={1} style={{ height: '100%' }}>
+      <SideBarHeaderSkeleton variant={headerVariant} />
+      {navRows > 0 && (
+        <Flexbox data-testid={'nav-sidebar-skeleton-nav'} flex={'none'} paddingInline={4}>
+          <SkeletonRows count={navRows} gap={navGap} paddingBlock={0} />
+        </Flexbox>
+      )}
+      {hasBody && (
+        <Flexbox
+          gap={bodyGap}
+          paddingBlock={bodyPaddingBlock}
+          paddingInline={4}
+          style={{ overflow: 'hidden' }}
+        >
+          {search && (
+            <Flexbox data-testid={'nav-sidebar-skeleton-search'} paddingInline={4}>
+              <SkeletonBar height={36} />
+            </Flexbox>
+          )}
+          {leadingRows > 0 && <SkeletonRows count={leadingRows} paddingBlock={0} />}
+          {!!groups?.length && (
+            <Flexbox gap={8}>
+              {groups.map((rows, groupIndex) => (
+                <Flexbox key={groupIndex}>
+                  <Flexbox
+                    flex={'none'}
+                    height={groupTitleHeight}
+                    justify={'center'}
+                    paddingBlock={4}
+                    paddingInline={'8px 4px'}
+                  >
+                    <SkeletonBar
+                      height={12}
+                      width={TITLE_WIDTHS[groupIndex % TITLE_WIDTHS.length]}
+                    />
                   </Flexbox>
-                ))}
-              </Flexbox>
-            )}
-          </Flexbox>
-        )}
-      </Flexbox>
-    );
-  },
-);
-
-NavSideBarSkeleton.displayName = 'NavSideBarSkeleton';
+                  {rows > 0 && <SkeletonRows count={rows} seed={groupIndex} />}
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+};
 
 export const NAV_SKELETON_SHAPES: Record<string, NavSkeletonShape> = {
   'agent': { groups: [0, 12], headerVariant: 'title', navRows: 5 },

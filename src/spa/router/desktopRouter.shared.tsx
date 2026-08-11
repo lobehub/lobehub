@@ -91,6 +91,9 @@ export interface MainAreaRouteOptions {
   createWorkspaceSettingsIndexElement?: () => ReactElement;
 }
 
+const deferPlatformElement = (factory?: () => ReactElement) =>
+  factory ? createElement(factory) : undefined;
+
 /**
  * Children shared between the root tree (`/`) and the workspace tree
  * (`/:workspaceSlug`). Personal-only segments (settings, index, catch-all,
@@ -971,7 +974,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       // Web renders Home beside the router outlet; Electron injects a per-tab
       // Home element because each tab owns an independent memory router.
       {
-        element: options.createHomeElement?.(),
+        element: deferPlatformElement(options.createHomeElement),
         handle: { meta: workspaceHomeRouteMeta },
         index: true,
       },
@@ -982,7 +985,9 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       {
         children: [
           {
-            element: options.createWorkspaceSettingsIndexElement?.() ?? redirectElement('general'),
+            element:
+              deferPlatformElement(options.createWorkspaceSettingsIndexElement) ??
+              redirectElement('general'),
             index: true,
           },
           // Full-bleed tabs render directly inside the workspace settings
@@ -1196,7 +1201,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
 
   // Web leaves this element empty; Electron injects the per-tab Home route.
   {
-    element: options.createHomeElement?.(),
+    element: deferPlatformElement(options.createHomeElement),
     handle: {
       meta: routeMeta({
         icon: MessageSquarePlus,

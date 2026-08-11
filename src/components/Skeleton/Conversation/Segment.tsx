@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
 
 import SkeletonBar from '../Bar';
 import ConversationSkeletonContainer from './Container';
@@ -21,7 +20,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ComposerSkeleton = memo(() => (
+const ComposerSkeleton = () => (
   <ConversationSkeletonContainer flex={'none'} paddingBlock={'0 8px'}>
     <Flexbox className={styles.composer} data-testid={'conversation-composer-skeleton'}>
       <Flexbox flex={1} paddingBlock={'12px 8px'} paddingInline={12}>
@@ -41,17 +40,13 @@ const ComposerSkeleton = memo(() => (
       <SkeletonBar height={22} radius={11} width={88} />
     </Flexbox>
   </ConversationSkeletonContainer>
-));
+);
 
-ComposerSkeleton.displayName = 'ComposerSkeleton';
-
-const ConversationSegmentSkeleton = memo(() => (
+const ConversationSegmentSkeleton = () => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     <ConversationListSkeleton />
     <ComposerSkeleton />
   </Flexbox>
-));
-
-ConversationSegmentSkeleton.displayName = 'ConversationSegmentSkeleton';
+);
 
 export default ConversationSegmentSkeleton;

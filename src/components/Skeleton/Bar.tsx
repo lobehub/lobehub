@@ -2,7 +2,6 @@
 
 import { Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
 
 export interface SkeletonBarProps {
   height: number;
@@ -10,7 +9,7 @@ export interface SkeletonBarProps {
   width?: number | string;
 }
 
-const SkeletonBar = memo<SkeletonBarProps>(({ height, width = '100%', radius }) => (
+const SkeletonBar = ({ height, width = '100%', radius }: SkeletonBarProps) => (
   <Skeleton.Button
     active
     block
@@ -27,8 +26,6 @@ const SkeletonBar = memo<SkeletonBarProps>(({ height, width = '100%', radius }) 
       width,
     }}
   />
-));
-
-SkeletonBar.displayName = 'SkeletonBar';
+);
 
 export default SkeletonBar;

@@ -1,6 +1,5 @@
 'use client';
 
-import { memo } from 'react';
 import { useLocation } from 'react-router';
 
 import ConversationLayoutSkeleton from './Conversation/Layout';
@@ -39,15 +38,13 @@ const isConversationPath = (pathname: string) => {
  * universal placeholder. This keeps parent and leaf Suspense boundaries on the
  * same visual structure while their chunks resolve at different times.
  */
-const RouteSegmentSkeleton = memo(() => {
+const RouteSegmentSkeleton = () => {
   const { pathname } = useLocation();
 
   if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
 
   return <SurfaceSkeleton variant={getSurfaceVariant(pathname)} />;
-});
-
-RouteSegmentSkeleton.displayName = 'RouteSegmentSkeleton';
+};
 
 export default RouteSegmentSkeleton;

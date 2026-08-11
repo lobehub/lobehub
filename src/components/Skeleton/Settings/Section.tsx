@@ -2,7 +2,6 @@
 
 import { Flexbox, FormGroup } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
 
 import SkeletonBar from '../Bar';
 
@@ -23,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const Row = memo<{ index: number }>(({ index }) => (
+const Row = ({ index }: { index: number }) => (
   <div className={styles.row}>
     <Flexbox gap={8}>
       <SkeletonBar height={16} width={112 + (index % 2) * 40} />
@@ -31,11 +30,9 @@ const Row = memo<{ index: number }>(({ index }) => (
     </Flexbox>
     <SkeletonBar height={32} width={index % 2 ? 152 : 88} />
   </div>
-));
+);
 
-Row.displayName = 'SettingsSectionRowSkeleton';
-
-const Group = memo<{ rows: number; titleWidth: number }>(({ rows, titleWidth }) => (
+const Group = ({ rows, titleWidth }: { rows: number; titleWidth: number }) => (
   <FormGroup
     collapsible={false}
     title={<SkeletonBar height={18} width={titleWidth} />}
@@ -50,17 +47,13 @@ const Group = memo<{ rows: number; titleWidth: number }>(({ rows, titleWidth }) 
       ))}
     </Flexbox>
   </FormGroup>
-));
+);
 
-Group.displayName = 'SettingsSectionGroupSkeleton';
-
-const SettingsSectionSkeleton = memo(() => (
+const SettingsSectionSkeleton = () => (
   <Flexbox aria-busy data-testid={'settings-section-skeleton'} gap={36}>
     <Group rows={2} titleWidth={104} />
     <Group rows={3} titleWidth={136} />
   </Flexbox>
-));
-
-SettingsSectionSkeleton.displayName = 'SettingsSectionSkeleton';
+);
 
 export default SettingsSectionSkeleton;

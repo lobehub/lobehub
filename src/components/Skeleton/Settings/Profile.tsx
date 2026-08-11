@@ -2,7 +2,7 @@
 
 import { Flexbox, FormGroup } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -64,41 +64,40 @@ interface SettingsProfileRowSkeletonProps {
   labelWidth?: number;
 }
 
-export const SettingsProfileRowSkeleton = memo<SettingsProfileRowSkeletonProps>(
-  ({ action = true, actionNode, body, bodyWidth = 160, height, labelWidth = 80 }) => (
-    <div className={styles.row} style={height ? { minHeight: height } : undefined}>
-      <div className={styles.label}>
-        <SkeletonBar height={22} width={labelWidth} />
-      </div>
-      <div className={styles.body}>
-        {body === undefined ? <SkeletonBar height={22} width={bodyWidth} /> : body}
-        {action && (
-          <div className={styles.action}>
-            {actionNode ?? <SkeletonBar height={22} width={80} />}
-          </div>
-        )}
-      </div>
+export const SettingsProfileRowSkeleton = ({
+  action = true,
+  actionNode,
+  body,
+  bodyWidth = 160,
+  height,
+  labelWidth = 80,
+}: SettingsProfileRowSkeletonProps) => (
+  <div className={styles.row} style={height ? { minHeight: height } : undefined}>
+    <div className={styles.label}>
+      <SkeletonBar height={22} width={labelWidth} />
     </div>
-  ),
+    <div className={styles.body}>
+      {body === undefined ? <SkeletonBar height={22} width={bodyWidth} /> : body}
+      {action && (
+        <div className={styles.action}>{actionNode ?? <SkeletonBar height={22} width={80} />}</div>
+      )}
+    </div>
+  </div>
 );
-
-SettingsProfileRowSkeleton.displayName = 'SettingsProfileRowSkeleton';
 
 const INTEREST_WIDTHS = [
   128, 188, 152, 148, 148, 164, 164, 188, 148, 100, 120, 136, 144, 144, 120, 128, 104, 104,
 ];
 
-const InterestsSkeleton = memo(() => (
+const InterestsSkeleton = () => (
   <Flexbox horizontal gap={8} style={{ width: '100%' }} wrap={'wrap'}>
     {INTEREST_WIDTHS.map((width, index) => (
       <SkeletonBar height={34} key={index} radius={cssVar.borderRadius} width={width} />
     ))}
   </Flexbox>
-));
+);
 
-InterestsSkeleton.displayName = 'SettingsInterestsSkeleton';
-
-const SettingsProfileSkeleton = memo(() => {
+const SettingsProfileSkeleton = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const email = useUserStore(userProfileSelectors.email);
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
@@ -153,8 +152,6 @@ const SettingsProfileSkeleton = memo(() => {
       </Flexbox>
     </FormGroup>
   );
-});
-
-SettingsProfileSkeleton.displayName = 'SettingsProfileSkeleton';
+};
 
 export default SettingsProfileSkeleton;

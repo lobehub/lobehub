@@ -1,11 +1,10 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { memo } from 'react';
 
 import ConversationSkeletonContainer from './Container';
 
-const ConversationListSkeleton = memo(() => (
+const ConversationListSkeleton = () => (
   <ConversationSkeletonContainer
     flex={1}
     gap={36}
@@ -24,8 +23,6 @@ const ConversationListSkeleton = memo(() => (
       </Flexbox>
     ))}
   </ConversationSkeletonContainer>
-));
-
-ConversationListSkeleton.displayName = 'ConversationListSkeleton';
+);
 
 export default ConversationListSkeleton;
