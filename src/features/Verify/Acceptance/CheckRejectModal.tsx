@@ -191,6 +191,8 @@ export const rejectModalTitle = (title: string, description?: string) => ({
   title,
 });
 
+export const canDismissRejectModal = (loading: boolean) => !loading;
+
 interface CheckRejectModalProps {
   checkDescription?: string;
   checkTitle: string;
@@ -218,7 +220,7 @@ export const mergeRejectComments = (initialComment = '', storedComment = '') => 
 const CheckRejectModalContent = memo<CheckRejectModalProps>(
   ({ checkTitle, draftKey, evidence, initialComment, onConfirm }) => {
     const { t: translate } = useTranslation('verify');
-    const { close } = useModalContext();
+    const { close, setCanDismissByClickOutside } = useModalContext();
     const [draft] = useState(() => readDraft(draftKey));
     const [comment, setComment] = useState(() =>
       mergeRejectComments(initialComment, draft?.comment),
@@ -233,6 +235,10 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
           .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
           .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
     );
+
+    useEffect(() => {
+      setCanDismissByClickOutside(canDismissRejectModal(loading));
+    }, [loading, setCanDismissByClickOutside]);
 
     // Your own screenshots (paste or upload) — attached to the reject alongside
     // the note and any circled regions.

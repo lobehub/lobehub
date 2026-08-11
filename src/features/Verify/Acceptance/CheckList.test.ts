@@ -12,7 +12,12 @@ import {
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
-import { CHECK_REJECT_MODAL_SIZE, mergeRejectComments, rejectModalTitle } from './CheckRejectModal';
+import {
+  canDismissRejectModal,
+  CHECK_REJECT_MODAL_SIZE,
+  mergeRejectComments,
+  rejectModalTitle,
+} from './CheckRejectModal';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -149,6 +154,11 @@ describe('check reject modal presentation', () => {
       description: 'The selected goal chip appears after pressing Enter.',
       title: 'C1 · Select Set Goal from the slash menu',
     });
+  });
+
+  it('prevents outside dismissal while the reject request is pending', () => {
+    expect(canDismissRejectModal(true)).toBe(false);
+    expect(canDismissRejectModal(false)).toBe(true);
   });
 });
 
