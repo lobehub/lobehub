@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   fieldLabel: css`
     margin-block-end: 6px;
     font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   footerLink: css`
     cursor: pointer;
@@ -48,25 +48,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorPrimaryHover};
     }
   `,
-  nameFieldLabel: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    align-items: flex-start;
-
-    width: 100%;
-    max-width: 100%;
-  `,
   nameInput: css`
     html[dir='rtl'] & {
       direction: rtl;
       text-align: start;
     }
-  `,
-  nameOptional: css`
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
   `,
   nameRow: css`
     display: grid;
@@ -97,12 +83,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     @media (width <= 420px) {
       grid-template-columns: 1fr;
     }
-  `,
-  optional: css`
-    margin-inline-start: 6px;
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -146,19 +126,7 @@ const BetterAuthSignUpForm = () => {
     </Text>
   );
 
-  const label = (text: string, optional?: boolean) => (
-    <span className={styles.fieldLabel}>
-      {text}
-      {optional ? <span className={styles.optional}>{t('betterAuth.signup.optional')}</span> : null}
-    </span>
-  );
-
-  const nameLabel = (text: string) => (
-    <span className={styles.nameFieldLabel}>
-      <span>{text}</span>
-      <span className={styles.nameOptional}>{t('betterAuth.signup.optional')}</span>
-    </span>
-  );
+  const label = (text: string) => <span className={styles.fieldLabel}>{text}</span>;
 
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.title')}>
@@ -187,11 +155,7 @@ const BetterAuthSignUpForm = () => {
         }
       >
         <div className={styles.nameRow}>
-          <Form.Item
-            labelWrap
-            label={nameLabel(t('betterAuth.signup.firstNameLabel'))}
-            name="firstName"
-          >
+          <Form.Item label={label(t('betterAuth.signup.firstNameLabel'))} name="firstName">
             <Input
               autoComplete="given-name"
               className={styles.nameInput}
@@ -199,11 +163,7 @@ const BetterAuthSignUpForm = () => {
               size="large"
             />
           </Form.Item>
-          <Form.Item
-            labelWrap
-            label={nameLabel(t('betterAuth.signup.lastNameLabel'))}
-            name="lastName"
-          >
+          <Form.Item label={label(t('betterAuth.signup.lastNameLabel'))} name="lastName">
             <Input
               autoComplete="family-name"
               className={styles.nameInput}
