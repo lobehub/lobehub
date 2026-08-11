@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { TaskDetailSections, TopicChatDrawer, useActiveTaskDetail } from '@/features/AgentTasks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -43,7 +43,11 @@ const Body = memo(() => {
       paddingInline={16}
       style={{ minHeight: 0, overflowY: 'auto' }}
     >
-      {isInitialLoading ? <Loading debugId="PortalTaskDetail" /> : <TaskDetailSections />}
+      {isInitialLoading ? (
+        <SurfaceSkeleton header={false} variant={'editor'} />
+      ) : (
+        <TaskDetailSections />
+      )}
       <TopicChatDrawer />
     </Flexbox>
   );

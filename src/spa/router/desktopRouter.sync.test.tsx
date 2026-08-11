@@ -7,7 +7,10 @@ import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
-import ContentLoading from '@/components/Loading/ContentLoading';
+import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
+import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
 import { createTabRouter } from '@/spa/router/tabRouter';
@@ -214,13 +217,71 @@ describe('desktop router shared definition', () => {
     // live in the per-tab memory routers, which build their own tree.
     ['Web', () => webDesktopRoutes.find((route) => route.path === '/')?.children ?? []],
     ['Electron', () => createTabRouter('/').routes[0]?.children ?? []],
-  ])('%s main-area routes load behind the content fallback, not the brand logo', (_, getRoutes) => {
-    const fallbacks = collectFallbacks(getRoutes());
+  ])(
+    '%s main-area routes load behind content or segment feedback, not branding',
+    (_, getRoutes) => {
+      const fallbacks = collectFallbacks(getRoutes());
 
-    expect(fallbacks.length).toBeGreaterThan(0);
-    expect(fallbacks).not.toContain(BrandTextLoading);
-    expect(new Set(fallbacks)).toEqual(new Set([ContentLoading]));
-  });
+      expect(fallbacks.length).toBeGreaterThan(0);
+      expect(fallbacks).not.toContain(BrandTextLoading);
+      expect(new Set(fallbacks)).toEqual(
+        new Set([
+          RouteSegmentSkeleton,
+          ConversationLayoutSkeleton,
+          ConversationSegmentSkeleton,
+          SettingsPageSkeleton,
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])(
+    '%s selects the closest conversation segment feedback for each pending boundary',
+    (_, createRuntimeRoutes) => {
+      for (const [pathname, expectedFallbacks] of [
+        [
+          '/agent/agent-1/topic-1',
+          [RouteSegmentSkeleton, ConversationLayoutSkeleton, ConversationSegmentSkeleton],
+        ],
+        ['/group/group-1/topic-1', [RouteSegmentSkeleton, ConversationLayoutSkeleton]],
+      ] as const) {
+        const matches = matchRoutes(createRuntimeRoutes(pathname), pathname);
+        const fallbackTypes = matches
+          ?.map(
+            ({ route }) =>
+              (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props
+                .fallback?.type,
+          )
+          .filter(Boolean);
+
+        expect(fallbackTypes?.slice(-expectedFallbacks.length), pathname).toEqual(
+          expectedFallbacks,
+        );
+      }
+    },
+  );
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])(
+    '%s keeps the settings layout and tab chunks on the settings page skeleton',
+    (_, getRoutes) => {
+      const matches = matchRoutes(getRoutes('/settings/profile'), '/settings/profile');
+      const fallbackTypes = matches
+        ?.map(
+          ({ route }) =>
+            (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props.fallback
+              ?.type,
+        )
+        .filter(Boolean);
+
+      expect(fallbackTypes?.slice(-2)).toEqual([SettingsPageSkeleton, SettingsPageSkeleton]);
+    },
+  );
 
   it('injects Home only into Electron per-tab content routes', () => {
     const webChildren = createWebMainAreaChildren();

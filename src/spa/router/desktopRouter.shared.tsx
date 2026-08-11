@@ -16,7 +16,7 @@ import {
   ShapesIcon,
   SquarePlay,
 } from 'lucide-react';
-import { cloneElement, isValidElement, type ReactElement, Suspense } from 'react';
+import { createElement, isValidElement, type ReactElement, type ReactNode, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -24,7 +24,11 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
-import ContentLoading from '@/components/Loading/ContentLoading';
+import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
+import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
@@ -54,13 +58,13 @@ import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@
 const agentChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),
   'Desktop > Chat',
-  { preloadId: 'agent' },
+  { fallback: <ConversationSegmentSkeleton />, preloadId: 'agent' },
 );
 
 const groupChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/group')),
   'Desktop > Agent Group',
-  { preloadId: 'group' },
+  { fallback: <ConversationLayoutSkeleton />, preloadId: 'group' },
 );
 
 const resourceCategoryRoutes: RouteObject[] = [
@@ -121,7 +125,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/(chat)/_layout'),
               'Desktop > Chat > ChatLayout',
-              { preloadId: 'agent' },
+              { fallback: <ConversationLayoutSkeleton />, preloadId: 'agent' },
             ),
           },
           {
@@ -920,6 +924,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Memory',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { settingsTab: SettingsTabs.Memory },
         path: 'memory',
@@ -933,6 +938,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab',
@@ -943,6 +949,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab > Sub',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab/:sub',
@@ -951,6 +958,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     element: dynamicElement(
       () => import('@/routes/(main)/settings/_layout'),
       'Desktop > Settings > Layout',
+      { fallback: <SettingsPageSkeleton /> },
     ),
     errorElement: <ErrorBoundary />,
     path: 'settings',
@@ -1228,27 +1236,34 @@ export interface SharedDesktopRouteOptions {
  * supply only the root children, runtime-only routes, and onboarding route.
  */
 /**
- * Swap the brand-loading fallback for a content one across a route subtree.
+ * Swap the default brand-loading fallback for a structural segment skeleton.
  *
  * `dynamicElement` / `dynamicLayout` wrap every route element in their own
  * `Suspense`, and that boundary is always nearer the suspending component than
  * any outlet-level one — so a fallback set on the main layout's outlet never
  * fires for route content, and the 100+ call sites would otherwise each need
- * the option. Rewriting the elements once here keeps the main area consistent
- * without touching routes outside it (mobile still wants the full-page brand
- * loading, since its nav bar is inside the same boundary as its outlet).
+ * the option. Explicit route fallbacks are preserved so a route can render the
+ * nearest segment skeleton instead. Rewriting only defaults here keeps the main
+ * area consistent without touching routes outside it (mobile still wants the
+ * full-page brand loading, since its nav bar is inside the same boundary as its
+ * outlet).
  */
-export const withContentFallback = (routes: RouteObject[]): RouteObject[] =>
+export const withSegmentFallback = (routes: RouteObject[]): RouteObject[] =>
   routes.map((route) => {
-    const element =
+    const suspenseElement =
       isValidElement(route.element) && route.element.type === Suspense
-        ? // right that this couples to `dynamicElement` returning a bare Suspense.
-          // The alternative is the option on all 104 call sites; the coupling is
-          // guarded instead — `desktopRouter.sync.test.tsx` asserts every
-          // main-area fallback is `ContentLoading`, so if that shape ever changes
-          // the rewrite fails loudly rather than silently restoring the logo.
-          cloneElement(route.element as ReactElement<{ fallback: ReactElement }>, {
-            fallback: <ContentLoading />,
+        ? (route.element as ReactElement<{ fallback: ReactNode }>)
+        : undefined;
+    const fallback = suspenseElement?.props.fallback;
+    const element =
+      suspenseElement && isValidElement(fallback) && fallback.type === BrandTextLoading
+        ? // This intentionally couples to `dynamicElement` / `dynamicLayout`
+          // returning a bare Suspense with BrandTextLoading as their default.
+          // Explicit segment fallbacks must pass through unchanged.
+          createElement(Suspense, {
+            ...suspenseElement.props,
+            fallback: <RouteSegmentSkeleton />,
+            key: suspenseElement.key,
           })
         : route.element;
 
@@ -1256,7 +1271,7 @@ export const withContentFallback = (routes: RouteObject[]): RouteObject[] =>
     // spreading loses the discriminant — the copy keeps the original's shape.
     return {
       ...route,
-      ...(route.children && { children: withContentFallback(route.children) }),
+      ...(route.children && { children: withSegmentFallback(route.children) }),
       element,
     } as RouteObject;
   });
@@ -1267,7 +1282,7 @@ export const createSharedDesktopRoutes = ({
   platformRoutes = [],
 }: SharedDesktopRouteOptions): RouteObject[] => [
   {
-    children: withContentFallback(mainAreaChildren),
+    children: withSegmentFallback(mainAreaChildren),
     // `BootShell` unmounts the moment the cache gate releases, which is often
     // before this chunk resolves. Falling back to the same skeleton keeps the
     // handoff invisible instead of flashing the brand logo a second time.

@@ -2,11 +2,11 @@
 
 import { memo, Suspense } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentTopicManager from '@/features/AgentTopicManager';
 
 const AgentTopicsPage = memo(() => (
-  <Suspense fallback={<Loading debugId="AgentTopicManager" />}>
+  <Suspense fallback={<SurfaceSkeleton variant={'list'} />}>
     <AgentTopicManager />
   </Suspense>
 ));
