@@ -37,6 +37,13 @@ export {
   VerifyRepairService,
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
+export {
+  blindSlicePosition,
+  isBlindControlCheck,
+  type PredictReviewParams,
+  shouldSurfaceProposal,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';

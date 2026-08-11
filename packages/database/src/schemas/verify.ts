@@ -2,6 +2,9 @@ import {
   acceptanceStatuses,
   acceptanceSubjectTypes,
   acceptanceVisibilities,
+  reviewAdjudications,
+  reviewPredictionActions,
+  reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -16,6 +19,7 @@ import {
 import type {
   AcceptanceConfig,
   AcceptanceMetadata,
+  AcceptanceReviewAnnotation,
   AcceptanceVisualRender,
   ToulminVerdict,
   VerifyCheckDecisionDetail,
@@ -640,3 +644,97 @@ export const verifyRuns = pgTable(
 
 export type NewVerifyRun = typeof verifyRuns.$inferInsert;
 export type VerifyRunItem = typeof verifyRuns.$inferSelect;
+
+// ============================================
+// 9. verify_review_predictions — an automated reviewer's opinion on a check
+// ============================================
+// A *shadow* lane, deliberately not folded into `verify_check_results`. Two
+// reasons it is its own table rather than another jsonb bag on that row:
+//
+//  1. Cardinality: one check result accumulates many opinions — one per model ×
+//     prompt version — and they must stay individually queryable to compare
+//     versions. A bag would force read-modify-write on the hot result row and
+//     lose the ability to filter by model.
+//  2. Provenance: the human's decision on `verify_check_results.user_decision`
+//     is the single ground truth. Keeping the model's opinion physically
+//     elsewhere makes it structurally impossible for a prediction to be mistaken
+//     for a human label — including by a future aggregation query nobody has
+//     written yet.
+export const verifyReviewPredictions = pgTable(
+  'verify_review_predictions',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** The check result being reviewed; an opinion dies with the result it judges. */
+    checkResultId: uuid('check_result_id')
+      .references(() => verifyCheckResults.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this prediction belongs to (mirrors the result) — scopes listing + cascade. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Producer, e.g. `google/gemini-3.6-flash`. Pins an opinion to what made it. */
+    modelId: text('model_id').notNull(),
+    /** Bumped whenever the judging prompt changes, so old opinions stay attributable. */
+    promptVersion: text('prompt_version').notNull(),
+
+    /** The proposal. Never `ignore` — that is a statement about the reviewer, not the delivery. */
+    action: text('action', { enum: reviewPredictionActions }).notNull(),
+
+    /**
+     * Model self-reported 0–1. Stored, but NOT yet trusted as a gate: in the
+     * offline baseline the Gemini models emitted 0.95–1.0 on essentially every
+     * row, so a threshold over this column would pass everything. Calibrate per
+     * model before wiring it to any automatic behaviour.
+     */
+    confidence: numeric('confidence', { mode: 'number', precision: 3, scale: 2 }),
+
+    /** One-line justification — this is what the reviewer actually reads. */
+    comment: text('comment'),
+    /** Full reasoning. Kept for training data, not surfaced in the collapsed card. */
+    rationale: text('rationale'),
+
+    /** Circled regions, same shape as the human's `AcceptanceReviewAnnotation`. */
+    annotations: jsonb('annotations').$type<AcceptanceReviewAnnotation[]>(),
+
+    // ---- The reviewer's answer ----
+    // Lives on the proposal, not on the check's decision detail, because two of
+    // the three answers leave the check UNJUDGED: dismissing a proposal says
+    // nothing about whether the delivery passes, so there is no decision row to
+    // hang it off. Keeping all three here also means one query returns the
+    // full agreement picture per model version.
+    adjudication: text('adjudication', { enum: reviewAdjudications }),
+    /** For a confirmed proposal: how much the reviewer changed before submitting. */
+    adjudicationEdit: text('adjudication_edit', { enum: reviewProposalEdits }),
+    adjudicatedAt: timestamptz('adjudicated_at'),
+
+    // ---- Operational telemetry, for cost/latency tracking per model version ----
+    latencyMs: integer('latency_ms'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('verify_review_predictions_check_result_id_idx').on(t.checkResultId),
+    index('verify_review_predictions_user_id_idx').on(t.userId),
+    index('verify_review_predictions_workspace_id_idx').on(t.workspaceId),
+    index('verify_review_predictions_model_id_idx').on(t.modelId),
+    // One opinion per (result, model, prompt version): a retry or a concurrent
+    // worker must update in place rather than stack a second row, or the
+    // agreement stats would double-count whichever check happened to be retried.
+    uniqueIndex('verify_review_predictions_result_model_prompt_unique').on(
+      t.checkResultId,
+      t.modelId,
+      t.promptVersion,
+    ),
+  ],
+);
+
+export type NewVerifyReviewPrediction = typeof verifyReviewPredictions.$inferInsert;
+export type VerifyReviewPredictionItem = typeof verifyReviewPredictions.$inferSelect;

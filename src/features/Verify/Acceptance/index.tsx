@@ -39,6 +39,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   X,
   XCircle,
 } from 'lucide-react';
@@ -75,6 +76,7 @@ import CheckList, {
   isCheckWorkActionable,
   isException,
   isGroupFullyAccepted,
+  type ProposalDismissInput,
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
@@ -471,6 +473,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const [rerunPending, setRerunPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
     const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const [predicting, setPredicting] = useState(false);
 
     const status = data?.acceptance.status;
 
@@ -587,6 +590,35 @@ const AcceptancePage = memo<AcceptancePageProps>(
       },
       [runAction, acceptanceRecordId],
     );
+
+    // Answering a model proposal is NOT a verdict on the check — the check
+    // stays pending and still needs the reviewer's own call. It goes through
+    // its own endpoint so a dismissal can never stamp a `user_decision`.
+    const handleDismissProposal = useCallback(
+      async (input: ProposalDismissInput) => {
+        if (!acceptanceRecordId) return;
+        await runAction(() =>
+          verifyService.adjudicateProposal({
+            adjudication: input.adjudication,
+            id: acceptanceRecordId,
+            predictionId: input.predictionId,
+          }),
+        );
+      },
+      [runAction, acceptanceRecordId],
+    );
+
+    // Ask for proposals on whatever is still awaiting a verdict. Explicit, so
+    // opening a report never spends model budget on its own.
+    const handlePredictReviews = useCallback(async () => {
+      if (!acceptanceRecordId) return;
+      setPredicting(true);
+      try {
+        await runAction(() => verifyService.predictReviews(acceptanceRecordId));
+      } finally {
+        setPredicting(false);
+      }
+    }, [runAction, acceptanceRecordId]);
 
     // Group-scoped feedback — for concerns that belong to no single check (the
     // checks themselves may be accepted) yet must reach the next round.
@@ -1674,6 +1706,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       canReview={isOwner}
                       check={focusedCheck}
                       reviewPending={pending}
+                      onDismissProposal={handleDismissProposal}
                       onReview={handleReview}
                       onRound={historyNavigation}
                     />
@@ -1698,6 +1731,18 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     {counts.total + unverifiedStandingChecks.length}
                   </span>
                   <Flexbox flex={1} />
+                  {/* Explicit, and only while something is still unreviewed —
+                    asking for proposals on a fully-judged acceptance would
+                    spend budget to produce cards nobody can act on. */}
+                  {isOwner && counts.pending > 0 && (
+                    <ActionIcon
+                      icon={Sparkles}
+                      loading={predicting}
+                      size={'small'}
+                      title={t('acceptance.proposal.request')}
+                      onClick={handlePredictReviews}
+                    />
+                  )}
                   {isOwner && (
                     <ActionIcon
                       icon={Plus}
@@ -1816,6 +1861,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   groupFeedback={groupFeedbackEntries}
                   reviewPending={pending}
                   round={roundFilter}
+                  onDismissProposal={handleDismissProposal}
                   onGroupFeedback={handleGroupFeedback}
                   onOpenTrace={openVerifierTrace}
                   onReview={handleReview}

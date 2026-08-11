@@ -1,6 +1,12 @@
 'use client';
 
-import type { AcceptanceGroupFeedback, AcceptanceReviewAnnotation } from '@lobechat/types';
+import type {
+  AcceptanceGroupFeedback,
+  AcceptanceRejectIntent,
+  AcceptanceReviewAnnotation,
+  ReviewAdjudication,
+  ReviewProposalEdit,
+} from '@lobechat/types';
 import {
   ActionIcon,
   copyToClipboard,
@@ -62,6 +68,9 @@ import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
 import { openGroupFeedbackModal } from './modals';
+import type { CheckProposal } from './proposal';
+import { classifyProposalEdit } from './proposal';
+import ProposalCard from './ProposalCard';
 
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
@@ -80,6 +89,17 @@ export interface CheckReviewInput {
   checkItemIds: string[];
   comment?: string;
   fileIds?: string[];
+  /** Present when this decision answered a model proposal. */
+  proposal?: { adjudication: ReviewAdjudication; edit?: ReviewProposalEdit; predictionId: string };
+  /** Which of the three jobs a reject is doing. */
+  rejectIntent?: AcceptanceRejectIntent;
+}
+
+/** Answering a model proposal without ruling on the check. */
+export interface ProposalDismissInput {
+  adjudication: 'misidentified' | 'not-an-issue';
+  checkItemId: string;
+  predictionId: string;
 }
 
 /** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
@@ -835,6 +855,8 @@ const CheckRow = memo<{
   check: AcceptanceCheck;
   detailMode?: boolean;
   expanded: boolean;
+  /** Answer a model proposal WITHOUT ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound?: (round: number) => void;
   /** Open an agent judge's verification run (its trace IS the argument). */
@@ -847,6 +869,7 @@ const CheckRow = memo<{
     check,
     detailMode,
     expanded,
+    onDismissProposal,
     onOpenTrace,
     onReview,
     onRound,
@@ -877,7 +900,12 @@ const CheckRow = memo<{
     const evidenceById = collectEvidenceById(check);
     const hasHistory = check.revisions > 1 || historyReviews.length > 0;
 
-    const openReject = () =>
+    /**
+     * @param fromProposal - when set, the modal opens prefilled with the
+     *   model's note and regions, and the submitted result is diffed against it
+     *   so the signal records WHICH part of the proposal was wrong.
+     */
+    const openReject = (fromProposal?: CheckProposal) =>
       openCheckRejectModal({
         checkDescription: check.planItem?.description,
         checkTitle: `C${check.seq} · ${check.title}`,
@@ -885,14 +913,25 @@ const CheckRow = memo<{
         evidence: check.evidence
           .filter((item) => isAnnotatable(item))
           .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
-        initialComment: reviewComment,
-        onConfirm: async ({ annotations, comment, fileIds }) => {
+        initialAnnotations: fromProposal?.annotations ?? undefined,
+        initialComment: fromProposal?.comment ?? reviewComment,
+        onConfirm: async ({ annotations, comment, fileIds, rejectIntent }) => {
           const ok = await onReview({
             action: 'reject',
             annotations: annotations.length > 0 ? annotations : undefined,
             checkItemIds: [check.id],
             comment: comment || undefined,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
+            ...(fromProposal
+              ? {
+                  proposal: {
+                    adjudication: 'confirmed' as const,
+                    edit: classifyProposalEdit(fromProposal, { annotations, comment }),
+                    predictionId: fromProposal.id,
+                  },
+                }
+              : {}),
+            rejectIntent,
           });
           if (ok) {
             setReviewComment('');
@@ -901,6 +940,21 @@ const CheckRow = memo<{
           return ok;
         },
       });
+
+    /**
+     * Dismissing a proposal is NOT a review of the check — the check stays
+     * pending and the reviewer still has to judge it. Only the model's opinion
+     * is being answered, so this writes the outcome without touching
+     * `user_decision`.
+     */
+    const handleAdjudicate = async (adjudication: 'not-an-issue' | 'misidentified') => {
+      if (!check.prediction) return;
+      await onDismissProposal?.({
+        adjudication,
+        checkItemId: check.id,
+        predictionId: check.prediction.id,
+      });
+    };
 
     // Accepting settles the check — the row folds itself away once the write
     // lands, so the reviewer's eye moves on to what still needs judgment.
@@ -1155,6 +1209,20 @@ const CheckRow = memo<{
             paddingBlock={detailMode ? 0 : '0 14px'}
             paddingInline={detailMode ? 0 : 16}
           >
+            {/* The model's proposal leads the detail: it is a claim about this
+              check that the reviewer is being asked to rule on, so it belongs
+              above the verifier's narrative rather than buried under it.
+              Suppressed once a verdict exists — see the bundle read, which
+              already drops it; this guard covers the optimistic window. */}
+            {check.prediction && reviewable && !activeReview && (
+              <ProposalCard
+                evidenceById={evidenceById}
+                pending={reviewPending}
+                proposal={check.prediction}
+                onAdjudicate={handleAdjudicate}
+                onConfirm={() => openReject(check.prediction ?? undefined)}
+              />
+            )}
             {/* The verifier's account of what it saw. Clamping it to two lines
               hid the middle of the argument behind an ellipsis with no way to
               open it — in a detail view there is nothing to preview. */}
@@ -1446,6 +1514,8 @@ const CheckRow = memo<{
 interface FocusedCheckDetailsProps {
   canReview: boolean;
   check: AcceptanceCheck;
+  /** Answer a model proposal without ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   /** Open an agent judge's verification run (its trace IS the argument). */
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
@@ -1455,13 +1525,14 @@ interface FocusedCheckDetailsProps {
 
 /** Full check content for the dedicated second-level acceptance workspace. */
 export const FocusedCheckDetails = memo<FocusedCheckDetailsProps>(
-  ({ canReview, check, onOpenTrace, onReview, onRound, reviewPending }) => (
+  ({ canReview, check, onDismissProposal, onOpenTrace, onReview, onRound, reviewPending }) => (
     <CheckRow
       detailMode
       expanded
       canReview={canReview}
       check={check}
       reviewPending={reviewPending}
+      onDismissProposal={onDismissProposal}
       onOpenTrace={onOpenTrace}
       onReview={onReview}
       onRound={onRound}
@@ -1540,6 +1611,8 @@ interface CheckListProps {
   filter: CheckFilter;
   /** Group-scoped feedback entries recorded on the aggregate. */
   groupFeedback: AcceptanceGroupFeedback[];
+  /** Answer a model proposal without ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   /** Record group-scoped feedback; resolves true when the write landed. */
   onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
   /** Open an agent judge's verification run (its trace IS the argument). */
@@ -1565,6 +1638,7 @@ const CheckList = memo<CheckListProps>(
     expanded,
     filter,
     groupFeedback,
+    onDismissProposal,
     onGroupFeedback,
     onReview,
     onOpenTrace,
@@ -1655,6 +1729,7 @@ const CheckList = memo<CheckListProps>(
               expanded={expanded.has(check.id)}
               key={check.id}
               reviewPending={reviewPending}
+              onDismissProposal={onDismissProposal}
               onOpenTrace={onOpenTrace}
               onReview={onReview}
               onRound={onRound}
@@ -1893,6 +1968,7 @@ const CheckList = memo<CheckListProps>(
                     expanded={expanded.has(check.id)}
                     key={check.id}
                     reviewPending={reviewPending}
+                    onDismissProposal={onDismissProposal}
                     onOpenTrace={onOpenTrace}
                     onReview={onReview}
                     onRound={onRound}

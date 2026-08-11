@@ -234,6 +234,68 @@ export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
 export const acceptanceCheckReviewActions = ['accept', 'ignore', 'reject'] as const;
 export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
 
+/**
+ * Why a reviewer rejected a check. The offline baseline (LOBE-13035) found that
+ * three different models converged on the same "wrong" answer for 24 of the
+ * checks a human had rejected — because the reject button is the only outbound
+ * channel on the page, so it carries three unrelated jobs at once. Only `unmet`
+ * is learnable from the check spec; the other two are a different question
+ * entirely, and folding them into one label caps how good any reviewer (human
+ * or model) can look.
+ *
+ * - unmet:       the delivery does not satisfy THIS check
+ * - new-idea:    the check passes, but the reviewer wants something different
+ * - no-evidence: the evidence does not show enough to judge the check at all
+ */
+export const acceptanceRejectIntents = ['unmet', 'new-idea', 'no-evidence'] as const;
+export type AcceptanceRejectIntent = (typeof acceptanceRejectIntents)[number];
+
+/** What an automated reviewer proposes for a check. Deliberately narrower than
+ *  the human's vocabulary: a model never proposes `ignore`, which is a statement
+ *  about the reviewer's priorities rather than about the delivery. */
+export const reviewPredictionActions = ['accept', 'reject'] as const;
+export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
+
+/**
+ * The reviewer's verdict on a model proposal. Three-way on purpose — a flat
+ * accept/dismiss would merge two opposite training signals: "you saw a problem
+ * that isn't there" (the judgement was wrong) and "there IS a problem but you
+ * circled the wrong thing" (the judgement was RIGHT, the grounding was wrong).
+ *
+ * - confirmed:    the proposal was right; it becomes a real reject
+ * - not-an-issue: no problem here — negative signal on the judgement
+ * - misidentified: a real problem, wrong region or wrong description —
+ *   positive signal on the judgement, negative on the grounding
+ */
+export const reviewAdjudications = ['confirmed', 'not-an-issue', 'misidentified'] as const;
+export type ReviewAdjudication = (typeof reviewAdjudications)[number];
+
+/**
+ * How closely the reviewer's submitted reject matched the proposal it started
+ * from. Derived by diffing the proposal against what was actually submitted, so
+ * it costs the reviewer no extra clicks — they were writing the reject anyway.
+ * Each value isolates which part of the proposal was wrong.
+ */
+export const reviewProposalEdits = [
+  'verbatim',
+  'comment-edited',
+  'region-moved',
+  'rewritten',
+] as const;
+export type ReviewProposalEdit = (typeof reviewProposalEdits)[number];
+
+/**
+ * Share of checks deliberately shown with NO proposal, so the reviewer labels
+ * them cold.
+ *
+ * This is not a rollout percentage — it is the only place miss rate stays
+ * measurable. Once a reviewer only ever adjudicates proposals, "the problems the
+ * model never raised" leave no trace, and the metric that matters most (missed
+ * defects) silently reads as perfect. It also breaks the anchoring loop where
+ * the dataset slowly collapses into the model's own opinions.
+ */
+export const REVIEW_PREDICTION_BLIND_RATE = 0.2;
+
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [
   'screenshot',

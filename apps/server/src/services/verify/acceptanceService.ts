@@ -2,9 +2,11 @@ import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
   AcceptanceCheckReviewAction,
+  AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  ReviewProposalOutcome,
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
@@ -649,6 +651,10 @@ export class AcceptanceService {
       checkItemIds: string[];
       comment?: string;
       fileIds?: string[];
+      /** Recorded when this decision answered a model proposal. */
+      proposal?: Omit<ReviewProposalOutcome, 'respondedAt'>;
+      /** Which of the three jobs a reject is doing; absent means unclassified. */
+      rejectIntent?: AcceptanceRejectIntent;
     },
   ): Promise<{ resultIds: string[] }> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
@@ -705,6 +711,13 @@ export class AcceptanceService {
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
       ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
+      // Only meaningful on a reject — an accept has no intent to classify.
+      ...(input.rejectIntent && input.action === 'reject'
+        ? { rejectIntent: input.rejectIntent }
+        : {}),
+      ...(input.proposal
+        ? { proposal: { ...input.proposal, respondedAt: new Date().toISOString() } }
+        : {}),
     };
 
     await Promise.all(
