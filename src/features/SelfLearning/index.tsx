@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { ChevronRightIcon, GraduationCapIcon, SparklesIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -147,16 +147,15 @@ const SelfLearning = memo(() => {
             isLoading={isLoading}
             loading={<Loading debugId="SelfLearning" />}
             empty={
-              <Flexbox align={'center'} gap={8} paddingBlock={64} width={'100%'}>
-                <Text weight={600}>{t('empty.title')}</Text>
-                <Text
-                  fontSize={13}
-                  style={{ maxWidth: 420, textAlign: 'center' }}
-                  type={'secondary'}
-                >
-                  {t('empty.desc')}
-                </Text>
-              </Flexbox>
+              <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
+                <Empty
+                  description={t('empty.desc')}
+                  descriptionProps={{ fontSize: 13 }}
+                  icon={GraduationCapIcon}
+                  style={{ maxWidth: 420 }}
+                  title={t('empty.title')}
+                />
+              </Center>
             }
             onRetry={() => mutate()}
           >
