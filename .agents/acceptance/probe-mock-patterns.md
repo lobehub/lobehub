@@ -1194,7 +1194,7 @@ Cause not established; re-seeding and restarting the same pool id does not help.
 
 **Works:** fall back to the legacy single instance (`electron-dev.sh start`, no id),
 which runs on the golden profile in place and decrypts normally. It boots on the
-loading shell once, so reload once before probing (see L-S0b). Gate on
+loading shell once, so reload once before probing (see L-S8). Gate on
 `app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
 
 ## Detailed references
