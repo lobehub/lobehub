@@ -58,7 +58,7 @@ const recordManagedUsage = async (params: {
     const me = members.find((m) => m.userId === userId && m.status === 'active');
     if (me) {
       orgMemberId = me.id;
-      await keyService.syncMemberUsage(me.id).catch(() => null);
+      await keyService.syncMemberCycleUsage(me.id).catch(() => null);
     }
   } else {
     // Warm personal remaining from OpenRouter so the next sources fetch is current.

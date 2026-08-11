@@ -3,10 +3,19 @@ import { ChatErrorType, type ErrorType } from '@lobechat/types';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import type { LobeChatDatabase } from '@/database/type';
-import { microUsdToDecimalString } from '@/database/utils/aicoMoney';
+import {
+  cycleRemainingMicroUsd,
+  hasValidManagedKeyId,
+  microUsdToDecimalString,
+} from '@/database/utils/aicoMoney';
 import { aicoEnv } from '@/envs/aico';
 
 import { type AicoBillingContext, parseAicoBillingContext } from './billingContext';
+
+/** Optional repair hook — chat path may lazy-provision a missing member key. */
+export type AicoManagedKeyRepair = {
+  ensureMemberKey: (orgMemberId: string) => Promise<unknown>;
+};
 
 export class AicoManagedPolicyError extends Error {
   errorType: ErrorType;
@@ -42,6 +51,7 @@ export class AicoManagedPolicy {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly decryptKey: (ciphertext: string) => Promise<string | null>,
+    private readonly keyRepair?: AicoManagedKeyRepair,
   ) {
     this.orgModel = new OrganizationModel(db);
     this.billingModel = new AicoBillingModel(db);
@@ -150,7 +160,7 @@ export class AicoManagedPolicy {
       throw new AicoManagedPolicyError('ORG_MEMBERSHIP_REQUIRED', ChatErrorType.Forbidden);
     }
 
-    const budget = await this.orgModel.getMemberBudget(me.id);
+    let budget = await this.orgModel.getMemberBudget(me.id);
     if (!budget?.isActive) {
       throw new AicoManagedPolicyError('MEMBER_BUDGET_INACTIVE', ChatErrorType.InvalidUserKey);
     }
@@ -160,10 +170,23 @@ export class AicoManagedPolicy {
         ChatErrorType.InvalidUserKey,
       );
     }
-    if ((budget.reservedMicroUsd ?? 0) <= 0) {
+    if (cycleRemainingMicroUsd(budget) <= 0) {
       throw new AicoManagedPolicyError('MEMBER_BUDGET_UNFUNDED', ChatErrorType.InvalidUserKey);
     }
-    if (!budget.openrouterKeyCiphertext || !budget.openrouterKeyId) {
+
+    if (
+      (!hasValidManagedKeyId(budget.openrouterKeyId) || !budget.openrouterKeyCiphertext) &&
+      this.keyRepair
+    ) {
+      try {
+        await this.keyRepair.ensureMemberKey(me.id);
+        budget = (await this.orgModel.getMemberBudget(me.id)) ?? budget;
+      } catch (error) {
+        console.warn('[aico] managed policy failed to repair member OpenRouter key', error);
+      }
+    }
+
+    if (!hasValidManagedKeyId(budget.openrouterKeyId) || !budget.openrouterKeyCiphertext) {
       throw new AicoManagedPolicyError('MANAGED_KEY_UNAVAILABLE', ChatErrorType.InvalidUserKey);
     }
 

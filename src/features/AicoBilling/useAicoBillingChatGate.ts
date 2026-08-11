@@ -20,7 +20,7 @@ export const useAicoBillingChatGate = (): AicoBillingChatGate => {
 
   if (isLoading || !data || !activeSource) {
     return {
-      blocked: false,
+      blocked: true,
       blockReason: null,
       showTrialCta: false,
       trialActive: Boolean(data?.trialActive),

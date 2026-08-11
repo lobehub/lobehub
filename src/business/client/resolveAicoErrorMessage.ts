@@ -9,18 +9,27 @@ import { buildPhoneVerifyRedirectUrl } from '@/libs/better-auth/phone';
 
 type LooseT = (key: string, options?: { defaultValue?: string }) => string;
 
-/** Pull a likely error-code string out of TRPC / Error / plain shapes. */
+/** Pull a likely error-code string out of TRPC / Error / ChatMessageError shapes. */
 export const extractErrorCodeCandidate = (error: unknown): string => {
   if (!error) return '';
   if (typeof error === 'string') return error;
   if (typeof error !== 'object') return '';
 
   const candidate = error as {
+    body?: { error?: unknown; message?: unknown };
     data?: { message?: unknown };
     message?: unknown;
     shape?: { message?: unknown };
   };
 
+  // Chat SSE: createErrorResponse puts Aico codes in `body.error` while
+  // `message` is a generic localized InvalidUserKey string — prefer body.
+  if (typeof candidate.body?.error === 'string' && candidate.body.error.trim()) {
+    return candidate.body.error;
+  }
+  if (typeof candidate.body?.message === 'string' && candidate.body.message.trim()) {
+    return candidate.body.message;
+  }
   if (typeof candidate.message === 'string' && candidate.message.trim()) {
     return candidate.message;
   }

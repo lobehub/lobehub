@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   confirmedUnusedMicro,
+  currentCycleLimitMicroUsd,
+  cycleRemainingMicroUsd,
   isProductBudgetPeriod,
+  isStaleManagedKeyId,
   microUsdToDecimalString,
   openRouterUsdToMicroFloor,
   periodToOpenRouterLimitReset,
@@ -60,5 +63,21 @@ describe('aicoMoney (final remediation)', () => {
     expect(() => usdDecimalStringToMicro('1.2.3')).toThrow();
     expect(() => tomanToMicroUsd(-1, 50_000)).toThrow();
     expect(() => openRouterUsdToMicroFloor(Number.NaN)).toThrow();
+  });
+
+  it('cycle remaining uses periodAmount and ignores pending reserved hold (FIN-001)', () => {
+    const budget = {
+      periodAmountMicroUsd: 10_000_000,
+      reservedMicroUsd: 30_000_000,
+      settledUsageMicroUsd: 2_000_000,
+    };
+    expect(currentCycleLimitMicroUsd(budget)).toBe(10_000_000);
+    expect(cycleRemainingMicroUsd(budget)).toBe(8_000_000);
+  });
+
+  it('isStaleManagedKeyId treats mock_ hashes as invalid', () => {
+    expect(isStaleManagedKeyId(null)).toBe(true);
+    expect(isStaleManagedKeyId('mock_abc')).toBe(true);
+    expect(isStaleManagedKeyId('ctrl_realhash')).toBe(false);
   });
 });

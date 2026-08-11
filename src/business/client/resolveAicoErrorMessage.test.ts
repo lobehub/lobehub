@@ -89,6 +89,18 @@ describe('resolveAicoErrorMessage', () => {
       'برای ادامه، ابتدا شماره موبایل خود را تأیید کنید.',
     );
   });
+
+  it('prefers ChatMessageError body.error over generic InvalidUserKey message', async () => {
+    const { extractErrorCodeCandidate, resolveAicoErrorMessage } =
+      await import('./resolveAicoErrorMessage');
+    const chatError = {
+      body: { error: 'MEMBER_BUDGET_UNFUNDED', provider: 'aico' },
+      message: 'translated_response.InvalidUserKey',
+      type: 'InvalidUserKey',
+    };
+    expect(extractErrorCodeCandidate(chatError)).toBe('MEMBER_BUDGET_UNFUNDED');
+    expect(resolveAicoErrorMessage(chatError)).toBe('سهمیه سازمانی انتخاب‌شده موجودی ندارد.');
+  });
 });
 
 describe('toastAicoError', () => {

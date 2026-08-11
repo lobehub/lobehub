@@ -24,6 +24,7 @@ import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
 import {
   type BudgetPeriod,
+  cycleRemainingMicroUsd,
   isBudgetPeriod,
   isProductBudgetPeriod,
   periodToOpenRouterLimitReset,
@@ -1691,7 +1692,11 @@ export class OrganizationModel {
           periodAmountMicroUsd,
           publicCode: m.publicCode,
           // Spendable remaining for the active cycle (excludes pending next-period hold).
-          remainingMicroUsd: Math.max(0, periodAmountMicroUsd - settledUsageMicroUsd),
+          remainingMicroUsd: cycleRemainingMicroUsd({
+            periodAmountMicroUsd,
+            reservedMicroUsd,
+            settledUsageMicroUsd,
+          }),
           pendingPeriod: budget?.pendingPeriod ?? null,
           pendingPeriodAmountMicroUsd: Number(budget?.pendingPeriodAmountMicroUsd ?? 0),
           renewalStatus: budget?.renewalStatus ?? null,

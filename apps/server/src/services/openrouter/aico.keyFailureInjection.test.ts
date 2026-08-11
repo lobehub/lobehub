@@ -414,6 +414,49 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     expect(key.limit).toBe(10);
   });
 
+  it('syncMemberCycleUsage writes period usage, not lifetime OpenRouter usage', async () => {
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const orgModel = new OrganizationModel(db);
+    const org = await orgModel.createOrganization({
+      name: 'Cycle Sync Org',
+      ownerUserId: userId,
+    });
+    const members = await orgModel.listMembers(org.id);
+    const ownerMember = members[0];
+
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+
+    await db.insert(memberBudgets).values({
+      isActive: true,
+      openrouterKeyCiphertext: 'enc',
+      openrouterKeyId: 'ctrl_cycle_sync',
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+      period: 'daily',
+      periodAmountMicroUsd: 10_000_000,
+      reservedMicroUsd: 10_000_000,
+      settledUsageMicroUsd: 0,
+    });
+
+    client.keys.set('ctrl_cycle_sync', {
+      disabled: false,
+      hash: 'ctrl_cycle_sync',
+      key: `${FAKE_SECRET}-ctrl_cycle_sync`,
+      limit: 10,
+      limitRemaining: 8,
+      name: 'test',
+      usage: 50,
+      usageDaily: 2,
+      usageMonthly: 50,
+      usageWeekly: 50,
+    });
+
+    await keys.syncMemberCycleUsage(ownerMember.id);
+    const budget = await orgModel.getMemberBudget(ownerMember.id);
+    expect(budget!.settledUsageMicroUsd).toBe(2_000_000);
+  });
+
   it('FIN-004: recreate after 404 disables/deletes the stale key hash', async () => {
     const billing = new AicoBillingModel(db);
     const client = new ControllableOpenRouterClient();
