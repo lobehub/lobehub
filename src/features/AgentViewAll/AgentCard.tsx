@@ -144,10 +144,10 @@ const AgentCard = memo<AgentCardProps>(
                   e.stopPropagation();
                 }}
               >
-                {/* Headless: the card's context menu is the only actions entry
-                    (the sidebar toggle folds into it via includeSidebarToggle). */}
+                {/* Visible "…" trigger AND right-click open the same menu — the
+                    context menu alone proved undiscoverable (the sidebar toggle
+                    folds into it via includeSidebarToggle). */}
                 <ItemActions
-                  hideTrigger
                   includeSidebarToggle
                   anchor={anchor}
                   forceActivated={menuActivated}
