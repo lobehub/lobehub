@@ -185,6 +185,8 @@ export default {
   'acceptance.proposal.confirm': 'Confirm and send back',
   'acceptance.proposal.misidentified': 'Real problem, wrong spot',
   'acceptance.proposal.notAnIssue': 'Not a problem',
+  'acceptance.proposal.regionCount': '{{count}} region(s) marked',
+  'acceptance.proposal.regionUnnamed': 'Marked region',
   'acceptance.proposal.request': 'Ask AI to review the pending checks',
   'acceptance.proposal.title': 'AI thinks this may not be met',
   'acceptance.review.attach': 'Attach screenshot',

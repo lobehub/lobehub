@@ -95,6 +95,45 @@ describe('classifyProposalEdit', () => {
     ).toBe('region-moved');
   });
 
+  it('does not report a move when several regions share one image', () => {
+    // Regression: matching by evidenceId alone paired every proposed region
+    // with the FIRST kept region on that image, so an untouched two-region
+    // proposal — a layout defect and a text defect in the same screenshot —
+    // reported region-moved and logged a grounding error that never happened.
+    const twoRegions = {
+      annotations: [
+        { comment: 'card is off-centre', evidenceId: 'ev1', rect: rect(0.09, 0.18) },
+        { comment: 'badge is unreadable', evidenceId: 'ev1', rect: rect(0.62, 0.03) },
+      ],
+      comment: 'two problems in this frame',
+    };
+    expect(
+      classifyProposalEdit(twoRegions, {
+        annotations: twoRegions.annotations,
+        comment: twoRegions.comment,
+      }),
+    ).toBe('verbatim');
+  });
+
+  it('still reports a move when one of several shared-image regions is relocated', () => {
+    const twoRegions = {
+      annotations: [
+        { comment: 'a', evidenceId: 'ev1', rect: rect(0.09, 0.18) },
+        { comment: 'b', evidenceId: 'ev1', rect: rect(0.62, 0.03) },
+      ],
+      comment: 'c',
+    };
+    expect(
+      classifyProposalEdit(twoRegions, {
+        annotations: [
+          { comment: 'a', evidenceId: 'ev1', rect: rect(0.09, 0.18) },
+          { comment: 'b', evidenceId: 'ev1', rect: rect(0.8, 0.8) },
+        ],
+        comment: 'c',
+      }),
+    ).toBe('region-moved');
+  });
+
   it('handles a proposal that carried no regions at all', () => {
     expect(
       classifyProposalEdit(

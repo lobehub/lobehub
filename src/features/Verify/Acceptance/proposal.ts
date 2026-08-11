@@ -56,10 +56,19 @@ export const classifyProposalEdit = (
   // rebuilt the case from scratch.
   if (proposed.length > 0 && kept.length === 0) return 'rewritten';
 
-  const moved = proposed.some((original) => {
-    const match = kept.find((region) => region.evidenceId === original.evidenceId);
-    return !match || !sameRect(match.rect, original.rect);
-  });
+  // Match each proposed region against ANY surviving region on the same image,
+  // not the first one found there. Several regions routinely share one
+  // screenshot (a layout defect and a text defect in the same frame), and
+  // keying on `evidenceId` alone matched every one of them to region #1 — so an
+  // untouched two-region proposal reported a move that never happened, feeding
+  // a false grounding error into the training signal.
+  const moved = proposed.some(
+    (original) =>
+      !kept.some(
+        (region) =>
+          region.evidenceId === original.evidenceId && sameRect(region.rect, original.rect),
+      ),
+  );
   if (moved) return 'region-moved';
 
   if (normalize(submitted.comment) !== normalize(proposal.comment)) return 'comment-edited';

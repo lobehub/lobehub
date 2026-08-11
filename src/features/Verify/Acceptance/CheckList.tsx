@@ -43,7 +43,7 @@ import {
   Route,
   XCircle,
 } from 'lucide-react';
-import { Fragment, memo, useState } from 'react';
+import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AudioPlayer from '@/features/AudioPlayer';
@@ -436,7 +436,19 @@ const comparisonContent = (item: AcceptanceEvidence) =>
     />
   );
 
-const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => {
+const EvidenceList = memo<{
+  evidence: AcceptanceEvidence[];
+  /**
+   * Regions to draw over an evidence image, keyed by evidence id. Used by the
+   * AI proposal: rather than the card rendering its own copy of the screenshot
+   * (which showed the same image twice in one row), the boxes land on the image
+   * that is already here.
+   */
+  overlays?: Map<
+    string,
+    { comment?: string; label?: number; rect: AcceptanceReviewAnnotation['rect'] }[]
+  >;
+}>(({ evidence, overlays }) => {
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
 
@@ -507,6 +519,25 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
                 alt={item.description ?? item.fileName ?? item.type}
                 downloadFileName={item.fileName ?? 'audio'}
                 url={item.fileUrl}
+              />
+              {caption}
+            </Flexbox>
+          );
+        const overlay = overlays?.get(item.id);
+        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type) && overlay?.length)
+          return (
+            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
+              {/* Comments stay off here — the proposal card already lists them
+                  against the same badge numbers. */}
+              <AnnotatedImage
+                annotations={overlay}
+                showComments={false}
+                src={item.fileUrl}
+                imageStyle={
+                  item.fileWidth && item.fileHeight
+                    ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
+                    : undefined
+                }
               />
               {caption}
             </Flexbox>
@@ -884,6 +915,9 @@ const CheckRow = memo<{
     const [ignoring, setIgnoring] = useState(false);
     const [rejecting, setRejecting] = useState(false);
     const [reviewComment, setReviewComment] = useState('');
+    // The proposal starts folded: it is a suggestion, and an open panel on every
+    // unreviewed check would push the evidence the reviewer came for below the fold.
+    const [proposalOpen, setProposalOpen] = useState(false);
     const meta = STATE_META[check.state];
     const counts = evidenceCounts(check.evidence);
     const visualization = readVisualizationManifest(check.result?.metadata);
@@ -898,6 +932,24 @@ const CheckRow = memo<{
         : undefined;
     const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
     const evidenceById = collectEvidenceById(check);
+
+    // Regions the proposal wants drawn on the evidence images already in this
+    // row. Numbered across the whole proposal (not per image), so "区域 2" in
+    // the card means the same box wherever it lives. Only while the card is
+    // open — boxes with no visible explanation read as a defect of the evidence.
+    const proposalOverlays = useMemo(() => {
+      if (!proposalOpen || !check.prediction) return undefined;
+      const map = new Map<
+        string,
+        { comment?: string; label?: number; rect: AcceptanceReviewAnnotation['rect'] }[]
+      >();
+      (check.prediction.annotations ?? []).forEach((annotation, index) => {
+        const bucket = map.get(annotation.evidenceId) ?? [];
+        bucket.push({ comment: annotation.comment, label: index + 1, rect: annotation.rect });
+        map.set(annotation.evidenceId, bucket);
+      });
+      return map.size > 0 ? map : undefined;
+    }, [proposalOpen, check.prediction]);
     const hasHistory = check.revisions > 1 || historyReviews.length > 0;
 
     /**
@@ -1216,11 +1268,12 @@ const CheckRow = memo<{
               already drops it; this guard covers the optimistic window. */}
             {check.prediction && reviewable && !activeReview && (
               <ProposalCard
-                evidenceById={evidenceById}
+                open={proposalOpen}
                 pending={reviewPending}
                 proposal={check.prediction}
                 onAdjudicate={handleAdjudicate}
                 onConfirm={() => openReject(check.prediction ?? undefined)}
+                onToggle={setProposalOpen}
               />
             )}
             {/* The verifier's account of what it saw. Clamping it to two lines
@@ -1254,7 +1307,7 @@ const CheckRow = memo<{
                 </Flexbox>
               )}
             {visualization && <VisualizationRenderer manifest={visualization} />}
-            <EvidenceList evidence={check.evidence} />
+            <EvidenceList evidence={check.evidence} overlays={proposalOverlays} />
 
             {check.state === 'not_executed' && (
               <Flexbox

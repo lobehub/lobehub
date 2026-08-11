@@ -149,6 +149,8 @@
   "acceptance.proposal.confirm": "确认并打回",
   "acceptance.proposal.misidentified": "确有问题，但位置不对",
   "acceptance.proposal.notAnIssue": "这不是问题",
+  "acceptance.proposal.regionCount": "标了 {{count}} 处",
+  "acceptance.proposal.regionUnnamed": "标注区域",
   "acceptance.proposal.request": "让 AI 复核待验收项",
   "acceptance.proposal.title": "AI 认为这条可能没做到",
   "acceptance.reject.description": "打回不是留言：你的意见将作为输入，发起新一轮修复，完成后回到「待验收」。",
