@@ -481,7 +481,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     const { path } = await localFileService.ensureSandboxWorkspace({ agentId });
     // Leave it unset if the directory could not be created: pointing the fence
     // at a path that does not exist would fail later and less clearly.
-    if (path) await commitWorkingDirectory({ path });
+    //
+    // `localTarget` because the sandbox pick is about to make `local` the
+    // target: the config still describes the previous one here, so without it a
+    // workspace member's first pick would file the path against the shared
+    // target (or nowhere) and the very next command would refuse again.
+    if (path) await commitWorkingDirectory({ path }, { localTarget: true });
   }, [agentId, commitWorkingDirectory, configuredWorkingDirectory]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
