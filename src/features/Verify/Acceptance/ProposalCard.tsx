@@ -111,9 +111,14 @@ const ProposalCard = memo<ProposalCardProps>(
         >
           <Icon icon={open ? ChevronDown : ChevronRight} size={12} />
           <Icon icon={Sparkles} size={12} />
-          <Text fontSize={12} type={'secondary'}>
+          <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
             {t('acceptance.proposal.title')}
           </Text>
+          {/* Provenance belongs beside the claim it qualifies, not parked at the
+              far end of the action row where it read as a stray footnote. */}
+          <span className={styles.muted}>
+            {proposal.provider}/{proposal.model}
+          </span>
           {!open && proposal.comment && <span className={styles.preview}>{proposal.comment}</span>}
           {!open && regions.length > 0 && (
             <span className={styles.muted}>
@@ -164,10 +169,6 @@ const ProposalCard = memo<ProposalCardProps>(
               >
                 {t('acceptance.proposal.misidentified')}
               </Button>
-              <Flexbox flex={1} />
-              <span className={styles.muted}>
-                {proposal.provider}/{proposal.model}
-              </span>
             </Flexbox>
           </>
         )}
