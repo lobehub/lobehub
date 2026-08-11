@@ -6,11 +6,16 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 - Next.js 16 + React 19 + TypeScript
 - SPA inside Next.js with `react-router-dom`
-- `@lobehub/ui`, antd for components; antd-style for CSS-in-JS — **prefer `createStaticStyles` with `cssVar.*`** (zero-runtime); only fall back to `createStyles` + `token` when styles genuinely need runtime computation. See `.cursor/docs/createStaticStyles_migration_guide.md`.
-- **Component priority**: `@lobehub/ui/base-ui` (headless primitives) **first**, then `@lobehub/ui` root, then antd as last resort. When the component exists in base-ui, use it — never reach for the root or antd counterpart. Base-ui covers `Select`, `Modal` / `createModal` / `confirmModal`, `DropdownMenu`, `ContextMenu`, `Popover`, `ScrollArea`, `Switch`, `Toast`, `FloatingSheet`, `Drawer`. Prefer `@lobehub/ui/base-ui` for new code and migrate root-package call sites opportunistically.
+- `@lobehub/ui`, antd, and antd-style for UI implementation
 - react-i18next for i18n; zustand for state management
 - SWR for data fetching; TRPC for type-safe backend
 - Drizzle ORM with PostgreSQL; Vitest for testing
+
+## Agent Skills
+
+`AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
+
+- **React and TSX**: Before editing components, component state, render boundaries, or memoization, read [`.agents/skills/react/SKILL.md`](.agents/skills/react/SKILL.md). It owns component selection, styling, state locality, and render-performance rules.
 
 ## Project Structure
 
