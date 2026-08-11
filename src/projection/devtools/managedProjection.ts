@@ -3,8 +3,9 @@ import { isPlainRecord } from '@lobechat/utils/object';
 
 import type { LocalDatabaseEntry } from '@/libs/localDatabase';
 
-import { parseProjectionStorageKey, PROJECTION_SCHEMA_VERSION } from '../persistence/repository';
 import { isProjectionRecord } from '../records/validators';
+
+const PROJECTION_CACHE_SCHEMA_VERSION = 1;
 
 export interface ManagedProjection {
   entryKey: string;
@@ -23,19 +24,17 @@ const getFragments = (record: ProjectionRecord): Record<string, ManagedFragment 
 export const inspectManagedProjection = (
   entry: LocalDatabaseEntry,
 ): ManagedProjectionInspection => {
-  const identity = parseProjectionStorageKey(entry.key);
-  if (!identity) {
-    return { reason: 'The storage key is not a valid Projection record key.', status: 'invalid' };
-  }
-
   if (!isPlainRecord(entry.value)) {
     return { reason: 'The stored value is not a Projection envelope.', status: 'invalid' };
   }
-  if (entry.value.schemaVersion !== PROJECTION_SCHEMA_VERSION) {
+  if (entry.value.schemaVersion !== PROJECTION_CACHE_SCHEMA_VERSION) {
     return {
-      reason: `Only Projection schema version ${PROJECTION_SCHEMA_VERSION} can be edited.`,
+      reason: `Only Projection cache schema version ${PROJECTION_CACHE_SCHEMA_VERSION} can be edited.`,
       status: 'invalid',
     };
+  }
+  if (typeof entry.value.scope !== 'string' || !entry.value.scope) {
+    return { reason: 'The Projection cache row has no valid scope.', status: 'invalid' };
   }
   if (!isProjectionRecord(entry.value.value)) {
     return {
@@ -45,17 +44,14 @@ export const inspectManagedProjection = (
   }
 
   const record = entry.value.value;
-  if (identity.kind !== record.kind || identity.id !== record.id) {
-    return {
-      reason: 'The storage key identity does not match the stored Projection identity.',
-      status: 'invalid',
-    };
-  }
   if (Object.keys(record.fragments).length === 0) {
     return { reason: 'This Projection has no editable fragments.', status: 'invalid' };
   }
 
-  return { projection: { entryKey: entry.key, record, scope: identity.scope }, status: 'editable' };
+  return {
+    projection: { entryKey: entry.key, record, scope: entry.value.scope },
+    status: 'editable',
+  };
 };
 
 export const getManagedProjectionFragmentNames = (projection: ManagedProjection): string[] =>

@@ -3,52 +3,59 @@ import { useMemo, useState } from 'react';
 import { useProjectionStore } from '@/projection/store';
 
 import {
-  createProjectionScopeRows,
+  createProjectionTableColumns,
   createProjectionTableRows,
-  filterProjectionScopeRows,
+  createProjectionTableSummaries,
   filterProjectionTableRows,
+  filterProjectionTableSummaries,
+  type ProjectionTableId,
 } from './model';
 
 export const useProjectionInspector = () => {
   const scopes = useProjectionStore((state) => state.scopes);
-  const [scopeSearch, setScopeSearch] = useState('');
+  const [tableSearch, setTableSearch] = useState('');
   const [rowSearch, setRowSearch] = useState('');
-  const [requestedScope, setRequestedScope] = useState<string | null>(null);
+  const [requestedTableId, setRequestedTableId] = useState<ProjectionTableId | null>(null);
   const [requestedRecordKey, setRequestedRecordKey] = useState<string | null>(null);
 
-  const scopeRows = useMemo(() => createProjectionScopeRows(scopes), [scopes]);
-  const visibleScopeRows = useMemo(
-    () => filterProjectionScopeRows(scopeRows, scopeSearch),
-    [scopeRows, scopeSearch],
+  const tables = useMemo(() => createProjectionTableSummaries(scopes), [scopes]);
+  const visibleTables = useMemo(
+    () => filterProjectionTableSummaries(tables, tableSearch),
+    [tableSearch, tables],
   );
-  const selectedScope =
-    requestedScope && visibleScopeRows.some(({ scope }) => scope === requestedScope)
-      ? requestedScope
-      : (visibleScopeRows.at(0)?.scope ?? null);
+  const selectedTable =
+    (requestedTableId && tables.find(({ id }) => id === requestedTableId)) ||
+    tables.find(({ rowCount }) => rowCount > 0) ||
+    tables.at(0) ||
+    null;
   const rows = useMemo(
-    () => createProjectionTableRows(selectedScope ?? '', scopes[selectedScope ?? '']),
-    [scopes, selectedScope],
+    () => createProjectionTableRows(scopes, selectedTable?.id ?? null),
+    [scopes, selectedTable?.id],
+  );
+  const columns = useMemo(
+    () => createProjectionTableColumns(rows, selectedTable),
+    [rows, selectedTable],
   );
   const matchingRows = useMemo(() => filterProjectionTableRows(rows, rowSearch), [rowSearch, rows]);
   const selectedRow =
-    matchingRows.find(({ projection }) => projection.entryKey === requestedRecordKey) ??
-    matchingRows.at(0);
+    matchingRows.find(({ rowKey }) => rowKey === requestedRecordKey) ?? matchingRows.at(0);
 
   return {
+    columns,
     matchingRows,
     rowSearch,
-    scopeRows,
-    scopeSearch,
     selectRecord: setRequestedRecordKey,
-    selectScope: (scope: string) => {
+    selectTable: (tableId: ProjectionTableId) => {
       setRequestedRecordKey(null);
-      setRequestedScope(scope);
+      setRequestedTableId(tableId);
       setRowSearch('');
     },
     selectedRow,
-    selectedScope,
+    selectedTable,
     setRowSearch,
-    setScopeSearch,
-    visibleScopeRows,
+    setTableSearch,
+    tableSearch,
+    tables,
+    visibleTables,
   };
 };

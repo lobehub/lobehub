@@ -1,8 +1,8 @@
 # Projection 客户端数据层与 Home 数据迁移规范
 
-> 状态：第一阶段已实现\
+> 状态：第一阶段与跨运行时 Entity Cache 已实现\
 > 首个落地范围：Home Dashboard 及其右侧 Inbox\
-> 持久化后端：现有 `localDatabase`（Web IndexedDB / Desktop SQLite IPC）
+> 运行时后端：Web 进程内存 / Desktop typed SQLite Entity Cache
 
 ## 1. 背景
 
@@ -81,8 +81,10 @@ flowchart LR
   end
 
   subgraph Persistence["持久化层"]
-    Repository["Typed Projection Repository"]
-    LocalDB["localDatabase"]
+    Repository["Projection Persistence Port"]
+    Web["Web Memory Adapter"]
+    Desktop["Electron IPC Adapter"]
+    SQLite["Typed SQLite Entity Tables"]
   end
 
   UI["React UI"]
@@ -94,8 +96,12 @@ flowchart LR
   Ingestor --> Commit
   Commit --> Graph
   Commit --> Repository
-  Repository --> LocalDB
-  LocalDB --> Repository
+  Repository --> Web
+  Repository --> Desktop
+  Desktop --> SQLite
+  Web --> Repository
+  SQLite --> Desktop
+  Desktop --> Repository
   Repository --> Graph
   Graph --> View
   View --> UI
@@ -112,8 +118,8 @@ src/projection/
 ├── records/              # canonical Projection action、selector、validator
 ├── modules/
 │   └── home/             # Home ingestor、Index、View selector、request hook
-├── persistence/          # typed repository 与 localDatabase adapter
-├── registry.ts           # 组合 Projection record 与业务模块 validator
+├── persistence/          # persistence port、Web memory、Electron codec/adapter
+├── registry.ts           # 运行时适配器注册与稳定 forwarding facade
 ├── store.ts              # composition root；组合 core/records/modules
 └── index.ts              # 面向消费者的公共入口
 
@@ -176,8 +182,10 @@ Home 根节点重新组装并下发整个列表。
 | Ingestor         | 将具体 DTO 显式拆为 fragments、indexes、snapshots | 网络调度、UI 状态                |
 | Projection Map   | scope 内唯一局部记录、commit 冲突处理、原子发布   | 远端事实存储、完整实体建模       |
 | View Selector    | 检查 coverage 并组装不可写视图                    | 保存第二份 Projection 数据       |
-| Typed Repository | schema envelope、scope key、批量持久化、hydration | 解释 SWR key 或业务 UI           |
-| `localDatabase`  | 跨运行时 KV / 批处理能力                          | 领域类型和请求语义               |
+| Persistence Port | 为 Store 提供统一 commit、hydrate、clear API      | 暴露 Web/Electron 分支给业务层   |
+| Web Adapter      | 当前页面生命周期内的进程内存缓存                  | durable warm reload、离线事实源  |
+| Electron Adapter | IPC codec、同 scope 写入排序                      | fragment 合并、UI 状态           |
+| SQLite Entity DB | typed entity/index/snapshot 表、事务与约束        | 服务端事实存储、任意 KV          |
 
 ## 5. 身份与 scope
 
@@ -195,7 +203,7 @@ Projection record 的存储身份为：
 - Anonymous scope 不持久化 Home 私有 Projection。
 - `lobehub:active-scope` 仅可用于提前定位候选分区，不能作为认证证明。
 - Web 必须等待 auth session settled；Desktop 必须等待 `isUserStateInit`。只有确认后的 scope
-  可以提交或展示持久化 Home 数据。
+  可以提交或展示私有 Projection 数据。Web hydration 通常为空；Desktop 可从实体表恢复。
 
 ## 6. ProjectionRecord 与 fragment 规则
 
@@ -350,29 +358,44 @@ fragments，`HomeBriefCardView` 再从引用组装 enrichment。
 
 ## 11. Typed Repository 与物理布局
 
-Repository 使用 `localDatabase.batch()` 保证一次 durable commit 中的记录原子写入。
+业务层只依赖 `ProjectionPersistence`，由 composition root 在首屏渲染前选择实现：
 
-| Collection         | Key                                      | Value                               |
-| ------------------ | ---------------------------------------- | ----------------------------------- |
-| `entity-records`   | `${encodedScope}::${kind}::${encodedId}` | versioned ProjectionRecord envelope |
-| `entity-indexes`   | `${encodedScope}::${indexName}`          | versioned Index envelope            |
-| `entity-snapshots` | `${encodedScope}::${snapshotName}`       | versioned Snapshot envelope         |
-| `entity-meta`      | `${encodedScope}`                        | 为后续 GC 元数据保留；首版不写入    |
+| Runtime  | 实现                            | 语义                                                     |
+| -------- | ------------------------------- | -------------------------------------------------------- |
+| Web      | `MemoryProjectionPersistence`   | 页面生命周期内可复用；刷新后允许重新加载，不写 IndexedDB |
+| Electron | `ElectronProjectionPersistence` | 通过独立 IPC 写 typed SQLite；支持 durable warm reload   |
 
-所有 value 使用以下 envelope：
+业务 Action、Selector、Ingestor 和组件禁止判断运行时。二者共同使用 `ProjectionCommit`、
+Fragment 冲突规则与 hydration API，差异只存在于 persistence adapter 以下。
 
-```ts
-interface PersistedEnvelope<T> {
-  schemaVersion: 1;
-  value: T;
-}
-```
+Electron 物理布局不是通用 KV，而是固定 registry 的实体 read model：
 
-- 未知 schema version 必须忽略并触发网络恢复，不允许强制 cast。
-- hydration 必须运行 Projection Record、Index、Snapshot 的领域 validator；无效记录按 cache miss 处理。
-- schema migration 通过新增 parser/migrator 完成，不修改已发布的底层数据库 migration 历史。
-- scope hydration 使用 prefix scan，只读取目标 scope。
-- index replacement 与其本次 upsert 的 Projection records 必须进入同一个 batch。
+| SQLite table                | 主身份               | 固定内容                                          |
+| --------------------------- | -------------------- | ------------------------------------------------- |
+| `projection_agents`         | `(scope, entity_id)` | access/identity/profile/routing/runtime fragments |
+| `projection_chat_groups`    | `(scope, entity_id)` | access/identity fragments                         |
+| `projection_topics`         | `(scope, entity_id)` | 当前 Topic registry 的八个 fragments              |
+| `projection_tasks`          | `(scope, entity_id)` | 当前 Task registry 的五个 fragments               |
+| `projection_briefs`         | `(scope, entity_id)` | 当前 Brief registry 的五个 fragments              |
+| `projection_home_indexes`   | `(scope, key)`       | 五个受约束的 `home.*` index                       |
+| `projection_home_snapshots` | `(scope, key)`       | 受约束的 `home.dailyBrief` snapshot               |
+
+每个实体 Fragment 对应固定的 `*_data / *_observed_at / *_source` 三列。SQLite 约束保证：
+
+- 三列同时为空或同时存在；
+- `observed_at >= 0`；
+- source 只能为 `network / realtime / mutation`；
+- data 是合法 JSON；
+- schema version、index key、snapshot key 只能取当前 registry 允许值。
+
+Fragment data 使用 SuperJSON 保留 Date 等结构化类型；hydration 后仍必须运行 Record、Index、
+Snapshot 领域 validator，无效行按 cache miss 处理。一次 materialized commit 的实体、index、
+snapshot 在同一 SQLite transaction 内 upsert；renderer 内同一 scope 的 IPC commit 保持调用
+顺序，主进程再串行化共享 SQLite 连接上的所有写事务。
+
+SQLite schema 变化必须新增 Desktop local migration，不修改已发布 migration。Entity Cache 是可
+重建 read model；不为旧 `entity-records / entity-indexes / entity-snapshots` KV 行编写业务回填，
+网络重新验证会重建新表。
 
 ## 12. 请求与 SWR 协议
 
@@ -415,6 +438,7 @@ flowchart TD
 ```
 
 - 初次 hydration 失败时，发布空的 ready scope，并依赖网络恢复，不能永久阻塞应用。
+- Web adapter 不承诺跨刷新 hydration；Electron adapter 从 typed SQLite 表恢复。
 - hydration 得到的空 index 仍表示 “已初始化且结果为空”；index 缺失才表示从未取得 coverage。
 - scope 切换不得展示前一 scope 的数据。Selector 始终显式接收当前 scope。
 - 已在内存准备完成的目标 scope 可立即切换。
@@ -487,11 +511,12 @@ Mutation 不得分别 patch SWR、Zustand list 和组件本地状态。统一流
 
 ### 18.2 Repository 测试
 
-- scope 前缀隔离。
-- record/index/snapshot 在一个 batch 中写入。
-- 同一 scope 的多个 durable commit 保持调用顺序；不同 scope 可以并行。
+- Web memory adapter 的 scope 隔离与刷新后网络兜底语义。
+- Electron record/index/snapshot 在一个 SQLite transaction 中写入。
+- 同一 scope 的多个 durable commit 保持调用顺序；共享 SQLite 连接上的事务不交错。
 - Date 等 structured-clone/superjson 类型可往返。
-- 未知 schema version 被忽略。
+- SQLite 拒绝不完整 Fragment 三元组、非法 source/key/schema version。
+- 未知或无效持久化数据被忽略。
 - hydration 能区分空 index 与缺失 index。
 
 ### 18.3 集成测试

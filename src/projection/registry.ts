@@ -1,15 +1,20 @@
-import type { ProjectionIndex, ProjectionRecord, ProjectionSnapshot } from '@lobechat/types';
+import { createMemoryProjectionPersistence } from './persistence/memoryAdapter';
+import type { ProjectionPersistence } from './persistence/types';
 
-import { isHomeIndex, isHomeSnapshot } from './modules/home/validators';
-import { createProjectionRepository } from './persistence/repository';
-import { isProjectionRecord } from './records/validators';
+let activePersistence = createMemoryProjectionPersistence();
 
-export const projectionRepository = createProjectionRepository<
-  ProjectionRecord,
-  ProjectionIndex,
-  ProjectionSnapshot
->({
-  isRecord: isProjectionRecord,
-  isIndex: isHomeIndex,
-  isSnapshot: isHomeSnapshot,
-});
+/** Stable forwarding facade retained by the store and test seams. */
+export const projectionRepository: ProjectionPersistence = {
+  clearScope: (scope) => activePersistence.clearScope(scope),
+  commit: (scope, commit) => activePersistence.commit(scope, commit),
+  hydrateScope: (scope) => activePersistence.hydrateScope(scope),
+};
+
+export const registerProjectionPersistence = (persistence: ProjectionPersistence): (() => void) => {
+  const previous = activePersistence;
+  activePersistence = persistence;
+
+  return () => {
+    if (activePersistence === persistence) activePersistence = previous;
+  };
+};

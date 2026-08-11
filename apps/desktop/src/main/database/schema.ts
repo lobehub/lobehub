@@ -1,8 +1,430 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import {
+  type AnySQLiteColumn,
+  check,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
+
+export const PROJECTION_CACHE_SCHEMA_VERSION = 1;
+
+const projectionSource = (name: string) =>
+  text(name, { enum: ['mutation', 'network', 'realtime'] });
+
+const fragmentChecks = (
+  constraintPrefix: string,
+  data: AnySQLiteColumn,
+  observedAt: AnySQLiteColumn,
+  source: AnySQLiteColumn,
+) => [
+  check(
+    `${constraintPrefix}_complete`,
+    sql`((${data} IS NULL) = (${observedAt} IS NULL)) AND ((${data} IS NULL) = (${source} IS NULL))`,
+  ),
+  check(`${constraintPrefix}_data_json`, sql`${data} IS NULL OR json_valid(${data})`),
+  check(
+    `${constraintPrefix}_observed_at_positive`,
+    sql`${observedAt} IS NULL OR ${observedAt} >= 0`,
+  ),
+  check(
+    `${constraintPrefix}_source_valid`,
+    sql`${source} IS NULL OR ${source} IN ('mutation', 'network', 'realtime')`,
+  ),
+];
+
+const entityChecks = (
+  constraintPrefix: string,
+  schemaVersion: AnySQLiteColumn,
+  tombstoneAt: AnySQLiteColumn,
+) => [
+  check(`${constraintPrefix}_schema_version_current`, sql`${schemaVersion} = 1`),
+  check(
+    `${constraintPrefix}_tombstone_at_positive`,
+    sql`${tombstoneAt} IS NULL OR ${tombstoneAt} >= 0`,
+  ),
+];
 
 export const localRecords = sqliteTable('local_records', {
   id: text('id').primaryKey().notNull(),
   value: text('value').notNull(),
 });
 
-export const localDatabaseSchema = { localRecords };
+export const projectionAgents = sqliteTable(
+  'projection_agents',
+  {
+    accessData: text('access_data'),
+    accessObservedAt: integer('access_observed_at'),
+    accessSource: projectionSource('access_source'),
+    entityId: text('entity_id').notNull(),
+    identityData: text('identity_data'),
+    identityObservedAt: integer('identity_observed_at'),
+    identitySource: projectionSource('identity_source'),
+    profileData: text('profile_data'),
+    profileObservedAt: integer('profile_observed_at'),
+    profileSource: projectionSource('profile_source'),
+    routingData: text('routing_data'),
+    routingObservedAt: integer('routing_observed_at'),
+    routingSource: projectionSource('routing_source'),
+    runtimeData: text('runtime_data'),
+    runtimeObservedAt: integer('runtime_observed_at'),
+    runtimeSource: projectionSource('runtime_source'),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+    tombstoneAt: integer('tombstone_at'),
+  },
+  (table) => [
+    uniqueIndex('projection_agents_scope_entity_unique').on(table.scope, table.entityId),
+    index('projection_agents_scope_idx').on(table.scope),
+    ...entityChecks('projection_agents', table.schemaVersion, table.tombstoneAt),
+    ...fragmentChecks(
+      'projection_agents_access',
+      table.accessData,
+      table.accessObservedAt,
+      table.accessSource,
+    ),
+    ...fragmentChecks(
+      'projection_agents_identity',
+      table.identityData,
+      table.identityObservedAt,
+      table.identitySource,
+    ),
+    ...fragmentChecks(
+      'projection_agents_profile',
+      table.profileData,
+      table.profileObservedAt,
+      table.profileSource,
+    ),
+    ...fragmentChecks(
+      'projection_agents_routing',
+      table.routingData,
+      table.routingObservedAt,
+      table.routingSource,
+    ),
+    ...fragmentChecks(
+      'projection_agents_runtime',
+      table.runtimeData,
+      table.runtimeObservedAt,
+      table.runtimeSource,
+    ),
+  ],
+);
+
+export const projectionChatGroups = sqliteTable(
+  'projection_chat_groups',
+  {
+    accessData: text('access_data'),
+    accessObservedAt: integer('access_observed_at'),
+    accessSource: projectionSource('access_source'),
+    entityId: text('entity_id').notNull(),
+    identityData: text('identity_data'),
+    identityObservedAt: integer('identity_observed_at'),
+    identitySource: projectionSource('identity_source'),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+    tombstoneAt: integer('tombstone_at'),
+  },
+  (table) => [
+    uniqueIndex('projection_chat_groups_scope_entity_unique').on(table.scope, table.entityId),
+    index('projection_chat_groups_scope_idx').on(table.scope),
+    ...entityChecks('projection_chat_groups', table.schemaVersion, table.tombstoneAt),
+    ...fragmentChecks(
+      'projection_chat_groups_access',
+      table.accessData,
+      table.accessObservedAt,
+      table.accessSource,
+    ),
+    ...fragmentChecks(
+      'projection_chat_groups_identity',
+      table.identityData,
+      table.identityObservedAt,
+      table.identitySource,
+    ),
+  ],
+);
+
+export const projectionTopics = sqliteTable(
+  'projection_topics',
+  {
+    activityData: text('activity_data'),
+    activityObservedAt: integer('activity_observed_at'),
+    activitySource: projectionSource('activity_source'),
+    creationData: text('creation_data'),
+    creationObservedAt: integer('creation_observed_at'),
+    creationSource: projectionSource('creation_source'),
+    displayData: text('display_data'),
+    displayObservedAt: integer('display_observed_at'),
+    displaySource: projectionSource('display_source'),
+    entityId: text('entity_id').notNull(),
+    navigationData: text('navigation_data'),
+    navigationObservedAt: integer('navigation_observed_at'),
+    navigationSource: projectionSource('navigation_source'),
+    previewData: text('preview_data'),
+    previewObservedAt: integer('preview_observed_at'),
+    previewSource: projectionSource('preview_source'),
+    routingData: text('routing_data'),
+    routingObservedAt: integer('routing_observed_at'),
+    routingSource: projectionSource('routing_source'),
+    runTimingData: text('run_timing_data'),
+    runTimingObservedAt: integer('run_timing_observed_at'),
+    runTimingSource: projectionSource('run_timing_source'),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    statusData: text('status_data'),
+    statusObservedAt: integer('status_observed_at'),
+    statusSource: projectionSource('status_source'),
+    storageId: text('storage_id').primaryKey().notNull(),
+    tombstoneAt: integer('tombstone_at'),
+  },
+  (table) => [
+    uniqueIndex('projection_topics_scope_entity_unique').on(table.scope, table.entityId),
+    index('projection_topics_scope_idx').on(table.scope),
+    ...entityChecks('projection_topics', table.schemaVersion, table.tombstoneAt),
+    ...fragmentChecks(
+      'projection_topics_activity',
+      table.activityData,
+      table.activityObservedAt,
+      table.activitySource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_creation',
+      table.creationData,
+      table.creationObservedAt,
+      table.creationSource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_display',
+      table.displayData,
+      table.displayObservedAt,
+      table.displaySource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_navigation',
+      table.navigationData,
+      table.navigationObservedAt,
+      table.navigationSource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_preview',
+      table.previewData,
+      table.previewObservedAt,
+      table.previewSource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_routing',
+      table.routingData,
+      table.routingObservedAt,
+      table.routingSource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_run_timing',
+      table.runTimingData,
+      table.runTimingObservedAt,
+      table.runTimingSource,
+    ),
+    ...fragmentChecks(
+      'projection_topics_status',
+      table.statusData,
+      table.statusObservedAt,
+      table.statusSource,
+    ),
+  ],
+);
+
+export const projectionTasks = sqliteTable(
+  'projection_tasks',
+  {
+    assignmentData: text('assignment_data'),
+    assignmentObservedAt: integer('assignment_observed_at'),
+    assignmentSource: projectionSource('assignment_source'),
+    descriptionData: text('description_data'),
+    descriptionObservedAt: integer('description_observed_at'),
+    descriptionSource: projectionSource('description_source'),
+    displayData: text('display_data'),
+    displayObservedAt: integer('display_observed_at'),
+    displaySource: projectionSource('display_source'),
+    entityId: text('entity_id').notNull(),
+    identityData: text('identity_data'),
+    identityObservedAt: integer('identity_observed_at'),
+    identitySource: projectionSource('identity_source'),
+    lifecycleData: text('lifecycle_data'),
+    lifecycleObservedAt: integer('lifecycle_observed_at'),
+    lifecycleSource: projectionSource('lifecycle_source'),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+    tombstoneAt: integer('tombstone_at'),
+  },
+  (table) => [
+    uniqueIndex('projection_tasks_scope_entity_unique').on(table.scope, table.entityId),
+    index('projection_tasks_scope_idx').on(table.scope),
+    ...entityChecks('projection_tasks', table.schemaVersion, table.tombstoneAt),
+    ...fragmentChecks(
+      'projection_tasks_assignment',
+      table.assignmentData,
+      table.assignmentObservedAt,
+      table.assignmentSource,
+    ),
+    ...fragmentChecks(
+      'projection_tasks_description',
+      table.descriptionData,
+      table.descriptionObservedAt,
+      table.descriptionSource,
+    ),
+    ...fragmentChecks(
+      'projection_tasks_display',
+      table.displayData,
+      table.displayObservedAt,
+      table.displaySource,
+    ),
+    ...fragmentChecks(
+      'projection_tasks_identity',
+      table.identityData,
+      table.identityObservedAt,
+      table.identitySource,
+    ),
+    ...fragmentChecks(
+      'projection_tasks_lifecycle',
+      table.lifecycleData,
+      table.lifecycleObservedAt,
+      table.lifecycleSource,
+    ),
+  ],
+);
+
+export const projectionBriefs = sqliteTable(
+  'projection_briefs',
+  {
+    actionsData: text('actions_data'),
+    actionsObservedAt: integer('actions_observed_at'),
+    actionsSource: projectionSource('actions_source'),
+    contentData: text('content_data'),
+    contentObservedAt: integer('content_observed_at'),
+    contentSource: projectionSource('content_source'),
+    entityId: text('entity_id').notNull(),
+    readStateData: text('read_state_data'),
+    readStateObservedAt: integer('read_state_observed_at'),
+    readStateSource: projectionSource('read_state_source'),
+    relationsData: text('relations_data'),
+    relationsObservedAt: integer('relations_observed_at'),
+    relationsSource: projectionSource('relations_source'),
+    resolutionData: text('resolution_data'),
+    resolutionObservedAt: integer('resolution_observed_at'),
+    resolutionSource: projectionSource('resolution_source'),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+    tombstoneAt: integer('tombstone_at'),
+  },
+  (table) => [
+    uniqueIndex('projection_briefs_scope_entity_unique').on(table.scope, table.entityId),
+    index('projection_briefs_scope_idx').on(table.scope),
+    ...entityChecks('projection_briefs', table.schemaVersion, table.tombstoneAt),
+    ...fragmentChecks(
+      'projection_briefs_actions',
+      table.actionsData,
+      table.actionsObservedAt,
+      table.actionsSource,
+    ),
+    ...fragmentChecks(
+      'projection_briefs_content',
+      table.contentData,
+      table.contentObservedAt,
+      table.contentSource,
+    ),
+    ...fragmentChecks(
+      'projection_briefs_read_state',
+      table.readStateData,
+      table.readStateObservedAt,
+      table.readStateSource,
+    ),
+    ...fragmentChecks(
+      'projection_briefs_relations',
+      table.relationsData,
+      table.relationsObservedAt,
+      table.relationsSource,
+    ),
+    ...fragmentChecks(
+      'projection_briefs_resolution',
+      table.resolutionData,
+      table.resolutionObservedAt,
+      table.resolutionSource,
+    ),
+  ],
+);
+
+const homeIndexKeys = [
+  'home.inboxTopics',
+  'home.recentTopics',
+  'home.sidebar',
+  'home.tasks',
+  'home.unresolvedBriefs',
+] as const;
+
+export const projectionHomeIndexes = sqliteTable(
+  'projection_home_indexes',
+  {
+    data: text('data').notNull(),
+    key: text('key', { enum: homeIndexKeys }).notNull(),
+    observedAt: integer('observed_at').notNull(),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    source: projectionSource('source').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+  },
+  (table) => [
+    uniqueIndex('projection_home_indexes_scope_key_unique').on(table.scope, table.key),
+    index('projection_home_indexes_scope_idx').on(table.scope),
+    check('projection_home_indexes_data_json', sql`json_valid(${table.data})`),
+    check(
+      'projection_home_indexes_key_valid',
+      sql`${table.key} IN ('home.inboxTopics', 'home.recentTopics', 'home.sidebar', 'home.tasks', 'home.unresolvedBriefs')`,
+    ),
+    check('projection_home_indexes_observed_at_positive', sql`${table.observedAt} >= 0`),
+    check('projection_home_indexes_schema_version_current', sql`${table.schemaVersion} = 1`),
+    check(
+      'projection_home_indexes_source_valid',
+      sql`${table.source} IN ('mutation', 'network', 'realtime')`,
+    ),
+  ],
+);
+
+export const projectionHomeSnapshots = sqliteTable(
+  'projection_home_snapshots',
+  {
+    data: text('data').notNull(),
+    key: text('key', { enum: ['home.dailyBrief'] }).notNull(),
+    observedAt: integer('observed_at').notNull(),
+    schemaVersion: integer('schema_version').default(PROJECTION_CACHE_SCHEMA_VERSION).notNull(),
+    scope: text('scope').notNull(),
+    source: projectionSource('source').notNull(),
+    storageId: text('storage_id').primaryKey().notNull(),
+  },
+  (table) => [
+    uniqueIndex('projection_home_snapshots_scope_key_unique').on(table.scope, table.key),
+    index('projection_home_snapshots_scope_idx').on(table.scope),
+    check('projection_home_snapshots_data_json', sql`json_valid(${table.data})`),
+    check('projection_home_snapshots_key_valid', sql`${table.key} = 'home.dailyBrief'`),
+    check('projection_home_snapshots_observed_at_positive', sql`${table.observedAt} >= 0`),
+    check('projection_home_snapshots_schema_version_current', sql`${table.schemaVersion} = 1`),
+    check(
+      'projection_home_snapshots_source_valid',
+      sql`${table.source} IN ('mutation', 'network', 'realtime')`,
+    ),
+  ],
+);
+
+export const localDatabaseSchema = {
+  localRecords,
+  projectionAgents,
+  projectionBriefs,
+  projectionChatGroups,
+  projectionHomeIndexes,
+  projectionHomeSnapshots,
+  projectionTasks,
+  projectionTopics,
+};

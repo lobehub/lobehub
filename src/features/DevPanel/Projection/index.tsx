@@ -2,17 +2,23 @@
 
 import { Input } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Layers3 } from 'lucide-react';
-import { memo } from 'react';
+import { Table2 } from 'lucide-react';
+import { memo, useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
-import ProjectionEditor from './ProjectionEditor';
+import { createProjectionTableCell } from './model';
+import ProjectionInspector from './ProjectionInspector';
+import ProjectionTableCell from './ProjectionTableCell';
+import {
+  type ProjectionCellEditFeedback,
+  useProjectionCellEditor,
+} from './useProjectionCellEditor';
 import { useProjectionInspector } from './useProjectionInspector';
 
 const styles = createStaticStyles(({ css }) => ({
   detailsBody: css`
-    overflow: auto;
+    overflow: hidden;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -44,31 +50,10 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
-  identity: css`
-    display: grid;
-    gap: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  raw: css`
-    overflow: auto;
-
-    margin: 0;
-    padding: 12px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
   rowActive: css`
     background: ${cssVar.colorFillSecondary};
   `,
-  scopeCount: css`
+  sidebarTableCount: css`
     flex-shrink: 0;
 
     min-width: 24px;
@@ -80,11 +65,11 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
-  scopeIcon: css`
+  sidebarTableIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
   `,
-  scopeItem: css`
+  sidebarTableItem: css`
     cursor: pointer;
 
     display: flex;
@@ -92,8 +77,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     width: 100%;
-    min-height: 36px;
-    padding-block: 4px;
+    height: 32px;
     padding-inline: 12px;
     border: 0;
 
@@ -113,30 +97,25 @@ const styles = createStaticStyles(({ css }) => ({
       outline-offset: -2px;
     }
   `,
-  scopeItemActive: css`
+  sidebarTableItemActive: css`
     color: ${cssVar.colorText};
     background: ${cssVar.colorFillSecondary};
   `,
-  scopeList: css`
+  sidebarTableList: css`
     overflow: auto;
     flex: 1;
     min-height: 0;
     padding-block: 4px;
   `,
-  scopeMeta: css`
+  sidebarTableName: css`
     overflow: hidden;
-    display: flex;
     flex: 1;
-    flex-direction: column;
-    gap: 1px;
-  `,
-  scopeName: css`
-    overflow: hidden;
+
     font-family: ${cssVar.fontFamilyCode};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  scopePane: css`
+  sidebarTablesPane: css`
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -144,18 +123,11 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     min-height: 0;
   `,
-  scopeStatus: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   table: css`
     table-layout: fixed;
     border-spacing: 0;
     border-collapse: separate;
-
     width: 100%;
-    min-width: 900px;
 
     th,
     td {
@@ -243,6 +215,23 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  editFeedback: css`
+    overflow: hidden;
+    flex: 1;
+
+    padding-inline: 12px;
+
+    color: ${cssVar.colorTextTertiary};
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  editFeedbackError: css`
+    color: ${cssVar.colorError};
+  `,
+  editFeedbackSaved: css`
+    color: ${cssVar.colorSuccess};
+  `,
   workspace: css`
     overflow: hidden;
     display: grid;
@@ -265,66 +254,79 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const formatTimestamp = (timestamp: number | undefined): string =>
-  timestamp === undefined ? '—' : new Date(timestamp).toISOString();
+const MAX_RENDERED_ROWS = 300;
 
 const ProjectionPanel = memo(() => {
   const {
+    columns,
     matchingRows,
     rowSearch,
-    scopeSearch,
     selectRecord,
-    selectScope,
+    selectTable,
     selectedRow,
-    selectedScope,
+    selectedTable,
     setRowSearch,
-    setScopeSearch,
-    visibleScopeRows,
+    setTableSearch,
+    tableSearch,
+    visibleTables,
   } = useProjectionInspector();
+  const [editFeedback, setEditFeedback] = useState<ProjectionCellEditFeedback | null>(null);
+  const cellEditor = useProjectionCellEditor({ onFeedback: setEditFeedback });
+  const renderedRows = matchingRows.slice(0, MAX_RENDERED_ROWS);
+  const tableMinWidth = Math.max(
+    900,
+    columns.reduce((total, { width }) => total + width, 0),
+  );
+  const rowRange =
+    matchingRows.length === 0
+      ? '0 rows'
+      : `1–${renderedRows.length} of ${matchingRows.length} rows`;
 
   return (
     <div className={devDockPanelStyles.root}>
       <div className={styles.workspace}>
         <aside
-          aria-label={'Projection scopes'}
-          className={cx(styles.scopePane, devDockPanelStyles.paneDividerEnd)}
+          aria-label={'Projection tables'}
+          className={cx(styles.sidebarTablesPane, devDockPanelStyles.paneDividerEnd)}
         >
-          <div className={devDockPanelStyles.paneHeader}>Scopes</div>
+          <div className={devDockPanelStyles.paneHeader}>Tables</div>
           <div className={devDockPanelStyles.paneSearch}>
             <Input
               allowClear
               className={devDockPanelStyles.searchInput}
-              placeholder={'Search scopes…'}
+              placeholder={'Search tables…'}
               size={'small'}
-              value={scopeSearch}
+              value={tableSearch}
               variant={'borderless'}
-              onChange={(event) => setScopeSearch(event.target.value)}
+              onChange={(event) => setTableSearch(event.target.value)}
             />
           </div>
-          <div className={styles.scopeList}>
-            {visibleScopeRows.length === 0 ? (
-              <div className={styles.empty}>
-                {scopeSearch ? 'No scopes match.' : 'No Projection scopes are loaded.'}
-              </div>
+          <div className={styles.sidebarTableList}>
+            {visibleTables.length === 0 ? (
+              <div className={styles.empty}>No tables match.</div>
             ) : (
-              visibleScopeRows.map(({ hydrationStatus, recordCount, scope }) => (
+              visibleTables.map(({ id, label, rowCount }) => (
                 <button
-                  aria-pressed={scope === selectedScope}
-                  key={scope}
-                  title={scope}
+                  aria-pressed={id === selectedTable?.id}
+                  key={id}
+                  title={label}
                   type={'button'}
                   className={cx(
-                    styles.scopeItem,
-                    scope === selectedScope && styles.scopeItemActive,
+                    styles.sidebarTableItem,
+                    id === selectedTable?.id && styles.sidebarTableItemActive,
                   )}
-                  onClick={() => selectScope(scope)}
+                  onClick={() => {
+                    void cellEditor.commit().then((committed) => {
+                      if (committed) {
+                        setEditFeedback(null);
+                        selectTable(id);
+                      }
+                    });
+                  }}
                 >
-                  <Layers3 className={styles.scopeIcon} size={14} />
-                  <span className={styles.scopeMeta}>
-                    <span className={styles.scopeName}>{scope}</span>
-                    <span className={styles.scopeStatus}>{hydrationStatus}</span>
-                  </span>
-                  <span className={styles.scopeCount}>{recordCount}</span>
+                  <Table2 className={styles.sidebarTableIcon} size={14} />
+                  <span className={styles.sidebarTableName}>{label}</span>
+                  <span className={styles.sidebarTableCount}>{rowCount}</span>
                 </button>
               ))
             )}
@@ -333,67 +335,73 @@ const ProjectionPanel = memo(() => {
 
         <main className={styles.tablePane}>
           <div className={devDockPanelStyles.toolbar}>
-            <span className={styles.toolbarTitle} title={selectedScope ?? undefined}>
-              {selectedScope ?? 'Projection'}
+            <span className={styles.toolbarTitle} title={selectedTable?.label}>
+              {selectedTable?.label ?? 'Projection'}
             </span>
             <Input
               allowClear
               className={styles.toolbarSearch}
-              disabled={!selectedScope}
-              placeholder={'Search records…'}
+              disabled={!selectedTable}
+              placeholder={'Search rows…'}
               size={'small'}
               value={rowSearch}
               onChange={(event) => setRowSearch(event.target.value)}
             />
-            <span className={styles.toolbarMeta}>{matchingRows.length} records</span>
+            <span className={styles.toolbarMeta}>{matchingRows.length} rows</span>
             <span className={styles.toolbarMeta}>live store</span>
           </div>
-          <div className={styles.tableScroll}>
-            <table className={styles.table}>
+          <div className={styles.tableScroll} key={selectedTable?.id}>
+            <table className={styles.table} style={{ minWidth: tableMinWidth }}>
               <colgroup>
-                <col style={{ width: 120 }} />
-                <col style={{ width: 240 }} />
-                <col style={{ width: 240 }} />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 220 }} />
+                {columns.map((column) => (
+                  <col key={column.id} style={{ width: column.width }} />
+                ))}
               </colgroup>
               <thead>
                 <tr>
-                  <th scope={'col'}>kind</th>
-                  <th scope={'col'}>id</th>
-                  <th scope={'col'}>fragments</th>
-                  <th scope={'col'}>source</th>
-                  <th scope={'col'}>observed_at</th>
+                  {columns.map((column) => (
+                    <th key={column.id} scope={'col'}>
+                      {column.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {matchingRows.map((row) => {
-                  const { projection } = row;
-                  const active = projection.entryKey === selectedRow?.projection.entryKey;
+                {renderedRows.map((row) => {
+                  const active = row.rowKey === selectedRow?.rowKey;
                   return (
                     <tr
-                      aria-label={`${projection.record.kind}/${projection.record.id}`}
+                      aria-label={`${row.scope}/${row.identity}`}
                       aria-selected={active}
                       className={active ? styles.rowActive : undefined}
-                      key={projection.entryKey}
+                      key={row.rowKey}
                       tabIndex={0}
-                      onClick={() => selectRecord(projection.entryKey)}
+                      onClick={() => {
+                        void cellEditor.commit().then((committed) => {
+                          if (committed) {
+                            setEditFeedback(null);
+                            selectRecord(row.rowKey);
+                          }
+                        });
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
-                          selectRecord(projection.entryKey);
+                          void cellEditor.commit().then((committed) => {
+                            if (committed) {
+                              setEditFeedback(null);
+                              selectRecord(row.rowKey);
+                            }
+                          });
                         }
                       }}
                     >
-                      <td title={projection.record.kind}>{projection.record.kind}</td>
-                      <td title={projection.record.id}>{projection.record.id}</td>
-                      <td title={row.fragmentNames.join(', ')}>
-                        {row.fragmentNames.join(', ') || '—'}
-                      </td>
-                      <td title={row.sources.join(', ')}>{row.sources.join(', ') || '—'}</td>
-                      <td title={formatTimestamp(row.latestObservedAt)}>
-                        {formatTimestamp(row.latestObservedAt)}
-                      </td>
+                      {columns.map((column) => {
+                        const cell = createProjectionTableCell(row, column);
+                        return (
+                          <ProjectionTableCell cell={cell} editor={cellEditor} key={cell.key} />
+                        );
+                      })}
                     </tr>
                   );
                 })}
@@ -402,46 +410,40 @@ const ProjectionPanel = memo(() => {
             {matchingRows.length === 0 && (
               <div className={styles.empty}>
                 {rowSearch
-                  ? `No records match “${rowSearch}”.`
-                  : selectedScope
-                    ? 'This scope has no records.'
+                  ? `No rows match “${rowSearch}”.`
+                  : selectedTable
+                    ? 'This table has no rows.'
                     : 'Open a surface that hydrates Projection data.'}
               </div>
             )}
           </div>
           <div className={devDockPanelStyles.statusBar}>
-            <span>{matchingRows.length} records</span>
+            <span>{rowRange}</span>
+            <span
+              title={editFeedback?.message}
+              className={cx(
+                styles.editFeedback,
+                editFeedback?.status === 'error' && styles.editFeedbackError,
+                editFeedback?.status === 'saved' && styles.editFeedbackSaved,
+              )}
+            >
+              {editFeedback?.message ?? 'Double-click a data cell to edit.'}
+            </span>
             <span>Projection Store</span>
           </div>
         </main>
 
         <aside
-          aria-label={'Selected Projection record'}
+          aria-label={'Selected Projection row'}
           className={cx(styles.detailsPane, devDockPanelStyles.paneDividerStart)}
         >
           <div className={devDockPanelStyles.paneHeader}>Record</div>
           {selectedRow ? (
             <div className={styles.detailsBody}>
-              <div className={cx(devDockPanelStyles.flatSection, styles.identity)}>
-                <span>{selectedRow.projection.scope}</span>
-                <span>
-                  {selectedRow.projection.record.kind}/{selectedRow.projection.record.id}
-                </span>
-              </div>
-              {selectedRow.fragmentNames.length > 0 ? (
-                <ProjectionEditor
-                  key={selectedRow.projection.entryKey}
-                  projection={selectedRow.projection}
-                />
-              ) : (
-                <div className={styles.empty}>This record has no editable fragments.</div>
-              )}
-              <pre className={styles.raw}>
-                {JSON.stringify(selectedRow.projection.record, null, 2)}
-              </pre>
+              <ProjectionInspector editor={cellEditor} row={selectedRow} table={selectedTable} />
             </div>
           ) : (
-            <div className={styles.empty}>Select a Projection record.</div>
+            <div className={styles.empty}>Select a Projection row.</div>
           )}
         </aside>
       </div>

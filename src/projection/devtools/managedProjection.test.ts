@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectionStorageKeys } from '../persistence/repository';
+import { projectionDevtoolRecordKey } from './identity';
 import {
   createProjectionFragmentEditRecord,
   inspectManagedProjection,
@@ -8,9 +8,10 @@ import {
 } from './managedProjection';
 
 const entry = {
-  key: projectionStorageKeys.record('user-1:personal', 'topic', 'topic/1'),
+  key: projectionDevtoolRecordKey('user-1:personal', 'topic', 'topic/1'),
   value: {
     schemaVersion: 1,
+    scope: 'user-1:personal',
     value: {
       fragments: {
         display: { data: { title: 'Initial' }, observedAt: 10, source: 'network' },
@@ -22,7 +23,7 @@ const entry = {
 };
 
 describe('managed Projections', () => {
-  it('recognizes a valid persisted Projection and derives its scoped identity from the key', () => {
+  it('recognizes a typed Projection cache row and retains its scope', () => {
     expect(inspectManagedProjection(entry)).toMatchObject({
       projection: {
         record: { id: 'topic/1', kind: 'topic' },
@@ -32,14 +33,14 @@ describe('managed Projections', () => {
     });
   });
 
-  it('rejects envelopes whose storage identity and Projection identity diverge', () => {
+  it('rejects cache rows without a scope', () => {
     expect(
       inspectManagedProjection({
         ...entry,
-        key: projectionStorageKeys.record('user-1:personal', 'topic', 'other-topic'),
+        value: { ...entry.value, scope: undefined },
       }),
     ).toEqual({
-      reason: 'The storage key identity does not match the stored Projection identity.',
+      reason: 'The Projection cache row has no valid scope.',
       status: 'invalid',
     });
   });

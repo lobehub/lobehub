@@ -39,6 +39,7 @@ const prefixRange = (collection: string, prefix: string) => {
 
 export default class LocalDatabaseService extends ServiceModule {
   private runtime: LocalDatabaseRuntime | null = null;
+  private writeTail: Promise<void> = Promise.resolve();
 
   initialize(): void {
     if (this.runtime) return;
@@ -51,36 +52,42 @@ export default class LocalDatabaseService extends ServiceModule {
   async batch(operations: DesktopLocalDatabaseBatchOperation[]): Promise<void> {
     if (operations.length === 0) return;
 
-    await this.getRuntime().db.transaction(async (tx) => {
-      for (const operation of operations) {
-        const id = storageKey(operation.collection, operation.key);
+    await this.runWrite(() =>
+      this.getRuntime().db.transaction(async (tx) => {
+        for (const operation of operations) {
+          const id = storageKey(operation.collection, operation.key);
 
-        if (operation.type === 'delete') {
-          await tx.delete(localRecords).where(eq(localRecords.id, id)).run();
-        } else {
-          await tx
-            .insert(localRecords)
-            .values({ id, value: operation.value })
-            .onConflictDoUpdate({ set: { value: operation.value }, target: localRecords.id })
-            .run();
+          if (operation.type === 'delete') {
+            await tx.delete(localRecords).where(eq(localRecords.id, id)).run();
+          } else {
+            await tx
+              .insert(localRecords)
+              .values({ id, value: operation.value })
+              .onConflictDoUpdate({ set: { value: operation.value }, target: localRecords.id })
+              .run();
+          }
         }
-      }
-    });
+      }),
+    );
   }
 
   async delete(collection: string, key: string): Promise<void> {
-    await this.getRuntime()
-      .db.delete(localRecords)
-      .where(eq(localRecords.id, storageKey(collection, key)))
-      .run();
+    await this.runWrite(() =>
+      this.getRuntime()
+        .db.delete(localRecords)
+        .where(eq(localRecords.id, storageKey(collection, key)))
+        .run(),
+    );
   }
 
   async deleteByPrefix(collection: string, prefix: string): Promise<void> {
     const { lowerBound, upperBound } = prefixRange(collection, prefix);
-    await this.getRuntime()
-      .db.delete(localRecords)
-      .where(and(gte(localRecords.id, lowerBound), lt(localRecords.id, upperBound)))
-      .run();
+    await this.runWrite(() =>
+      this.getRuntime()
+        .db.delete(localRecords)
+        .where(and(gte(localRecords.id, lowerBound), lt(localRecords.id, upperBound)))
+        .run(),
+    );
   }
 
   async entriesByPrefix(collection: string, prefix: string): Promise<DesktopLocalDatabaseEntry[]> {
@@ -123,11 +130,23 @@ export default class LocalDatabaseService extends ServiceModule {
   }
 
   async set(collection: string, key: string, value: string): Promise<void> {
-    await this.getRuntime()
-      .db.insert(localRecords)
-      .values({ id: storageKey(collection, key), value })
-      .onConflictDoUpdate({ set: { value }, target: localRecords.id })
-      .run();
+    await this.runWrite(() =>
+      this.getRuntime()
+        .db.insert(localRecords)
+        .values({ id: storageKey(collection, key), value })
+        .onConflictDoUpdate({ set: { value }, target: localRecords.id })
+        .run(),
+    );
+  }
+
+  /** Serialize writes and transactions that share the single local SQLite connection. */
+  async runWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const current = this.writeTail.then(operation, operation);
+    this.writeTail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    return current;
   }
 
   destroy = (): void => {
@@ -135,7 +154,7 @@ export default class LocalDatabaseService extends ServiceModule {
     this.runtime = null;
   };
 
-  private getRuntime(): LocalDatabaseRuntime {
+  getRuntime(): LocalDatabaseRuntime {
     this.initialize();
     return this.runtime!;
   }

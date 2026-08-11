@@ -1,15 +1,10 @@
-import type {
-  ProjectionCommit,
-  ProjectionIndex,
-  ProjectionRecord,
-  ProjectionSnapshot,
-} from '@lobechat/types';
+import type { ProjectionCommit } from '@lobechat/types';
 
 import { isAnonymousScope, isScopeTrusted } from '@/libs/swr/useCacheScope';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { HydratedProjection, ProjectionRepositoryCommit } from '../persistence/repository';
+import type { ProjectionPersistence } from '../persistence/types';
 import type { ProjectionStore } from '../store';
 import { createEmptyProjectionScope } from './initialState';
 import { applyProjectionCommit, materializeProjectionCommit } from './reducer';
@@ -23,16 +18,6 @@ export interface ProjectionCoreAction {
   internal_commitProjection: (scope: string, commit: ProjectionCommit) => void;
   internal_commitProjectionForDevtools: (scope: string, commit: ProjectionCommit) => Promise<void>;
   prepareProjectionScope: (scope: string) => Promise<void>;
-}
-
-export interface ProjectionPersistence {
-  commit: (
-    scope: string,
-    commit: ProjectionRepositoryCommit<ProjectionRecord, ProjectionIndex, ProjectionSnapshot>,
-  ) => Promise<void>;
-  hydrateScope: (
-    scope: string,
-  ) => Promise<HydratedProjection<ProjectionRecord, ProjectionIndex, ProjectionSnapshot>>;
 }
 
 class ProjectionCoreActionImpl implements ProjectionCoreAction {

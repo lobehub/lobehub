@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StoreSetter } from '@/store/types';
 
+import type { ProjectionPersistence } from '../persistence/types';
 import type { ProjectionStore } from '../store';
-import type { ProjectionPersistence } from './action';
 import { createProjectionCoreAction } from './action';
 import { createEmptyProjectionScope } from './initialState';
 import { applyProjectionCommit } from './reducer';
@@ -66,6 +66,7 @@ describe('ProjectionCoreAction', () => {
     });
     const commit = vi.fn(() => persistencePending);
     const harness = createActionHarness({
+      clearScope: vi.fn(),
       commit,
       hydrateScope: vi.fn(),
     });
@@ -107,7 +108,7 @@ describe('ProjectionCoreAction', () => {
   it('honors an explicit DevTool scope without changing business persistence guards', async () => {
     mocks.scopeTrusted = false;
     const commit = vi.fn().mockResolvedValue(undefined);
-    const harness = createActionHarness({ commit, hydrateScope: vi.fn() });
+    const harness = createActionHarness({ clearScope: vi.fn(), commit, hydrateScope: vi.fn() });
 
     await harness
       .getState()
@@ -122,6 +123,7 @@ describe('ProjectionCoreAction', () => {
   it('surfaces persistence failures after retaining the visible Store edit', async () => {
     const failure = new Error('database unavailable');
     const harness = createActionHarness({
+      clearScope: vi.fn(),
       commit: vi.fn().mockRejectedValue(failure),
       hydrateScope: vi.fn(),
     });

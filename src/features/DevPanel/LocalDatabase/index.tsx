@@ -1,5 +1,6 @@
 'use client';
 
+import { DESKTOP_PROJECTION_CACHE_TABLES } from '@lobechat/electron-client-ipc';
 import { Input } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -9,7 +10,6 @@ import { memo, useMemo, useState } from 'react';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { inspectManagedProjection } from '@/projection/devtools';
-import { PROJECTION_COLLECTIONS } from '@/projection/persistence/repository';
 
 import ProjectionEditor from '../Projection/ProjectionEditor';
 import {
@@ -24,6 +24,13 @@ import {
 import { useLocalDatabaseInspector } from './useLocalDatabaseInspector';
 
 const MAX_RENDERED_ROWS = 300;
+const EDITABLE_PROJECTION_TABLES: ReadonlySet<string> = new Set([
+  DESKTOP_PROJECTION_CACHE_TABLES.agent,
+  DESKTOP_PROJECTION_CACHE_TABLES.brief,
+  DESKTOP_PROJECTION_CACHE_TABLES.chatGroup,
+  DESKTOP_PROJECTION_CACHE_TABLES.task,
+  DESKTOP_PROJECTION_CACHE_TABLES.topic,
+]);
 const EMPTY_COLUMNS: LocalDatabaseColumn[] = [
   { id: '__key', label: 'key' },
   { id: 'value', label: 'value' },
@@ -363,7 +370,7 @@ const LocalDatabasePanel = memo(() => {
   );
   const projectionInspection = useMemo(
     () =>
-      selectedCollection === PROJECTION_COLLECTIONS.records && selectedRow
+      selectedCollection && EDITABLE_PROJECTION_TABLES.has(selectedCollection) && selectedRow
         ? inspectManagedProjection(selectedRow.entry)
         : null,
     [selectedCollection, selectedRow],
@@ -469,8 +476,8 @@ const LocalDatabasePanel = memo(() => {
             />
             <span className={styles.toolbarMeta}>{entries.length} rows</span>
             <span className={styles.toolbarMeta}>
-              {selectedCollection === PROJECTION_COLLECTIONS.records
-                ? 'projection edit'
+              {selectedCollection && EDITABLE_PROJECTION_TABLES.has(selectedCollection)
+                ? 'entity edit'
                 : 'read-only'}
             </span>
             <Button

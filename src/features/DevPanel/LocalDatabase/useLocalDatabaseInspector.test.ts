@@ -16,11 +16,11 @@ describe('useLocalDatabaseInspector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listCollections.mockResolvedValue([
-      { entryCount: 2, name: 'entity-records' },
+      { entryCount: 2, name: 'projection_agents' },
       { entryCount: 1, name: 'swr-cache' },
     ]);
     mocks.entriesByPrefix.mockImplementation(async (collection: string) =>
-      collection === 'entity-records'
+      collection === 'projection_agents'
         ? [
             { key: 'agent::1', value: { id: '1' } },
             { key: 'topic::2', value: { id: '2' } },
@@ -34,9 +34,9 @@ describe('useLocalDatabaseInspector', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.selectedCollection).toBe('entity-records');
+    expect(result.current.selectedCollection).toBe('projection_agents');
     expect(result.current.entries).toHaveLength(2);
-    expect(mocks.entriesByPrefix).toHaveBeenCalledWith('entity-records', '');
+    expect(mocks.entriesByPrefix).toHaveBeenCalledWith('projection_agents', '');
   });
 
   it('switches collections and preserves the selected collection when refreshed', async () => {
@@ -48,7 +48,7 @@ describe('useLocalDatabaseInspector', () => {
     expect(result.current.entries).toEqual([{ key: 'message:list', value: { data: [] } }]);
 
     mocks.listCollections.mockResolvedValue([
-      { entryCount: 2, name: 'entity-records' },
+      { entryCount: 2, name: 'projection_agents' },
       { entryCount: 2, name: 'swr-cache' },
     ]);
     mocks.entriesByPrefix.mockResolvedValueOnce([

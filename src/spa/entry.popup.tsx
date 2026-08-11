@@ -6,6 +6,8 @@ import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { bootTiming } from '@/libs/bootTiming';
 import { registerLocalDatabaseAdapter } from '@/libs/localDatabase';
 import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electronAdapter';
+import { createElectronProjectionPersistence } from '@/projection/persistence/electronAdapter';
+import { registerProjectionPersistence } from '@/projection/registry';
 import { createAppRouter } from '@/utils/router';
 
 import { startAppInitialization } from './initialize/bootstrap';
@@ -13,6 +15,7 @@ import { popupRoutes } from './router/popupRouter.config';
 import { createSPARoot } from './runtime';
 
 registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
+registerProjectionPersistence(createElectronProjectionPersistence());
 bootTiming.mark('bundle-eval');
 startAppInitialization();
 

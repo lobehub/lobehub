@@ -27,7 +27,7 @@ Projection 域与基础设施工作收录于 §10 后续路线图。Projection �
 | --- | -------------------------------------- | -------------------------------------------------------- |
 | 6   | IndexedDB SWR tier（`topic:` 前缀）    | #5 的每个 key 单独落盘，同一 topic 行随请求形态落盘 N 份 |
 | 7   | localStorage（`recent:list` 等）       | recent topic 壳子                                        |
-| 8   | projection repository `entity-records` | canonical 持久化（当前仅 Home 喂入的 fragments）         |
+| 8   | Desktop typed Projection entity tables | Electron canonical 持久化（Web 使用进程内存）            |
 
 ### 1.3 Canonical（覆盖不全）
 
@@ -192,8 +192,8 @@ summarize 流式期间逐 token 更新写 slice 的 UI overlay，不进 graph；
 
 ## 6. 持久化与启动
 
-- repository 沿用 `entity-records` / `entity-indexes` collection，仅扩展 registry
-  validator，无底层存储布局变更。
+- repository 沿用统一 `ProjectionPersistence` port；Web 继续使用进程内存，Electron 扩展
+  对应实体表的固定 Fragment 列与 registry validator。业务写法不引入运行时分支。
 - `topic:` 前缀从 `CACHE_TIERS.idb` 移除；provider 既有的退役 key 清理机制清除历史落盘行。
 - 启动顺序併入现有流程：scope ready → hydrate records + chat indexes → 投影再生成 →
   sidebar 首帧直接可画 → SWR 后台 revalidate。
