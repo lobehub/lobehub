@@ -30,11 +30,12 @@ export const useTaskDetailProjection = (
 
 export const useTaskGroupListProjection = (
   signature: TaskListQuerySignature,
+  enabled = true,
 ): TaskGroupListView | undefined => {
-  useProjectionViewHydration(taskGroupListViewContract, signature);
+  useProjectionViewHydration(taskGroupListViewContract, signature, enabled);
   const scope = useCacheScope();
   return useProjectionStore(
-    (state) => selectTaskGroupList(state.scopes[scope], signature),
+    (state) => (enabled ? selectTaskGroupList(state.scopes[scope], signature) : undefined),
     isEqual,
   );
 };

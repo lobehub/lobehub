@@ -24,6 +24,8 @@ import type {
   TopicProjection,
 } from '@lobechat/types';
 
+import { taskListProjectionRecord } from '../task/ingestors';
+
 export interface ProjectionObservation {
   observedAt: number;
   source: ProjectionSource;
@@ -272,26 +274,8 @@ const agentIdentityRecord = (
   kind: 'agent',
 });
 
-const taskRecord = (item: TaskListItem, observation: ProjectionObservation): TaskProjection => ({
-  fragments: {
-    assignment: fragment(
-      {
-        assigneeAgentId: item.assigneeAgentId,
-        visibility: item.visibility,
-        workspaceId: item.workspaceId,
-      },
-      observation,
-    ),
-    description: fragment({ description: item.description }, observation),
-    display: fragment({ name: item.name }, observation),
-    identity: fragment({ identifier: item.identifier }, observation),
-    lifecycle: fragment({ status: parseTaskStatus(item.status) }, observation),
-  },
-  id: item.id,
-  kind: 'task',
-});
-
-export const ingestHomeTasks = (
+const ingestHomeTaskList = (
+  key: 'home.scheduledTasks' | 'home.tasks',
   items: TaskListItem[],
   total: number,
   observation: ProjectionObservation,
@@ -301,6 +285,7 @@ export const ingestHomeTasks = (
     { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }
   >();
   for (const task of items) {
+    parseTaskStatus(task.status);
     for (const participant of task.participants) {
       if (participant.type !== 'agent') continue;
       participantAgents.set(participant.id, participant);
@@ -309,12 +294,12 @@ export const ingestHomeTasks = (
 
   return {
     records: [
-      ...items.map((item) => taskRecord(item, observation)),
+      ...items.map((item) => taskListProjectionRecord(item, observation)),
       ...Array.from(participantAgents.values(), (agent) => agentIdentityRecord(agent, observation)),
     ],
     indexes: [
       {
-        key: 'home.tasks',
+        key,
         ...observation,
         refs: items.map(({ id }) => ({ id, kind: 'task' as const })),
         total,
@@ -322,6 +307,18 @@ export const ingestHomeTasks = (
     ],
   };
 };
+
+export const ingestHomeTasks = (
+  items: TaskListItem[],
+  total: number,
+  observation: ProjectionObservation,
+): ProjectionCommit => ingestHomeTaskList('home.tasks', items, total, observation);
+
+export const ingestHomeScheduledTasks = (
+  items: TaskListItem[],
+  total: number,
+  observation: ProjectionObservation,
+): ProjectionCommit => ingestHomeTaskList('home.scheduledTasks', items, total, observation);
 
 const briefRecord = (
   item: HomeBriefInput,

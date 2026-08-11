@@ -1,10 +1,11 @@
 import type { HomeDailyBriefResponse, HomeRecentItem, SidebarVisibility } from '../../home';
-import type { TaskStatus } from '../../task';
+import type { TaskAutomationMode, TaskItem, TaskStatus } from '../../task';
 import type { ProjectionRef, ProjectionSource } from '../base';
 
 export type HomeIndexKey =
   | 'home.inboxTopics'
   | 'home.recentTopics'
+  | 'home.scheduledTasks'
   | 'home.sidebar'
   | 'home.tasks'
   | 'home.unresolvedBriefs';
@@ -56,6 +57,11 @@ export interface HomeTasksIndex extends HomeIndexBase<'home.tasks'> {
   total: number;
 }
 
+export interface HomeScheduledTasksIndex extends HomeIndexBase<'home.scheduledTasks'> {
+  refs: ProjectionRef<'task'>[];
+  total: number;
+}
+
 export interface HomeUnresolvedBriefsIndex extends HomeIndexBase<'home.unresolvedBriefs'> {
   refs: ProjectionRef<'brief'>[];
 }
@@ -63,6 +69,7 @@ export interface HomeUnresolvedBriefsIndex extends HomeIndexBase<'home.unresolve
 export interface HomeIndexMap {
   'home.inboxTopics': HomeInboxTopicsIndex;
   'home.recentTopics': HomeRecentTopicsIndex;
+  'home.scheduledTasks': HomeScheduledTasksIndex;
   'home.sidebar': HomeSidebarIndex;
   'home.tasks': HomeTasksIndex;
   'home.unresolvedBriefs': HomeUnresolvedBriefsIndex;
@@ -85,12 +92,22 @@ export interface HomeSnapshotMap {
 
 export type HomeSnapshot = HomeSnapshotMap[keyof HomeSnapshotMap];
 
-export interface HomeTaskCardView {
-  description?: string | null;
-  id: string;
-  identifier: string;
-  name?: string | null;
+export type HomeTaskCardView = Pick<
+  TaskItem,
+  | 'assigneeAgentId'
+  | 'createdAt'
+  | 'description'
+  | 'heartbeatInterval'
+  | 'id'
+  | 'identifier'
+  | 'instruction'
+  | 'name'
+  | 'schedulePattern'
+  | 'scheduleTimezone'
+  | 'updatedAt'
+> & {
+  automationMode: TaskAutomationMode | null;
   status: TaskStatus;
-}
+};
 
 export type HomeRecentTopicView = HomeRecentItem & { type: 'topic' };

@@ -227,26 +227,45 @@ export const selectHomeTask = (
   record: TaskProjection | undefined,
 ): HomeTaskCardView | undefined => {
   const active = activeRecord(record);
+  const assignment = active?.fragments.assignment?.data;
   const identity = active?.fragments.identity?.data;
   const display = active?.fragments.display?.data;
   const description = active?.fragments.description?.data;
   const lifecycle = active?.fragments.lifecycle?.data;
-  if (!identity || !display || !description || !lifecycle) return undefined;
+  const row = active?.fragments.row?.data;
+  if (
+    !assignment ||
+    !identity ||
+    display?.name === undefined ||
+    description?.description === undefined ||
+    !lifecycle ||
+    !row
+  )
+    return undefined;
 
   return {
-    ...identity,
-    ...display,
-    ...description,
-    ...lifecycle,
+    assigneeAgentId: assignment.assigneeAgentId,
+    automationMode: row.automationMode,
+    createdAt: row.createdAt,
+    description: description.description,
+    heartbeatInterval: row.heartbeatInterval,
     id: active.id,
+    identifier: identity.identifier,
+    instruction: row.instruction,
+    name: display.name,
+    schedulePattern: row.schedulePattern,
+    scheduleTimezone: row.scheduleTimezone,
+    status: lifecycle.status,
+    updatedAt: row.updatedAt,
   };
 };
 
-export const selectHomeTasks = (
+const selectHomeTaskList = (
   scope: ProjectionScopeState | undefined,
+  indexKey: 'home.scheduledTasks' | 'home.tasks',
 ): HomeTaskCardView[] | undefined => {
-  const index = scope?.indexes['home.tasks'];
-  if (!scope || !index || index.key !== 'home.tasks') return undefined;
+  const index = scope?.indexes[indexKey];
+  if (!scope || !index || index.key !== indexKey) return undefined;
   const views: HomeTaskCardView[] = [];
   for (const ref of index.refs) {
     const record = scope.records.task[ref.id];
@@ -257,6 +276,14 @@ export const selectHomeTasks = (
   }
   return views;
 };
+
+export const selectHomeTasks = (
+  scope: ProjectionScopeState | undefined,
+): HomeTaskCardView[] | undefined => selectHomeTaskList(scope, 'home.tasks');
+
+export const selectHomeScheduledTasks = (
+  scope: ProjectionScopeState | undefined,
+): HomeTaskCardView[] | undefined => selectHomeTaskList(scope, 'home.scheduledTasks');
 
 const agentEnrichment = (record: AgentProjection | undefined): BriefItem['agent'] => {
   const identity = activeRecord(record)?.fragments.identity?.data;

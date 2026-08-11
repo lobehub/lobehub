@@ -7,6 +7,7 @@ import type {
   ChatTopicsIndex,
   HomeInboxTopicsIndex,
   HomeRecentTopicsIndex,
+  HomeScheduledTasksIndex,
   HomeSidebarIndex,
   HomeTasksIndex,
   HomeUnresolvedBriefsIndex,
@@ -144,8 +145,8 @@ export const removeEntityFromProjectionIndex = (
     return changed ? { ...list, ...mutation, groups } : undefined;
   }
 
-  if (kind === 'task' && index.key === 'home.tasks') {
-    const list = index as HomeTasksIndex;
+  if (kind === 'task' && (index.key === 'home.tasks' || index.key === 'home.scheduledTasks')) {
+    const list = index as HomeScheduledTasksIndex | HomeTasksIndex;
     const count = removedCount(list.refs, ids);
     if (count === 0) return undefined;
     return {

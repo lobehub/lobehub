@@ -1,14 +1,16 @@
 'use client';
 
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type {
   HomeDailyBriefResponse,
   HomeRecentTopicsView,
   ProjectionRequestMarker,
+  TaskStatus,
 } from '@lobechat/types';
 import type { KeyedMutator } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { homeKeys, projectionKeys } from '@/libs/swr/keys';
+import { homeKeys, projectionKeys, taskKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { homeService } from '@/services/home';
@@ -20,11 +22,14 @@ import { nextProjectionObservedAt } from '../../core/ingest';
 import { buildAccountProjectionScope } from '../../core/scope';
 import { getProjectionStoreState, useProjectionStore } from '../../store';
 import { useProjectionViewHydration } from '../../views/hook';
+import { taskGroupListViewContract } from '../task/contracts';
+import { selectTaskGroupList } from '../task/selectors';
 import {
   homeBriefsViewContract,
   homeDailyBriefViewContract,
   homeInboxTopicsViewContract,
   homeRecentTopicsViewContract,
+  homeScheduledTasksViewContract,
   homeSidebarViewContract,
   homeTasksViewContract,
 } from './contracts';
@@ -32,6 +37,7 @@ import {
   selectHomeBriefs,
   selectHomeInboxTopics,
   selectHomeRecentTopics,
+  selectHomeScheduledTasks,
   selectHomeSidebar,
   selectHomeTasks,
 } from './selectors';
@@ -49,6 +55,18 @@ export interface HomeSnapshotQuery<T> extends HomeDataRequest {
 }
 
 const marker = (observedAt: number): ProjectionRequestMarker => ({ observedAt });
+
+export const HOME_GOALS_AGENT_KEY = '__home_goals__';
+export const HOME_RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
+  (status) => status !== 'completed',
+);
+export const HOME_GOALS_SIGNATURE = {
+  agentKey: HOME_GOALS_AGENT_KEY,
+  visibility: 'all',
+} as const;
+
+const HOME_GOAL_STATUSES = ['backlog', 'running', 'scheduled', 'completed'];
+const HOME_GOAL_FETCH_LIMIT = 100;
 
 export const useHomeSidebarRequest = (
   isLogin: boolean | undefined,
@@ -157,11 +175,86 @@ export const useHomeTasksRequest = (isLogin: boolean | undefined): HomeDataReque
     isLogin ? projectionKeys.tasks(scope) : null,
     async () => {
       const observedAt = nextProjectionObservedAt();
-      const result = await taskService.list({});
+      const result = await taskService.list({
+        automated: false,
+        hasGoal: false,
+        orderBy: 'updatedAt',
+        statuses: HOME_RECENT_TASK_STATUSES,
+      });
       getProjectionStoreState().ingestHomeTasks(scope, result.data, result.total, observedAt);
       return marker(observedAt);
     },
     { revalidateOnFocus: false },
+  );
+  return {
+    error: request.error,
+    isInitialized,
+    isLoading: request.isLoading && !isInitialized,
+    isValidating: request.isValidating,
+    mutate: request.mutate,
+  };
+};
+
+export const useHomeScheduledTasksRequest = (isLogin: boolean | undefined): HomeDataRequest => {
+  useProjectionViewHydration(homeScheduledTasksViewContract, {}, Boolean(isLogin));
+  const scope = useCacheScope();
+  const isInitialized = useProjectionStore((state) =>
+    Boolean(selectHomeScheduledTasks(state.scopes[scope])),
+  );
+
+  const request = useClientDataSWR<ProjectionRequestMarker>(
+    isLogin ? projectionKeys.scheduledTasks(scope) : null,
+    async () => {
+      const observedAt = nextProjectionObservedAt();
+      const result = await taskService.list({
+        automated: true,
+        hasGoal: false,
+        orderBy: 'updatedAt',
+      });
+      getProjectionStoreState().ingestHomeScheduledTasks(
+        scope,
+        result.data,
+        result.total,
+        observedAt,
+      );
+      return marker(observedAt);
+    },
+    { revalidateOnFocus: false },
+  );
+  return {
+    error: request.error,
+    isInitialized,
+    isLoading: request.isLoading && !isInitialized,
+    isValidating: request.isValidating,
+    mutate: request.mutate,
+  };
+};
+
+export const useHomeGoalsRequest = (enabled: boolean): HomeDataRequest => {
+  useProjectionViewHydration(taskGroupListViewContract, HOME_GOALS_SIGNATURE, enabled);
+  const scope = useCacheScope();
+  const isInitialized = useProjectionStore((state) =>
+    Boolean(selectTaskGroupList(state.scopes[scope], HOME_GOALS_SIGNATURE)),
+  );
+
+  const request = useClientDataSWR<ProjectionRequestMarker>(
+    enabled ? taskKeys.homeGoals(scope) : null,
+    async () => {
+      const observedAt = nextProjectionObservedAt();
+      const result = await taskService.groupList({
+        groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }],
+        hasGoal: true,
+        parentTaskId: null,
+      });
+      getProjectionStoreState().commitTaskGroupList(
+        scope,
+        result.data,
+        HOME_GOALS_SIGNATURE,
+        observedAt,
+      );
+      return marker(observedAt);
+    },
+    { revalidateOnFocus: true },
   );
   return {
     error: request.error,

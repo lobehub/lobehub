@@ -41,8 +41,6 @@ beforeEach(() => {
     goalListFilter: 'active',
     goalListVisibleLimit: 10,
     goalViewMode: 'list',
-    homeGoalsByScope: {},
-    homeGoalsInitializedScopes: [],
   });
 });
 
@@ -73,64 +71,29 @@ describe('GoalAction', () => {
     ).toEqual([expect.objectContaining({ id: 'goal-2', identifier: 'GOAL-2' })]);
   });
 
-  it('uses the complete goal workspace with a project-scoped query and cache', () => {
+  it('uses the complete goal workspace with a project-scoped query and cache', async () => {
+    vi.mocked(taskService.groupList).mockResolvedValueOnce({
+      data: [group([goal('project-goal-1', 'GOAL-1')])],
+    } as any);
+
     useGoalStore.getState().useFetchGoals(undefined, 'project-1');
-    const [key, fetcher, options] = vi.mocked(useClientDataSWR).mock.calls[0];
+    const [key, fetcher] = vi.mocked(useClientDataSWR).mock.calls[0];
 
     expect(key).toEqual(['task:sidebarGroups', 'project:project-1:goals-page']);
-    expect(fetcher).toBeTypeOf('function');
-    void (fetcher as () => unknown)();
+    await (fetcher as () => Promise<unknown>)();
+
     expect(taskService.groupList).toHaveBeenCalledWith(
       expect.objectContaining({ hasGoal: true, projectId: 'project-1' }),
     );
-
-    const onSuccess = (
-      options as {
-        onSuccess: (value: { data: Array<{ tasks: Array<{ id: string }> }> }) => void;
-      }
-    ).onSuccess;
-    onSuccess({ data: [{ tasks: [{ id: 'project-goal-1' }] }] });
-
-    expect(useGoalStore.getState().goalListByAgentId['project:project-1']).toEqual([
-      { id: 'project-goal-1' },
-    ]);
+    const scope = getProjectionStoreState().scopes[SCOPE];
+    expect(
+      selectTaskGroupList(scope, {
+        agentKey: 'project:project-1:goals-page',
+        visibility: 'all',
+      })?.[0].tasks,
+    ).toEqual([expect.objectContaining({ id: 'project-goal-1' })]);
   });
 
-  it('keeps each workspace home roll-up apart, so a late response cannot cross scopes', () => {
-    useGoalStore.getState().useFetchHomeGoals(true, 'user:ws-a');
-    useGoalStore.getState().useFetchHomeGoals(true, 'user:ws-b');
-    const optionsOf = (call: number) =>
-      vi.mocked(useClientDataSWR).mock.calls[call][2] as {
-        onSuccess: (value: { data: Array<{ tasks: Array<{ id: string }> }> }) => void;
-      };
-
-    // ws-b lands first, then the workspace you already left answers.
-    optionsOf(1).onSuccess({ data: [{ tasks: [{ id: 'goal-b' }] }] });
-    optionsOf(0).onSuccess({ data: [{ tasks: [{ id: 'goal-a' }] }] });
-
-    expect(useGoalStore.getState().homeGoalsByScope).toEqual({
-      'user:ws-a': [{ id: 'goal-a' }],
-      'user:ws-b': [{ id: 'goal-b' }],
-    });
-    expect(useGoalStore.getState().homeGoalsInitializedScopes).toEqual(['user:ws-b', 'user:ws-a']);
-  });
-
-  it('asks only for the statuses a goal can still be open in', () => {
-    useGoalStore.getState().useFetchHomeGoals(true, 'user:ws-a');
-    const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
-
-    fetcher();
-
-    expect(taskService.groupList).toHaveBeenCalledWith(
-      expect.objectContaining({
-        groups: [
-          { key: 'goals', limit: 100, statuses: ['backlog', 'running', 'scheduled', 'completed'] },
-        ],
-        hasGoal: true,
-        parentTaskId: null,
-      }),
-    );
-  });
 
   it('refreshes only the requested agent goal cache', async () => {
     await useGoalStore.getState().refreshGoals('agent-1');

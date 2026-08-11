@@ -106,9 +106,9 @@ export class TaskListSliceActionImpl {
       // automation filter), so they are invalidated by root, not enumerated.
       mutate(isTaskListKey),
       mutate(taskKeys.groupList(listAgentId, listVisibility, projectId)),
-      // A schedule can be attached, changed or removed from any task edit, so
-      // the automated roll-up has to be revalidated alongside the main list.
-      mutate(taskKeys.scheduledList(ALL_AGENTS_LIST_KEY)),
+      // Home keeps ordinary and automated task result sets in distinct
+      // Projection indexes; a task edit can change membership in either one.
+      mutate(projectionKeys.scheduledTasks(getCacheScope())),
       mutate(projectionKeys.tasks(getCacheScope())),
     ]);
   };
@@ -204,37 +204,6 @@ export class TaskListSliceActionImpl {
             { isTaskGroupListInit: true, taskGroups },
             false,
             'useFetchTaskGroupList/onSuccess',
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
-  };
-
-  /**
-   * The automated-task roll-up behind Home's "Scheduled" section. Always
-   * cross-agent and unnarrowed by visibility: Home is an overview, not a
-   * continuation of the Task page's filter chip — so it needs neither the
-   * agent scope nor the visibility argument the main list carries, and its
-   * own state fields keep it from colliding with `tasks`.
-   */
-  useFetchScheduledTaskList = (options: { enabled?: boolean; limit?: number } = {}) => {
-    const { enabled = true, limit } = options;
-
-    return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY) : null,
-      async () =>
-        this.fetchTaskList({ automated: true, hasGoal: false, limit, orderBy: 'updatedAt' }),
-      {
-        onSuccess: (data: { data: TaskListItem[]; total: number }) => {
-          this.#set(
-            {
-              isScheduledTaskListInit: true,
-              scheduledTasks: data.data,
-              scheduledTasksTotal: data.total,
-            },
-            false,
-            'useFetchScheduledTaskList/onSuccess',
           );
         },
         revalidateOnFocus: false,

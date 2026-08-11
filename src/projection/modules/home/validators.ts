@@ -5,6 +5,7 @@ import { hasObservation, isObject, isProjectionRef } from '../../core/validation
 const INDEX_KEYS = new Set([
   'home.inboxTopics',
   'home.recentTopics',
+  'home.scheduledTasks',
   'home.sidebar',
   'home.tasks',
   'home.unresolvedBriefs',
@@ -54,9 +55,13 @@ export const isHomeIndex = (value: unknown): value is HomeIndex => {
 
   if (!Array.isArray(value.refs)) return false;
   const kind =
-    value.key === 'home.tasks' ? 'task' : value.key === 'home.unresolvedBriefs' ? 'brief' : 'topic';
+    value.key === 'home.tasks' || value.key === 'home.scheduledTasks'
+      ? 'task'
+      : value.key === 'home.unresolvedBriefs'
+        ? 'brief'
+        : 'topic';
   if (!value.refs.every((ref) => isProjectionRef(ref, kind))) return false;
-  if (value.key === 'home.tasks') {
+  if (value.key === 'home.tasks' || value.key === 'home.scheduledTasks') {
     return typeof value.total === 'number' && Number.isInteger(value.total) && value.total >= 0;
   }
   if (value.key === 'home.recentTopics') {

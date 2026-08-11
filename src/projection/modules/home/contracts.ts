@@ -1,7 +1,33 @@
+import type { ProjectionScopeState } from '../../core/initialState';
 import { projectionRecordRequest, projectionRefsFromIndex } from '../../views/request';
 import type { ProjectionViewContract } from '../../views/types';
 import { AGENT_SIDEBAR_FRAGMENTS } from '../agent/contracts';
 import { briefRecordsForIndex } from '../brief/contracts';
+
+const HOME_TASK_FRAGMENTS = [
+  'assignment',
+  'description',
+  'display',
+  'identity',
+  'lifecycle',
+  'row',
+] as const;
+
+const homeTaskRecords = (
+  scope: ProjectionScopeState | undefined,
+  indexKey: 'home.scheduledTasks' | 'home.tasks',
+) => {
+  const taskIds = projectionRefsFromIndex(scope?.indexes[indexKey]).map((ref) => ref.id);
+  const agentIds = taskIds.flatMap((id) => {
+    const agentId = scope?.records.task[id]?.fragments.assignment?.data.assigneeAgentId;
+    return agentId ? [agentId] : [];
+  });
+
+  return [
+    projectionRecordRequest('task', taskIds, HOME_TASK_FRAGMENTS),
+    projectionRecordRequest('agent', agentIds, ['identity']),
+  ];
+};
 
 export const homeSidebarViewContract: ProjectionViewContract<Record<string, never>> = {
   indexes: () => ['home.sidebar'],
@@ -65,13 +91,13 @@ export const homeInboxTopicsViewContract: ProjectionViewContract<Record<string, 
 export const homeTasksViewContract: ProjectionViewContract<Record<string, never>> = {
   indexes: () => ['home.tasks'],
   key: () => 'home.tasks',
-  records: (scope) => [
-    projectionRecordRequest(
-      'task',
-      projectionRefsFromIndex(scope?.indexes['home.tasks']).map((ref) => ref.id),
-      ['description', 'display', 'identity', 'lifecycle'],
-    ),
-  ],
+  records: (scope) => homeTaskRecords(scope, 'home.tasks'),
+};
+
+export const homeScheduledTasksViewContract: ProjectionViewContract<Record<string, never>> = {
+  indexes: () => ['home.scheduledTasks'],
+  key: () => 'home.scheduledTasks',
+  records: (scope) => homeTaskRecords(scope, 'home.scheduledTasks'),
 };
 
 export const homeBriefsViewContract: ProjectionViewContract<Record<string, never>> = {

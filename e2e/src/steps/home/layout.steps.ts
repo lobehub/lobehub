@@ -119,7 +119,29 @@ Then('Home 滚动应同时带动主列与右栏', async function (this: CustomWo
   expect(mainShift).toBeGreaterThan(0);
   expect(railBefore!.y - railAfter!.y).toBeCloseTo(mainShift, 0);
 
-  await this.page.mouse.wheel(0, -200);
+  // Wheel deltas are not a positioning API: Chromium can coalesce them, and a
+  // preceding kinetic scroll may consume only part of the reverse delta. The
+  // following assertions assume the next step starts at the page origin, so
+  // reset the actual dashboard scroller deterministically.
+  await main.evaluate((node) => {
+    for (let current = node.parentElement; current; current = current.parentElement) {
+      if (!['auto', 'scroll'].includes(getComputedStyle(current).overflowY)) continue;
+      current.scrollTop = 0;
+      return;
+    }
+  });
+  await expect
+    .poll(
+      () =>
+        main.evaluate((node) => {
+          for (let current = node.parentElement; current; current = current.parentElement)
+            if (['auto', 'scroll'].includes(getComputedStyle(current).overflowY))
+              return current.scrollTop;
+          return 0;
+        }),
+      { timeout: WAIT_TIMEOUT },
+    )
+    .toBe(0);
   await settleBox(this, main);
 });
 

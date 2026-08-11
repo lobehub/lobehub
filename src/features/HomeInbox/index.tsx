@@ -3,7 +3,7 @@ import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useState } from 'react';
+import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
@@ -17,11 +17,16 @@ import Recommendations, { useRecommendationsVisible } from '@/features/Recommend
 // acceptance workspace into its chunk for one hook.
 import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { useHomeBriefIds, useHomeBriefsRequest } from '@/projection';
+import {
+  HOME_GOALS_SIGNATURE,
+  useHomeBriefIds,
+  useHomeBriefsRequest,
+  useHomeGoalsRequest,
+  useTaskGroupListProjection,
+} from '@/projection';
 import { useBriefStore } from '@/store/brief';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -165,10 +170,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // goal pages themselves — without it a row would navigate to a redirect.
   const goalsEnabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
-  const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
-  const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
-  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
+  const goalsQuery = useHomeGoalsRequest(showGoals);
+  const goalGroups = useTaskGroupListProjection(HOME_GOALS_SIGNATURE, showGoals);
+  const goals = useMemo(() => goalGroups?.[0]?.tasks ?? [], [goalGroups]);
+  const isGoalsInit = goalsQuery.isInitialized;
   const goalIds = useMemo(() => goals.map(({ id }) => id), [goals]);
   // One read for every goal's acceptance, instead of two per row — and asked
   // about these goals specifically, since the recency-capped acceptance feed
@@ -279,15 +284,15 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // A goal feed failure must not be silent: without this the card just vanishes,
   // which is indistinguishable from having no open goals — the one reading a
   // long-running goal surface can least afford.
-  if (showGoals && goalsSWR.error && !isGoalsInit)
+  if (showGoals && goalsQuery.error && !isGoalsInit)
     sections.push({
       key: 'goals-error',
       label: t('inbox.goals.title'),
       node: (
         <AsyncError
-          error={goalsSWR.error}
+          error={goalsQuery.error}
           variant={'inline'}
-          onRetry={() => void goalsSWR.mutate()}
+          onRetry={() => void goalsQuery.mutate()}
         />
       ),
     });

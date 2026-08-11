@@ -21,6 +21,7 @@ import {
   ingestHomeDailyBrief,
   ingestHomeInboxTopics,
   ingestHomeRecentTopics,
+  ingestHomeScheduledTasks,
   ingestHomeSidebar,
   ingestHomeTasks,
   type ProjectionObservation,
@@ -48,6 +49,12 @@ export interface HomeProjectionAction {
     items: HomeRecentItem[],
     limit: number,
     view: HomeRecentTopicsView,
+    observedAt: number,
+  ) => void;
+  ingestHomeScheduledTasks: (
+    scope: string,
+    items: TaskListItem[],
+    total: number,
     observedAt: number,
   ) => void;
   ingestHomeSidebar: (
@@ -124,6 +131,18 @@ class HomeProjectionActionImpl implements HomeProjectionAction {
     this.#get().internal_commitProjection(
       scope,
       ingestHomeTasks(items, total, observation('network', observedAt)),
+    );
+  };
+
+  ingestHomeScheduledTasks = (
+    scope: string,
+    items: TaskListItem[],
+    total: number,
+    observedAt: number,
+  ): void => {
+    this.#get().internal_commitProjection(
+      scope,
+      ingestHomeScheduledTasks(items, total, observation('network', observedAt)),
     );
   };
 

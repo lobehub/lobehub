@@ -6,6 +6,7 @@ import type {
   HomeInboxTopicsIndex,
   HomeRecentTopicsIndex,
   HomeRecentTopicsView,
+  HomeScheduledTasksIndex,
   HomeSidebarIndex,
   HomeSidebarProjectionRef,
   HomeTasksIndex,
@@ -210,6 +211,30 @@ export const useHomeTaskIds = (limit?: number): string[] => {
     const projectionScope = state.scopes[scope];
     const index = projectionScope?.indexes['home.tasks'];
     if (!projectionScope || index?.key !== 'home.tasks') return [];
+
+    const ids = index.refs
+      .filter((ref) => Boolean(selectHomeTask(projectionScope.records.task[ref.id])))
+      .map((ref) => ref.id);
+    return limit === undefined ? ids : ids.slice(0, limit);
+  }, shallow);
+};
+
+export const useHomeScheduledTasksIndex = (): HomeScheduledTasksIndex | undefined => {
+  const scope = useCacheScope();
+
+  return useProjectionStore((state) => {
+    const index = state.scopes[scope]?.indexes['home.scheduledTasks'];
+    return index?.key === 'home.scheduledTasks' ? index : undefined;
+  });
+};
+
+export const useHomeScheduledTaskIds = (limit?: number): string[] => {
+  const scope = useCacheScope();
+
+  return useProjectionStore((state) => {
+    const projectionScope = state.scopes[scope];
+    const index = projectionScope?.indexes['home.scheduledTasks'];
+    if (!projectionScope || index?.key !== 'home.scheduledTasks') return [];
 
     const ids = index.refs
       .filter((ref) => Boolean(selectHomeTask(projectionScope.records.task[ref.id])))

@@ -1,5 +1,3 @@
-import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
@@ -11,27 +9,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
-import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import HomeInbox from '@/features/HomeInbox';
-import AuthorChip from '@/features/HomeInbox/AuthorChip';
-import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
-import Recommendations from '@/features/Recommendations';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import {
-  useHomeBriefIds,
-  useHomeBriefsRequest,
-  useHomeInboxTopicIds,
-  useHomeRecentTopic,
-  useHomeRecentTopicIds,
-  useHomeRecentTopicsRequest,
-  useHomeTask,
-  useHomeTaskIds,
-  useHomeTasksIndex,
-  useHomeTasksRequest,
-} from '@/projection';
-import AsyncError from '@/components/AsyncError';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
@@ -42,11 +19,24 @@ import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import {
+  HOME_RECENT_TASK_STATUSES,
+  useHomeBriefIds,
+  useHomeBriefsRequest,
+  useHomeInboxTopicIds,
+  useHomeRecentTopic,
+  useHomeRecentTopicIds,
+  useHomeRecentTopicsRequest,
+  useHomeScheduledTaskIds,
+  useHomeScheduledTasksIndex,
+  useHomeScheduledTasksRequest,
+  useHomeTask,
+  useHomeTaskIds,
+  useHomeTasksIndex,
+  useHomeTasksRequest,
+} from '@/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
-import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -134,16 +124,12 @@ interface RowProps {
   trailing?: ReactNode;
 }
 
-const TASK_STATUS_SET = new Set<TaskStatus>(TASK_STATUSES);
-
 /**
  * What the recent block lists: everything that is not finished work. Derived
  * from the canonical status set (not hand-listed) so a status added later shows
  * up here by default instead of silently vanishing from Home.
  */
-export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
-  (status) => status !== 'completed',
-);
+export const RECENT_TASK_STATUSES = HOME_RECENT_TASK_STATUSES;
 export const HOME_TOPIC_RECENT_LIMIT = 15;
 
 const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
@@ -172,9 +158,6 @@ export const resolveTaskSummaryLine = (
 
   return !line || line === title.trim() ? undefined : line;
 };
-
-const normalizeTaskStatus = (status: string): TaskStatus =>
-  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 /**
  * Reserved width for the trailing timestamp. Relative and absolute forms differ
@@ -318,65 +301,54 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
  * that slip through are terminal leftovers whose schedule no longer fires, so
  * printing it would claim an automation that is not there.
  */
-const ScheduledTaskRow = memo<{ task: TaskListItem }>(({ task }) => {
-  const title = task.name?.trim() || task.identifier;
-  const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
-  const status = normalizeTaskStatus(task.status);
+const TaskRow = memo<{ showTrigger?: boolean; taskId: string }>(
+  ({ showTrigger = true, taskId }) => {
+    const task = useHomeTask(taskId);
+    const title = task?.name?.trim() || task?.identifier || '';
+    const description = useMemo(
+      () => (task ? resolveTaskSummaryLine(task, title) : undefined),
+      [task, title],
+    );
 
-  return (
-    <Row
-      description={description}
-      href={taskDetailPath(task.identifier)}
-      title={title}
-      icon={
-        status === 'running' ? (
-          <RunningGlyph size={16} />
-        ) : (
-          <TaskStatusIcon size={16} status={status} />
-        )
-      }
-      // The identifier is how the task is referred to everywhere else, so it
-      // belongs beside the name rather than in the sentence slot below it.
-      titleExtra={
-        title === task.identifier ? undefined : (
-          <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
-        )
-      }
-      trailing={
-        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <TaskTriggerTag
-            automationMode={task.automationMode}
-            heartbeatInterval={task.heartbeatInterval}
-            schedulePattern={task.schedulePattern}
-            scheduleTimezone={task.scheduleTimezone}
-          />
-          <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
-          <Time date={task.updatedAt || task.createdAt} minWidth={TIME_COLUMN_WIDTH} />
-        </Flexbox>
-      }
-    />
-  );
-});
+    if (!task) return null;
 
-const TaskRow = memo<{ taskId: string }>(({ taskId }) => {
-  const task = useHomeTask(taskId);
-  if (!task) return null;
-
-  return (
-    <Row
-      description={task.description || task.identifier}
-      href={taskDetailPath(task.identifier)}
-      icon={
-        task.status === 'running' ? (
-          <RunningGlyph size={16} />
-        ) : (
-          <TaskStatusIcon size={16} status={task.status} />
-        )
-      }
-      title={task.name || task.identifier}
-    />
-  );
-});
+    return (
+      <Row
+        description={description}
+        href={taskDetailPath(task.identifier)}
+        title={title}
+        icon={
+          task.status === 'running' ? (
+            <RunningGlyph size={16} />
+          ) : (
+            <TaskStatusIcon size={16} status={task.status} />
+          )
+        }
+        // The identifier is how the task is referred to everywhere else, so it
+        // belongs beside the name rather than in the sentence slot below it.
+        titleExtra={
+          title === task.identifier ? undefined : (
+            <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
+          )
+        }
+        trailing={
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            {showTrigger && (
+              <TaskTriggerTag
+                automationMode={task.automationMode}
+                heartbeatInterval={task.heartbeatInterval}
+                schedulePattern={task.schedulePattern}
+                scheduleTimezone={task.scheduleTimezone}
+              />
+            )}
+            <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
+            <Time date={task.updatedAt || task.createdAt} minWidth={TIME_COLUMN_WIDTH} />
+          </Flexbox>
+        }
+      />
+    );
+  },
+);
 
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
@@ -407,13 +379,13 @@ const TaskContent = memo(() => {
       {tasksQuery.error && !tasksInit ? (
         <AsyncError error={tasksQuery.error} variant={'inline'} onRetry={tasksQuery.mutate} />
       ) : !tasksInit ? (
-        <LoadingRows avatarSize={16} />
+        <LoadingRows withTime avatarSize={16} />
       ) : taskIds.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
           {shown.map((taskId) => (
-            <TaskRow key={taskId} taskId={taskId} />
+            <TaskRow key={taskId} showTrigger={false} taskId={taskId} />
           ))}
         </Flexbox>
       )}
@@ -429,11 +401,11 @@ const TaskContent = memo(() => {
  */
 const ScheduledTaskContent = memo(() => {
   const { t } = useTranslation('home');
-  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
-  const scheduledSWR = useFetchScheduledTaskList();
-  const scheduled = useTaskStore(taskListSelectors.scheduledTaskList);
-  const scheduledTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
-  const scheduledInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const scheduledQuery = useHomeScheduledTasksRequest(isLogin);
+  const scheduledIds = useHomeScheduledTaskIds();
+  const scheduledIndex = useHomeScheduledTasksIndex();
+  const scheduledInit = scheduledQuery.isInitialized;
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
 
   // Automation is opt-in and most accounts have none. An empty block would be a
@@ -445,18 +417,18 @@ const ScheduledTaskContent = memo(() => {
   // list look exactly like an account with no schedules, and someone whose
   // automations are running would read a confidently incomplete page. The block
   // stays and says so, with a retry.
-  const failedFirstLoad = Boolean(scheduledSWR.error) && !scheduledInit;
-  if (scheduledInit && scheduled.length === 0) return null;
+  const failedFirstLoad = Boolean(scheduledQuery.error) && !scheduledInit;
+  if (scheduledInit && scheduledIds.length === 0) return null;
 
-  const shown = scheduled.slice(0, taskCount);
+  const shown = scheduledIds.slice(0, taskCount);
 
   return (
     <GroupBlock
       actionAlwaysVisible
-      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduled.length, taskCount)}
+      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduledIds.length, taskCount)}
       title={t('dashboard.scheduledTask.title')}
       action={
-        !failedFirstLoad && scheduledTotal > shown.length ? (
+        !failedFirstLoad && (scheduledIndex?.total ?? scheduledIds.length) > shown.length ? (
           <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
@@ -464,11 +436,15 @@ const ScheduledTaskContent = memo(() => {
       }
     >
       {failedFirstLoad ? (
-        <AsyncError error={scheduledSWR.error} variant={'inline'} onRetry={scheduledSWR.mutate} />
+        <AsyncError
+          error={scheduledQuery.error}
+          variant={'inline'}
+          onRetry={scheduledQuery.mutate}
+        />
       ) : scheduledInit ? (
         <Flexbox gap={4}>
-          {shown.map((task) => (
-            <ScheduledTaskRow key={task.identifier} task={task} />
+          {shown.map((taskId) => (
+            <TaskRow key={taskId} taskId={taskId} />
           ))}
         </Flexbox>
       ) : (

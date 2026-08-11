@@ -368,6 +368,7 @@ participants 等关联可在后续 pass 中继续解析。若目标数据已在 
 | `home.recentTopics`      | 有序 Topic refs，以及本次查询覆盖的 `limit`                                        |
 | `home.inboxTopics`       | 有序 Topic refs，查询签名为 running + unread + last message                        |
 | `home.tasks`             | 有序 Task refs、total、查询签名为 all agents + all visibility                      |
+| `home.scheduledTasks`    | 自动化 Task refs 与 total；与普通 Home Tasks 结果集独立                            |
 | `home.unresolvedBriefs`  | 有序 Brief refs                                                                    |
 
 ### 10.3 Snapshots
@@ -595,9 +596,9 @@ client read source。既有 Store 按以下原则过渡：
 | Agent     | config/hydrate、available、directory、search、builtin、prefetch、profile/preview | Agent records + `agent.available` / `agent.directory` / `agent.search:*` |
 | ChatGroup | detail、list、sidebar/search                                                     | ChatGroup/Agent records + `chatGroup.list` / mixed search refs           |
 | Topic     | sidebar、agent view、search、pagination、Home recents/inbox                      | Topic records + `chat.*` / `home.*Topics` indexes                        |
-| Task      | detail、平铺列表、Agent sidebar、Goals page、Home tasks                          | Task/Agent records + `task.list:*` / `task.groupList:*` / Home           |
+| Task      | detail、平铺列表、Agent sidebar、Goals page、Home tasks/scheduled/goals          | Task/Agent records + `task.list:*` / `task.groupList:*` / Home           |
 | Brief     | unresolved、news、read/resolve/delete                                            | Brief/Agent/Task records + `brief.news:*` / `home.unresolvedBriefs`      |
-| Home      | sidebar、recents、inbox、tasks、briefs、daily brief                              | 5 个 Home indexes + `home.dailyBrief` snapshot                           |
+| Home      | sidebar、recents、inbox、tasks、scheduled tasks、goals、briefs、daily brief      | 6 个 Home indexes、Goals task group index + `home.dailyBrief` snapshot   |
 
 上述 Hook 的 SWR 仅承担请求生命周期。Projection-native Home Hook 返回 request marker；为了兼容旧
 调用者，部分既有 Hook 仍返回由 Projection 重新解析的瞬时 read model，但不进入 durable SWR tier。
