@@ -41,6 +41,7 @@ export default {
   'navigation.resourcePages': 'Pages',
   'navigation.resourceVideos': 'Videos',
   'navigation.settings': 'Settings',
+  'navigation.selfLearning': 'Self-evolving',
   'navigation.stats': 'Statistics',
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',

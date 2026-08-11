@@ -41,6 +41,7 @@ import {
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
+  agentSelfLearningRouteMeta,
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
@@ -215,6 +216,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: redirectElement('../statistics'),
             path: 'stats',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning'),
+              'Desktop > Chat > Self Learning',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning',
           },
           {
             element: dynamicElement(
