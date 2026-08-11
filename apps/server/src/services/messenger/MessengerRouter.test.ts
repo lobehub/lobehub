@@ -160,6 +160,19 @@ vi.mock('@/database/models/workspace', () => ({
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {},
 }));
+
+// `/mode` status parity with execAgent: the effective-mode lookup layers the
+// caller's workspace member-mode override over the shared agent config.
+const mockGetWorkspaceUserPreference = vi.fn();
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: class {
+    getPreference = (...args: any[]) => mockGetWorkspaceUserPreference(...args);
+  },
+}));
+const mockIsResourceAuthorOrAdmin = vi.fn();
+vi.mock('@/server/services/resourcePermission', () => ({
+  isResourceAuthorOrAdmin: (...args: any[]) => mockIsResourceAuthorOrAdmin(...args),
+}));
 vi.mock('@/server/services/bot/replyTemplate', () => ({
   renderCommandReply: (key: string) => {
     if (key === 'cmdModeSetAgent') return 'Switched to Agent Mode';
@@ -1203,6 +1216,97 @@ describe('MessengerRouter slash command dispatch', () => {
         entries: [
           { id: 'agent', isActive: false, title: 'Agent Mode' },
           { id: 'chat', isActive: true, title: 'Chat Mode' },
+        ],
+      }),
+    );
+  });
+
+  it('/mode without args applies the workspace member-mode override for non-managers', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: 'workspace-1',
+    });
+    // Shared workspace agent defaults to Agent Mode, but this member turned it
+    // off via their per-user override — the picker must mark Chat Mode, the
+    // mode execAgent will actually run for them.
+    mockGetAgentConfigById.mockResolvedValue({
+      chatConfig: { enableAgentMode: true },
+      userId: 'user_owner',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetWorkspaceUserPreference.mockResolvedValue({
+      agentModeOverrides: { agt_main: false },
+    });
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve(null),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/mode' }));
+
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledWith(
+      'D_DM',
+      expect.objectContaining({
+        action: 'mode',
+        entries: [
+          { id: 'agent', isActive: false, title: 'Agent Mode' },
+          { id: 'chat', isActive: true, title: 'Chat Mode' },
+        ],
+      }),
+    );
+  });
+
+  it('/mode without args ignores a manager-stale member override (shared config wins)', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: 'workspace-1',
+    });
+    // The caller manages this agent — execAgent ignores their own stale
+    // override, so the picker must too.
+    mockGetAgentConfigById.mockResolvedValue({
+      chatConfig: { enableAgentMode: true },
+      userId: 'user_owner',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetWorkspaceUserPreference.mockResolvedValue({
+      agentModeOverrides: { agt_main: false },
+    });
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(true);
+    const dmThread = {
+      id: 'slack:D_DM:',
+      isDM: true,
+      setState: vi.fn(),
+      state: Promise.resolve(null),
+    };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/mode' }));
+
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledWith(
+      'D_DM',
+      expect.objectContaining({
+        action: 'mode',
+        entries: [
+          { id: 'agent', isActive: true, title: 'Agent Mode' },
+          { id: 'chat', isActive: false, title: 'Chat Mode' },
         ],
       }),
     );
