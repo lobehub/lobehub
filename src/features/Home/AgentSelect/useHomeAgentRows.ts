@@ -1,18 +1,22 @@
 'use client';
 
-import type { HomeSidebarEntityRef, HomeSidebarGroupIndex, HomeSidebarIndex } from '@lobechat/types';
+import type {
+  HomeSidebarGroupIndex,
+  HomeSidebarIndex,
+  HomeSidebarProjectionRef,
+} from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useHomeSidebarIndex } from '@/client-data';
 import { useSidebarGroupVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarGroupVisibility';
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
+import { useHomeSidebarIndex } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 export type AgentRowRef =
   | { id: string; pinned: false; source: 'builtin' }
-  | { id: string; pinned: boolean; ref: HomeSidebarEntityRef; source: 'entity' };
+  | { id: string; pinned: boolean; ref: HomeSidebarProjectionRef; source: 'entity' };
 
 export interface HomeAgentRows {
   /** Whether the canonical sidebar index is available, including an empty index. */
@@ -25,7 +29,7 @@ export interface HomeAgentRows {
   workspaceRows: AgentRowRef[];
 }
 
-type KeepSidebarRefs = (refs: HomeSidebarEntityRef[]) => HomeSidebarEntityRef[];
+type KeepSidebarRefs = (refs: HomeSidebarProjectionRef[]) => HomeSidebarProjectionRef[];
 type KeepSidebarGroups = (groups: HomeSidebarGroupIndex[]) => HomeSidebarGroupIndex[];
 
 const keepAllGroups: KeepSidebarGroups = (groups) => groups;
@@ -39,7 +43,7 @@ export const resolveHomeAgentRows = (
 ): HomeAgentRows => {
   const seen = new Set<string>();
 
-  const collect = (buckets: HomeSidebarEntityRef[][]): AgentRowRef[] => {
+  const collect = (buckets: HomeSidebarProjectionRef[][]): AgentRowRef[] => {
     const rows: AgentRowRef[] = [];
     for (const bucket of buckets) {
       for (const ref of keep(bucket)) {

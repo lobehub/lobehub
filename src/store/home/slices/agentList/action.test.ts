@@ -24,7 +24,7 @@ const response: SidebarAgentListResponse = {
 };
 
 describe('AgentListActionImpl compatibility projection', () => {
-  it('clears the previous scope before a replacement EntityView is available', () => {
+  it('clears the previous scope before a replacement Projection view is available', () => {
     const state = { ...initialAgentListState };
     const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
     const action = new AgentListActionImpl(set as never, () => state as HomeStore);

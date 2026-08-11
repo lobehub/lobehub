@@ -4,10 +4,10 @@ import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
-import { useHomeInboxTopic } from '@/client-data';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeInboxTopic } from '@/projection';
 
 import AuthorChip from './AuthorChip';
 import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';

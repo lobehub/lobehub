@@ -18,29 +18,18 @@ import { toApiAnchor } from './useDevtoolsEntries';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     scroll-margin-block-start: 16px;
-
     overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 20px;
-
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorBgContainer};
   `,
   cardBody: css`
-    padding: 20px;
+    gap: 0;
   `,
   cardHeader: css`
-    gap: 10px;
-
-    padding-block: 20px;
-    padding-inline: 24px;
+    gap: 6px;
+    padding: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: linear-gradient(
-      180deg,
-      ${cssVar.colorFillQuaternary} 0%,
-      ${cssVar.colorBgContainer} 100%
-    );
+    background: ${cssVar.colorFillQuaternary};
   `,
   code: css`
     overflow: auto;
@@ -48,7 +37,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     max-height: 320px;
     margin: 0;
     padding: 12px;
-    border-radius: 12px;
 
     font-size: 12px;
     line-height: 1.55;
@@ -62,10 +50,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  fixture: css`
+    padding: 12px;
+  `,
   previewShell: css`
-    padding: 16px;
-    border-radius: 16px;
+    padding: 12px;
     background: ${cssVar.colorFillQuaternary};
+  `,
+  previewSection: css`
+    gap: 8px;
+    padding: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   sectionLabel: css`
     gap: 8px;
@@ -116,8 +111,8 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
         )}
       </Flexbox>
 
-      <Flexbox className={styles.cardBody} gap={16}>
-        <Flexbox gap={8}>
+      <Flexbox className={styles.cardBody}>
+        <Flexbox className={styles.previewSection}>
           <Flexbox horizontal className={styles.sectionLabel}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Inspector
@@ -133,7 +128,7 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </div>
         </Flexbox>
 
-        <Flexbox gap={8}>
+        <Flexbox className={styles.previewSection}>
           <Flexbox horizontal className={styles.sectionLabel}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Body
@@ -151,7 +146,7 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </div>
         </Flexbox>
 
-        <details>
+        <details className={styles.fixture}>
           <summary className={styles.fixtureSummary}>Fixture payload</summary>
           <pre className={styles.code}>
             {JSON.stringify(

@@ -7,10 +7,10 @@ import { PinIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHomeSidebarItem } from '@/client-data';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useHomeSidebarItem } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 

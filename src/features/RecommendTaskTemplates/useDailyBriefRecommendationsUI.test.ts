@@ -53,7 +53,7 @@ vi.mock('swr', () => ({
   default: mockUseSWR,
 }));
 
-vi.mock('@/client-data', () => ({
+vi.mock('@/projection', () => ({
   useHomeBriefsRequest: mockUseHomeBriefsRequest,
 }));
 

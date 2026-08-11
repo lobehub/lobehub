@@ -1,10 +1,10 @@
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
-import { getClientDataStoreState } from '@/client-data';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { clientDataKeys, recentKeys } from '@/libs/swr/keys';
+import { projectionKeys, recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { type HomeStore } from '@/store/home/store';
@@ -40,7 +40,7 @@ export class RecentActionImpl {
     const recents = this.#get().recents.map((item) => (item.id === id ? { ...item, title } : item));
     this.#set({ recents }, false, n('updateRecentTitle'));
     if (current?.type === 'topic') {
-      getClientDataStoreState().updateTopicEntityTitle(getCacheScope(), id, title);
+      getProjectionStoreState().updateTopicProjectionTitle(getCacheScope(), id, title);
     }
   };
 
@@ -48,7 +48,7 @@ export class RecentActionImpl {
     await Promise.all([
       mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.list.root),
       mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.allDrawer.root),
-      mutate((key: unknown) => Array.isArray(key) && key[0] === clientDataKeys.recentTopics.root),
+      mutate((key: unknown) => Array.isArray(key) && key[0] === projectionKeys.recentTopics.root),
     ]);
   };
 

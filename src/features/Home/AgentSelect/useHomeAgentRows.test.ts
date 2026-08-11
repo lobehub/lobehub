@@ -1,11 +1,14 @@
-import type { HomeSidebarEntityRef, HomeSidebarIndex } from '@lobechat/types';
+import type { HomeSidebarIndex, HomeSidebarProjectionRef } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { resolveHomeAgentRows } from './useHomeAgentRows';
 
 const UPDATED_AT = new Date('2026-07-31T00:00:00.000Z');
 
-const ref = (id: string, options: Partial<HomeSidebarEntityRef> = {}): HomeSidebarEntityRef => ({
+const ref = (
+  id: string,
+  options: Partial<HomeSidebarProjectionRef> = {},
+): HomeSidebarProjectionRef => ({
   id,
   kind: 'agent',
   pinned: false,
@@ -29,12 +32,11 @@ const index = (overrides: Partial<HomeSidebarIndex> = {}): HomeSidebarIndex => (
 const keepAll = <T>(items: T[]): T[] => items;
 const hide = (ids: string[]) => {
   const hidden = new Set(ids);
-  return (items: HomeSidebarEntityRef[]) => items.filter((item) => !hidden.has(item.id));
+  return (items: HomeSidebarProjectionRef[]) => items.filter((item) => !hidden.has(item.id));
 };
 const hideGroups = (ids: string[]) => {
   const hidden = new Set(ids);
-  return <T extends { id: string }>(groups: T[]) =>
-    groups.filter((group) => !hidden.has(group.id));
+  return <T extends { id: string }>(groups: T[]) => groups.filter((group) => !hidden.has(group.id));
 };
 const ids = (rows: { id: string }[]) => rows.map((row) => row.id);
 

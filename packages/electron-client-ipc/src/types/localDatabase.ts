@@ -13,6 +13,11 @@ export interface DesktopLocalDatabaseEntry {
   value: string;
 }
 
+export interface DesktopLocalDatabaseCollectionInfo {
+  entryCount: number;
+  name: string;
+}
+
 export interface DesktopLocalDatabaseSet extends DesktopLocalDatabaseKey {
   value: string;
 }

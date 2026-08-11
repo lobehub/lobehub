@@ -32,6 +32,11 @@ describe('LocalDatabaseService', () => {
     await service.set('first', 'scope-b::1', 'first-3');
     await service.set('second', 'scope-a::1', 'second-1');
 
+    await expect(service.listCollections()).resolves.toEqual([
+      { entryCount: 3, name: 'first' },
+      { entryCount: 1, name: 'second' },
+    ]);
+
     await expect(service.entriesByPrefix('first', 'scope-a::')).resolves.toEqual([
       { key: 'scope-a::1', value: 'first-1' },
       { key: 'scope-a::2', value: 'first-2' },
@@ -43,6 +48,10 @@ describe('LocalDatabaseService', () => {
       { key: 'scope-b::1', value: 'first-3' },
     ]);
     await expect(service.get('second', 'scope-a::1')).resolves.toBe('second-1');
+    await expect(service.listCollections()).resolves.toEqual([
+      { entryCount: 1, name: 'first' },
+      { entryCount: 1, name: 'second' },
+    ]);
   });
 
   it('preserves keys when collection names contain key-like delimiters', async () => {

@@ -1,8 +1,8 @@
 import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
-import { getClientDataStoreState } from '@/client-data';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
@@ -64,7 +64,7 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
-    getClientDataStoreState().updateTaskEntityStatus(getCacheScope(), id, 'running');
+    getProjectionStoreState().updateTaskProjectionStatus(getCacheScope(), id, 'running');
 
     let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
@@ -156,7 +156,7 @@ export class TaskLifecycleSliceActionImpl {
       value: { status, ...extraUpdate },
     });
     this.#patchTaskCollectionsStatus(id, status);
-    getClientDataStoreState().updateTaskEntityStatus(getCacheScope(), id, status);
+    getProjectionStoreState().updateTaskProjectionStatus(getCacheScope(), id, status);
 
     try {
       await runMutation(this.#set, this.#get, {
@@ -170,7 +170,11 @@ export class TaskLifecycleSliceActionImpl {
 
           if (previousStatus) {
             this.#patchTaskCollectionsStatus(id, previousStatus);
-            getClientDataStoreState().updateTaskEntityStatus(getCacheScope(), id, previousStatus);
+            getProjectionStoreState().updateTaskProjectionStatus(
+              getCacheScope(),
+              id,
+              previousStatus,
+            );
           }
           try {
             await this.#get().internal_refreshTaskDetail(id);

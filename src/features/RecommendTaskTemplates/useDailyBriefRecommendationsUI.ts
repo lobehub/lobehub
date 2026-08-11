@@ -11,8 +11,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { useHomeBriefsRequest } from '@/client-data';
 import { taskTemplateKeys } from '@/libs/swr/keys';
+import { useHomeBriefsRequest } from '@/projection';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';

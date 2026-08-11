@@ -1140,10 +1140,11 @@ export const homeKeys = {
 };
 
 /**
- * Non-persistent request identities for the normalized Home entity graph.
- * Fetchers cache only a completion marker; all domain data lives in ClientDataStore.
+ * Non-persistent request identities for the normalized Home projection graph.
+ * Fetchers cache only a completion marker; all domain data lives in ProjectionStore.
+ * The serialized `request:entity:*` roots remain stable for cache compatibility.
  */
-export const clientDataKeys = {
+export const projectionKeys = {
   briefs: def('request:entity:home:briefs', (scope: string) => [
     'request:entity:home:briefs',
     scope,

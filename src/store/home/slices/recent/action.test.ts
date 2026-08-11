@@ -1,10 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as clientDataStore from '@/client-data';
 import * as swr from '@/libs/swr';
-import { clientDataKeys, recentKeys } from '@/libs/swr/keys';
+import { projectionKeys, recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
+import * as projectionStore from '@/projection';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
 import { useHomeStore } from '@/store/home';
@@ -13,8 +13,8 @@ import { initialRecentState } from '@/store/home/slices/recent/initialState';
 const item = (id: string, title: string, type: 'task' | 'topic' = 'topic'): RecentItem =>
   ({ id, title, type }) as unknown as RecentItem;
 
-const clientDataActions = {
-  updateTopicEntityTitle: vi.fn(),
+const projectionActions = {
+  updateTopicProjectionTitle: vi.fn(),
 };
 
 /**
@@ -39,7 +39,7 @@ const captureOnData = (scope: string) => {
 beforeEach(() => {
   vi.clearAllMocks();
   useHomeStore.setState({ ...initialRecentState });
-  vi.spyOn(clientDataStore, 'getClientDataStoreState').mockReturnValue(clientDataActions as never);
+  vi.spyOn(projectionStore, 'getProjectionStoreState').mockReturnValue(projectionActions as never);
 });
 
 afterEach(() => {
@@ -128,7 +128,7 @@ describe('RecentActionImpl', () => {
   });
 
   describe('updateRecentTitle', () => {
-    it('renames the legacy projection and commits the canonical Topic entity', () => {
+    it('renames the legacy view and commits the canonical Topic Projection', () => {
       useHomeStore.setState({ recents: [item('a', 'old'), item('b', 'keep')] });
       const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
       vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
@@ -138,7 +138,7 @@ describe('RecentActionImpl', () => {
       });
 
       expect(useHomeStore.getState().recents).toEqual([item('a', 'new'), item('b', 'keep')]);
-      expect(clientDataActions.updateTopicEntityTitle).toHaveBeenCalledWith(
+      expect(projectionActions.updateTopicProjectionTitle).toHaveBeenCalledWith(
         'user-1:workspace-1',
         'a',
         'new',
@@ -146,7 +146,7 @@ describe('RecentActionImpl', () => {
       expect(mutateSpy).not.toHaveBeenCalled();
     });
 
-    it('does not reinterpret a Task recent as a Topic entity mutation', () => {
+    it('does not reinterpret a Task recent as a Topic Projection mutation', () => {
       useHomeStore.setState({ recents: [item('task-1', 'old', 'task')] });
 
       act(() => {
@@ -154,7 +154,7 @@ describe('RecentActionImpl', () => {
       });
 
       expect(useHomeStore.getState().recents).toEqual([item('task-1', 'new', 'task')]);
-      expect(clientDataActions.updateTopicEntityTitle).not.toHaveBeenCalled();
+      expect(projectionActions.updateTopicProjectionTitle).not.toHaveBeenCalled();
     });
   });
 
@@ -169,8 +169,8 @@ describe('RecentActionImpl', () => {
       expect(mutateSpy).toHaveBeenCalledTimes(3);
       const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
       expect(matcher(recentKeys.list(true, 10, 's'))).toBe(true);
-      const entityMatcher = mutateSpy.mock.calls[2][0] as (key: unknown) => boolean;
-      expect(entityMatcher(clientDataKeys.recentTopics('s', 9, 'mine'))).toBe(true);
+      const projectionMatcher = mutateSpy.mock.calls[2][0] as (key: unknown) => boolean;
+      expect(projectionMatcher(projectionKeys.recentTopics('s', 9, 'mine'))).toBe(true);
     });
   });
 

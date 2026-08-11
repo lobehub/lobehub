@@ -9,11 +9,11 @@ import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
-import { getClientDataStoreState } from '@/client-data';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { clientDataKeys, cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
+import { cronKeys, deviceKeys, projectionKeys, topicKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
@@ -395,10 +395,10 @@ export class ChatTopicActionImpl {
   };
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
-    const entityScope = getCacheScope();
+    const projectionScope = getCacheScope();
     const observedAt = Date.now();
     await this.#get().internal_updateTopic(id, { title });
-    getClientDataStoreState().updateTopicEntityTitle(entityScope, id, title, observedAt);
+    getProjectionStoreState().updateTopicProjectionTitle(projectionScope, id, title, observedAt);
   };
 
   /**
@@ -555,9 +555,9 @@ export class ChatTopicActionImpl {
       scope,
     });
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
-    const entityScope = getCacheScope();
+    const projectionScope = getCacheScope();
 
-    getClientDataStoreState().updateTopicEntityStatus(entityScope, topicId, status);
+    getProjectionStoreState().updateTopicProjectionStatus(projectionScope, topicId, status);
 
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
@@ -589,7 +589,7 @@ export class ChatTopicActionImpl {
       this.#pendingTopicStatusWrites.delete(topicId);
       // Re-read the Home Topic fragment instead of leaving the optimistic
       // canonical status authoritative after a rejected write.
-      void mutate(clientDataKeys.inboxTopics(entityScope));
+      void mutate(projectionKeys.inboxTopics(projectionScope));
     });
   };
 

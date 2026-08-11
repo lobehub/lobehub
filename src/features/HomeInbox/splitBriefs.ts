@@ -1,8 +1,8 @@
+import { type BriefItem } from '@/features/DailyBrief/types';
 import {
   compareHomeNeedsYouBriefs,
   isHomeNewsBrief,
-} from '@/client-data/modules/home/homeBriefSections';
-import { type BriefItem } from '@/features/DailyBrief/types';
+} from '@/projection/modules/home/homeBriefSections';
 
 /**
  * Within "Needs you", failures sink to the bottom: a stuck decision blocks the

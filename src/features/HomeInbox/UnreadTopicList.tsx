@@ -8,13 +8,13 @@ import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-rea
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHomeInboxTopic } from '@/client-data';
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeInboxTopic } from '@/projection';
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';

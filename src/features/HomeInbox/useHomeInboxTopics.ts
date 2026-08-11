@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 
 import {
-  getClientDataStoreState,
+  getProjectionStoreState,
   useHomeInboxTopicIds,
   useHomeInboxTopicsRequest,
-} from '@/client-data';
+} from '@/projection';
 import { type ChatTopicStatus } from '@/types/topic';
 
 export interface HomeInboxTopics {
@@ -35,7 +35,7 @@ export const useHomeInboxTopics = (
 
   const promoteToRunning = useCallback(
     (topicId: string) => {
-      getClientDataStoreState().updateTopicEntityStatus(
+      getProjectionStoreState().updateTopicProjectionStatus(
         request.scope,
         topicId,
         'running' as ChatTopicStatus,

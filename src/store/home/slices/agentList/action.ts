@@ -3,7 +3,7 @@ import { type SWRResponse } from 'swr';
 
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { agentConfigKeys, clientDataKeys } from '@/libs/swr/keys';
+import { agentConfigKeys, projectionKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { homeService } from '@/services/home';
 import { getAgentStoreState } from '@/store/agent';
@@ -92,7 +92,7 @@ export class AgentListActionImpl {
 
   refreshAgentList = async (): Promise<void> => {
     getAgentStoreState().invalidateAvailableAgents();
-    await mutate(clientDataKeys.sidebar(getCacheScope()));
+    await mutate(projectionKeys.sidebar(getCacheScope()));
   };
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {

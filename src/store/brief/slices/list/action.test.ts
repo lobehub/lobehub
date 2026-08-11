@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as clientDataStore from '@/client-data';
 import * as cacheScope from '@/libs/swr/useCacheScope';
+import * as projectionStore from '@/projection';
 import { briefService } from '@/services/brief';
 import type { BriefStore } from '@/store/brief/store';
 import type { BriefItem } from '@/store/brief/types';
@@ -31,9 +31,9 @@ const createBrief = (id: string): BriefItem => ({
 });
 
 describe('BriefListActionImpl', () => {
-  const clientDataActions = {
-    deleteBriefEntity: vi.fn(),
-    resolveBriefEntitiesAsRead: vi.fn(),
+  const projectionActions = {
+    deleteBriefProjection: vi.fn(),
+    resolveBriefProjectionsAsRead: vi.fn(),
     updateBriefReadState: vi.fn(),
     updateBriefResolution: vi.fn(),
   };
@@ -42,8 +42,8 @@ describe('BriefListActionImpl', () => {
     vi.clearAllMocks();
     vi.spyOn(Date, 'now').mockReturnValue(100);
     vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
-    vi.spyOn(clientDataStore, 'getClientDataStoreState').mockReturnValue(
-      clientDataActions as never,
+    vi.spyOn(projectionStore, 'getProjectionStoreState').mockReturnValue(
+      projectionActions as never,
     );
   });
 
@@ -70,7 +70,7 @@ describe('BriefListActionImpl', () => {
     await action.resolveBriefsAsRead([resolvedBrief.id, remainingBrief.id]);
 
     expect(state.briefs).toEqual([remainingBrief]);
-    expect(clientDataActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+    expect(projectionActions.resolveBriefProjectionsAsRead).toHaveBeenCalledWith(
       'user-1:workspace-1',
       [resolvedBrief.id],
       expect.any(String),
@@ -78,7 +78,7 @@ describe('BriefListActionImpl', () => {
     );
   });
 
-  it('writes read state through the canonical entity mutation path', async () => {
+  it('writes read state through the canonical Projection mutation path', async () => {
     const brief = createBrief('brief-1');
     const state = { briefs: [brief], isBriefsInit: true };
     const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
@@ -90,7 +90,7 @@ describe('BriefListActionImpl', () => {
     await action.markBriefRead(brief.id);
 
     expect(state.briefs[0].readAt).toBe('2026-07-31T01:00:00.000Z');
-    expect(clientDataActions.updateBriefReadState).toHaveBeenCalledWith(
+    expect(projectionActions.updateBriefReadState).toHaveBeenCalledWith(
       'user-1:workspace-1',
       brief.id,
       state.briefs[0].readAt,
@@ -119,7 +119,7 @@ describe('BriefListActionImpl', () => {
       resolvedComment: null,
     };
     expect(state.briefs[0]).toMatchObject(resolution);
-    expect(clientDataActions.updateBriefResolution).toHaveBeenCalledWith(
+    expect(projectionActions.updateBriefResolution).toHaveBeenCalledWith(
       'user-1:workspace-1',
       brief.id,
       resolution,
@@ -127,7 +127,7 @@ describe('BriefListActionImpl', () => {
     );
   });
 
-  it('tombstones a deleted brief in the canonical entity graph', async () => {
+  it('tombstones a deleted brief in the canonical Projection graph', async () => {
     const deleted = createBrief('brief-deleted');
     const remaining = createBrief('brief-remaining');
     const state = { briefs: [deleted, remaining], isBriefsInit: true };
@@ -138,7 +138,7 @@ describe('BriefListActionImpl', () => {
     await action.deleteBrief(deleted.id);
 
     expect(state.briefs).toEqual([remaining]);
-    expect(clientDataActions.deleteBriefEntity).toHaveBeenCalledWith(
+    expect(projectionActions.deleteBriefProjection).toHaveBeenCalledWith(
       'user-1:workspace-1',
       deleted.id,
       100,
@@ -148,7 +148,7 @@ describe('BriefListActionImpl', () => {
   // The legacy-projection patch must land on the list the ids came from. On a
   // mid-flight workspace switch the bucket already belongs to the next
   // partition, so splicing it would leak the previous workspace's briefs —
-  // while the canonical entity resolution still lands in the captured scope.
+  // while the canonical Projection resolution still lands in the captured scope.
   it('should abandon the write when the workspace changed while the request was in flight', async () => {
     const brief = createBrief('brief-1');
     const nextScopeBrief = createBrief('brief-from-next-workspace');
@@ -165,7 +165,7 @@ describe('BriefListActionImpl', () => {
 
     expect(state.briefs).toEqual([nextScopeBrief]);
     expect(set).not.toHaveBeenCalled();
-    expect(clientDataActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+    expect(projectionActions.resolveBriefProjectionsAsRead).toHaveBeenCalledWith(
       SCOPE,
       [brief.id],
       expect.any(String),
