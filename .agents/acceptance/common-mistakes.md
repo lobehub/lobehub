@@ -25,6 +25,28 @@ fixture through the real composer. Assert the new user row in the database, its
 parent on the active spine, its rendered presence before and after a cold reload,
 and the resulting assistant continuation when the environment supports it.
 
+### L-E14 — Verifying an insertion affordance without continuing the user's next action
+
+**Wrong approach:** check that a composer affordance (an action-tag chip, a mention,
+a file token) inserted the right node, screenshot it, and move on — then verify the
+sent payload through a _different_ entry point that happens to be easier to drive.
+
+**Why it fails:** insertion is half the affordance; the caret it leaves behind is
+the other half. A caret parked in front of the inserted node sends the user's very
+next keystroke to the wrong side of it. For any chip that serializes into the prompt
+with position semantics — the `/goal` marker must lead the message for `isGoalPrompt`
+to match — that silently rewrites the payload into something the runtime no longer
+recognizes, while every screenshot of the insertion itself still looks correct.
+Verifying the payload through a different entry point hides it completely: the path
+with the defect is never the path that gets sent.
+
+**Correct approach:** for every insertion affordance, continue the user's action in
+the same case — type after inserting — and assert the resulting node order, not just
+the node's presence. Drive the payload check through the _same_ entry point the case
+under test uses; if an affordance has several entries (slash menu, `+` menu), the one
+you send from must be the one you are claiming works. Assert order in the persisted
+`editor_data`, since that is what both the prompt serializer and the bubble read.
+
 ### L-E1 — Publishing a replacement as a second Acceptance row
 
 **Wrong approach:** assign a replacement check a new id without `supersedes`, or
@@ -341,17 +363,27 @@ database may contain the user's synchronized profile.
 distinguishes environments. For production publishing without changing a local
 login, use an isolated `LOBEHUB_CLI_HOME` for login and ingest.
 
-### L-S2 — Trusting a successful renderer build as proof Electron boots
+### L-S2 — Trusting green gates as proof the app boots
 
-**Wrong approach:** use green Vite and Vitest results as blank-screen insurance for
-a desktop routing or module-graph change.
+**Wrong approach:** use green Vite, Vitest, lint, and type-check results as
+blank-screen insurance for a routing or module-graph change, on Electron or Web.
 
 **Why it fails:** browser ESM initialization cycles and nested-router invariants can
-fail only when the real renderer starts.
+fail only when the real renderer starts. Vitest resolves a module graph in its own
+order, so a cycle that is harmless under test can still put a module-level binding in
+the temporal dead zone in the bundler's order — the app then dies at the
+`ErrorBoundary` with `Cannot access '<X>' before initialization` while every gate
+stays green. Adding a shared constant next to the logic that uses it is the common
+way to close such a cycle in a folder where a node/component pair already import each
+other.
 
-**Correct approach:** boot the real Electron instance, require the project readiness
-probe to report a non-error UI, and inspect a screenshot. Router-host component tests
-must also cover the real outer-router composition.
+**Correct approach:** boot the real surface, require the project readiness probe to
+report a non-error UI, and inspect a screenshot before claiming a UI change is
+delivered. On a boot failure read `agent-browser console` (the ErrorBoundary page
+itself shows no stack) and attribute before diagnosing. Keep cross-module constants
+in the folder's leaf module — the one that imports nothing from its siblings — rather
+than beside their primary consumer. Router-host component tests must also cover the
+real outer-router composition.
 
 ### L-S3 — Verifying Acceptance UI against an unfetched canary ref
 
