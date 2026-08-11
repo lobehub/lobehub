@@ -3,7 +3,7 @@ import { Button } from '@lobehub/ui/base-ui';
 import { Image } from 'antd';
 import { createStaticStyles, cx, keyframes } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
-import { FileBoxIcon, ImageIcon } from 'lucide-react';
+import { FileBoxIcon } from 'lucide-react';
 import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,7 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 import { FALLBACK_ASPECT_RATIO, readAspectRatio } from './imageAspectRatio';
+import { readPlaceholderIcon } from './placeholderIcon';
 
 const pulse = keyframes`
   0%,
@@ -222,7 +223,11 @@ const ImageFileItem = memo<ImageFileItemProps>(
             <div
               className={cx(styles.placeholder, status === 'loading' && styles.placeholderLoading)}
             >
-              <Icon className={styles.placeholderIcon} icon={ImageIcon} size={28} />
+              <Icon
+                className={styles.placeholderIcon}
+                icon={readPlaceholderIcon(status)}
+                size={28}
+              />
               {status === 'error' && (
                 <>
                   <div className={styles.placeholderReason}>

@@ -19,15 +19,18 @@ export const getResourceQueryVisibility = (
 };
 
 /**
- * Categories where "where did this come from" is a question worth asking:
- * every file-backed category. Pages hold no files and Home is a dashboard, so
- * neither offers the filter.
+ * Categories where "where did this come from" is a question worth asking: the
+ * media categories, and only those. Generation produces images, video and
+ * audio — so those are the lists where uploads and model output actually mix
+ * and need separating.
+ *
+ * Documents and raw files have no generated counterpart, and the All view is a
+ * cross-category overview rather than a place to narrow by origin; offering the
+ * filter there would be four controls that can only ever partition the list one
+ * way. Pages hold no files and Home is a dashboard.
  */
 export const SOURCE_FILTER_CATEGORIES: FilesTabs[] = [
-  FilesTabs.All,
   FilesTabs.Audios,
-  FilesTabs.Documents,
-  FilesTabs.Files,
   FilesTabs.Images,
   FilesTabs.Videos,
 ];

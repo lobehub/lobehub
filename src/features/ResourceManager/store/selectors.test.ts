@@ -15,13 +15,36 @@ import {
 const stateWith = (patch: Partial<State>): State => ({ ...initialState, ...patch });
 
 describe('resource manager selectors', () => {
-  it('should open the images category on generated output and every other category on all', () => {
+  it('should open the images category on generated output and the other media categories on all', () => {
     expect(getResourceSourceFilter(stateWith({ category: FilesTabs.Images }))).toBe(
       ResourceSourceFilter.Generated,
     );
-    expect(getResourceSourceFilter(stateWith({ category: FilesTabs.Files }))).toBe(
+    expect(getResourceSourceFilter(stateWith({ category: FilesTabs.Videos }))).toBe(
       ResourceSourceFilter.All,
     );
+    expect(getResourceSourceFilter(stateWith({ category: FilesTabs.Audios }))).toBe(
+      ResourceSourceFilter.All,
+    );
+  });
+
+  it('should offer the source filter on media categories only', () => {
+    for (const category of [FilesTabs.Images, FilesTabs.Videos, FilesTabs.Audios]) {
+      expect(canFilterResourceSource(stateWith({ category }))).toBe(true);
+    }
+
+    // Documents and raw files have no generated counterpart, and All is a
+    // cross-category overview — the filter could only ever partition those one
+    // way, so it is not offered at all.
+    for (const category of [
+      FilesTabs.All,
+      FilesTabs.Documents,
+      FilesTabs.Files,
+      FilesTabs.Pages,
+      FilesTabs.Home,
+    ]) {
+      expect(canFilterResourceSource(stateWith({ category }))).toBe(false);
+      expect(getResourceSourceFilter(stateWith({ category }))).toBe(ResourceSourceFilter.All);
+    }
   });
 
   it('should let an explicit pick override the category default', () => {
@@ -32,18 +55,15 @@ describe('resource manager selectors', () => {
     ).toBe(ResourceSourceFilter.Uploaded);
   });
 
-  it('should not narrow by source inside a library or on categories without files', () => {
+  it('should not narrow by source inside a library, even on a media category', () => {
     const inLibrary = stateWith({
       category: FilesTabs.Images,
       libraryId: 'kb-1',
       sourceFilter: ResourceSourceFilter.Generated,
     });
-    const pages = stateWith({ category: FilesTabs.Pages });
 
     expect(canFilterResourceSource(inLibrary)).toBe(false);
     expect(getResourceSourceFilter(inLibrary)).toBe(ResourceSourceFilter.All);
-    expect(canFilterResourceSource(pages)).toBe(false);
-    expect(getResourceSourceFilter(pages)).toBe(ResourceSourceFilter.All);
   });
 
   it('should apply the home visibility filter only outside a concrete library', () => {
