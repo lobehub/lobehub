@@ -10,7 +10,11 @@ import {
   walletTransactions,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { type BudgetPeriod, confirmedUnusedMicro, periodToOpenRouterLimitReset } from '@/database/utils/aicoMoney';
+import {
+  type BudgetPeriod,
+  confirmedUnusedMicro,
+  periodToOpenRouterLimitReset,
+} from '@/database/utils/aicoMoney';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 import { computePeriodWindow } from './periodBoundaries';
@@ -100,9 +104,7 @@ export const processDueRenewals = async (
     const prepaidMicroUsd = Number(row.budget.pendingPeriodAmountMicroUsd ?? 0);
     const nextPeriod = (row.budget.pendingPeriod ?? row.budget.period) as BudgetPeriod;
     const nextPeriodAmountMicroUsd =
-      prepaidMicroUsd > 0
-        ? prepaidMicroUsd
-        : Number(row.budget.periodAmountMicroUsd ?? 0);
+      prepaidMicroUsd > 0 ? prepaidMicroUsd : Number(row.budget.periodAmountMicroUsd ?? 0);
     const due: DueBudget = {
       budgetId: row.budget.id,
       currentPeriod: row.budget.period as BudgetPeriod,
@@ -525,6 +527,13 @@ const runOutboxAction = async (params: {
     case 'disable_member_key': {
       if (!row.orgMemberId) throw new Error('ORG_MEMBER_ID_REQUIRED');
       await keyService.disableMemberKey(row.orgMemberId);
+      return;
+    }
+
+    // OR-001: soft-delete enqueues disable_user_key; must actually disable the personal OR key.
+    case 'disable_user_key': {
+      if (!row.userId) throw new Error('USER_ID_REQUIRED');
+      await keyService.disableUserKey(row.userId);
       return;
     }
 

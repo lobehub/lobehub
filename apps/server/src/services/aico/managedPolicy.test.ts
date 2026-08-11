@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AicoManagedPolicy,
-  AicoManagedPolicyError,
-} from './managedPolicy';
 import { parseAicoBillingContext } from './billingContext';
+import { AicoManagedPolicy, AicoManagedPolicyError } from './managedPolicy';
 
 describe('explicit billing context + managed policy', () => {
   it('rejects missing / invalid billing context', () => {
@@ -17,9 +14,10 @@ describe('explicit billing context + managed policy', () => {
 
   it('accepts personal and organization shapes', () => {
     expect(parseAicoBillingContext({ source: 'personal' })).toEqual({ source: 'personal' });
-    expect(
-      parseAicoBillingContext({ source: 'organization', organizationId: 'org_1' }),
-    ).toEqual({ organizationId: 'org_1', source: 'organization' });
+    expect(parseAicoBillingContext({ source: 'organization', organizationId: 'org_1' })).toEqual({
+      organizationId: 'org_1',
+      source: 'organization',
+    });
   });
 
   it('treats aico and openrouter as managed', () => {
@@ -32,5 +30,15 @@ describe('explicit billing context + managed policy', () => {
     const err = new AicoManagedPolicyError('BILLING_CONTEXT_REQUIRED');
     expect(err.code).toBe('BILLING_CONTEXT_REQUIRED');
     expect(err.name).toBe('AicoManagedPolicyError');
+  });
+
+  it('OR-003: authorize requires modelId for managed providers', async () => {
+    const policy = new AicoManagedPolicy({} as any, async () => null);
+    await expect(
+      policy.authorize({ billing: { source: 'personal' }, userId: 'u1' }),
+    ).rejects.toMatchObject({ code: 'MODEL_ID_REQUIRED' });
+    await expect(
+      policy.authorize({ billing: { source: 'personal' }, modelId: '   ', userId: 'u1' }),
+    ).rejects.toMatchObject({ code: 'MODEL_ID_REQUIRED' });
   });
 });

@@ -404,12 +404,23 @@ export const organizationRouter = router({
         });
       }
 
-      // Local access is already revocation_pending. Durable outbox handles OR
-      // disable + settlement — OpenRouter downtime must not block removal.
+      // OR-005: best-effort sync disable so the OR key stops spending immediately.
+      // Durable outbox still owns settlement + retry if OpenRouter is down.
       const budget = await ctx.organizationModel.getMemberBudgetForOrg({
         orgId: input.orgId,
         orgMemberId: input.memberId,
       });
+      if (budget?.openrouterKeyId) {
+        try {
+          const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+          await keyService.disableMemberKey(input.memberId);
+        } catch (error) {
+          console.warn(
+            '[aico] sync disableMemberKey on remove failed; outbox will retry reclaim',
+            error,
+          );
+        }
+      }
       await ctx.serverDB.insert(aicoKeyOutbox).values({
         action: 'reclaim_member',
         nextAttemptAt: new Date(),

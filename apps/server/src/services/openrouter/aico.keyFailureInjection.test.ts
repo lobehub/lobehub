@@ -233,7 +233,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     expect(client.keys.size).toBe(0); // must not create key for zero budget
   });
 
-  it('OpenRouter succeeds then DB key update failure leaves orphan key', async () => {
+  it('OR-002: OpenRouter succeeds then DB key update failure retires orphan key', async () => {
     const billing = new AicoBillingModel(db);
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
@@ -252,7 +252,7 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     };
 
     await expect(keys.ensureUserKey(userId)).rejects.toThrow(/DB write failed/);
-    expect(client.keys.size).toBe(1); // orphan on OpenRouter side
+    expect(client.keys.size).toBe(0); // OR-002: orphan retired (disable+delete)
     const wallet = await billing.getUserWallet(userId);
     expect(wallet?.openrouterKeyId).toBeFalsy();
   });

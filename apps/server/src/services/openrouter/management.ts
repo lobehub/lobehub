@@ -252,8 +252,8 @@ export const createOpenRouterManagementClient = (
   const isProduction = process.env.NODE_ENV === 'production';
   const isControlPlane = aicoEnv.AICO_IS_CONTROL_PLANE;
 
-  // Product servers must never hold the OpenRouter management key.
-  if (!isControlPlane && aicoEnv.OPENROUTER_MANAGEMENT_API_KEY && isProduction) {
+  // OR-008: product process must never hold the management key (any NODE_ENV).
+  if (!isControlPlane && aicoEnv.OPENROUTER_MANAGEMENT_API_KEY) {
     throw new Error(
       'OPENROUTER_MANAGEMENT_API_KEY must not be set on the product server — configure AICO_CONTROL_PLANE_URL + AICO_CONTROL_PLANE_SERVICE_TOKEN instead.',
     );
@@ -265,7 +265,7 @@ export const createOpenRouterManagementClient = (
     if (remote) return remote;
   }
 
-  // Control plane (or explicit local key in non-prod) talks to OpenRouter directly.
+  // Control plane talks to OpenRouter directly with the management key.
   if (aicoEnv.OPENROUTER_MANAGEMENT_API_KEY) {
     return new HttpOpenRouterManagementClient(aicoEnv.OPENROUTER_MANAGEMENT_API_KEY);
   }

@@ -136,18 +136,11 @@ export class AicoOpenRouterKeyService {
         return { created: false, keyId: null };
       }
 
-      const created = await this.client.createKey({
-        limitReset: null,
+      return this.createAndPersistUserKey({
         limitUsd,
         name: `aico-user-${userId}`,
-      });
-      const encrypted = await this.encryptKey(created.key);
-      await this.billingModel.updateUserOpenRouterKey({
-        ciphertext: encrypted,
-        keyId: created.hash,
         userId,
       });
-      return { created: true, keyId: created.hash };
     });
   };
 
@@ -165,18 +158,11 @@ export class AicoOpenRouterKeyService {
         return { created: false, keyId: wallet.openrouterKeyId };
       }
 
-      const created = await this.client.createKey({
-        limitReset: null,
+      return this.createAndPersistUserKey({
         limitUsd: microToOpenRouterLimitUsd(budgetMicro),
         name: `aico-trial-${userId}`,
-      });
-      const encrypted = await this.encryptKey(created.key);
-      await this.billingModel.updateUserOpenRouterKey({
-        ciphertext: encrypted,
-        keyId: created.hash,
         userId,
       });
-      return { created: true, keyId: created.hash };
     });
   };
 
@@ -230,15 +216,51 @@ export class AicoOpenRouterKeyService {
         limitUsd,
         name: `aico-member-${orgMemberId}`,
       });
-      const encrypted = await this.encryptKey(created.key);
-      await this.orgModel.updateMemberOpenRouterKey({
-        ciphertext: encrypted,
-        keyId: created.hash,
-        orgMemberId,
-      });
+      try {
+        const encrypted = await this.encryptKey(created.key);
+        await this.orgModel.updateMemberOpenRouterKey({
+          ciphertext: encrypted,
+          keyId: created.hash,
+          orgMemberId,
+        });
+      } catch (error) {
+        // OR-002: OR create succeeded but DB persist failed — retire orphan spendable key.
+        console.error('[aico] member OpenRouter key persist failed; retiring orphan key', error);
+        await this.retireManagedKey(created.hash);
+        throw error;
+      }
       return { created: true, keyId: created.hash };
     });
   };
+
+  /**
+   * OR-002: create on OpenRouter then persist ciphertext. If DB write fails after
+   * createKey, immediately retire the orphan so it cannot spend against the master account.
+   */
+  private async createAndPersistUserKey(params: {
+    limitUsd: number;
+    name: string;
+    userId: string;
+  }): Promise<{ created: true; keyId: string }> {
+    const created = await this.client.createKey({
+      limitReset: null,
+      limitUsd: params.limitUsd,
+      name: params.name,
+    });
+    try {
+      const encrypted = await this.encryptKey(created.key);
+      await this.billingModel.updateUserOpenRouterKey({
+        ciphertext: encrypted,
+        keyId: created.hash,
+        userId: params.userId,
+      });
+    } catch (error) {
+      console.error('[aico] user OpenRouter key persist failed; retiring orphan key', error);
+      await this.retireManagedKey(created.hash);
+      throw error;
+    }
+    return { created: true, keyId: created.hash };
+  }
 
   disableMemberKey = async (orgMemberId: string) => {
     const budget = await this.orgModel.getMemberBudget(orgMemberId);
@@ -324,9 +346,7 @@ export class AicoOpenRouterKeyService {
     const limitMicro =
       info.limit == null ? currentCycle : Number(openRouterUsdToMicroFloor(info.limit));
     const remainingFromOr =
-      info.limitRemaining == null
-        ? null
-        : Number(openRouterUsdToMicroFloor(info.limitRemaining));
+      info.limitRemaining == null ? null : Number(openRouterUsdToMicroFloor(info.limitRemaining));
 
     // Detect post-reset OR counters while Aico still holds closing-period spend.
     const looksReset =
