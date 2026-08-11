@@ -48,11 +48,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorPrimaryHover};
     }
   `,
+  nameFieldLabel: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-start;
+
+    width: 100%;
+    max-width: 100%;
+  `,
   nameInput: css`
     html[dir='rtl'] & {
       direction: rtl;
       text-align: start;
     }
+  `,
+  nameOptional: css`
+    font-size: 12px;
+    font-weight: 400;
+    color: ${cssVar.colorTextTertiary};
   `,
   nameRow: css`
     display: grid;
@@ -65,11 +79,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     .ant-form-item-label {
+      overflow: visible;
+      max-width: 100%;
       text-align: start;
     }
 
     .ant-form-item-label > label {
+      display: flex;
+
+      width: 100%;
+      max-width: 100%;
       height: auto;
+
       white-space: normal;
     }
 
@@ -132,6 +153,13 @@ const BetterAuthSignUpForm = () => {
     </span>
   );
 
+  const nameLabel = (text: string) => (
+    <span className={styles.nameFieldLabel}>
+      <span>{text}</span>
+      <span className={styles.nameOptional}>{t('betterAuth.signup.optional')}</span>
+    </span>
+  );
+
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.title')}>
       <AuthSocialButtons
@@ -159,7 +187,11 @@ const BetterAuthSignUpForm = () => {
         }
       >
         <div className={styles.nameRow}>
-          <Form.Item label={label(t('betterAuth.signup.firstNameLabel'), true)} name="firstName">
+          <Form.Item
+            labelWrap
+            label={nameLabel(t('betterAuth.signup.firstNameLabel'))}
+            name="firstName"
+          >
             <Input
               autoComplete="given-name"
               className={styles.nameInput}
@@ -167,7 +199,11 @@ const BetterAuthSignUpForm = () => {
               size="large"
             />
           </Form.Item>
-          <Form.Item label={label(t('betterAuth.signup.lastNameLabel'), true)} name="lastName">
+          <Form.Item
+            labelWrap
+            label={nameLabel(t('betterAuth.signup.lastNameLabel'))}
+            name="lastName"
+          >
             <Input
               autoComplete="family-name"
               className={styles.nameInput}

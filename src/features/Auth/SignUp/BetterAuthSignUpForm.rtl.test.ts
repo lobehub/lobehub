@@ -28,8 +28,10 @@ describe('BetterAuthSignUpForm RTL field alignment', () => {
 
   it('keeps name inputs RTL under dir=rtl and prevents grid overflow clipping', () => {
     expect(source).toContain('nameInput');
+    expect(source).toContain('nameFieldLabel');
+    expect(source).toContain('labelWrap');
     expect(source).toContain('min-width: 0');
     expect(source).toMatch(/\.ant-form-item-label\s*\{[\s\S]*?text-align:\s*start/);
-    expect(source).toMatch(/\.ant-form-item-label > label\s*\{[\s\S]*?height:\s*auto/);
+    expect(source).toMatch(/\.ant-form-item-label > label\s*\{[\s\S]*?width:\s*100%/);
   });
 });
