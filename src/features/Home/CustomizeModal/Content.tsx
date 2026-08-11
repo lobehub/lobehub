@@ -73,22 +73,20 @@ const CustomizeModalContent = memo(() => {
           <PresetBar value={preset} onChange={applyPreset} />
         </SettingRow>
 
-        <Flexbox gap={12}>
-          <Text fontSize={12} type={'secondary'} weight={600}>
-            {t('dashboard.customize.group.decoration')}
-          </Text>
-          <SettingRow
-            description={t('dashboard.customize.portrait.desc')}
-            title={t('dashboard.customize.portrait.title')}
-          >
-            <Switch
-              aria-label={t('dashboard.customize.portrait.title')}
-              checked={showPortrait}
-              size={'small'}
-              onChange={togglePortrait}
-            />
-          </SettingRow>
-        </Flexbox>
+        {/* No heading: the groups below name parts of the page, and a heading
+            over this single row would promise a category that has one member
+            and no page to point at. Its own label and description say enough. */}
+        <SettingRow
+          description={t('dashboard.customize.portrait.desc')}
+          title={t('dashboard.customize.portrait.title')}
+        >
+          <Switch
+            aria-label={t('dashboard.customize.portrait.title')}
+            checked={showPortrait}
+            size={'small'}
+            onChange={togglePortrait}
+          />
+        </SettingRow>
 
         {HOME_WIDGET_GROUPS.map((group) => (
           <Flexbox gap={12} key={group.key}>

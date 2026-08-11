@@ -49,7 +49,6 @@
   "dashboard.customize.decrease": "减少{{label}}",
   "dashboard.customize.entry": "自定义",
   "dashboard.customize.group.agent": "Agent",
-  "dashboard.customize.group.decoration": "装饰",
   "dashboard.customize.group.listSize": "列表条数",
   "dashboard.customize.group.rail": "侧边栏",
   "dashboard.customize.group.task": "任务",
