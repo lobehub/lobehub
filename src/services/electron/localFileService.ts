@@ -6,6 +6,8 @@ import {
   type DeviceSandboxInstallResult,
   type EditLocalFileParams,
   type EditLocalFileResult,
+  type EnsureSandboxWorkspaceParams,
+  type EnsureSandboxWorkspaceResult,
   type GetCommandOutputParams,
   type GetCommandOutputResult,
   type GlobFilesParams,
@@ -278,6 +280,17 @@ class LocalFileService {
    */
   async installSandbox(): Promise<DeviceSandboxInstallResult> {
     return ensureElectronIpc().shellCommand.installSandbox();
+  }
+
+  /**
+   * Create (and return) the default directory a sandboxed agent should work in.
+   * The caller persists it as the agent's working directory, so the default is
+   * visible and changeable rather than hidden.
+   */
+  async ensureSandboxWorkspace(
+    params: EnsureSandboxWorkspaceParams,
+  ): Promise<EnsureSandboxWorkspaceResult> {
+    return ensureElectronIpc().shellCommand.ensureSandboxWorkspace(params);
   }
 
   async getCommandOutput(params: GetCommandOutputParams): Promise<GetCommandOutputResult> {

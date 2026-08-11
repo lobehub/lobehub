@@ -376,6 +376,22 @@ export interface DeviceSandboxInstallResult {
   status: 'cancelled' | 'failed' | 'installed' | 'not-installable';
 }
 
+export interface EnsureSandboxWorkspaceParams {
+  /** Scopes the workspace per agent, so two agents never share a fence root. */
+  agentId: string;
+}
+
+export interface EnsureSandboxWorkspaceResult {
+  /**
+   * Absolute path of the created directory. Absent when it could not be
+   * created — the caller then leaves the working directory unset rather than
+   * pointing it at something that does not exist.
+   */
+  path?: string;
+  /** Why the directory could not be created. */
+  reason?: string;
+}
+
 export interface RunCommandResult {
   duration_ms?: number;
   error?: string;

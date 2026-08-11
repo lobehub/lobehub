@@ -37,11 +37,13 @@ import {
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -458,13 +460,38 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     void revalidateSandboxCapability();
   }, [open, revalidateSandboxCapability]);
 
+  // `homeFallback: false` on purpose — this must reflect whether the user has
+  // actually chosen a directory, not the runtime's convenience fallback.
+  const configuredWorkingDirectory = useEffectiveWorkingDirectory(agentId, { homeFallback: false });
+  const { commit: commitWorkingDirectory } = useCommitWorkingDirectory(agentId);
+
+  /**
+   * Give a sandboxed agent somewhere to work when the user has not picked a
+   * directory yet.
+   *
+   * The fence is scoped to the working directory, so without one the run is
+   * refused — a first use that fails on a requirement the picker never
+   * mentioned. Rather than fence a directory nobody chose *silently*, the
+   * default is written into the same setting the chip reads, so the answer to
+   * "where is this running?" stays visible and changeable.
+   */
+  const ensureSandboxWorkingDirectory = useCallback(async () => {
+    if (configuredWorkingDirectory) return;
+
+    const { path } = await localFileService.ensureSandboxWorkspace({ agentId });
+    // Leave it unset if the directory could not be created: pointing the fence
+    // at a path that does not exist would fail later and less clearly.
+    if (path) await commitWorkingDirectory({ path });
+  }, [agentId, commitWorkingDirectory, configuredWorkingDirectory]);
+
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string, localSandbox?: boolean) => {
       setOpen(false);
+      if (localSandbox) await ensureSandboxWorkingDirectory();
       await selectExecutionTarget(target, deviceId, { localSandbox });
     },
-    [selectExecutionTarget],
+    [ensureSandboxWorkingDirectory, selectExecutionTarget],
   );
 
   // Setting up the backend raises an elevation prompt and creates a dedicated

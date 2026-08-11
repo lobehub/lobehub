@@ -1,8 +1,14 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import type { SandboxCapability } from '@lobechat/device-sandbox';
 import type {
   DesktopShellSettings,
   DeviceSandboxCapabilityResult,
   DeviceSandboxInstallResult,
+  EnsureSandboxWorkspaceParams,
+  EnsureSandboxWorkspaceResult,
   GetCommandOutputParams,
   GetCommandOutputResult,
   KillCommandParams,
@@ -27,6 +33,12 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:ShellCommandCtr');
 
 const processManager = new ShellProcessManager();
+
+/**
+ * Agent ids are opaque to this process, and they end up as a path segment —
+ * so anything that is not plainly a name is stripped rather than trusted.
+ */
+const safeSegment = (value: string): string => value.replaceAll(/[^\w-]/g, '') || 'default';
 
 /** Prefix for a simple `lh`/`lobe`/`lobehub` invocation (keyword + boundary, args via slice). */
 const SIMPLE_LH_PREFIX = /^\s*(?:lh|lobe|lobehub)(?=\s|$)/;
@@ -165,6 +177,40 @@ export default class ShellCommandCtr extends ControllerModule {
    * Always clears the cached verdict first: the whole point is to re-evaluate a
    * host that previously said no, including one downgraded by a failed launch.
    */
+  /**
+   * Create the default workspace a sandboxed agent runs in, and return its real
+   * path.
+   *
+   * The sandbox fences writes to the run's working directory, so without one
+   * there is nothing to fence and the command is refused. Making the user go
+   * find a folder before the feature does anything is a poor first run, so the
+   * picker calls this and then *writes the result into the visible working-
+   * directory setting* — a default the user can see and change, not a hidden
+   * one. A directory nobody can point at is how "the UI says one thing, the run
+   * does another" starts.
+   *
+   * Created eagerly rather than lazily at launch because the policy layer
+   * resolves its roots with `realpath` and rejects a path that does not exist
+   * yet.
+   */
+  @IpcMethod()
+  async ensureSandboxWorkspace({
+    agentId,
+  }: EnsureSandboxWorkspaceParams): Promise<EnsureSandboxWorkspaceResult> {
+    const target = path.join(os.homedir(), 'LobeHub', 'sandbox', safeSegment(agentId));
+    try {
+      fs.mkdirSync(target, { recursive: true });
+      // Resolve symlinks now: this exact string becomes the fence root, and the
+      // policy layer compares realpaths.
+      const resolved = fs.realpathSync.native(target);
+      logger.info('Prepared sandbox workspace:', resolved);
+      return { path: resolved };
+    } catch (error) {
+      logger.error('Failed to prepare sandbox workspace:', error);
+      return { reason: (error as Error).message };
+    }
+  }
+
   @IpcMethod()
   async installSandbox(): Promise<DeviceSandboxInstallResult> {
     const { installDeviceSandbox } = await import('@lobechat/device-sandbox');
