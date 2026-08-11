@@ -16,6 +16,7 @@ import { toolSelectors } from '@/store/tool/selectors';
 import { dataSelectors, useConversationStore } from '../../../store';
 import Actions from './Actions';
 import Inspectors from './Inspector';
+import { useToolCallStartTime } from './useToolCallStartTime';
 
 const Debug = dynamic(() => import('./Debug'), {
   loading: () => <Skeleton.Block active height={300} width={'100%'} />,
@@ -96,7 +97,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const looksLikeWaitingForToolResult = !hasError && !isArgumentsStreaming && !hasFinishedResult;
   const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
   const isToolCalling = !hasFinishedResult && (isToolCallingFromOperation || isToolCallingFallback);
-  const toolCallStartTime = useChatStore(operationSelectors.getRunningToolCallStartTime(id));
+  const toolCallStartTime = useToolCallStartTime(id);
 
   const hasCustomRender = !!getBuiltinRender(identifier, apiName);
   // Only allow toggle when has custom render and not in pending/reject/abort state
