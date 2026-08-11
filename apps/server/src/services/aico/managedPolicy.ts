@@ -88,9 +88,12 @@ export class AicoManagedPolicy {
       throw new AicoManagedPolicyError(code, ChatErrorType.BadRequest);
     }
 
-    if (params.modelId) {
-      await this.assertModelAllowed(params.userId, billing, params.modelId);
+    // OR-003: managed keys must always bind to an explicit model — omitting modelId
+    // previously skipped the allow-list while still injecting the member/user key.
+    if (!params.modelId?.trim()) {
+      throw new AicoManagedPolicyError('MODEL_ID_REQUIRED', ChatErrorType.BadRequest);
     }
+    await this.assertModelAllowed(params.userId, billing, params.modelId);
 
     if (billing.source === 'personal') {
       // Trial uses personal wallet key path but product Trial is disabled in prod.

@@ -144,6 +144,19 @@ describe('createOpenRouterManagementClient product / control-plane rules', () =>
     }
   });
 
+  it('OR-008: non-production product server also rejects embedded management key', () => {
+    const prevNode = process.env.NODE_ENV;
+    try {
+      (process.env as { NODE_ENV?: string }).NODE_ENV = 'development';
+      aicoEnv.OPENROUTER_MANAGEMENT_API_KEY = 'sk-or-v1-should-not-be-here';
+      expect(() => createOpenRouterManagementClient({})).toThrow(
+        /must not be set on the product server/,
+      );
+    } finally {
+      (process.env as { NODE_ENV?: string }).NODE_ENV = prevNode;
+    }
+  });
+
   it('production product server requires control plane URL when no management key', () => {
     const prevNode = process.env.NODE_ENV;
     try {
