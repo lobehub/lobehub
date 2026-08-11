@@ -225,6 +225,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentSelfLearningRouteMeta },
             path: 'self-learning',
           },
+          // 单个专长的完整拟合面板。做成路由而不是页内状态，深链才打得开。
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+              'Desktop > Chat > Self Learning > Domain',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/:domainId',
+          },
           {
             element: dynamicElement(
               () => import('@/routes/(main)/agent/permission'),

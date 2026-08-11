@@ -44,7 +44,8 @@ const Nav = memo(() => {
     pathname.includes('/channel') ||
     pathname.endsWith('/statistics');
   const isGoalsActive = pathname.endsWith('/goals');
-  const isSelfLearningActive = pathname.endsWith('/self-learning');
+  // 下钻页 /self-learning/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
+  const isSelfLearningActive = pathname.includes('/self-learning');
   const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.

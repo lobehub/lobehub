@@ -1,6 +1,6 @@
 import { useClientDataSWR } from '@/libs/swr';
 import { swrKeys } from '@/libs/swr/keys';
-import { expertiseService } from '@/services/expertise';
+import { type ExpertiseMaturity, expertiseService } from '@/services/expertise';
 
 export const useExpertiseOverview = (agentId?: string) =>
   useClientDataSWR(agentId ? swrKeys.expertise.overview(agentId) : null, () =>
@@ -17,17 +17,45 @@ export const useExpertiseLessons = (domainId?: string, layer?: string, search?: 
     expertiseService.listLessons({ domainId: domainId!, layer, search }),
   );
 
-/** 到达 90% 渐近线所需的实践次数：P(n)=P∞(1−e^(−n/τ)) ⇒ n = τ·ln10。 */
-export const runsToNinety = (tau: number) => Math.ceil(tau * Math.LN10);
+/** 到达渐近线某个比例所需的实践次数：P(n)=P∞(1−e^(−n/τ)) ⇒ n = −τ·ln(1−r)。 */
+export const runsToRatio = (tau: number, ratio: number) => Math.ceil(-tau * Math.log(1 - ratio));
 
 /**
- * 把拟合参数展开成一条预测曲线。
+ * 曲线形态 —— 图上那四条线的图例就是这四种。
  *
- * 只在 maturity.usable 时调用 —— 撞了 τ 上界或置信度不足的拟合画出来的曲线
- * 是边界伪影，比不画更有害。
+ * 刻意不只读 plateauKind：它描述拟合出的形状，而「掉头」是规则被退休的结果，
+ * 在形状上仍然可能被拟合成 saturated。两者一起判断才对得上用户看见的那条线。
  */
-export const projectCurve = (pInf: number, tau: number, upto: number) =>
-  Array.from({ length: upto }, (_, i) => ({
-    n: i + 1,
-    value: pInf * (1 - Math.exp(-(i + 1) / tau)),
-  }));
+export type ExpertiseShape = 'flat' | 'rising' | 'declining' | 'stuck';
+
+export const shapeOf = (maturity: ExpertiseMaturity, delta: number): ExpertiseShape => {
+  if (delta < 0) return 'declining';
+  if (maturity.usable && (maturity.maturity ?? 0) >= 0.9) return 'flat';
+  if (delta === 0) return 'stuck';
+  return 'rising';
+};
+
+/**
+ * 把拟合参数展开成外推曲线。
+ *
+ * 起点接在今天的真实值上而不是模型值上 —— 否则外推段会从曲线末端跳一下，
+ * 那个跳变会被读成「数据出错了」。偏差按 τ 指数衰减地并回模型。
+ */
+export const projectSeries = (
+  pInf: number,
+  tau: number,
+  fromRun: number,
+  fromValue: number,
+  toRun: number,
+  steps = 90,
+) => {
+  const model = (n: number) => pInf * (1 - Math.exp(-n / tau));
+  const offset = fromValue - model(fromRun);
+  return Array.from({ length: steps }, (_, k) => {
+    const run = fromRun + (k / (steps - 1)) * (toRun - fromRun);
+    return {
+      n: Math.min(pInf, model(run) + offset * Math.exp(-(run - fromRun) / tau)),
+      run,
+    };
+  });
+};
