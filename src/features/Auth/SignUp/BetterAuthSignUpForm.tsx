@@ -17,6 +17,22 @@ import { PASSWORD_MIN_LENGTH } from '@/libs/better-auth/plugins/password-policy'
 import { useSignUp } from './useSignUp';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  /**
+   * Email is inherently LTR once filled, but Persian placeholders must sit on the
+   * inline-start edge (right under dir=rtl). `type="email"` + UA LTR often pins the
+   * empty field left; keep text + inputMode and flip direction while placeholder-shown.
+   */
+  emailInput: css`
+    html[dir='rtl'] &:placeholder-shown {
+      direction: rtl;
+      text-align: start;
+    }
+
+    html[dir='rtl'] &:not(:placeholder-shown) {
+      direction: ltr;
+      text-align: start;
+    }
+  `,
   fieldLabel: css`
     margin-block-end: 6px;
     font-size: 13px;
@@ -32,10 +48,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorPrimaryHover};
     }
   `,
+  nameInput: css`
+    html[dir='rtl'] & {
+      direction: rtl;
+      text-align: start;
+    }
+  `,
   nameRow: css`
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+
+    /* Avoid min-content overflow clipping Persian labels in half-width columns */
+    & > .ant-form-item {
+      min-width: 0;
+    }
+
+    .ant-form-item-label {
+      text-align: start;
+    }
+
+    .ant-form-item-label > label {
+      height: auto;
+      white-space: normal;
+    }
 
     @media (width <= 420px) {
       grid-template-columns: 1fr;
@@ -126,6 +162,7 @@ const BetterAuthSignUpForm = () => {
           <Form.Item label={label(t('betterAuth.signup.firstNameLabel'), true)} name="firstName">
             <Input
               autoComplete="given-name"
+              className={styles.nameInput}
               placeholder={t('betterAuth.signup.firstNamePlaceholder')}
               size="large"
             />
@@ -133,6 +170,7 @@ const BetterAuthSignUpForm = () => {
           <Form.Item label={label(t('betterAuth.signup.lastNameLabel'), true)} name="lastName">
             <Input
               autoComplete="family-name"
+              className={styles.nameInput}
               placeholder={t('betterAuth.signup.lastNamePlaceholder')}
               size="large"
             />
@@ -148,11 +186,11 @@ const BetterAuthSignUpForm = () => {
         >
           <Input
             autoComplete="email"
+            className={styles.emailInput}
             inputMode="email"
             placeholder={t('betterAuth.signup.emailPlaceholder')}
             ref={emailInputRef}
             size="large"
-            type="email"
           />
         </Form.Item>
         <Form.Item
