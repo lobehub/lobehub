@@ -162,6 +162,34 @@ describe('insertGoalTag', () => {
     ]);
   });
 
+  it('prepends a paragraph when the draft starts with a block-children container', () => {
+    const { editor, lexicalEditor } = createTestEditor();
+    // A list / table shape: an ElementNode whose children are blocks, not inline
+    // content. Prepending the chip straight into it would break that container's
+    // child contract and could move the chip off the head of the message.
+    lexicalEditor.update(
+      () => {
+        const container = $createParagraphNode();
+        const innerBlock = $createParagraphNode();
+        innerBlock.append($createTextNode('ship the homepage'));
+        container.append(innerBlock);
+        $getRoot().append(container);
+      },
+      { discrete: true },
+    );
+
+    insertGoalTag(editor, LABEL);
+
+    const blocks = lexicalEditor.read(() =>
+      $getRoot()
+        .getChildren()
+        .map((block: any) => block.getChildren().map((child: any) => child.getType())),
+    );
+    // The chip leads the document in its own paragraph, ahead of the container.
+    expect(blocks[0]).toEqual([ActionTagNode.getType()]);
+    expect(blocks).toHaveLength(2);
+  });
+
   it('does nothing without an editor', () => {
     expect(() => insertGoalTag(undefined, LABEL)).not.toThrow();
   });

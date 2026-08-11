@@ -4,8 +4,13 @@ import {
   $createRangeSelection,
   $getRoot,
   $getSelection,
+  $isDecoratorNode,
   $isElementNode,
+  $isLineBreakNode,
+  $isParagraphNode,
   $isRangeSelection,
+  $isTextNode,
+  type ElementNode,
   type LexicalNode,
 } from 'lexical';
 
@@ -28,6 +33,25 @@ const $hasGoalTag = (): boolean => {
   }
 
   return false;
+};
+
+/**
+ * True when `block` holds inline children, so the inline chip can be prepended
+ * straight into it.
+ *
+ * `$isElementNode` alone is not that test: a list, table, or quote-of-blocks is an
+ * ElementNode too, and its children are rows / items, not inline content.
+ * Prepending the chip there would break that container's child contract, and the
+ * chip could end up serialized somewhere other than the head of the message —
+ * which is the one place `isGoalPrompt` accepts it.
+ */
+const $acceptsInlineChildren = (block: ElementNode): boolean => {
+  const first = block.getFirstChild();
+  // An empty block offers nothing to infer from; only a paragraph is certain.
+  if (!first) return $isParagraphNode(block);
+  if ($isTextNode(first) || $isLineBreakNode(first)) return true;
+
+  return ($isElementNode(first) || $isDecoratorNode(first)) && first.isInline();
 };
 
 /**
@@ -77,9 +101,10 @@ export const insertGoalTag = (editor: IEditor | undefined, label: string) => {
     const root = $getRoot();
     const firstBlock = root.getFirstChild();
 
-    // The chip is inline, so it only goes inside a block that accepts inline
-    // children; anything else (a code block, a table) gets a paragraph in front.
-    if ($isElementNode(firstBlock)) {
+    // The chip is inline, so it only goes inside a block that actually takes
+    // inline children; a list, table, or code block gets a paragraph in front of
+    // it instead, which still leaves the chip leading the message.
+    if ($isElementNode(firstBlock) && $acceptsInlineChildren(firstBlock)) {
       const firstInline = firstBlock.getFirstChild();
       if (firstInline) firstInline.insertBefore(tag);
       else firstBlock.append(tag);
