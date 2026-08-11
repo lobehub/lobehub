@@ -42,7 +42,9 @@ export interface TopicSummaryCandidate {
   workspaceId: string | null;
 }
 
-const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, true) = true`;
+// Mirrors `DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM.enabled`: users who have
+// never touched the setting are opted out, so the missing-value default is false.
+const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, false) = true`;
 const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
 
 export const topicSummaryEligibleMessage = and(
