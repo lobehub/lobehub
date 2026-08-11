@@ -131,8 +131,8 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileUserDetailPage = memo(() => {
+export const MobileUserDetailPage = () => {
   return <UserDetailPage mobile={true} />;
-});
+};
 
 export default UserDetailPage;

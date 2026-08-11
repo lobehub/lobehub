@@ -375,15 +375,13 @@ export interface VoiceMessageControlProps {
   waveform: number[];
 }
 
-const SendDots = memo(() => (
+const SendDots = () => (
   <span aria-hidden className={styles.sendDots}>
     {Array.from({ length: 4 }, (_, index) => (
       <i key={index} />
     ))}
   </span>
-));
-
-SendDots.displayName = 'VoiceMessageSendDots';
+);
 
 export const VoiceMessageControl = memo<VoiceMessageControlProps>(
   ({

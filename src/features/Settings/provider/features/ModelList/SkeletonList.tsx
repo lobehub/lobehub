@@ -86,12 +86,12 @@ export const Placeholder = memo(() => {
   );
 });
 
-export const SkeletonList = memo(() => (
+export const SkeletonList = () => (
   <Flexbox gap={4} paddingBlock={12}>
     {Array.from({ length: 6 }).map((_, i) => (
       <Placeholder key={i} />
     ))}
   </Flexbox>
-));
+);
 
 export default SkeletonList;

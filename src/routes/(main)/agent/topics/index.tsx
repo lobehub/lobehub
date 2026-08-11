@@ -1,14 +1,14 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { Suspense } from 'react';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentTopicManager from '@/features/AgentTopicManager';
 
-const AgentTopicsPage = memo(() => (
+const AgentTopicsPage = () => (
   <Suspense fallback={<SurfaceSkeleton variant={'list'} />}>
     <AgentTopicManager />
   </Suspense>
-));
+);
 
 export default AgentTopicsPage;

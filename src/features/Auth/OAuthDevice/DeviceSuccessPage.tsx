@@ -1,16 +1,12 @@
 'use client';
 
-import { memo } from 'react';
-
 import OAuthGuard from '../OAuthGuard';
 import DeviceSuccess from './DeviceSuccess';
 
-const DeviceSuccessPage = memo(() => (
+const DeviceSuccessPage = () => (
   <OAuthGuard>
     <DeviceSuccess />
   </OAuthGuard>
-));
-
-DeviceSuccessPage.displayName = 'DeviceSuccessPage';
+);
 
 export default DeviceSuccessPage;

@@ -175,7 +175,7 @@ const ChannelContent = memo(() => {
   );
 });
 
-const ChannelPage = memo(() => {
+const ChannelPage = () => {
   const { aid } = useParams<{ aid?: string }>();
 
   return (
@@ -187,6 +187,6 @@ const ChannelPage = memo(() => {
       <ChannelContent />
     </ResourceConfigAccessGate>
   );
-});
+};
 
 export default ChannelPage;

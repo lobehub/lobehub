@@ -802,7 +802,7 @@ const PlusAction = memo(() => {
 
 PlusAction.displayName = 'PlusAction';
 
-const Plus = memo(() => (
+const Plus = () => (
   <Suspense
     fallback={
       <ChatInputAction
@@ -815,8 +815,6 @@ const Plus = memo(() => (
   >
     <PlusAction />
   </Suspense>
-));
-
-Plus.displayName = 'Plus';
+);
 
 export default Plus;
