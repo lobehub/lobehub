@@ -69,7 +69,7 @@ def main(encoded):
     # retained history above the configured limit in the sequential case.
     for _, marker in sorted(completed, reverse=True)[${BACKGROUND_COMPLETED_LIMIT - 1}:]:
         base = marker.with_suffix('')
-        for suffix in ('.sh', '.log', '.pid', '.pgid', '.exit', '.off'):
+        for suffix in ('.sh', '.log', '.pid', '.pgid', '.exit', '.off', '.timedout'):
             try:
                 base.with_suffix(suffix).unlink()
             except FileNotFoundError:
@@ -147,13 +147,18 @@ def main(encoded):
         # Once the final bytes have been consumed, retain only the tiny exit
         # marker so repeated polls stay idempotent without keeping commands,
         # logs, offsets, or stale process identifiers forever.
-        for suffix in ('.sh', '.log', '.pid', '.pgid', '.off'):
+        for suffix in ('.sh', '.log', '.pid', '.pgid', '.off', '.timedout'):
             try:
                 base.with_suffix(suffix).unlink()
             except FileNotFoundError:
                 pass
 
-    reported_running = running or has_more
+    # The monitor owns publication of the authoritative exit status. A poll
+    # can land after the process group disappears but before that atomic
+    # handoff, so a published PID/PGID without an exit marker is still pending.
+    # Preserve the old not-found result for ids that have no state at all.
+    awaiting_exit = exit_code is None and probe.exists()
+    reported_running = running or awaiting_exit or has_more
     reported_exit_code = None if has_more else exit_code
     emit({
         'exitCode': reported_exit_code,
@@ -601,15 +606,46 @@ export class TencentSandboxProvider implements SandboxProvider {
       // `--foreground`, then creates a separate process group for itself and
       // the command tree. `$!` is both timeout's pid and that group's pgid, so
       // manual cancellation and the deadline target the real command group.
-      // `--kill-after` also bounds children that ignore SIGTERM. The launcher's
-      // own timeout would only cover the few milliseconds it runs.
+      // A command can exit after daemonizing or backgrounding a child, which
+      // also makes GNU timeout exit before its deadline. The independent
+      // monitor therefore retains responsibility for the entire group until
+      // it is empty, using a separately killable sleep as its deadline timer.
+      // This avoids leaking the sleep when a short command finishes early and
+      // publishes a timeout marker before terminating an overlong group.
+      // `group_alive` ignores zombies because they cannot execute and may wait
+      // indefinitely for the sandbox's PID 1 to reap them.
       // The launcher also has to detach every fd, otherwise the caller's
       // `commands.run` waits for the detached process to close stdout.
       const launch =
-        `setsid sh -c 'timeout --kill-after=5s ${timeoutSec}s sh ${base}.sh ` +
+        `setsid sh -c 'group_alive() { ` +
+        `ps -eo pgid=,stat= | awk -v target=$command_pgid ` +
+        `"\\$1 == target && \\$2 !~ /^Z/ { found=1 } END { exit !found }"; ` +
+        `}; timer_alive() { ` +
+        `ps -o stat= -p "$1" | awk ` +
+        `"\\$1 !~ /^Z/ { found=1 } END { exit !found }"; ` +
+        `}; ` +
+        `timeout --kill-after=5s ${timeoutSec}s sh ${base}.sh ` +
         `> ${base}.log 2>&1 & command_pgid=$!; ` +
         `echo $command_pgid > ${base}.pgid; ` +
-        `wait $command_pgid; echo $? > ${base}.exit' ` +
+        `sleep ${timeoutSec} & deadline_pid=$!; ` +
+        `while group_alive && timer_alive $deadline_pid; do sleep 0.05; done; ` +
+        `if group_alive; then ` +
+        `wait $deadline_pid 2>/dev/null || true; ` +
+        `echo 1 > ${base}.timedout; ` +
+        // dash's kill builtin rejects `--`; the id comes from `$!`, so it is
+        // always a positive decimal and safe to negate as a group target.
+        `kill -TERM -$command_pgid 2>/dev/null || true; ` +
+        `sleep 5 & grace_pid=$!; ` +
+        `while group_alive && timer_alive $grace_pid; do sleep 0.05; done; ` +
+        `if group_alive; then kill -KILL -$command_pgid 2>/dev/null || true; ` +
+        `else kill $grace_pid 2>/dev/null || true; fi; ` +
+        `wait $grace_pid 2>/dev/null || true; ` +
+        `else kill $deadline_pid 2>/dev/null || true; ` +
+        `wait $deadline_pid 2>/dev/null || true; fi; ` +
+        `wait $command_pgid; command_status=$?; ` +
+        `while group_alive; do sleep 0.05; done; ` +
+        `if [ -f ${base}.timedout ]; then command_status=124; fi; ` +
+        `echo $command_status > ${base}.exit' ` +
         `< /dev/null > /dev/null 2>&1 & ` +
         `monitor_pid=$!; echo $monitor_pid > ${base}.pid; ` +
         `attempts=0; ` +
@@ -720,9 +756,10 @@ export class TencentSandboxProvider implements SandboxProvider {
    * needed.
    *
    * `persistent` renews before expiry so a topic keeps its container.
-   * `on-demand` lets the instance lapse at `TENCENT_SANDBOX_TIMEOUT_SEC` and
-   * acquires a fresh one afterwards, which bounds cost without breaking
-   * multi-call flows such as file bootstrapping or background commands.
+   * `on-demand` never renews; it lets the backend-confirmed lifetime lapse and
+   * acquires a fresh instance afterwards. Acquisition reserves enough time for
+   * the current operation, and a near-expiry instance is not given new work
+   * that it cannot finish.
    */
   private async connect(
     operationTimeoutMs: number,
@@ -749,10 +786,11 @@ export class TencentSandboxProvider implements SandboxProvider {
       // A concurrent short operation may have started the acquisition. Once it
       // settles, re-evaluate a longer caller instead of inheriting credentials
       // that do not cover its requested lifetime.
-      if (
-        sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand' ||
-        this.hasRequiredLifetime(shared.instance, operationTimeoutMs)
-      ) {
+      const canReuseShared =
+        sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand'
+          ? this.hasOperationLifetime(shared.instance, operationTimeoutMs)
+          : this.hasRequiredLifetime(shared.instance, operationTimeoutMs);
+      if (canReuseShared) {
         return shared;
       }
 
@@ -779,20 +817,24 @@ export class TencentSandboxProvider implements SandboxProvider {
     this.compactInstanceCache(key);
 
     const cached = instances.get(key);
-    const persistent = sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand';
-    const requestedTimeoutSec = persistent
-      ? this.requestedInstanceTimeoutSec(operationTimeoutMs)
-      : this.timeoutSec();
+    const requestedTimeoutSec = this.requestedInstanceTimeoutSec(operationTimeoutMs);
 
     if (cached) {
       if (cached.expiresAt <= Date.now()) {
         return this.reacquireExpired(key, cached, operationTimeoutMs, requestedTimeoutSec);
       }
 
-      // On-demand instances are not renewed, so they stay usable right up to
-      // their real expiry — dropping them early would strand files and
-      // background processes mid-session.
+      // On-demand instances are never renewed or released early because that
+      // would strand session state. Do not start work that cannot finish in
+      // the remaining lifetime; the caller can retry with a shorter deadline
+      // or after the control plane expires and reacquires the conversation.
       if (sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand') {
+        if (!this.hasOperationLifetime(cached, operationTimeoutMs)) {
+          throw new Error(
+            'On-demand sandbox remaining lifetime is shorter than the requested operation timeout',
+          );
+        }
+
         this.rememberInstance(key, cached);
         return { instance: cached, sessionExpiredAndRecreated: false };
       }
@@ -834,7 +876,7 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     const previousInstanceId = instanceHistory.get(key);
     const instance = await this.acquire(requestedTimeoutSec);
-    if (persistent) this.assertOperationLifetime(instance, operationTimeoutMs, 'acquired');
+    this.assertOperationLifetime(instance, operationTimeoutMs, 'acquired');
     this.rememberInstance(key, instance);
 
     return {
@@ -856,9 +898,7 @@ export class TencentSandboxProvider implements SandboxProvider {
     requestedTimeoutSec: number,
   ): Promise<ResolvedInstance> {
     const instance = await this.acquire(requestedTimeoutSec);
-    if (sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand') {
-      this.assertOperationLifetime(instance, operationTimeoutMs, 'reacquired');
-    }
+    this.assertOperationLifetime(instance, operationTimeoutMs, 'reacquired');
     this.rememberInstance(key, instance);
 
     return {
@@ -910,7 +950,7 @@ export class TencentSandboxProvider implements SandboxProvider {
 
     if (requiredTimeoutSec > MAX_INSTANCE_TIMEOUT_SEC) {
       throw new Error(
-        `timeout must not exceed ${(MAX_INSTANCE_TIMEOUT_SEC * 1000 - INSTANCE_OPERATION_HEADROOM_MS).toLocaleString('en-US')} milliseconds for Tencent persistent sandboxes`,
+        `timeout must not exceed ${(MAX_INSTANCE_TIMEOUT_SEC * 1000 - INSTANCE_OPERATION_HEADROOM_MS).toLocaleString('en-US')} milliseconds for Tencent sandboxes`,
       );
     }
 

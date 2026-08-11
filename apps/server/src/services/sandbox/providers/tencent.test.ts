@@ -103,6 +103,16 @@ const isLinuxProcessTerminated = async (pid: number) => {
   }
 };
 
+const isLinuxSessionTerminated = async (sid: number) => {
+  const { stdout } = await execFileAsync('ps', ['-eo', 'sid=,stat='], { encoding: 'utf8' });
+
+  return !stdout.split('\n').some((line) => {
+    const [sessionId, state] = line.trim().split(/\s+/);
+
+    return Number(sessionId) === sid && state !== undefined && !state.startsWith('Z');
+  });
+};
+
 describe('TencentSandboxProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -321,6 +331,8 @@ describe('TencentSandboxProvider', () => {
     // timeout's own pid/group is the one we record and later kill.
     expect(launch).toContain('timeout --kill-after=5s 5s');
     expect(launch).toContain('command_pgid=$!');
+    expect(launch).toContain('while group_alive');
+    expect(launch).toContain('.timedout');
     // Without detaching every fd the caller waits for the background process.
     expect(launch).toContain('< /dev/null > /dev/null 2>&1');
   });
@@ -368,17 +380,28 @@ describe('TencentSandboxProvider', () => {
       const provider = await load();
       const result = await provider.callTool('runCommand', {
         background: true,
-        command: `sleep 60 & echo $! > ${childPidFile}; wait`,
-        timeout: 250,
+        // The foreground shell exits successfully while its child stays in
+        // the process group. The monitor must still own that child until the
+        // deadline rather than publishing the shell's zero status early.
+        command: `sleep 60 & echo $! > ${childPidFile}`,
+        timeout: 2000,
       });
       const [launch] = mocks.sandbox.commands.run.mock.calls.at(-1)!;
-      expect(launch).toContain('timeout --kill-after=5s 0.25s');
-      expect(launch).not.toContain('timeout --kill-after=5s 1s');
+      expect(launch).toContain('timeout --kill-after=5s 2s');
 
       const { commandId } = result.result as Record<string, string>;
       const base = `/tmp/lobe-background/${commandId}`;
 
       try {
+        await vi.waitFor(
+          async () => {
+            expect(Number((await readFile(childPidFile, 'utf8')).trim())).toBeGreaterThan(1);
+          },
+          { interval: 25, timeout: 2000 },
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await expect(readFile(`${base}.exit`, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
         await vi.waitFor(
           async () => {
             expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('124');
@@ -407,7 +430,7 @@ describe('TencentSandboxProvider', () => {
           success: false,
         });
 
-        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off']) {
+        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off', 'timedout']) {
           await expect(readFile(`${base}.${suffix}`, 'utf8')).rejects.toMatchObject({
             code: 'ENOENT',
           });
@@ -438,7 +461,7 @@ describe('TencentSandboxProvider', () => {
         }
 
         await Promise.all(
-          ['sh', 'log', 'pid', 'pgid', 'exit', 'off'].map((suffix) =>
+          ['sh', 'log', 'pid', 'pgid', 'exit', 'off', 'timedout'].map((suffix) =>
             rm(`${base}.${suffix}`, { force: true }),
           ),
         );
@@ -504,7 +527,7 @@ describe('TencentSandboxProvider', () => {
         });
         expect(secondOutput).toBe('€'.repeat(12_619));
 
-        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off']) {
+        for (const suffix of ['sh', 'log', 'pid', 'pgid', 'off', 'timedout']) {
           await expect(readFile(`${base}.${suffix}`, 'utf8')).rejects.toMatchObject({
             code: 'ENOENT',
           });
@@ -540,6 +563,43 @@ describe('TencentSandboxProvider', () => {
     expect(result.result).toMatchObject({ newOutput: 'tick\n', running: true });
     expect(mocks.sandbox.commands.connect).not.toHaveBeenCalled();
   });
+
+  it.runIf(process.platform === 'linux')(
+    'waits for the monitor exit marker after the process group disappears',
+    async () => {
+      const base = `/tmp/lobe-background/${TEST_COMMAND_ID}`;
+      await rm('/tmp/lobe-background', { force: true, recursive: true });
+      await mkdir('/tmp/lobe-background', { recursive: true });
+      await writeFile(`${base}.log`, '');
+      await writeFile(`${base}.pgid`, '999999999');
+
+      mocks.sandbox.commands.run.mockImplementation(async (command: string) => {
+        const { stderr, stdout } = await execFileAsync('sh', ['-c', command], {
+          encoding: 'utf8',
+        });
+
+        return { exitCode: 0, stderr, stdout };
+      });
+
+      try {
+        const pending = await (
+          await load()
+        ).callTool('getCommandOutput', {
+          commandId: TEST_COMMAND_ID,
+        });
+
+        expect(pending.result).toMatchObject({
+          exitCode: null,
+          hasMore: false,
+          newOutput: '',
+          running: true,
+          success: true,
+        });
+      } finally {
+        await rm('/tmp/lobe-background', { force: true, recursive: true });
+      }
+    },
+  );
 
   it('forwards the requested command timeout', async () => {
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
@@ -675,6 +735,7 @@ describe('TencentSandboxProvider', () => {
   });
 
   it('requests enough instance lifetime for an explicit long command timeout', async () => {
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
     expiresInSec = 360;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
@@ -981,12 +1042,43 @@ describe('TencentSandboxProvider', () => {
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     const provider = await load();
-    await provider.callTool('runCommand', { command: 'echo 1' });
-    await provider.callTool('runCommand', { command: 'echo 2' });
+    await provider.callTool('runCommand', { command: 'echo 1', timeout: 1000 });
+    await provider.callTool('runCommand', { command: 'echo 2', timeout: 1000 });
 
     expect(calls.update).toBe(0);
     expect(calls.release).toBe(0);
     expect(calls.acquire).toBe(1);
+  });
+
+  it('rejects an on-demand operation that cannot finish before expiry', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    try {
+      const provider = await load();
+      const first = await provider.callTool('runCommand', {
+        command: 'echo fits',
+        timeout: 1000,
+      });
+      await vi.advanceTimersByTimeAsync(6000);
+      const rejected = await provider.callTool('runCommand', {
+        command: 'echo too-late',
+        timeout: 5000,
+      });
+
+      expect(first.success).toBe(true);
+      expect(rejected.success).toBe(false);
+      expect(rejected.error?.message).toContain('remaining lifetime');
+      expect(calls.acquire).toBe(1);
+      expect(calls.update).toBe(0);
+      expect(calls.release).toBe(0);
+      expect(mocks.sandbox.commands.run).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shares one instance between concurrent calls for the same session', async () => {
@@ -1095,7 +1187,7 @@ describe('TencentSandboxProvider', () => {
         }
 
         await Promise.all(
-          ['sh', 'log', 'pid', 'pgid', 'exit', 'off'].map((suffix) =>
+          ['sh', 'log', 'pid', 'pgid', 'exit', 'off', 'timedout'].map((suffix) =>
             rm(`${base}.${suffix}`, { force: true }),
           ),
         );
@@ -1135,6 +1227,13 @@ describe('TencentSandboxProvider', () => {
         await vi.waitFor(
           async () => {
             expect((await readFile(`${base}.exit`, 'utf8')).trim()).toBe('0');
+          },
+          { interval: 25, timeout: 2000 },
+        );
+        const monitorSessionId = Number((await readFile(`${base}.pid`, 'utf8')).trim());
+        await vi.waitFor(
+          async () => {
+            expect(await isLinuxSessionTerminated(monitorSessionId)).toBe(true);
           },
           { interval: 25, timeout: 2000 },
         );
