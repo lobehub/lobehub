@@ -6,7 +6,6 @@ import { OrganizationModel } from '@/database/models/organization';
 import { aicoKeyOutbox, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
-  isBudgetPeriod,
   microUsdToDecimalString,
   tomanString,
   usdDecimalStringToMicro,
@@ -591,6 +590,8 @@ export const organizationRouter = router({
         grossNextRenewalUsd: microUsdToDecimalString(stats.grossNextRenewalMicroUsd),
         members: stats.members.map((m) => ({
           ...m,
+          pendingPeriodAmountMicroUsd: String(m.pendingPeriodAmountMicroUsd),
+          pendingPeriodAmountUsd: microUsdToDecimalString(m.pendingPeriodAmountMicroUsd),
           periodAmountMicroUsd: String(m.periodAmountMicroUsd),
           periodAmountUsd: microUsdToDecimalString(m.periodAmountMicroUsd),
           remainingMicroUsd: String(m.remainingMicroUsd),
@@ -702,14 +703,12 @@ export const organizationRouter = router({
         idempotencyKey: z.string().min(8).max(128).optional(),
         orgId: z.string().min(1),
         orgMemberId: z.string().min(1),
-        period: z.enum(['total', 'daily', 'weekly', 'monthly']).default('total'),
+        /** Required product period — no silent default (AICO-140). */
+        period: z.enum(['daily', 'weekly', 'monthly']),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
-      if (!isBudgetPeriod(input.period)) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_PERIOD' });
-      }
 
       let periodAmountMicroUsd: number;
       try {
@@ -732,6 +731,24 @@ export const organizationRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AMOUNT' });
       }
 
+      // Sync OR usage before a possible mid-period decrease so clamp uses fresh consumption.
+      try {
+        const existing = await ctx.organizationModel.getMemberBudgetForOrg({
+          orgId: input.orgId,
+          orgMemberId: input.orgMemberId,
+        });
+        if (
+          existing &&
+          existing.period === input.period &&
+          periodAmountMicroUsd < Number(existing.periodAmountMicroUsd ?? 0)
+        ) {
+          const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+          await keyService.syncMemberUsage(input.orgMemberId);
+        }
+      } catch {
+        // Best-effort — allocate still clamps to settledUsageMicroUsd on hand.
+      }
+
       try {
         const result = await ctx.organizationModel.allocateMemberCredit({
           createdByUserId: ctx.userId,
@@ -751,7 +768,7 @@ export const organizationRouter = router({
             idempotencyKey: input.idempotencyKey ?? null,
             period: input.period,
             periodAmountMicroUsd,
-            transactionId: result.transaction.id,
+            transactionId: result.transaction?.id ?? null,
           },
           organizationId: input.orgId,
           targetId: input.orgMemberId,
@@ -764,6 +781,10 @@ export const organizationRouter = router({
           budgetPeriodAmountUsd: microUsdToDecimalString(result.budget.periodAmountMicroUsd),
           orgBalanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
           orgBalanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
+          pendingPeriod: result.budget.pendingPeriod ?? null,
+          pendingPeriodAmountUsd: result.budget.pendingPeriodAmountMicroUsd
+            ? microUsdToDecimalString(result.budget.pendingPeriodAmountMicroUsd)
+            : null,
           reservedMicroUsd: String(result.budget.reservedMicroUsd),
           reservedUsd: microUsdToDecimalString(result.budget.reservedMicroUsd),
         };

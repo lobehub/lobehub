@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   confirmedUnusedMicro,
+  isProductBudgetPeriod,
   microUsdToDecimalString,
   openRouterUsdToMicroFloor,
   periodToOpenRouterLimitReset,
@@ -15,6 +16,13 @@ describe('aicoMoney (final remediation)', () => {
     expect(periodToOpenRouterLimitReset('daily')).toBe('daily');
     expect(periodToOpenRouterLimitReset('weekly')).toBe('weekly');
     expect(periodToOpenRouterLimitReset('monthly')).toBe('monthly');
+  });
+
+  it('product periods exclude total', () => {
+    expect(isProductBudgetPeriod('daily')).toBe(true);
+    expect(isProductBudgetPeriod('weekly')).toBe(true);
+    expect(isProductBudgetPeriod('monthly')).toBe(true);
+    expect(isProductBudgetPeriod('total')).toBe(false);
   });
 
   it('round-trips precision-heavy decimals as strings', () => {

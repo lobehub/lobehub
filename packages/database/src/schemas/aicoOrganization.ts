@@ -232,7 +232,7 @@ export const memberBudgets = pgTable(
       .notNull(),
     /** Configured period amount in micro-USD (gross renewal). */
     periodAmountMicroUsd: bigint('period_amount_micro_usd', { mode: 'number' }).notNull(),
-    /** daily | weekly | monthly | total */
+    /** Product periods: daily | weekly | monthly. Legacy `total` grandfathered until reclaim. */
     period: text('period').notNull().default('total'),
     /** OpenRouter limit_reset mirror: daily | weekly | monthly | null */
     openrouterLimitReset: text('openrouter_limit_reset'),

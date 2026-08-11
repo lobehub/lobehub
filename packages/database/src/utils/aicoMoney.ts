@@ -9,6 +9,9 @@ export const MICRO_USD_PER_USD = 1_000_000n;
 
 export type BudgetPeriod = 'total' | 'daily' | 'weekly' | 'monthly';
 
+/** Product-facing org member periods (AICO-140). Legacy `total` is grandfathered only. */
+export type ProductBudgetPeriod = 'daily' | 'weekly' | 'monthly';
+
 export const BUDGET_PERIODS: readonly BudgetPeriod[] = [
   'total',
   'daily',
@@ -16,8 +19,17 @@ export const BUDGET_PERIODS: readonly BudgetPeriod[] = [
   'monthly',
 ] as const;
 
+export const PRODUCT_BUDGET_PERIODS: readonly ProductBudgetPeriod[] = [
+  'daily',
+  'weekly',
+  'monthly',
+] as const;
+
 export const isBudgetPeriod = (value: string): value is BudgetPeriod =>
   (BUDGET_PERIODS as readonly string[]).includes(value);
+
+export const isProductBudgetPeriod = (value: string): value is ProductBudgetPeriod =>
+  (PRODUCT_BUDGET_PERIODS as readonly string[]).includes(value);
 
 /** OpenRouter Management API `limit_reset` mapping (midnight UTC; weeks Mon–Sun). */
 export const periodToOpenRouterLimitReset = (

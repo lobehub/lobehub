@@ -195,6 +195,9 @@ class MockOpenRouterManagementClient implements OpenRouterManagementClient {
       limitReset: params.limitReset ?? null,
       name: params.name,
       usage: 0,
+      usageDaily: 0,
+      usageMonthly: 0,
+      usageWeekly: 0,
     };
     this.keys.set(hash, row);
     return { ...row };

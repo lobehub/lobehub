@@ -25,6 +25,7 @@ import type { LobeChatDatabase } from '../type';
 import {
   type BudgetPeriod,
   isBudgetPeriod,
+  isProductBudgetPeriod,
   periodToOpenRouterLimitReset,
 } from '../utils/aicoMoney';
 import { randomSlug } from '../utils/idGenerator';
@@ -1178,20 +1179,17 @@ export class OrganizationModel {
   };
 
   /**
-   * Creates or funds a member's period budget from the org wallet.
+   * Sets (or creates) a member's period budget cap from the org wallet.
    * Does not call OpenRouter — caller provisions/updates the key.
    *
-   * Money-safety: the debit is a compare-and-swap
-   * `UPDATE ... WHERE wallet_balance_micro_usd >= amount` so concurrent
-   * allocations can never overspend the org wallet, even under stale
-   * JS-level reads — Postgres serializes concurrent writers on the row and
-   * re-evaluates the WHERE clause each time.
+   * Product rules (AICO-140):
+   * - New allocates must use daily|weekly|monthly (`total` is legacy-only).
+   * - Same period → **set/replace** the recurring cap (debit/credit delta only).
+   * - Mid-period decrease clamps to max(requested, settledUsage).
+   * - Different period → queue via pending*; prepaid once (renewal must not re-debit).
    *
-   * - Same period as the existing budget → additive top-up of the current cycle.
-   * - Different period than the existing budget → queued via
-   *   `pendingPeriod`/`pendingPeriodAmountMicroUsd` so the member's active
-   *   cycle is never disrupted mid-flight; the money is still reserved
-   *   immediately out of the org wallet.
+   * Money-safety: wallet moves use compare-and-swap so concurrent writers cannot
+   * overspend the org wallet.
    */
   allocateMemberCredit = async (params: {
     createdByUserId: string;
@@ -1203,6 +1201,7 @@ export class OrganizationModel {
     periodAmountMicroUsd: number;
   }) => {
     if (!isBudgetPeriod(params.period)) throw new Error('INVALID_PERIOD');
+    if (!isProductBudgetPeriod(params.period)) throw new Error('PERIOD_NOT_ALLOWED');
     if (!Number.isInteger(params.periodAmountMicroUsd) || params.periodAmountMicroUsd <= 0) {
       throw new Error('AMOUNT_MUST_BE_POSITIVE_INTEGER_MICRO_USD');
     }
@@ -1244,20 +1243,6 @@ export class OrganizationModel {
       });
       if (!member) throw new Error('MEMBER_NOT_FOUND');
 
-      const [updatedOrg] = await tx
-        .update(organizations)
-        .set({
-          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} - ${params.periodAmountMicroUsd}`,
-        })
-        .where(
-          and(
-            eq(organizations.id, params.orgId),
-            sql`${organizations.walletBalanceMicroUsd} >= ${params.periodAmountMicroUsd}`,
-          ),
-        )
-        .returning();
-      if (!updatedOrg) throw new Error('INSUFFICIENT_ORG_BALANCE');
-
       const window = computePeriodWindow(params.period);
       const openrouterLimitReset = periodToOpenRouterLimitReset(params.period);
       const existing = await tx.query.memberBudgets.findFirst({
@@ -1268,7 +1253,41 @@ export class OrganizationModel {
       });
 
       let budget: MemberBudgetItem;
+      /** Net wallet debit (>0) or credit via negative tracked separately for ledger. */
+      let walletDebitMicroUsd = 0;
+      let walletCreditMicroUsd = 0;
+
+      const applyWalletDebit = async (amount: number) => {
+        if (amount <= 0) return;
+        const [updatedOrg] = await tx
+          .update(organizations)
+          .set({
+            walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} - ${amount}`,
+          })
+          .where(
+            and(
+              eq(organizations.id, params.orgId),
+              sql`${organizations.walletBalanceMicroUsd} >= ${amount}`,
+            ),
+          )
+          .returning();
+        if (!updatedOrg) throw new Error('INSUFFICIENT_ORG_BALANCE');
+        walletDebitMicroUsd += amount;
+      };
+
+      const applyWalletCredit = async (amount: number) => {
+        if (amount <= 0) return;
+        await tx
+          .update(organizations)
+          .set({
+            walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${amount}`,
+          })
+          .where(eq(organizations.id, params.orgId));
+        walletCreditMicroUsd += amount;
+      };
+
       if (!existing) {
+        await applyWalletDebit(params.periodAmountMicroUsd);
         [budget] = await tx
           .insert(memberBudgets)
           .values({
@@ -1285,16 +1304,24 @@ export class OrganizationModel {
           })
           .returning();
       } else if (existing.period === params.period) {
-        // Clearing a queued period change refunds that hold back to the org wallet.
+        // Same period: set/replace cap. Clear any queued period change first.
         const previousPending = Number(existing.pendingPeriodAmountMicroUsd ?? 0);
         if (previousPending > 0) {
-          await tx
-            .update(organizations)
-            .set({
-              walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${previousPending}`,
-            })
-            .where(eq(organizations.id, params.orgId));
+          await applyWalletCredit(previousPending);
         }
+
+        const oldCap = Number(existing.periodAmountMicroUsd ?? 0);
+        const consumed = Math.max(0, Number(existing.settledUsageMicroUsd ?? 0));
+        // Decrease cannot go below already-consumed spend this cycle.
+        const effectiveCap = Math.max(params.periodAmountMicroUsd, consumed);
+        const delta = effectiveCap - oldCap;
+
+        if (delta > 0) {
+          await applyWalletDebit(delta);
+        } else if (delta < 0) {
+          await applyWalletCredit(-delta);
+        }
+
         [budget] = await tx
           .update(memberBudgets)
           .set({
@@ -1305,30 +1332,66 @@ export class OrganizationModel {
             openrouterLimitReset,
             pendingPeriod: null,
             pendingPeriodAmountMicroUsd: null,
-            periodAmountMicroUsd: sql`${memberBudgets.periodAmountMicroUsd} + ${params.periodAmountMicroUsd}`,
+            periodAmountMicroUsd: effectiveCap,
             renewalStatus: 'active',
-            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} - ${previousPending} + ${params.periodAmountMicroUsd}`,
+            // reserved = current cap only once pending is cleared
+            reservedMicroUsd: effectiveCap,
+          })
+          .where(eq(memberBudgets.id, existing.id))
+          .returning();
+      } else if (existing.period === 'total' && isProductBudgetPeriod(params.period)) {
+        // Legacy total → product period: apply immediately (renewal never selects total).
+        const previousPending = Number(existing.pendingPeriodAmountMicroUsd ?? 0);
+        if (previousPending > 0) {
+          await applyWalletCredit(previousPending);
+        }
+
+        const oldCap = Number(existing.periodAmountMicroUsd ?? 0);
+        const consumed = Math.max(0, Number(existing.settledUsageMicroUsd ?? 0));
+        const effectiveCap = Math.max(params.periodAmountMicroUsd, consumed);
+        const delta = effectiveCap - oldCap;
+
+        if (delta > 0) {
+          await applyWalletDebit(delta);
+        } else if (delta < 0) {
+          await applyWalletCredit(-delta);
+        }
+
+        [budget] = await tx
+          .update(memberBudgets)
+          .set({
+            currentPeriodEnd: window.end,
+            currentPeriodStart: window.start,
+            isActive: true,
+            nextRenewalAt: window.nextRenewalAt,
+            openrouterLimitReset,
+            pendingPeriod: null,
+            pendingPeriodAmountMicroUsd: null,
+            period: params.period,
+            periodAmountMicroUsd: effectiveCap,
+            renewalStatus: 'active',
+            reservedMicroUsd: effectiveCap,
           })
           .where(eq(memberBudgets.id, existing.id))
           .returning();
       } else {
-        // Replace prior pending reservation (do not stack) and refund the old hold — FIN-001.
+        // Different product period: queue pending (prepaid once). Active cycle unchanged.
         const previousPending = Number(existing.pendingPeriodAmountMicroUsd ?? 0);
         if (previousPending > 0) {
-          await tx
-            .update(organizations)
-            .set({
-              walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${previousPending}`,
-            })
-            .where(eq(organizations.id, params.orgId));
+          await applyWalletCredit(previousPending);
         }
+        await applyWalletDebit(params.periodAmountMicroUsd);
+
+        const currentCap = Number(existing.periodAmountMicroUsd ?? 0);
         [budget] = await tx
           .update(memberBudgets)
           .set({
             isActive: true,
             pendingPeriod: params.period,
             pendingPeriodAmountMicroUsd: params.periodAmountMicroUsd,
-            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} - ${previousPending} + ${params.periodAmountMicroUsd}`,
+            // reserved = current cycle + pending next-period hold (FIN-001: OR uses periodAmount only)
+            reservedMicroUsd: currentCap + params.periodAmountMicroUsd,
+            renewalStatus: 'active',
           })
           .where(eq(memberBudgets.id, existing.id))
           .returning();
@@ -1341,20 +1404,29 @@ export class OrganizationModel {
         .limit(1);
       if (!freshOrg) throw new Error('ORG_NOT_FOUND');
 
-      // Balance after allocate (and any pending refund) vs balance before the CAS debit.
       const balanceAfterMicroUsd = Number(freshOrg.walletBalanceMicroUsd ?? 0);
-      const balanceBeforeMicroUsd = balanceAfterMicroUsd + params.periodAmountMicroUsd;
+      const netDebit = walletDebitMicroUsd - walletCreditMicroUsd;
+      const balanceBeforeMicroUsd = balanceAfterMicroUsd + netDebit;
+      const ledgerAmount = Math.abs(netDebit);
+
+      // Idempotent re-set of the same cap with no pending clear — no ledger row.
+      if (ledgerAmount === 0) {
+        return { budget, organization: freshOrg, transaction: null };
+      }
 
       try {
         const [txRow] = await tx
           .insert(walletTransactions)
           .values({
-            amountMicroUsd: params.periodAmountMicroUsd,
+            amountMicroUsd: ledgerAmount,
             amountToman: 0,
             balanceAfterMicroUsd,
             balanceBeforeMicroUsd,
             createdByUserId: params.createdByUserId,
-            description: `Allocate period budget to member ${params.orgMemberId}`,
+            description:
+              netDebit < 0
+                ? `Reduce period budget for member ${params.orgMemberId}`
+                : `Set period budget for member ${params.orgMemberId}`,
             gatewayRefId: params.idempotencyKey ?? null,
             orgId: params.orgId,
             orgMemberId: params.orgMemberId,
@@ -1365,7 +1437,6 @@ export class OrganizationModel {
 
         return { budget, organization: freshOrg, transaction: txRow };
       } catch (error) {
-        // Unique gateway_ref_id race: another writer won — surface as conflict after rollback.
         const message = error instanceof Error ? error.message : String(error);
         if (params.idempotencyKey && /gateway_ref|unique|duplicate/i.test(message)) {
           throw new Error('IDEMPOTENCY_KEY_CONFLICT', { cause: error });
@@ -1619,7 +1690,10 @@ export class OrganizationModel {
           period: (budget?.period as BudgetPeriod | undefined) ?? 'total',
           periodAmountMicroUsd,
           publicCode: m.publicCode,
-          remainingMicroUsd: Math.max(0, reservedMicroUsd - settledUsageMicroUsd),
+          // Spendable remaining for the active cycle (excludes pending next-period hold).
+          remainingMicroUsd: Math.max(0, periodAmountMicroUsd - settledUsageMicroUsd),
+          pendingPeriod: budget?.pendingPeriod ?? null,
+          pendingPeriodAmountMicroUsd: Number(budget?.pendingPeriodAmountMicroUsd ?? 0),
           renewalStatus: budget?.renewalStatus ?? null,
           reservedMicroUsd,
           role: m.role as OrgMemberRole,
@@ -1636,15 +1710,16 @@ export class OrganizationModel {
     const settledUsageMicroUsd = memberStats.reduce((sum, m) => sum + m.settledUsageMicroUsd, 0);
     const balanceMicroUsd = Number(org.walletBalanceMicroUsd);
 
-    // Renewal forecast: gross amount required at the next renewal boundary
-    // across recurring (non-`total`) member budgets, and the shortfall if the
-    // org wallet cannot currently cover it. `total`-period budgets never
-    // renew automatically and are excluded from the forecast.
+    // Renewal forecast: wallet still needed at the next renewal boundary.
+    // Prepaid pending already debited the org wallet, so contribute
+    // max(0, nextCap - prepaid) (0 when pending equals next cap).
+    // `total`-period budgets never renew automatically and are excluded.
     const recurringMembers = memberStats.filter((m) => m.period !== 'total');
-    const grossNextRenewalMicroUsd = recurringMembers.reduce(
-      (sum, m) => sum + m.periodAmountMicroUsd,
-      0,
-    );
+    const grossNextRenewalMicroUsd = recurringMembers.reduce((sum, m) => {
+      const prepaid = Math.max(0, m.pendingPeriodAmountMicroUsd ?? 0);
+      const nextCap = prepaid > 0 ? prepaid : m.periodAmountMicroUsd;
+      return sum + Math.max(0, nextCap - prepaid);
+    }, 0);
     const shortfallMicroUsd = Math.max(0, grossNextRenewalMicroUsd - balanceMicroUsd);
     const nextRenewalAt =
       recurringMembers

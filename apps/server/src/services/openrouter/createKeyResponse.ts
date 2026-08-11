@@ -5,6 +5,9 @@ export interface OpenRouterKeyInfo {
   limitRemaining: number | null;
   name: string;
   usage: number;
+  usageDaily: number | null;
+  usageMonthly: number | null;
+  usageWeekly: number | null;
 }
 
 export interface CreateOpenRouterKeyResult extends OpenRouterKeyInfo {
@@ -19,6 +22,9 @@ export const mapOpenRouterKeyInfo = (data: Record<string, unknown>): OpenRouterK
   limitRemaining: data.limit_remaining == null ? null : Number(data.limit_remaining),
   name: String(data.name ?? ''),
   usage: Number(data.usage ?? 0),
+  usageDaily: data.usage_daily == null ? null : Number(data.usage_daily),
+  usageMonthly: data.usage_monthly == null ? null : Number(data.usage_monthly),
+  usageWeekly: data.usage_weekly == null ? null : Number(data.usage_weekly),
 });
 
 /**
