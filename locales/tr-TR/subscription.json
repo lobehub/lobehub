@@ -480,6 +480,8 @@
   "plansModal.default.title": "Planınızı yükseltin",
   "plansModal.fileStorageLimit.desc": "Dosya depolama alanınız doldu. Yüklemeye ve dosyaları yönetmeye devam etmek için yükseltin.",
   "plansModal.fileStorageLimit.title": "Depolama sınırına ulaşıldı",
+  "plansModal.messengerWechat.desc": "WeChat Sistem Botu, ücretli kişisel planlarda mevcuttur. Bağlanmak ve kullanmak için yükseltin.",
+  "plansModal.messengerWechat.title": "Yükselttikten sonra WeChat'i bağlayın",
   "plansModal.modelAccess.desc": "Bu model ücretli planlarda mevcuttur. Tüm model seçeneklerini kullanmak için yükseltin.",
   "plansModal.modelAccess.title": "Tüm modellerin kilidini açın",
   "qa.desc": "Sorunuz yanıtlanmadıysa, daha fazla SSS için <1>Ürün Belgeleri</1>'ni kontrol edin veya bizimle iletişime geçin.",

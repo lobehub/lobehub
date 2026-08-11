@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "重試",
   "flow.steps.learnYourWorld.sectionHint": "分析您的連接數據以了解對您重要的事情…",
   "flow.steps.learnYourWorld.skipAhead": "跳到前面",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 您可以暫時跳過此步驟——當您的個人檔案準備好時，我們會通知您。",
   "flow.steps.learnYourWorld.title": "了解您的世界",
   "flow.steps.messenger.connect": "連接",
   "flow.steps.messenger.connected": "已連接",

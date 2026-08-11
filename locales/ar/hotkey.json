@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "إظهار أو إخفاء اللوحة اليسرى",
   "toggleLeftPanel.title": "تبديل اللوحة اليسرى",
   "toggleRightPanel.desc": "إظهار أو إخفاء اللوحة اليمنى",
-  "toggleRightPanel.title": "تبديل اللوحة اليمنى"
+  "toggleRightPanel.title": "تبديل اللوحة اليمنى",
+  "toggleTerminalPanel.desc": "إظهار أو إخفاء لوحة الطرفية السفلية",
+  "toggleTerminalPanel.title": "تبديل لوحة الطرفية"
 }

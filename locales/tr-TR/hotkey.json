@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Sol paneli göster veya gizle",
   "toggleLeftPanel.title": "Sol Paneli Aç/Kapat",
   "toggleRightPanel.desc": "Sağ paneli göster veya gizle",
-  "toggleRightPanel.title": "Sağ Paneli Aç/Kapat"
+  "toggleRightPanel.title": "Sağ Paneli Aç/Kapat",
+  "toggleTerminalPanel.desc": "Alt terminal panelini göster veya gizle",
+  "toggleTerminalPanel.title": "Terminal Panelini Değiştir"
 }

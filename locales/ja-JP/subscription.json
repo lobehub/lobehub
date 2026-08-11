@@ -480,6 +480,8 @@
   "plansModal.default.title": "プランをアップグレード",
   "plansModal.fileStorageLimit.desc": "ファイルストレージが満杯です。アップグレードして、ファイルのアップロードと管理を続けましょう。",
   "plansModal.fileStorageLimit.title": "ストレージ制限に達しました",
+  "plansModal.messengerWechat.desc": "WeChatシステムボットは、有料の個人プランで利用可能です。アップグレードして接続し、使用してください。",
+  "plansModal.messengerWechat.title": "アップグレード後にWeChatを接続",
   "plansModal.modelAccess.desc": "このモデルは有料プランで利用可能です。アップグレードして、すべてのモデルを利用しましょう。",
   "plansModal.modelAccess.title": "すべてのモデルをアンロック",
   "qa.desc": "ご質問の答えが見つからない場合は、<1>製品ドキュメント</1>をご確認いただくか、お問い合わせください。",

@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "Riprova",
   "flow.steps.learnYourWorld.sectionHint": "Analizza i tuoi dati collegati per capire cosa conta per te…",
   "flow.steps.learnYourWorld.skipAhead": "Salta avanti",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 Puoi saltare questo passaggio per ora — ti avviseremo quando il tuo profilo sarà pronto.",
   "flow.steps.learnYourWorld.title": "Conosci il tuo mondo",
   "flow.steps.messenger.connect": "Connetti",
   "flow.steps.messenger.connected": "Connesso",
