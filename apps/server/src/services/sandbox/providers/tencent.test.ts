@@ -1081,6 +1081,64 @@ describe('TencentSandboxProvider', () => {
     }
   });
 
+  it('keeps late on-demand background status and cancellation available', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T00:00:00Z'));
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
+    expiresInSec = 360;
+    mocks.sandbox.files.write.mockResolvedValue(undefined);
+    mocks.sandbox.commands.run
+      .mockResolvedValueOnce(okCommand())
+      .mockResolvedValueOnce(okCommand())
+      .mockResolvedValueOnce(
+        okCommand(
+          JSON.stringify({
+            exitCode: 0,
+            hasMore: false,
+            newOutput: 'done\n',
+            running: false,
+            success: true,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(okCommand(JSON.stringify({ forced: false, success: true })));
+
+    try {
+      const provider = await load();
+      const started = await provider.callTool('runCommand', {
+        background: true,
+        command: 'long-background-work',
+        timeout: 300_000,
+      });
+      expect(started.success).toBe(true);
+      await vi.advanceTimersByTimeAsync(300_000);
+      const { commandId } = started.result as Record<string, string>;
+
+      // Sixty seconds remain: enough for bounded status/cancel helpers, but
+      // not for the unrelated 120-second default command workload.
+      const output = await provider.callTool('getCommandOutput', {
+        commandId,
+      });
+      const killed = await provider.callTool('killCommand', {
+        commandId,
+      });
+
+      expect(output.result).toMatchObject({ exitCode: 0, newOutput: 'done\n' });
+      expect(killed.result).toMatchObject({ forced: false, success: true });
+      expect(calls.acquire).toBe(1);
+      expect(calls.update).toBe(0);
+      expect(calls.release).toBe(0);
+      expect(controlPlaneRequests[0]).toMatchObject({
+        action: 'acquire',
+        payload: { Timeout: 360 },
+      });
+      expect(mocks.sandbox.commands.run.mock.calls[2][1]).toEqual({ timeoutMs: 10_000 });
+      expect(mocks.sandbox.commands.run.mock.calls[3][1]).toEqual({ timeoutMs: 10_000 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shares one instance between concurrent calls for the same session', async () => {
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 

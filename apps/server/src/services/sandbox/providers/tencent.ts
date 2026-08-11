@@ -35,6 +35,7 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const EXPORT_TIMEOUT_MS = 300_000;
 const CONTROL_PLANE_TIMEOUT_MS = 30_000;
 const BACKGROUND_LAUNCH_TIMEOUT_MS = 10_000;
+const BACKGROUND_CONTROL_TIMEOUT_MS = 10_000;
 const TEMP_FILE_CLEANUP_TIMEOUT_MS = 10_000;
 const BACKGROUND_OUTPUT_CHUNK_BYTES = 256 * 1024;
 const BACKGROUND_KILL_GRACE_SEC = 1;
@@ -349,7 +350,7 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return configError;
 
     try {
-      const operationTimeoutMs = this.timeoutMs(params);
+      const operationTimeoutMs = this.operationTimeoutMs(toolName, params);
       const { sandbox, sessionExpiredAndRecreated } = await this.connect(operationTimeoutMs);
       const { error, result, success } = await this.dispatch(sandbox, toolName, params);
 
@@ -508,7 +509,7 @@ export class TencentSandboxProvider implements SandboxProvider {
             sandbox,
             backgroundStatusScript,
             { commandId: this.commandId(params) },
-            { allowReportedFailure: true },
+            { allowReportedFailure: true, timeoutMs: BACKGROUND_CONTROL_TIMEOUT_MS },
           ),
         );
       }
@@ -519,7 +520,7 @@ export class TencentSandboxProvider implements SandboxProvider {
             sandbox,
             killBackgroundScript,
             { commandId: this.commandId(params) },
-            { allowReportedFailure: true },
+            { allowReportedFailure: true, timeoutMs: BACKGROUND_CONTROL_TIMEOUT_MS },
           ),
         );
       }
@@ -745,6 +746,18 @@ export class TencentSandboxProvider implements SandboxProvider {
     }
 
     return value;
+  }
+
+  private operationTimeoutMs(toolName: string, params: Record<string, unknown>): number {
+    // Polling and cancellation are bounded control-plane helpers, not another
+    // full command workload. Reserving the 120-second command default here
+    // can make an on-demand background job impossible to observe or stop near
+    // the end of its backend-confirmed lifetime.
+    if (toolName === 'getCommandOutput' || toolName === 'killCommand') {
+      return BACKGROUND_CONTROL_TIMEOUT_MS;
+    }
+
+    return this.timeoutMs(params);
   }
 
   // ---------------------------------------------------------------------------
