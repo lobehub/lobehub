@@ -34,6 +34,7 @@ const payload = {
   ],
   responseLanguage: 'zh-CN',
   sessionId: 'session-1',
+  startedAt: 1000,
   topicId: 'topic-1',
   userId: 'user-1',
 };
@@ -93,6 +94,7 @@ describe('processUnderstandingProviders', () => {
       responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       sourceFingerprint: 'github@1',
+      startedAt: 1000,
       topicId: 'topic-1',
       userId: 'user-1',
     });

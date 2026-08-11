@@ -5,6 +5,7 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
+import { observeOnboardingUnderstandingOperation } from '@lobechat/observability-otel/modules/onboarding-understanding';
 import type { InvokableWorkflow, PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
@@ -18,6 +19,10 @@ import { getTaskRecommendationFlowControlKey } from '@/server/workflows/onboardi
 import { runStep } from '@/server/workflows/step';
 
 import {
+  getOnboardingUnderstandingTraceHeaders,
+  observeOnboardingUnderstandingWorkflow,
+} from './observability';
+import {
   getUnderstandingWritingFlowControlKey,
   type ProcessCollectedUnderstandingPayload,
   type ProcessUnderstandingProvidersPayload,
@@ -29,7 +34,8 @@ type ProviderService = Pick<UnderstandingService, 'failProvider' | 'processProvi
 type ProviderWorkflowContext = Pick<
   WorkflowContext<ProcessUnderstandingProvidersPayload>,
   'invoke' | 'requestPayload' | 'run'
->;
+> &
+  Partial<Pick<WorkflowContext<ProcessUnderstandingProvidersPayload>, 'headers'>>;
 
 interface ProviderWorkflowDependencies {
   createService?: (userId: string) => Promise<ProviderService>;
@@ -71,6 +77,25 @@ const taskRecommendationWorkflowRunId = (sessionId: string, sourceFingerprint: s
     .digest('hex')
     .slice(0, 32)}`;
 
+/**
+ * Collects selected Understanding providers and schedules fingerprint-scoped writers.
+ *
+ * Use when:
+ * - QStash delivers an onboarding Understanding provider workflow
+ *
+ * Expects:
+ * - A validated user, topic, session, and deterministic provider revision list
+ *
+ * Returns:
+ * - The terminal result observed for each provider attempt
+ *
+ * Call stack:
+ *
+ * processProvidersWorkflow
+ *   -> {@link processUnderstandingProviders}
+ *     -> UnderstandingService.processProvider
+ *       -> WorkflowContext.invoke(processCollectedWorkflow)
+ */
 export const processUnderstandingProviders = async (
   context: ProviderWorkflowContext,
   dependencies: ProviderWorkflowDependencies,
@@ -80,79 +105,108 @@ export const processUnderstandingProviders = async (
     ...parsed,
     providers: parsed.providers.toSorted((left, right) => left.id.localeCompare(right.id)),
   };
-  const service = await (dependencies.createService ?? createService)(payload.userId);
+  return observeOnboardingUnderstandingWorkflow(
+    context,
+    {
+      operation: 'workflow.providers',
+      sessionId: payload.sessionId,
+      topicId: payload.topicId,
+    },
+    async () => {
+      const service = await (dependencies.createService ?? createService)(payload.userId);
 
-  const providers = await Promise.all(
-    payload.providers.map(async ({ id: providerId, revision }) => {
-      const result = await runStep(context, `provider:${providerId}:${revision}:process`, () =>
-        service.processProvider({
-          providerId,
-          revision,
-          sessionId: payload.sessionId,
-          topicId: payload.topicId,
-        }),
-      );
-      await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
-      if (result.status === 'completed' && result.revision === revision) {
-        const body = {
-          responseLanguage: payload.responseLanguage,
-          sessionId: payload.sessionId,
-          sourceFingerprint: result.sourceFingerprint,
-          topicId: payload.topicId,
-          userId: payload.userId,
-        };
-        const downstreamTasks: Promise<unknown>[] = [
-          context.invoke(`provider:${providerId}:write:${result.revision}`, {
-            body,
-            // Serialize writers for this session. The repository's fingerprint CAS then prevents a
-            // delayed failure callback for an older invocation from terminalizing newer writing.
-            flowControl: {
-              key: getUnderstandingWritingFlowControlKey(payload.sessionId),
-              parallelism: 1,
+      const providers = await Promise.all(
+        payload.providers.map(async ({ id: providerId, revision }) => {
+          const result = await runStep(context, `provider:${providerId}:${revision}:process`, () =>
+            service.processProvider({
+              providerId,
+              revision,
+              sessionId: payload.sessionId,
+              topicId: payload.topicId,
+            }),
+          );
+          await observeOnboardingUnderstandingOperation(
+            {
+              operation: 'progress.publish',
+              providerId,
+              sessionId: payload.sessionId,
+              topicId: payload.topicId,
             },
-            workflow: dependencies.processCollectedWorkflow,
-            workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
-          }),
-        ];
-        if (payload.triggerTaskRecommendations !== false) {
-          downstreamTasks.push(
-            runStep(context, `provider:${providerId}:recommend:${result.revision}`, () =>
-              // NOTICE:
-              // Cross-route workflow fan-out must use an absolute QStash trigger.
-              // context.invoke only replaces the current URL's final path segment, which sent this
-              // child to `/api/workflows/onboarding/understanding/process` and returned 404.
-              // Source/context: `router-hono/workflows/memory-user-memory/workflows/processUserTopics.ts:193`.
-              // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
-              dependencies.triggerTaskRecommendations(body, {
-                // Every completed provider may race to schedule a fingerprint-specific run. The
-                // session-scoped flow-control key makes the first accepted fingerprint immutable.
+            () => publishOnboardingGenerationProgress(payload.userId, payload.topicId),
+          );
+          if (result.status === 'completed' && result.revision === revision) {
+            const body = {
+              responseLanguage: payload.responseLanguage,
+              sessionId: payload.sessionId,
+              sourceFingerprint: result.sourceFingerprint,
+              ...(payload.startedAt === undefined ? {} : { startedAt: payload.startedAt }),
+              topicId: payload.topicId,
+              userId: payload.userId,
+            };
+            const downstreamTasks: Promise<unknown>[] = [
+              context.invoke(`provider:${providerId}:write:${result.revision}`, {
+                body,
+                // Serialize writers for this session. The repository's fingerprint CAS then prevents a
+                // delayed failure callback for an older invocation from terminalizing newer writing.
                 flowControl: {
-                  key: getTaskRecommendationFlowControlKey(payload.sessionId),
+                  key: getUnderstandingWritingFlowControlKey(payload.sessionId),
                   parallelism: 1,
                 },
-                workflowRunId: taskRecommendationWorkflowRunId(
-                  payload.sessionId,
-                  result.sourceFingerprint,
-                ),
+                headers: getOnboardingUnderstandingTraceHeaders(),
+                workflow: dependencies.processCollectedWorkflow,
+                workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
               }),
-            ),
-          );
-        }
-        await Promise.all(downstreamTasks);
-      }
+            ];
+            if (payload.triggerTaskRecommendations !== false) {
+              downstreamTasks.push(
+                runStep(context, `provider:${providerId}:recommend:${result.revision}`, () =>
+                  // NOTICE:
+                  // Cross-route workflow fan-out must use an absolute QStash trigger.
+                  // context.invoke only replaces the current URL's final path segment, which sent this
+                  // child to `/api/workflows/onboarding/understanding/process` and returned 404.
+                  // Source/context: `router-hono/workflows/memory-user-memory/workflows/processUserTopics.ts:193`.
+                  // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
+                  dependencies.triggerTaskRecommendations(
+                    {
+                      responseLanguage: payload.responseLanguage,
+                      sessionId: payload.sessionId,
+                      sourceFingerprint: result.sourceFingerprint,
+                      topicId: payload.topicId,
+                      userId: payload.userId,
+                    },
+                    {
+                      // Every completed provider may race to schedule a fingerprint-specific run. The
+                      // session-scoped flow-control key makes the first accepted fingerprint immutable.
+                      flowControl: {
+                        key: getTaskRecommendationFlowControlKey(payload.sessionId),
+                        parallelism: 1,
+                      },
+                      workflowRunId: taskRecommendationWorkflowRunId(
+                        payload.sessionId,
+                        result.sourceFingerprint,
+                      ),
+                    },
+                  ),
+                ),
+              );
+            }
+            await Promise.all(downstreamTasks);
+          }
 
-      return {
-        failedCount: result.failedCount,
-        providerId,
-        revision: result.revision,
-        sourceCount: result.sourceCount,
-        status: result.status,
-        succeededCount: result.succeededCount,
-      };
-    }),
+          return {
+            failedCount: result.failedCount,
+            providerId,
+            revision: result.revision,
+            sourceCount: result.sourceCount,
+            status: result.status,
+            succeededCount: result.succeededCount,
+          };
+        }),
+      );
+
+      return { providers };
+    },
   );
-
-  return { providers };
 };
 
 export const failRunningUnderstandingProviders = async (
