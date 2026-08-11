@@ -58,9 +58,10 @@ const FitCurve = memo<FitCurveProps>(({ series, maturity, runCount }) => {
             .join(' ')
         : '';
 
-    // 每次新增的柱：相邻快照的差
+    // 每次新增的柱：相邻快照的差；有人在对话里的那几次单独着色
     const bars = series.map((s, k) => ({
       gain: s.activeCount - (series[k - 1]?.activeCount ?? 0),
+      human: s.hadHumanInLoop,
       run: s.runIndex,
     }));
     const maxGain = Math.max(1, ...bars.map((b) => b.gain));
@@ -118,7 +119,7 @@ const FitCurve = memo<FitCurveProps>(({ series, maturity, runCount }) => {
       {geom.bars.map((b) =>
         b.gain <= 0 ? null : (
           <rect
-            fill={theme.colorFillSecondary}
+            fill={b.human ? theme.colorInfoBorder : theme.colorFillSecondary}
             height={(b.gain / geom.maxGain) * 46}
             key={b.run}
             rx={1.5}
@@ -190,8 +191,8 @@ const FitCurve = memo<FitCurveProps>(({ series, maturity, runCount }) => {
             fontSize={10.5}
             fontWeight={600}
             textAnchor={'end'}
-            x={x(n90) - 9}
-            y={y(pInf * 0.9) - 8}
+            x={x(n90) - 11}
+            y={y(pInf * 0.9) - 16}
           >
             {t('detail.chart.reach90', { run: n90 })}
           </text>
@@ -199,8 +200,8 @@ const FitCurve = memo<FitCurveProps>(({ series, maturity, runCount }) => {
             fill={theme.colorTextTertiary}
             fontSize={10}
             textAnchor={'end'}
-            x={x(n90) - 9}
-            y={y(pInf * 0.9) + 5}
+            x={x(n90) - 11}
+            y={y(pInf * 0.9) - 4}
           >
             {t('detail.chart.remaining', { count: n90 - (last?.runIndex ?? 0) })}
           </text>

@@ -8,7 +8,7 @@ export default {
   'detail.chart.count': '{{count}}',
   'detail.chart.firstRun': 'run 1',
   'detail.chart.legendActual': 'actual',
-  'detail.chart.legendBars': 'bars = learned that round',
+  'detail.chart.legendBars': 'bars = learned that round (blue = you were in the conversation)',
   'detail.chart.legendFit': 'fit P∞(1−e^(−n/τ))',
   'detail.chart.noProjection':
     'The fit is not usable ({{reason}}) — no projection, and no made-up number.',
@@ -33,7 +33,11 @@ export default {
   'detail.metric.shape': 'Curve shape',
   'detail.metric.shapeSub': 'gained {{count}} in the tail',
   'detail.outOfScope': 'Out of scope: ',
-  'detail.subheadOk': 'The estimated ceiling for this domain is {{ceiling}} rules.',
+  'detail.shapeClause.growing': 'and the curve is still climbing',
+  'detail.shapeClause.noisy': 'though the curve is too noisy to read',
+  'detail.shapeClause.saturated': 'and the curve has flattened',
+  'detail.shapeClause.stalled': 'but the curve never really got going',
+  'detail.subheadOk': 'The estimated ceiling for this domain is {{ceiling}} rules, {{shape}}.',
   'detail.subheadUnusable': 'The fit is not usable — maturity cannot be computed for this domain.',
   'detail.totals': '{{runs}} practices · {{lessons}} rules · {{hits}} hits',
 

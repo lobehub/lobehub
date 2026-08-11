@@ -51,6 +51,20 @@ const PLATEAU_KEY: Record<
   stalled: 'plateau.stalled',
 };
 
+/** 副标题末尾那半句：把曲线形态说成人话，而不是把 plateauKind 直接印出来。 */
+const SHAPE_CLAUSE: Record<
+  string,
+  | 'detail.shapeClause.growing'
+  | 'detail.shapeClause.noisy'
+  | 'detail.shapeClause.saturated'
+  | 'detail.shapeClause.stalled'
+> = {
+  growing: 'detail.shapeClause.growing',
+  noisy: 'detail.shapeClause.noisy',
+  saturated: 'detail.shapeClause.saturated',
+  stalled: 'detail.shapeClause.stalled',
+};
+
 const DomainDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
   const theme = useTheme();
@@ -122,7 +136,10 @@ const DomainDetail = memo(() => {
                       <br />
                       <Text className={styles.sentence} type={'secondary'}>
                         {maturity?.usable
-                          ? t('detail.subheadOk', { ceiling: Math.round(maturity.pInf ?? 0) })
+                          ? t('detail.subheadOk', {
+                              ceiling: Math.round(maturity.pInf ?? 0),
+                              shape: t(SHAPE_CLAUSE[maturity.plateauKind ?? 'growing']),
+                            })
                           : t('detail.subheadUnusable')}
                       </Text>
                     </Text>
@@ -159,6 +176,9 @@ const DomainDetail = memo(() => {
                           <Flexbox horizontal align={'center'} gap={5}>
                             <div
                               style={{ background: theme.colorFillSecondary, height: 8, width: 6 }}
+                            />
+                            <div
+                              style={{ background: theme.colorInfoBorder, height: 8, width: 6 }}
                             />
                             <Text fontSize={11} type={'secondary'}>
                               {t('detail.chart.legendBars')}
