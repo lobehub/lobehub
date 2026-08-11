@@ -7,7 +7,7 @@ import {
   windowsInstallInstructions,
 } from '@anthropic-ai/sandbox-runtime';
 
-import { ensureStagedSrtWin, resolveSrtWinSource } from './srtWinStaging';
+import { resolveEffectiveSrtWin } from './srtWinStaging';
 import type { SandboxCapability } from './types';
 
 const unavailable = (reason: string, warnings?: string[]): SandboxCapability => ({
@@ -36,15 +36,15 @@ const unavailable = (reason: string, warnings?: string[]): SandboxCapability => 
  * check at `initialize()` is what actually fails closed.
  */
 const probeWindows = (): SandboxCapability => {
-  const source = resolveSrtWinSource(getSrtWinPath);
-  if (!source) {
+  // Exactly the path the launch will use: `resolveEffectiveSrtWin` is the one
+  // place that resolves and stages, so the probe can never bless a path the
+  // launch would not take.
+  const path = resolveEffectiveSrtWin(getSrtWinPath);
+  if (!path) {
     return unavailable(`Sandbox helper not found. ${windowsInstallInstructions(undefined)}`);
   }
 
-  // Stage before probing, so the path reported as working is the same one the
-  // launch will use — the sandbox account cannot read an app install under a
-  // user profile.
-  const srtWin = resolveSrtWin({ path: ensureStagedSrtWin(source) ?? source });
+  const srtWin = resolveSrtWin({ path });
 
   let user;
   try {

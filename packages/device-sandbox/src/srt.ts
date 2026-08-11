@@ -2,24 +2,24 @@ import type { SandboxRuntimeConfig } from '@anthropic-ai/sandbox-runtime';
 import { getSrtWinPath } from '@anthropic-ai/sandbox-runtime';
 
 import { normalizeSandboxPolicy } from './policy';
-import { ensureStagedSrtWin, resolveSrtWinSource } from './srtWinStaging';
+import { resolveEffectiveSrtWin } from './srtWinStaging';
 import type { SandboxPolicy } from './types';
 
 /**
- * Point the backend at a helper the sandbox user can read. See
- * {@link ensureStagedSrtWin} — without this, a per-user app install puts the
- * helper somewhere the sandbox account has no rights to, and every launch dies
- * with an unexplained ACCESS_DENIED.
+ * Point the backend at the same helper the capability probe validated. See
+ * {@link resolveEffectiveSrtWin} — leaving the backend to resolve its own
+ * package-relative path lands inside `app.asar` once bundled, and a per-user
+ * install puts the shipped copy somewhere the sandbox account cannot read.
  *
- * Silent no-op off Windows and whenever staging isn't possible; the backend
- * then resolves its own packaged binary exactly as before.
+ * Silent no-op off Windows, and when no helper can be found at all — the
+ * backend then fails loudly at launch rather than being told a path that does
+ * not exist.
  */
 const resolveWindowsConfig = (): SandboxRuntimeConfig['windows'] => {
   if (process.platform !== 'win32') return undefined;
   try {
-    const source = resolveSrtWinSource(getSrtWinPath);
-    const staged = source ? ensureStagedSrtWin(source) : undefined;
-    return staged ? { srtWin: { path: staged } } : undefined;
+    const path = resolveEffectiveSrtWin(getSrtWinPath);
+    return path ? { srtWin: { path } } : undefined;
   } catch {
     return undefined;
   }

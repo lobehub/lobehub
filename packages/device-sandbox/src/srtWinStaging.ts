@@ -124,3 +124,23 @@ export const ensureStagedSrtWin = (packagedExe: string): string | undefined => {
     return undefined;
   }
 };
+
+/**
+ * The helper path every caller must use — the probe, the launch, and setup.
+ *
+ * Resolution and staging are combined here on purpose. When they were separate,
+ * the probe fell back to the unstaged source while the launch fell back to *no
+ * override at all*, letting the backend resolve its own package-relative path —
+ * which is inside `app.asar` once bundled. A host where staging fails
+ * (ProgramData locked down, disk full) would then be advertised as available and
+ * fail on the first command. One function, one answer.
+ *
+ * Falling back to the unstaged source rather than giving up is deliberate: a
+ * per-machine install already lives somewhere the sandbox account can read, so
+ * staging is an accommodation for per-user installs, not a precondition.
+ */
+export const resolveEffectiveSrtWin = (packagedFallback?: () => string): string | undefined => {
+  const source = resolveSrtWinSource(packagedFallback);
+  if (!source) return undefined;
+  return ensureStagedSrtWin(source) ?? source;
+};

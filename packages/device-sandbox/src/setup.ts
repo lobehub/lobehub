@@ -50,13 +50,12 @@ export const installDeviceSandbox = async (): Promise<SandboxSetupResult> => {
 
   const { getSrtWinPath, installWindowsSandbox, resolveSrtWin } =
     await import('@anthropic-ai/sandbox-runtime');
-  const { ensureStagedSrtWin, resolveSrtWinSource } = await import('./srtWinStaging');
+  const { resolveEffectiveSrtWin } = await import('./srtWinStaging');
 
   // Stage the helper as part of setup, not lazily at first use: this is the
   // moment the user asked us to make the machine ready, and a first run that
   // failed on file permissions would look like the setup itself hadn't worked.
-  const source = resolveSrtWinSource(getSrtWinPath);
-  const staged = source ? ensureStagedSrtWin(source) : undefined;
+  const staged = resolveEffectiveSrtWin(getSrtWinPath);
   const srtWin = staged ? resolveSrtWin({ path: staged }) : undefined;
 
   const result = installWindowsSandbox(srtWin ? { srtWin } : {});
