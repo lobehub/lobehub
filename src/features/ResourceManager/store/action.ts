@@ -171,6 +171,14 @@ export class ResourceManagerStoreActionImpl {
       selectionTotal: undefined,
       sourceFilter,
     });
+
+    // Drop the previous source's rows immediately, exactly as the visibility
+    // toggle does. Without this the old rows stay on screen and interactive
+    // under the newly active chip until the fetch lands — and a "select all"
+    // fired in that window resolves against `useFileStore.queryParams`, which
+    // still carries the previous source, so the following batch action would
+    // target rows the user is no longer looking at.
+    useFileStore.getState().clearCurrentQueryResources();
   };
 
   setCurrentViewItemId = (currentViewItemId?: string): void => {
