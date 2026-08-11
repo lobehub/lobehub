@@ -56,6 +56,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 16px;
     color: ${cssVar.colorTextTertiary};
   `,
+  blockAction: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-decoration: none;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+  identifier: css`
+    flex: none;
+  `,
   row: css`
     border-radius: ${cssVar.borderRadiusLG};
     color: inherit;
@@ -103,6 +115,8 @@ interface RowProps {
   href: string;
   icon: ReactNode;
   title: ReactNode;
+  /** Sits on the title's own line, after it — an identifier, a badge. */
+  titleExtra?: ReactNode;
   trailing?: ReactNode;
 }
 
@@ -117,22 +131,51 @@ const TASK_STATUSES = new Set<TaskStatus>([
 ]);
 export const HOME_TOPIC_RECENT_LIMIT = 15;
 
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
+
 export const resolveRecentsBadgeCount = (fetched: number, shown: number): number | undefined =>
   Math.min(fetched, shown) || undefined;
+
+/**
+ * The one line a task row shows under its name. `instruction` is what the task
+ * was actually asked to do, so it is the line worth reading; `description` is
+ * the summary that only some tasks carry. Both are markdown, and a row is one
+ * line — its syntax markers are just noise here.
+ *
+ * A task created straight from the composer takes its name from its
+ * instruction, so the two would print the same sentence twice. When they agree,
+ * the row keeps the name alone rather than repeating it in a quieter colour.
+ */
+export const resolveTaskSummaryLine = (
+  { description, instruction }: { description?: string | null; instruction?: string | null },
+  title: string,
+): string | undefined => {
+  const raw = instruction?.trim() || description?.trim();
+  if (!raw) return undefined;
+
+  const line = markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim();
+
+  return !line || line === title.trim() ? undefined : line;
+};
 
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
-const Row = memo<RowProps>(({ description, href, icon, title, trailing }) => (
+const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
   <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
       <Flexbox flex={'none'} paddingBlock={3}>
         {icon}
       </Flexbox>
       <Flexbox className={styles.rowText} gap={3}>
-        <Text ellipsis className={homeType.itemTitle}>
-          {title}
-        </Text>
+        {/* The name takes the space and truncates; anything after it keeps its
+            full width, so an identifier stays readable however long the name is. */}
+        <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
+          <Text ellipsis className={homeType.itemTitle}>
+            {title}
+          </Text>
+          {titleExtra}
+        </Flexbox>
         {description && (
           <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
         )}
@@ -248,26 +291,38 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
  * is indistinguishable from a topic row, and the section reads as another feed
  * rather than as work with an owner.
  */
-const TaskRow = memo<{ task: TaskListItem }>(({ task }) => (
-  <Row
-    description={task.description || task.identifier}
-    href={taskDetailPath(task.identifier)}
-    icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
-    title={task.name || task.identifier}
-    trailing={
-      <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-        <TaskTriggerTag
-          automationMode={task.automationMode}
-          heartbeatInterval={task.heartbeatInterval}
-          schedulePattern={task.schedulePattern}
-          scheduleTimezone={task.scheduleTimezone}
-        />
-        <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
-        <Time date={task.updatedAt || task.createdAt} />
-      </Flexbox>
-    }
-  />
-));
+const TaskRow = memo<{ task: TaskListItem }>(({ task }) => {
+  const title = task.name?.trim() || task.identifier;
+  const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
+
+  return (
+    <Row
+      description={description}
+      href={taskDetailPath(task.identifier)}
+      icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
+      title={title}
+      // The identifier is how the task is referred to everywhere else, so it
+      // belongs beside the name rather than in the sentence slot below it.
+      titleExtra={
+        title === task.identifier ? undefined : (
+          <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
+        )
+      }
+      trailing={
+        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+          <TaskTriggerTag
+            automationMode={task.automationMode}
+            heartbeatInterval={task.heartbeatInterval}
+            schedulePattern={task.schedulePattern}
+            scheduleTimezone={task.scheduleTimezone}
+          />
+          <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
+          <Time date={task.updatedAt || task.createdAt} />
+        </Flexbox>
+      }
+    />
+  );
+});
 
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
@@ -279,9 +334,24 @@ const TaskContent = memo(() => {
   const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
+  const shown = tasks.slice(0, taskCount);
 
   return (
-    <GroupBlock count={tasksTotal || undefined} title={t('dashboard.task.title')}>
+    <GroupBlock
+      actionAlwaysVisible
+      count={resolveRecentsBadgeCount(tasks.length, taskCount)}
+      title={t('dashboard.task.title')}
+      // The block shows the most recent slice, so the rest needs somewhere to
+      // be: the badge counts what is on screen and this carries the remainder
+      // to the full list, instead of a badge claiming a total you cannot reach.
+      action={
+        tasksTotal > shown.length ? (
+          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+            {t('dashboard.task.viewAll')}
+          </WorkspaceLink>
+        ) : undefined
+      }
+    >
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
@@ -290,7 +360,7 @@ const TaskContent = memo(() => {
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
-          {tasks.slice(0, taskCount).map((task) => (
+          {shown.map((task) => (
             <TaskRow key={task.identifier} task={task} />
           ))}
         </Flexbox>
@@ -321,11 +391,24 @@ const ScheduledTaskContent = memo(() => {
   if (scheduledInit && scheduled.length === 0) return null;
   if (scheduledSWR.error && !scheduledInit) return null;
 
+  const shown = scheduled.slice(0, taskCount);
+
   return (
-    <GroupBlock count={scheduledTotal || undefined} title={t('dashboard.scheduledTask.title')}>
+    <GroupBlock
+      actionAlwaysVisible
+      count={resolveRecentsBadgeCount(scheduled.length, taskCount)}
+      title={t('dashboard.scheduledTask.title')}
+      action={
+        scheduledTotal > shown.length ? (
+          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+            {t('dashboard.task.viewAll')}
+          </WorkspaceLink>
+        ) : undefined
+      }
+    >
       {scheduledInit ? (
         <Flexbox gap={4}>
-          {scheduled.slice(0, taskCount).map((task) => (
+          {shown.map((task) => (
             <TaskRow key={task.identifier} task={task} />
           ))}
         </Flexbox>

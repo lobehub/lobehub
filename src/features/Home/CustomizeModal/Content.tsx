@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import CountStepper from './components/CountStepper';
 import PresetBar from './components/PresetBar';
 import SettingRow from './components/SettingRow';
-import { HOME_COUNT_MAX, HOME_COUNT_MIN, HOME_WIDGET_KEYS } from './config';
+import { HOME_COUNT_MAX, HOME_COUNT_MIN, HOME_WIDGET_GROUPS } from './config';
 import { useHomeCustomization } from './useHomeCustomization';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -84,29 +84,33 @@ const CustomizeModalContent = memo(() => {
             <Switch
               aria-label={t('dashboard.customize.portrait.title')}
               checked={showPortrait}
+              size={'small'}
               onChange={togglePortrait}
             />
           </SettingRow>
         </Flexbox>
 
-        <Flexbox gap={12}>
-          <Text fontSize={12} type={'secondary'} weight={600}>
-            {t('dashboard.customize.group.sections')}
-          </Text>
-          {HOME_WIDGET_KEYS.map((key) => (
-            <SettingRow key={key} title={t(`dashboard.customize.widget.${key}`)}>
-              <Switch
-                aria-label={t(`dashboard.customize.widget.${key}`)}
-                checked={!isWidgetHidden(key)}
-                // The scheduled block is the second half of the task overview,
-                // so there is nothing for it to switch on while the first half
-                // is off.
-                disabled={key === 'scheduledTasks' && isWidgetHidden('tasks')}
-                onChange={() => toggleWidget(key)}
-              />
-            </SettingRow>
-          ))}
-        </Flexbox>
+        {HOME_WIDGET_GROUPS.map((group) => (
+          <Flexbox gap={12} key={group.key}>
+            <Text fontSize={12} type={'secondary'} weight={600}>
+              {t(`dashboard.customize.group.${group.key}`)}
+            </Text>
+            {group.widgets.map((key) => (
+              <SettingRow key={key} title={t(`dashboard.customize.widget.${key}`)}>
+                <Switch
+                  aria-label={t(`dashboard.customize.widget.${key}`)}
+                  checked={!isWidgetHidden(key)}
+                  // The scheduled block is the second half of the task overview,
+                  // so there is nothing for it to switch on while the first half
+                  // is off.
+                  disabled={key === 'scheduledTasks' && isWidgetHidden('tasks')}
+                  size={'small'}
+                  onChange={() => toggleWidget(key)}
+                />
+              </SettingRow>
+            ))}
+          </Flexbox>
+        ))}
 
         <Flexbox gap={12}>
           <Text fontSize={12} type={'secondary'} weight={600}>

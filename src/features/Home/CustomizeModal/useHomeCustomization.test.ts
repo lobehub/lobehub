@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   HOME_PRESETS,
+  HOME_WIDGET_GROUPS,
   HOME_WIDGET_KEYS,
   isHomeMinimalLayout,
   isHomeWidgetHidden,
@@ -96,6 +97,20 @@ describe('isHomeMinimalLayout', () => {
         showPortrait: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('HOME_WIDGET_GROUPS', () => {
+  const grouped = HOME_WIDGET_GROUPS.flatMap((group) => group.widgets);
+
+  it('gives every widget exactly one group, so none can fall out of the panel', () => {
+    expect([...grouped].sort()).toEqual([...HOME_WIDGET_KEYS].sort());
+  });
+
+  it('keeps the two task blocks together under the task group', () => {
+    const task = HOME_WIDGET_GROUPS.find((group) => group.key === 'task');
+    expect(task?.widgets).toContain('tasks');
+    expect(task?.widgets).toContain('scheduledTasks');
   });
 });
 

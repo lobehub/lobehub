@@ -21,6 +21,24 @@ export const HOME_WIDGET_KEYS = [
 export type HomeInboxWidgetKey = (typeof HOME_INBOX_WIDGET_KEYS)[number];
 export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
 
+/**
+ * A flat list of nine switches makes the reader hold the whole page in their
+ * head to find one section. Grouped by the thing the section is *about*, each
+ * switch is found by first deciding what you want less of — your assistants'
+ * activity, your tasks, what the day reported — and only then which one.
+ *
+ * The order inside each group follows the page top-down, so scanning the panel
+ * and scanning Home walk the same path.
+ */
+export const HOME_WIDGET_GROUPS = [
+  { key: 'agent', widgets: ['recents', 'unread', 'running'] },
+  { key: 'task', widgets: ['goals', 'tasks', 'scheduledTasks'] },
+  { key: 'brief', widgets: ['needsYou', 'news'] },
+  { key: 'discover', widgets: ['suggestions'] },
+] as const satisfies ReadonlyArray<{ key: string; widgets: readonly HomeWidgetKey[] }>;
+
+export type HomeWidgetGroupKey = (typeof HOME_WIDGET_GROUPS)[number]['key'];
+
 export const HOME_CUSTOMIZE_DEFAULTS = {
   hiddenHomeWidgets: [] as string[],
   homeRecentsCount: 8,
