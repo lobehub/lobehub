@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -381,14 +381,28 @@ describe('TaskModel', () => {
     it('should order by last activity when asked, not by creation', async () => {
       const model = new TaskModel(serverDB, userId);
       const older = await model.create({ instruction: 'Created first, touched last' });
-      await model.create({ instruction: 'Created second, never touched' });
-      await model.update(older.id, { name: 'Just edited' });
+      const newer = await model.create({ instruction: 'Created second, never touched' });
 
-      const byCreation = await model.list({});
-      expect(byCreation.tasks[0].instruction).toBe('Created second, never touched');
+      // Stamp `updated_at` rather than letting `update()` do it. Inserts take
+      // their timestamp from Postgres `now()` while `update()` writes a Node
+      // `new Date()`, so asserting on a real edit races the database clock
+      // against the host's — which is stable enough to pass alone and flips
+      // under a loaded full-suite run. The column under test is the ORDER BY,
+      // not who wrote the value.
+      const stamp = async (id: string, iso: string) => {
+        await serverDB.execute(sql`update tasks set updated_at = ${iso} where id = ${id}`);
+      };
+      await stamp(newer.id, '2026-01-01T00:00:00Z');
+      await stamp(older.id, '2026-06-01T00:00:00Z');
 
-      const byActivity = await model.list({ orderBy: 'updatedAt' });
-      expect(byActivity.tasks[0].id).toBe(older.id);
+      const order = async (params: Parameters<TaskModel['list']>[0]) => {
+        const { tasks: rows } = await model.list(params);
+        // Only these two rows: the assertion is about their relative order.
+        return rows.map((t) => t.id).filter((id) => id === older.id || id === newer.id);
+      };
+
+      expect(await order({})).toEqual([newer.id, older.id]);
+      expect(await order({ orderBy: 'updatedAt' })).toEqual([older.id, newer.id]);
     });
 
     it('should split automated tasks from manual ones', async () => {
