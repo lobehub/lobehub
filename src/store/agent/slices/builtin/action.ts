@@ -5,11 +5,9 @@ import { type PartialDeep } from 'type-fest';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  selectAgentProjection,
-} from '@/projection';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import { selectAgentProjection } from '@/projection/modules/agent/selectors';
+import { getProjectionStoreState } from '@/projection/store';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 

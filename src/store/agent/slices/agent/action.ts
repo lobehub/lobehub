@@ -18,17 +18,17 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import { agentAvailableViewContract } from '@/projection/modules/agent/contracts';
+import { type AgentProjectionInput } from '@/projection/modules/agent/ingestors';
 import {
-  agentAvailableViewContract,
-  type AgentProjectionInput,
-  getProjectionStoreState,
-  nextProjectionObservedAt,
   selectAgentProjection,
   selectAgentSummary,
   selectAvailableAgentsIndex,
-  useAgentProjectionState,
-  useProjectionViewHydration,
-} from '@/projection';
+} from '@/projection/modules/agent/selectors';
+import { useAgentProjectionState } from '@/projection/modules/agent/viewHooks';
+import { getProjectionStoreState } from '@/projection/store';
+import { useProjectionViewHydration } from '@/projection/views/hook';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {

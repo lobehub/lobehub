@@ -2,7 +2,6 @@ import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
 import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
-import { getAgentStoreState } from '@/store/agent';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
 
@@ -102,6 +101,11 @@ export class OnboardingActionImpl {
       getPluginMode(currentSettings.defaultAgent?.config?.plugins, id) === 'pinned';
     const shouldOpen = open !== undefined ? open : !isDefaultPinned;
 
+    // User Store is part of cache-scope resolution, while Agent Store consumes
+    // that scope for Projection writes. Resolve this low-frequency dependency
+    // at action time so the two stores do not re-enter each other during ESM
+    // initialization.
+    const { getAgentStoreState } = await import('@/store/agent');
     const agentStore = getAgentStoreState();
     const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
     if (!inboxAgentId) return;
