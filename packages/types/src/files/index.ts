@@ -32,8 +32,29 @@ export enum FileSource {
  * acceptance report renders its evidence via `verify_evidence.file_id`), but
  * never show up in the resource library listings — a single verification run
  * uploads hundreds of artifacts and would otherwise bury real content.
+ *
+ * The one way back in is an explicit `ResourceSourceFilter.Acceptance` request:
+ * the user asked for evidence, so burying it no longer applies.
  */
 export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [FileSource.Acceptance];
+
+/** Sources a generation model wrote, as opposed to anything a human put there. */
+export const AI_GENERATED_FILE_SOURCES: FileSource[] = [
+  FileSource.ImageGeneration,
+  FileSource.VideoGeneration,
+];
+
+const FILE_SOURCE_VALUES = new Set<string>(Object.values(FileSource));
+
+/**
+ * Narrow a caller-supplied source to a known value.
+ *
+ * Uploads carry `source` as a free-form string on the wire (older clients are
+ * out there and a rejected upload over an attribution hint is a bad trade), so
+ * an unrecognised value is dropped rather than persisted or thrown on.
+ */
+export const toFileSource = (source?: string | null): FileSource | undefined =>
+  source && FILE_SOURCE_VALUES.has(source) ? (source as FileSource) : undefined;
 
 export interface FileItem {
   content?: string;

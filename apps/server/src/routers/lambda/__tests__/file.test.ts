@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
@@ -361,6 +362,48 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should persist a known upload source so the origin filter can see it', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: FileSource.PageEditor,
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: FileSource.PageEditor }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should drop an unrecognised source instead of failing the upload', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: 'some-future-client',
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: undefined }),
+        true,
+        routerMocks.transactionClient,
+      );
     });
 
     it('should refresh global file metadata when an existing hash points to a missing object', async () => {

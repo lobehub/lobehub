@@ -1,5 +1,5 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem } from '@/types/files';
+import { type FileListItem, FilesTabs, ResourceSourceFilter } from '@/types/files';
 import { SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
@@ -16,6 +16,44 @@ export const getResourceQueryVisibility = (
   if (libraryId) return undefined;
 
   return listVisibility === 'private' ? 'private' : 'public';
+};
+
+/**
+ * Categories where "where did this come from" is a question worth asking:
+ * every file-backed category. Pages hold no files and Home is a dashboard, so
+ * neither offers the filter.
+ */
+export const SOURCE_FILTER_CATEGORIES: FilesTabs[] = [
+  FilesTabs.All,
+  FilesTabs.Audios,
+  FilesTabs.Documents,
+  FilesTabs.Files,
+  FilesTabs.Images,
+  FilesTabs.Videos,
+];
+
+/**
+ * The images category is dominated by generation output — a few uploaded
+ * screenshots against hundreds of generated images — so it opens on the
+ * generated set. Every other category opens on everything.
+ */
+const DEFAULT_SOURCE_FILTER_BY_CATEGORY: Partial<Record<FilesTabs, ResourceSourceFilter>> = {
+  [FilesTabs.Images]: ResourceSourceFilter.Generated,
+};
+
+export const canFilterResourceSource = ({ category, libraryId }: State): boolean =>
+  !libraryId && SOURCE_FILTER_CATEGORIES.includes(category);
+
+/**
+ * The origin narrowing actually in effect: the user's explicit pick, else the
+ * category default. A library defines its own pool and never narrows by origin.
+ */
+export const getResourceSourceFilter = (s: State): ResourceSourceFilter => {
+  if (!canFilterResourceSource(s)) return ResourceSourceFilter.All;
+
+  return (
+    s.sourceFilter ?? DEFAULT_SOURCE_FILTER_BY_CATEGORY[s.category] ?? ResourceSourceFilter.All
+  );
 };
 
 /**

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FileSource, FilesTabs } from '@lobechat/types';
+import { FileSource, FilesTabs, ResourceSourceFilter } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -1356,6 +1356,104 @@ describe('KnowledgeRepo', () => {
       const result = await knowledgeRepo.findById('evidence-file', 'file');
 
       expect(result?.name).toBe('payload-execution.txt');
+    });
+  });
+
+  describe('query - source filtering', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'uploaded-image',
+          fileType: 'image/png',
+          name: 'screenshot.png',
+          size: 100,
+          url: 'uploaded-url',
+          userId,
+        },
+        {
+          id: 'pasted-image',
+          fileType: 'image/png',
+          name: 'pasted.png',
+          size: 100,
+          source: FileSource.PageEditor,
+          url: 'pasted-url',
+          userId,
+        },
+        {
+          id: 'generated-image',
+          fileType: 'image/png',
+          name: 'generated.png',
+          size: 100,
+          source: FileSource.ImageGeneration,
+          url: 'generated-url',
+          userId,
+        },
+        {
+          id: 'evidence-image',
+          fileType: 'image/png',
+          name: 'evidence.png',
+          size: 100,
+          source: FileSource.Acceptance,
+          url: 'evidence-url',
+          userId,
+        },
+      ]);
+    });
+
+    const queryImageIds = async (sourceFilter?: ResourceSourceFilter) => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Images, sourceFilter });
+
+      return result.map((item) => item.fileId);
+    };
+
+    it('should keep the historical pool when the filter is all', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.All);
+
+      expect(ids).toContain('uploaded-image');
+      expect(ids).toContain('pasted-image');
+      expect(ids).toContain('generated-image');
+      expect(ids).not.toContain('evidence-image');
+    });
+
+    it('should return only model output when the filter is generated', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Generated);
+
+      expect(ids).toEqual(['generated-image']);
+    });
+
+    it('should treat page-editor images as uploads and exclude generated output', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Uploaded);
+
+      expect(ids).toContain('uploaded-image');
+      expect(ids).toContain('pasted-image');
+      expect(ids).not.toContain('generated-image');
+      expect(ids).not.toContain('evidence-image');
+    });
+
+    it('should surface otherwise-hidden evidence when the filter is acceptance', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Acceptance);
+
+      expect(ids).toEqual(['evidence-image']);
+    });
+
+    it('should drop documents from the union once the filter narrows', async () => {
+      await serverDB.insert(documents).values({
+        content: 'note body',
+        fileType: 'custom/document',
+        id: 'source-filter-note',
+        source: 'note-source',
+        sourceType: 'api',
+        title: 'a note',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      } as NewDocument);
+
+      const all = await knowledgeRepo.query({ sourceFilter: ResourceSourceFilter.All });
+      const generated = await knowledgeRepo.query({ sourceFilter: ResourceSourceFilter.Generated });
+
+      expect(all.map((item) => item.id)).toContain('source-filter-note');
+      expect(generated.map((item) => item.id)).not.toContain('source-filter-note');
     });
   });
 

@@ -24,7 +24,7 @@ import { assertCanPerformResourceAction } from '@/server/services/resourcePermis
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
+import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -280,6 +280,11 @@ export const fileRouter = router({
             name: input.name,
             parentId: resolvedParentId,
             size: actualSize,
+            // Attribution the caller supplied (e.g. a page-editor paste). The
+            // wire type is a loose string for older clients, so unknown values
+            // are dropped rather than persisted — `source` drives the resource
+            // library's origin filter and its hidden-source exclusion.
+            source: toFileSource(input.source),
             url: input.url,
             ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
           },

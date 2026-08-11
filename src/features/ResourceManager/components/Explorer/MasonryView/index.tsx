@@ -18,6 +18,7 @@ import {
   useExplorerSelectionActions,
   useExplorerSelectionSummary,
 } from '../hooks/useExplorerSelection';
+import SourceFilter from '../ToolBar/SourceFilter';
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
 import MasonryItemWrapper from './MasonryItem/MasonryItemWrapper';
 import MasonryViewSkeleton from './Skeleton';
@@ -248,6 +249,8 @@ const MasonryView = memo(function MasonryView({
                   ns: 'components',
                 })}
           </span>
+          <Flexbox flex={1} />
+          <SourceFilter />
         </Flexbox>
         {showSelectAllHint && (
           <Flexbox

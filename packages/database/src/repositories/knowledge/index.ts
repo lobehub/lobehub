@@ -1,12 +1,20 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
+import {
+  AI_GENERATED_FILE_SOURCES,
+  FileSource,
+  FilesTabs,
+  LIBRARY_HIDDEN_FILE_SOURCES,
+  ResourceSourceFilter,
+  SortType,
+} from '@lobechat/types';
 import {
   and,
   asc,
   desc,
   eq,
   ilike,
+  inArray,
   isNull,
   ne,
   notExists,
@@ -249,11 +257,17 @@ export class KnowledgeRepo {
    * sources that belong to another surface (acceptance evidence). Kept as one
    * helper so a new listing can't accidentally pick up ownership alone and
    * start leaking hundreds of verification artifacts back into the library.
+   *
+   * `sourceFilter` is the only opt-out: asking for `acceptance` explicitly is a
+   * request for exactly the rows this predicate otherwise hides, so the
+   * exclusion is dropped and `fileSourceFilter` narrows to them instead.
    */
-  private fileScope = () =>
+  private fileScope = (sourceFilter?: ResourceSourceFilter) =>
     and(
       buildWorkspaceWhere(this.scope(), f),
-      or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+      sourceFilter === ResourceSourceFilter.Acceptance
+        ? undefined
+        : or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
     );
 
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
@@ -284,7 +298,11 @@ export class KnowledgeRepo {
       : undefined,
   ];
 
-  private fileArm = (where: (SQL | undefined)[], knowledgeBaseId?: string) => {
+  private fileArm = (
+    where: (SQL | undefined)[],
+    knowledgeBaseId?: string,
+    sourceFilter?: ResourceSourceFilter,
+  ) => {
     let query = this.db.select(fileArmColumns).from(f).$dynamic();
 
     if (knowledgeBaseId) {
@@ -300,7 +318,7 @@ export class KnowledgeRepo {
     return query
       .leftJoin(d, eq(d.fileId, f.id))
       .leftJoin(users, eq(users.id, f.userId))
-      .where(and(this.fileScope(), ...where));
+      .where(and(this.fileScope(sourceFilter), ...where));
   };
 
   private documentArm = (where: (SQL | undefined)[]) =>
@@ -324,6 +342,7 @@ export class KnowledgeRepo {
     parentId,
     limit = 50,
     offset = 0,
+    sourceFilter,
     visibility,
   }: KnowledgeQueryParams = {}): Promise<KnowledgeItem[]> {
     // If parentId is provided, check if it's a slug and resolve it to an ID
@@ -356,10 +375,12 @@ export class KnowledgeRepo {
           visibility: f.visibility,
         }),
         this.fileCategoryFilter(category),
+        this.fileSourceFilter(sourceFilter),
         // Exclude files in knowledge base if needed
         !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
       ],
       knowledgeBaseId,
+      sourceFilter,
     );
 
     const documentArm = this.documentArm([
@@ -370,6 +391,7 @@ export class KnowledgeRepo {
         visibility: d.visibility,
       }),
       this.documentCategoryFilter(category),
+      this.documentSourceFilter(sourceFilter),
       // Inside a knowledge base only standalone rows (folders and notes with no
       // backing file) belong to the document arm — documents that do have a file
       // already come back through the file arm.
@@ -495,6 +517,40 @@ export class KnowledgeRepo {
     // `false` drops the arm from the UNION — a category the table can't serve.
     return filter === 'none' ? sql`false` : filter;
   };
+
+  /**
+   * Origin narrowing on `files.source`. Uploads are defined by exclusion rather
+   * than by `IS NULL` alone: an image pasted into the page editor carries
+   * `page-editor` and is still something the user put there, so anything that
+   * isn't machine-generated or foreign-owned counts as an upload.
+   */
+  private fileSourceFilter = (sourceFilter?: ResourceSourceFilter): SQL | undefined => {
+    switch (sourceFilter) {
+      case ResourceSourceFilter.Acceptance: {
+        return eq(f.source, FileSource.Acceptance);
+      }
+      case ResourceSourceFilter.Generated: {
+        return inArray(f.source, AI_GENERATED_FILE_SOURCES);
+      }
+      case ResourceSourceFilter.Uploaded: {
+        return or(
+          isNull(f.source),
+          notInArray(f.source, [...AI_GENERATED_FILE_SOURCES, ...LIBRARY_HIDDEN_FILE_SOURCES]),
+        );
+      }
+      default: {
+        return undefined;
+      }
+    }
+  };
+
+  /**
+   * Origin is a file-level notion — documents have no `source` of this kind — so
+   * any narrowing at all drops the document arm from the UNION. `all` leaves it
+   * untouched.
+   */
+  private documentSourceFilter = (sourceFilter?: ResourceSourceFilter): SQL | undefined =>
+    !sourceFilter || sourceFilter === ResourceSourceFilter.All ? undefined : sql`false`;
 
   /**
    * Document rows only surface under All and Pages; every file-oriented category
