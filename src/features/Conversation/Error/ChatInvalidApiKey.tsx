@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { extractErrorCodeCandidate } from '@/business/client/resolveAicoErrorMessage';
 import { isAicoManagedRuntimeProvider } from '@/features/AicoBilling/isManagedRuntimeProvider';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
@@ -12,7 +13,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
-import { useConversationStore } from '../store';
+import { dataSelectors, useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';
 import { isAicoManagedProviderMode } from './isAicoManagedProviderMode';
 import ManagedKeyError from './ManagedKeyError';
@@ -25,6 +26,8 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
   const { t } = useTranslation(['modelProvider', 'error']);
   const navigate = useWorkspaceAwareNavigate();
   const [deleteMessage] = useConversationStore((s) => [s.deleteMessage]);
+  const messageError = useConversationStore(dataSelectors.getDisplayMessageById(id))?.error;
+  const serverErrorCode = extractErrorCodeCandidate(messageError);
   const providerName = useProviderName(provider as GlobalLLMProviderKey);
 
   const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
@@ -34,7 +37,13 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
     // Native openai/google/… selections do not use the wallet key — prompt a
     // model switch instead of the misleading “top up wallet” card.
     const reason = provider && !isAicoManagedRuntimeProvider(provider) ? 'wrongProvider' : 'funds';
-    return <ManagedKeyError reason={reason} onNavigate={() => deleteMessage(id)} />;
+    return (
+      <ManagedKeyError
+        reason={reason}
+        serverErrorCode={serverErrorCode || undefined}
+        onNavigate={() => deleteMessage(id)}
+      />
+    );
   }
 
   return (

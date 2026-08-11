@@ -502,9 +502,17 @@ export const initModelRuntimeFromDB = async (
     if (options?.billingContext === undefined) {
       throw new AicoManagedPolicyError('BILLING_CONTEXT_REQUIRED');
     }
-    // Decrypt-only: chat path must not construct the OpenRouter management client.
-    const keyService = new AicoOpenRouterKeyService(db, null);
-    const policy = new AicoManagedPolicy(db, (ciphertext) => keyService.decryptKey(ciphertext));
+    // Decrypt-only by default. Management client is created only if authorize
+    // needs to repair a funded member budget that is missing a managed key.
+    const decryptKeyService = new AicoOpenRouterKeyService(db, null);
+    const policy = new AicoManagedPolicy(
+      db,
+      (ciphertext) => decryptKeyService.decryptKey(ciphertext),
+      {
+        ensureMemberKey: (orgMemberId) =>
+          new AicoOpenRouterKeyService(db).ensureMemberKey(orgMemberId),
+      },
+    );
     const authorized = await policy.authorize({
       billing: options.billingContext,
       modelId: options.modelId,

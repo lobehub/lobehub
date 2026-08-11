@@ -34,20 +34,30 @@ vi.mock('@/server/services/sms', () => ({
   },
 }));
 
-const { disableAllOrgMemberKeysMock, reclaimMemberKeyMock } = vi.hoisted(() => ({
+const {
+  disableAllOrgMemberKeysMock,
+  ensureMemberKeyMock,
+  getUserRemainingMock,
+  reclaimMemberKeyMock,
+  syncMemberCycleUsageMock,
+} = vi.hoisted(() => ({
   disableAllOrgMemberKeysMock: vi.fn().mockResolvedValue([]),
+  ensureMemberKeyMock: vi.fn().mockResolvedValue({ created: false, keyId: null }),
+  getUserRemainingMock: vi.fn().mockResolvedValue({ remainingMicroUsd: 0, usageMicroUsd: null }),
   reclaimMemberKeyMock: vi.fn().mockResolvedValue(null),
+  syncMemberCycleUsageMock: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/server/services/openrouter/keyService', () => ({
   AicoOpenRouterKeyService: class {
     ensureUserKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
-    ensureMemberKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
+    ensureMemberKey = ensureMemberKeyMock;
     disableMemberKey = vi.fn().mockResolvedValue(null);
     disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
-    getUserRemaining = vi.fn().mockRejectedValue(new Error('not mocked'));
+    getUserRemaining = getUserRemainingMock;
     reclaimMemberKey = reclaimMemberKeyMock;
-    syncMemberUsage = vi.fn().mockResolvedValue(null);
+    syncMemberCycleUsage = syncMemberCycleUsageMock;
+    syncMemberUsage = syncMemberCycleUsageMock;
   },
 }));
 
@@ -477,6 +487,11 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       })
       .where(eq(userWallets.userId, ownerId));
 
+    getUserRemainingMock.mockResolvedValue({
+      remainingMicroUsd: 1_500_000,
+      usageMicroUsd: null,
+    });
+
     const org = await ownerCaller.create({ name: 'Billing Sources Co' });
     await orgModel.addManualCredit({
       amountMicroUsd: 10_000_000,
@@ -518,6 +533,94 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const preferred = await billingCaller.getMyBillingSources();
     expect(preferred.preferredBillingSource).toBe('organization');
     expect(preferred.preferredOrganizationId).toBe(org.id);
+  });
+
+  it('getMyBillingSources org remaining uses periodAmount not reserved when pending hold exists', async () => {
+    const { eq } = await import('drizzle-orm');
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const { memberBudgets } = await import('@/database/schemas/aicoOrganization');
+
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const billingCaller = aicoBillingRouter.createCaller(createTestContext(ownerId));
+    const orgModel = new OrganizationModel(testDB);
+
+    const org = await ownerCaller.create({ name: 'Pending Hold Co' });
+    await orgModel.addManualCredit({
+      amountMicroUsd: 50_000_000,
+      amountToman: 500_000,
+      createdByUserId: ownerId,
+      description: 'fund',
+      fxRateTomanPerUsd: 50_000,
+      orgId: org.id,
+      type: 'topup',
+    });
+
+    const members = await orgModel.listMembers(org.id);
+    const me = members.find((m) => m.userId === ownerId);
+    expect(me).toBeTruthy();
+
+    await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: me!.id,
+      period: 'daily',
+      periodAmountMicroUsd: 10_000_000,
+    });
+
+    await testDB
+      .update(memberBudgets)
+      .set({
+        openrouterKeyId: 'ctrl_pending_hold',
+        pendingPeriod: 'monthly',
+        pendingPeriodAmountMicroUsd: 20_000_000,
+        reservedMicroUsd: 30_000_000,
+        settledUsageMicroUsd: 2_000_000,
+      })
+      .where(eq(memberBudgets.orgMemberId, me!.id));
+
+    const sources = await billingCaller.getMyBillingSources();
+    const orgSource = sources.sources.find(
+      (s) => s.source === 'organization' && s.organizationId === org.id,
+    );
+    expect(orgSource).toBeTruthy();
+    // $10 period cap − $2 settled = $8 (not $30 reserved − $2 = $28)
+    expect(orgSource!.remainingUsd).toBe('8.000000');
+    expect(orgSource!.hasManagedKey).toBe(true);
+  });
+
+  it('getMyBillingSources calls ensureMemberKey when funded but key is missing', async () => {
+    ensureMemberKeyMock.mockClear();
+
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const billingCaller = aicoBillingRouter.createCaller(createTestContext(ownerId));
+    const orgModel = new OrganizationModel(testDB);
+
+    const org = await ownerCaller.create({ name: 'Lazy Key Repair Co' });
+    await orgModel.addManualCredit({
+      amountMicroUsd: 10_000_000,
+      amountToman: 500_000,
+      createdByUserId: ownerId,
+      description: 'fund',
+      fxRateTomanPerUsd: 50_000,
+      orgId: org.id,
+      type: 'topup',
+    });
+
+    const members = await orgModel.listMembers(org.id);
+    const me = members.find((m) => m.userId === ownerId);
+    expect(me).toBeTruthy();
+
+    await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: me!.id,
+      period: 'daily',
+      periodAmountMicroUsd: 5_000_000,
+    });
+
+    await billingCaller.getMyBillingSources();
+    expect(ensureMemberKeyMock).toHaveBeenCalledWith(me!.id);
   });
 
   it('convertToManagement requires a verified phone and rejects a second organization', async () => {

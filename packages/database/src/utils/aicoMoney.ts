@@ -146,3 +146,34 @@ export const tomanString = (toman: bigint | number | string): string => {
   const value = typeof toman === 'bigint' ? toman : BigInt(toman);
   return value.toString();
 };
+
+/** Member budget fields needed for current-cycle spend math (FIN-001). */
+export type MemberBudgetCycleFields = {
+  periodAmountMicroUsd?: number | null;
+  reservedMicroUsd?: number | null;
+  settledUsageMicroUsd?: number | null;
+};
+
+/**
+ * Current-cycle spendable cap for a member budget.
+ * Pending next-period holds inflate `reservedMicroUsd` but must not raise the
+ * live OpenRouter limit until renewal applies them.
+ */
+export const currentCycleLimitMicroUsd = (budget: MemberBudgetCycleFields): number => {
+  const periodAmount = Number(budget.periodAmountMicroUsd ?? 0);
+  if (periodAmount > 0) return periodAmount;
+  return Number(budget.reservedMicroUsd ?? 0);
+};
+
+/** Spendable remaining in the active billing cycle (excludes pending next-period hold). */
+export const cycleRemainingMicroUsd = (budget: MemberBudgetCycleFields): number => {
+  const limit = currentCycleLimitMicroUsd(budget);
+  const settled = Math.max(0, Number(budget.settledUsageMicroUsd ?? 0));
+  return Math.max(0, limit - settled);
+};
+
+export const isStaleManagedKeyId = (keyId: string | null | undefined): boolean =>
+  !keyId || keyId.startsWith('mock_');
+
+export const hasValidManagedKeyId = (keyId: string | null | undefined): boolean =>
+  Boolean(keyId) && !isStaleManagedKeyId(keyId);

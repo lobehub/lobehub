@@ -6,7 +6,11 @@ import { z } from 'zod';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { microUsdToDecimalString } from '@/database/utils/aicoMoney';
+import {
+  cycleRemainingMicroUsd,
+  hasValidManagedKeyId,
+  microUsdToDecimalString,
+} from '@/database/utils/aicoMoney';
 import { aicoEnv } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -107,7 +111,7 @@ export const aicoBillingRouter = router({
     ).remainingMicroUsd;
 
     const personal = {
-      hasManagedKey: Boolean(wallet.openrouterKeyId),
+      hasManagedKey: hasValidManagedKeyId(wallet.openrouterKeyId),
       isActive: Boolean(wallet.isActive),
       remainingMicroUsd: String(personalRemaining),
       remainingUsd: microUsdToDecimalString(personalRemaining),
@@ -121,23 +125,45 @@ export const aicoBillingRouter = router({
           const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
           if (!me) return null;
 
-          await keyService.syncMemberUsage(me.id).catch(() => null);
+          let budget = await ctx.organizationModel.getMemberBudget(me.id);
 
-          const budget = await ctx.organizationModel.getMemberBudget(me.id);
-          const reservedMicroUsd = Number(budget?.reservedMicroUsd ?? 0);
-          const settledUsageMicroUsd = Number(budget?.settledUsageMicroUsd ?? 0);
-          const remainingMicroUsd = Math.max(0, reservedMicroUsd - settledUsageMicroUsd);
+          if (budget && hasValidManagedKeyId(budget.openrouterKeyId)) {
+            await keyService.syncMemberCycleUsage(me.id).catch(() => null);
+            budget = await ctx.organizationModel.getMemberBudget(me.id);
+          }
+
           const renewalStatus = budget?.renewalStatus ?? null;
+          const renewalBlocked =
+            renewalStatus === 'renewal_pending' || renewalStatus === 'renewal_failed';
+
+          let remainingMicroUsd = cycleRemainingMicroUsd(budget ?? {});
+
+          if (
+            budget?.isActive &&
+            !renewalBlocked &&
+            remainingMicroUsd > 0 &&
+            !hasValidManagedKeyId(budget.openrouterKeyId)
+          ) {
+            await keyService.ensureMemberKey(me.id).catch((error) => {
+              console.warn('[aicoBilling] lazy member key repair failed', {
+                orgId: org.id,
+                orgMemberId: me.id,
+                error,
+              });
+              return null;
+            });
+            budget = await ctx.organizationModel.getMemberBudget(me.id);
+            remainingMicroUsd = cycleRemainingMicroUsd(budget ?? {});
+          }
 
           return {
-            hasManagedKey: Boolean(budget?.openrouterKeyId),
+            hasManagedKey: hasValidManagedKeyId(budget?.openrouterKeyId),
             isActive: Boolean(budget?.isActive),
             organizationId: org.id,
             organizationName: org.name,
             remainingMicroUsd: String(remainingMicroUsd),
             remainingUsd: microUsdToDecimalString(remainingMicroUsd),
-            renewalBlocked:
-              renewalStatus === 'renewal_pending' || renewalStatus === 'renewal_failed',
+            renewalBlocked,
             source: 'organization' as const,
           };
         }),
@@ -333,7 +359,7 @@ export const aicoBillingRouter = router({
           const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
           if (!me) return false;
           const budget = await ctx.organizationModel.getMemberBudget(me.id);
-          return Boolean(budget?.isActive && (budget.reservedMicroUsd ?? 0) > 0);
+          return Boolean(budget?.isActive && cycleRemainingMicroUsd(budget) > 0);
         }),
       )
     ).some(Boolean);
