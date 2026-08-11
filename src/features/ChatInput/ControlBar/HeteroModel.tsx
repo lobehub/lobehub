@@ -409,7 +409,6 @@ const HeteroModel = memo(() => {
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const [open, setOpen] = useState(false);
-  const [effortOpen, setEffortOpen] = useState(false);
 
   const patchProvider = useCallback(
     async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
@@ -514,7 +513,17 @@ const HeteroModel = memo(() => {
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
     const effort = resolveQoderReasoningEffort(provider);
     const defaultLabel = t('heteroAgent.modelSelector.default');
+    const modelLabel = getModelLabel(model, defaultLabel);
     const effortLabel = t(EFFORT_LABEL_KEYS[effort]);
+    const triggerText = getTriggerText({
+      defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
+      defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
+      defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
+      effort,
+      effortLabel,
+      model,
+      modelLabel,
+    });
     const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [
       { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
       ...QODER_REASONING_EFFORT_LEVELS.map((level) => ({
@@ -524,51 +533,53 @@ const HeteroModel = memo(() => {
     ];
 
     return (
-      <>
-        <HeterogeneousAgentModelSelector
-          agentId={agentId}
-          disabled={false}
-          model={model}
-          permissionReason={reason}
-          type={provider.type}
-          onSelect={(value) => void patchProvider({ model: value })}
-        />
-        <DropdownMenuRoot open={effortOpen} onOpenChange={setEffortOpen}>
-          <DropdownMenuTrigger nativeButton={false}>
-            <div className={styles.trigger}>
-              <span className={styles.label}>{effortLabel}</span>
-              <Icon icon={ChevronDownIcon} size={12} />
-            </div>
-          </DropdownMenuTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
-              <DropdownMenuPopup className={styles.popup} style={{ width: 220 }}>
-                <div className={styles.sectionTitle}>
-                  {t('heteroAgent.modelSelector.reasoning')}
-                </div>
-                <div className={styles.scroll}>
-                  {effortOptions.map((option) => (
-                    <DropdownMenuItem
-                      className={styles.option}
-                      data-selected={effort === option.value ? 'true' : undefined}
-                      key={`effort-${option.value}`}
-                      onClick={() => {
-                        setEffortOpen(false);
-                        void patchProvider({ effort: option.value });
-                      }}
-                    >
-                      <span className={styles.optionLabel}>{option.label}</span>
-                      {effort === option.value && (
-                        <Icon className={styles.check} icon={CheckIcon} size={16} />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </div>
-              </DropdownMenuPopup>
-            </DropdownMenuPositioner>
-          </DropdownMenuPortal>
-        </DropdownMenuRoot>
-      </>
+      <DropdownMenuRoot open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger nativeButton={false}>
+          <div
+            className={styles.trigger}
+            aria-label={t('heteroAgent.modelSelector.ariaLabel', {
+              model: modelLabel,
+              reasoning: effortLabel,
+            })}
+          >
+            <span className={styles.label}>{triggerText}</span>
+            <Icon icon={ChevronDownIcon} size={12} />
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+            <DropdownMenuPopup className={styles.popup} style={{ width: 240 }}>
+              <HeterogeneousAgentModelSelector
+                agentId={agentId}
+                disabled={false}
+                model={model}
+                permissionReason={reason}
+                type={provider.type}
+                variant="submenu"
+                onSelect={selectModel}
+              />
+              <SelectorSubmenu
+                currentValue={effortLabel}
+                label={t('heteroAgent.modelSelector.reasoning')}
+              >
+                {effortOptions.map((option) => (
+                  <DropdownMenuItem
+                    className={styles.option}
+                    data-selected={effort === option.value ? 'true' : undefined}
+                    key={`effort-${option.value}`}
+                    onClick={() => selectReasoningEffort(option.value)}
+                  >
+                    <span className={styles.optionLabel}>{option.label}</span>
+                    {effort === option.value && (
+                      <Icon className={styles.check} icon={CheckIcon} size={16} />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </SelectorSubmenu>
+            </DropdownMenuPopup>
+          </DropdownMenuPositioner>
+        </DropdownMenuPortal>
+      </DropdownMenuRoot>
     );
   }
 
