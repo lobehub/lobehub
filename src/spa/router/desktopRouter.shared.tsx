@@ -4,11 +4,17 @@ import {
   BrainCircuit,
   Download,
   FilePenIcon,
+  FilesIcon,
+  FileText,
   Image,
+  ImageIcon,
+  LayoutPanelTopIcon,
   LibraryBigIcon,
   MessageSquarePlus,
+  Mic2,
   Settings,
   ShapesIcon,
+  SquarePlay,
 } from 'lucide-react';
 import { cloneElement, isValidElement, type ReactElement, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
@@ -52,6 +58,23 @@ const groupChatElement = dynamicElement(
   'Desktop > Agent Group',
   { preloadId: 'group' },
 );
+
+const resourceCategoryRoutes: RouteObject[] = [
+  { icon: LayoutPanelTopIcon, path: 'all', titleKey: 'navigation.resourceAll' },
+  { icon: FileText, path: 'documents', titleKey: 'navigation.resourceDocuments' },
+  { icon: ImageIcon, path: 'images', titleKey: 'navigation.resourceImages' },
+  { icon: SquarePlay, path: 'videos', titleKey: 'navigation.resourceVideos' },
+  { icon: Mic2, path: 'audios', titleKey: 'navigation.resourceAudios' },
+  { icon: FilesIcon, path: 'files', titleKey: 'navigation.resourceFiles' },
+].map(({ icon, path, titleKey }) => ({
+  element: dynamicElement(
+    () => import('@/routes/(main)/resource/(home)'),
+    `Desktop > Resource > Home > ${path}`,
+    { preloadId: 'resource' },
+  ),
+  handle: { meta: routeMeta({ icon, titleKey }) },
+  path,
+}));
 
 export interface MainAreaRouteOptions {
   /** Electron renders Home inside each tab router; Web renders it beside the router outlet. */
@@ -479,6 +502,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             index: true,
           },
           ...BusinessResourceRoutes,
+          ...resourceCategoryRoutes,
           // /resource/page needs a static segment: the dynamic `:category`
           // ties with the workspace mirror `/:workspaceSlug/page` on route
           // score, and the workspace tree would swallow it into a slug 404.
@@ -489,7 +513,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               { preloadId: 'resource' },
             ),
             handle: {
-              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+              meta: routeMeta({ icon: FilePenIcon, titleKey: 'navigation.resourcePages' }),
             },
             path: 'page',
           },

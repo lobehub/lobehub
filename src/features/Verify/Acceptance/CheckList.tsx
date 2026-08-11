@@ -97,6 +97,10 @@ export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
 export const isCheckWorkActionable = (check: AcceptanceCheck): boolean =>
   ['pending', 'rejected'].includes(userReviewState(check));
 
+/** A successful review decision moves the reviewer forward by folding the finished row. */
+export const shouldCollapseAfterReview = (succeeded: boolean, expanded: boolean): boolean =>
+  succeeded && expanded;
+
 /** Every reviewable check in the group is user-accepted — settled business. */
 export const isGroupFullyAccepted = (checks: AcceptanceCheck[]): boolean => {
   const reviewable = checks.filter((check) => check.result);
@@ -875,6 +879,7 @@ const CheckRow = memo<{
 
     const openReject = () =>
       openCheckRejectModal({
+        checkDescription: check.planItem?.description,
         checkTitle: `C${check.seq} · ${check.title}`,
         draftKey: check.id,
         evidence: check.evidence
@@ -889,7 +894,10 @@ const CheckRow = memo<{
             comment: comment || undefined,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
           });
-          if (ok) setReviewComment('');
+          if (ok) {
+            setReviewComment('');
+            if (shouldCollapseAfterReview(ok, expanded)) onToggle();
+          }
           return ok;
         },
       });
@@ -907,7 +915,7 @@ const CheckRow = memo<{
       });
       setAccepting(false);
       if (ok) setReviewComment('');
-      if (ok && expanded) onToggle();
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
     };
 
     const handleReject = async (event: { stopPropagation: () => void }) => {
@@ -918,6 +926,7 @@ const CheckRow = memo<{
       const ok = await onReview({ action: 'reject', checkItemIds: [check.id], comment });
       setRejecting(false);
       if (ok) setReviewComment('');
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
     };
 
     const handleIgnore = async (event: { stopPropagation: () => void }) => {
@@ -925,7 +934,7 @@ const CheckRow = memo<{
       setIgnoring(true);
       const ok = await onReview({ action: 'ignore', checkItemIds: [check.id] });
       setIgnoring(false);
-      if (ok && expanded) onToggle();
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
     };
 
     // The user's standing verdict owns the head slot: a reject replaces the
