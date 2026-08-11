@@ -187,6 +187,41 @@ describe('OnboardingUnderstandingRepository', () => {
     repository = new OnboardingUnderstandingRepository(db, userId);
   });
 
+  /** @example A provider workflow failure after collection creates terminal writing state. */
+  it('records writing failure before a generation is prepared', async () => {
+    // ROOT CAUSE:
+    //
+    // A provider workflow can fail after all sources complete but before prepareWriting runs. The
+    // repository previously required an existing writing revision, so its failure callback became a
+    // no-op and the session projected as `processing` forever.
+    //
+    // We fixed this by allowing the current completed fingerprint to initialize failed writing state.
+    await repository.initialize(topicId, sessionId, ['github']);
+    await completeProvider('github', 3);
+
+    const failed = await repository.failWriting({
+      error: {
+        code: 'UNDERSTANDING_WRITING_FAILED',
+        message: 'understanding writing failed',
+        operation: 'writing',
+        provider: 'understanding',
+        retryable: true,
+      },
+      feedbackRevision: 0,
+      generationRevision: 0,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      topicId,
+    });
+
+    expect(failed.writing).toMatchObject({
+      feedbackRevision: 0,
+      generationRevision: 0,
+      sourceFingerprint: 'github@1',
+      status: 'failed',
+    });
+  });
+
   /** @example A fresh onboarding run cannot inherit completed starter-task recommendations. */
   it('removes Understanding and task recommendations together on reset', async () => {
     const taskRecommendations: OnboardingTaskRecommendationSession = {

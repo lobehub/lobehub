@@ -844,7 +844,7 @@ export class UnderstandingService {
   }) => {
     try {
       const current = await this.activeSession(topicId, sessionId);
-      if (!current.writing || current.writing.sourceFingerprint !== sourceFingerprint) return;
+      if (current.writing && current.writing.sourceFingerprint !== sourceFingerprint) return;
       const session = await this.dependencies.repository.failWriting({
         error: canonicalCollectionError(
           'understanding',
@@ -852,8 +852,8 @@ export class UnderstandingService {
           'UNDERSTANDING_WRITING_FAILED',
           true,
         ),
-        feedbackRevision: current.writing.feedbackRevision ?? 0,
-        generationRevision: current.writing.generationRevision ?? 0,
+        feedbackRevision: current.writing?.feedbackRevision ?? current.feedback?.revision ?? 0,
+        generationRevision: current.writing?.generationRevision ?? current.generationRevision ?? 0,
         sessionId,
         sourceFingerprint,
         topicId,

@@ -178,19 +178,23 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     ),
     failProvider: vi.fn(async () => session!),
     failDetailedWriting: vi.fn(async () => session!),
-    failWriting: vi.fn(async ({ error, sourceFingerprint }) => {
-      session = {
-        ...session!,
-        writing: {
-          error,
-          resultMessageId: session?.writing?.resultMessageId,
-          sourceFingerprint,
-          status: 'failed',
-          updatedAt: '2026-07-20T00:00:00.000Z',
-        },
-      };
-      return session;
-    }),
+    failWriting: vi.fn(
+      async ({ error, feedbackRevision, generationRevision, sourceFingerprint }) => {
+        session = {
+          ...session!,
+          writing: {
+            error,
+            feedbackRevision,
+            generationRevision,
+            resultMessageId: session?.writing?.resultMessageId,
+            sourceFingerprint,
+            status: 'failed',
+            updatedAt: '2026-07-20T00:00:00.000Z',
+          },
+        };
+        return session;
+      },
+    ),
     get: vi.fn(async () => session),
     initialize: vi.fn(async (_topicId: string, sessionId: string, providerIds: string[]) => {
       session = {
@@ -744,7 +748,8 @@ describe('UnderstandingService', () => {
     expect(harness.generateObject).not.toHaveBeenCalled();
   });
 
-  it('ignores a writing failure before a generation is prepared', async () => {
+  /** @example A workflow failure after collection creates a terminal writing state. */
+  it('records a writing failure before a generation is prepared', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
 
     await expect(
@@ -753,9 +758,22 @@ describe('UnderstandingService', () => {
         sourceFingerprint: 'github@1',
         topicId: 'topic-1',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({
+      writing: {
+        feedbackRevision: 0,
+        generationRevision: 0,
+        sourceFingerprint: 'github@1',
+        status: 'failed',
+      },
+    });
     expect(harness.repository.prepareWriting).not.toHaveBeenCalled();
-    expect(harness.repository.failWriting).not.toHaveBeenCalled();
+    expect(harness.repository.failWriting).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedbackRevision: 0,
+        generationRevision: 0,
+        sourceFingerprint: 'github@1',
+      }),
+    );
   });
 
   it.each([

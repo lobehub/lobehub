@@ -676,12 +676,13 @@ export class OnboardingUnderstandingRepository {
     this.db.transaction((tx) =>
       mutateTopicSession(tx, this.userId, topicId, (persisted) => {
         const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
         if (
           getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
-          session.writing?.feedbackRevision !== feedbackRevision ||
-          session.writing?.generationRevision !== generationRevision ||
-          (session.writing?.sourceFingerprint === sourceFingerprint &&
-            session.writing.status !== 'running')
+          (writing &&
+            (writing.feedbackRevision !== feedbackRevision ||
+              writing.generationRevision !== generationRevision ||
+              (writing.sourceFingerprint === sourceFingerprint && writing.status !== 'running')))
         ) {
           return { nextSession: session, result: session, write: false };
         }
@@ -691,7 +692,7 @@ export class OnboardingUnderstandingRepository {
             error,
             feedbackRevision,
             generationRevision,
-            resultMessageId: session.writing?.resultMessageId,
+            resultMessageId: writing?.resultMessageId,
             sourceFingerprint,
             status: 'failed',
             updatedAt: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import {
+  getUnderstandingSourceFingerprint,
   StaleUnderstandingSessionError,
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
@@ -29,7 +30,10 @@ import {
   ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
 
-type ProviderService = Pick<UnderstandingService, 'failProvider' | 'processProvider'>;
+type ProviderService = Pick<
+  UnderstandingService,
+  'failProvider' | 'failWriting' | 'get' | 'processProvider'
+>;
 
 type ProviderWorkflowContext = Pick<
   WorkflowContext<ProcessUnderstandingProvidersPayload>,
@@ -115,17 +119,31 @@ export const processUnderstandingProviders = async (
     async () => {
       const service = await (dependencies.createService ?? createService)(payload.userId);
 
-      const providers = await Promise.all(
-        payload.providers.map(async ({ id: providerId, revision }) => {
-          const result = await runStep(context, `provider:${providerId}:${revision}:process`, () =>
+      // NOTICE:
+      // Upstash batches workflow steps created in the same microtask into one parallel step group.
+      // Creating downstream steps inside provider callbacks made that group depend on which provider
+      // finished first, so replay expected GitHub steps while receiving Twitter steps (or vice versa).
+      // Source/context: `@upstash/workflow@0.2.23/index.js:2058-2083` and `:2278-2315`.
+      // Keep collection and downstream scheduling as separate, deterministically ordered stages until
+      // Upstash supports dynamic parallel branches with independently replayable child step graphs.
+      const providerResults = await Promise.all(
+        payload.providers.map(async ({ id: providerId, revision }) => ({
+          providerId,
+          result: await runStep(context, `provider:${providerId}:${revision}:process`, () =>
             service.processProvider({
               providerId,
               revision,
               sessionId: payload.sessionId,
               topicId: payload.topicId,
             }),
-          );
-          await observeOnboardingUnderstandingOperation(
+          ),
+          revision,
+        })),
+      );
+
+      await Promise.all(
+        providerResults.map(({ providerId }) =>
+          observeOnboardingUnderstandingOperation(
             {
               operation: 'progress.publish',
               providerId,
@@ -133,82 +151,100 @@ export const processUnderstandingProviders = async (
               topicId: payload.topicId,
             },
             () => publishOnboardingGenerationProgress(payload.userId, payload.topicId),
-          );
-          if (result.status === 'completed' && result.revision === revision) {
-            const body = {
-              responseLanguage: payload.responseLanguage,
-              sessionId: payload.sessionId,
-              sourceFingerprint: result.sourceFingerprint,
-              ...(payload.startedAt === undefined ? {} : { startedAt: payload.startedAt }),
-              topicId: payload.topicId,
-              userId: payload.userId,
-            };
-            const downstreamTasks: Promise<unknown>[] = [
-              context.invoke(`provider:${providerId}:write:${result.revision}`, {
-                body,
-                // Serialize writers for this session. The repository's fingerprint CAS then prevents a
-                // delayed failure callback for an older invocation from terminalizing newer writing.
+          ),
+        ),
+      );
+
+      for (const { providerId, result, revision } of providerResults) {
+        if (result.status !== 'completed' || result.revision !== revision) continue;
+
+        const body = {
+          responseLanguage: payload.responseLanguage,
+          sessionId: payload.sessionId,
+          sourceFingerprint: result.sourceFingerprint,
+          ...(payload.startedAt === undefined ? {} : { startedAt: payload.startedAt }),
+          topicId: payload.topicId,
+          userId: payload.userId,
+        };
+        await context.invoke(`provider:${providerId}:write:${result.revision}`, {
+          body,
+          // Serialize writers for this session. The repository's fingerprint CAS then prevents a
+          // delayed failure callback for an older invocation from terminalizing newer writing.
+          flowControl: {
+            key: getUnderstandingWritingFlowControlKey(payload.sessionId),
+            parallelism: 1,
+          },
+          headers: getOnboardingUnderstandingTraceHeaders(),
+          workflow: dependencies.processCollectedWorkflow,
+          workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
+        });
+        if (payload.triggerTaskRecommendations !== false) {
+          await runStep(context, `provider:${providerId}:recommend:${result.revision}`, () =>
+            // NOTICE:
+            // Cross-route workflow fan-out must use an absolute QStash trigger.
+            // context.invoke only replaces the current URL's final path segment, which sent this
+            // child to `/api/workflows/onboarding/understanding/process` and returned 404.
+            // Source/context: `router-hono/workflows/memory-user-memory/workflows/processUserTopics.ts:193`.
+            // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
+            dependencies.triggerTaskRecommendations(
+              {
+                responseLanguage: payload.responseLanguage,
+                sessionId: payload.sessionId,
+                sourceFingerprint: result.sourceFingerprint,
+                topicId: payload.topicId,
+                userId: payload.userId,
+              },
+              {
+                // Every completed provider may race to schedule a fingerprint-specific run. The
+                // session-scoped flow-control key makes the first accepted fingerprint immutable.
                 flowControl: {
-                  key: getUnderstandingWritingFlowControlKey(payload.sessionId),
+                  key: getTaskRecommendationFlowControlKey(payload.sessionId),
                   parallelism: 1,
                 },
-                headers: getOnboardingUnderstandingTraceHeaders(),
-                workflow: dependencies.processCollectedWorkflow,
-                workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
-              }),
-            ];
-            if (payload.triggerTaskRecommendations !== false) {
-              downstreamTasks.push(
-                runStep(context, `provider:${providerId}:recommend:${result.revision}`, () =>
-                  // NOTICE:
-                  // Cross-route workflow fan-out must use an absolute QStash trigger.
-                  // context.invoke only replaces the current URL's final path segment, which sent this
-                  // child to `/api/workflows/onboarding/understanding/process` and returned 404.
-                  // Source/context: `router-hono/workflows/memory-user-memory/workflows/processUserTopics.ts:193`.
-                  // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
-                  dependencies.triggerTaskRecommendations(
-                    {
-                      responseLanguage: payload.responseLanguage,
-                      sessionId: payload.sessionId,
-                      sourceFingerprint: result.sourceFingerprint,
-                      topicId: payload.topicId,
-                      userId: payload.userId,
-                    },
-                    {
-                      // Every completed provider may race to schedule a fingerprint-specific run. The
-                      // session-scoped flow-control key makes the first accepted fingerprint immutable.
-                      flowControl: {
-                        key: getTaskRecommendationFlowControlKey(payload.sessionId),
-                        parallelism: 1,
-                      },
-                      workflowRunId: taskRecommendationWorkflowRunId(
-                        payload.sessionId,
-                        result.sourceFingerprint,
-                      ),
-                    },
-                  ),
+                workflowRunId: taskRecommendationWorkflowRunId(
+                  payload.sessionId,
+                  result.sourceFingerprint,
                 ),
-              );
-            }
-            await Promise.all(downstreamTasks);
-          }
+              },
+            ),
+          );
+        }
+      }
 
-          return {
-            failedCount: result.failedCount,
-            providerId,
-            revision: result.revision,
-            sourceCount: result.sourceCount,
-            status: result.status,
-            succeededCount: result.succeededCount,
-          };
-        }),
-      );
+      const providers = providerResults.map(({ providerId, result }) => ({
+        failedCount: result.failedCount,
+        providerId,
+        revision: result.revision,
+        sourceCount: result.sourceCount,
+        status: result.status,
+        succeededCount: result.succeededCount,
+      }));
 
       return { providers };
     },
   );
 };
 
+/**
+ * Terminalizes provider-workflow state after Upstash exhausts delivery retries.
+ *
+ * Use when:
+ * - Registering the failure callback for the provider collection workflow
+ * - Preventing completed-source sessions from remaining in processing without a writer
+ *
+ * Expects:
+ * - The payload identifies the exact provider revisions owned by the failed workflow run
+ *
+ * Returns:
+ * - Provider identifiers transitioned from running to failed
+ *
+ * Call stack:
+ *
+ * processProvidersWorkflowOptions.failureFunction
+ *   -> {@link failRunningUnderstandingProviders}
+ *     -> UnderstandingService.failProvider
+ *     -> UnderstandingService.failWriting
+ */
 export const failRunningUnderstandingProviders = async (
   input: unknown,
   dependencies: ProviderFailureDependencies = {},
@@ -236,9 +272,52 @@ export const failRunningUnderstandingProviders = async (
     }),
   );
 
+  try {
+    const current = await service.get(payload.topicId);
+    const hasActiveProvider = Object.values(current.sources).some(
+      ({ status }) => status === 'pending' || status === 'running',
+    );
+    if (!hasActiveProvider && !current.writing) {
+      const sourceFingerprint = getUnderstandingSourceFingerprint({
+        feedback: current.feedback ?? { revision: 0, turns: [] },
+        generationRevision: current.generationRevision ?? 0,
+        id: current.id,
+        sources: current.sources,
+      });
+      if (sourceFingerprint) {
+        await service.failWriting({
+          sessionId: payload.sessionId,
+          sourceFingerprint,
+          topicId: payload.topicId,
+        });
+        await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+      }
+    }
+  } catch (error) {
+    if (!isTerminalizedSession(error)) throw error;
+  }
+
   return { failedProviderIds: failedProviderIds.sort() };
 };
 
+/**
+ * Supplies validation and terminal failure handling for the provider workflow route.
+ *
+ * Use when:
+ * - Registering the provider handler with Upstash Workflow
+ *
+ * Expects:
+ * - JSON payloads matching the provider workflow schema
+ *
+ * Returns:
+ * - Public workflow serve options with revision-scoped failure compensation
+ *
+ * Call stack:
+ *
+ * workflow route
+ *   -> processProvidersWorkflowOptions.failureFunction
+ *     -> {@link failRunningUnderstandingProviders}
+ */
 export const processProvidersWorkflowOptions = {
   failureFunction: async ({
     context: { requestPayload },
