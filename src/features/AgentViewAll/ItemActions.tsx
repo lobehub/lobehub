@@ -233,7 +233,10 @@ const ItemActions = memo<ItemActionsProps>((props) => {
         )
       ) : props.hideTrigger ? null : (
         <span onFocus={activateFromFocus} onPointerEnter={activate}>
-          <ActionIcon icon={EllipsisIcon} size={'small'} title={t('more')} />
+          {/* Explicit aria-label: outside a popup trigger, ActionIcon does not
+              derive one from `title`, leaving the focusable placeholder
+              unnamed for screen readers until the real trigger mounts. */}
+          <ActionIcon aria-label={t('more')} icon={EllipsisIcon} size={'small'} title={t('more')} />
         </span>
       )}
     </span>
