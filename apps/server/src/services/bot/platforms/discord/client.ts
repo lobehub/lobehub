@@ -23,7 +23,7 @@ import {
 import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
 import { DISCORD_BOT_TOKEN_PATTERN, DISCORD_PUBLIC_KEY_PATTERN } from './const';
-import { patchDiscordForwardedInteractions, patchDiscordThreadRecovery } from './patch';
+import { patchDiscordForwardedInteractions } from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
@@ -212,7 +212,6 @@ class DiscordGatewayClient implements PlatformClient {
 
   applyChatPatches(chatBot: ChatBot<any>): void {
     patchDiscordForwardedInteractions(chatBot);
-    patchDiscordThreadRecovery(chatBot);
   }
 
   createAdapter(): Record<string, any> {
