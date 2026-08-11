@@ -85,7 +85,11 @@ export class TaskListSliceActionImpl {
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
     await Promise.all([
-      mutate(taskKeys.list(listAgentId, listQueryVisibility)),
+      // Both orderings of the same list: the Tasks page holds the createdAt
+      // entry and Home the updatedAt one, and an edit invalidates both — an
+      // edit is exactly what moves a task in the updatedAt ordering.
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'createdAt')),
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'updatedAt')),
       mutate(taskKeys.groupList(listAgentId, listVisibility)),
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
@@ -169,7 +173,8 @@ export class TaskListSliceActionImpl {
 
     return useClientDataSWR(
       enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY) : null,
-      async () => this.fetchTaskList({ automated: true, hasGoal: false, limit }),
+      async () =>
+        this.fetchTaskList({ automated: true, hasGoal: false, limit, orderBy: 'updatedAt' }),
       {
         onSuccess: (data: { data: TaskListItem[]; total: number }) => {
           this.#set(
@@ -192,11 +197,19 @@ export class TaskListSliceActionImpl {
       agentId?: string;
       allAgents?: boolean;
       enabled?: boolean;
+      /**
+       * Newest-first by creation unless a caller asks otherwise. A block that
+       * calls itself "recent" and prints `updatedAt` has to order by it too, or
+       * the task that just moved falls off the page in favour of a newer idle
+       * one. Part of the cache key: the Tasks page and Home read the same
+       * `tasks` field and must not serve each other's ordering.
+       */
+      orderBy?: 'createdAt' | 'updatedAt';
       /** Override the Task page's persisted filter for embedded consumers. */
       visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, visibility } = options;
+    const { agentId, allAgents = false, enabled = true, orderBy, visibility } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
     const { listAgentId, listQueryVisibility } = this.#get();
@@ -217,11 +230,12 @@ export class TaskListSliceActionImpl {
     }
 
     return useClientDataSWR(
-      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility) : null,
+      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility, orderBy) : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
           ...(allAgents ? {} : { assigneeAgentId: id }),
           hasGoal: false,
+          orderBy,
           visibility: filterToServerVisibility(listVisibility),
         });
       },

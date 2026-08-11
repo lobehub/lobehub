@@ -328,8 +328,9 @@ const TaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Home is an overview, not a continuation of the Task page's last-used
-  // filter. It must always show the complete task set.
-  const tasksSWR = useFetchTaskList({ allAgents: true, visibility: 'all' });
+  // filter. It must always show the complete task set — ordered by activity,
+  // because this block calls itself "recent" and prints the same timestamp.
+  const tasksSWR = useFetchTaskList({ allAgents: true, orderBy: 'updatedAt', visibility: 'all' });
   const tasks = useTaskStore(taskListSelectors.taskList);
   const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
@@ -388,25 +389,32 @@ const ScheduledTaskContent = memo(() => {
   // permanent reminder of a feature you did not ask for, so the section only
   // exists once something is actually scheduled — the loading skeleton aside,
   // which has to hold its place until the answer arrives.
+  //
+  // A failed first fetch is NOT that case: hiding it would make an unreachable
+  // list look exactly like an account with no schedules, and someone whose
+  // automations are running would read a confidently incomplete page. The block
+  // stays and says so, with a retry.
+  const failedFirstLoad = Boolean(scheduledSWR.error) && !scheduledInit;
   if (scheduledInit && scheduled.length === 0) return null;
-  if (scheduledSWR.error && !scheduledInit) return null;
 
   const shown = scheduled.slice(0, taskCount);
 
   return (
     <GroupBlock
       actionAlwaysVisible
-      count={resolveRecentsBadgeCount(scheduled.length, taskCount)}
+      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduled.length, taskCount)}
       title={t('dashboard.scheduledTask.title')}
       action={
-        scheduledTotal > shown.length ? (
+        !failedFirstLoad && scheduledTotal > shown.length ? (
           <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined
       }
     >
-      {scheduledInit ? (
+      {failedFirstLoad ? (
+        <AsyncError error={scheduledSWR.error} variant={'inline'} onRetry={scheduledSWR.mutate} />
+      ) : scheduledInit ? (
         <Flexbox gap={4}>
           {shown.map((task) => (
             <TaskRow key={task.identifier} task={task} />

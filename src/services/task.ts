@@ -13,6 +13,7 @@ class TaskService {
     assigneeAgentId?: string;
     automated?: boolean;
     hasGoal?: boolean;
+    orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
     parentIdentifier?: string;
