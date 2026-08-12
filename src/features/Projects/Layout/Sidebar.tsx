@@ -8,6 +8,7 @@ import {
   ListTodoIcon,
   MessageSquareDashedIcon,
   MessageSquarePlusIcon,
+  SparklesIcon,
   TargetIcon,
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -76,6 +77,7 @@ const ProjectSidebarContent = memo(() => {
     [detail?.agents],
   );
   const projectTasksPath = getProjectTasksPath(projectId!);
+  const projectHomePath = `/project/${projectId}`;
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
 
@@ -94,6 +96,12 @@ const ProjectSidebarContent = memo(() => {
       header={header}
       body={
         <Flexbox gap={8} paddingInline={4}>
+          <NavItem
+            active={pathname === projectHomePath}
+            icon={SparklesIcon}
+            title={t('sections.home')}
+            onClick={() => navigate(projectHomePath)}
+          />
           <NavItem
             active={pathname === projectTasksPath}
             icon={ListTodoIcon}

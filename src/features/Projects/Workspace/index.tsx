@@ -1,9 +1,9 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tag, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BookOpenIcon, BotIcon, CheckSquareIcon, FolderKanbanIcon, SendIcon } from 'lucide-react';
+import { FolderKanbanIcon, SendHorizontalIcon, SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -16,68 +16,56 @@ import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import ProjectDashboard from './ProjectDashboard';
+
 const styles = createStaticStyles(({ css }) => ({
   composer: css`
     overflow: hidden;
 
-    min-height: 180px;
     border: 1px solid ${cssVar.colorBorder};
-    border-radius: 20px;
+    border-radius: 18px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   composerFooter: css`
-    padding-block: 10px 12px;
-    padding-inline: 20px 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 6px 8px;
+    padding-inline: 14px 8px;
   `,
   content: css`
     overflow: auto;
-
     width: 100%;
-    max-width: 920px;
+  `,
+  intro: css`
+    width: 100%;
+    max-width: 760px;
+  `,
+  page: css`
+    box-sizing: border-box;
+    width: min(1060px, calc(100% - 64px));
     margin-inline: auto;
-    padding-block: 56px;
-    padding-inline: 40px;
+    padding-block: 42px 72px;
 
     @media (width <= 720px) {
-      padding-block: 32px;
-      padding-inline: 20px;
+      width: calc(100% - 40px);
+      padding-block: 32px 48px;
     }
-  `,
-  contextItem: css`
-    flex: 1;
-
-    min-width: 180px;
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
   `,
   prompt: css`
     cursor: pointer;
 
-    padding-block: 6px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 5px;
+    padding-inline: 10px;
+    border: 0;
     border-radius: 999px;
 
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      color ${cssVar.motionDurationMid},
-      border-color ${cssVar.motionDurationMid};
+    background: ${cssVar.colorFillQuaternary};
 
     &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
-      color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   shell: css`
@@ -86,10 +74,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   textarea: css`
-    padding: 20px !important;
+    padding-block: 15px 8px !important;
+    padding-inline: 16px !important;
     border: 0 !important;
 
-    font-size: 16px !important;
+    font-size: 15px !important;
 
     background: transparent !important;
     box-shadow: none !important;
@@ -107,8 +96,8 @@ const ProjectWorkspace = memo(() => {
 
   if (!enabled) {
     return (
-      <Center height="100%">
-        <Flexbox align="center" gap={12}>
+      <Center height={'100%'}>
+        <Flexbox align={'center'} gap={12}>
           <Icon icon={FolderKanbanIcon} size={40} />
           <Text fontSize={18} weight={600}>
             {t('disabled.title')}
@@ -118,130 +107,91 @@ const ProjectWorkspace = memo(() => {
       </Center>
     );
   }
-  if (error) return <AsyncError error={error} variant="page" onRetry={() => mutate()} />;
+  if (error) return <AsyncError error={error} variant={'page'} onRetry={() => mutate()} />;
   if (isLoading || !detail)
     return (
-      <Center height="100%">
+      <Center height={'100%'}>
         <NeuralNetworkLoading />
       </Center>
     );
 
   const startConversation = () => {
     const content = message.trim();
-    if (!content) return;
-
-    navigate(getProjectConversationStartPath(projectId!, content));
+    if (!content || !projectId) return;
+    navigate(getProjectConversationStartPath(projectId, content));
   };
   const prompts = [
+    t('overview.prompts.summarizeProgress'),
     t('overview.prompts.planMilestone'),
     t('overview.prompts.findBlockers'),
-    t('overview.prompts.summarizeProgress'),
-  ];
-  const contextItems = [
-    {
-      count: detail.tasks?.length ?? 0,
-      icon: CheckSquareIcon,
-      label: t('sections.tasks'),
-    },
-    {
-      count: detail.agents?.length ?? 0,
-      icon: BotIcon,
-      label: t('sections.agents'),
-    },
-    {
-      count: detail.knowledgeBases?.length ?? 0,
-      icon: BookOpenIcon,
-      label: t('sections.knowledgeBases'),
-    },
   ];
 
   return (
     <Flexbox className={styles.shell} flex={1}>
-      <Flexbox className={styles.content} flex={1} gap={28}>
-        <Flexbox gap={10}>
-          <Text fontSize={30} weight={650}>
-            {t('overview.nextActionTitle')}
-          </Text>
-          <Text type="secondary">
-            {t('overview.nextActionDescription', { name: detail.project.name })}
-          </Text>
-        </Flexbox>
-
-        <Flexbox className={styles.composer}>
-          <TextArea
-            autoFocus
-            autoSize={{ maxRows: 8, minRows: 5 }}
-            className={styles.textarea}
-            placeholder={t('overview.composerPlaceholder')}
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') startConversation();
-            }}
-          />
-          <Flexbox
-            horizontal
-            align="center"
-            className={styles.composerFooter}
-            justify="space-between"
-          >
-            <Text fontSize={12} type="secondary">
-              {t('overview.sendHint')}
-            </Text>
-            <Button
-              disabled={!message.trim()}
-              icon={SendIcon}
-              type="primary"
-              onClick={startConversation}
-            >
-              {t('overview.startConversation')}
-            </Button>
-          </Flexbox>
-        </Flexbox>
-
-        <Flexbox horizontal gap={8} wrap="wrap">
-          {prompts.map((prompt) => (
-            <button
-              className={styles.prompt}
-              key={prompt}
-              type="button"
-              onClick={() => setMessage(prompt)}
-            >
-              {prompt}
-            </button>
-          ))}
-        </Flexbox>
-
-        <Flexbox gap={12}>
-          <Flexbox gap={4}>
-            <Text fontSize={16} weight={600}>
-              {t('overview.contextTitle')}
-            </Text>
-            <Text fontSize={13} type="secondary">
-              {detail.project.description || t('overview.noDescription')}
-            </Text>
-          </Flexbox>
-          <Flexbox horizontal gap={12} wrap="wrap">
-            {contextItems.map(({ count, icon, label }) => (
-              <Flexbox
-                horizontal
-                align="center"
-                className={styles.contextItem}
-                gap={10}
-                key={label}
-              >
-                <Icon icon={icon} size={18} />
-                <Text weight={500}>{label}</Text>
-                <Text style={{ marginInlineStart: 'auto' }} type="secondary">
-                  {count}
-                </Text>
+      <div className={styles.content}>
+        <Flexbox className={styles.page} gap={0}>
+          <Flexbox className={styles.intro} gap={18}>
+            <Flexbox gap={5}>
+              <Text fontSize={26} weight={650}>
+                {t('overview.title')}
+              </Text>
+              <Text type={'secondary'}>{t('overview.description')}</Text>
+            </Flexbox>
+            <Flexbox gap={10}>
+              <Flexbox className={styles.composer}>
+                <TextArea
+                  autoFocus
+                  autoSize={{ maxRows: 7, minRows: 3 }}
+                  className={styles.textarea}
+                  placeholder={t('overview.composerPlaceholder')}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter')
+                      startConversation();
+                  }}
+                />
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.composerFooter}
+                  justify={'space-between'}
+                >
+                  <Flexbox horizontal align={'center'} gap={7}>
+                    <Tag icon={<SparklesIcon size={12} />}>{detail.project.name}</Tag>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('overview.contextEnabled')}
+                    </Text>
+                  </Flexbox>
+                  <Button
+                    disabled={!message.trim()}
+                    icon={SendHorizontalIcon}
+                    type={'primary'}
+                    onClick={startConversation}
+                  />
+                </Flexbox>
               </Flexbox>
-            ))}
+              <Flexbox horizontal gap={8} wrap={'wrap'}>
+                {prompts.map((prompt) => (
+                  <button
+                    className={styles.prompt}
+                    key={prompt}
+                    type={'button'}
+                    onClick={() => setMessage(prompt)}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </Flexbox>
+            </Flexbox>
           </Flexbox>
+          <ProjectDashboard detail={detail} projectId={projectId!} />
         </Flexbox>
-      </Flexbox>
+      </div>
     </Flexbox>
   );
 });
+
+ProjectWorkspace.displayName = 'ProjectWorkspace';
 
 export default ProjectWorkspace;
