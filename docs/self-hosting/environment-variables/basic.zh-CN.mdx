@@ -205,10 +205,24 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - 允许访问内网 API 网关：`10.0.0.50`
 - 允许访问内网文档服务器：`172.16.0.10`
 
-### `NEXT_PUBLIC_ASSET_PREFIX`
+### `ASSET_BASE_URL`
 
 - 类型：可选
-- 描述：静态资源的路径访问前缀，你可以设置为 CDN 访问的 URL，具体可参考： [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix)
+- 描述：构建产物（Next.js 静态资源与 SPA 包）的基础 URL。设置为 CDN 或对象存储的域名，即可让构建产物不再由应用自身分发。它对应 Next.js 的 [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix)。不设置时，所有资源仍由应用同源提供。
+- 默认值：-
+- 示例：`https://cdn.example.com`
+
+<Callout type={'warning'}>
+  当它指向与应用不同的域名时，该资源域名**必须**返回覆盖应用域名的 `Access-Control-Allow-Origin`
+  响应头。一旦配置了资源基础 URL，LobeHub 会在生成的 `<script>` 与 `<link>` 标签上带出
+  `crossorigin`；缺少该响应头会让浏览器拒绝执行这些资源，页面直接白屏。它同时也让这些文件的脚本报错能带着真实堆栈进入错误监控，而不是一条无信息的
+  `Script error.`。
+</Callout>
+
+### `NEXT_PUBLIC_ASSET_PREFIX`
+
+- 类型：可选，**已废弃** —— 请改用 `ASSET_BASE_URL`
+- 描述：`ASSET_BASE_URL` 的旧名称。在未设置 `ASSET_BASE_URL` 时仍会作为回退生效，并且同样受上述跨域要求约束。
 - 默认值：-
 - 示例：`https://cdn.example.com`
 

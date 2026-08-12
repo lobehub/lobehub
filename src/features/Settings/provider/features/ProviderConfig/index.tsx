@@ -19,11 +19,11 @@ import { useDebounceFn } from 'ahooks';
 import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { InfoIcon, Loader2Icon, LockIcon } from 'lucide-react';
+import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useLayoutEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
-import { z } from 'zod';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
@@ -270,9 +270,8 @@ const ProviderConfig = memo<ProviderConfigProps>(
       [normalizeConfigValues],
     );
 
-    const { run: debouncedHandleValueChange } = useDebounceFn(handleValueChange, {
-      wait: 500,
-    });
+    const { cancel: cancelDebouncedHandleValueChange, run: debouncedHandleValueChange } =
+      useDebounceFn(handleValueChange, { wait: 500 });
 
     const isCustom = source === AiProviderSourceEnum.Custom;
 
@@ -374,7 +373,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
               validator: (_: any, value: string) => {
                 if (!value) return;
 
-                return z.string().url().safeParse(value).error
+                return AiProviderBaseURLSchema.safeParse(value).error
                   ? Promise.reject(t('providerModels.config.baseURL.invalid'))
                   : Promise.resolve();
               },
@@ -436,10 +435,18 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   isCheckingConnection.current = false;
                 }}
                 onBeforeCheck={async () => {
+                  try {
+                    await form.validateFields();
+                  } catch {
+                    return false;
+                  }
+
                   // Set connection test state to prevent duplicate requests from onValuesChange
                   isCheckingConnection.current = true;
                   // Proactively save the latest form values to ensure fetchAiProviderRuntimeState retrieves up-to-date data
                   await updateAiProviderConfig(id, normalizeValues(form.getFieldsValue()));
+
+                  return true;
                 }}
               />
             ),
@@ -570,6 +577,11 @@ const ProviderConfig = memo<ProviderConfigProps>(
             variant={'borderless'}
             onValuesChange={(_, values) => {
               if (!canManageProvider) return;
+
+              cancelDebouncedHandleValueChange();
+              const baseURL = values.keyVaults?.baseURL;
+              if (baseURL && !AiProviderBaseURLSchema.safeParse(baseURL).success) return;
+
               debouncedHandleValueChange(id, normalizeValues(values));
             }}
             {...FORM_STYLE}

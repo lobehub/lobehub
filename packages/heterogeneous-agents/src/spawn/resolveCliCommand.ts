@@ -49,12 +49,18 @@ interface ValidateOptions {
   validateFlag?: string;
   validateKeywords?: string[];
   validatePattern?: RegExp;
+  versionFlag?: string;
 }
 
 interface ResolvedCommand {
   env?: NodeJS.ProcessEnv;
   path: string;
 }
+
+const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
+
+const extractVersion = (versionBanner: string): string | undefined =>
+  versionBanner.match(VERSION_PATTERN)?.[1];
 
 const isWindows = () => platform() === 'win32';
 let shellPathPromise: Promise<string | undefined> | undefined;
@@ -376,7 +382,7 @@ export const detectValidatedCommand = async (
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
-  const { validateFlag = '--version', validateKeywords, validatePattern } = options;
+  const { validateFlag = '--version', validateKeywords, validatePattern, versionFlag } = options;
 
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
@@ -414,6 +420,24 @@ export const detectValidatedCommand = async (
       return { available: false };
     }
 
+    let versionBanner = firstLine;
+    if (versionFlag && versionFlag !== validateFlag) {
+      try {
+        const versionResult = await execProbe(resolvedPath, [versionFlag], env, viaShell);
+        if (versionResult !== UNRESOLVED_SHIM) {
+          versionBanner = `${versionResult.stdout}\n${versionResult.stderr}`
+            .trim()
+            .split(/\r?\n/)[0]!
+            .trim();
+        }
+      } catch {
+        // Validation already proved the binary is available. Older releases
+        // may not support the separate version flag, so keep the successful
+        // detection and omit its version instead of reporting it unavailable.
+        versionBanner = '';
+      }
+    }
+
     return {
       available: true,
       path: resolvedPath,
@@ -423,7 +447,11 @@ export const detectValidatedCommand = async (
       // `#!/usr/bin/env node` shim resolved here can't find `node` under the
       // leaner inherited PATH (Finder-launched Electron).
       resolvedPathEnv: env?.PATH,
-      version: firstLine,
+      // CLIs format their banners differently (`codex-cli 0.147.0`,
+      // `1.2.3 (Claude Code)`, etc.). Keep validation against the original
+      // output, but expose only the version so every consumer renders the same
+      // value. A product-only banner is availability evidence, not a version.
+      version: extractVersion(versionBanner),
     };
   };
 
@@ -454,6 +482,7 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'amp': {
     validateFlag: '--help',
     validateKeywords: ['Amp CLI'],
+    versionFlag: '--version',
   },
   'claude-code': {
     validateKeywords: ['claude code'],

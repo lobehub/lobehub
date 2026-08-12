@@ -75,7 +75,7 @@ export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
 
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);
 
-export const imageUrl = (filename: string) => `/images/${filename}`;
+export const imageUrl = (filename: string) => `/app-images/${filename}`;
 
 export const LOBE_URL_IMPORT_NAME = 'settings';
 

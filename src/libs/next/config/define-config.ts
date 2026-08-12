@@ -49,13 +49,19 @@ export function defineConfig(config: CustomNextConfig) {
     },
   };
 
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  const assetPrefix = (process.env.ASSET_BASE_URL || process.env.NEXT_PUBLIC_ASSET_PREFIX)?.replace(
+    /\/+$/,
+    '',
+  );
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
+    // Gated, not unconditional: an asset host that omits Access-Control-Allow-Origin
+    // turns every tag into one the browser refuses to execute. Same-origin needs no opt-in.
+    crossOrigin: assetPrefix ? 'anonymous' : undefined,
 
     compiler: {
       emotion: true,
@@ -111,7 +117,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -128,7 +134,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [

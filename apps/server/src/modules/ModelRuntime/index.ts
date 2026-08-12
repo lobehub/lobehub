@@ -1,5 +1,6 @@
 import { type GoogleGenAIOptions } from '@google/genai';
 import {
+  AgentRuntimeError,
   mergeModelRuntimeHooks,
   ModelRuntime,
   type ModelRuntimeHooks,
@@ -8,6 +9,7 @@ import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
   type AWSBedrockKeyVault,
   type AzureOpenAIKeyVault,
+  ChatErrorType,
   type ClientSecretPayload,
   type CloudflareKeyVault,
   type ComfyUIKeyVault,
@@ -19,6 +21,7 @@ import {
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
+import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
@@ -410,6 +413,17 @@ export const initModelRuntimeWithUserPayload = (
   hooks?: ModelRuntimeHooks,
 ) => {
   const runtimeProvider = payload.runtimeProvider ?? provider;
+
+  /**
+   * User-configured endpoints can come from older clients or persisted rows that predate
+   * input validation. Reject them before an SDK appends a request path and throws an
+   * unclassified ERR_INVALID_URL, which would otherwise surface as a server-side 500.
+   */
+  if (payload.baseURL && !AiProviderBaseURLSchema.safeParse(payload.baseURL).success) {
+    throw AgentRuntimeError.createError(ChatErrorType.BadRequest, {
+      message: 'Invalid provider baseURL',
+    });
+  }
 
   if (runtimeProvider === ModelProvider.VertexAI) {
     const vertexOptions = buildVertexOptions(payload, params);

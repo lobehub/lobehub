@@ -457,7 +457,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         <img
           alt=""
           className="cover"
-          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+          src={
+            isDark ? '/app-images/agent_gateway_dark.webp' : '/app-images/agent_gateway_light.webp'
+          }
         />
         <div className="body">
           <div className="title">{t('gatewayMode.cardTitle')}</div>

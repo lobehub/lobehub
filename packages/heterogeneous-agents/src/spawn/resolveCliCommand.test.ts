@@ -102,9 +102,10 @@ describe('resolveCliCommand', () => {
       platformMock.mockReturnValue('darwin');
     });
 
-    it('resolves AMP on PATH and validates its help banner', async () => {
+    it('resolves Amp on PATH and reports its normalized version', async () => {
       callExecFile('/Users/x/.local/bin/amp\n');
       callExecFile('Amp CLI\n\nUsage: amp [options] [command]');
+      callExecFile('0.0.1786551414-g7b8b6b (released 2026-08-12T16:16:54.000Z, 38m ago)');
 
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('amp', 'amp');
@@ -112,21 +113,37 @@ describe('resolveCliCommand', () => {
       expect(status).toMatchObject({
         available: true,
         path: '/Users/x/.local/bin/amp',
-        version: 'Amp CLI',
+        version: '0.0.1786551414-g7b8b6b',
       });
       expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['--version']);
+    });
+
+    it('keeps an older Amp available when it does not support the version flag', async () => {
+      callExecFile('/Users/x/.local/bin/amp\n');
+      callExecFile('Amp CLI\n\nUsage: amp [options] [command]');
+      callExecFileError(new Error('unknown option: --version'));
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('amp', 'amp');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/amp',
+      });
+      expect(status.version).toBeUndefined();
     });
 
     it('resolves `codex` on PATH and validates it via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/codex\n');
-      callExecFile('codex-cli 0.142.5');
+      callExecFile('codex-cli 0.147.0-alpha.6.6');
 
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('codex', 'codex');
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('/usr/local/bin/codex');
-      expect(status.version).toBe('codex-cli 0.142.5');
+      expect(status.version).toBe('0.147.0-alpha.6.6');
       expect(status.resolvedPathEnv).toBeUndefined();
       expect(execMock).not.toHaveBeenCalled();
     });
@@ -402,7 +419,7 @@ describe('resolveCliCommand', () => {
       expect(status).toMatchObject({
         available: true,
         path: nativeExe,
-        version: 'codex-cli 0.146.0',
+        version: '0.146.0',
       });
       // The unrunnable shim is never spawned: `execFile` on a .cmd throws
       // EINVAL since the CVE-2024-27980 fix, so trying it would only waste a
@@ -582,6 +599,18 @@ describe('resolveCliCommand', () => {
       expect(status).toMatchObject({ available: true, version: '1.18.3' });
     });
 
+    it('reports the semantic version instead of an OpenClaw build hash', async () => {
+      callExecFile('/Users/x/.local/bin/openclaw\n');
+      callExecFile('openclaw 2026.8.8 (0790d9f)');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('openclaw', {
+        validateKeywords: ['openclaw'],
+      });
+
+      expect(status).toMatchObject({ available: true, version: '2026.8.8' });
+    });
+
     it('still rejects output whose first line is not a version', async () => {
       callExecFile('/Users/x/.local/bin/qodercli\n');
       callExecFile('Usage: qodercli [command]\n1.0.39');
@@ -603,6 +632,7 @@ describe('resolveCliCommand', () => {
     it('uses amp as the default command for the AMP adapter', async () => {
       callExecFile('/Users/x/.local/bin/amp\n');
       callExecFile('Amp CLI');
+      callExecFile('0.0.1786551414-g7b8b6b');
 
       const { resolveHeteroSpawnCommand } = await importModule();
       const resolved = await resolveHeteroSpawnCommand('amp', undefined);

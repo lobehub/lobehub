@@ -27,6 +27,10 @@ describe('chainOnboardingTaskRecommendation', () => {
     expect(messages[0].content).toContain('Never comment, submit a review, approve');
     expect(messages[0].content).toContain('Select only the highest-value recommendations');
     expect(messages[0].content).toContain('urgency, recurrence, user impact, and leverage');
+    expect(messages[0].content).toContain(
+      'The selected task will start immediately after onboarding confirmation',
+    );
+    expect(messages[0].content).toContain('without waiting for another user message');
     expect(messages[0].content).toContain('Title: Analyze mobile lifecycle risk');
     expect(messages[1].content).toContain('<connector-evidence provider="github">');
     expect(messages[1].content).toContain('{"pullRequest":1}');

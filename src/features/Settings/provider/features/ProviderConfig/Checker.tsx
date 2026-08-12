@@ -66,7 +66,7 @@ interface ConnectionCheckerProps {
   checkErrorRender?: CheckErrorRender;
   model: string;
   onAfterCheck: () => Promise<void>;
-  onBeforeCheck: () => Promise<void>;
+  onBeforeCheck: () => Promise<boolean>;
   provider: string;
 }
 
@@ -236,8 +236,10 @@ const Checker = memo<ConnectionCheckerProps>(
             onClick={async () => {
               if (!canManageProvider) return;
 
-              await onBeforeCheck();
               try {
+                const shouldCheck = await onBeforeCheck();
+                if (!shouldCheck) return;
+
                 await checkConnection();
               } finally {
                 await onAfterCheck();

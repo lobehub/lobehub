@@ -32,6 +32,7 @@ import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
 import { GPT56ReasoningEffortSlider } from './GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from './Grok45ReasoningEffortSlider';
+import Grok46ReasoningEffortSlider from './Grok46ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from './Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
@@ -385,6 +386,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'grok4_5ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <Grok46ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'grok4_6ReasoningEffort',
         style: {
           paddingBottom: 0,
         },

@@ -119,7 +119,7 @@ describe('cliAgentBinaries', () => {
 
       expect(status.available).toBe(true);
       expect(status.path).toBe(`${npmDir}\\claude.cmd`);
-      expect(status.version).toBe('1.2.3 (Claude Code)');
+      expect(status.version).toBe('1.2.3');
 
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
@@ -354,7 +354,7 @@ describe('cliAgentBinaries', () => {
 
         expect(status.available).toBe(true);
         expect(status.path).toBe(path.join(os.homedir(), '.local', 'bin', 'claude'));
-        expect(status.version).toBe('2.1.196 (Claude Code)');
+        expect(status.version).toBe('2.1.196');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
@@ -410,7 +410,7 @@ describe('cliAgentBinaries', () => {
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
-        expect(status.version).toBe('codex-cli 0.138.0');
+        expect(status.version).toBe('0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
@@ -480,7 +480,7 @@ describe('cliAgentBinaries', () => {
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
-        expect(status.version).toBe('gemini 0.2.0');
+        expect(status.version).toBe('0.2.0');
         // The login-shell PATH that resolved the shim must be surfaced so the
         // spawn site can carry it into the child env (mise/nvm `node` lives
         // there, not on the leaner inherited PATH).

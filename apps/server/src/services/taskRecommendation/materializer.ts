@@ -7,8 +7,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { CreateTaskInput } from '@/server/services/task';
 import { TaskService } from '@/server/services/task';
 
+/** Represents the durable outcome of materializing an onboarding task recommendation. */
 export type TaskRecommendationMaterializationResult =
-  { status: 'not-found' } | { status: 'stale' } | { status: 'success'; taskId: string };
+  | { status: 'not-found' }
+  | { status: 'stale' }
+  | {
+      /** Whether this invocation created the task instead of replaying its persisted mapping. */
+      created: boolean;
+      status: 'success';
+      /** Stable task ID persisted for this recommendation. */
+      taskId: string;
+    };
 
 interface MaterializeTaskRecommendationInput {
   assigneeAgentId: string;
@@ -70,7 +79,7 @@ export class TaskRecommendationMaterializer {
       if (parsed.data.id !== input.sessionId) return { status: 'stale' };
 
       const existingTaskId = parsed.data.createdTaskIds[input.recommendationId];
-      if (existingTaskId) return { status: 'success', taskId: existingTaskId };
+      if (existingTaskId) return { created: false, status: 'success', taskId: existingTaskId };
 
       const recommendation = parsed.data.recommendations.find(
         ({ id }) => id === input.recommendationId,
@@ -119,6 +128,6 @@ export class TaskRecommendationMaterializer {
           ),
         );
 
-      return { status: 'success', taskId: task.id };
+      return { created: true, status: 'success', taskId: task.id };
     });
 }
