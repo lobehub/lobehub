@@ -112,14 +112,28 @@ describe('cliAgentBinaries', () => {
     });
 
     it('returns unavailable when `where` finds nothing', async () => {
-      callExecFileError(new Error('not found'));
+      const originalPath = process.env.PATH;
+      // Single clean segment: the recovered PATH then equals it exactly, so no
+      // second `where` attempt runs.
+      process.env.PATH = 'C:\\Windows';
 
-      const { claudeCodeBinary } = await import('../cliAgentBinaries');
-      const status = await claudeCodeBinary.detect();
+      try {
+        callExecFileError(new Error('not found')); // where claude
+        // A failed `where` falls back to the registry PATH, in case this
+        // process is holding an environment snapshot older than the install.
+        callExecFileError(new Error('access denied')); // reg query HKLM
+        callExecFileError(new Error('access denied')); // reg query HKCU
 
-      expect(status.available).toBe(false);
-      // We should NOT proceed to invoke anything after a failed resolve.
-      expect(execMock).not.toHaveBeenCalled();
+        const { claudeCodeBinary } = await import('../cliAgentBinaries');
+        const status = await claudeCodeBinary.detect();
+
+        expect(status.available).toBe(false);
+        // We should NOT proceed to invoke anything after a failed resolve.
+        expect(execMock).not.toHaveBeenCalled();
+        expect(execFileMock).toHaveBeenCalledTimes(3);
+      } finally {
+        process.env.PATH = originalPath;
+      }
     });
 
     it('rejects custom commands containing shell metacharacters', async () => {
