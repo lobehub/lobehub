@@ -140,7 +140,7 @@ const expandWindowsEnvRefs = (value: string): string =>
     return match?.[1] ?? reference;
   });
 
-const readWindowsRegistryPath = async (key: string): Promise<string | undefined> => {
+const readWindowsRegistryPathValue = async (key: string): Promise<string | undefined> => {
   try {
     const { stdout } = await execFilePromise('reg', ['query', key, '/v', 'Path'], {
       timeout: 3000,
@@ -153,6 +153,13 @@ const readWindowsRegistryPath = async (key: string): Promise<string | undefined>
   }
 };
 
+const readMergedWindowsRegistryPath = async (): Promise<string | undefined> => {
+  if (!isWindows()) return undefined;
+
+  const values = await Promise.all(WINDOWS_REGISTRY_PATH_KEYS.map(readWindowsRegistryPathValue));
+  return mergePathValues(...values);
+};
+
 /**
  * PATH as the registry currently records it.
  *
@@ -161,16 +168,19 @@ const readWindowsRegistryPath = async (key: string): Promise<string | undefined>
  * Explorer session that predates a CLI install can't find that CLI on PATH
  * even though every new shell can. This is the Windows counterpart to the
  * login-shell PATH re-read used on macOS/Linux.
+ *
+ * Concurrent callers share one lookup — a scan probes every agent at once —
+ * but the result is deliberately NOT kept afterwards. Reading the registry
+ * exists precisely to observe PATH edits this process missed, so holding the
+ * answer for the process lifetime would re-create the staleness it fixes: a
+ * CLI installed after the first failed scan would stay "not installed" until
+ * the app restarted. `reg query` is a couple of short-lived processes, and it
+ * only runs when `where` already came up empty.
  */
 const getWindowsRegistryPath = async (): Promise<string | undefined> => {
-  if (!isWindows()) return undefined;
-
-  const values = await Promise.all(WINDOWS_REGISTRY_PATH_KEYS.map(readWindowsRegistryPath));
-  return mergePathValues(...values);
-};
-
-const getCachedWindowsRegistryPath = async (): Promise<string | undefined> => {
-  registryPathPromise ??= getWindowsRegistryPath();
+  registryPathPromise ??= readMergedWindowsRegistryPath().finally(() => {
+    registryPathPromise = undefined;
+  });
   return registryPathPromise;
 };
 
@@ -236,7 +246,7 @@ const resolveCommandCandidates = async (command: string): Promise<ResolvedComman
     // Windows re-reads the registry environment (the inherited block is a
     // creation-time snapshot that never picks up a later install).
     const recoveredPath = isWindows()
-      ? await getCachedWindowsRegistryPath()
+      ? await getWindowsRegistryPath()
       : await getCachedLoginShellPath();
     const lookupPath = mergePathValues(recoveredPath, process.env.PATH);
 

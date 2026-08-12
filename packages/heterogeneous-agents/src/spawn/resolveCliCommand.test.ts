@@ -452,6 +452,40 @@ describe('resolveCliCommand', () => {
       }
     });
 
+    it('re-reads the registry on a later scan instead of reusing the first answer', async () => {
+      // The user installs the CLI while the app is already open: the first
+      // scan sees neither the process PATH nor the registry, the rescan must
+      // see the registry entry the installer just wrote.
+      const originalPath = process.env.PATH;
+      const qoderBin = 'C:\\Users\\x\\AppData\\Local\\Programs\\Qoder\\bin';
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [`${qoderBin}\\qodercli.exe`]: true });
+        const { detectValidatedCommand } = await importModule();
+        const options = { validatePattern: /^v?\d+\.\d+\.\d+$/ };
+
+        callExecFileError(new Error('not found')); // where qodercli
+        callExecFileError(new Error('no value')); // reg query HKLM
+        callExecFileError(new Error('no value')); // reg query HKCU
+        expect((await detectValidatedCommand('qodercli', options)).available).toBe(false);
+
+        callExecFileError(new Error('not found')); // where qodercli
+        callExecFileError(new Error('no value')); // reg query HKLM
+        callExecFile(
+          `\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    ${qoderBin}\r\n`,
+        );
+        callExecFile(`${qoderBin}\\qodercli.exe\r\n`); // where qodercli (recovered PATH)
+        callExecFile('1.0.39');
+
+        const status = await detectValidatedCommand('qodercli', options);
+
+        expect(status).toMatchObject({ available: true, path: `${qoderBin}\\qodercli.exe` });
+      } finally {
+        process.env.PATH = originalPath;
+      }
+    });
+
     it('falls back to the Windows Codex app bundled CLI when nothing is on PATH', async () => {
       const originalLocalAppData = process.env.LOCALAPPDATA;
       const originalPath = process.env.PATH;
