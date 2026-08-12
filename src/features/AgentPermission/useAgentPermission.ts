@@ -1,15 +1,9 @@
 'use client';
 
-import type { AgentModelSelectionPolicy, LobeAgentAgencyConfig } from '@lobechat/types';
-import { useCallback, useMemo } from 'react';
+import type { AgentModelSelectionPolicy } from '@lobechat/types';
 
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
-import {
-  groupExecutionTargetDevices,
-  resolveExecutionTargetSelection,
-} from '@/features/ExecutionTargetPicker';
+import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
-import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { usePermission } from '@/hooks/usePermission';
 import type { ResourceAccessLevel } from '@/services/resourcePermission';
 import { useAgentStore } from '@/store/agent';
@@ -36,20 +30,16 @@ export interface AgentPermissionState {
 }
 
 /**
- * View model of the Agent Permission page.
+ * View model of the Agent Permission page: the member access level plus the
+ * agent's own Editable settings (shared with the Agent Group page through
+ * {@link useAgentSelectionPolicies}).
  *
- * The stored policy is read directly rather than through
- * `resolveAgentModelSelectionPolicy`: that resolver answers "what happens at
- * run time", which collapses to `fixed` for a private agent — so a control
- * driven by it would look stuck on an agent whose author is configuring the
- * rules ahead of sharing. Here the author's *intent* is what's edited — which
- * is also why a private agent still shows every control: all of them are the
- * same promise about what happens once it reaches the workspace.
+ * A private agent still shows every control: all of them are the same promise
+ * about what happens once it reaches the workspace.
  */
 export const useAgentPermission = (agentId: string): AgentPermissionState => {
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
-  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const isWorkspaceAgent = !!agent?.workspaceId;
   const isPrivate = agent?.visibility === 'private';
@@ -59,74 +49,24 @@ export const useAgentPermission = (agentId: string): AgentPermissionState => {
     error: accessError,
     isLoading: accessLoading,
     mutate: retryAccess,
-    setAccessLevel,
     // Settable while private too: the server stores the level and the publish
     // paths read it back, so it is the same configure-ahead-of-sharing promise
     // the policies below make.
+    setAccessLevel,
   } = useResourcePermission('agent', isWorkspaceAgent ? agentId : undefined);
 
-  const { data: devices } = useDeviceList();
-  const publicWorkspaceDevices = useMemo(
-    () => groupExecutionTargetDevices(devices).publicWorkspace,
-    [devices],
-  );
-
-  const agencyConfig = agent?.agencyConfig;
-  const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
-  const executionSelection = resolveExecutionTargetSelection({
-    boundDeviceId: agencyConfig?.boundDeviceId,
-    configuredTarget: agencyConfig?.executionTarget,
-    devices: publicWorkspaceDevices,
-    isHeterogeneous: !!heterogeneousType,
-  });
-
-  const saveAgencyConfig = useCallback(
-    (patch: Partial<LobeAgentAgencyConfig>) =>
-      updateAgentConfigById(agentId, { agencyConfig: patch }),
-    [agentId, updateAgentConfigById],
-  );
-
-  const setExecutionTargetPolicy = useCallback(
-    (policy: AgentModelSelectionPolicy) => {
-      if (policy === 'member') {
-        void saveAgencyConfig({ executionTargetSelectionPolicy: 'member' });
-        return;
-      }
-      // Fixing pins whatever is selected right now, so a run can't fall back to
-      // a target the author never chose.
-      if (!executionSelection) return;
-
-      void saveAgencyConfig({
-        ...(executionSelection.deviceId ? { boundDeviceId: executionSelection.deviceId } : {}),
-        executionTarget: executionSelection.target,
-        executionTargetSelectionPolicy: 'fixed',
-      });
-    },
-    [executionSelection, saveAgencyConfig],
-  );
-
-  const setModelPolicy = useCallback(
-    (policy: AgentModelSelectionPolicy) => void saveAgencyConfig({ modelSelectionPolicy: policy }),
-    [saveAgencyConfig],
-  );
+  const policies = useAgentSelectionPolicies(agentId);
 
   return {
+    ...policies,
     accessError,
     accessLevel: access?.accessLevel,
     accessLoading,
     canEditConfig: canEditContent,
-    canFixExecutionTarget:
-      !!executionSelection &&
-      (executionSelection.target !== 'sandbox' ||
-        isHeterogeneousSandboxExecutionAvailable(heterogeneousType)),
     canManageAccess: access?.canManage === true,
-    executionTargetPolicy: agencyConfig?.executionTargetSelectionPolicy ?? 'member',
     isPrivate,
     isWorkspaceAgent,
-    modelPolicy: agencyConfig?.modelSelectionPolicy ?? 'member',
     retryAccess: () => void retryAccess(),
     setAccessLevel: (level) => void setAccessLevel(level),
-    setExecutionTargetPolicy,
-    setModelPolicy,
   };
 };

@@ -105,9 +105,15 @@ const updateSchema = z.object({
 
 const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
+  // true → only tasks whose schedule or heartbeat can still fire (a terminal or
+  // misconfigured one cannot), false → its exact complement. Omitted leaves the
+  // set unnarrowed.
+  automated: z.boolean().optional(),
   hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  // Which timestamp orders the page, newest first. Defaults to creation time.
+  orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
   parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),

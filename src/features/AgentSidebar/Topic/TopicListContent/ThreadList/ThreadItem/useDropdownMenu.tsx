@@ -1,7 +1,7 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { PencilLine, Trash } from 'lucide-react';
+import { PanelRight, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,20 +10,36 @@ import { useChatStore } from '@/store/chat';
 
 interface ThreadItemDropdownMenuProps {
   id: string;
+  sourceMessageId?: string;
   toggleEditing: (visible?: boolean) => void;
 }
 
 export const useThreadItemDropdownMenu = ({
   id,
+  sourceMessageId,
   toggleEditing,
 }: ThreadItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['thread', 'common']);
   const { allowed: canEditThread } = usePermission('edit_own_content');
 
-  const [removeThread] = useChatStore((s) => [s.removeThread]);
+  const [removeThread, openThreadInPortal] = useChatStore((s) => [
+    s.removeThread,
+    s.openThreadInPortal,
+  ]);
 
   return useCallback(() => {
     return [
+      {
+        icon: <Icon icon={PanelRight} />,
+        key: 'openOnRight',
+        label: t('openOnRight', { ns: 'common' }),
+        onClick: () => {
+          openThreadInPortal(id, sourceMessageId);
+        },
+      },
+      {
+        type: 'divider' as const,
+      },
       {
         disabled: !canEditThread,
         icon: <Icon icon={PencilLine} />,
@@ -58,5 +74,5 @@ export const useThreadItemDropdownMenu = ({
         sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
-  }, [id, canEditThread, removeThread, toggleEditing, t]);
+  }, [id, sourceMessageId, canEditThread, removeThread, openThreadInPortal, toggleEditing, t]);
 };

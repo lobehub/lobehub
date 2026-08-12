@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "بررسی برنامه",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "روش تأیید",
   "builtins.lobe-delivery-checker.verifyPlan.required": "ضروری",
+  "builtins.lobe-goal.apiName.createGoal": "شروع هدف",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "ایجاد گروهی عامل‌ها",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "ایجاد عامل",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "ایجاد گروه",

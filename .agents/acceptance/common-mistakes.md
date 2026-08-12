@@ -10,21 +10,6 @@ in feature specifications or historical field notes, not in this living checklis
 
 ## Evidence and publication
 
-### L-E5 — Treating historical branch rendering as proof that conversation can continue
-
-**Wrong approach:** render a recovered historical `taskCallback` card beside the
-active tool continuation, then call the message-loss regression verified without
-sending another user message.
-
-**Why it fails:** read-path recovery proves only that existing rows are visible.
-The next user turn exercises a separate write/parent-selection path and can still
-attach to the wrong branch, disappear after reconciliation, or vanish after reload.
-
-**Correct approach:** for every conversation-branch regression, continue from the
-fixture through the real composer. Assert the new user row in the database, its
-parent on the active spine, its rendered presence before and after a cold reload,
-and the resulting assistant continuation when the environment supports it.
-
 ### L-E1 — Publishing a replacement as a second Acceptance row
 
 **Wrong approach:** assign a replacement check a new id without `supersedes`, or
@@ -175,6 +160,104 @@ disclosure is not expressible in that field.
 **Correct approach:** set `"verifier": "llm"` and carry the multimodal disclosure in
 the plan item's `method` prose alongside `"requiredEvidence": ["screenshot"]`.
 
+### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
+
+**Wrong approach:** verify working-tree changes that have no PR of their own, then
+ingest without stating that, assuming the round carries no PR because `result.json`
+omits `pullRequest` (or sets it to `null`).
+
+**Why it fails:** the ingest resolves the PR from `branch` whenever the field is
+absent OR null, so a long-lived branch that already owns a PR stamps every round
+with it. The page then presents an unrelated PR as the provenance of this
+verification, and deleting the run and re-ingesting reproduces the same stamp.
+Two rounds later nobody can tell which delivery the evidence belongs to.
+
+**Correct approach:** before publishing a round for uncommitted work, decide the
+provenance explicitly — commit and open the real PR first, or state in `report.md`
+that this round has no PR and that any PR shown belongs to other work on the same
+branch. Also re-read `branch` / `commit` at publish time rather than trusting the
+scaffold: a session that spans a branch switch fills them from whatever is checked
+out when `report-init.sh` ran.
+
+### L-E14 — Verifying an insertion affordance without continuing the user's next action
+
+**Wrong approach:** check that a composer affordance (an action-tag chip, a mention,
+a file token) inserted the right node, screenshot it, and move on — then verify the
+sent payload through a _different_ entry point that happens to be easier to drive.
+
+**Why it fails:** insertion is half the affordance; the caret it leaves behind is
+the other half. A caret parked in front of the inserted node sends the user's very
+next keystroke to the wrong side of it. For any chip that serializes into the prompt
+with position semantics — the `/goal` marker must lead the message for `isGoalPrompt`
+to match — that silently rewrites the payload into something the runtime no longer
+recognizes, while every screenshot of the insertion itself still looks correct.
+Verifying the payload through a different entry point hides it completely: the path
+with the defect is never the path that gets sent.
+
+**Correct approach:** for every insertion affordance, continue the user's action in
+the same case — type after inserting — and assert the resulting node order, not just
+the node's presence. Drive the payload check through the _same_ entry point the case
+under test uses; if an affordance has several entries (slash menu, `+` menu), the one
+you send from must be the one you are claiming works. Assert order in the persisted
+`editor_data`, since that is what both the prompt serializer and the bubble read.
+
+### L-E15 — Treating historical branch rendering as proof that conversation can continue
+
+**Wrong approach:** render a recovered historical `taskCallback` card beside the
+active tool continuation, then call the message-loss regression verified without
+sending another user message.
+
+**Why it fails:** read-path recovery proves only that existing rows are visible.
+The next user turn exercises a separate write/parent-selection path and can still
+attach to the wrong branch, disappear after reconciliation, or vanish after reload.
+
+**Correct approach:** for every conversation-branch regression, continue from the
+fixture through the real composer. Assert the new user row in the database, its
+parent on the active spine, its rendered presence before and after a cold reload,
+and the resulting assistant continuation when the environment supports it.
+
+### L-E16 — Treating a terminal reply as evidence of live streaming
+
+**Wrong approach:** ask a device-executed Claude Code agent for a one-token fixed
+marker, record until the process exits, and treat the eventual assistant text or
+a refreshed screenshot as proof that the reply streamed into the open Topic.
+
+**Why it fails:** `lh hetero exec` can run Claude Code without
+`--include-partial-messages`. In that mode the adapter receives only the final
+assistant snapshot, so the UI may show an empty target-Agent shell for the whole
+run and acquire the text only during terminal reconciliation. A short fixed
+marker also has no observable intermediate state even when partial framing works.
+
+The acceptance proves persistence and refresh recovery but
+does not prove the user sees the answer arrive live; a GIF of an empty shell is
+mistaken for streaming evidence.
+
+**Correct approach:** enable Claude Code partial messages on the device/sandbox
+CLI spawn path. Verify with a multi-part response and timestamped DOM/store
+samples before any reload, then attach a GIF whose frames visibly progress and
+whose final frame contains the complete answer. Check persistence separately by
+refreshing only after the live-stream assertion has passed.
+
+### L-E17 — Proving direct-mention routing with a text-only response
+
+**Wrong approach:** verify a leading single-Agent mention only with a plain-text
+response, then conclude that the direct-routing message tree is correct for all
+target-Agent runs.
+
+**Why it fails:** tool-capable runs add assistant tool-call chunks and
+tool-result messages. Those nodes can accidentally inherit the owner Agent,
+create a synthetic target-user envelope, or resume the owner after the tool
+result even when the initial text response looked correct.
+
+The simple happy path passes while real coding Agents either
+lose their tool output, render it under the wrong Agent, or invoke Lobe AI for
+the final answer.
+
+**Correct approach:** exercise a deterministic real tool call through the same
+gateway/device route, then assert the complete persisted tree: original owner
+user, target assistant/tool call, tool result, and target final response. Also
+assert there is no owner assistant, `callAgent`, or synthetic target-user row.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -265,6 +348,26 @@ one. Where that link would otherwise duplicate the segment's own label, render i
 deeper routes and let the segment name the section on the index route. Verify the deepest
 route of every section, not just the index: an index-only pass cannot see this failure.
 
+### L-D8 — Rendering a cross-agent dispatch envelope as a visible user turn
+
+**Wrong approach:** treat every persisted `role: user` row as a user-authored
+message when building the visible conversation list.
+
+**Why it fails:** `callAgent` persists a synthetic user envelope beneath the
+caller assistant so the target Agent has an isolated execution context. When
+that envelope is rendered, the original prompt appears twice even though the
+target Agent produced only one reply.
+
+Users see a duplicate prompt bubble and cannot tell whether
+the delegation ran once or twice; acceptance screenshots become misleading.
+
+**Correct approach:** stamp synthetic envelopes with explicit dispatch metadata
+when they are persisted, keep them in the context tree, and let the presentation
+layer hide only rows declared `visibility: internal`. Continue traversal through
+the envelope so the target assistant reply remains independently visible.
+Never infer authorship from agent-id differences or a parent tool call: a real
+cross-Agent user follow-up can have the same tree shape.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -303,17 +406,27 @@ database may contain the user's synchronized profile.
 distinguishes environments. For production publishing without changing a local
 login, use an isolated `LOBEHUB_CLI_HOME` for login and ingest.
 
-### L-S2 — Trusting a successful renderer build as proof Electron boots
+### L-S2 — Trusting green gates as proof the app boots
 
-**Wrong approach:** use green Vite and Vitest results as blank-screen insurance for
-a desktop routing or module-graph change.
+**Wrong approach:** use green Vite, Vitest, lint, and type-check results as
+blank-screen insurance for a routing or module-graph change, on Electron or Web.
 
 **Why it fails:** browser ESM initialization cycles and nested-router invariants can
-fail only when the real renderer starts.
+fail only when the real renderer starts. Vitest resolves a module graph in its own
+order, so a cycle that is harmless under test can still put a module-level binding in
+the temporal dead zone in the bundler's order — the app then dies at the
+`ErrorBoundary` with `Cannot access '<X>' before initialization` while every gate
+stays green. Adding a shared constant next to the logic that uses it is the common
+way to close such a cycle in a folder where a node/component pair already import each
+other.
 
-**Correct approach:** boot the real Electron instance, require the project readiness
-probe to report a non-error UI, and inspect a screenshot. Router-host component tests
-must also cover the real outer-router composition.
+**Correct approach:** boot the real surface, require the project readiness probe to
+report a non-error UI, and inspect a screenshot before claiming a UI change is
+delivered. On a boot failure read `agent-browser console` (the ErrorBoundary page
+itself shows no stack) and attribute before diagnosing. Keep cross-module constants
+in the folder's leaf module — the one that imports nothing from its siblings — rather
+than beside their primary consumer. Router-host component tests must also cover the
+real outer-router composition.
 
 ### L-S3 — Verifying Acceptance UI against an unfetched canary ref
 
@@ -391,69 +504,38 @@ the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*`
 from the dev server and grep for a marker of the fix — or restart the dev server
 process outright and re-verify.
 
+**Same failure, second shape — a dev server that was already running when the run
+started.** A leftover server can be listening on a port that no longer matches what
+`test-env.sh` resolves, serving a dep graph optimized against a different config. The
+SPA then dies at the ErrorBoundary with `TypeError: Failed to fetch dynamically
+imported module: …/_layout/index.tsx`, which reads exactly like a broken route tree in
+the branch under test — while every module in that graph still returns 200 to `curl`,
+because the served copy and the requested copy disagree, not the source. Before
+attributing any module-load failure to the change under test, compare the running
+server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` and
+restart before diagnosing anything. The restarted server is then yours to stop at
+teardown even though you did not start the original.
+
 ---
 
-## Cross-agent dispatch envelopes are not visible user turns
+### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 
-**Wrong approach**: treat every persisted `role: user` row as a user-authored
-message when building the visible conversation list.
+**Wrong approach:** treat the Electron dev instance's first renderer boot as
+representative, and diagnose a `ReferenceError: Cannot access '<X>' before
+initialization` thrown from the desktop router config as a bug in the branch.
 
-**Why it's wrong**: `callAgent` persists a synthetic user envelope beneath the
-caller assistant so the target Agent has an isolated execution context. When
-that envelope is rendered, the original prompt appears twice even though the
-target Agent produced only one reply.
+**Why it fails:** the desktop Vite renderer can serve a partially initialized
+module graph on the very first boot after a cold start (dependency optimization
+runs concurrently with the first evaluation). The app stays on the HTML loading
+shell with `rootChildren: 0` while the stores are already exposed, which reads
+exactly like a broken route tree. A single `location.reload()` boots it cleanly
+with no code change.
 
-**What it breaks**: users see a duplicate prompt bubble and cannot tell whether
-the delegation ran once or twice; acceptance screenshots become misleading.
-
-**Correct approach**: stamp synthetic envelopes with explicit dispatch metadata
-when they are persisted, keep them in the context tree, and let the presentation
-layer hide only rows declared `visibility: internal`. Continue traversal through
-the envelope so the target assistant reply remains independently visible.
-Never infer authorship from agent-id differences or a parent tool call: a real
-cross-Agent user follow-up can have the same tree shape.
-
-## A terminal Claude Code reply is not evidence of live streaming
-
-**Wrong approach**: ask a device-executed Claude Code agent for a one-token fixed
-marker, record until the process exits, and treat the eventual assistant text or
-a refreshed screenshot as proof that the reply streamed into the open Topic.
-
-**Why it's wrong**: `lh hetero exec` can run Claude Code without
-`--include-partial-messages`. In that mode the adapter receives only the final
-assistant snapshot, so the UI may show an empty target-Agent shell for the whole
-run and acquire the text only during terminal reconciliation. A short fixed
-marker also has no observable intermediate state even when partial framing works.
-
-**What it breaks**: the acceptance proves persistence and refresh recovery but
-does not prove the user sees the answer arrive live; a GIF of an empty shell is
-mistaken for streaming evidence.
-
-**Correct approach**: enable Claude Code partial messages on the device/sandbox
-CLI spawn path. Verify with a multi-part response and timestamped DOM/store
-samples before any reload, then attach a GIF whose frames visibly progress and
-whose final frame contains the complete answer. Check persistence separately by
-refreshing only after the live-stream assertion has passed.
-
-## A text-only direct mention does not prove tool-call ownership
-
-**Wrong approach**: verify a leading single-Agent mention only with a plain-text
-response, then conclude that the direct-routing message tree is correct for all
-target-Agent runs.
-
-**Why it's wrong**: tool-capable runs add assistant tool-call chunks and
-tool-result messages. Those nodes can accidentally inherit the owner Agent,
-create a synthetic target-user envelope, or resume the owner after the tool
-result even when the initial text response looked correct.
-
-**What it breaks**: the simple happy path passes while real coding Agents either
-lose their tool output, render it under the wrong Agent, or invoke Lobe AI for
-the final answer.
-
-**Correct approach**: exercise a deterministic real tool call through the same
-gateway/device route, then assert the complete persisted tree: original owner
-user, target assistant/tool call, tool result, and target final response. Also
-assert there is no owner assistant, `callAgent`, or synthetic target-user row.
+**Correct approach:** on a first-boot renderer error, reload once and re-probe
+before drawing any conclusion. Only if the error survives a reload does it belong
+to the code. Never attribute it to the change under test without that A/B — and
+note that `electron-dev.sh start` reports "Ready" even when the renderer never
+became interactive, so its own readiness line is not the gate.
 
 ## Historical source
 

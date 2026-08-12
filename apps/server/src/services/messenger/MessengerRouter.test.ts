@@ -125,8 +125,14 @@ vi.mock('@/server/services/bot/AgentBridgeService', () => ({
 // partition test can feed it rows without standing up drizzle. AgentModel's
 // methods are instance arrow-function fields, so prototype spies don't work.
 const mockListMessengerBindableAgents = vi.fn();
+const mockAgentExistsById = vi.fn();
+const mockAgentModelConstructor = vi.fn();
 vi.mock('@/database/models/agent', () => ({
   AgentModel: class {
+    constructor(...args: unknown[]) {
+      mockAgentModelConstructor(...args);
+    }
+    existsById = (...args: any[]) => mockAgentExistsById(...args);
     listMessengerBindableAgents = (...args: any[]) => mockListMessengerBindableAgents(...args);
   },
 }));
@@ -273,6 +279,11 @@ beforeEach(() => {
   mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
   mockGetBotFeatureAccessState.mockReset();
   mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
+  mockAgentModelConstructor.mockReset();
+  mockAgentExistsById.mockReset();
+  // Default: the bound active agent still resolves. Tests that exercise the
+  // stale-binding path override this.
+  mockAgentExistsById.mockResolvedValue(true);
   mockAgentBridgeConstructor.mockReset();
   mockHandleMention.mockReset();
   mockHandleSubscribed.mockReset();
@@ -662,6 +673,57 @@ describe('MessengerRouter channel @mention', () => {
       channelId: 'C_GENERAL',
       userId: 'U_ALICE',
     });
+  });
+
+  it('skips dispatch and prompts /agents when the active agent no longer exists', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_deleted',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: null,
+    });
+    // The bound agent was deleted (or moved out of the active scope).
+    mockAgentExistsById.mockResolvedValue(false);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true }));
+
+    // Without this guard the run reaches the agent runtime and the user gets a
+    // bare "Agent Execution Failed" with no operation id.
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockAgentExistsById).toHaveBeenCalledWith('agt_deleted');
+    expect(mockAgentModelConstructor).toHaveBeenCalledWith({}, 'user_alice', undefined);
+    expect(mockSlackBinder.sendDmText).toHaveBeenCalledWith(
+      'D_DM',
+      expect.stringContaining('/agents'),
+    );
+  });
+
+  it('scopes the active-agent check to the linked workspace', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: 'workspace-1',
+    });
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true }));
+
+    expect(mockAgentModelConstructor).toHaveBeenCalledWith({}, 'user_alice', 'workspace-1');
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
   });
 
   it('routes an unlinked channel mention through handleUnlinkedMessage with channelMentionThreadId', async () => {

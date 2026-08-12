@@ -9,6 +9,7 @@ import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { electronStylish } from '@/styles/electron';
+import { preloadLang } from '@/utils/client/preloadLang';
 
 const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: number }>(
   ({ placement, size }) => {
@@ -25,7 +26,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
         closeOnClick: true,
         key: 'auto',
         label: (
-          <Flexbox gap={4}>
+          <Flexbox gap={4} onMouseEnter={() => preloadLang('auto')}>
             <Text style={{ lineHeight: 1.2 }}>{t('settingCommon.lang.autoMode')}</Text>
             <Text fontSize={12} style={{ lineHeight: 1.2 }} type={'secondary'}>
               {t(`lang.auto` as any, { ns: 'common' })}
@@ -45,7 +46,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
         closeOnClick: true,
         key: item.value,
         label: (
-          <Flexbox gap={4} key={item.value}>
+          <Flexbox gap={4} key={item.value} onMouseEnter={() => preloadLang(item.value)}>
             <Text style={{ lineHeight: 1.2 }}>{item.label}</Text>
             <Text fontSize={12} style={{ lineHeight: 1.2 }} type={'secondary'}>
               {t(`lang.${item.value}` as any, { ns: 'common' })}

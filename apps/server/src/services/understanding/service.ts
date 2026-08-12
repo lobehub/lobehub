@@ -11,6 +11,7 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
+import { observeOnboardingUnderstandingOperation } from '@lobechat/observability-otel/modules/onboarding-understanding';
 import {
   chainUnderstandingDetailedPersona,
   chainUnderstandingPersona,
@@ -255,22 +256,40 @@ export class UnderstandingService {
   private initialize = async (
     topicId: string,
     selectedProviderIds?: string[],
-  ): Promise<OnboardingUnderstandingSession> => {
-    await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
-    const current = await this.dependencies.repository.get(topicId);
-    if (current) return current;
-    const requestedProviderIds = selectedProviderIds
-      ? [...new Set(selectedProviderIds)].sort()
-      : [...this.dependencies.providers.keys()].sort();
-    if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
-      throw new UnderstandingResourceNotFoundError('session');
-    }
-    const availableProviderIds = new Set(await this.listSourceProviderIds());
-    const providerIds = requestedProviderIds.filter((providerId) =>
-      availableProviderIds.has(providerId),
-    );
-    return this.dependencies.repository.initialize(topicId, this.dependencies.ids(), providerIds);
-  };
+  ): Promise<OnboardingUnderstandingSession> =>
+    observeOnboardingUnderstandingOperation({ operation: 'initialize', topicId }, async () => {
+      await observeOnboardingUnderstandingOperation(
+        { operation: 'topic.assert-active', topicId },
+        () => this.dependencies.topic.assertActiveOnboardingTopic(topicId),
+      );
+
+      const current = await observeOnboardingUnderstandingOperation(
+        { operation: 'session.read', topicId },
+        () => this.dependencies.repository.get(topicId),
+      );
+      if (current) return current;
+
+      const requestedProviderIds = selectedProviderIds
+        ? [...new Set(selectedProviderIds)].sort()
+        : [...this.dependencies.providers.keys()].sort();
+      if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
+        throw new UnderstandingResourceNotFoundError('session');
+      }
+      const availableProviderIds = new Set(
+        await observeOnboardingUnderstandingOperation(
+          { operation: 'provider.resolve-available', topicId },
+          () => this.listSourceProviderIds(),
+        ),
+      );
+      const providerIds = requestedProviderIds.filter((providerId) =>
+        availableProviderIds.has(providerId),
+      );
+      const sessionId = this.dependencies.ids();
+      return observeOnboardingUnderstandingOperation(
+        { operation: 'session.persist', sessionId, topicId },
+        () => this.dependencies.repository.initialize(topicId, sessionId, providerIds),
+      );
+    });
 
   start = async (
     topicId: string,
@@ -278,28 +297,40 @@ export class UnderstandingService {
     selectedProviderIds?: string[],
     options: UnderstandingStartOptions = {},
   ): Promise<OnboardingUnderstandingPollingResult> => {
-    const { OnboardingUnderstandingWorkflow } =
-      await import('@/server/workflows/onboardingUnderstanding');
-    OnboardingUnderstandingWorkflow.assertAvailable();
-    const session = await this.initialize(topicId, selectedProviderIds);
-    const providers = Object.entries(session.sources)
-      .filter(([, state]) => state.status === 'pending')
-      .toSorted(([left], [right]) => left.localeCompare(right))
-      .map(([id, state]) => ({ id, revision: state.revision + 1 }));
-    if (providers.length > 0) {
-      await OnboardingUnderstandingWorkflow.triggerProviders(
-        {
-          providers,
-          responseLanguage,
-          sessionId: session.id,
-          triggerTaskRecommendations: options.triggerTaskRecommendations,
-          topicId,
-          userId: this.dependencies.userId,
-        },
-        { workflowRunId: `onboarding-understanding-initial-${session.id}` },
-      );
-    }
-    return this.get(topicId);
+    const startedAt = Date.now();
+    return observeOnboardingUnderstandingOperation(
+      { operation: 'session.start', topicId },
+      async () => {
+        const { OnboardingUnderstandingWorkflow } =
+          await import('@/server/workflows/onboardingUnderstanding');
+        OnboardingUnderstandingWorkflow.assertAvailable();
+
+        const session = await this.initialize(topicId, selectedProviderIds);
+        const providers = Object.entries(session.sources)
+          .filter(([, state]) => state.status === 'pending')
+          .toSorted(([left], [right]) => left.localeCompare(right))
+          .map(([id, state]) => ({ id, revision: state.revision + 1 }));
+        if (providers.length > 0) {
+          await observeOnboardingUnderstandingOperation(
+            { operation: 'workflow.trigger', sessionId: session.id, topicId },
+            () =>
+              OnboardingUnderstandingWorkflow.triggerProviders(
+                {
+                  providers,
+                  responseLanguage,
+                  sessionId: session.id,
+                  startedAt,
+                  triggerTaskRecommendations: options.triggerTaskRecommendations,
+                  topicId,
+                  userId: this.dependencies.userId,
+                },
+                { workflowRunId: `onboarding-understanding-initial-${session.id}` },
+              ),
+          );
+        }
+        return this.get(topicId);
+      },
+    );
   };
 
   revise = async (
@@ -376,6 +407,7 @@ export class UnderstandingService {
           providers: providerAttempts,
           responseLanguage: input.responseLanguage,
           sessionId: input.sessionId,
+          startedAt: Date.now(),
           topicId: input.topicId,
           userId: this.dependencies.userId,
         },
@@ -392,6 +424,7 @@ export class UnderstandingService {
           sessionId: input.sessionId,
           responseLanguage: input.responseLanguage,
           sourceFingerprint,
+          startedAt: Date.now(),
           topicId: input.topicId,
           userId: this.dependencies.userId,
         },
@@ -461,6 +494,7 @@ export class UnderstandingService {
           providers: [{ id: input.providerId, revision }],
           responseLanguage: input.responseLanguage,
           sessionId: input.sessionId,
+          startedAt: Date.now(),
           topicId: input.topicId,
           userId: this.dependencies.userId,
         },
@@ -481,123 +515,156 @@ export class UnderstandingService {
     return this.get(input.topicId);
   };
 
-  processProvider = async (input: ProviderOperationInput) => {
-    const session = await this.activeSession(input.topicId, input.sessionId);
-    const provider = this.dependencies.providers.get(input.providerId);
-    const state = session.sources[input.providerId];
-    if (!provider || !state) throw new UnderstandingResourceNotFoundError('session');
-    const stale = () => ({
-      failedCount: 0,
-      providerId: input.providerId,
-      revision: input.revision,
-      sourceCount: 0,
-      status: 'stale' as const,
-      succeededCount: 0,
-    });
-
-    if (state.status === 'completed') {
-      if (state.revision !== input.revision) return stale();
-      const sourceFingerprint = getUnderstandingSourceFingerprint(session);
-      if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
-      const stored = await this.dependencies.sourceStore().get({
+  processProvider = async (input: ProviderOperationInput) =>
+    observeOnboardingUnderstandingOperation(
+      {
+        operation: 'provider.process',
         providerId: input.providerId,
-        revision: input.revision,
         sessionId: input.sessionId,
-        userId: this.dependencies.userId,
-      });
-      if (stored) {
-        return {
-          failedCount: stored.diagnostics.failedCount,
+        topicId: input.topicId,
+      },
+      async () => {
+        const operationAttributes = {
+          providerId: input.providerId,
+          sessionId: input.sessionId,
+          topicId: input.topicId,
+        };
+        const session = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'session.read' },
+          () => this.activeSession(input.topicId, input.sessionId),
+        );
+        const provider = this.dependencies.providers.get(input.providerId);
+        const state = session.sources[input.providerId];
+        if (!provider || !state) throw new UnderstandingResourceNotFoundError('session');
+        const stale = () => ({
+          failedCount: 0,
           providerId: input.providerId,
           revision: input.revision,
-          sourceCount: stored.sourceCount,
-          sourceFingerprint,
-          status: 'completed' as const,
-          succeededCount: stored.diagnostics.succeededCount,
-        };
-      }
-      const expired = await this.dependencies.repository.expireProviderContexts({
-        providers: [{ providerId: input.providerId, revision: input.revision }],
-        sessionId: input.sessionId,
-        sourceFingerprint,
-        topicId: input.topicId,
-      });
-      const expiredState = expired.sources[input.providerId];
-      return expiredState?.revision === input.revision && expiredState.status === 'failed'
-        ? {
-            failedCount: expiredState.failedCount,
+          sourceCount: 0,
+          status: 'stale' as const,
+          succeededCount: 0,
+        });
+
+        if (state.status === 'completed') {
+          if (state.revision !== input.revision) return stale();
+          const sourceFingerprint = getUnderstandingSourceFingerprint(session);
+          if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+          const stored = await this.dependencies.sourceStore().get({
             providerId: input.providerId,
             revision: input.revision,
-            sourceCount: 0,
-            status: 'failed' as const,
-            succeededCount: expiredState.succeededCount,
+            sessionId: input.sessionId,
+            userId: this.dependencies.userId,
+          });
+          if (stored) {
+            return {
+              failedCount: stored.diagnostics.failedCount,
+              providerId: input.providerId,
+              revision: input.revision,
+              sourceCount: stored.sourceCount,
+              sourceFingerprint,
+              status: 'completed' as const,
+              succeededCount: stored.diagnostics.succeededCount,
+            };
           }
-        : stale();
-    }
+          const expired = await this.dependencies.repository.expireProviderContexts({
+            providers: [{ providerId: input.providerId, revision: input.revision }],
+            sessionId: input.sessionId,
+            sourceFingerprint,
+            topicId: input.topicId,
+          });
+          const expiredState = expired.sources[input.providerId];
+          return expiredState?.revision === input.revision && expiredState.status === 'failed'
+            ? {
+                failedCount: expiredState.failedCount,
+                providerId: input.providerId,
+                revision: input.revision,
+                sourceCount: 0,
+                status: 'failed' as const,
+                succeededCount: expiredState.succeededCount,
+              }
+            : stale();
+        }
 
-    if (state.status === 'pending') {
-      if (state.revision + 1 !== input.revision) return stale();
-      const running = await this.dependencies.repository.markProviderRunning(
-        input.topicId,
-        input.sessionId,
-        input.providerId,
-      );
-      if (running.revision !== input.revision) return stale();
-    } else if (state.status !== 'running' || state.revision !== input.revision) {
-      return stale();
-    }
+        if (state.status === 'pending') {
+          if (state.revision + 1 !== input.revision) return stale();
+          const running = await observeOnboardingUnderstandingOperation(
+            { ...operationAttributes, operation: 'provider.mark-running' },
+            () =>
+              this.dependencies.repository.markProviderRunning(
+                input.topicId,
+                input.sessionId,
+                input.providerId,
+              ),
+          );
+          if (running.revision !== input.revision) return stale();
+        } else if (state.status !== 'running' || state.revision !== input.revision) {
+          return stale();
+        }
 
-    let collected;
-    try {
-      collected = await provider.collect({
-        connectorData: this.dependencies.connectorData,
-        userId: this.dependencies.userId,
-      });
-    } catch (error) {
-      if (!(error instanceof ConnectorDataError) || error.retryable) throw error;
-      return this.recordProviderFailure(input, 0);
-    }
+        let collected;
+        try {
+          collected = await observeOnboardingUnderstandingOperation(
+            { ...operationAttributes, operation: 'provider.collect' },
+            () =>
+              provider.collect({
+                connectorData: this.dependencies.connectorData,
+                userId: this.dependencies.userId,
+              }),
+          );
+        } catch (error) {
+          if (!(error instanceof ConnectorDataError) || error.retryable) throw error;
+          return this.recordProviderFailure(input, 0);
+        }
 
-    const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-    const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
-    const usable =
-      Boolean(context) &&
-      collected.sourceCount > 0 &&
-      diagnostics.evidenceCount > 0 &&
-      diagnostics.succeededCount > 0;
-    if (!usable) return this.recordProviderFailure(input, diagnostics.succeededCount, diagnostics);
+        const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
+        const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
+        const usable =
+          Boolean(context) &&
+          collected.sourceCount > 0 &&
+          diagnostics.evidenceCount > 0 &&
+          diagnostics.succeededCount > 0;
+        if (!usable)
+          return this.recordProviderFailure(input, diagnostics.succeededCount, diagnostics);
 
-    const stored = {
-      context,
-      diagnostics,
-      providerId: input.providerId,
-      revision: input.revision,
-      sessionId: input.sessionId,
-      sourceCount: collected.sourceCount,
-      userId: this.dependencies.userId,
-    };
-    await this.dependencies.sourceStore().put(stored);
-    const transition = await this.dependencies.repository.completeProvider({
-      errors: diagnostics.errors,
-      failedCount: diagnostics.failedCount,
-      providerId: input.providerId,
-      revision: input.revision,
-      sessionId: input.sessionId,
-      succeededCount: diagnostics.succeededCount,
-      topicId: input.topicId,
-    });
-    const sourceFingerprint = getUnderstandingSourceFingerprint(transition);
-    if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
-    return {
-      failedCount: diagnostics.failedCount,
-      providerId: input.providerId,
-      revision: input.revision,
-      sourceCount: collected.sourceCount,
-      sourceFingerprint,
-      status: 'completed' as const,
-      succeededCount: diagnostics.succeededCount,
-    };
-  };
+        const stored = {
+          context,
+          diagnostics,
+          providerId: input.providerId,
+          revision: input.revision,
+          sessionId: input.sessionId,
+          sourceCount: collected.sourceCount,
+          userId: this.dependencies.userId,
+        };
+        await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'provider.persist-context' },
+          () => this.dependencies.sourceStore().put(stored),
+        );
+        const transition = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'provider.complete' },
+          () =>
+            this.dependencies.repository.completeProvider({
+              errors: diagnostics.errors,
+              failedCount: diagnostics.failedCount,
+              providerId: input.providerId,
+              revision: input.revision,
+              sessionId: input.sessionId,
+              succeededCount: diagnostics.succeededCount,
+              topicId: input.topicId,
+            }),
+        );
+        const sourceFingerprint = getUnderstandingSourceFingerprint(transition);
+        if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+        return {
+          failedCount: diagnostics.failedCount,
+          providerId: input.providerId,
+          revision: input.revision,
+          sourceCount: collected.sourceCount,
+          sourceFingerprint,
+          status: 'completed' as const,
+          succeededCount: diagnostics.succeededCount,
+        };
+      },
+    );
 
   failProvider = async (input: ProviderOperationInput) => {
     try {
@@ -633,114 +700,138 @@ export class UnderstandingService {
     responseLanguage,
     sessionId,
     topicId,
-  }: ProcessCollectedInput) => {
-    const session = await this.activeSession(topicId, sessionId);
-    const feedback = session.feedback ?? { revision: 0, turns: [] };
-    if (getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint) {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-    if (
-      session.writing?.sourceFingerprint === expectedSourceFingerprint &&
-      (session.writing.feedbackRevision ?? 0) === feedback.revision &&
-      session.writing.status === 'completed'
-    ) {
-      return {
-        feedbackRevision: session.writing.feedbackRevision ?? 0,
-        generationRevision: session.writing.generationRevision ?? 0,
-        published: true as const,
-        resultId: session.writing.resultMessageId,
-        sourceFingerprint: expectedSourceFingerprint,
-      };
-    }
+  }: ProcessCollectedInput) =>
+    observeOnboardingUnderstandingOperation(
+      { operation: 'writer.process', sessionId, topicId },
+      async () => {
+        const operationAttributes = { sessionId, topicId };
+        const session = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'session.read' },
+          () => this.activeSession(topicId, sessionId),
+        );
+        const feedback = session.feedback ?? { revision: 0, turns: [] };
+        if (getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+        if (
+          session.writing?.sourceFingerprint === expectedSourceFingerprint &&
+          (session.writing.feedbackRevision ?? 0) === feedback.revision &&
+          session.writing.status === 'completed'
+        ) {
+          return {
+            feedbackRevision: session.writing.feedbackRevision ?? 0,
+            generationRevision: session.writing.generationRevision ?? 0,
+            published: true as const,
+            resultId: session.writing.resultMessageId,
+            sourceFingerprint: expectedSourceFingerprint,
+          };
+        }
 
-    const completed = Object.entries(session.sources)
-      .filter(([, state]) => state.status === 'completed')
-      .sort(([left], [right]) => left.localeCompare(right));
-    const sourceStore = this.dependencies.sourceStore();
-    const contexts = await Promise.all(
-      completed.map(([providerId, state]) =>
-        sourceStore.get({
-          providerId,
-          revision: state.revision,
+        const completed = Object.entries(session.sources)
+          .filter(([, state]) => state.status === 'completed')
+          .sort(([left], [right]) => left.localeCompare(right));
+        const sourceStore = this.dependencies.sourceStore();
+        const contexts = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.read-contexts' },
+          () =>
+            Promise.all(
+              completed.map(([providerId, state]) =>
+                sourceStore.get({
+                  providerId,
+                  revision: state.revision,
+                  sessionId,
+                  userId: this.dependencies.userId,
+                }),
+              ),
+            ),
+        );
+        const missing = completed.flatMap(([providerId, state], index) =>
+          contexts[index] ? [] : [{ providerId, revision: state.revision }],
+        );
+        if (missing.length > 0) {
+          await this.dependencies.repository.expireProviderContexts({
+            providers: missing,
+            sessionId,
+            sourceFingerprint: expectedSourceFingerprint,
+            topicId,
+          });
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+
+        const sourceContexts = contexts as StoredUnderstandingProviderContext[];
+        const threadId = writingThreadId(sessionId, expectedSourceFingerprint, feedback.revision);
+        const writerAgent = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.resolve-agent' },
+          () => this.dependencies.writerAgent(),
+        );
+        const prepared = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.prepare' },
+          () =>
+            this.dependencies.repository.prepareWriting({
+              agentId: writerAgent.id,
+              expectedFeedbackRevision: feedback.revision,
+              sessionId,
+              sourceFingerprint: expectedSourceFingerprint,
+              threadId,
+              topicId,
+            }),
+        );
+        if (!prepared.ready) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+
+        const providers = sourceContexts.map(({ providerId }) => providerId);
+        const diagnostics = sumDiagnostics(session, sourceContexts);
+        const writerResult = await this.runWriter({
+          contexts: sourceContexts,
+          diagnostics,
+          feedback: feedback.turns,
+          providers,
+          responseLanguage,
           sessionId,
-          userId: this.dependencies.userId,
-        }),
-      ),
+          threadId,
+          topicId,
+          writerAgent,
+        });
+        const metadata = OnboardingUnderstandingMessageMetadataSchema.parse({
+          analysis: writerResult.analysis,
+          diagnostics,
+          feedbackRevision: prepared.feedbackRevision,
+          generationRevision: prepared.generationRevision,
+          kind: 'proposal',
+          providers,
+          resultId: writerResult.assistantMessageId,
+          sourceFingerprint: expectedSourceFingerprint,
+        });
+        const committed = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.commit' },
+          () =>
+            this.dependencies.repository.commitWriting({
+              assistantMessageId: writerResult.assistantMessageId,
+              feedbackRevision: prepared.feedbackRevision,
+              generationRevision: prepared.generationRevision,
+              metadata,
+              sessionId,
+              sourceFingerprint: expectedSourceFingerprint,
+              threadId,
+              topicId,
+            }),
+        );
+        if (!committed.published) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+        return {
+          feedbackRevision: prepared.feedbackRevision,
+          generationRevision: prepared.generationRevision,
+          ...(committed.personaVersion === undefined
+            ? {}
+            : { personaVersion: committed.personaVersion }),
+          published: true as const,
+          resultId: writerResult.assistantMessageId,
+          sourceFingerprint: expectedSourceFingerprint,
+        };
+      },
     );
-    const missing = completed.flatMap(([providerId, state], index) =>
-      contexts[index] ? [] : [{ providerId, revision: state.revision }],
-    );
-    if (missing.length > 0) {
-      await this.dependencies.repository.expireProviderContexts({
-        providers: missing,
-        sessionId,
-        sourceFingerprint: expectedSourceFingerprint,
-        topicId,
-      });
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-
-    const sourceContexts = contexts as StoredUnderstandingProviderContext[];
-    const threadId = writingThreadId(sessionId, expectedSourceFingerprint, feedback.revision);
-    const writerAgent = await this.dependencies.writerAgent();
-    const prepared = await this.dependencies.repository.prepareWriting({
-      agentId: writerAgent.id,
-      expectedFeedbackRevision: feedback.revision,
-      sessionId,
-      sourceFingerprint: expectedSourceFingerprint,
-      threadId,
-      topicId,
-    });
-    if (!prepared.ready) {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-
-    const providers = sourceContexts.map(({ providerId }) => providerId);
-    const diagnostics = sumDiagnostics(session, sourceContexts);
-    const writerResult = await this.runWriter({
-      contexts: sourceContexts,
-      diagnostics,
-      feedback: feedback.turns,
-      providers,
-      responseLanguage,
-      threadId,
-      topicId,
-      writerAgent,
-    });
-    const metadata = OnboardingUnderstandingMessageMetadataSchema.parse({
-      analysis: writerResult.analysis,
-      diagnostics,
-      feedbackRevision: prepared.feedbackRevision,
-      generationRevision: prepared.generationRevision,
-      kind: 'proposal',
-      providers,
-      resultId: writerResult.assistantMessageId,
-      sourceFingerprint: expectedSourceFingerprint,
-    });
-    const committed = await this.dependencies.repository.commitWriting({
-      assistantMessageId: writerResult.assistantMessageId,
-      feedbackRevision: prepared.feedbackRevision,
-      generationRevision: prepared.generationRevision,
-      metadata,
-      sessionId,
-      sourceFingerprint: expectedSourceFingerprint,
-      threadId,
-      topicId,
-    });
-    if (!committed.published) {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-    return {
-      feedbackRevision: prepared.feedbackRevision,
-      generationRevision: prepared.generationRevision,
-      ...(committed.personaVersion === undefined
-        ? {}
-        : { personaVersion: committed.personaVersion }),
-      published: true as const,
-      resultId: writerResult.assistantMessageId,
-      sourceFingerprint: expectedSourceFingerprint,
-    };
-  };
 
   failWriting = async ({
     sessionId,
@@ -753,7 +844,7 @@ export class UnderstandingService {
   }) => {
     try {
       const current = await this.activeSession(topicId, sessionId);
-      if (!current.writing || current.writing.sourceFingerprint !== sourceFingerprint) return;
+      if (current.writing && current.writing.sourceFingerprint !== sourceFingerprint) return;
       const session = await this.dependencies.repository.failWriting({
         error: canonicalCollectionError(
           'understanding',
@@ -761,8 +852,8 @@ export class UnderstandingService {
           'UNDERSTANDING_WRITING_FAILED',
           true,
         ),
-        feedbackRevision: current.writing.feedbackRevision ?? 0,
-        generationRevision: current.writing.generationRevision ?? 0,
+        feedbackRevision: current.writing?.feedbackRevision ?? current.feedback?.revision ?? 0,
+        generationRevision: current.writing?.generationRevision ?? current.generationRevision ?? 0,
         sessionId,
         sourceFingerprint,
         topicId,
@@ -787,91 +878,124 @@ export class UnderstandingService {
     responseLanguage,
     sessionId,
     topicId,
-  }: ProcessCollectedInput) => {
-    const session = await this.activeSession(topicId, sessionId);
-    const writing = session.writing;
-    if (
-      getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint ||
-      writing?.status !== 'completed' ||
-      writing.sourceFingerprint !== expectedSourceFingerprint
-    ) {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-    if (writing.detailed?.status === 'completed') {
-      return { published: true as const, sourceFingerprint: expectedSourceFingerprint };
-    }
-    if (writing.detailed?.status !== 'running') {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
+  }: ProcessCollectedInput) =>
+    observeOnboardingUnderstandingOperation(
+      { operation: 'detailed.process', sessionId, topicId },
+      async () => {
+        const operationAttributes = { sessionId, topicId };
+        const session = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'session.read' },
+          () => this.activeSession(topicId, sessionId),
+        );
+        const writing = session.writing;
+        if (
+          getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint ||
+          writing?.status !== 'completed' ||
+          writing.sourceFingerprint !== expectedSourceFingerprint
+        ) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+        if (writing.detailed?.status === 'completed') {
+          return { published: true as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+        if (writing.detailed?.status !== 'running') {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
 
-    const resultMessage = await this.dependencies.messages.findById(writing.resultMessageId);
-    const proposal = storedProposal(resultMessage?.metadata);
-    if (!proposal) throw new UnderstandingProviderContextUnavailableError();
-    if (
-      proposal.sourceFingerprint !== expectedSourceFingerprint ||
-      proposal.feedbackRevision !== writing.feedbackRevision ||
-      proposal.generationRevision !== writing.generationRevision
-    ) {
-      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
-    }
+        const resultMessage = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'detailed.read-result' },
+          () => this.dependencies.messages.findById(writing.resultMessageId),
+        );
+        const proposal = storedProposal(resultMessage?.metadata);
+        if (!proposal) throw new UnderstandingProviderContextUnavailableError();
+        if (
+          proposal.sourceFingerprint !== expectedSourceFingerprint ||
+          proposal.feedbackRevision !== writing.feedbackRevision ||
+          proposal.generationRevision !== writing.generationRevision
+        ) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
 
-    const completed = Object.entries(session.sources)
-      .filter(([, state]) => state.status === 'completed')
-      .sort(([left], [right]) => left.localeCompare(right));
-    const sourceStore = this.dependencies.sourceStore();
-    const contexts = await Promise.all(
-      completed.map(([providerId, state]) =>
-        sourceStore.get({
-          providerId,
-          revision: state.revision,
-          sessionId,
-          userId: this.dependencies.userId,
-        }),
-      ),
+        const completed = Object.entries(session.sources)
+          .filter(([, state]) => state.status === 'completed')
+          .sort(([left], [right]) => left.localeCompare(right));
+        const sourceStore = this.dependencies.sourceStore();
+        const contexts = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.read-contexts' },
+          () =>
+            Promise.all(
+              completed.map(([providerId, state]) =>
+                sourceStore.get({
+                  providerId,
+                  revision: state.revision,
+                  sessionId,
+                  userId: this.dependencies.userId,
+                }),
+              ),
+            ),
+        );
+        if (contexts.some((context) => !context)) {
+          throw new UnderstandingProviderContextUnavailableError();
+        }
+
+        const baseline = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'detailed.read-baseline' },
+          () => this.dependencies.persona.getLatestPersonaDocument(),
+        );
+        const writerAgent = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.resolve-agent' },
+          () => this.dependencies.writerAgent(),
+        );
+        const detailedPersona: UnderstandingPersonaProposal =
+          UnderstandingPersonaProposalSchema.parse(
+            await observeOnboardingUnderstandingOperation(
+              { ...operationAttributes, operation: 'detailed.generate' },
+              () =>
+                this.dependencies.generator.generateObject(
+                  {
+                    messages: [
+                      {
+                        content: chainUnderstandingDetailedPersona({
+                          analysis: proposal.analysis,
+                          responseLanguage,
+                        }),
+                        role: 'system',
+                      },
+                      {
+                        content: [
+                          'Write the complete persona from the original collected provider contexts.',
+                          buildEphemeralDocument(
+                            contexts as StoredUnderstandingProviderContext[],
+                            baseline,
+                          ),
+                        ].join('\n\n'),
+                        role: 'user',
+                      },
+                    ],
+                    model: writerAgent.model,
+                    provider: writerAgent.provider,
+                    schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+                    thinking: { type: 'disabled' },
+                  },
+                  { metadata: { trigger: RequestTrigger.Onboarding } },
+                ),
+            ),
+          );
+        const committed = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'detailed.commit' },
+          () =>
+            this.dependencies.repository.commitDetailedWriting({
+              detailedPersona,
+              feedbackRevision: writing.feedbackRevision ?? 0,
+              generationRevision: writing.generationRevision ?? 0,
+              sessionId,
+              sourceFingerprint: expectedSourceFingerprint,
+              topicId,
+            }),
+        );
+        return { ...committed, sourceFingerprint: expectedSourceFingerprint };
+      },
     );
-    if (contexts.some((context) => !context)) {
-      throw new UnderstandingProviderContextUnavailableError();
-    }
-
-    const baseline = await this.dependencies.persona.getLatestPersonaDocument();
-    const writerAgent = await this.dependencies.writerAgent();
-    const detailedPersona: UnderstandingPersonaProposal = UnderstandingPersonaProposalSchema.parse(
-      await this.dependencies.generator.generateObject(
-        {
-          messages: [
-            {
-              content: chainUnderstandingDetailedPersona({
-                analysis: proposal.analysis,
-                responseLanguage,
-              }),
-              role: 'system',
-            },
-            {
-              content: [
-                'Write the complete persona from the original collected provider contexts.',
-                buildEphemeralDocument(contexts as StoredUnderstandingProviderContext[], baseline),
-              ].join('\n\n'),
-              role: 'user',
-            },
-          ],
-          model: writerAgent.model,
-          provider: writerAgent.provider,
-          schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
-          thinking: { type: 'disabled' },
-        },
-        { metadata: { trigger: RequestTrigger.Onboarding } },
-      ),
-    );
-    const committed = await this.dependencies.repository.commitDetailedWriting({
-      detailedPersona,
-      feedbackRevision: writing.feedbackRevision ?? 0,
-      generationRevision: writing.generationRevision ?? 0,
-      sessionId,
-      sourceFingerprint: expectedSourceFingerprint,
-      topicId,
-    });
-    return { ...committed, sourceFingerprint: expectedSourceFingerprint };
-  };
 
   failDetailedPersona = async ({
     sessionId,
@@ -967,6 +1091,7 @@ export class UnderstandingService {
     feedback,
     providers,
     responseLanguage,
+    sessionId,
     threadId,
     topicId,
     writerAgent,
@@ -976,64 +1101,85 @@ export class UnderstandingService {
     feedback: UnderstandingFeedbackTurn[];
     providers: string[];
     responseLanguage: string;
+    sessionId: string;
     threadId: string;
     topicId: string;
     writerAgent: { id: string; model: string; provider: string };
-  }) => {
-    const existing = await this.dependencies.messages.findLatestAssistantMessageByThread({
-      agentId: writerAgent.id,
-      threadId,
-      topicId,
-    });
-    if (existing && !existing.error) {
-      const analysis = parseStoredAnalysis(existing.content);
-      if (analysis) return { analysis, assistantMessageId: existing.id };
-    }
+  }) =>
+    observeOnboardingUnderstandingOperation(
+      { operation: 'writer.generate', sessionId, topicId },
+      async () => {
+        const operationAttributes = { sessionId, topicId };
+        const existing = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.read-existing' },
+          () =>
+            this.dependencies.messages.findLatestAssistantMessageByThread({
+              agentId: writerAgent.id,
+              threadId,
+              topicId,
+            }),
+        );
+        if (existing && !existing.error) {
+          const analysis = parseStoredAnalysis(existing.content);
+          if (analysis) return { analysis, assistantMessageId: existing.id };
+        }
 
-    const baseline = await this.dependencies.persona.getLatestPersonaDocument();
-    const analysis = UnderstandingAnalysisSchema.parse(
-      await this.dependencies.generator.generateObject(
-        {
-          messages: [
-            {
-              content: chainUnderstandingPersona({
-                diagnostics,
-                feedback,
-                providers,
-                responseLanguage,
-              }),
-              role: 'system',
-            },
-            {
-              content: [
-                'Write onboarding persona from collected provider contexts.',
-                buildEphemeralDocument(contexts, baseline),
-              ].join('\n\n'),
-              role: 'user',
-            },
-          ],
-          model: writerAgent.model,
-          provider: writerAgent.provider,
-          schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
-          thinking: { type: 'disabled' },
-        },
-        { metadata: { trigger: RequestTrigger.Onboarding } },
-      ),
+        const baseline = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.read-baseline' },
+          () => this.dependencies.persona.getLatestPersonaDocument(),
+        );
+        const analysis = UnderstandingAnalysisSchema.parse(
+          await observeOnboardingUnderstandingOperation(
+            { ...operationAttributes, operation: 'generation.runtime-call' },
+            () =>
+              this.dependencies.generator.generateObject(
+                {
+                  messages: [
+                    {
+                      content: chainUnderstandingPersona({
+                        diagnostics,
+                        feedback,
+                        providers,
+                        responseLanguage,
+                      }),
+                      role: 'system',
+                    },
+                    {
+                      content: [
+                        'Write onboarding persona from collected provider contexts.',
+                        buildEphemeralDocument(contexts, baseline),
+                      ].join('\n\n'),
+                      role: 'user',
+                    },
+                  ],
+                  model: writerAgent.model,
+                  provider: writerAgent.provider,
+                  schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+                  thinking: { type: 'disabled' },
+                },
+                { metadata: { trigger: RequestTrigger.Onboarding } },
+              ),
+          ),
+        );
+        const message = await observeOnboardingUnderstandingOperation(
+          { ...operationAttributes, operation: 'writer.create-message' },
+          () =>
+            this.dependencies.messages.create({
+              agentId: writerAgent.id,
+              content: JSON.stringify(analysis),
+              model: writerAgent.model,
+              provider: writerAgent.provider,
+              role: 'assistant',
+              threadId,
+              topicId,
+            }),
+        );
+        return {
+          analysis,
+          assistantMessageId: message.id,
+        };
+      },
     );
-    const message = await this.dependencies.messages.create({
-      agentId: writerAgent.id,
-      content: JSON.stringify(analysis),
-      model: writerAgent.model,
-      provider: writerAgent.provider,
-      role: 'assistant',
-      threadId,
-      topicId,
-    });
-    return {
-      analysis,
-      assistantMessageId: message.id,
-    };
-  };
 }
 
 interface CreateUnderstandingServiceOptions {

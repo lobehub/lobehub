@@ -135,8 +135,22 @@ vi.mock('@lobehub/ui', async () => {
   const { useState } = await import('react');
 
   return {
-    ActionIcon: ({ disabled, onClick }: { disabled?: boolean; onClick?: () => void }) => (
-      <button data-testid="refresh" disabled={disabled} type="button" onClick={onClick} />
+    ActionIcon: ({
+      disabled,
+      onClick,
+      title,
+    }: {
+      disabled?: boolean;
+      onClick?: () => void;
+      title?: string;
+    }) => (
+      <button
+        aria-label={title}
+        data-testid={title ? 'calendar' : 'refresh'}
+        disabled={disabled}
+        type="button"
+        onClick={onClick}
+      />
     ),
     Collapse: ({
       defaultActiveKey = [],

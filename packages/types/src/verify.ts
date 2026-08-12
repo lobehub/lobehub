@@ -262,9 +262,13 @@ export type VerifyRunScenario = 'coding' | 'writing' | 'research' | 'generic';
  */
 export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
 
-/** The medium of a captured evidence artifact. */
+/**
+ * The medium of a captured evidence artifact. `audio` covers a delivered or
+ * captured sound (TTS output, a recorded voice reply, an alert tone) — it plays
+ * inline on the acceptance page instead of publishing as an unplayable blob.
+ */
 export type VerifyEvidenceType =
-  'screenshot' | 'gif' | 'video' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
+  'screenshot' | 'gif' | 'video' | 'audio' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';

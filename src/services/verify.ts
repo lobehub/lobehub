@@ -166,6 +166,17 @@ export class VerifyService {
 
   listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
 
+  /**
+   * Acceptance status for a known set of subjects. `listAcceptances` is capped
+   * at the newest rows across every subject type, so a list surface deriving
+   * per-row state must ask about its own subjects instead.
+   */
+  listAcceptanceStatuses = (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<Array<{ status: string; subjectId: string }>> =>
+    lambdaClient.acceptance.listStatusesBySubjects.query({ subjectIds, subjectType });
+
   acceptDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.accept.mutate({ comment, id });
 

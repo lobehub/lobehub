@@ -9,19 +9,18 @@ import { useTranslation } from 'react-i18next';
 import { agentService } from '@/services/agent';
 import { useChatStore } from '@/store/chat';
 
-import { useAgentTransferJob } from './useAgentTransferJob';
+import { type MigrationTarget, useAgentTransferJob } from './useAgentTransferJob';
 
-interface MigrationBannerProps {
-  agentId: string;
+interface MigrationBannerProps extends MigrationTarget {
   topicId?: string | null;
 }
 
 /**
- * Whether this topic's history is still awaiting its transfer backfill.
+ * Whether this topic's history is still awaiting its transfer/copy backfill.
  * Exposed so the surrounding surface can also gate the chat input.
  */
-export const useTopicMigrationPending = (agentId?: string | null, topicId?: string | null) => {
-  const { data } = useAgentTransferJob(agentId);
+export const useTopicMigrationPending = (target: MigrationTarget, topicId?: string | null) => {
+  const { data } = useAgentTransferJob(target);
   return {
     job: data ?? null,
     topicPending: !!topicId && !!data && data.pendingTopicIds.includes(topicId),
@@ -34,59 +33,61 @@ export const useTopicMigrationPending = (agentId?: string | null, topicId?: stri
  * shared job hook, and refetches messages the moment the topic flips over —
  * so the usual wait is a few seconds, then the history appears in place.
  */
-export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(({ agentId, topicId }) => {
-  const { t } = useTranslation('chat');
-  const { data, mutate } = useAgentTransferJob(agentId);
-  const refreshMessages = useChatStore((s) => s.refreshMessages);
-  // Tracks WHICH topic was prioritized (not just whether one was): switching
-  // straight from one pending topic to another reuses this component, and the
-  // new topic must jump the queue too.
-  const prioritizedTopicId = useRef<string | null>(null);
+export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(
+  ({ agentId, groupId, topicId }) => {
+    const { t } = useTranslation('chat');
+    const { data, mutate } = useAgentTransferJob({ agentId, groupId });
+    const refreshMessages = useChatStore((s) => s.refreshMessages);
+    // Tracks WHICH topic was prioritized (not just whether one was): switching
+    // straight from one pending topic to another reuses this component, and the
+    // new topic must jump the queue too.
+    const prioritizedTopicId = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!topicId || prioritizedTopicId.current === topicId) return;
-    prioritizedTopicId.current = topicId;
+    useEffect(() => {
+      if (!topicId || prioritizedTopicId.current === topicId) return;
+      prioritizedTopicId.current = topicId;
 
-    void agentService
-      .prioritizeTransferTopic(topicId)
-      .then(({ pending }) => {
-        // Already migrated between render and request — sync the job status
-        // and pull the messages straight away.
-        if (!pending) {
-          void mutate();
-          void refreshMessages();
-        }
-      })
-      .catch(() => {
-        if (prioritizedTopicId.current === topicId) prioritizedTopicId.current = null;
-      });
-  }, [topicId, mutate, refreshMessages]);
+      void agentService
+        .prioritizeTransferTopic(topicId)
+        .then(({ pending }) => {
+          // Already migrated between render and request — sync the job status
+          // and pull the messages straight away.
+          if (!pending) {
+            void mutate();
+            void refreshMessages();
+          }
+        })
+        .catch(() => {
+          if (prioritizedTopicId.current === topicId) prioritizedTopicId.current = null;
+        });
+    }, [topicId, mutate, refreshMessages]);
 
-  // The placeholder unmounts when `pendingTopicIds` stops listing this topic;
-  // fetch the freshly migrated history exactly once on the way out.
-  useEffect(
-    () => () => {
-      void refreshMessages();
-    },
-    [refreshMessages],
-  );
+    // The placeholder unmounts when `pendingTopicIds` stops listing this topic;
+    // fetch the freshly migrated history exactly once on the way out.
+    useEffect(
+      () => () => {
+        void refreshMessages();
+      },
+      [refreshMessages],
+    );
 
-  return (
-    <Flexbox align={'center'} flex={1} gap={12} justify={'center'} padding={24}>
-      <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={20} />
-      <Text type={'secondary'} weight={500}>
-        {t(
-          data?.type === 'copy'
-            ? 'transferMigration.topicPendingCopy.title'
-            : 'transferMigration.topicPending.title',
-        )}
-      </Text>
-      <Text fontSize={12} style={{ maxWidth: 420, textAlign: 'center' }} type={'secondary'}>
-        {t('transferMigration.topicPending.desc')}
-      </Text>
-    </Flexbox>
-  );
-});
+    return (
+      <Flexbox align={'center'} flex={1} gap={12} justify={'center'} padding={24}>
+        <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={20} />
+        <Text type={'secondary'} weight={500}>
+          {t(
+            data?.type === 'copy'
+              ? 'transferMigration.topicPendingCopy.title'
+              : 'transferMigration.topicPending.title',
+          )}
+        </Text>
+        <Text fontSize={12} style={{ maxWidth: 420, textAlign: 'center' }} type={'secondary'}>
+          {t('transferMigration.topicPending.desc')}
+        </Text>
+      </Flexbox>
+    );
+  },
+);
 
 TopicMigrationPlaceholder.displayName = 'TopicMigrationPlaceholder';
 
@@ -118,9 +119,9 @@ const chipStyles = createStaticStyles(({ css }) => ({
  * conversation prioritizes it) lives in the tooltip so the header stays calm.
  * Renders nothing once the job completes.
  */
-export const AgentMigrationBadge = memo<{ agentId: string }>(({ agentId }) => {
+export const AgentMigrationBadge = memo<MigrationTarget>(({ agentId, groupId }) => {
   const { t } = useTranslation('chat');
-  const { data } = useAgentTransferJob(agentId);
+  const { data } = useAgentTransferJob({ agentId, groupId });
 
   if (!data) return null;
 

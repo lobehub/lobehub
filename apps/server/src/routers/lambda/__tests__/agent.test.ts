@@ -13,6 +13,7 @@ import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -345,6 +346,41 @@ describe('agentRouter', () => {
         },
       ]);
     });
+
+    // Regression: `visibility` is workspace-scoped — buildWorkspaceWhere ignores
+    // the column in personal mode while it still defaults to 'public', so
+    // forcing the public scope there filtered personal rows by a value that
+    // carries no meaning.
+    it('sends no visibility scope in personal mode, even for a public agent', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller(mockCtx);
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+      expect(knowledgeBaseModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+    });
+
+    it('forces the workspace scope for a public agent inside a workspace', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'public' }),
+      );
+    });
   });
 
   describe('createAgentFiles', () => {
@@ -496,7 +532,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'copied-agent',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
       // Folder placement is shared state, carried by AgentModel.duplicate's
@@ -555,7 +591,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });
@@ -701,7 +737,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });

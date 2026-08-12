@@ -38,6 +38,12 @@ import {
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
 import {
+  GoalInspectors,
+  GoalInterventions,
+  GoalManifest,
+  GoalRenders,
+} from '@lobechat/builtin-tool-goal/client';
+import {
   GroupAgentBuilderInspectors,
   GroupAgentBuilderManifest,
   GroupAgentBuilderRenders,
@@ -223,6 +229,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinRender
     >,
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
+    [GoalManifest.identifier]: GoalRenders as Record<string, BuiltinRender>,
     [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
@@ -275,6 +282,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       string,
       BuiltinInspector
     >,
+    [GoalManifest.identifier]: GoalInspectors as Record<string, BuiltinInspector>,
     [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
       string,
       BuiltinInspector
@@ -354,6 +362,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       string,
       BuiltinIntervention
     >,
+    [GoalManifest.identifier]: GoalInterventions as Record<string, BuiltinIntervention>,
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,

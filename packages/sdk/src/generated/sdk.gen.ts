@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1AgentGroupsByIdData, DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentsByIdData, DeleteApiV1AgentsByIdResponses, DeleteApiV1FilesByIdData, DeleteApiV1FilesByIdResponses, DeleteApiV1KnowledgeBasesByIdData, DeleteApiV1KnowledgeBasesByIdFilesBatchData, DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1MessagesByIdData, DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesData, DeleteApiV1MessagesResponses, DeleteApiV1MessageTranslationsByMessageIdData, DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1PermissionsByIdData, DeleteApiV1PermissionsByIdResponses, DeleteApiV1ProvidersByIdData, DeleteApiV1ProvidersByIdResponses, DeleteApiV1RolesByIdData, DeleteApiV1RolesByIdPermissionsData, DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdResponses, DeleteApiV1TopicsByIdData, DeleteApiV1TopicsByIdResponses, DeleteApiV1UsersByIdData, DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdRolesData, DeleteApiV1UsersByIdRolesResponses, GetApiV1AgentGroupsByIdData, GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsData, GetApiV1AgentGroupsResponses, GetApiV1AgentsByIdData, GetApiV1AgentsByIdResponses, GetApiV1AgentsData, GetApiV1AgentsResponses, GetApiV1FilesByIdChunksData, GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdData, GetApiV1FilesByIdResponses, GetApiV1FilesByIdUrlData, GetApiV1FilesByIdUrlResponses, GetApiV1FilesData, GetApiV1FilesResponses, GetApiV1HealthData, GetApiV1HealthResponses, GetApiV1KnowledgeBasesByIdData, GetApiV1KnowledgeBasesByIdFilesData, GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesData, GetApiV1KnowledgeBasesResponses, GetApiV1MessagesByIdData, GetApiV1MessagesByIdResponses, GetApiV1MessagesCountData, GetApiV1MessagesCountResponses, GetApiV1MessagesData, GetApiV1MessagesResponses, GetApiV1MessageTranslationsByMessageIdData, GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1ModelsByProviderIdByModelIdData, GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsData, GetApiV1ModelsResponses, GetApiV1PermissionsByIdData, GetApiV1PermissionsByIdResponses, GetApiV1PermissionsData, GetApiV1PermissionsResponses, GetApiV1ProvidersByIdData, GetApiV1ProvidersByIdResponses, GetApiV1ProvidersData, GetApiV1ProvidersResponses, GetApiV1RolesByIdData, GetApiV1RolesByIdPermissionsData, GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdResponses, GetApiV1RolesData, GetApiV1RolesResponses, GetApiV1TopicsByIdData, GetApiV1TopicsByIdResponses, GetApiV1TopicsData, GetApiV1TopicsResponses, GetApiV1UsersByIdData, GetApiV1UsersByIdResponses, GetApiV1UsersByIdRolesData, GetApiV1UsersByIdRolesResponses, GetApiV1UsersData, GetApiV1UsersMeData, GetApiV1UsersMeResponses, GetApiV1UsersResponses, PatchApiV1AgentGroupsByIdData, PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentsByIdData, PatchApiV1AgentsByIdResponses, PatchApiV1FilesByIdData, PatchApiV1FilesByIdResponses, PatchApiV1KnowledgeBasesByIdData, PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1MessageTranslationsByMessageIdData, PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1ModelsByProviderIdByModelIdData, PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1PermissionsByIdData, PatchApiV1PermissionsByIdResponses, PatchApiV1ProvidersByIdData, PatchApiV1ProvidersByIdResponses, PatchApiV1RolesByIdData, PatchApiV1RolesByIdPermissionsData, PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdResponses, PatchApiV1TopicsByIdData, PatchApiV1TopicsByIdResponses, PatchApiV1UsersByIdData, PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdRolesData, PatchApiV1UsersByIdRolesResponses, PostApiV1AgentGroupsData, PostApiV1AgentGroupsResponses, PostApiV1AgentsData, PostApiV1AgentsResponses, PostApiV1FilesBatchesData, PostApiV1FilesBatchesResponses, PostApiV1FilesByIdChunksData, PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdParsesData, PostApiV1FilesByIdParsesResponses, PostApiV1FilesData, PostApiV1FilesQueriesData, PostApiV1FilesQueriesResponses, PostApiV1FilesResponses, PostApiV1KnowledgeBasesByIdFilesBatchData, PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesMoveData, PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesData, PostApiV1KnowledgeBasesResponses, PostApiV1MessagesData, PostApiV1MessagesRepliesData, PostApiV1MessagesRepliesResponses, PostApiV1MessagesResponses, PostApiV1MessageTranslationsByMessageIdData, PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1ModelsData, PostApiV1ModelsResponses, PostApiV1PermissionsData, PostApiV1PermissionsResponses, PostApiV1ProvidersData, PostApiV1ProvidersResponses, PostApiV1ResponsesData, PostApiV1ResponsesResponses, PostApiV1RolesData, PostApiV1RolesResponses, PostApiV1TopicsData, PostApiV1TopicsResponses, PostApiV1UsersData, PostApiV1UsersResponses } from './types.gen';
+import type { DeleteApiV1AgentGroupsByIdData, DeleteApiV1AgentGroupsByIdErrors, DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentsByIdData, DeleteApiV1AgentsByIdErrors, DeleteApiV1AgentsByIdResponses, DeleteApiV1ApiKeysByIdData, DeleteApiV1ApiKeysByIdErrors, DeleteApiV1ApiKeysByIdResponses, DeleteApiV1FilesByIdData, DeleteApiV1FilesByIdErrors, DeleteApiV1FilesByIdResponses, DeleteApiV1KnowledgeBasesByIdData, DeleteApiV1KnowledgeBasesByIdErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchData, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1McpServersByIdData, DeleteApiV1McpServersByIdErrors, DeleteApiV1McpServersByIdResponses, DeleteApiV1MessagesByIdData, DeleteApiV1MessagesByIdErrors, DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesData, DeleteApiV1MessagesErrors, DeleteApiV1MessagesResponses, DeleteApiV1MessageTranslationsByMessageIdData, DeleteApiV1MessageTranslationsByMessageIdErrors, DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1PermissionsByIdData, DeleteApiV1PermissionsByIdErrors, DeleteApiV1PermissionsByIdResponses, DeleteApiV1ProvidersByIdData, DeleteApiV1ProvidersByIdErrors, DeleteApiV1ProvidersByIdResponses, DeleteApiV1RolesByIdData, DeleteApiV1RolesByIdErrors, DeleteApiV1RolesByIdPermissionsData, DeleteApiV1RolesByIdPermissionsErrors, DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdResponses, DeleteApiV1TopicsByIdData, DeleteApiV1TopicsByIdErrors, DeleteApiV1TopicsByIdResponses, DeleteApiV1UsersByIdData, DeleteApiV1UsersByIdErrors, DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdRolesData, DeleteApiV1UsersByIdRolesErrors, DeleteApiV1UsersByIdRolesResponses, GetApiV1AgentGroupsByIdData, GetApiV1AgentGroupsByIdErrors, GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsData, GetApiV1AgentGroupsErrors, GetApiV1AgentGroupsResponses, GetApiV1AgentsByIdData, GetApiV1AgentsByIdErrors, GetApiV1AgentsByIdResponses, GetApiV1AgentsData, GetApiV1AgentsErrors, GetApiV1AgentsResponses, GetApiV1ApiKeysByIdData, GetApiV1ApiKeysByIdErrors, GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysData, GetApiV1ApiKeysErrors, GetApiV1ApiKeysResponses, GetApiV1EvalRunsByIdData, GetApiV1EvalRunsByIdErrors, GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdResultsData, GetApiV1EvalRunsByIdResultsErrors, GetApiV1EvalRunsByIdResultsResponses, GetApiV1FilesByIdChunksData, GetApiV1FilesByIdChunksErrors, GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdData, GetApiV1FilesByIdErrors, GetApiV1FilesByIdResponses, GetApiV1FilesByIdUrlData, GetApiV1FilesByIdUrlErrors, GetApiV1FilesByIdUrlResponses, GetApiV1FilesData, GetApiV1FilesErrors, GetApiV1FilesResponses, GetApiV1HealthData, GetApiV1HealthErrors, GetApiV1HealthResponses, GetApiV1KnowledgeBasesByIdData, GetApiV1KnowledgeBasesByIdErrors, GetApiV1KnowledgeBasesByIdFilesData, GetApiV1KnowledgeBasesByIdFilesErrors, GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesData, GetApiV1KnowledgeBasesErrors, GetApiV1KnowledgeBasesResponses, GetApiV1McpServersByIdData, GetApiV1McpServersByIdErrors, GetApiV1McpServersByIdResponses, GetApiV1McpServersData, GetApiV1McpServersErrors, GetApiV1McpServersResponses, GetApiV1MessagesByIdData, GetApiV1MessagesByIdErrors, GetApiV1MessagesByIdResponses, GetApiV1MessagesCountData, GetApiV1MessagesCountErrors, GetApiV1MessagesCountResponses, GetApiV1MessagesData, GetApiV1MessagesErrors, GetApiV1MessagesResponses, GetApiV1MessageTranslationsByMessageIdData, GetApiV1MessageTranslationsByMessageIdErrors, GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1ModelsByProviderIdByModelIdData, GetApiV1ModelsByProviderIdByModelIdErrors, GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsData, GetApiV1ModelsErrors, GetApiV1ModelsResponses, GetApiV1PermissionsByIdData, GetApiV1PermissionsByIdErrors, GetApiV1PermissionsByIdResponses, GetApiV1PermissionsData, GetApiV1PermissionsErrors, GetApiV1PermissionsResponses, GetApiV1ProvidersByIdData, GetApiV1ProvidersByIdErrors, GetApiV1ProvidersByIdResponses, GetApiV1ProvidersData, GetApiV1ProvidersErrors, GetApiV1ProvidersResponses, GetApiV1RolesByIdData, GetApiV1RolesByIdErrors, GetApiV1RolesByIdPermissionsData, GetApiV1RolesByIdPermissionsErrors, GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdResponses, GetApiV1RolesData, GetApiV1RolesErrors, GetApiV1RolesResponses, GetApiV1TopicsByIdData, GetApiV1TopicsByIdErrors, GetApiV1TopicsByIdResponses, GetApiV1TopicsData, GetApiV1TopicsErrors, GetApiV1TopicsResponses, GetApiV1UsageData, GetApiV1UsageErrors, GetApiV1UsageResponses, GetApiV1UsersByIdData, GetApiV1UsersByIdErrors, GetApiV1UsersByIdResponses, GetApiV1UsersByIdRolesData, GetApiV1UsersByIdRolesErrors, GetApiV1UsersByIdRolesResponses, GetApiV1UsersData, GetApiV1UsersErrors, GetApiV1UsersMeData, GetApiV1UsersMeErrors, GetApiV1UsersMeResponses, GetApiV1UsersResponses, PatchApiV1AgentGroupsByIdData, PatchApiV1AgentGroupsByIdErrors, PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentsByIdData, PatchApiV1AgentsByIdErrors, PatchApiV1AgentsByIdResponses, PatchApiV1ApiKeysByIdData, PatchApiV1ApiKeysByIdErrors, PatchApiV1ApiKeysByIdResponses, PatchApiV1FilesByIdData, PatchApiV1FilesByIdErrors, PatchApiV1FilesByIdResponses, PatchApiV1KnowledgeBasesByIdData, PatchApiV1KnowledgeBasesByIdErrors, PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1McpServersByIdData, PatchApiV1McpServersByIdErrors, PatchApiV1McpServersByIdResponses, PatchApiV1MessageTranslationsByMessageIdData, PatchApiV1MessageTranslationsByMessageIdErrors, PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1ModelsByProviderIdByModelIdData, PatchApiV1ModelsByProviderIdByModelIdErrors, PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1PermissionsByIdData, PatchApiV1PermissionsByIdErrors, PatchApiV1PermissionsByIdResponses, PatchApiV1ProvidersByIdData, PatchApiV1ProvidersByIdErrors, PatchApiV1ProvidersByIdResponses, PatchApiV1RolesByIdData, PatchApiV1RolesByIdErrors, PatchApiV1RolesByIdPermissionsData, PatchApiV1RolesByIdPermissionsErrors, PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdResponses, PatchApiV1TopicsByIdData, PatchApiV1TopicsByIdErrors, PatchApiV1TopicsByIdResponses, PatchApiV1UsersByIdData, PatchApiV1UsersByIdErrors, PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdRolesData, PatchApiV1UsersByIdRolesErrors, PatchApiV1UsersByIdRolesResponses, PostApiV1AgentGroupsData, PostApiV1AgentGroupsErrors, PostApiV1AgentGroupsResponses, PostApiV1AgentsData, PostApiV1AgentsErrors, PostApiV1AgentsResponses, PostApiV1ApiKeysData, PostApiV1ApiKeysErrors, PostApiV1ApiKeysResponses, PostApiV1ChatData, PostApiV1ChatErrors, PostApiV1ChatGenerateReplyData, PostApiV1ChatGenerateReplyErrors, PostApiV1ChatGenerateReplyResponses, PostApiV1ChatResponses, PostApiV1ChatTranslateData, PostApiV1ChatTranslateErrors, PostApiV1ChatTranslateResponses, PostApiV1EvalRunsData, PostApiV1EvalRunsErrors, PostApiV1EvalRunsResponses, PostApiV1FilesBatchesData, PostApiV1FilesBatchesErrors, PostApiV1FilesBatchesResponses, PostApiV1FilesByIdChunksData, PostApiV1FilesByIdChunksErrors, PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdParsesData, PostApiV1FilesByIdParsesErrors, PostApiV1FilesByIdParsesResponses, PostApiV1FilesData, PostApiV1FilesErrors, PostApiV1FilesQueriesData, PostApiV1FilesQueriesErrors, PostApiV1FilesQueriesResponses, PostApiV1FilesResponses, PostApiV1KnowledgeBasesByIdFilesBatchData, PostApiV1KnowledgeBasesByIdFilesBatchErrors, PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesMoveData, PostApiV1KnowledgeBasesByIdFilesMoveErrors, PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesData, PostApiV1KnowledgeBasesErrors, PostApiV1KnowledgeBasesResponses, PostApiV1McpServersByIdSyncData, PostApiV1McpServersByIdSyncErrors, PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersData, PostApiV1McpServersErrors, PostApiV1McpServersResponses, PostApiV1MessagesData, PostApiV1MessagesErrors, PostApiV1MessagesRepliesData, PostApiV1MessagesRepliesErrors, PostApiV1MessagesRepliesResponses, PostApiV1MessagesResponses, PostApiV1MessageTranslationsByMessageIdData, PostApiV1MessageTranslationsByMessageIdErrors, PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1ModelsData, PostApiV1ModelsErrors, PostApiV1ModelsResponses, PostApiV1PermissionsData, PostApiV1PermissionsErrors, PostApiV1PermissionsResponses, PostApiV1ProvidersData, PostApiV1ProvidersErrors, PostApiV1ProvidersResponses, PostApiV1ResponsesData, PostApiV1ResponsesErrors, PostApiV1ResponsesResponses, PostApiV1RolesData, PostApiV1RolesErrors, PostApiV1RolesResponses, PostApiV1TopicsData, PostApiV1TopicsErrors, PostApiV1TopicsResponses, PostApiV1UsersData, PostApiV1UsersErrors, PostApiV1UsersResponses } from './types.gen';
 
 const mergeMethodHeaders = (
     defaults: Record<string, unknown>,
@@ -65,8 +65,8 @@ export class Health extends HeyApiClient {
     /**
      * Health check
      */
-    public check<ThrowOnError extends boolean = false>(options?: Options<GetApiV1HealthData, ThrowOnError>): RequestResult<GetApiV1HealthResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1HealthResponses, unknown, ThrowOnError>({
+    public check<ThrowOnError extends boolean = false>(options?: Options<GetApiV1HealthData, ThrowOnError>): RequestResult<GetApiV1HealthResponses, GetApiV1HealthErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1HealthResponses, GetApiV1HealthErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/health',
             ...options
@@ -78,16 +78,16 @@ export class AgentGroups extends HeyApiClient {
     /**
      * Get agent group list
      */
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentGroupsData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1AgentGroupsResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentGroupsData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agent-groups',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentGroupsData, ThrowOnError>): RequestResult<PostApiV1AgentGroupsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1AgentGroupsResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentGroupsData, ThrowOnError>): RequestResult<PostApiV1AgentGroupsResponses, PostApiV1AgentGroupsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1AgentGroupsResponses, PostApiV1AgentGroupsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agent-groups',
             ...options,
@@ -95,24 +95,24 @@ export class AgentGroups extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentGroupsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1AgentGroupsByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentGroupsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentGroupsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agent-groups/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1AgentGroupsByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agent-groups/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentGroupsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1AgentGroupsByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentGroupsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentGroupsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agent-groups/{id}',
             ...options,
@@ -122,16 +122,16 @@ export class AgentGroups extends HeyApiClient {
 }
 
 export class Agents extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentsData, ThrowOnError>): RequestResult<GetApiV1AgentsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1AgentsResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentsData, ThrowOnError>): RequestResult<GetApiV1AgentsResponses, GetApiV1AgentsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1AgentsResponses, GetApiV1AgentsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agents',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsData, ThrowOnError>): RequestResult<PostApiV1AgentsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1AgentsResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsData, ThrowOnError>): RequestResult<PostApiV1AgentsResponses, PostApiV1AgentsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1AgentsResponses, PostApiV1AgentsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agents',
             ...options,
@@ -139,24 +139,24 @@ export class Agents extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1AgentsByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentsByIdResponses, DeleteApiV1AgentsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1AgentsByIdResponses, DeleteApiV1AgentsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agents/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1AgentsByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentsByIdResponses, GetApiV1AgentsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1AgentsByIdResponses, GetApiV1AgentsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agents/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1AgentsByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentsByIdResponses, PatchApiV1AgentsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1AgentsByIdResponses, PatchApiV1AgentsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/agents/{id}',
             ...options,
@@ -165,9 +165,117 @@ export class Agents extends HeyApiClient {
     }
 }
 
+export class ApiKeys extends HeyApiClient {
+    /**
+     * List API keys
+     */
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ApiKeysData, ThrowOnError>): RequestResult<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/api-keys',
+            ...options
+        });
+    }
+    
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ApiKeysData, ThrowOnError>): RequestResult<PostApiV1ApiKeysResponses, PostApiV1ApiKeysErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ApiKeysResponses, PostApiV1ApiKeysErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/api-keys',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<DeleteApiV1ApiKeysByIdResponses, DeleteApiV1ApiKeysByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1ApiKeysByIdResponses, DeleteApiV1ApiKeysByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/api-keys/{id}',
+            ...options
+        });
+    }
+    
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/api-keys/{id}',
+            ...options
+        });
+    }
+    
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<PatchApiV1ApiKeysByIdResponses, PatchApiV1ApiKeysByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1ApiKeysByIdResponses, PatchApiV1ApiKeysByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/api-keys/{id}',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+}
+
+export class Chat extends HeyApiClient {
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatData, ThrowOnError>): RequestResult<PostApiV1ChatResponses, PostApiV1ChatErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ChatResponses, PostApiV1ChatErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/chat',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    public createTranslate<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatTranslateData, ThrowOnError>): RequestResult<PostApiV1ChatTranslateResponses, PostApiV1ChatTranslateErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ChatTranslateResponses, PostApiV1ChatTranslateErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/chat/translate',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    public createGenerateReply<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatGenerateReplyData, ThrowOnError>): RequestResult<PostApiV1ChatGenerateReplyResponses, PostApiV1ChatGenerateReplyErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ChatGenerateReplyResponses, PostApiV1ChatGenerateReplyErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/chat/generate-reply',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+}
+
+export class Eval extends HeyApiClient {
+    /**
+     * Create an eval run
+     *
+     * Queues an asynchronous QStash-backed evaluation run and returns immediately.
+     */
+    public createRuns<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsResponses, PostApiV1EvalRunsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalRunsResponses, PostApiV1EvalRunsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    public getRuns<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}',
+            ...options
+        });
+    }
+    
+    public listRunsResults<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdResultsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdResultsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdResultsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/results',
+            ...options
+        });
+    }
+}
+
 export class Files extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1FilesData, ThrowOnError>): RequestResult<GetApiV1FilesResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1FilesResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1FilesData, ThrowOnError>): RequestResult<GetApiV1FilesResponses, GetApiV1FilesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1FilesResponses, GetApiV1FilesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files',
             ...options
@@ -177,8 +285,8 @@ export class Files extends HeyApiClient {
     /**
      * Upload a file and return the corresponding file record
      */
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesData, ThrowOnError>): RequestResult<PostApiV1FilesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1FilesResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesData, ThrowOnError>): RequestResult<PostApiV1FilesResponses, PostApiV1FilesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1FilesResponses, PostApiV1FilesErrors, ThrowOnError>({
             ...formDataBodySerializer,
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files',
@@ -187,24 +295,24 @@ export class Files extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1FilesByIdData, ThrowOnError>): RequestResult<DeleteApiV1FilesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1FilesByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1FilesByIdData, ThrowOnError>): RequestResult<DeleteApiV1FilesByIdResponses, DeleteApiV1FilesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1FilesByIdResponses, DeleteApiV1FilesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdData, ThrowOnError>): RequestResult<GetApiV1FilesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1FilesByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdData, ThrowOnError>): RequestResult<GetApiV1FilesByIdResponses, GetApiV1FilesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1FilesByIdResponses, GetApiV1FilesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1FilesByIdData, ThrowOnError>): RequestResult<PatchApiV1FilesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1FilesByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1FilesByIdData, ThrowOnError>): RequestResult<PatchApiV1FilesByIdResponses, PatchApiV1FilesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1FilesByIdResponses, PatchApiV1FilesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}',
             ...options,
@@ -212,32 +320,32 @@ export class Files extends HeyApiClient {
         });
     }
     
-    public getUrl<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdUrlData, ThrowOnError>): RequestResult<GetApiV1FilesByIdUrlResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1FilesByIdUrlResponses, unknown, ThrowOnError>({
+    public getUrl<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdUrlData, ThrowOnError>): RequestResult<GetApiV1FilesByIdUrlResponses, GetApiV1FilesByIdUrlErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1FilesByIdUrlResponses, GetApiV1FilesByIdUrlErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}/url',
             ...options
         });
     }
     
-    public parse<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdParsesData, ThrowOnError>): RequestResult<PostApiV1FilesByIdParsesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1FilesByIdParsesResponses, unknown, ThrowOnError>({
+    public parse<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdParsesData, ThrowOnError>): RequestResult<PostApiV1FilesByIdParsesResponses, PostApiV1FilesByIdParsesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1FilesByIdParsesResponses, PostApiV1FilesByIdParsesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}/parses',
             ...options
         });
     }
     
-    public listChunks<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<GetApiV1FilesByIdChunksResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1FilesByIdChunksResponses, unknown, ThrowOnError>({
+    public listChunks<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdChunksErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdChunksErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}/chunks',
             ...options
         });
     }
     
-    public createChunks<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<PostApiV1FilesByIdChunksResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1FilesByIdChunksResponses, unknown, ThrowOnError>({
+    public createChunks<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdChunksErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdChunksErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/{id}/chunks',
             ...options,
@@ -248,8 +356,8 @@ export class Files extends HeyApiClient {
     /**
      * Batch file upload
      */
-    public uploadBatch<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesBatchesData, ThrowOnError>): RequestResult<PostApiV1FilesBatchesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1FilesBatchesResponses, unknown, ThrowOnError>({
+    public uploadBatch<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesBatchesData, ThrowOnError>): RequestResult<PostApiV1FilesBatchesResponses, PostApiV1FilesBatchesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1FilesBatchesResponses, PostApiV1FilesBatchesErrors, ThrowOnError>({
             ...formDataBodySerializer,
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/batches',
@@ -258,8 +366,8 @@ export class Files extends HeyApiClient {
         });
     }
     
-    public query<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesQueriesData, ThrowOnError>): RequestResult<PostApiV1FilesQueriesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1FilesQueriesResponses, unknown, ThrowOnError>({
+    public query<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesQueriesData, ThrowOnError>): RequestResult<PostApiV1FilesQueriesResponses, PostApiV1FilesQueriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1FilesQueriesResponses, PostApiV1FilesQueriesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/files/queries',
             ...options,
@@ -269,16 +377,16 @@ export class Files extends HeyApiClient {
 }
 
 export class KnowledgeBases extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1KnowledgeBasesResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesResponses, GetApiV1KnowledgeBasesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1KnowledgeBasesResponses, GetApiV1KnowledgeBasesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesResponses, PostApiV1KnowledgeBasesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesResponses, PostApiV1KnowledgeBasesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases',
             ...options,
@@ -286,24 +394,24 @@ export class KnowledgeBases extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<PatchApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1KnowledgeBasesByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}',
             ...options,
@@ -311,16 +419,16 @@ export class KnowledgeBases extends HeyApiClient {
         });
     }
     
-    public listFiles<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdFilesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdFilesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdFilesResponses, unknown, ThrowOnError>({
+    public listFiles<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdFilesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdFilesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdFilesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}/files',
             ...options
         });
     }
     
-    public removeFiles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, unknown, ThrowOnError>({
+    public removeFiles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}/files/batch',
             ...options,
@@ -328,8 +436,8 @@ export class KnowledgeBases extends HeyApiClient {
         });
     }
     
-    public addFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesBatchResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesBatchResponses, unknown, ThrowOnError>({
+    public addFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}/files/batch',
             ...options,
@@ -337,8 +445,8 @@ export class KnowledgeBases extends HeyApiClient {
         });
     }
     
-    public moveFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesMoveData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesMoveResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesMoveResponses, unknown, ThrowOnError>({
+    public moveFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesMoveData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesByIdFilesMoveErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesByIdFilesMoveErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/knowledge-bases/{id}/files/move',
             ...options,
@@ -347,25 +455,86 @@ export class KnowledgeBases extends HeyApiClient {
     }
 }
 
+export class McpServers extends HeyApiClient {
+    /**
+     * List remote MCP servers
+     */
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1McpServersData, ThrowOnError>): RequestResult<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers',
+            ...options
+        });
+    }
+    
+    /**
+     * Add a remote MCP server
+     */
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1McpServersData, ThrowOnError>): RequestResult<PostApiV1McpServersResponses, PostApiV1McpServersErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1McpServersResponses, PostApiV1McpServersErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1McpServersByIdData, ThrowOnError>): RequestResult<DeleteApiV1McpServersByIdResponses, DeleteApiV1McpServersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1McpServersByIdResponses, DeleteApiV1McpServersByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers/{id}',
+            ...options
+        });
+    }
+    
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1McpServersByIdData, ThrowOnError>): RequestResult<GetApiV1McpServersByIdResponses, GetApiV1McpServersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1McpServersByIdResponses, GetApiV1McpServersByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers/{id}',
+            ...options
+        });
+    }
+    
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1McpServersByIdData, ThrowOnError>): RequestResult<PatchApiV1McpServersByIdResponses, PatchApiV1McpServersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1McpServersByIdResponses, PatchApiV1McpServersByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers/{id}',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * Discover and sync MCP tools
+     */
+    public createSync<ThrowOnError extends boolean = false>(options: Options<PostApiV1McpServersByIdSyncData, ThrowOnError>): RequestResult<PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersByIdSyncErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersByIdSyncErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/mcp-servers/{id}/sync',
+            ...options
+        });
+    }
+}
+
 export class MessageTranslations extends HeyApiClient {
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<DeleteApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/message-translations/{messageId}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<GetApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/message-translations/{messageId}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PatchApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/message-translations/{messageId}',
             ...options,
@@ -373,8 +542,8 @@ export class MessageTranslations extends HeyApiClient {
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PostApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1MessageTranslationsByMessageIdResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/message-translations/{messageId}',
             ...options,
@@ -384,16 +553,16 @@ export class MessageTranslations extends HeyApiClient {
 }
 
 export class Messages extends HeyApiClient {
-    public getCount<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesCountData, ThrowOnError>): RequestResult<GetApiV1MessagesCountResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1MessagesCountResponses, unknown, ThrowOnError>({
+    public getCount<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesCountData, ThrowOnError>): RequestResult<GetApiV1MessagesCountResponses, GetApiV1MessagesCountErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1MessagesCountResponses, GetApiV1MessagesCountErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages/count',
             ...options
         });
     }
     
-    public deleteMany<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesData, ThrowOnError>): RequestResult<DeleteApiV1MessagesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1MessagesResponses, unknown, ThrowOnError>({
+    public deleteMany<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesData, ThrowOnError>): RequestResult<DeleteApiV1MessagesResponses, DeleteApiV1MessagesErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1MessagesResponses, DeleteApiV1MessagesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages',
             ...options,
@@ -401,16 +570,16 @@ export class Messages extends HeyApiClient {
         });
     }
     
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesData, ThrowOnError>): RequestResult<GetApiV1MessagesResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1MessagesResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesData, ThrowOnError>): RequestResult<GetApiV1MessagesResponses, GetApiV1MessagesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1MessagesResponses, GetApiV1MessagesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesData, ThrowOnError>): RequestResult<PostApiV1MessagesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1MessagesResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesData, ThrowOnError>): RequestResult<PostApiV1MessagesResponses, PostApiV1MessagesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1MessagesResponses, PostApiV1MessagesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages',
             ...options,
@@ -418,24 +587,24 @@ export class Messages extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1MessagesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1MessagesByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessagesByIdData, ThrowOnError>): RequestResult<GetApiV1MessagesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1MessagesByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessagesByIdData, ThrowOnError>): RequestResult<GetApiV1MessagesByIdResponses, GetApiV1MessagesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1MessagesByIdResponses, GetApiV1MessagesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages/{id}',
             ...options
         });
     }
     
-    public createReply<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesRepliesData, ThrowOnError>): RequestResult<PostApiV1MessagesRepliesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1MessagesRepliesResponses, unknown, ThrowOnError>({
+    public createReply<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesRepliesData, ThrowOnError>): RequestResult<PostApiV1MessagesRepliesResponses, PostApiV1MessagesRepliesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1MessagesRepliesResponses, PostApiV1MessagesRepliesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages/replies',
             ...options,
@@ -445,16 +614,16 @@ export class Messages extends HeyApiClient {
 }
 
 export class Models extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ModelsData, ThrowOnError>): RequestResult<GetApiV1ModelsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1ModelsResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ModelsData, ThrowOnError>): RequestResult<GetApiV1ModelsResponses, GetApiV1ModelsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1ModelsResponses, GetApiV1ModelsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/models',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ModelsData, ThrowOnError>): RequestResult<PostApiV1ModelsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1ModelsResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ModelsData, ThrowOnError>): RequestResult<PostApiV1ModelsResponses, PostApiV1ModelsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ModelsResponses, PostApiV1ModelsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/models',
             ...options,
@@ -462,16 +631,16 @@ export class Models extends HeyApiClient {
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<GetApiV1ModelsByProviderIdByModelIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1ModelsByProviderIdByModelIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/models/{providerId}/{modelId}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<PatchApiV1ModelsByProviderIdByModelIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1ModelsByProviderIdByModelIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/models/{providerId}/{modelId}',
             ...options,
@@ -481,16 +650,16 @@ export class Models extends HeyApiClient {
 }
 
 export class Permissions extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1PermissionsData, ThrowOnError>): RequestResult<GetApiV1PermissionsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1PermissionsResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1PermissionsData, ThrowOnError>): RequestResult<GetApiV1PermissionsResponses, GetApiV1PermissionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1PermissionsResponses, GetApiV1PermissionsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/permissions',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1PermissionsData, ThrowOnError>): RequestResult<PostApiV1PermissionsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1PermissionsResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1PermissionsData, ThrowOnError>): RequestResult<PostApiV1PermissionsResponses, PostApiV1PermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1PermissionsResponses, PostApiV1PermissionsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/permissions',
             ...options,
@@ -498,24 +667,24 @@ export class Permissions extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1PermissionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1PermissionsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1PermissionsByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1PermissionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1PermissionsByIdResponses, DeleteApiV1PermissionsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1PermissionsByIdResponses, DeleteApiV1PermissionsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/permissions/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1PermissionsByIdData, ThrowOnError>): RequestResult<GetApiV1PermissionsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1PermissionsByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1PermissionsByIdData, ThrowOnError>): RequestResult<GetApiV1PermissionsByIdResponses, GetApiV1PermissionsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1PermissionsByIdResponses, GetApiV1PermissionsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/permissions/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1PermissionsByIdData, ThrowOnError>): RequestResult<PatchApiV1PermissionsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1PermissionsByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1PermissionsByIdData, ThrowOnError>): RequestResult<PatchApiV1PermissionsByIdResponses, PatchApiV1PermissionsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1PermissionsByIdResponses, PatchApiV1PermissionsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/permissions/{id}',
             ...options,
@@ -525,16 +694,16 @@ export class Permissions extends HeyApiClient {
 }
 
 export class Providers extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ProvidersData, ThrowOnError>): RequestResult<GetApiV1ProvidersResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1ProvidersResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ProvidersData, ThrowOnError>): RequestResult<GetApiV1ProvidersResponses, GetApiV1ProvidersErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1ProvidersResponses, GetApiV1ProvidersErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/providers',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ProvidersData, ThrowOnError>): RequestResult<PostApiV1ProvidersResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1ProvidersResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ProvidersData, ThrowOnError>): RequestResult<PostApiV1ProvidersResponses, PostApiV1ProvidersErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ProvidersResponses, PostApiV1ProvidersErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/providers',
             ...options,
@@ -542,24 +711,24 @@ export class Providers extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ProvidersByIdData, ThrowOnError>): RequestResult<DeleteApiV1ProvidersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1ProvidersByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ProvidersByIdData, ThrowOnError>): RequestResult<DeleteApiV1ProvidersByIdResponses, DeleteApiV1ProvidersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1ProvidersByIdResponses, DeleteApiV1ProvidersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/providers/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ProvidersByIdData, ThrowOnError>): RequestResult<GetApiV1ProvidersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1ProvidersByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ProvidersByIdData, ThrowOnError>): RequestResult<GetApiV1ProvidersByIdResponses, GetApiV1ProvidersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1ProvidersByIdResponses, GetApiV1ProvidersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/providers/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ProvidersByIdData, ThrowOnError>): RequestResult<PatchApiV1ProvidersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1ProvidersByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ProvidersByIdData, ThrowOnError>): RequestResult<PatchApiV1ProvidersByIdResponses, PatchApiV1ProvidersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1ProvidersByIdResponses, PatchApiV1ProvidersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/providers/{id}',
             ...options,
@@ -569,8 +738,8 @@ export class Providers extends HeyApiClient {
 }
 
 export class Responses extends HeyApiClient {
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ResponsesData, ThrowOnError>): RequestResult<PostApiV1ResponsesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1ResponsesResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ResponsesData, ThrowOnError>): RequestResult<PostApiV1ResponsesResponses, PostApiV1ResponsesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1ResponsesResponses, PostApiV1ResponsesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/responses',
             ...options,
@@ -580,16 +749,16 @@ export class Responses extends HeyApiClient {
 }
 
 export class Roles extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1RolesData, ThrowOnError>): RequestResult<GetApiV1RolesResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1RolesResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1RolesData, ThrowOnError>): RequestResult<GetApiV1RolesResponses, GetApiV1RolesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1RolesResponses, GetApiV1RolesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1RolesData, ThrowOnError>): RequestResult<PostApiV1RolesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1RolesResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1RolesData, ThrowOnError>): RequestResult<PostApiV1RolesResponses, PostApiV1RolesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1RolesResponses, PostApiV1RolesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles',
             ...options,
@@ -597,24 +766,24 @@ export class Roles extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1RolesByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdResponses, DeleteApiV1RolesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1RolesByIdResponses, DeleteApiV1RolesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdData, ThrowOnError>): RequestResult<GetApiV1RolesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1RolesByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdData, ThrowOnError>): RequestResult<GetApiV1RolesByIdResponses, GetApiV1RolesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1RolesByIdResponses, GetApiV1RolesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1RolesByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdResponses, PatchApiV1RolesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1RolesByIdResponses, PatchApiV1RolesByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}',
             ...options,
@@ -622,24 +791,24 @@ export class Roles extends HeyApiClient {
         });
     }
     
-    public deletePermissions<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError>({
+    public deletePermissions<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdPermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdPermissionsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}/permissions',
             ...options
         });
     }
     
-    public listPermissions<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<GetApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError>({
+    public listPermissions<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdPermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdPermissionsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}/permissions',
             ...options
         });
     }
     
-    public updatePermissions<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1RolesByIdPermissionsResponses, unknown, ThrowOnError>({
+    public updatePermissions<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdPermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdPermissionsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/roles/{id}/permissions',
             ...options,
@@ -649,16 +818,16 @@ export class Roles extends HeyApiClient {
 }
 
 export class Topics extends HeyApiClient {
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1TopicsData, ThrowOnError>): RequestResult<GetApiV1TopicsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1TopicsResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1TopicsData, ThrowOnError>): RequestResult<GetApiV1TopicsResponses, GetApiV1TopicsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1TopicsResponses, GetApiV1TopicsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/topics',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1TopicsData, ThrowOnError>): RequestResult<PostApiV1TopicsResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1TopicsResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1TopicsData, ThrowOnError>): RequestResult<PostApiV1TopicsResponses, PostApiV1TopicsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1TopicsResponses, PostApiV1TopicsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/topics',
             ...options,
@@ -666,24 +835,24 @@ export class Topics extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1TopicsByIdData, ThrowOnError>): RequestResult<DeleteApiV1TopicsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1TopicsByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1TopicsByIdData, ThrowOnError>): RequestResult<DeleteApiV1TopicsByIdResponses, DeleteApiV1TopicsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1TopicsByIdResponses, DeleteApiV1TopicsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/topics/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1TopicsByIdData, ThrowOnError>): RequestResult<GetApiV1TopicsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1TopicsByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1TopicsByIdData, ThrowOnError>): RequestResult<GetApiV1TopicsByIdResponses, GetApiV1TopicsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1TopicsByIdResponses, GetApiV1TopicsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/topics/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1TopicsByIdData, ThrowOnError>): RequestResult<PatchApiV1TopicsByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1TopicsByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1TopicsByIdData, ThrowOnError>): RequestResult<PatchApiV1TopicsByIdResponses, PatchApiV1TopicsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1TopicsByIdResponses, PatchApiV1TopicsByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/topics/{id}',
             ...options,
@@ -696,24 +865,24 @@ export class Users extends HeyApiClient {
     /**
      * Get current authenticated user
      */
-    public me<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersMeData, ThrowOnError>): RequestResult<GetApiV1UsersMeResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1UsersMeResponses, unknown, ThrowOnError>({
+    public me<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersMeData, ThrowOnError>): RequestResult<GetApiV1UsersMeResponses, GetApiV1UsersMeErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1UsersMeResponses, GetApiV1UsersMeErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/me',
             ...options
         });
     }
     
-    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersData, ThrowOnError>): RequestResult<GetApiV1UsersResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1UsersResponses, unknown, ThrowOnError>({
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersData, ThrowOnError>): RequestResult<GetApiV1UsersResponses, GetApiV1UsersErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1UsersResponses, GetApiV1UsersErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users',
             ...options
         });
     }
     
-    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1UsersData, ThrowOnError>): RequestResult<PostApiV1UsersResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).post<PostApiV1UsersResponses, unknown, ThrowOnError>({
+    public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1UsersData, ThrowOnError>): RequestResult<PostApiV1UsersResponses, PostApiV1UsersErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1UsersResponses, PostApiV1UsersErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users',
             ...options,
@@ -721,24 +890,24 @@ export class Users extends HeyApiClient {
         });
     }
     
-    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1UsersByIdResponses, unknown, ThrowOnError>({
+    public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}',
             ...options
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdData, ThrowOnError>): RequestResult<GetApiV1UsersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1UsersByIdResponses, unknown, ThrowOnError>({
+    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdData, ThrowOnError>): RequestResult<GetApiV1UsersByIdResponses, GetApiV1UsersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1UsersByIdResponses, GetApiV1UsersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}',
             ...options
         });
     }
     
-    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1UsersByIdResponses, unknown, ThrowOnError>({
+    public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}',
             ...options,
@@ -746,28 +915,41 @@ export class Users extends HeyApiClient {
         });
     }
     
-    public deleteRoles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdRolesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteApiV1UsersByIdRolesResponses, unknown, ThrowOnError>({
+    public deleteRoles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdRolesResponses, DeleteApiV1UsersByIdRolesErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1UsersByIdRolesResponses, DeleteApiV1UsersByIdRolesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}/roles',
             ...options
         });
     }
     
-    public listRoles<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<GetApiV1UsersByIdRolesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<GetApiV1UsersByIdRolesResponses, unknown, ThrowOnError>({
+    public listRoles<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<GetApiV1UsersByIdRolesResponses, GetApiV1UsersByIdRolesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1UsersByIdRolesResponses, GetApiV1UsersByIdRolesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}/roles',
             ...options
         });
     }
     
-    public updateRoles<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdRolesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchApiV1UsersByIdRolesResponses, unknown, ThrowOnError>({
+    public updateRoles<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdRolesResponses, PatchApiV1UsersByIdRolesErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1UsersByIdRolesResponses, PatchApiV1UsersByIdRolesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/users/{id}/roles',
             ...options,
             headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+}
+
+export class Usage extends HeyApiClient {
+    /**
+     * Get usage and quota summary
+     */
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsageData, ThrowOnError>): RequestResult<GetApiV1UsageResponses, GetApiV1UsageErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1UsageResponses, GetApiV1UsageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/usage',
+            ...options
         });
     }
 }
@@ -798,6 +980,21 @@ export class LobeHub extends HeyApiClient {
         return this._agents ??= new Agents({ client: this.client });
     }
     
+    private _apiKeys?: ApiKeys;
+    get apiKeys(): ApiKeys {
+        return this._apiKeys ??= new ApiKeys({ client: this.client });
+    }
+    
+    private _chat?: Chat;
+    get chat(): Chat {
+        return this._chat ??= new Chat({ client: this.client });
+    }
+    
+    private _eval?: Eval;
+    get eval(): Eval {
+        return this._eval ??= new Eval({ client: this.client });
+    }
+    
     private _files?: Files;
     get files(): Files {
         return this._files ??= new Files({ client: this.client });
@@ -806,6 +1003,11 @@ export class LobeHub extends HeyApiClient {
     private _knowledgeBases?: KnowledgeBases;
     get knowledgeBases(): KnowledgeBases {
         return this._knowledgeBases ??= new KnowledgeBases({ client: this.client });
+    }
+    
+    private _mcpServers?: McpServers;
+    get mcpServers(): McpServers {
+        return this._mcpServers ??= new McpServers({ client: this.client });
     }
     
     private _messageTranslations?: MessageTranslations;
@@ -851,5 +1053,10 @@ export class LobeHub extends HeyApiClient {
     private _users?: Users;
     get users(): Users {
         return this._users ??= new Users({ client: this.client });
+    }
+    
+    private _usage?: Usage;
+    get usage(): Usage {
+        return this._usage ??= new Usage({ client: this.client });
     }
 }

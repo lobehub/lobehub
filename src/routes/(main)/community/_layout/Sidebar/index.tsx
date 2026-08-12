@@ -1,17 +1,13 @@
-import { memo } from 'react';
-
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import Content from './Content';
 
-const Sidebar = memo(() => {
+const Sidebar = () => {
   return (
     <NavPanelPortal navKey="discover">
       <Content />
     </NavPanelPortal>
   );
-});
-
-Sidebar.displayName = 'DisocverSidebar';
+};
 
 export default Sidebar;

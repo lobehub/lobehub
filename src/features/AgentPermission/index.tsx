@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -51,7 +51,7 @@ const AgentPermission = memo(() => {
               error={configError}
               errorVariant={'page'}
               isLoading={isAgentConfigLoading && !configError}
-              loading={<Loading debugId="AgentPermission" />}
+              loading={<SurfaceSkeleton header={false} variant={'form'} />}
               onRetry={() => retryAgentConfigFetch()}
             >
               <PermissionForm agentId={activeAgentId ?? ''} />

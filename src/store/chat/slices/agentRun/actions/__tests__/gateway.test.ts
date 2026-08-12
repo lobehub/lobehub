@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
+import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -528,6 +529,7 @@ describe('GatewayActionImpl', () => {
     function createExecuteTestAction() {
       const mockClient = createMockClient();
       const moveQueuedMessages = vi.fn();
+      const moveVoiceMessages = vi.fn();
       const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
       const associateMessageWithOperation = vi.fn();
       const connectToGateway = vi.fn();
@@ -554,6 +556,7 @@ describe('GatewayActionImpl', () => {
         internal_dispatchTopic: internalDispatchTopic,
         internal_replaceTopicId: internalReplaceTopicId,
         moveQueuedMessages,
+        moveVoiceMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -583,6 +586,7 @@ describe('GatewayActionImpl', () => {
         internalReplaceTopicId,
         mockClient,
         moveQueuedMessages,
+        moveVoiceMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -719,7 +723,7 @@ describe('GatewayActionImpl', () => {
     });
 
     it('should move queued follow-ups from the new-topic key to the server-created topic key', async () => {
-      const { action, moveQueuedMessages } = createExecuteTestAction();
+      const { action, moveQueuedMessages, moveVoiceMessages } = createExecuteTestAction();
       const context = { agentId: 'agent-1', topicId: null, threadId: null };
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -746,6 +750,10 @@ describe('GatewayActionImpl', () => {
         messageMapKey(context),
         messageMapKey({ ...context, topicId: 'topic-created' }),
       );
+      expect(moveVoiceMessages).toHaveBeenCalledWith(context, {
+        ...context,
+        topicId: 'topic-created',
+      });
     });
 
     it('should replace the optimistic topic placeholder with the server topic id', async () => {
@@ -992,19 +1000,17 @@ describe('GatewayActionImpl', () => {
       );
     });
 
-    it('forwards the parent abort signal to execAgentTask and bails out (with server interrupt) when cancel arrives after the request resolved', async () => {
+    it('reconciles an accepted message but skips the gateway child when cancel races with phase-1 persistence', async () => {
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
       const completeOperation = vi.fn();
       const associateMessageWithOperation = vi.fn();
       const connectToGateway = vi.fn();
+      const moveQueuedMessages = vi.fn();
       const onOperationCancel = vi.fn();
+      const onMessageAccepted = vi.fn();
+      const replaceMessages = vi.fn();
 
-      // Pre-aborted controller simulates the user clicking Stop while
-      // execAgentTask is still in flight: when it resolves the signal is
-      // already `aborted: true`, so executeGatewayAgent must NOT proceed to
-      // start the child op or open a WS connection.
       const controller = new AbortController();
-      controller.abort('user cancelled');
 
       const mockClient = createMockClient();
       const state: Record<string, any> = { gatewayConnections: {} };
@@ -1018,8 +1024,10 @@ describe('GatewayActionImpl', () => {
         completeOperation,
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        moveQueuedMessages,
+        moveVoiceMessages: vi.fn(),
         onOperationCancel,
-        replaceMessages: vi.fn(),
+        replaceMessages,
         startOperation,
         switchTopic: vi.fn(),
       })) as any;
@@ -1035,8 +1043,7 @@ describe('GatewayActionImpl', () => {
       const interruptTaskSpy = vi
         .mocked(aiAgentService.interruptTask)
         .mockResolvedValue({ operationId: 'server-op-cancel', success: true });
-
-      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+      const persistedResult = {
         agentId: 'agent-1',
         assistantMessageId: 'ast-1',
         autoStarted: true,
@@ -1049,36 +1056,46 @@ describe('GatewayActionImpl', () => {
         token: 'test-token',
         topicId: 'topic-1',
         userMessageId: 'usr-1',
-      });
-
-      await expect(
-        action.executeGatewayAgent({
-          context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
-          message: 'Hello',
-          parentOperationId: 'parent-send-msg-op',
+      } as const;
+      let resolvePersistence!: (value: typeof persistedResult) => void;
+      vi.mocked(aiAgentService.execAgentTask).mockReturnValue(
+        new Promise((resolve) => {
+          resolvePersistence = resolve;
         }),
-      ).rejects.toBeDefined();
+      );
+      vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('refresh failed'));
 
-      // The signal must be forwarded into execAgentTask so the fetch itself
-      // is aborted in-flight when cancel comes during the round-trip.
+      const execution = action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+        onMessageAccepted,
+        parentOperationId: 'parent-send-msg-op',
+      });
+      await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
+      controller.abort('user cancelled');
+      resolvePersistence(persistedResult);
+
+      await expect(execution).resolves.toEqual(persistedResult);
+
       expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ signal: controller.signal }),
       );
-
       // Server task was created before the signal flipped — best-effort
       // interrupt must fire so the agent run stops server-side.
-      expect(interruptTaskSpy).toHaveBeenCalledWith({
-        operationId: 'server-op-cancel',
-        topicId: 'topic-1',
-      });
-
-      // No child op, no message association, no WS connect, no parent complete
-      // — the cancel must short-circuit the whole hand-off.
+      await vi.waitFor(() =>
+        expect(interruptTaskSpy).toHaveBeenCalledWith({
+          operationId: 'server-op-cancel',
+          topicId: 'topic-1',
+        }),
+      );
+      expect(onMessageAccepted).toHaveBeenCalledOnce();
+      expect(replaceMessages).not.toHaveBeenCalled();
+      expect(moveQueuedMessages).toHaveBeenCalledOnce();
       expect(startOperation).not.toHaveBeenCalled();
       expect(associateMessageWithOperation).not.toHaveBeenCalled();
       expect(connectToGateway).not.toHaveBeenCalled();
-      expect(completeOperation).not.toHaveBeenCalled();
+      expect(completeOperation).toHaveBeenCalledWith('parent-send-msg-op');
     });
 
     it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {
@@ -1097,6 +1114,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway: vi.fn(),
         internal_dispatchTopic: vi.fn(),
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),
         startOperation,
@@ -1185,6 +1203,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),
@@ -1272,6 +1291,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),
@@ -1362,6 +1382,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),

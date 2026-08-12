@@ -57,6 +57,10 @@ export class FileService {
     await lambdaClient.file.removeFile.mutate({ id });
   };
 
+  removeUnreferencedFile = async (id: string): Promise<void> => {
+    await lambdaClient.file.removeUnreferencedFile.mutate({ id });
+  };
+
   removeFiles = async (ids: string[]): Promise<void> => {
     await lambdaClient.file.removeFiles.mutate({ ids });
   };

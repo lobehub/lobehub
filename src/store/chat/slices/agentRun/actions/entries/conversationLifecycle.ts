@@ -1,10 +1,12 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
+import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
+  ChatAudioItem,
   ChatImageItem,
   ChatThreadType,
   ChatTopicMetadata,
@@ -72,6 +74,7 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
+import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -178,6 +181,14 @@ const createAbortError = () =>
 
 const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
+const throwIfSendAborted = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Message send was cancelled', 'AbortError');
+};
+
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
   userMessageId: string,
@@ -262,17 +273,59 @@ export class ConversationLifecycleActionImpl {
     contextSelections,
     inputEditor,
     messages: inputMessages,
+    optimisticUserMessageId,
     parentId: inputParentId,
     pageSelections,
     onPreflightFailure,
+    onMessageAccepted,
+    onMessagePersisted,
     onTopicCreated,
+    preserveComposer,
+    signal,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
+    throwIfSendAborted(signal);
+
+    let detachCallerAbort = () => {};
+    let hasNotifiedMessageAccepted = false;
+    const detachUnacceptedCallerAbort = () => {
+      if (!hasNotifiedMessageAccepted) detachCallerAbort();
+    };
+    const notifyMessageAccepted = () => {
+      if (hasNotifiedMessageAccepted) return;
+
+      hasNotifiedMessageAccepted = true;
+      detachCallerAbort();
+      try {
+        onMessageAccepted?.();
+      } catch (error) {
+        console.error('[sendMessage] onMessageAccepted callback failed:', error);
+      }
+    };
+    let hasNotifiedMessagePersisted = false;
+    const notifyMessagePersisted = () => {
+      if (hasNotifiedMessagePersisted) return;
+
+      notifyMessageAccepted();
+      hasNotifiedMessagePersisted = true;
+      try {
+        onMessagePersisted?.();
+      } catch (error) {
+        console.error('[sendMessage] onMessagePersisted callback failed:', error);
+      }
+    };
+
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
     const targetInputEditor = inputEditor ?? mainInputEditor;
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
+    if (
+      isGoalPrompt(message) &&
+      !selectedTools.some(({ identifier }) => identifier === GoalIdentifier)
+    ) {
+      selectedTools.push({ identifier: GoalIdentifier, name: 'Goal' });
+    }
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
 
     const localFileReferences = mergeLocalFileReferences(
@@ -510,6 +563,8 @@ export class ConversationLifecycleActionImpl {
     const requestTrigger = (metadata as Pick<MessageMetadata, 'trigger'> | undefined)?.trigger;
     const requestMetadata = requestTrigger ? { trigger: requestTrigger } : undefined;
 
+    throwIfSendAborted(signal);
+
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
     // if message is empty or no files, then stop
@@ -545,12 +600,35 @@ export class ConversationLifecycleActionImpl {
           ].filter((key) => key !== currentContextKey)
         : []),
     ];
-    const findRunningBlockingOp = (key: string) =>
-      (this.#get().operationsByContext[key] || [])
-        .map((id) => this.#get().operations[id])
+    const findRunningBlockingOp = (key: string) => {
+      const contextOpIds = this.#get().operationsByContext[key] || [];
+      const ownVoiceUploadIndex = optimisticUserMessageId
+        ? contextOpIds.findIndex((id) => {
+            const operation = this.#get().operations[id];
+            return (
+              operation?.type === 'uploadVoiceMessage' &&
+              operation.context.messageId === optimisticUserMessageId
+            );
+          })
+        : -1;
+
+      return contextOpIds
+        .map((id, index) => ({ index, operation: this.#get().operations[id] }))
         .find(
-          (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
-        );
+          ({ index, operation }) =>
+            operation &&
+            QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type) &&
+            operation.status === 'running' &&
+            // The upload transaction calls this lifecycle after its own binary is ready. It must
+            // not queue behind itself (or a later voice upload); earlier voice uploads still block.
+            !(
+              optimisticUserMessageId &&
+              operation.type === 'uploadVoiceMessage' &&
+              (operation.context.messageId === optimisticUserMessageId ||
+                (ownVoiceUploadIndex >= 0 && index > ownVoiceUploadIndex))
+            ),
+        )?.operation;
+    };
     let queueTargetKey = currentContextKey;
     let runningQueueBlockingOp: ReturnType<typeof findRunningBlockingOp>;
     for (const key of queueCandidateKeys) {
@@ -560,12 +638,12 @@ export class ConversationLifecycleActionImpl {
         break;
       }
     }
-
     if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
-      // resumed sendMessage can rebuild imageList/videoList — by the time
+      // resumed sendMessage can rebuild audioList/imageList/videoList — by the time
       // we drain, chatUploadFileList has long been cleared.
       const filesPreview: QueuedFile[] = (files ?? []).map((f) => ({
+        audioMetadata: f.audioMetadata,
         id: f.id,
         mimeType: f.file?.type ?? '',
         name: f.file?.name ?? f.id,
@@ -587,6 +665,7 @@ export class ConversationLifecycleActionImpl {
         },
         runningQueueBlockingOp.id,
       );
+      notifyMessageAccepted();
       return;
     }
 
@@ -596,6 +675,7 @@ export class ConversationLifecycleActionImpl {
         fileList: fileIdList,
         metadata: userMessageMetadata,
       });
+      notifyMessagePersisted();
 
       return;
     }
@@ -603,9 +683,12 @@ export class ConversationLifecycleActionImpl {
     // Use provided messages or query from store
     // For /newTopic from existing topic, start with empty message list (fresh topic)
     const contextKey = messageMapKey(context);
-    const messages = forceNewTopicFromExisting
-      ? []
-      : (inputMessages ?? displayMessageSelectors.getDisplayMessagesByKey(contextKey)(this.#get()));
+    const messages = (
+      forceNewTopicFromExisting
+        ? []
+        : (inputMessages ??
+          displayMessageSelectors.getDisplayMessagesByKey(contextKey)(this.#get()))
+    ).filter((item) => !isLocalOnlyMessage(item));
     // Historical callback/tool sibling forks are rendered with the recovered
     // taskCallback card as supplemental history. It is not the active
     // conversational tail: using it here lets findLastMessageId descend into
@@ -633,7 +716,7 @@ export class ConversationLifecycleActionImpl {
     // re-keyed when the response lands. That is what keeps the conversation's
     // identity — and therefore the mounted message list — stable across the
     // whole send.
-    const tempId = generateEntityId('messages');
+    const tempId = optimisticUserMessageId ?? generateEntityId('messages');
     const tempAssistantId = generateEntityId('messages');
     const { operationId, abortController } = this.#get().startOperation({
       type: 'sendMessage',
@@ -644,6 +727,40 @@ export class ConversationLifecycleActionImpl {
         inThread: !!operationContext.threadId,
       },
     });
+    // Voice recording starts before a first-send topic exists, so its upload
+    // transaction and local row initially live in the legacy `_new` bucket.
+    // Adopt the client-minted topic context before looking up that row; otherwise
+    // the formal send would create a duplicate in the minted bucket.
+    this.#get().moveVoiceMessages(context, operationContext);
+
+    const cleanupTempMessages = (options?: { preserveOptimisticUser?: boolean }) => {
+      const ids = options?.preserveOptimisticUser ? [tempAssistantId] : [tempId, tempAssistantId];
+      this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
+    };
+    const restoreUnacceptedVoiceMessageContext = () => {
+      if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
+
+      // The minted topic is rolled back on a pre-accept failure. Return the
+      // retry-owned upload operation and playable local row to the visible
+      // `_new` conversation instead of leaving them under a deleted topic id.
+      this.#get().moveVoiceMessages(operationContext, context);
+    };
+    if (signal) {
+      const cancelFromCaller = () => {
+        const operation = this.#get().operations[operationId];
+        if (hasNotifiedMessageAccepted || operation?.status !== 'running') return;
+
+        this.#get().cancelOperation(operationId, 'Caller cancelled before message acceptance');
+      };
+
+      if (signal.aborted) {
+        cancelFromCaller();
+      } else {
+        signal.addEventListener('abort', cancelFromCaller, { once: true });
+        detachCallerAbort = () => signal.removeEventListener('abort', cancelFromCaller);
+      }
+    }
+    throwIfSendAborted(signal);
 
     // Shared run lifecycle for the post-persist topic-title hook. Built once here
     // so all three runtime branches fire the SAME `afterUserMessagePersisted`
@@ -678,26 +795,64 @@ export class ConversationLifecycleActionImpl {
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,
       }));
+    const tempAudios: ChatAudioItem[] = filesForPreview
+      .filter((f) => f.audioMetadata || f.file?.type?.startsWith('audio'))
+      .map((f) => ({
+        ...f.audioMetadata,
+        id: f.id,
+        url: f.fileUrl || f.base64Url || f.previewUrl || '',
+        alt: f.file?.name || f.id,
+      }));
 
-    // use optimistic update to avoid the slow waiting (now with operationId for correct context)
-    this.#get().optimisticCreateTmpMessage(
-      {
-        content: message,
-        editorData: editorData ?? undefined,
-        // if message has attached with files, then add files to message and the agent
-        files: fileIdList,
-        role: 'user',
-        agentId: operationContext.agentId,
-        // if there is topicId, then add topicId to message
-        topicId: operationContext.topicId ?? undefined,
-        threadId: operationContext.threadId ?? undefined,
-        imageList: tempImages.length > 0 ? tempImages : undefined,
-        videoList: tempVideos.length > 0 ? tempVideos : undefined,
-        // Pass metadata for immediate display
-        metadata: userMessageMetadata,
-      },
-      { operationId, tempMessageId: tempId },
+    const optimisticUserMessage = {
+      content: message,
+      editorData: editorData ?? undefined,
+      // if message has attached with files, then add files to message and the agent
+      files: fileIdList,
+      role: 'user' as const,
+      agentId: operationContext.agentId,
+      // if there is topicId, then add topicId to message
+      topicId: operationContext.topicId ?? undefined,
+      threadId: operationContext.threadId ?? undefined,
+      audioList: tempAudios.length > 0 ? tempAudios : undefined,
+      imageList: tempImages.length > 0 ? tempImages : undefined,
+      videoList: tempVideos.length > 0 ? tempVideos : undefined,
+      // Pass metadata for immediate display
+      metadata: userMessageMetadata,
+    };
+    const operationMessageKey = messageMapKey(
+      this.#get().internal_getConversationContext({ operationId }),
     );
+    const existingOptimisticUserMessage = this.#get().dbMessagesMap[operationMessageKey]?.find(
+      (item) => item.id === tempId && item.role === 'user',
+    );
+
+    // A voice message can render a local-only row before its binary upload finishes. Adopt that
+    // row in place so the formal send lifecycle keeps its stable position and never duplicates it.
+    if (existingOptimisticUserMessage) {
+      this.#get().internal_dispatchMessage(
+        {
+          id: tempId,
+          type: 'updateMessage',
+          value: {
+            ...optimisticUserMessage,
+            groupId: operationContext.groupId,
+            metadata: {
+              ...existingOptimisticUserMessage.metadata,
+              ...userMessageMetadata,
+              scope: existingOptimisticUserMessage.metadata?.scope,
+            },
+          },
+        },
+        { operationId },
+      );
+    } else {
+      // use optimistic update to avoid the slow waiting (now with operationId for correct context)
+      this.#get().optimisticCreateTmpMessage(optimisticUserMessage, {
+        operationId,
+        tempMessageId: tempId,
+      });
+    }
     this.#get().optimisticCreateTmpMessage(
       {
         content: LOADING_FLAT,
@@ -982,7 +1137,9 @@ export class ConversationLifecycleActionImpl {
     }
 
     // Store editor state in operation metadata for cancel restoration
-    const jsonState = inputEditorData ?? targetInputEditor?.getJSONState();
+    const jsonState = preserveComposer
+      ? undefined
+      : (inputEditorData ?? targetInputEditor?.getJSONState());
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
@@ -1003,6 +1160,7 @@ export class ConversationLifecycleActionImpl {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
+        throwIfSendAborted(signal);
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
@@ -1056,18 +1214,27 @@ export class ConversationLifecycleActionImpl {
         );
       } catch (e) {
         console.error('[HeterogeneousAgent] Failed to persist messages:', e);
-        this.#get().failOperation(operationId, {
-          message: e instanceof Error ? e.message : 'Unknown error',
-          type: 'HeterogeneousAgentError',
-        });
+        if (this.#get().operations[operationId]?.status !== 'cancelled') {
+          this.#get().failOperation(operationId, {
+            message: e instanceof Error ? e.message : 'Unknown error',
+            type: 'HeterogeneousAgentError',
+          });
+        }
+        cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+        restoreUnacceptedVoiceMessageContext();
         return;
       }
 
       if (!heteroData) {
+        cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+        restoreUnacceptedVoiceMessageContext();
         return;
       }
+      notifyMessageAccepted();
 
       // Update context with server-created topicId. Once the server has returned a
       // persisted topic, the hetero stream must target the real topic bucket; keeping
@@ -1092,6 +1259,7 @@ export class ConversationLifecycleActionImpl {
           messageMapKey({ ...operationContext, topicId: null }),
           heteroMessageKey,
         );
+      this.#get().moveVoiceMessages(operationContext, heteroContext);
       const heteroMessages = heteroResponseMeta.__isPartialMessages
         ? mergePartialPersistedMessages(
             this.#get().messagesMap[heteroMessageKey] || [],
@@ -1167,6 +1335,21 @@ export class ConversationLifecycleActionImpl {
 
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
+      notifyMessagePersisted();
+
+      // Clear editor temp state — the user's message is already persisted, so
+      // a later Stop click must NOT restore it into the input (would feel like
+      // the app re-sent the message). Client/Gateway paths clear this at
+      // line 684-686 after `sendMessageInServer` resolves, but the hetero
+      // branch returns early (line 498) and never reaches that clear.
+      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
+
+      if (abortController.signal.aborted) {
+        return {
+          assistantMessageId: heteroData.assistantMessageId,
+          userMessageId: heteroData.userMessageId,
+        };
+      }
 
       // Topic title: hetero used to set only a sliced placeholder
       // title on new topics — upgrade it to the LLM summary via the shared hook
@@ -1183,13 +1366,6 @@ export class ConversationLifecycleActionImpl {
           topicId: heteroData.topicId,
         })
         .catch(console.error);
-
-      // Clear editor temp state — the user's message is already persisted, so
-      // a later Stop click must NOT restore it into the input (would feel like
-      // the app re-sent the message). Client/Gateway paths clear this at
-      // line 684-686 after `sendMessageInServer` resolves, but the hetero
-      // branch returns early (line 498) and never reaches that clear.
-      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
       // Sidebar "running" spinner for hetero runs is driven off the persisted
       // `topic.status === 'running'` (written by the executor's writeTopicStatus,
@@ -1330,6 +1506,7 @@ export class ConversationLifecycleActionImpl {
           fileIds: fileIdList,
           message,
           metadata: requestMetadata,
+          onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
           optimisticTopic,
           // Forward @-mentioned tool ids so the server runtime enables them for
@@ -1350,6 +1527,7 @@ export class ConversationLifecycleActionImpl {
           // messages with the server's real IDs.
           tempMessageIds: [tempAssistantId],
         });
+        const cancelledAfterPersistence = abortController.signal.aborted;
 
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
@@ -1363,21 +1541,25 @@ export class ConversationLifecycleActionImpl {
           if (optimisticTopic && optimisticTopicActive) {
             optimisticTopicActive = false;
           }
-          void sendRunLifecycle
-            .afterUserMessagePersisted({
-              assistantMessageId: result.assistantMessageId,
-              context: { ...operationContext, topicId: result.topicId },
-              isCreateNewTopic: willCreateNewTopic,
-              operationId,
-              runId: operationId,
-              runScope: sendRunScope,
-              runtimeType,
-              topicId: result.topicId,
-            })
-            .catch(console.error);
+          if (!cancelledAfterPersistence) {
+            void sendRunLifecycle
+              .afterUserMessagePersisted({
+                assistantMessageId: result.assistantMessageId,
+                context: { ...operationContext, topicId: result.topicId },
+                isCreateNewTopic: willCreateNewTopic,
+                operationId,
+                runId: operationId,
+                runScope: sendRunScope,
+                runtimeType,
+                topicId: result.topicId,
+              })
+              .catch(console.error);
+          }
         } else {
           rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         }
+
+        notifyMessagePersisted();
 
         return {
           assistantMessageId: result.assistantMessageId,
@@ -1389,7 +1571,12 @@ export class ConversationLifecycleActionImpl {
         // server task. Don't clobber that with 'failed'.
         const op = this.#get().operations[operationId];
         if (op?.status === 'cancelled') {
+          cleanupTempMessages({
+            preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
+          });
+          detachUnacceptedCallerAbort();
           rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+          restoreUnacceptedVoiceMessageContext();
           return;
         }
 
@@ -1398,7 +1585,12 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
         });
+        cleanupTempMessages({
+          preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
+        });
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+        restoreUnacceptedVoiceMessageContext();
         return;
       }
     }
@@ -1411,6 +1603,7 @@ export class ConversationLifecycleActionImpl {
       );
 
     try {
+      throwIfSendAborted(signal);
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
@@ -1494,6 +1687,7 @@ export class ConversationLifecycleActionImpl {
         },
         abortController,
       );
+      notifyMessageAccepted();
       const responseMeta = data as SendMessageServerResponseMeta;
       // Use created topicId/threadId if available, otherwise use original from context
       let finalTopicId = data.topicId ?? operationContext.topicId;
@@ -1577,6 +1771,7 @@ export class ConversationLifecycleActionImpl {
           messageMapKey({ ...operationContext, topicId: null }),
           finalMessageKey,
         );
+      this.#get().moveVoiceMessages(operationContext, finalContext);
       const persistedMessages = attachSendTimeMetadataToUserMessage(
         data.messages,
         data.userMessageId,
@@ -1615,12 +1810,14 @@ export class ConversationLifecycleActionImpl {
       console.error(e);
       rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
       // Fail operation on error
-      this.#get().failOperation(operationId, {
-        type: e instanceof Error ? e.name : 'unknown_error',
-        message: e instanceof Error ? e.message : 'Unknown error',
-      });
+      if (this.#get().operations[operationId]?.status !== 'cancelled') {
+        this.#get().failOperation(operationId, {
+          type: e instanceof Error ? e.name : 'unknown_error',
+          message: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
 
-      if (e instanceof TRPCClientError) {
+      if (!preserveComposer && e instanceof TRPCClientError) {
         const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
         // Check if error is due to cancellation
         if (!isAbort) {
@@ -1639,12 +1836,10 @@ export class ConversationLifecycleActionImpl {
       // under the ids the server persisted, so `replaceMessages` reconciled them
       // in place — and for a brand-new topic `switchTopic({ clearNewKey: true })`
       // drops the now-empty `_new` bucket anyway.
-      if (!data) {
-        this.#get().internal_dispatchMessage(
-          { type: 'deleteMessages', ids: [tempId, tempAssistantId] },
-          { operationId },
-        );
-      }
+      if (!data)
+        cleanupTempMessages({
+          preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
+        });
     }
 
     // Clear editor temp state after message created
@@ -1653,12 +1848,25 @@ export class ConversationLifecycleActionImpl {
     }
 
     if (!data) {
+      detachUnacceptedCallerAbort();
       rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+      restoreUnacceptedVoiceMessageContext();
       return;
     }
 
     rollbackOptimisticTopic('sendMessage/rollbackUnresolvedOptimisticTopic');
 
+    if (abortController.signal.aborted) {
+      this.#get().completeOperation(operationId);
+      notifyMessagePersisted();
+
+      return {
+        assistantMessageId: data.assistantMessageId,
+        createdThreadId: data.createdThreadId,
+        createdTopicId: isCreatedTopicResponse(data) ? data.topicId : undefined,
+        userMessageId: data.userMessageId,
+      };
+    }
     // Topic title auto-generation, now via the shared `afterUserMessagePersisted`
     // hook. The client passes its freshly-created `data.messages`
     // (not yet in the store under the real topicId); gateway/hetero call the same
@@ -1676,10 +1884,6 @@ export class ConversationLifecycleActionImpl {
         topicId: data.topicId,
       })
       .catch(console.error);
-
-    // Complete sendMessage operation here - message creation is done
-    // execAgentRuntime is a separate operation (child) that handles AI response generation
-    this.#get().completeOperation(operationId);
 
     const execContext = {
       ...operationContext,
@@ -1737,9 +1941,20 @@ export class ConversationLifecycleActionImpl {
 
     // ── AI execution (client mode) ──
     {
+      let sendOperationHandedOff = false;
+      const handoffSendOperation = () => {
+        if (sendOperationHandedOff) return;
+
+        sendOperationHandedOff = true;
+        // Keep the send operation running until the child runtime is ready to start. This makes
+        // `_new` → persisted-topic migration one continuous queue barrier for follow-up turns.
+        this.#get().completeOperation(operationId);
+        notifyMessagePersisted();
+      };
+
       try {
         if (directMentionRoute) {
-          await executeDirectMention(
+          const directMentionRun = executeDirectMention(
             {
               context: execContext,
               instruction: message,
@@ -1750,10 +1965,12 @@ export class ConversationLifecycleActionImpl {
             },
             this.#get,
           );
+          handoffSendOperation();
+          await directMentionRun;
         } else {
-          const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
-            messageMapKey(execContext),
-          )(this.#get());
+          const displayMessages = displayMessageSelectors
+            .getDisplayMessagesByKey(messageMapKey(execContext))(this.#get())
+            .filter((item) => !isLocalOnlyMessage(item));
 
           // When agents are @mentioned, inject a slim callAgent-only manifest
           // so the AI can delegate directly without activating the full agent-management tool
@@ -1782,7 +1999,7 @@ export class ConversationLifecycleActionImpl {
             agentRuntimeInitialContext,
           );
 
-          await executeClientAgent({
+          const clientRun = executeClientAgent({
             context: execContext,
             initialContext: mergedAgentRuntimeInitialContext,
             metadata: requestMetadata,
@@ -1794,6 +2011,8 @@ export class ConversationLifecycleActionImpl {
             skipCreateFirstMessage: true,
             userMessageId: data.userMessageId,
           });
+          handoffSendOperation();
+          await clientRun;
         }
 
         const userFiles = dbMessageSelectors
@@ -1806,6 +2025,8 @@ export class ConversationLifecycleActionImpl {
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        handoffSendOperation();
       }
     }
 

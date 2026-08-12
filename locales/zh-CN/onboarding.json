@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "重试",
   "flow.steps.learnYourWorld.sectionHint": "分析你已连接的数据，了解你真正在意的事情…",
   "flow.steps.learnYourWorld.skipAhead": "跳过等待",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 可以先跳过这一步，画像完成后我们会通知你。",
   "flow.steps.learnYourWorld.title": "了解你的世界",
   "flow.steps.messenger.connect": "连接",
   "flow.steps.messenger.connected": "已连接",

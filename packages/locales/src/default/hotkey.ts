@@ -48,4 +48,6 @@ export default {
   'toggleLeftPanel.title': 'Toggle Left Panel',
   'toggleRightPanel.desc': 'Show or hide the right panel',
   'toggleRightPanel.title': 'Toggle Right Panel',
+  'toggleTerminalPanel.desc': 'Show or hide the bottom terminal panel',
+  'toggleTerminalPanel.title': 'Toggle Terminal Panel',
 };

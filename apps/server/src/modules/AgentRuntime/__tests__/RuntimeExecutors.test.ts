@@ -2371,6 +2371,47 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should forward additional contexts without leaking model parameters', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const additionalContexts = [
+          {
+            content: { text: 'Inspect the repository.', type: 'text' as const },
+            placement: 'stable_prefix' as const,
+            wrapper: { tag: 'graph_node_context' },
+          },
+          {
+            content: { text: 'Continue.', type: 'text' as const },
+            placement: 'virtual_tail' as const,
+            wrapper: {
+              attributes: { stage: 'inspection' },
+              tag: 'graph_runtime_guidance',
+            },
+          },
+        ];
+
+        await createRuntimeExecutors(ctxWithConfig).call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+              additionalContexts,
+            },
+            type: 'call_llm',
+          },
+          createMockState(),
+        );
+
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ additionalContexts }));
+        const modelPayload = mockChat.mock.calls[0][0];
+        expect(modelPayload).not.toHaveProperty('additionalContexts');
+        expect(JSON.stringify(modelPayload.messages)).toContain('<graph_node_context>');
+        expect(JSON.stringify(modelPayload.messages)).toContain('<graph_runtime_guidance');
+      });
+
       it('should pass model knowledge cutoff into serverMessagesEngine', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,

@@ -21,6 +21,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type LocaleMode } from '@/types/locale';
+import { preloadLang } from '@/utils/client/preloadLang';
 
 const Common = memo(() => {
   const { t } = useTranslation('setting');
@@ -86,6 +87,19 @@ const Common = memo(() => {
           <Flexbox horizontal justify={'flex-end'}>
             <Select
               defaultValue={language}
+              optionRender={(option) => (
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={() => preloadLang(option.value as LocaleMode)}
+                >
+                  {option.label}
+                </span>
+              )}
               options={[
                 { label: t('settingCommon.lang.autoMode'), value: 'auto' },
                 ...localeOptions,

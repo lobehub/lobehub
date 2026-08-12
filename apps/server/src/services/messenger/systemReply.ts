@@ -34,6 +34,7 @@ interface MessengerSystemStrings {
   scopesHint: string;
   scopesUsage: (count: number) => string;
   scopeSwitched: (name: string, agentTitle?: string) => string;
+  staleAgent: string;
   staleScope: string;
   startDirectMessageOnly: string;
   stopDirectMessageOnly: string;
@@ -93,6 +94,8 @@ const EN_US: MessengerSystemStrings = {
   scopesUsage: (count) => `Usage: /switch <n>, where n is between 1 and ${count}.`,
   startDirectMessageOnly:
     'Open your direct message with the LobeHub bot and send `/start` there to link your account.',
+  staleAgent:
+    'Your active agent is no longer available — it may have been deleted or moved to another workspace. Send /agents to pick another one.',
   staleScope: 'Your active workspace is no longer available. Send /switch to choose another scope.',
   stopDirectMessageOnly: 'Open your direct message with the LobeHub bot and send `/stop` there.',
   stopNotActive: 'No active execution to stop.',
@@ -149,6 +152,7 @@ const ZH_CN: MessengerSystemStrings = {
   scopesHint: '回复 /switch <序号> 可切换空间。',
   scopesUsage: (count) => `用法：/switch <序号>，序号范围为 1–${count}。`,
   startDirectMessageOnly: '请打开与 LobeHub 机器人的私聊，并在那里发送 `/start` 绑定账号。',
+  staleAgent: '当前 Agent 已不可用，可能已被删除或移动到其他工作区。请发送 /agents 重新选择。',
   staleScope: '当前工作区已不可用。请发送 /switch 选择其他空间。',
   stopDirectMessageOnly: '请在与 LobeHub 机器人的私聊中发送 `/stop`。',
   stopNotActive: '当前没有正在执行的任务可以停止。',

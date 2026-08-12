@@ -61,8 +61,8 @@ describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
 });
 
 describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
-  it('gives the multi-file summary a prominent Codex-style icon container', () => {
-    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(56);
+  it('keeps the multi-file summary as compact as the single-file card', () => {
+    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
   });
 });
 

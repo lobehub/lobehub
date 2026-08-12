@@ -55,6 +55,8 @@ export default {
   'actionTag.tooltip.skill': 'Loads a reusable skill package for this request.',
   'actionTag.tooltip.tool': 'Marks a tool the user explicitly selected for this request.',
   'slash.compact': 'Compact context',
+  'slash.goal': 'Goal',
+  'slash.goal.desc': 'Plan and start a goal with editable acceptance criteria',
   'slash.h1': 'Heading 1',
   'slash.h2': 'Heading 2',
   'slash.h3': 'Heading 3',

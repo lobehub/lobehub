@@ -212,7 +212,7 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('runs Qoder with its default command and forwards model but not effort', async () => {
+  it('runs Qoder with its default command and forwards model and effort', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
     await runCmd([
@@ -233,7 +233,7 @@ describe('hetero exec command', () => {
       expect.objectContaining({
         agentType: 'qoder',
         command: 'qodercli',
-        extraArgs: ['--model', 'Claude Sonnet 4.5'],
+        extraArgs: ['--model', 'Claude Sonnet 4.5', '--reasoning-effort', 'high'],
         prompt: 'do thing',
       }),
     );
@@ -785,6 +785,38 @@ describe('hetero exec command', () => {
       topicId: 'topic-1',
     });
     expect(mockHeteroFinishMutate.mock.calls[0][0].error.body).toBeUndefined();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('preserves a working-directory error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockRejectedValue(
+      Object.assign(new Error('Working directory does not exist: /deleted/worktree'), {
+        code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { code: 'working_directory_not_found' },
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

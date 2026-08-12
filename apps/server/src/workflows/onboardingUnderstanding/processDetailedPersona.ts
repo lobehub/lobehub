@@ -4,14 +4,21 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
+import {
+  observeOnboardingUnderstandingOperation,
+  recordOnboardingUnderstandingEndToEndDuration,
+} from '@lobechat/observability-otel/modules/onboarding-understanding';
 import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createUnderstandingService,
   type UnderstandingService,
 } from '@/server/services/understanding/service';
+import { runStep } from '@/server/workflows/step';
 
+import { observeOnboardingUnderstandingWorkflow } from './observability';
 import {
   type ProcessCollectedUnderstandingPayload,
   ProcessCollectedUnderstandingPayloadSchema,
@@ -25,7 +32,8 @@ type DetailedPersonaService = Pick<
 type DetailedPersonaWorkflowContext = Pick<
   WorkflowContext<ProcessCollectedUnderstandingPayload>,
   'requestPayload' | 'run'
->;
+> &
+  Partial<Pick<WorkflowContext<ProcessCollectedUnderstandingPayload>, 'headers'>>;
 
 interface DetailedPersonaWorkflowDependencies {
   createService?: (userId: string) => Promise<DetailedPersonaService>;
@@ -63,22 +71,45 @@ export const processDetailedUnderstandingPersona = async (
   dependencies: DetailedPersonaWorkflowDependencies = {},
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
-  const service = await (dependencies.createService ?? createService)(payload.userId);
-  return context.run('detailed-persona:process', async () => {
-    try {
-      return await service.processDetailedPersona({
-        expectedSourceFingerprint: payload.sourceFingerprint,
-        responseLanguage: payload.responseLanguage,
-        sessionId: payload.sessionId,
-        topicId: payload.topicId,
+  return observeOnboardingUnderstandingWorkflow(
+    context,
+    {
+      operation: 'workflow.detailed-persona',
+      sessionId: payload.sessionId,
+      topicId: payload.topicId,
+    },
+    async () => {
+      const service = await (dependencies.createService ?? createService)(payload.userId);
+      const result = await runStep(context, 'detailed-persona:process', async () => {
+        try {
+          const result = await service.processDetailedPersona({
+            expectedSourceFingerprint: payload.sourceFingerprint,
+            responseLanguage: payload.responseLanguage,
+            sessionId: payload.sessionId,
+            topicId: payload.topicId,
+          });
+          if (result.published) {
+            recordOnboardingUnderstandingEndToEndDuration(payload.startedAt);
+          }
+          return result;
+        } catch (error) {
+          if (isStaleSession(error)) {
+            return { published: false as const, sourceFingerprint: payload.sourceFingerprint };
+          }
+          throw error;
+        }
       });
-    } catch (error) {
-      if (isStaleSession(error)) {
-        return { published: false as const, sourceFingerprint: payload.sourceFingerprint };
-      }
-      throw error;
-    }
-  });
+      await observeOnboardingUnderstandingOperation(
+        {
+          operation: 'progress.publish',
+          sessionId: payload.sessionId,
+          topicId: payload.topicId,
+        },
+        () => publishOnboardingGenerationProgress(payload.userId, payload.topicId),
+      );
+      return result;
+    },
+  );
 };
 
 /**
@@ -105,6 +136,7 @@ export const failRunningDetailedUnderstandingPersona = async (
       sourceFingerprint: payload.sourceFingerprint,
       topicId: payload.topicId,
     });
+    if (failed) await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
     return { failed: Boolean(failed) };
   } catch (error) {
     if (isStaleSession(error)) return { failed: false };

@@ -301,6 +301,7 @@ export class HeterogeneousPersistenceHandler {
    * this topic can include `--resume <id>`.
    */
   async finish(params: {
+    assistantMessageId?: string;
     error?: { body?: Record<string, unknown>; message: string; type: string };
     operationId: string;
     result: 'success' | 'error' | 'cancelled';
@@ -324,8 +325,19 @@ export class HeterogeneousPersistenceHandler {
     // a stale/mismatched operation stays a no-op.
     if (!state && params.result === 'error' && params.error && params.topicId) {
       try {
-        state = await this.loadOrCreateState(params.operationId, params.topicId);
-      } catch {
+        state = await this.loadOrCreateState(
+          params.operationId,
+          params.topicId,
+          params.assistantMessageId,
+          true,
+        );
+      } catch (error) {
+        log(
+          'finish bootstrap failed op=%s topic=%s err=%O',
+          params.operationId,
+          params.topicId,
+          error,
+        );
         return;
       }
     }
@@ -387,6 +399,7 @@ export class HeterogeneousPersistenceHandler {
     operationId: string,
     topicId: string,
     seedAssistantMessageId?: string,
+    allowMissingRunningOperation = false,
   ): Promise<OperationState> {
     let state = operationStates.get(operationId);
     if (state) {
@@ -403,13 +416,13 @@ export class HeterogeneousPersistenceHandler {
     const topic = await this.deps.topicModel.findById(topicId);
     const running = topic?.metadata?.runningOperation;
 
-    if (!running) {
+    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
       throw new StaleHeteroOperationError(
         `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
       );
     }
 
-    if (running.operationId !== operationId) {
+    if (running && running.operationId !== operationId) {
       throw new StaleHeteroOperationError(
         `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
       );
@@ -422,7 +435,7 @@ export class HeterogeneousPersistenceHandler {
     // runningOperation binding to match `operationId`, otherwise late/retried
     // batches after finish could keep mutating a completed turn.
     // Fall back to topic.metadata for desktop / old-CLI callers that lack the field.
-    const baseAssistantMessageId = seedAssistantMessageId ?? running.assistantMessageId;
+    const baseAssistantMessageId = seedAssistantMessageId ?? running?.assistantMessageId;
 
     if (!baseAssistantMessageId) {
       throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
@@ -475,7 +488,7 @@ export class HeterogeneousPersistenceHandler {
       processedKeys: new Set(),
       publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
-      threadId: running.threadId ?? undefined,
+      threadId: running?.threadId ?? undefined,
       topicId,
     };
     await this.refreshToolMessageIndex(state);
@@ -1124,6 +1137,7 @@ export class HeterogeneousPersistenceHandler {
     if (state.main.accContent) updateValue.content = state.main.accContent;
     if (state.main.accReasoning) updateValue.reasoning = { content: state.main.accReasoning };
     if (error) {
+      if (error.body?.clearEchoedContent === true) updateValue.content = '';
       // Same canonical normalization as the in-stream `setError` path — the CLI's
       // free-form `{ message, type }` runs through formatErrorForState so the
       // terminal flush and the in-stream write produce one classified error shape.

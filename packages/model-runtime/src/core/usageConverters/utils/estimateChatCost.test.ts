@@ -91,6 +91,53 @@ describe('estimateChatCost', () => {
       expect(estimate.videoTokens).toBe(1200);
     });
 
+    it('counts audio by duration with an explicit conservative fallback source', () => {
+      const estimate = estimateOpenAIChatInputTokens(
+        [
+          {
+            content: [
+              {
+                audio_url: {
+                  durationMs: 2500,
+                  url: 'https://example.com/known-duration.mp3',
+                },
+                type: 'audio_url',
+              },
+              {
+                audio_url: { url: 'https://example.com/unknown-duration.mp3' },
+                type: 'audio_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        { audioTokenEstimate: 1200, audioTokensPerSecond: 32 },
+      );
+
+      expect(estimate.audioTokens).toBe(1200 + 1200);
+      expect(estimate.audioDurationItemCount).toBe(1);
+      expect(estimate.audioFallbackItemCount).toBe(1);
+      expect(estimate.audioTokenEstimateSource).toBe('mixed');
+      expect(estimate.totalTokens).toBe(estimate.textTokens + estimate.audioTokens);
+    });
+
+    it('never serializes an audio URL into the text token bucket', () => {
+      const estimate = (url: string) =>
+        estimateOpenAIChatInputTokens(
+          [
+            {
+              content: [{ audio_url: { durationMs: 1000, url }, type: 'audio_url' }],
+              role: 'user',
+            },
+          ],
+          { audioTokensPerSecond: 32 },
+        );
+
+      expect(estimate('a').textTokens).toBe(
+        estimate(`https://example.com/${'very-long-path/'.repeat(100)}audio.mp3`).textTokens,
+      );
+    });
+
     it('handles assistant tool-call messages with null content', () => {
       const estimate = estimateOpenAIChatInputTokens([
         {
@@ -268,6 +315,32 @@ describe('estimateChatCost', () => {
       expect(estimate?.inputVideoTokens).toBe(2000);
       expect(estimate?.totalInputTokens).toBeGreaterThan(2000);
       expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['videoInput']);
+    });
+
+    it('uses the model pricing audio rate and exposes the estimate source', () => {
+      const pricing: Pricing = {
+        audioTokensPerSecond: 32,
+        units: [{ name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(pricing, [
+        {
+          content: [
+            {
+              audio_url: { durationMs: 2500, url: 'https://example.com/audio.mp3' },
+              type: 'audio_url',
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+
+      expect(estimate?.inputAudioTokens).toBe(1000);
+      expect(estimate?.audioDurationItemCount).toBe(1);
+      expect(estimate?.audioFallbackItemCount).toBe(0);
+      expect(estimate?.audioTokenEstimateSource).toBe('duration');
+      expect(estimate?.estimatedCost).toBe(0.002);
+      expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['audioInput']);
     });
 
     it('bills estimated image inputs through text pricing when image pricing is unavailable', () => {

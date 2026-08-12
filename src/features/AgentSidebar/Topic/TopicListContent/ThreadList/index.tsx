@@ -38,6 +38,7 @@ const ThreadList = memo(({ topicId }: { topicId: string }) => {
           index={index}
           isSubagent={item.type === ThreadType.Isolation}
           key={item.id}
+          sourceMessageId={item.sourceMessageId ?? undefined}
           title={item.title}
         />
       ))}

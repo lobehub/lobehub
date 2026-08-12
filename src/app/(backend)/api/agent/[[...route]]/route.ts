@@ -1,4 +1,4 @@
-import app from '@/server/agent-hono';
+import app from '@/server/router-hono/agent';
 
 const handler = (request: Request) => app.fetch(request);
 

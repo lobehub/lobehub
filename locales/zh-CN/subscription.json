@@ -480,6 +480,8 @@
   "plansModal.default.title": "升级方案",
   "plansModal.fileStorageLimit.desc": "文件存储已达上限，升级以继续上传，或前往<1>「资源」页面</1>删除不需要的文件以释放空间。",
   "plansModal.fileStorageLimit.title": "存储空间不足",
+  "plansModal.messengerWechat.desc": "微信 System Bot 仅面向个人付费方案开放，升级后即可连接并使用。",
+  "plansModal.messengerWechat.title": "升级后连接微信",
   "plansModal.modelAccess.desc": "该模型为付费方案专享，升级即可使用全部模型。",
   "plansModal.modelAccess.title": "解锁全部模型",
   "qa.desc": "如果您的问题未被解答，请查看 <1>产品文档</1> 获取更多常见问题，或联系我们。",

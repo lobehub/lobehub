@@ -1,8 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+
 interface RenderHomeOptions {
   isLogin?: boolean;
+  portalViewType?: PortalViewType;
   showHomePortrait?: boolean;
 }
 
@@ -12,7 +15,11 @@ function translate() {
   return { i18n: { language: 'en-US' }, t: (key: string) => key };
 }
 
-const renderHome = async ({ isLogin = true, showHomePortrait }: RenderHomeOptions = {}) => {
+const renderHome = async ({
+  isLogin = true,
+  portalViewType,
+  showHomePortrait,
+}: RenderHomeOptions = {}) => {
   vi.resetModules();
 
   vi.doMock('react-i18next', () => ({ useTranslation: translate }));
@@ -21,11 +28,17 @@ const renderHome = async ({ isLogin = true, showHomePortrait }: RenderHomeOption
   vi.doMock('../HomePortrait', () => stub('home-portrait'));
   vi.doMock('../InputArea', () => stub('home-input-area'));
   vi.doMock('../PortraitBubble', () => stub('portrait-bubble'));
+  vi.doMock('../AcceptancePortalDrawer', () => stub('acceptance-portal-drawer'));
   vi.doMock('@/features/HomeInbox', () => stub('home-inbox'));
-  vi.doMock('@/store/chat', () => ({
-    useChatStore: {
-      getState: () => ({ mainInputEditor: undefined }),
-      setState: vi.fn(),
+  function selectFromChatStore(selector: (state: unknown) => unknown) {
+    return selector({ portalViewType });
+  }
+  selectFromChatStore.getState = () => ({ mainInputEditor: undefined });
+  selectFromChatStore.setState = vi.fn();
+  vi.doMock('@/store/chat', () => ({ useChatStore: selectFromChatStore }));
+  vi.doMock('@/store/chat/selectors', () => ({
+    chatPortalSelectors: {
+      currentViewType: (state: { portalViewType?: PortalViewType }) => state.portalViewType ?? null,
     },
   }));
   function selectFromGlobalStore(selector: (state: unknown) => unknown) {
@@ -50,8 +63,10 @@ afterEach(() => {
   vi.doUnmock('../HomePortrait');
   vi.doUnmock('../InputArea');
   vi.doUnmock('../PortraitBubble');
+  vi.doUnmock('../AcceptancePortalDrawer');
   vi.doUnmock('@/features/HomeInbox');
   vi.doUnmock('@/store/chat');
+  vi.doUnmock('@/store/chat/selectors');
   vi.doUnmock('@/store/global');
   vi.doUnmock('@/store/user');
 });
@@ -91,5 +106,17 @@ describe('Home portrait visibility', () => {
 
     expect(screen.queryByTestId('home-portrait')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portrait-bubble')).not.toBeInTheDocument();
+  }, 20000);
+
+  it('loads the acceptance drawer only after an acceptance portal opens', async () => {
+    await renderHome({ portalViewType: PortalViewType.Acceptance });
+
+    expect(await screen.findByTestId('acceptance-portal-drawer')).toBeInTheDocument();
+  }, 20000);
+
+  it('does not load the acceptance drawer for unrelated portal views', async () => {
+    await renderHome({ portalViewType: PortalViewType.TaskDetail });
+
+    expect(screen.queryByTestId('acceptance-portal-drawer')).not.toBeInTheDocument();
   }, 20000);
 });

@@ -310,6 +310,74 @@ describe('topic action', () => {
 
     // Additional tests for refreshTopic can be added here...
   });
+  describe('updateTopicModel', () => {
+    // The Agent Builder panels render a whole conversation for a builtin agent
+    // while the page's activeAgentId still points at the agent being edited, so
+    // the topic being switched lives in another `topicDataMap` bucket.
+    const BUILDER_KEY = topicMapKey({ agentId: 'builder-agent' });
+
+    const seedBuilderTopic = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'edited-agent',
+          activeTopicId: 'builder-topic',
+          topicDataMap: {
+            [BUILDER_KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'builder-topic',
+                  model: 'glm-5.2',
+                  provider: 'lobehub',
+                  title: 'Builder chat',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('applies the switch to the bucket that owns the topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+    });
+
+    it('revalidates the owning bucket instead of the active agent bucket', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      (mutate as Mock).mockClear();
+      seedBuilderTopic();
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      const matcherFn = (mutate as Mock).mock.calls[0][0];
+      expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
+      expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+    });
+  });
+
   describe('favoriteTopic', () => {
     it('should update the favorite state of a topic and refresh topics', async () => {
       const { result } = renderHook(() => useChatStore());

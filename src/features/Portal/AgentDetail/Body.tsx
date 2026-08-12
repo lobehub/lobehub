@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { AgentNotFound } from '@/features/AgentNotFound';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -44,7 +44,7 @@ const Body = memo(() => {
     );
   }
 
-  if (isLoading) return <Loading debugId="PortalAgentDetail" />;
+  if (isLoading) return <SurfaceSkeleton header={false} variant={'form'} />;
 
   return (
     <Flexbox align="center" flex={1} gap={16} padding={32} style={{ overflowY: 'auto' }}>

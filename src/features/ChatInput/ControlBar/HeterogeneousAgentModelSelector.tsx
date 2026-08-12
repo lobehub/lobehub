@@ -6,16 +6,23 @@ import { ActionIcon, Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   Button,
   DropdownMenuItem,
+  DropdownMenuItemContent,
+  DropdownMenuItemExtra,
+  DropdownMenuItemLabel,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
+  DropdownMenuSubmenuArrow,
+  DropdownMenuSubmenuRoot,
+  DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   LoaderCircleIcon,
   RefreshCwIcon,
   SearchIcon,
@@ -125,6 +132,28 @@ const styles = createStaticStyles(({ css }) => ({
   stale: css`
     color: ${cssVar.colorWarning};
   `,
+  submenuMeta: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 150px;
+    padding-inline-start: 16px;
+
+    font-size: 14px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  submenuMetaLabel: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  submenuTrigger: css`
+    min-height: 36px;
+    padding-inline: 10px;
+  `,
   trigger: css`
     cursor: pointer;
 
@@ -181,10 +210,11 @@ interface HeterogeneousAgentModelSelectorProps {
   onSelect: (model: string) => void;
   permissionReason?: string;
   type: ListHeterogeneousAgentModelsParams['type'];
+  variant?: 'standalone' | 'submenu';
 }
 
 export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelectorProps>(
-  ({ agentId, disabled, model, onSelect, permissionReason, type }) => {
+  ({ agentId, disabled, model, onSelect, permissionReason, type, variant = 'standalone' }) => {
     const { t } = useTranslation('chat');
     const agentName = type === 'pi' ? 'Pi' : type === 'qoder' ? 'Qoder' : 'OpenCode';
     const [search, setSearch] = useState('');
@@ -302,6 +332,139 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
       );
     }
 
+    const handleModelSelect = variant === 'submenu' ? onSelect : handleSelect;
+    const menu = (
+      <div className={styles.container}>
+        <div className={styles.search}>
+          <Input
+            autoFocus
+            placeholder={t('heteroAgent.cliModel.search')}
+            prefix={<Icon icon={SearchIcon} size={14} />}
+            size="small"
+            value={search}
+            variant="borderless"
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
+          <ActionIcon
+            aria-label={t('heteroAgent.cliModel.reload')}
+            className={cx(isValidating && styles.spinning)}
+            disabled={!targetReady || isValidating}
+            icon={isValidating ? LoaderCircleIcon : RefreshCwIcon}
+            size="small"
+            title={t('heteroAgent.cliModel.reload')}
+            onClick={() => void mutate()}
+          />
+        </div>
+        <div className={styles.list}>
+          <DropdownMenuItem
+            className={styles.item}
+            onClick={() => handleModelSelect(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)}
+          >
+            <div className={styles.itemBody}>
+              <div className={styles.itemTitle}>{t('heteroAgent.modelSelector.default')}</div>
+              <div className={styles.itemSubtitle}>
+                {t('heteroAgent.cliModel.defaultDesc', { name: agentName })}
+              </div>
+            </div>
+            {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION && (
+              <Icon className={styles.check} icon={CheckIcon} size={14} />
+            )}
+          </DropdownMenuItem>
+
+          {isLoading && !data && (
+            <div className={styles.empty}>
+              {t('heteroAgent.cliModel.loading', { name: agentName })}
+            </div>
+          )}
+          {!targetReady && (
+            <div className={styles.empty}>{t('heteroAgent.cliModel.targetUnavailable')}</div>
+          )}
+          {error && (
+            <div className={styles.empty}>
+              {t(getCatalogErrorKey(error.name))}
+              <br />
+              <Button size="small" type="text" onClick={() => void mutate()}>
+                {t('heteroAgent.cliModel.retry')}
+              </Button>
+            </div>
+          )}
+          {data && rows.length === 0 && (
+            <div className={styles.empty}>
+              {search.trim()
+                ? t('heteroAgent.cliModel.noMatch')
+                : t('heteroAgent.cliModel.empty', { name: agentName })}
+            </div>
+          )}
+          {Object.entries(groups).map(([providerId, models]) => (
+            <div key={providerId}>
+              <div className={styles.group}>{providerId}</div>
+              {models.map((item) => (
+                <DropdownMenuItem
+                  className={styles.item}
+                  key={item.id}
+                  onClick={() => handleModelSelect(item.id)}
+                >
+                  <div className={styles.itemBody}>
+                    <div className={styles.itemTitle}>{item.label ?? item.modelId}</div>
+                    <div
+                      className={cx(
+                        styles.itemSubtitle,
+                        selectedIsStale && item.id === currentModel && styles.stale,
+                      )}
+                    >
+                      {item.id}
+                      {selectedIsStale && item.id === currentModel
+                        ? ` · ${t('heteroAgent.cliModel.stale')}`
+                        : ''}
+                    </div>
+                  </div>
+                  {item.id === currentModel && (
+                    <Icon className={styles.check} icon={CheckIcon} size={14} />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    if (variant === 'submenu') {
+      return (
+        <DropdownMenuSubmenuRoot
+          open={open}
+          onOpenChange={handleOpenChange}
+          onOpenChangeComplete={handleOpenChangeComplete}
+        >
+          <DropdownMenuSubmenuTrigger
+            className={styles.submenuTrigger}
+            label={t('heteroAgent.modelSelector.model')}
+            openOnHover={false}
+          >
+            <DropdownMenuItemContent>
+              <DropdownMenuItemLabel>{t('heteroAgent.modelSelector.model')}</DropdownMenuItemLabel>
+              <DropdownMenuItemExtra className={styles.submenuMeta}>
+                <span className={styles.submenuMetaLabel}>
+                  {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+                    ? t('heteroAgent.modelSelector.default')
+                    : currentModel}
+                </span>
+              </DropdownMenuItemExtra>
+              <DropdownMenuSubmenuArrow>
+                <Icon icon={ChevronRightIcon} size={12} />
+              </DropdownMenuSubmenuArrow>
+            </DropdownMenuItemContent>
+          </DropdownMenuSubmenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
+              <DropdownMenuPopup>{menu}</DropdownMenuPopup>
+            </DropdownMenuPositioner>
+          </DropdownMenuPortal>
+        </DropdownMenuSubmenuRoot>
+      );
+    }
+
     return (
       <DropdownMenuRoot
         open={open}
@@ -311,106 +474,7 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
         <DropdownMenuTrigger nativeButton={false}>{trigger}</DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
-            <DropdownMenuPopup>
-              <div className={styles.container}>
-                <div className={styles.search}>
-                  <Input
-                    autoFocus
-                    placeholder={t('heteroAgent.cliModel.search')}
-                    prefix={<Icon icon={SearchIcon} size={14} />}
-                    size="small"
-                    value={search}
-                    variant="borderless"
-                    onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  />
-                  <ActionIcon
-                    aria-label={t('heteroAgent.cliModel.reload')}
-                    className={cx(isValidating && styles.spinning)}
-                    disabled={!targetReady || isValidating}
-                    icon={isValidating ? LoaderCircleIcon : RefreshCwIcon}
-                    size="small"
-                    title={t('heteroAgent.cliModel.reload')}
-                    onClick={() => void mutate()}
-                  />
-                </div>
-                <div className={styles.list}>
-                  <DropdownMenuItem
-                    className={styles.item}
-                    onClick={() => handleSelect(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)}
-                  >
-                    <div className={styles.itemBody}>
-                      <div className={styles.itemTitle}>
-                        {t('heteroAgent.modelSelector.default')}
-                      </div>
-                      <div className={styles.itemSubtitle}>
-                        {t('heteroAgent.cliModel.defaultDesc', { name: agentName })}
-                      </div>
-                    </div>
-                    {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION && (
-                      <Icon className={styles.check} icon={CheckIcon} size={14} />
-                    )}
-                  </DropdownMenuItem>
-
-                  {isLoading && !data && (
-                    <div className={styles.empty}>
-                      {t('heteroAgent.cliModel.loading', { name: agentName })}
-                    </div>
-                  )}
-                  {!targetReady && (
-                    <div className={styles.empty}>
-                      {t('heteroAgent.cliModel.targetUnavailable')}
-                    </div>
-                  )}
-                  {error && (
-                    <div className={styles.empty}>
-                      {t(getCatalogErrorKey(error.name))}
-                      <br />
-                      <Button size="small" type="text" onClick={() => void mutate()}>
-                        {t('heteroAgent.cliModel.retry')}
-                      </Button>
-                    </div>
-                  )}
-                  {data && rows.length === 0 && (
-                    <div className={styles.empty}>
-                      {search.trim()
-                        ? t('heteroAgent.cliModel.noMatch')
-                        : t('heteroAgent.cliModel.empty', { name: agentName })}
-                    </div>
-                  )}
-                  {Object.entries(groups).map(([providerId, models]) => (
-                    <div key={providerId}>
-                      <div className={styles.group}>{providerId}</div>
-                      {models.map((item) => (
-                        <DropdownMenuItem
-                          className={styles.item}
-                          key={item.id}
-                          onClick={() => handleSelect(item.id)}
-                        >
-                          <div className={styles.itemBody}>
-                            <div className={styles.itemTitle}>{item.label ?? item.modelId}</div>
-                            <div
-                              className={cx(
-                                styles.itemSubtitle,
-                                selectedIsStale && item.id === currentModel && styles.stale,
-                              )}
-                            >
-                              {item.id}
-                              {selectedIsStale && item.id === currentModel
-                                ? ` · ${t('heteroAgent.cliModel.stale')}`
-                                : ''}
-                            </div>
-                          </div>
-                          {item.id === currentModel && (
-                            <Icon className={styles.check} icon={CheckIcon} size={14} />
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </DropdownMenuPopup>
+            <DropdownMenuPopup>{menu}</DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>
       </DropdownMenuRoot>

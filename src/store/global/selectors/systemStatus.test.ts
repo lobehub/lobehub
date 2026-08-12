@@ -279,9 +279,10 @@ describe('systemStatusSelectors', () => {
       expect(items[spacerIdx - 1]).toBe('recents');
       // missing top-group defaults slot in just before the accordion
       expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
-      expect(items.indexOf('pages')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
+      expect(items.indexOf('pages')).toBeGreaterThan(spacerIdx);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -293,14 +294,14 @@ describe('systemStatusSelectors', () => {
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
         'tasks',
-        'pages',
+        'resource',
         'private',
         'agent',
         'recents',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'resource',
+        'pages',
         'memory',
       ]);
     });
@@ -314,14 +315,14 @@ describe('systemStatusSelectors', () => {
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
         'tasks',
-        'pages',
+        'resource',
         'private',
         'recents',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'resource',
+        'pages',
         'memory',
       ]);
     });
@@ -633,6 +634,22 @@ describe('systemStatusSelectors', () => {
           },
         });
       });
+    });
+  });
+
+  describe('homeGoalsCollapsed', () => {
+    // The goals card opens by default: a first-time viewer must see the goals,
+    // not an unexplained folded header.
+    it('reads as open when the viewer has never folded the card', () => {
+      const s: GlobalState = merge(initialState, { status: {} });
+
+      expect(systemStatusSelectors.homeGoalsCollapsed(s)).toBe(false);
+    });
+
+    it('keeps the card folded once the viewer put it away', () => {
+      const s: GlobalState = merge(initialState, { status: { homeGoalsCollapsed: true } });
+
+      expect(systemStatusSelectors.homeGoalsCollapsed(s)).toBe(true);
     });
   });
 });

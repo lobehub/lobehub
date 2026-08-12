@@ -426,6 +426,8 @@ export class GatewayActionImpl {
     messageContext?: ConversationContext;
     /** Request metadata carried from the originating user message. */
     metadata?: Pick<MessageMetadata, 'trigger'>;
+    /** Called as soon as phase-1 returns with a persisted user message. */
+    onMessageAccepted?: () => void;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
@@ -494,6 +496,7 @@ export class GatewayActionImpl {
       messageContext = executionContext,
       metadata,
       onComplete,
+      onMessageAccepted,
       optimisticTopic,
       parentMessageId,
       parentOperationId,
@@ -550,10 +553,9 @@ export class GatewayActionImpl {
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
     // is still running, so the ChatInput stop button is active. Forward the
-    // signal into the request so the fetch aborts in-flight, and re-check
-    // afterwards in case cancel arrived just after the request resolved (the
-    // server task is then already created — best-effort interrupt it before
-    // bailing out, otherwise the agent run continues server-side).
+    // signal into the request so the fetch aborts in-flight. If the server has
+    // already persisted the turn, interrupt generation but still reconcile the
+    // message locally before returning.
     const abortSignal = parentOperationId
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
@@ -563,6 +565,10 @@ export class GatewayActionImpl {
       approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
     };
+
+    if (abortSignal?.aborted) {
+      throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+    }
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -583,6 +589,20 @@ export class GatewayActionImpl {
           // the correct agent rather than the builder itself.
           ...(executionContext.scope === 'agent_builder' && {
             editingAgentId: this.#get().activeAgentId ?? undefined,
+          }),
+          // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+          // the group Profile page. The builder conversation is keyed by the
+          // builtin builder agent (no groupId in its ConversationContext, so the
+          // message map key and the group's own chat stay separate), which left
+          // the server runtime with no idea which group it was editing.
+          // The context value wins, and every surface that opens this scope sets
+          // it from its own route/group: it is fixed for the run, so a mid-run
+          // navigation cannot make the server stamp a different group than the
+          // panel is reading from. The `activeGroupId` fallback is a last resort
+          // for a caller that forgot — it is sampled here, AFTER the async
+          // preflight above, so it can already be stale by this point.
+          ...(executionContext.scope === 'group_agent_builder' && {
+            editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
           }),
           groupId: executionContext.groupId,
           ...(initialTopicMetadata && { initialTopicMetadata }),
@@ -611,16 +631,46 @@ export class GatewayActionImpl {
       { signal: abortSignal },
     );
 
-    if (abortSignal?.aborted) {
-      // Cancel arrived after execAgentTask resolved — server task exists.
-      aiAgentService
-        .interruptTask({ operationId: result.operationId, topicId: result.topicId })
-        .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
-      throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+    // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
+    // before handling a late abort so callers never delete a file already attached server-side.
+    try {
+      onMessageAccepted?.();
+    } catch (error) {
+      console.error('[Gateway] onMessageAccepted callback failed:', error);
     }
 
-    // If server created a new topic, fetch messages first then switch topic
-    // (same pattern as client mode: replaceMessages before switchTopic to avoid skeleton flash)
+    let hasInterruptedAfterPersistence = false;
+    const interruptIfCancelledAfterPersistence = () => {
+      if (!abortSignal?.aborted) return false;
+
+      if (!hasInterruptedAfterPersistence) {
+        hasInterruptedAfterPersistence = true;
+        // Cancel arrived after execAgentTask resolved — server task exists. Interrupt generation,
+        // but keep reconciling the persisted message before returning to the caller.
+        aiAgentService
+          .interruptTask({ operationId: result.operationId, topicId: result.topicId })
+          .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+      }
+
+      return true;
+    };
+    let cancelledAfterPersistence = interruptIfCancelledAfterPersistence();
+
+    // Keep execution identity separate from the conversation bucket that owns
+    // the streamed messages. They differ for callAgent/sub-agent runs.
+    const resolvedExecutionContext = { ...executionContext, topicId: result.topicId };
+    const resolvedMessageContext = { ...messageContext, topicId: result.topicId };
+    this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
+
+    if (!isCreateNewTopic && cancelledAfterPersistence) {
+      try {
+        const messages = await messageService.getMessages(resolvedMessageContext);
+        this.#get().replaceMessages(messages, { context: resolvedMessageContext });
+      } catch {
+        /* non-critical */
+      }
+    }
+
     if (isCreateNewTopic && result.topicId) {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (messageContext.agentId) consumePendingTopicRepos(messageContext.agentId);
@@ -643,9 +693,8 @@ export class GatewayActionImpl {
         );
       }
       try {
-        const newContext = { ...messageContext, topicId: result.topicId };
-        const messages = await messageService.getMessages(newContext);
-        this.#get().replaceMessages(messages, { context: newContext });
+        const messages = await messageService.getMessages(resolvedMessageContext);
+        this.#get().replaceMessages(messages, { context: resolvedMessageContext });
       } catch {
         /* non-critical */
       }
@@ -662,19 +711,8 @@ export class GatewayActionImpl {
       this.#get()
         .refreshTopic()
         .catch((err) => console.error('[Gateway] refreshTopic after topic creation failed:', err));
-
-      if (abortSignal?.aborted) {
-        aiAgentService
-          .interruptTask({ operationId: result.operationId, topicId: result.topicId })
-          .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
-        throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
-      }
     }
 
-    // Keep execution identity separate from the conversation bucket that owns
-    // the streamed messages. They differ for callAgent/sub-agent runs.
-    const resolvedExecutionContext = { ...executionContext, topicId: result.topicId };
-    const resolvedMessageContext = { ...messageContext, topicId: result.topicId };
     this.#get().moveQueuedMessages(
       messageMapKey(messageContext),
       messageMapKey(resolvedMessageContext),
@@ -686,6 +724,12 @@ export class GatewayActionImpl {
         messageMapKey({ ...messageContext, topicId: null }),
         messageMapKey(resolvedMessageContext),
       );
+    cancelledAfterPersistence = interruptIfCancelledAfterPersistence() || cancelledAfterPersistence;
+
+    if (cancelledAfterPersistence) {
+      if (parentOperationId) this.#get().completeOperation(parentOperationId);
+      return result;
+    }
 
     if (result.topicId) {
       void this.#get().updateTopicStatus?.({

@@ -19,7 +19,12 @@ const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as { modelSelectionPolicy?: 'fixed' | 'member' } | undefined,
     agentMap: {
-      'agent-1': {} as { visibility?: 'private' | 'public'; workspaceId?: string },
+      'agent-1': {} as {
+        slug?: string;
+        virtual?: boolean;
+        visibility?: 'private' | 'public';
+        workspaceId?: string;
+      },
     },
     model: 'shared-model',
     provider: 'shared-provider',
@@ -119,6 +124,42 @@ describe('useAgentModelSelection', () => {
     testState.access.canManageAgent = false;
     testState.resource.canConfigureResource = false;
     testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.workspaceUserPreference = {
+      agentModelOverrides: {
+        'agent-1': { model: 'member-model', provider: 'member-provider' },
+      },
+    };
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      model: 'member-model',
+      provider: 'member-provider',
+      selectionPolicy: 'member',
+      usesWorkspaceMemberSelection: true,
+    });
+    expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      agentModelOverrides: {
+        'agent-1': { model: 'next-model', provider: 'next-provider' },
+      },
+    });
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the model personal on a collaborative builtin Agent even for an admin', async () => {
+    // Admin of the workspace: canManage is true, yet the Agent Builder row is
+    // shared infrastructure, so the pick must stay this member's own.
+    testState.access.canManageAgent = true;
+    testState.resource.canConfigureResource = true;
+    testState.agent.agentMap['agent-1'] = {
+      slug: 'group-agent-builder',
+      virtual: true,
       visibility: 'public',
       workspaceId: 'workspace-1',
     };

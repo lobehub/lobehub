@@ -192,7 +192,7 @@ describe('PiAdapter', () => {
     expect(dataFor(events, 'tool_end')).toHaveLength(1);
   });
 
-  it('maps provider auth failures after Pi confirms it will not retry', () => {
+  it('maps provider auth failures only after the whole Pi run settles', () => {
     const adapter = new PiAdapter();
     const events = [
       ...adapter.adapt({ type: 'turn_start' }),
@@ -209,8 +209,11 @@ describe('PiAdapter', () => {
         type: 'message_update',
       }),
       ...adapter.adapt({ type: 'turn_end' }),
-      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
     ];
+    const agentEndEvents = adapter.adapt({ type: 'agent_end', willRetry: false });
+
+    expect(agentEndEvents).toEqual([]);
+    events.push(...agentEndEvents, ...adapter.adapt({ type: 'agent_settled' }));
 
     expect(dataFor(events, 'error')).toEqual([
       expect.objectContaining({
@@ -227,6 +230,30 @@ describe('PiAdapter', () => {
     ]);
     expect(adapter.adapt({ type: 'agent_settled' })).toEqual([]);
     expect(adapter.flush()).toEqual([]);
+  });
+
+  it('surfaces an overflow when Pi settles without compacting', () => {
+    const adapter = new PiAdapter();
+    const overflowError = {
+      errorMessage: 'Your input exceeds the context window of this model.',
+      model: 'gpt-5.6-luna',
+      provider: 'openai-codex',
+      stopReason: 'error',
+    };
+    const events = [
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({ message: { ...overflowError, role: 'assistant' }, type: 'message_end' }),
+      ...adapter.adapt({ type: 'turn_end' }),
+      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
+      ...adapter.adapt({ type: 'agent_settled' }),
+    ];
+
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([]);
+    expect(dataFor(events, 'error')).toEqual([
+      expect.objectContaining({
+        message: 'Your input exceeds the context window of this model.',
+      }),
+    ]);
   });
 
   it('does not emit a terminal error when Pi retries and later succeeds', () => {
@@ -281,6 +308,160 @@ describe('PiAdapter', () => {
       content: 'Recovered',
     });
     expect(dataFor(events, 'agent_runtime_end')).toEqual([{}]);
+  });
+
+  it('waits through overflow compaction and ends successfully after Pi recovers', () => {
+    const adapter = new PiAdapter();
+    const overflowError = {
+      errorMessage: 'Your input exceeds the context window of this model.',
+      model: 'gpt-5.6-luna',
+      provider: 'openai-codex',
+      stopReason: 'error',
+    };
+    const events = [
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({ message: { ...overflowError, role: 'assistant' }, type: 'message_end' }),
+      ...adapter.adapt({ type: 'turn_end' }),
+      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
+      ...adapter.adapt({ reason: 'overflow', type: 'compaction_start' }),
+      ...adapter.adapt({
+        aborted: false,
+        reason: 'overflow',
+        result: { estimatedTokensAfter: 1856, tokensBefore: 371_835 },
+        type: 'compaction_end',
+        willRetry: true,
+      }),
+      ...adapter.adapt({ type: 'agent_start' }),
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({
+        assistantMessageEvent: { delta: 'Recovered after compaction', type: 'text_delta' },
+        type: 'message_update',
+      }),
+      ...adapter.adapt({
+        message: {
+          content: [{ text: 'Recovered after compaction', type: 'text' }],
+          model: 'gpt-5.6-luna',
+          provider: 'openai-codex',
+          role: 'assistant',
+          stopReason: 'stop',
+          usage: { cacheRead: 0, cacheWrite: 0, input: 10, output: 2, totalTokens: 12 },
+        },
+        type: 'message_end',
+      }),
+      ...adapter.adapt({ type: 'turn_end' }),
+      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
+      ...adapter.adapt({ type: 'agent_settled' }),
+    ];
+
+    expect(dataFor(events, 'error')).toEqual([]);
+    expect(
+      events.filter((event) => event.type === 'stream_start').map((event) => event.stepIndex),
+    ).toEqual([0, 1]);
+    expect(dataFor(events, 'stream_chunk')).toContainEqual({
+      chunkType: 'text',
+      content: 'Recovered after compaction',
+    });
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([{}]);
+  });
+
+  it('surfaces a failed overflow compaction when Pi settles', () => {
+    const adapter = new PiAdapter();
+    const events = [
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({
+        message: {
+          errorMessage: 'Your input exceeds the context window of this model.',
+          model: 'gpt-5.6-luna',
+          provider: 'openai-codex',
+          role: 'assistant',
+          stopReason: 'error',
+        },
+        type: 'message_end',
+      }),
+      ...adapter.adapt({ type: 'turn_end' }),
+      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
+      ...adapter.adapt({ reason: 'overflow', type: 'compaction_start' }),
+      ...adapter.adapt({
+        aborted: false,
+        errorMessage: 'Context overflow recovery failed: summary request failed',
+        reason: 'overflow',
+        type: 'compaction_end',
+        willRetry: false,
+      }),
+      ...adapter.adapt({ type: 'agent_settled' }),
+    ];
+
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([]);
+    expect(dataFor(events, 'error')).toEqual([
+      expect.objectContaining({
+        details: {
+          model: 'gpt-5.6-luna',
+          modelProvider: 'openai-codex',
+          stopReason: 'error',
+        },
+        message: 'Context overflow recovery failed: summary request failed',
+      }),
+    ]);
+  });
+
+  it('keeps a successful answer successful when threshold compaction fails', () => {
+    const adapter = new PiAdapter();
+    const events = [
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({
+        message: {
+          content: [{ text: 'The answer completed before compaction.', type: 'text' }],
+          model: 'gpt-5.6-luna',
+          provider: 'openai-codex',
+          role: 'assistant',
+          stopReason: 'stop',
+        },
+        type: 'message_end',
+      }),
+      ...adapter.adapt({ type: 'turn_end' }),
+      ...adapter.adapt({ type: 'agent_end', willRetry: false }),
+      ...adapter.adapt({ reason: 'threshold', type: 'compaction_start' }),
+      ...adapter.adapt({
+        aborted: false,
+        errorMessage: 'Auto-compaction failed: summary request failed',
+        reason: 'threshold',
+        type: 'compaction_end',
+        willRetry: false,
+      }),
+      ...adapter.adapt({ type: 'agent_settled' }),
+    ];
+
+    expect(dataFor(events, 'error')).toEqual([]);
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([{}]);
+  });
+
+  it('flushes the pending failure if Pi exits during a retry before settling', () => {
+    const adapter = new PiAdapter();
+    const retryError = {
+      errorMessage: 'Provider overloaded',
+      model: 'claude-sonnet-4-5',
+      provider: 'anthropic',
+      stopReason: 'error',
+    };
+
+    adapter.adapt({ type: 'turn_start' });
+    adapter.adapt({ message: { ...retryError, role: 'assistant' }, type: 'message_end' });
+    adapter.adapt({ type: 'turn_end' });
+    adapter.adapt({ type: 'agent_end', willRetry: true });
+    adapter.adapt({
+      attempt: 1,
+      delayMs: 1000,
+      errorMessage: retryError.errorMessage,
+      maxAttempts: 3,
+      type: 'auto_retry_start',
+    });
+
+    const events = adapter.flush();
+
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([]);
+    expect(dataFor(events, 'error')).toEqual([
+      expect.objectContaining({ message: 'Provider overloaded' }),
+    ]);
   });
 
   it('treats an aborted Pi response as an interrupted outcome, not an error', () => {

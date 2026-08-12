@@ -10,7 +10,7 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
@@ -200,7 +200,7 @@ const AgentTopicManager = memo(() => {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView, loadMoreError]);
 
-  if (!activeAgentId) return <Loading debugId="AgentTopicManager" />;
+  if (!activeAgentId) return <SurfaceSkeleton variant={'list'} />;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>

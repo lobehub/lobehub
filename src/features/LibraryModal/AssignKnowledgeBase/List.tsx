@@ -12,6 +12,7 @@ import Item from './Item';
 import MasonryItemWrapper from './Item/MasonryItemWrapper';
 import Loading from './Loading';
 import MasonrySkeleton from './MasonrySkeleton';
+import { resolvePickerScope } from './resolvePickerScope';
 import { type ViewMode } from './ViewSwitcher';
 import ViewSwitcher from './ViewSwitcher';
 import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
@@ -19,22 +20,25 @@ import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
 export const List = memo(() => {
   const { t } = useTranslation(['file', 'chat']);
 
-  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility] = useAgentStore((s) => [
-    s.useFetchFilesAndKnowledgeBases,
-    s.activeAgentId,
-    s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
-  ]);
-
-  // Public agents can only reference workspace resources. The backend
-  // enforces this hard (see agent.getKnowledgeBasesAndFiles) — this flag
-  // just drives the UX: hide the tab, show an explainer, and force the
-  // fetch to workspace scope so the client can't ask for private items.
-  const isPublicAgent = agentVisibility === 'public';
+  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility, agentWorkspaceId] =
+    useAgentStore((s) => [
+      s.useFetchFilesAndKnowledgeBases,
+      s.activeAgentId,
+      s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
+      s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
+    ]);
 
   const [mode, setMode] = useState<PickerVisibility>('public');
-  const effectiveMode: PickerVisibility = isPublicAgent ? 'public' : mode;
+  const { effectiveVisibility, showPublicAgentHint, showVisibilityTabs } = resolvePickerScope({
+    agentVisibility,
+    agentWorkspaceId,
+    mode,
+  });
 
-  const { isLoading, error, data } = useFetchFilesAndKnowledgeBases(activeAgentId, effectiveMode);
+  const { isLoading, error, data } = useFetchFilesAndKnowledgeBases(
+    activeAgentId,
+    effectiveVisibility,
+  );
 
   const [columnCount, setColumnCount] = useState(2);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -95,10 +99,10 @@ export const List = memo(() => {
        */}
       <Flexbox gap={8} style={{ paddingBlockEnd: 12 }}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
-          {isPublicAgent ? <span /> : <VisibilityTabs value={mode} onChange={setMode} />}
+          {showVisibilityTabs ? <VisibilityTabs value={mode} onChange={setMode} /> : <span />}
           <ViewSwitcher view={viewMode} onViewChange={setViewMode} />
         </Flexbox>
-        {isPublicAgent && (
+        {showPublicAgentHint && (
           <Alert
             showIcon
             message={t('resources.knowledgePicker.publicAgentHint', { ns: 'chat' })}

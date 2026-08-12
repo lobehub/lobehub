@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -340,6 +340,95 @@ describe('TaskModel', () => {
       const { tasks, total } = await model.list({ limit: 2, offset: 0 });
       expect(total).toBe(5);
       expect(tasks).toHaveLength(2);
+    });
+
+    // The tick services refuse these three shapes, so a roll-up that lists them
+    // as schedules is listing things that will never fire — and in a bounded
+    // list they push out the ones that will.
+    it('should leave out automation the runtime would refuse to fire', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const live = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Nightly digest',
+        schedulePattern: '0 9 * * *',
+      });
+      const noPattern = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Schedule with its pattern cleared',
+      });
+      const noInterval = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 0,
+        instruction: 'Heartbeat with its interval cleared',
+      });
+      const done = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Completed but still carries its cron',
+        schedulePattern: '0 9 * * *',
+      });
+      await model.updateStatus(done.id, 'completed');
+
+      const automated = await model.list({ automated: true });
+      expect(automated.tasks.map((t) => t.id)).toEqual([live.id]);
+
+      // Complementary, so nothing falls into neither bucket.
+      const manual = await model.list({ automated: false });
+      expect(manual.tasks.map((t) => t.id).sort()).toEqual(
+        [noPattern.id, noInterval.id, done.id].sort(),
+      );
+    });
+
+    it('should order by last activity when asked, not by creation', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const older = await model.create({ instruction: 'Created first, touched last' });
+      const newer = await model.create({ instruction: 'Created second, never touched' });
+
+      // Stamp `updated_at` rather than letting `update()` do it. Inserts take
+      // their timestamp from Postgres `now()` while `update()` writes a Node
+      // `new Date()`, so asserting on a real edit races the database clock
+      // against the host's — which is stable enough to pass alone and flips
+      // under a loaded full-suite run. The column under test is the ORDER BY,
+      // not who wrote the value.
+      const stamp = async (id: string, iso: string) => {
+        await serverDB.execute(sql`update tasks set updated_at = ${iso} where id = ${id}`);
+      };
+      await stamp(newer.id, '2026-01-01T00:00:00Z');
+      await stamp(older.id, '2026-06-01T00:00:00Z');
+
+      const order = async (params: Parameters<TaskModel['list']>[0]) => {
+        const { tasks: rows } = await model.list(params);
+        // Only these two rows: the assertion is about their relative order.
+        return rows.map((t) => t.id).filter((id) => id === older.id || id === newer.id);
+      };
+
+      expect(await order({})).toEqual([newer.id, older.id]);
+      expect(await order({ orderBy: 'updatedAt' })).toEqual([older.id, newer.id]);
+    });
+
+    it('should split automated tasks from manual ones', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const cron = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Nightly digest',
+        schedulePattern: '0 9 * * *',
+      });
+      const heartbeat = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        instruction: 'Keep watching',
+      });
+      const manual = await model.create({ instruction: 'One-off' });
+
+      const automated = await model.list({ automated: true });
+      expect(automated.total).toBe(2);
+      expect(automated.tasks.map((t) => t.id).sort()).toEqual([cron.id, heartbeat.id].sort());
+
+      const notAutomated = await model.list({ automated: false });
+      expect(notAutomated.total).toBe(1);
+      expect(notAutomated.tasks[0].id).toBe(manual.id);
+
+      // Omitting the flag must not narrow anything.
+      expect((await model.list()).total).toBe(3);
     });
   });
 

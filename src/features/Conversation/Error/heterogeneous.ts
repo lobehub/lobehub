@@ -16,6 +16,7 @@ export const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
   HeterogeneousAgentSessionErrorCode.CliNotFound,
   HeterogeneousAgentSessionErrorCode.Overloaded,
   HeterogeneousAgentSessionErrorCode.RateLimit,
+  HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
 ]);
 
 export const isHeterogeneousAgentStatusGuideError = (

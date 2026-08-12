@@ -19,6 +19,8 @@ vi.mock('node:os', async () => {
   return { ...actual, platform: vi.fn(() => 'linux') };
 });
 
+const platformMock = vi.mocked(os.platform);
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, existsSync: vi.fn(() => true) };
@@ -263,6 +265,8 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
     mockGetAllWindows.mockReset();
+    platformMock.mockReturnValue('linux');
+    vi.mocked(existsSync).mockReturnValue(true);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
   });
@@ -644,6 +648,45 @@ describe('HeterogeneousAgentCtr', () => {
       ]);
     });
 
+    it('cleans up the intervention when Windows command-line validation rejects before spawn', async () => {
+      platformMock.mockReturnValue('win32');
+      const operationId = 'op-oversized-windows-argv';
+      const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await rm(tmpConfigPath, { force: true });
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: {
+          detect: vi.fn().mockResolvedValue({
+            available: true,
+            path: 'C:\\claude.exe',
+          }),
+        },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        args: ['a'.repeat(32_767)],
+        command: 'claude',
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          agentId: 'agent-1',
+          operationId,
+          prompt: 'hello',
+          sessionId,
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/resolved Windows command line requires/);
+
+      expect(spawnCalls).toHaveLength(0);
+      expect((ctr as any).opIdToIntervention.has(operationId)).toBe(false);
+      expect((ctr as any).opIdToBrowserBinding.has(operationId)).toBe(false);
+      expect((ctr as any).builtinMcpServer.hasOperation(operationId)).toBe(false);
+      await expect(access(tmpConfigPath)).rejects.toThrow();
+    });
+
     it('uses Claude SDK streaming lab instead of spawning claude -p', async () => {
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
       const send = vi.fn();
@@ -852,6 +895,53 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Codex CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('validates the default desktop directory when the session cwd is omitted', async () => {
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate === FAKE_DESKTOP_PATH);
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
+
+      expect(existsSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH);
+      expect(detect).toHaveBeenCalledWith('codex', true);
+    });
+
+    it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
+      const missingCwd = '/tmp/lobehub-deleted-worktree';
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      const detect = vi.fn().mockResolvedValue({
+        available: true,
+        path: '/Applications/ChatGPT.app/Contents/Resources/codex',
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        cwd: missingCwd,
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow(`Working directory does not exist: ${missingCwd}`);
+
+      expect(detect).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -1490,6 +1580,7 @@ describe('HeterogeneousAgentCtr', () => {
   describe('spawnLhHeteroExec', () => {
     const params = {
       agentType: 'opencode',
+      assistantMessageId: 'asst-gateway',
       jwt: 'device-jwt',
       operationId: 'op-gateway',
       prompt: 'inspect the repository',
@@ -1537,6 +1628,7 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
+          LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst-gateway',
           LOBEHUB_JWT: 'device-jwt',
           LOBEHUB_SERVER: 'https://server.example.com',
         }),

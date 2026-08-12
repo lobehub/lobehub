@@ -1,14 +1,13 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
-import { memo } from 'react';
 
 import BrandWatermark from '@/components/BrandWatermark';
 
 import Category from './features/Category';
 import UserBanner from './features/UserBanner';
 
-const MeHomePage = memo(() => {
+const MeHomePage = () => {
   return (
     <>
       <UserBanner />
@@ -18,8 +17,6 @@ const MeHomePage = memo(() => {
       </Center>
     </>
   );
-});
-
-MeHomePage.displayName = 'MeHomePage';
+};
 
 export default MeHomePage;

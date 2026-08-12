@@ -60,7 +60,8 @@ export type HeteroErrorAttribution = 'user' | 'provider' | 'harness' | 'system';
  * (`src/features/Conversation/Error/heterogeneous.ts`) and
  * `STATUS_GUIDE_ERROR_CODES` (`../spawn/classifyProcessFailure.ts`).
  */
-export type HeteroGuideCode = 'auth_required' | 'cli_not_found' | 'overloaded' | 'rate_limit';
+export type HeteroGuideCode =
+  'auth_required' | 'cli_not_found' | 'overloaded' | 'rate_limit' | 'working_directory_not_found';
 
 /**
  * Mapping of category → leading digit of the `numericId`.

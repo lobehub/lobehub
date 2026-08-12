@@ -98,7 +98,7 @@ describe('customInteractionHandlers', () => {
     expect(result).toEqual({
       // createUserMessage must stay false: the completed tool card already
       // renders the answers, so a synthetic user message would duplicate them
-      // in the client runtime (LOBE-12835).
+      // in the client runtime.
       options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
       payload,
     });

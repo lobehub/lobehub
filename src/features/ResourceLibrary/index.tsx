@@ -46,7 +46,7 @@ const MainContent = memo(() => {
 
 MainContent.displayName = 'LibraryMainContent';
 
-const LibraryPage = memo(() => {
+const LibraryPage = () => {
   return (
     <>
       <NProgress />
@@ -55,8 +55,6 @@ const LibraryPage = memo(() => {
       </Container>
     </>
   );
-});
-
-LibraryPage.displayName = 'LibraryPage';
+};
 
 export default LibraryPage;

@@ -1,11 +1,10 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 
 import { ChatList } from '@/features/Conversation';
 
-const ChatBody = memo(() => {
+const ChatBody = () => {
   return (
     <Flexbox
       data-testid="floating-chat-panel-body"
@@ -17,8 +16,6 @@ const ChatBody = memo(() => {
       <ChatList />
     </Flexbox>
   );
-});
-
-ChatBody.displayName = 'FloatingChatPanelBody';
+};
 
 export default ChatBody;

@@ -72,6 +72,38 @@ On the first ingest, always supply `--requirement "<one-sentence business goal>"
 The requirement describes what the whole acceptance judges, not the narrower
 scope of one round. It is immutable once recorded.
 
+## HARD RULE — programmatic gates are NEVER acceptance checks
+
+This is a binding constraint on every check you author, enforced at ingest —
+not a style preference.
+
+Every check MUST be an outcome a **person decides about the delivery**: what
+the user sees, hears, reads, or receives. The repo's own automated gates are
+not that. The following MUST NOT appear as a check, in any round, under any
+phrasing:
+
+- unit / integration / regression / snapshot tests; test suites or test cases
+- coverage, `type-check` / `tsc`, lint / `eslint`, format, "compiles cleanly",
+  "build passes", "CI is green"
+
+They are preconditions of shipping, and a page full of them buries the two or
+three checks that actually needed a human eye. Run them — then report them as
+**one line of narrative**, never as a check.
+
+Enforcement, so plan around it rather than against it:
+
+- `lh acceptance run ingest` **drops** every matching plan item and case and
+  warns — the round publishes without them, so a gate-check wastes the effort
+  spent producing it.
+- A round consisting **only** of such checks **fails to publish entirely**:
+  there is nothing in it for a person to accept.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a good acceptance item (`verifier: "program"`);
+"`bun run test` is green" is not. Before writing any plan, re-read each draft
+check and ask: _would the user click accept/reject on this?_ If the honest
+answer is "it's a gate", it does not go in.
+
 ## Rounds are immutable — repair means a NEW round
 
 A published round is a permanent record of what was true at that moment. **Never
@@ -107,8 +139,10 @@ stay internal.
 
 ## Step 1 — Discover the plan (what to prove)
 
-> Plan-driven path only. Authoring your own checks instead? Jump to
-> [references/report.md](references/report.md), then use the relevant surface
+> Plan-driven path only. Authoring your own checks instead? Apply the
+> [hard rule](#hard-rule--programmatic-gates-are-never-acceptance-checks) to
+> every check you write, then jump to
+> [references/report.md](references/report.md) and use the relevant surface
 > recipes below to capture its evidence. Publish that authored plan and its
 > cases together with `lh acceptance run ingest`.
 
@@ -146,8 +180,11 @@ the cheapest surface that can actually prove it, and escalate only if needed:
 Rules of thumb:
 
 - **Don't open a browser for a backend change.** If a criterion is satisfied by a
-  command's output or a test passing, capture that as `text` — it's the strongest,
-  cheapest proof.
+  command's output, capture that as `text` — it's the strongest, cheapest proof.
+- **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
+  alert tone: upload the clip itself so the page renders a player. Prose about a
+  sound, or a screenshot of a waveform, proves nothing.
+  See [references/evidence.md](references/evidence.md#audio-deliverables).
 - **Web vs Electron:** use **web** when the behavior is identical in a normal
   browser against the app's dev server or deployed URL. Use **Electron** only when
   the criterion depends on desktop-only behavior (native windows, IPC, the

@@ -113,6 +113,16 @@ describe('ChatGPT subscription models', () => {
   });
 });
 
+describe('OpenAI audio models', () => {
+  it('advertises native audio support for gpt-audio', () => {
+    const gptAudio = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.OpenAI && model.id === 'gpt-audio',
+    );
+
+    expect(gptAudio?.abilities.audio).toBe(true);
+  });
+});
+
 describe('Moonshot models', () => {
   it('advertises Kimi K3 reasoning effort controls', () => {
     const kimiK3 = LOBE_DEFAULT_MODEL_LIST.find(

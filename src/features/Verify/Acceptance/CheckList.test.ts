@@ -8,10 +8,16 @@ import {
   hasAnnotatableEvidence,
   hasVisualEvidence,
   isCheckWorkActionable,
+  shouldCollapseAfterReview,
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
-import { mergeRejectComments } from './CheckRejectModal';
+import {
+  canDismissRejectModal,
+  CHECK_REJECT_MODAL_SIZE,
+  mergeRejectComments,
+  rejectModalTitle,
+} from './CheckRejectModal';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -79,6 +85,16 @@ describe('hasVisualEvidence', () => {
       } as AcceptanceCheck),
     ).toBe(false);
   });
+
+  it('counts an audio clip as media, so a sound deliverable expands on open', () => {
+    // The clip IS the deliverable — a row that stays collapsed hides the one
+    // thing the reviewer has to listen to.
+    expect(
+      hasVisualEvidence({
+        evidence: [{ fileUrl: 'https://example.com/tts.mp3', type: 'audio' }],
+      } as AcceptanceCheck),
+    ).toBe(true);
+  });
 });
 
 describe('hasAnnotatableEvidence', () => {
@@ -97,6 +113,14 @@ describe('hasAnnotatableEvidence', () => {
       } as AcceptanceCheck),
     ).toBe(false);
   });
+
+  it('does not offer region comments for audio — there is no image to circle', () => {
+    expect(
+      hasAnnotatableEvidence({
+        evidence: [{ fileUrl: 'https://example.com/tts.mp3', type: 'audio' }],
+      } as AcceptanceCheck),
+    ).toBe(false);
+  });
 });
 
 describe('mergeRejectComments', () => {
@@ -112,6 +136,29 @@ describe('mergeRejectComments', () => {
 
   it('does not duplicate the same draft', () => {
     expect(mergeRejectComments('Same feedback', 'Same feedback')).toBe('Same feedback');
+  });
+});
+
+describe('check reject modal presentation', () => {
+  it('keeps 1% viewport breathing room around the annotation surface', () => {
+    expect(CHECK_REJECT_MODAL_SIZE).toEqual({ height: '98dvh', width: '98vw' });
+  });
+
+  it('shows the acceptance item description below its title', () => {
+    expect(
+      rejectModalTitle(
+        'C1 · Select Set Goal from the slash menu',
+        'The selected goal chip appears after pressing Enter.',
+      ),
+    ).toEqual({
+      description: 'The selected goal chip appears after pressing Enter.',
+      title: 'C1 · Select Set Goal from the slash menu',
+    });
+  });
+
+  it('prevents outside dismissal while the reject request is pending', () => {
+    expect(canDismissRejectModal(true)).toBe(false);
+    expect(canDismissRejectModal(false)).toBe(true);
   });
 });
 
@@ -182,6 +229,17 @@ describe('isCheckWorkActionable', () => {
   it('hides work for accepted and ignored checks', () => {
     expect(isCheckWorkActionable(withReview('accept'))).toBe(false);
     expect(isCheckWorkActionable(withReview('ignore'))).toBe(false);
+  });
+});
+
+describe('shouldCollapseAfterReview', () => {
+  it('folds an expanded check after its reject is recorded', () => {
+    expect(shouldCollapseAfterReview(true, true)).toBe(true);
+  });
+
+  it('keeps the row unchanged when the review fails or it is already folded', () => {
+    expect(shouldCollapseAfterReview(false, true)).toBe(false);
+    expect(shouldCollapseAfterReview(true, false)).toBe(false);
   });
 });
 

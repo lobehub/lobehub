@@ -140,6 +140,17 @@ export interface ConversationContext {
    */
   documentId?: string;
   /**
+   * Group being configured by the Group Agent Builder panel (`group_agent_builder`
+   * scope).
+   *
+   * Deliberately separate from {@link groupId}: that field marks the run as a
+   * group *chat* turn and gets stamped onto the created topic and messages,
+   * which would drag the builder's side-conversation into the group's own
+   * message read path. This one only scopes the builder's own buckets and topic
+   * list, and travels to the server as `ExecAgentAppContext.editingGroupId`.
+   */
+  editingGroupId?: string;
+  /**
    * Group ID for group conversations
    * Used when scope is 'group' or 'group_agent'
    */

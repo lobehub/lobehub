@@ -8,6 +8,7 @@ import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { type FinalizeRunPayload } from '@/server/workflows/agentEvalRun';
 import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
+import { runStep } from '@/server/workflows/step';
 
 const log = debug('lobe-server:workflows:finalize-run');
 
@@ -36,7 +37,7 @@ export const { POST } = serve<FinalizeRunPayload>(
     const wsId = await resolveAgentEvalRunWorkspace(db, runId);
 
     // Step 1: Get run details
-    const run = await context.run('agent-eval-run:get-run', async () => {
+    const run = await runStep(context, 'agent-eval-run:get-run', async () => {
       const runModel = new AgentEvalRunModel(db, userId, wsId);
       return runModel.findById(runId);
     });
@@ -51,7 +52,7 @@ export const { POST } = serve<FinalizeRunPayload>(
     }
 
     // Step 2: Get all RunTopics (already evaluated in recordTrajectoryCompletion)
-    const runTopics = await context.run('agent-eval-run:get-run-topics', async () => {
+    const runTopics = await runStep(context, 'agent-eval-run:get-run-topics', async () => {
       const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
       return runTopicModel.findByRunId(runId);
     });
@@ -59,7 +60,7 @@ export const { POST } = serve<FinalizeRunPayload>(
     log('Total RunTopics: %d', runTopics.length);
 
     // Step 3: Aggregate metrics from already-evaluated RunTopics
-    const metrics = await context.run('agent-eval-run:aggregate-metrics', async () => {
+    const metrics = await runStep(context, 'agent-eval-run:aggregate-metrics', async () => {
       const service = new AgentEvalRunService(db, userId, wsId);
       return service.evaluateAndFinalizeRun({
         run: { config: run.config, id: runId, metrics: run.metrics, startedAt: run.startedAt },
@@ -82,7 +83,7 @@ export const { POST } = serve<FinalizeRunPayload>(
           ? 'failed'
           : 'completed';
 
-    await context.run('agent-eval-run:update-run', async () => {
+    await runStep(context, 'agent-eval-run:update-run', async () => {
       const runModel = new AgentEvalRunModel(db, userId, wsId);
       return runModel.update(runId, { metrics, status: runStatus });
     });

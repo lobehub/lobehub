@@ -8,15 +8,12 @@ import type {
   UIChatMessage,
   UploadFileItem,
 } from '@lobechat/types';
+import { estimateAudioInputTokens } from '@lobechat/utils/audio';
 import { getMimeType } from '@lobechat/utils/mimeType';
 import { estimateTokenCount } from 'tokenx';
 
 const ESTIMATE_INPUT_MESSAGE_ID = '__cost_estimate_input__';
 const VISUAL_INPUT_TOKEN_ESTIMATE = 1000;
-// Per-attachment flat estimate for audio media parts. Audio token usage scales
-// with duration (Gemini bills ~32 tokens/sec), but duration isn't available at
-// preflight, so we mirror the visual flat-per-item heuristic as a lower bound.
-const AUDIO_INPUT_TOKEN_ESTIMATE = 1000;
 const BYTES_PER_TEXT_TOKEN_ESTIMATE = 4;
 const TEXT_UPLOAD_MIME_TYPES = new Set([
   'application/javascript',
@@ -43,6 +40,10 @@ export interface InputTokenBuckets {
 }
 
 interface AttachmentTokenOptions {
+  /** Conservative per-item fallback when an audio duration or model rate is unavailable. */
+  audioTokenEstimate?: number;
+  /** Positive model-specific audio input token rate. */
+  audioTokensPerSecond?: number;
   canUseAudio: boolean;
   canUseVideo: boolean;
   canUseVision: boolean;
@@ -88,7 +89,13 @@ const countFileContextTokens = ({
 
 export const estimateSentMessageAttachmentTokenBuckets = (
   messages: UIChatMessage[],
-  { canUseAudio, canUseVideo, canUseVision }: AttachmentTokenOptions,
+  {
+    audioTokenEstimate,
+    audioTokensPerSecond,
+    canUseAudio,
+    canUseVideo,
+    canUseVision,
+  }: AttachmentTokenOptions,
 ): InputTokenBuckets => {
   let textTokens = 0;
   let imageTokens = 0;
@@ -128,7 +135,10 @@ export const estimateSentMessageAttachmentTokenBuckets = (
     }
 
     if (canUseAudio) {
-      audioTokens += audioList.length * AUDIO_INPUT_TOKEN_ESTIMATE;
+      audioTokens += estimateAudioInputTokens(audioList, {
+        fallbackTokensPerItem: audioTokenEstimate,
+        tokensPerSecond: audioTokensPerSecond,
+      }).tokens;
     }
   }
 
@@ -169,7 +179,13 @@ const estimateTextFileTokensBySize = (size: number) =>
 
 export const estimatePendingUploadTokenBuckets = (
   files: UploadFileItem[],
-  { canUseAudio, canUseVideo, canUseVision }: AttachmentTokenOptions,
+  {
+    audioTokenEstimate,
+    audioTokensPerSecond,
+    canUseAudio,
+    canUseVideo,
+    canUseVision,
+  }: AttachmentTokenOptions,
   textFileContents: Record<string, string>,
 ): InputTokenBuckets => {
   if (files.length === 0) return EMPTY_TOKEN_BUCKETS;
@@ -227,7 +243,12 @@ export const estimatePendingUploadTokenBuckets = (
   }
 
   return {
-    audioTokens: canUseAudio ? audioList.length * AUDIO_INPUT_TOKEN_ESTIMATE : 0,
+    audioTokens: canUseAudio
+      ? estimateAudioInputTokens(audioList, {
+          fallbackTokensPerItem: audioTokenEstimate,
+          tokensPerSecond: audioTokensPerSecond,
+        }).tokens
+      : 0,
     imageTokens: canUseVision ? imageList.length * VISUAL_INPUT_TOKEN_ESTIMATE : 0,
     textTokens:
       countFileContextTokens({

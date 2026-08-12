@@ -290,6 +290,29 @@ const config = {
   extraResources: [
     { from: 'resources/bin', to: 'bin' },
     { from: 'resources/cli-package.json', to: 'package.json' },
+    // Local Sandbox helper binaries. The sandbox spawns these by path, so they
+    // must be real files — not entries inside app.asar, and not something the
+    // user is expected to install separately.
+    //
+    // Shipped as a resource rather than by externalizing
+    // `@anthropic-ai/sandbox-runtime`: its JavaScript bundles into the main
+    // process perfectly well, and making it a production dependency instead
+    // drags four transitive packages into electron-builder's node_modules
+    // traversal, which pnpm's layout does not satisfy (`@pondwader/socks5-server
+    // not found`). Only the binaries need to exist on disk.
+    {
+      from: 'node_modules/@anthropic-ai/sandbox-runtime/vendor',
+      to: 'sandbox-runtime/vendor',
+    },
+    // Carried alongside the binaries so the staging directory stays keyed on the
+    // backend's real version. Without it the version lookup falls back to the
+    // binary's size — which still works, but would defeat the per-version
+    // isolation in exactly the case it exists for: an installed app being
+    // updated.
+    {
+      from: 'node_modules/@anthropic-ai/sandbox-runtime/package.json',
+      to: 'sandbox-runtime/package.json',
+    },
   ],
 
   win: {

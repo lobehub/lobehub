@@ -9,7 +9,6 @@ import {
   Switch,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +21,18 @@ interface CriterionEditContentProps {
   onSubmit: (value: GoalCriterionDraft) => void;
   seq: number;
 }
+
+const CriterionEditTitle = memo<Pick<CriterionEditContentProps, 'isNew' | 'seq'>>(
+  ({ isNew, seq }) => {
+    const { t } = useTranslation('plugin');
+
+    return isNew
+      ? t('builtins.lobe-task.goal.addCriterion')
+      : t('builtins.lobe-task.goal.editCriterion', { seq });
+  },
+);
+
+CriterionEditTitle.displayName = 'GoalCriterionEditTitle';
 
 /**
  * A criterion's judge prompt is the thing the whole loop is scored against, so
@@ -118,8 +129,6 @@ export const openCriterionEditModal = (props: CriterionEditContentProps): ModalI
     content: <CriterionEditContent {...props} />,
     footer: null,
     maskClosable: true,
-    title: props.isNew
-      ? t('builtins.lobe-task.goal.addCriterion', { ns: 'plugin' })
-      : t('builtins.lobe-task.goal.editCriterion', { ns: 'plugin', seq: props.seq }),
+    title: <CriterionEditTitle isNew={props.isNew} seq={props.seq} />,
     width: 'min(90vw, 560px)',
   });

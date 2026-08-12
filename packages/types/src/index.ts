@@ -4,6 +4,7 @@ export * from './agentGroup';
 export * from './agentHook';
 export * from './aiChat';
 export * from './aiProvider';
+export * from './apiKey';
 export * from './artifact';
 export * from './asyncTask';
 export * from './auth';

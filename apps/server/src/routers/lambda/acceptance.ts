@@ -445,6 +445,27 @@ export const acceptanceRouter = router({
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
 
   /**
+   * Acceptance status for a known set of subjects, in one read.
+   *
+   * `list` is recency-capped and spans every subject type, so a list surface
+   * that derived per-row state from it would silently mis-read any subject
+   * pushed past the cap. This answers about exactly the subjects asked for.
+   */
+  listStatusesBySubjects: acceptanceProcedure
+    .input(
+      z.object({
+        subjectIds: z.array(z.string()).max(200),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.acceptanceService.acceptanceModel.listStatusesBySubjects(
+        input.subjectType,
+        input.subjectIds,
+      ),
+    ),
+
+  /**
    * Feedback addressed to a check GROUP (business category) rather than any
    * single check — for concerns that don't invalidate an individual check
    * (which may well be accepted) but still need to reach the next round.

@@ -80,6 +80,37 @@ describe('resourcePermissionRouter.setGeneralAccess', () => {
     expect(result.visibility).toBe('private');
   });
 
+  // Regression: `viewer` used to be resolved through the resource default, which
+  // was `use` at the time. Once the Agent / Group default became `edit`, that
+  // path would have handed edit access to a released client that explicitly
+  // asked for the non-editor option.
+  it.each([
+    ['agent', 'use'],
+    ['agentGroup', 'use'],
+    ['document', 'view'],
+  ] as const)('maps a legacy %s viewer role to %s, not to the default', async (type, expected) => {
+    getResourceMetaMock.mockResolvedValue({
+      userId: 'user_creator',
+      visibility: 'public',
+      workspaceId: 'ws_1',
+    } as any);
+    canManageMock.mockResolvedValue(true);
+
+    const result = await caller().setGeneralAccess({
+      resourceId: 'resource-1',
+      resourceType: type,
+      role: 'viewer',
+    });
+
+    expect(permissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+      type,
+      'resource-1',
+      expected,
+      'user_creator',
+    );
+    expect(result.accessLevel).toBe(expected);
+  });
+
   it('reports public resources as public', async () => {
     getResourceMetaMock.mockResolvedValue({
       userId: 'user_creator',

@@ -13,19 +13,16 @@ import {
   Feather,
   FileClockIcon,
   FlaskConical,
-  Rocket,
   Send,
   Settings2,
   SettingsIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
-import HighlightNotification from '@/components/HighlightNotification';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
@@ -33,33 +30,9 @@ import { useActiveNavKey } from '@/features/NavPanel/useActiveNavKey';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useNavLayout } from '@/hooks/useNavLayout';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
-
-import { resolveFooterPromotionState } from './promotionPipeline';
-
-const PRODUCT_HUNT_NOTIFICATION = {
-  actionHref: 'https://www.producthunt.com/products/lobehub?launch=lobehub',
-  endTime: new Date('2026-02-01T00:00:00Z'),
-  image: 'https://hub-apac-1.lobeobjects.space/og/lobehub-ph.png',
-  slug: 'product-hunt-2026',
-  startTime: new Date('2026-01-27T08:00:00Z'),
-} as const;
-
-interface PromotionCard {
-  actionHref?: string;
-  actionIcon?: ReactNode;
-  actionLabel: string;
-  description: string;
-  image?: string;
-  onAction?: () => void;
-  onActionClick?: () => void;
-  onClose: () => void;
-  title: string;
-}
 
 type FooterMenuItems = NonNullable<MenuProps['items']>;
 
@@ -109,41 +82,8 @@ const Footer = memo(() => {
   const activeNavKey = useActiveNavKey();
   const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
-  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
-
-  const [isProductHuntNotificationRead, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.isNotificationRead(PRODUCT_HUNT_NOTIFICATION.slug)(s),
-    s.updateSystemStatus,
-  ]);
-
-  const isWithinTimeWindow = useMemo(() => {
-    const now = new Date();
-    return now >= PRODUCT_HUNT_NOTIFICATION.startTime && now <= PRODUCT_HUNT_NOTIFICATION.endTime;
-  }, []);
-
-  const { shouldAutoShowProductHuntCard, shouldShowProductHuntMenuEntry } = useMemo(
-    () =>
-      resolveFooterPromotionState({
-        isProductHuntNotificationRead,
-        isWithinProductHuntWindow: isWithinTimeWindow,
-        serverConfigInit,
-      }),
-    [isProductHuntNotificationRead, isWithinTimeWindow, serverConfigInit],
-  );
-
-  const trackPromotionEvent = useCallback(
-    (eventName: string, properties: Record<string, string>) => {
-      try {
-        analytics?.track({ name: eventName, properties });
-      } catch {
-        // silently ignore tracking errors to avoid affecting business logic
-      }
-    },
-    [analytics],
-  );
 
   const trackMenuClick = useCallback(
     (key: string) => {
@@ -159,27 +99,6 @@ const Footer = memo(() => {
     [analytics],
   );
 
-  const markNotificationRead = useCallback(
-    (slug: string) => {
-      const currentSlugs = useGlobalStore.getState().status.readNotificationSlugs || [];
-
-      if (currentSlugs.includes(slug)) return;
-
-      updateSystemStatus({ readNotificationSlugs: [...currentSlugs, slug] });
-    },
-    [updateSystemStatus],
-  );
-
-  useEffect(() => {
-    if (!shouldAutoShowProductHuntCard) return;
-
-    setIsProductHuntCardOpen(true);
-    trackPromotionEvent('product_hunt_card_viewed', {
-      spm: 'homepage.product_hunt.viewed',
-      trigger: 'auto',
-    });
-  }, [isWithinTimeWindow, shouldAutoShowProductHuntCard, trackPromotionEvent]);
-
   const handleOpenChangelogModal = useCallback(() => {
     openChangelogModal();
   }, []);
@@ -187,44 +106,6 @@ const Footer = memo(() => {
   const handleOpenFeedbackModal = useCallback(() => {
     openFeedbackModal();
   }, []);
-
-  const handleOpenProductHuntCard = useCallback(() => {
-    setIsProductHuntCardOpen(true);
-    trackPromotionEvent('product_hunt_card_viewed', {
-      spm: 'homepage.product_hunt.viewed',
-      trigger: 'menu_click',
-    });
-  }, [trackPromotionEvent]);
-
-  const handleCloseProductHuntCard = useCallback(() => {
-    setIsProductHuntCardOpen(false);
-    markNotificationRead(PRODUCT_HUNT_NOTIFICATION.slug);
-    trackPromotionEvent('product_hunt_card_closed', {
-      spm: 'homepage.product_hunt.closed',
-    });
-  }, [markNotificationRead, trackPromotionEvent]);
-
-  const handleProductHuntActionClick = useCallback(() => {
-    trackPromotionEvent('product_hunt_action_clicked', {
-      spm: 'homepage.product_hunt.action_clicked',
-    });
-  }, [trackPromotionEvent]);
-
-  const activePromotion = useMemo<PromotionCard | undefined>(() => {
-    if (isProductHuntCardOpen) {
-      return {
-        actionHref: PRODUCT_HUNT_NOTIFICATION.actionHref,
-        actionLabel: t('productHunt.actionLabel'),
-        description: t('productHunt.description'),
-        image: PRODUCT_HUNT_NOTIFICATION.image,
-        onActionClick: handleProductHuntActionClick,
-        onClose: handleCloseProductHuntCard,
-        title: t('productHunt.title'),
-      };
-    }
-
-    return undefined;
-  }, [handleCloseProductHuntCard, handleProductHuntActionClick, isProductHuntCardOpen, t]);
 
   const { helpMenuItems, trackedMenuKeys } = useMemo<{
     helpMenuItems: MenuProps['items'];
@@ -322,16 +203,6 @@ const Footer = memo(() => {
             },
           ]
         : []),
-      ...(shouldShowProductHuntMenuEntry
-        ? [
-            {
-              icon: <Icon icon={Rocket} />,
-              key: 'productHunt',
-              label: 'Product Hunt',
-              onClick: handleOpenProductHuntCard,
-            },
-          ]
-        : []),
     ];
 
     return {
@@ -352,9 +223,7 @@ const Footer = memo(() => {
     enableBusinessFeatures,
     handleOpenChangelogModal,
     handleOpenFeedbackModal,
-    handleOpenProductHuntCard,
     isDevMode,
-    shouldShowProductHuntMenuEntry,
     t,
     settingLabelKey,
     billboardMenuItems,
@@ -424,20 +293,6 @@ const Footer = memo(() => {
             </WorkspaceLink>
           )}
         </Flexbox>
-      )}
-      {activePromotion && (
-        <HighlightNotification
-          open
-          actionHref={activePromotion.actionHref}
-          actionIcon={activePromotion.actionIcon}
-          actionLabel={activePromotion.actionLabel}
-          description={activePromotion.description}
-          image={activePromotion.image}
-          title={activePromotion.title}
-          onAction={activePromotion.onAction}
-          onActionClick={activePromotion.onActionClick}
-          onClose={activePromotion.onClose}
-        />
       )}
       {isHomeSidebar && <Billboard />}
     </>

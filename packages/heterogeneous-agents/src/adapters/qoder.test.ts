@@ -119,6 +119,95 @@ describe('QoderAdapter', () => {
     });
   });
 
+  it('preserves synthesized todo state from Qoder Task tools', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      message: {
+        content: [
+          {
+            id: 'task-create-1',
+            input: {
+              activeForm: 'Adding Qoder todo support',
+              description: 'Keep the synthesized task state for the UI.',
+              subject: 'Add Qoder todo support',
+            },
+            name: 'TaskCreate',
+            type: 'tool_use',
+          },
+        ],
+        id: 'msg-task-create',
+      },
+      type: 'assistant',
+    });
+
+    const events = adapter.adapt({
+      message: {
+        content: [
+          {
+            content: 'Task #1 created successfully: Add Qoder todo support',
+            tool_use_id: 'task-create-1',
+            type: 'tool_result',
+          },
+        ],
+        role: 'user',
+      },
+      type: 'user',
+    });
+    const pluginState = {
+      todos: {
+        items: [{ id: '1', status: 'todo', text: 'Add Qoder todo support' }],
+        updatedAt: expect.any(String),
+      },
+    };
+    expect(events.find((event) => event.type === 'tool_result')?.data.pluginState).toEqual(
+      pluginState,
+    );
+    expect(events.find((event) => event.type === 'tool_end')?.data.result.state).toEqual(
+      pluginState,
+    );
+
+    adapter.adapt({
+      message: {
+        content: [
+          {
+            id: 'task-update-1',
+            input: { status: 'completed', taskId: '1' },
+            name: 'TaskUpdate',
+            type: 'tool_use',
+          },
+        ],
+        id: 'msg-task-update',
+      },
+      type: 'assistant',
+    });
+    const updatedEvents = adapter.adapt({
+      message: {
+        content: [
+          {
+            content: 'Updated task #1 status',
+            tool_use_id: 'task-update-1',
+            type: 'tool_result',
+          },
+        ],
+        role: 'user',
+      },
+      type: 'user',
+    });
+    const updatedPluginState = {
+      todos: {
+        items: [{ id: '1', status: 'completed', text: 'Add Qoder todo support' }],
+        updatedAt: expect.any(String),
+      },
+    };
+    expect(updatedEvents.find((event) => event.type === 'tool_result')?.data.pluginState).toEqual(
+      updatedPluginState,
+    );
+    expect(updatedEvents.find((event) => event.type === 'tool_end')?.data.result.state).toEqual(
+      updatedPluginState,
+    );
+  });
+
   it('preserves Qoder WebSearch structured sources on tool_result and tool_end', () => {
     const adapter = new QoderAdapter();
     adapter.adapt({ subtype: 'init', type: 'system' });

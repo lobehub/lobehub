@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "فحص البرنامج",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "طريقة التحقق",
   "builtins.lobe-delivery-checker.verifyPlan.required": "مطلوب",
+  "builtins.lobe-goal.apiName.createGoal": "ابدأ الهدف",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "إنشاء وكلاء دفعة واحدة",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "إنشاء وكيل",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "إنشاء مجموعة",

@@ -1400,12 +1400,20 @@ export class ChatTopicActionImpl {
     );
   };
 
-  refreshTopic = async (): Promise<void> => {
+  /**
+   * @param ownerContainerKey - Revalidate this `topicDataMap` bucket instead of
+   *   the active agent/group one. Pass it whenever the affected row may live
+   *   elsewhere (Agent Builder panels render another agent's conversation);
+   *   omitting it refreshes whatever the page is showing.
+   */
+  refreshTopic = async (ownerContainerKey?: string): Promise<void> => {
     const { activeAgentId, activeGroupId } = this.#get();
     // Use topicMapKey to generate the same key used in useFetchTopics
     // Key format: topicKeys.list(containerKey, { isInbox, pageSize })
-    const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
-    const agentViewKey = activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null;
+    const containerKey =
+      ownerContainerKey ?? topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const agentViewKey =
+      ownerContainerKey ?? (activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null);
     await mutate(
       (key) =>
         Array.isArray(key) &&
@@ -1454,10 +1462,15 @@ export class ChatTopicActionImpl {
   };
 
   internal_updateTopic = async (id: string, data: Partial<ChatTopic>): Promise<void> => {
-    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
+    // The row is not necessarily in the active agent/group bucket — resolve the
+    // one that holds it, so the optimistic write and the revalidation both land
+    // where the topic is actually rendered (see `getTopicContainerKeyById`).
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+
+    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data, containerKey });
 
     await topicService.updateTopic(id, data);
-    await this.#get().refreshTopic();
+    await this.#get().refreshTopic(containerKey);
   };
 
   internal_updateTopicLinkedPullRequest = async (
@@ -1574,11 +1587,13 @@ export class ChatTopicActionImpl {
     const { activeAgentId, activeGroupId } = this.#get();
     const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
     const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);
-    const key = topicMapKey({
-      agentId: scopedAgentId,
-      groupId: scopedGroupId,
-      scope: payload.scope,
-    });
+    const key =
+      payload.containerKey ??
+      topicMapKey({
+        agentId: scopedAgentId,
+        groupId: scopedGroupId,
+        scope: payload.scope,
+      });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 

@@ -76,6 +76,8 @@ export default {
   'flow.steps.learnYourWorld.sectionHint':
     'Analyze your connected data to understand what matters to you…',
   'flow.steps.learnYourWorld.skipAhead': 'Skip ahead',
+  'flow.steps.learnYourWorld.skipNotificationHint':
+    "💡 You can skip this step for now — we'll notify you when your profile is ready.",
   'flow.steps.learnYourWorld.title': 'Learn your world',
   'flow.steps.messenger.connect': 'Connect',
   'flow.steps.messenger.connected': 'Connected',

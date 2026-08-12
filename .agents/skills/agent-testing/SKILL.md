@@ -157,6 +157,12 @@ deliverable. Do not ask for approval yet: Step 2 must establish the real
 environment state first so the user can approve one complete, evidence-backed plan
 instead of separate plan and environment prompts.
 
+**Case selection gate (hard rule):** every case must be a delivery outcome a
+person can judge. Never plan the repo's own programmatic gates — unit /
+integration tests, coverage, type-check, lint, a clean build — as cases; ingest
+drops them and a gates-only round fails to publish. Full rule:
+[references/plan.md](./references/plan.md#case-selection-gate-hard-rule).
+
 ### Step 2 — Confirm environment state and auth (mandatory)
 
 Step 2 is about getting the environment ready: **dependencies are healthy** and
@@ -476,6 +482,17 @@ Hard rules worth front-loading:
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
+- **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
+  alert tone: attach the clip the feature produced so the page renders a player.
+  Prose about a sound, or a screenshot of a waveform, proves nothing —
+  [references/report.md](./references/report.md).
+- **Programmatic gates are NEVER acceptance checks (hard rule, enforced).**
+  Unit / integration tests, coverage, type-check, lint, and a clean build are
+  preconditions of shipping; they belong in one line of `report.md` →
+  Verification and MUST NOT appear in `plan[]` / `cases[]` under any phrasing.
+  `acceptance run ingest` drops every matching item (matched on title, category,
+  and method) and a gates-only round fails to publish —
+  [references/report.md](./references/report.md#hard-rule--what-is-not-an-acceptance-check).
 
 ### Step 6 — Publish to LobeHub Acceptance (mandatory)
 

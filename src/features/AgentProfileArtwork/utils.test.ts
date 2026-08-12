@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { selectAgentArtworkModel } from '@/store/agent/slices/artwork/utils';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { openFilePicker, resolveAgentBackground } from './utils';
+import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';
 
 describe('openFilePicker', () => {
   it('uses the native picker while preserving click as a compatibility fallback', () => {
@@ -64,5 +64,31 @@ describe('selectAgentArtworkModel', () => {
 
   it('falls back to the first available image model', () => {
     expect(selectAgentArtworkModel([createProvider('fal', ['flux'])])?.model.id).toBe('flux');
+  });
+});
+
+/**
+ * `@lobehub/ui`'s `Avatar` latches an internal image-error flag and never
+ * clears it when `avatar` changes, so a broken avatar url would keep every
+ * later one — including a freshly generated one — invisible until a reload.
+ * Every avatar render site keys off this helper to force a clean remount, so
+ * the key MUST change with the url and MUST NOT change for anything else.
+ */
+describe('avatarRemountKey', () => {
+  it('changes when the avatar url changes', () => {
+    expect(avatarRemountKey('http://example.com/a.png')).not.toBe(
+      avatarRemountKey('http://example.com/b.png'),
+    );
+  });
+
+  it('stays stable for the same avatar so unrelated re-renders do not remount', () => {
+    expect(avatarRemountKey('http://example.com/a.png')).toBe(
+      avatarRemountKey('http://example.com/a.png'),
+    );
+  });
+
+  it('collapses every empty value onto one placeholder key', () => {
+    expect(avatarRemountKey(undefined)).toBe(avatarRemountKey(null));
+    expect(avatarRemountKey('')).toBe(avatarRemountKey(undefined));
   });
 });

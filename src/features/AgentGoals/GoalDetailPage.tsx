@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useActiveTaskDetail } from '@/features/AgentTasks/AgentTaskDetail';
 import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDetailTitleInput';
@@ -190,7 +190,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer gap={20} paddingBlock={16}>
           {isInitialLoading || !task ? (
-            <Loading debugId={'GoalDetail'} />
+            <SurfaceSkeleton header={false} variant={'editor'} />
           ) : (
             <>
               <Flexbox className={styles.header} gap={8}>

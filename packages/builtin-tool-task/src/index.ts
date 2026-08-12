@@ -6,5 +6,5 @@ export {
 } from './listTasks';
 export { TaskIdentifier, TaskManifest } from './manifest';
 export { systemPrompt } from './systemRole';
-export type { CreateGoalParams, GoalCriterionDraft } from './types';
+export type { CreateGoalParams, CreateGoalState, GoalCriterionDraft } from './types';
 export { TaskApiName } from './types';

@@ -99,8 +99,21 @@ const CODEX_MAX_REASONING_EFFORT_LEVELS = [
 const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
 const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
 
+/**
+ * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--reasoning-effort <level>` flag.
+ */
+export const QODER_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number];
+
+export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
+
 export type HeterogeneousReasoningEffort =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | QoderReasoningEffort
+  | HeterogeneousAgentDefaultSelection;
 
 /**
  * Codex speed modes, mirrored to the CLI config key `service_tier`.
@@ -279,6 +292,12 @@ interface CodexSelectionSource {
   speed?: string | null;
 }
 
+interface QoderSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
@@ -377,6 +396,9 @@ const isClaudeCodeReasoningEffort = (
 const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
 
+const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
+  !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
+
 /**
  * Reasoning-effort levels exposed by a Codex model. Unknown and default model
  * selections use the conservative common set because their actual capability
@@ -465,6 +487,22 @@ const getExplicitCodexReasoningEffort = (
 ): CodexReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+export const resolveQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliFlagValue(source?.args, QODER_REASONING_EFFORT_FLAG) ?? source?.effort
+  )?.trim();
+  return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const getExplicitQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isQoderReasoningEffort(effort) ? effort : undefined;
 };
 
 const isCodexFastServiceTier = (value: string | undefined): boolean =>
@@ -590,6 +628,10 @@ export const buildHeteroSpawnArgs = (
     ) {
       extraArgs.push('--model', model);
     }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
+    }
   }
 
   if (extraArgs.length === 0) return provider.args;
@@ -692,6 +734,10 @@ export const buildHeteroExecArgs = (
     ) {
       selectorArgs.push('--model', model);
     }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
+    }
   }
 
   const args = [...wrapperArgs, ...selectorArgs];
@@ -754,6 +800,38 @@ export interface LobeAgentAgencyConfig {
    */
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Confine the run's shell commands to the device sandbox. A *modifier* on
+   * `executionTarget: 'local'`, not a target of its own — the run still goes to
+   * the same machine through the same routing, it is only what the spawned
+   * command may touch that changes (writes limited to the working directory,
+   * no network).
+   *
+   * Modelled as a flag rather than a sixth `DeviceExecutionTarget` deliberately:
+   * every existing routing rule (web coercion, gateway upgrade, bot-trigger
+   * promotion, fixed-workspace policy) stays literally unchanged, and the flag
+   * composes if sandboxed execution later extends to `device` targets.
+   *
+   * Only shell commands are affected. File tools (`writeFile` / `editFile`) run
+   * in the desktop process itself, and heterogeneous CLI agents spawn through
+   * their own path — neither passes through the sandboxed runner. Say
+   * "commands" in user-facing copy, never "the agent".
+   */
+  localSandbox?: boolean;
+  /**
+   * Let the sandboxed commands reach the package-registry allowlist. Only
+   * meaningful with {@link localSandbox}; defaults to off.
+   *
+   * A separate field rather than a tri-state on `localSandbox` because the two
+   * answer different questions ("fence this?" vs "may the fence let installs
+   * through?"), and because the network choice must survive toggling the
+   * sandbox off and back on.
+   *
+   * Never means "the network is open" — the sandbox backend rejects a catch-all
+   * allowlist outright, so this opens a fixed set of registries and forges.
+   * User-facing copy must not promise more than that.
+   */
+  localSandboxNetwork?: boolean;
   /**
    * Workspace model-selection policy. `fixed` keeps the shared agent model
    * authoritative; `member` enables a per-user model override stored in
@@ -841,6 +919,9 @@ export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
  * - `fixed` shared config ignores the caller override entirely
  * - `override.executionTarget` wins when set; falls back to shared
  * - `override.boundDeviceId` wins when set; falls back to shared
+ * - `override.localSandbox` wins when set; falls back to shared. It rides along
+ *   with the target because it qualifies *this member's* local execution — one
+ *   member sandboxing their own machine says nothing about anyone else's.
  * - Nothing else (heterogeneousProvider, verifyRubricId, workingDirByDevice)
  *   is overridable — those describe the agent, not this user's routing
  *
@@ -850,18 +931,31 @@ export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
  */
 export const resolveAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
-  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
 ): LobeAgentAgencyConfig | undefined => {
   const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
   if (!override) return base;
   const hasTarget = override.executionTarget !== undefined;
   const hasDevice = override.boundDeviceId !== undefined;
-  if (!hasTarget && !hasDevice) return base;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
   return {
     ...base,
     ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
     ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
   };
 };
 
@@ -882,7 +976,13 @@ export interface AgentAgencyConfigContext {
  */
 export const resolveAgentAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
-  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
   context: AgentAgencyConfigContext,
 ): LobeAgentAgencyConfig | undefined => {
   const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);

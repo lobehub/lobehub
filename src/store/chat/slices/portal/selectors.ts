@@ -52,6 +52,7 @@ const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
 const showTaskDetail = (s: ChatStoreState) => currentViewType(s) === PortalViewType.TaskDetail;
+const showTopicChat = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Topic;
 
 // ============== Data Extractors ==============
 
@@ -248,6 +249,12 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+// Topic chat selectors — the second, side-by-side topic opened in the portal
+const portalTopicId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.Topic);
+  return view?.topicId;
+};
+
 const topicCommentsView = (s: ChatStoreState) => getViewData(s, PortalViewType.TopicComments);
 const topicCommentThreadView = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.TopicCommentThread);
@@ -297,6 +304,7 @@ export const chatPortalSelectors = {
   showMessageDetail,
   showPluginUI,
   showTaskDetail,
+  showTopicChat,
 
   // Agent detail data
   agentDetailId,
@@ -337,6 +345,9 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+
+  // Topic chat data
+  portalTopicId,
 
   // Topic comment data
   topicCommentsView,

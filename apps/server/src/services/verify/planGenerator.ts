@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
+import { isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
@@ -89,6 +90,19 @@ const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyChec
     verifierType: 'agent',
   };
 };
+
+/**
+ * Drop AI-proposed criteria that are really the repo's own test / lint gates.
+ *
+ * The prompt already forbids them, but a model asked to verify a code change
+ * reaches for "unit tests pass" reliably enough that the acceptance page fills
+ * with rows nobody can act on. Applied only to the AI-generated criteria: they
+ * are complementary by construction, and `generateDraftPlan` still falls back
+ * to the holistic check if the filter empties the plan.
+ */
+const withoutProgrammaticTests = <T extends { description?: string; title: string }>(
+  criteria: T[],
+): T[] => criteria.filter((c) => !isProgrammaticTestCheck(c.title, c.description));
 
 const criterionToCheckItem = (
   criterion: VerifyCriterionItem,
@@ -284,7 +298,7 @@ export class VerifyPlanGeneratorService {
       log('config criteria-gen output did not match schema: %O', parsed.error.flatten());
       return [];
     }
-    return parsed.data.criteria.slice(0, maxCriteria).map((c) => ({
+    return withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map((c) => ({
       description: c.description,
       instruction: c.instruction,
       onFail: c.onFail ?? 'manual',
@@ -444,7 +458,7 @@ export class VerifyPlanGeneratorService {
     // Like the agent-authored path, the detailed instruction lives in a document
     // (the single source of truth) referenced by documentId — never inline.
     return Promise.all(
-      parsed.data.criteria.slice(0, params.maxCriteria).map(async (c) => {
+      withoutProgrammaticTests(parsed.data.criteria.slice(0, params.maxCriteria)).map(async (c) => {
         let documentId: string | null = null;
         if (c.instruction) {
           const doc = await this.documentModel.create({

@@ -42,6 +42,45 @@ describe('resource manager store actions', () => {
     });
   });
 
+  it('should drop the previous source rows when the source filter changes', () => {
+    // Regression: the pick used to update ResourceManager state only, leaving
+    // the previous source's rows on screen and interactive until the fetch
+    // landed — and a "select all" fired in that window resolved against the
+    // stale queryParams, so the next batch action targeted the wrong source.
+    useFileStore.setState({
+      queryParams: { category: 'images', sourceFilter: 'generated' } as any,
+      resourceList: [{ id: 'file-1' }, { id: 'file-2' }] as any,
+      resourceMap: new Map([['file-1', { id: 'file-1' } as any]]),
+      selectAllState: 'all',
+    } as any);
+    useResourceManagerStore.setState({
+      selectAllState: 'all',
+      selectedFileIds: ['file-9'],
+      selectionTotal: 12,
+      sourceFilter: 'generated' as any,
+    });
+
+    useResourceManagerStore.getState().setSourceFilter('uploaded' as any);
+
+    expect(useResourceManagerStore.getState()).toMatchObject({
+      selectAllState: 'none',
+      selectedFileIds: [],
+      sourceFilter: 'uploaded',
+    });
+    expect(useResourceManagerStore.getState().selectionTotal).toBeUndefined();
+    expect(useFileStore.getState().resourceList).toEqual([]);
+  });
+
+  it('should ignore re-picking the already active source filter', () => {
+    useFileStore.setState({ resourceList: [{ id: 'file-1' }] as any } as any);
+    useResourceManagerStore.setState({ sourceFilter: 'uploaded' as any });
+
+    useResourceManagerStore.getState().setSourceFilter('uploaded' as any);
+
+    // No clear, so clicking the active chip does not flash the list.
+    expect(useFileStore.getState().resourceList).toEqual([{ id: 'file-1' }]);
+  });
+
   it('should exclude deselected ids when resolving all-selected resources', async () => {
     useResourceManagerStore.setState({
       selectAllState: 'all',

@@ -11,7 +11,9 @@ class TaskService {
 
   list = async (params: {
     assigneeAgentId?: string;
+    automated?: boolean;
     hasGoal?: boolean;
+    orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
     parentIdentifier?: string;

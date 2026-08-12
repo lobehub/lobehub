@@ -6,13 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ApiKeyItem, type CreateApiKeyParams } from '@/types/apiKey';
 
+import { WorkspaceApiKeyPolicyContext } from '../WorkspaceApiKeyPolicyContext';
 import ApiKey from './ApiKey';
+import ScopeSelector from './ApiKeyModal/ScopeSelector';
 
 const hoisted = vi.hoisted(() => ({
   createApiKeyModal: vi.fn(),
   state: {
     activeWorkspaceId: null as string | null,
     allowed: true,
+    canCreateWorkspaceKey: true,
+    isWorkspaceAdmin: true,
     manageSettingsAllowed: true,
     reason: '',
   },
@@ -147,7 +151,15 @@ const renderPage = () => {
   return render(
     <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
       <QueryClientProvider client={queryClient}>
-        <ApiKey />
+        <WorkspaceApiKeyPolicyContext
+          value={{
+            canCreate: hoisted.state.canCreateWorkspaceKey,
+            isAdmin: hoisted.state.isWorkspaceAdmin,
+            memberCreation: hoisted.state.canCreateWorkspaceKey ? 'all_members' : 'admins_only',
+          }}
+        >
+          <ApiKey />
+        </WorkspaceApiKeyPolicyContext>
       </QueryClientProvider>
     </SWRConfig>,
   );
@@ -157,6 +169,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   hoisted.state.activeWorkspaceId = null;
   hoisted.state.allowed = true;
+  hoisted.state.canCreateWorkspaceKey = true;
+  hoisted.state.isWorkspaceAdmin = true;
   hoisted.state.manageSettingsAllowed = true;
   hoisted.state.reason = '';
   hoisted.trpc.getApiKeys.mockResolvedValue([makeItem()]);
@@ -171,6 +185,26 @@ const openDetail = async (name: string) => {
 };
 
 describe('ApiKey', () => {
+  it('offers MCP read/write and read-only usage scopes when access is restricted', () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <ScopeSelector
+        fullAccess={false}
+        selected={[]}
+        onFullAccessChange={vi.fn()}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+
+    const mcpGroup = screen.getByText('apikey.scopes.groups.mcp').parentElement!;
+    const usageGroup = screen.getByText('apikey.scopes.groups.usage').parentElement!;
+    expect(within(mcpGroup).getAllByRole('checkbox')).toHaveLength(2);
+    expect(within(usageGroup).getAllByRole('checkbox')).toHaveLength(1);
+
+    fireEvent.click(within(mcpGroup).getByRole('checkbox', { name: 'apikey.scopes.write' }));
+    expect(onSelectedChange).toHaveBeenCalledWith(['mcp:write', 'mcp:read']);
+  });
+
   it('shows loading, then empty state when the first fetch returns no keys', async () => {
     let resolveList!: (items: ApiKeyItem[]) => void;
     hoisted.trpc.getApiKeys.mockImplementation(
@@ -188,6 +222,20 @@ describe('ApiKey', () => {
     resolveList([]);
 
     expect(await screen.findByText('apikey.list.empty')).toBeInTheDocument();
+  });
+
+  it('explains the creation restriction when a workspace member has no keys', async () => {
+    hoisted.state.activeWorkspaceId = 'ws-1';
+    hoisted.state.canCreateWorkspaceKey = false;
+    hoisted.state.isWorkspaceAdmin = false;
+    hoisted.trpc.getApiKeys.mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText('apikey.list.restrictedEmpty.title')).toBeInTheDocument();
+    expect(screen.getByText('apikey.list.restrictedEmpty.desc')).toBeInTheDocument();
+    expect(screen.queryByText('apikey.list.empty')).toBeNull();
+    expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeDisabled();
   });
 
   it('renders fetched keys with their plaintext for the owner', async () => {
@@ -306,7 +354,7 @@ describe('ApiKey', () => {
     ).toBeDisabled();
   });
 
-  it('allows a workspace admin to manage another member key while keeping its secret masked', async () => {
+  it('allows a workspace admin to revoke another member key while keeping it read-only and masked', async () => {
     hoisted.state.activeWorkspaceId = 'ws-1';
     hoisted.trpc.getApiKeys.mockResolvedValue([
       makeItem(),
@@ -318,10 +366,14 @@ describe('ApiKey', () => {
     const otherRow = screen.getByText('Other Key').closest('tr')!;
     expect(within(otherRow).getByText(`sk-lh-${'*'.repeat(12)}`)).toBeInTheDocument();
 
-    // an admin can manage another member's key from its drawer
+    // an admin can centrally revoke another member's key, but only its creator
+    // can rename, disable, or edit the grants.
     const dialog = await openDetail('Other Key');
-    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeEnabled();
-    expect(within(dialog).getByRole('switch')).toBeEnabled();
+    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeDisabled();
+    expect(within(dialog).getByRole('switch')).toBeDisabled();
+    expect(
+      within(dialog).queryByRole('button', { name: 'apikey.detail.permissions.edit' }),
+    ).toBeNull();
     expect(
       within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }),
     ).toBeEnabled();
@@ -332,20 +384,33 @@ describe('ApiKey', () => {
     expect(within(mineRow).getByText('lb-plain-secret')).toBeInTheDocument();
   });
 
-  it('disables create and row actions for workspace members without settings permission', async () => {
+  it('allows workspace members to create and manage their own keys', async () => {
     hoisted.state.activeWorkspaceId = 'ws-1';
     hoisted.state.manageSettingsAllowed = false;
+    hoisted.state.isWorkspaceAdmin = false;
     renderPage();
     await screen.findByText('My Key');
 
-    expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeEnabled();
 
     const dialog = await openDetail('My Key');
-    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeDisabled();
-    expect(within(dialog).getByRole('switch')).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeEnabled();
+    expect(within(dialog).getByRole('switch')).toBeEnabled();
     expect(
       within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+  });
+
+  it('disables member creation when the workspace policy is admins only', async () => {
+    hoisted.state.activeWorkspaceId = 'ws-1';
+    hoisted.state.canCreateWorkspaceKey = false;
+    hoisted.state.isWorkspaceAdmin = false;
+    renderPage();
+    await screen.findByText('My Key');
+
+    const createButton = screen.getByRole('button', { name: 'apikey.list.actions.create' });
+    expect(createButton).toBeDisabled();
+    expect(createButton).toHaveAttribute('title', 'apikey.list.actions.creationRestricted');
   });
 
   it('shows the unavailable copy with tooltip when key decryption failed', async () => {
@@ -369,6 +434,15 @@ describe('ApiKey', () => {
     expect(screen.getByText('Bob')).toBeInTheDocument();
   });
 
+  it('hides the creator column from workspace members', async () => {
+    hoisted.state.activeWorkspaceId = 'ws-1';
+    hoisted.state.isWorkspaceAdmin = false;
+    renderPage();
+    await screen.findByText('My Key');
+
+    expect(screen.queryByRole('columnheader', { name: 'apikey.list.columns.creator' })).toBeNull();
+  });
+
   it('hides the creator column in personal mode', async () => {
     renderPage();
     await screen.findByText('My Key');
@@ -389,7 +463,9 @@ describe('ApiKey', () => {
 
   it('opens the detail drawer on row click listing only the granted scopes', async () => {
     hoisted.trpc.getApiKeys.mockResolvedValue([
-      makeItem({ scopes: ['model:read', 'model:invoke', 'agent:read'] }),
+      makeItem({
+        scopes: ['model:read', 'model:invoke', 'agent:read', 'mcp:read', 'mcp:write', 'usage:read'],
+      }),
     ]);
     renderPage();
     await screen.findByText('My Key');
@@ -400,7 +476,9 @@ describe('ApiKey', () => {
     expect(within(dialog).getByText('apikey.detail.title')).toBeInTheDocument();
     // one row per granted domain, actions collapsed — ungranted domains absent
     expect(within(dialog).getByText('apikey.scopes.groups.agent')).toBeInTheDocument();
+    expect(within(dialog).getByText('apikey.scopes.groups.mcp')).toBeInTheDocument();
     expect(within(dialog).getByText('apikey.scopes.groups.model')).toBeInTheDocument();
+    expect(within(dialog).getByText('apikey.scopes.groups.usage')).toBeInTheDocument();
     expect(within(dialog).queryByText('apikey.scopes.groups.chat')).toBeNull();
     expect(within(dialog).queryByText('apikey.scopes.groups.file')).toBeNull();
     // the model row collapses read + invoke onto one line (the `t` mock echoes
@@ -414,8 +492,32 @@ describe('ApiKey', () => {
         'apikey.scopes.invoke',
       ].join(''),
     );
-    // read-only: no editable scope controls in the detail view
+    // the grant summary stays compact until the creator explicitly edits it
     expect(within(dialog).queryAllByRole('checkbox')).toHaveLength(0);
+    expect(
+      within(dialog).getByRole('button', { name: 'apikey.detail.permissions.edit' }),
+    ).toBeEnabled();
+  });
+
+  it('edits a key scope in place and refreshes the list', async () => {
+    hoisted.trpc.getApiKeys.mockResolvedValue([makeItem({ scopes: ['agent:read'] })]);
+    renderPage();
+    await screen.findByText('My Key');
+
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.edit' }));
+    const scopeCheckboxes = within(dialog).getAllByRole('checkbox');
+    fireEvent.click(scopeCheckboxes[0]);
+    fireEvent.click(scopeCheckboxes[2]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.save' }));
+
+    await waitFor(() =>
+      expect(hoisted.trpc.updateApiKey).toHaveBeenCalledWith({
+        id: 'key-1',
+        value: { scopes: ['chat:read'] },
+      }),
+    );
+    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
   });
 
   it('shows the full-access copy instead of the grant list for a full-access key', async () => {

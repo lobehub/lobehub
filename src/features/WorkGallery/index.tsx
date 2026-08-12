@@ -5,19 +5,16 @@ import { Avatar, Center, Empty, Flexbox, Skeleton } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import { openDocumentModal } from '@/features/DocumentModal/loader';
-import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
+import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -184,7 +181,6 @@ interface WorkGalleryProps {
 
 const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   const { t, i18n } = useTranslation('file');
-  const navigate = useWorkspaceAwareNavigate();
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   useFetchAgentList();
 
@@ -236,33 +232,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     }));
   }, [filteredItems, i18n.language, t]);
 
-  const handleOpen = useCallback(
-    (item: WorkSummaryItem) => {
-      const openTarget = getWorkTypeDescriptor(item).getOpenTarget(item);
-      if (!openTarget) return;
-
-      switch (openTarget.kind) {
-        case 'document': {
-          void openDocumentModal(openTarget.documentId);
-          return;
-        }
-        case 'external': {
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        case 'filePreview': {
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        case 'task': {
-          navigate(taskDetailPath(openTarget.identifier));
-        }
-      }
-    },
-    [navigate],
-  );
+  const handleOpen = useOpenWork();
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

@@ -85,6 +85,18 @@ export interface ExecAgentAppContext {
    * itself.
    */
   editingAgentId?: string;
+  /**
+   * When scope is 'group_agent_builder', the ID of the group being edited (the
+   * group whose Profile page the user opened the builder panel on).
+   *
+   * Deliberately NOT `groupId`: that field marks the run as a *group chat* turn
+   * and gets stamped onto the created topic and messages, which would pull the
+   * builder's private side-conversation into the group's message read path
+   * (`MessageModel.query` filters group chats by `messages.groupId`). The
+   * builder conversation stays owned by the builtin builder agent; only the
+   * group-agent-builder tool runtime and its context injector read this field.
+   */
+  editingGroupId?: string;
   /** Group ID for group chat */
   groupId?: string | null;
   /**

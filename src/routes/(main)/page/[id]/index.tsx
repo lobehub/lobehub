@@ -5,7 +5,7 @@ import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 import { createStoreUpdater } from 'zustand-utils';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import PageExplorer from '@/features/PageExplorer';
 import { usePageStore } from '@/store/page';
 import { getIdFromIdentifier } from '@/utils/identifier';
@@ -23,7 +23,7 @@ const PagesPage = memo(() => {
   storeUpdater('selectedPageId', pageId);
 
   return (
-    <Suspense fallback={<Loading debugId="PagesPage" />}>
+    <Suspense fallback={<SurfaceSkeleton variant={'editor'} />}>
       <PageExplorer pageId={pageId} />
     </Suspense>
   );

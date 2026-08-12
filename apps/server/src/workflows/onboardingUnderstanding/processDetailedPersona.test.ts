@@ -1,10 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeStepResult } from '@/server/workflows/testing/stepContext';
+
 import {
   failRunningDetailedUnderstandingPersona,
   processDetailedUnderstandingPersona,
 } from './processDetailedPersona';
+
+const telemetry = vi.hoisted(() => ({
+  recordSessionDuration: vi.fn(),
+}));
 
 const errors = vi.hoisted(() => {
   class DomainError extends Error {}
@@ -21,11 +27,19 @@ vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/server/services/understanding/service', () => ({
   createUnderstandingService: vi.fn(),
 }));
+vi.mock('@lobechat/observability-otel/modules/onboarding-understanding', () => ({
+  observeOnboardingUnderstandingOperation: async <Result>(
+    _attributes: unknown,
+    operation: () => Promise<Result>,
+  ) => operation(),
+  recordOnboardingUnderstandingEndToEndDuration: telemetry.recordSessionDuration,
+}));
 
 const payload = {
   responseLanguage: 'zh-CN',
   sessionId: 'session-1',
   sourceFingerprint: 'github@1',
+  startedAt: 1000,
   topicId: 'topic-1',
   userId: 'user-1',
 };
@@ -42,7 +56,7 @@ describe('processDetailedUnderstandingPersona', () => {
       requestPayload: payload,
       run: async <T>(stepName: string, action: () => Promise<T>) => {
         steps.push(stepName);
-        return action();
+        return serializeStepResult(await action());
       },
     };
 
@@ -52,6 +66,8 @@ describe('processDetailedUnderstandingPersona', () => {
       }),
     ).resolves.toEqual({ published: true, sourceFingerprint: 'github@1' });
     expect(steps).toEqual(['detailed-persona:process']);
+    /** @example expect(recordSessionDuration).toHaveBeenCalledWith(startedAt); */
+    expect(telemetry.recordSessionDuration).toHaveBeenCalledWith(1000);
   });
 });
 
