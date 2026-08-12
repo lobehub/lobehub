@@ -22,7 +22,7 @@ describe('platform command scanning', () => {
       available: true,
       path: '/resolved/bin/openclaw',
       resolvedPathEnv: '/resolved/bin:/usr/bin',
-      version: 'openclaw 1.2.3',
+      version: '1.2.3',
     });
 
     await expect(resolveRemotePlatformCommand('openclaw')).resolves.toEqual({
@@ -41,7 +41,7 @@ describe('platform command scanning', () => {
       available: true,
       path: '/private/bin/hermes',
       resolvedPathEnv: '/private/bin:/usr/bin',
-      version: 'Hermes Agent v0.9.0 (build 1)',
+      version: '0.9.0',
     });
 
     await expect(probeRemotePlatform('hermes')).resolves.toEqual({

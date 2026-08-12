@@ -137,6 +137,7 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
   },
   writing: {
     instructionPrinciples: [
+      'The selected task will start immediately after onboarding confirmation. Write a self-contained first-run instruction that the assigned agent can execute without waiting for another user message.',
       'Write two to four sentences addressed directly to an autonomous agent. State the background work it can perform, the concrete private deliverable it must return, and the completion criteria.',
       'Select only the highest-value recommendations for this provider. Rank evidence by urgency, recurrence, user impact, and leverage; when the limit is two, return the two strongest distinct candidates in that order. Skip low-signal, generic, duplicated, or merely convenient work.',
       'Include enough project, person, or subject context for the Inbox agent to execute the task without guessing which similarly named work item is intended.',
