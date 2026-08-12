@@ -92,12 +92,13 @@ const AgentSelect = memo(() => {
       const scope = getCacheScope();
       const observedAt = nextProjectionObservedAt();
       agentService
-        .getAgentConfigById(agentId)
-        .then((config) => {
-          if (config) {
+        .getAgentConfigByIdWithAccess(agentId)
+        .then((result) => {
+          if (result) {
             getProjectionStoreState().commitAgentConfig(
               scope,
-              { ...config, id: config.id ?? agentId },
+              { ...result.data, id: result.data.id ?? agentId },
+              result.access,
               'network',
               observedAt,
             );

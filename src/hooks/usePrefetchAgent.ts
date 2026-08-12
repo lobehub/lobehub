@@ -25,18 +25,19 @@ export const usePrefetchAgent = () => {
       getActiveWorkspaceId(),
     ) as readonly unknown[];
     const observedAt = nextProjectionObservedAt();
-    const request = agentService.getAgentConfigById(agentId).then((data) => {
-      if (data) {
+    const request = agentService.getAgentConfigByIdWithAccess(agentId).then((result) => {
+      if (result) {
         getProjectionStoreState().commitAgentConfig(
           scope,
-          { ...data, id: data.id ?? agentId },
+          { ...result.data, id: result.data.id ?? agentId },
+          result.access,
           'network',
           observedAt,
         );
       } else {
         getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
       }
-      return data;
+      return result?.data;
     });
 
     // Populate the SWR cache without triggering re-renders on consuming hooks

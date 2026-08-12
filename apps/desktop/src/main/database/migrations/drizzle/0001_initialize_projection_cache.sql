@@ -14,6 +14,9 @@ CREATE TABLE `projection_agents` (
 	`lifecycle_data` text,
 	`lifecycle_observed_at` integer,
 	`lifecycle_source` text,
+	`metadata_data` text,
+	`metadata_observed_at` integer,
+	`metadata_source` text,
 	`profile_data` text,
 	`profile_observed_at` integer,
 	`profile_source` text,
@@ -50,6 +53,10 @@ CREATE TABLE `projection_agents` (
 	CONSTRAINT "projection_agents_lifecycle_data_json" CHECK("projection_agents"."lifecycle_data" IS NULL OR json_valid("projection_agents"."lifecycle_data")),
 	CONSTRAINT "projection_agents_lifecycle_observed_at_positive" CHECK("projection_agents"."lifecycle_observed_at" IS NULL OR "projection_agents"."lifecycle_observed_at" >= 0),
 	CONSTRAINT "projection_agents_lifecycle_source_valid" CHECK("projection_agents"."lifecycle_source" IS NULL OR "projection_agents"."lifecycle_source" IN ('mutation', 'network', 'realtime')),
+	CONSTRAINT "projection_agents_metadata_complete" CHECK((("projection_agents"."metadata_data" IS NULL) = ("projection_agents"."metadata_observed_at" IS NULL)) AND (("projection_agents"."metadata_data" IS NULL) = ("projection_agents"."metadata_source" IS NULL))),
+	CONSTRAINT "projection_agents_metadata_data_json" CHECK("projection_agents"."metadata_data" IS NULL OR json_valid("projection_agents"."metadata_data")),
+	CONSTRAINT "projection_agents_metadata_observed_at_positive" CHECK("projection_agents"."metadata_observed_at" IS NULL OR "projection_agents"."metadata_observed_at" >= 0),
+	CONSTRAINT "projection_agents_metadata_source_valid" CHECK("projection_agents"."metadata_source" IS NULL OR "projection_agents"."metadata_source" IN ('mutation', 'network', 'realtime')),
 	CONSTRAINT "projection_agents_profile_complete" CHECK((("projection_agents"."profile_data" IS NULL) = ("projection_agents"."profile_observed_at" IS NULL)) AND (("projection_agents"."profile_data" IS NULL) = ("projection_agents"."profile_source" IS NULL))),
 	CONSTRAINT "projection_agents_profile_data_json" CHECK("projection_agents"."profile_data" IS NULL OR json_valid("projection_agents"."profile_data")),
 	CONSTRAINT "projection_agents_profile_observed_at_positive" CHECK("projection_agents"."profile_observed_at" IS NULL OR "projection_agents"."profile_observed_at" >= 0),
@@ -129,6 +136,9 @@ CREATE TABLE `projection_chat_groups` (
 	`membership_data` text,
 	`membership_observed_at` integer,
 	`membership_source` text,
+	`sidebar_data` text,
+	`sidebar_observed_at` integer,
+	`sidebar_source` text,
 	`entity_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
 	`scope` text NOT NULL,
@@ -155,7 +165,11 @@ CREATE TABLE `projection_chat_groups` (
 	CONSTRAINT "projection_chat_groups_membership_complete" CHECK((("projection_chat_groups"."membership_data" IS NULL) = ("projection_chat_groups"."membership_observed_at" IS NULL)) AND (("projection_chat_groups"."membership_data" IS NULL) = ("projection_chat_groups"."membership_source" IS NULL))),
 	CONSTRAINT "projection_chat_groups_membership_data_json" CHECK("projection_chat_groups"."membership_data" IS NULL OR json_valid("projection_chat_groups"."membership_data")),
 	CONSTRAINT "projection_chat_groups_membership_observed_at_positive" CHECK("projection_chat_groups"."membership_observed_at" IS NULL OR "projection_chat_groups"."membership_observed_at" >= 0),
-	CONSTRAINT "projection_chat_groups_membership_source_valid" CHECK("projection_chat_groups"."membership_source" IS NULL OR "projection_chat_groups"."membership_source" IN ('mutation', 'network', 'realtime'))
+	CONSTRAINT "projection_chat_groups_membership_source_valid" CHECK("projection_chat_groups"."membership_source" IS NULL OR "projection_chat_groups"."membership_source" IN ('mutation', 'network', 'realtime')),
+	CONSTRAINT "projection_chat_groups_sidebar_complete" CHECK((("projection_chat_groups"."sidebar_data" IS NULL) = ("projection_chat_groups"."sidebar_observed_at" IS NULL)) AND (("projection_chat_groups"."sidebar_data" IS NULL) = ("projection_chat_groups"."sidebar_source" IS NULL))),
+	CONSTRAINT "projection_chat_groups_sidebar_data_json" CHECK("projection_chat_groups"."sidebar_data" IS NULL OR json_valid("projection_chat_groups"."sidebar_data")),
+	CONSTRAINT "projection_chat_groups_sidebar_observed_at_positive" CHECK("projection_chat_groups"."sidebar_observed_at" IS NULL OR "projection_chat_groups"."sidebar_observed_at" >= 0),
+	CONSTRAINT "projection_chat_groups_sidebar_source_valid" CHECK("projection_chat_groups"."sidebar_source" IS NULL OR "projection_chat_groups"."sidebar_source" IN ('mutation', 'network', 'realtime'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `projection_chat_groups_scope_entity_unique` ON `projection_chat_groups` (`scope`,`entity_id`);--> statement-breakpoint

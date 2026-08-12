@@ -4,7 +4,7 @@ export * from './core/scope';
 export type { AgentProjectionAction } from './modules/agent/action';
 export * from './modules/agent/contracts';
 export * from './modules/agent/hooks';
-export type { AgentProjectionInput } from './modules/agent/ingestors';
+export type { AgentProjectionCoverage, AgentProjectionInput } from './modules/agent/ingestors';
 export {
   type AgentProjectionView,
   selectAgentDirectory,
@@ -40,6 +40,7 @@ export {
 export * from './modules/chat/viewHooks';
 export type { ChatGroupProjectionAction } from './modules/chatGroup/action';
 export * from './modules/chatGroup/contracts';
+export type { ChatGroupDetailCoverage } from './modules/chatGroup/ingestors';
 export {
   selectChatGroupDetail,
   selectChatGroupItem,

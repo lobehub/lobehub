@@ -481,6 +481,54 @@ describe('agentGroupRouter', () => {
       expect(result?.config).toEqual({ systemPrompt: 'editable group prompt' });
       expect(result?.agents[0]).not.toHaveProperty('systemRole');
     });
+
+    it('reports group and per-member access for Projection ingestion', async () => {
+      const fullGroupDetail = {
+        agents: [
+          {
+            id: 'agent-1',
+            model: 'private-model',
+            systemRole: 'private member prompt',
+            title: 'Agent 1',
+            userId: 'creator-1',
+            visibility: 'public',
+            workspaceId: 'ws-1',
+          },
+        ],
+        config: { systemPrompt: 'editable group prompt' },
+        id: 'group-1',
+        title: 'Test Group',
+        userId: 'creator-1',
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      };
+      chatGroupServiceMock.getGroupDetail.mockResolvedValue(fullGroupDetail);
+      vi.mocked(canPerformResourceAction)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+
+      const caller = agentGroupRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.getGroupDetailWithAccess({ id: 'group-1' });
+
+      expect(result).toEqual({
+        access: 'full',
+        data: {
+          ...fullGroupDetail,
+          agents: [
+            {
+              id: 'agent-1',
+              model: 'private-model',
+              title: 'Agent 1',
+              userId: 'creator-1',
+              visibility: 'public',
+              workspaceId: 'ws-1',
+            },
+          ],
+        },
+        memberAccess: { 'agent-1': 'profile' },
+      });
+    });
   });
 
   describe('getGroupAgents', () => {

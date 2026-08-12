@@ -51,11 +51,12 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (agentState.agentMap[agentId]) return;
   const scope = getCacheScope();
   const observedAt = nextProjectionObservedAt();
-  const config = await agentService.getAgentConfigById(agentId);
-  if (config) {
+  const result = await agentService.getAgentConfigByIdWithAccess(agentId);
+  if (result) {
     getProjectionStoreState().commitAgentConfig(
       scope,
-      { ...config, id: config.id ?? agentId },
+      { ...result.data, id: result.data.id ?? agentId },
+      result.access,
       'network',
       observedAt,
     );

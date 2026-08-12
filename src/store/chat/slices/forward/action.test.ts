@@ -19,6 +19,10 @@ describe('ChatForwardAction', () => {
     vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
       async (id) => ({ id }) as never,
     );
+    vi.spyOn(agentService, 'getAgentConfigByIdWithAccess').mockImplementation(async (id) => {
+      const data = await agentService.getAgentConfigById(id);
+      return data ? ({ access: 'full', data } as never) : null;
+    });
   });
 
   afterEach(() => {
@@ -113,6 +117,7 @@ describe('ChatForwardAction', () => {
     getProjectionStoreState().commitAgentConfig(
       getCacheScope(),
       { id: 'agent-a', model: 'canonical-model', title: 'Edited in DevDock' },
+      'full',
       'mutation',
     );
     resolveConfig!({ id: 'agent-a', model: 'stale-model', title: 'Stale network title' });
@@ -145,6 +150,7 @@ describe('ChatForwardAction', () => {
     getProjectionStoreState().commitAgentConfig(
       getCacheScope(),
       { id: 'agent-a', model: 'canonical-model', title: 'Edited in DevDock' },
+      'full',
       'mutation',
     );
     resolveConfig!(null);

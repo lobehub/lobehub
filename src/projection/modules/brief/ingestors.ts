@@ -57,7 +57,7 @@ const briefAgentRecord = (
   item: BriefItem,
   observation: ProjectionObservation,
 ): AgentProjection[] =>
-  item.agent ? [agentProjectionRecord(item.agent, observation, 'summary')] : [];
+  item.agent ? [agentProjectionRecord(item.agent, observation, 'identity')] : [];
 
 const briefTaskRecord = (item: BriefItem, observation: ProjectionObservation): TaskProjection[] => {
   if (!item.taskId) return [];

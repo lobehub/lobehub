@@ -43,7 +43,7 @@ export const homeSidebarViewContract: ProjectionViewContract<Record<string, neve
       projectionRecordRequest(
         'chatGroup',
         refs.filter((ref) => ref.kind === 'chatGroup').map((ref) => ref.id),
-        ['access', 'identity'],
+        ['access', 'identity', 'sidebar'],
       ),
     ];
   },

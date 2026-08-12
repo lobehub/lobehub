@@ -35,7 +35,7 @@ export class ChatGroupCurdAction {
   #commitGroupMutation = (id: string): void => {
     const group = this.#get().groupMap[id];
     if (!group) return;
-    getProjectionStoreState().commitChatGroupDetail(getCacheScope(), group, 'mutation');
+    getProjectionStoreState().commitChatGroupItem(getCacheScope(), group, 'mutation');
   };
 
   /**

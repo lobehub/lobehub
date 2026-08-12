@@ -108,6 +108,7 @@ describe('Home projection ingestors', () => {
             workspaceId: sidebarAgent.workspaceId ?? undefined,
           },
           networkObservation,
+          'summary',
         ),
       ],
     });
@@ -221,6 +222,7 @@ describe('Home projection ingestors', () => {
         agentProjectionRecord(
           { id: 'agent-1', name: 'Ada', title: 'Researcher' },
           networkObservation,
+          'identity',
         ),
       ],
     });

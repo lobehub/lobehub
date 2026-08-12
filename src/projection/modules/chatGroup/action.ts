@@ -5,7 +5,12 @@ import type { StoreSetter } from '@/store/types';
 import { nextProjectionObservedAt, projectionObservation } from '../../core/ingest';
 import { removeEntityFromProjectionIndex } from '../../records/indexMutations';
 import type { ProjectionStore } from '../../store';
-import { chatGroupProjectionRecord, ingestChatGroupDetail, ingestChatGroups } from './ingestors';
+import {
+  type ChatGroupDetailCoverage,
+  chatGroupProjectionRecord,
+  ingestChatGroupDetail,
+  ingestChatGroups,
+} from './ingestors';
 
 type Setter = StoreSetter<ProjectionStore>;
 
@@ -13,6 +18,7 @@ export interface ChatGroupProjectionAction {
   commitChatGroupDetail: (
     scope: string,
     item: AgentGroupDetail,
+    coverage: ChatGroupDetailCoverage,
     source?: ProjectionSource,
     observedAt?: number,
   ) => void;
@@ -49,12 +55,13 @@ class ChatGroupProjectionActionImpl implements ChatGroupProjectionAction {
   commitChatGroupDetail = (
     scope: string,
     item: AgentGroupDetail,
+    coverage: ChatGroupDetailCoverage,
     source: ProjectionSource = 'network',
     observedAt = nextProjectionObservedAt(),
   ): void => {
     this.#get().internal_commitProjection(
       scope,
-      ingestChatGroupDetail(item, projectionObservation(source, observedAt)),
+      ingestChatGroupDetail(item, projectionObservation(source, observedAt), coverage),
     );
   };
 
@@ -65,7 +72,7 @@ class ChatGroupProjectionActionImpl implements ChatGroupProjectionAction {
     observedAt = nextProjectionObservedAt(),
   ): void => {
     this.#get().internal_commitProjection(scope, {
-      records: [chatGroupProjectionRecord(item, projectionObservation(source, observedAt))],
+      records: [chatGroupProjectionRecord(item, projectionObservation(source, observedAt), 'full')],
     });
   };
 

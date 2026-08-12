@@ -127,6 +127,7 @@ describe('Projection legacy store bridge', () => {
         systemRole: 'System role',
         title: 'Network agent',
       },
+      'full',
       'network',
       100,
     );
@@ -151,7 +152,15 @@ describe('Projection legacy store bridge', () => {
       updatedAt: new Date(100),
       userId: 'user-1',
     } as AgentGroupDetail;
-    useProjectionStore.getState().commitChatGroupDetail(SCOPE, group, 'network', 100);
+    useProjectionStore
+      .getState()
+      .commitChatGroupDetail(
+        SCOPE,
+        group,
+        { group: 'full', members: { 'agent-1': 'full' } },
+        'network',
+        100,
+      );
 
     const task = {
       assigneeAgentId: 'agent-1',

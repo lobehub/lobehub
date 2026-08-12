@@ -172,6 +172,7 @@ export class AgentSliceActionImpl {
     getProjectionStoreState().commitAgentConfig(
       projectionScope,
       { ...config, id: result.agentId } as unknown as AgentProjectionInput,
+      'identity',
       'mutation',
     );
     this.#get().invalidateAvailableAgents();
@@ -423,11 +424,13 @@ export class AgentSliceActionImpl {
       swrKey,
       async () => {
         const observedAt = nextProjectionObservedAt();
-        const data = await agentService.getAgentConfigById(agentId);
-        if (data) {
+        const result = await agentService.getAgentConfigByIdWithAccess(agentId);
+        const data = result?.data;
+        if (result) {
           getProjectionStoreState().commitAgentConfig(
             scope,
-            { ...data, id: data.id ?? agentId },
+            { ...result.data, id: result.data.id ?? agentId },
+            result.access,
             'network',
             observedAt,
           );
@@ -461,6 +464,7 @@ export class AgentSliceActionImpl {
             projectionStore.commitAgentConfig(
               scope,
               { ...data, id: data.id ?? agentId },
+              'profile',
               'network',
               0,
             );
@@ -606,11 +610,13 @@ export class AgentSliceActionImpl {
       swrKey,
       async () => {
         const observedAt = nextProjectionObservedAt();
-        const data = await agentService.getAgentConfigById(agentId);
-        if (data) {
+        const result = await agentService.getAgentConfigByIdWithAccess(agentId);
+        const data = result?.data;
+        if (result) {
           getProjectionStoreState().commitAgentConfig(
             scope,
-            { ...data, id: data.id ?? agentId },
+            { ...result.data, id: result.data.id ?? agentId },
+            result.access,
             'network',
             observedAt,
           );
@@ -636,6 +642,7 @@ export class AgentSliceActionImpl {
             projectionStore.commitAgentConfig(
               scope,
               { ...data, id: data.id ?? agentId },
+              'profile',
               'network',
               0,
             );
@@ -790,6 +797,7 @@ export class AgentSliceActionImpl {
     getProjectionStoreState().commitAgentConfig(
       getCacheScope(),
       { ...agentMap[id], id } as unknown as AgentProjectionInput,
+      'full',
       options?.source ?? 'mutation',
       options?.observedAt,
     );

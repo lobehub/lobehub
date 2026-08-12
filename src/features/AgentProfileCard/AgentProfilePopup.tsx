@@ -102,11 +102,13 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       async () => {
         const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
-        const data = await agentService.getAgentConfigById(agentId);
-        if (data) {
+        const result = await agentService.getAgentConfigByIdWithAccess(agentId);
+        const data = result?.data;
+        if (result) {
           getProjectionStoreState().commitAgentConfig(
             scope,
-            { ...data, id: data.id ?? agentId },
+            { ...result.data, id: result.data.id ?? agentId },
+            result.access,
             'network',
             observedAt,
           );

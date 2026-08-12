@@ -145,11 +145,13 @@ const getPreviewData = async (
     case 'agent': {
       const scope = getCacheScope();
       const observedAt = nextProjectionObservedAt();
-      const data = await agentService.getAgentConfigById(reference.agentId);
-      if (data) {
+      const result = await agentService.getAgentConfigByIdWithAccess(reference.agentId);
+      const data = result?.data;
+      if (result) {
         getProjectionStoreState().commitAgentConfig(
           scope,
-          { ...data, id: data.id ?? reference.agentId },
+          { ...result.data, id: result.data.id ?? reference.agentId },
+          result.access,
           'network',
           observedAt,
         );

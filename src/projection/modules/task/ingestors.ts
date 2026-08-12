@@ -50,7 +50,7 @@ export const ingestTaskList = (
     records: [
       ...items.map((item) => taskListProjectionRecord(item, observation)),
       ...Array.from(participantAgents.values(), (agent) =>
-        agentProjectionRecord(agent, observation, 'summary'),
+        agentProjectionRecord(agent, observation, 'identity'),
       ),
     ],
   };

@@ -381,11 +381,12 @@ export class ConversationLifecycleActionImpl {
     if (directMentionRoute && !agentConfig) {
       const scope = getCacheScope();
       const observedAt = nextProjectionObservedAt();
-      const targetAgentConfig = await agentService.getAgentConfigById(agentId);
-      if (targetAgentConfig) {
+      const result = await agentService.getAgentConfigByIdWithAccess(agentId);
+      if (result) {
         getProjectionStoreState().commitAgentConfig(
           scope,
-          { ...targetAgentConfig, id: targetAgentConfig.id ?? agentId },
+          { ...result.data, id: result.data.id ?? agentId },
+          result.access,
           'network',
           observedAt,
         );

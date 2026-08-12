@@ -43,11 +43,13 @@ export class BuiltinAgentSliceActionImpl {
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
     const scope = getCacheScope();
     const observedAt = nextProjectionObservedAt();
-    const data = await agentService.getBuiltinAgent(slug);
-    if (data?.id) {
+    const result = await agentService.getBuiltinAgentWithAccess(slug);
+    const data = result?.data;
+    if (data?.id && result) {
       getProjectionStoreState().commitAgentConfig(
         scope,
         { ...data, id: data.id },
+        result.access,
         'network',
         observedAt,
       );
@@ -77,11 +79,13 @@ export class BuiltinAgentSliceActionImpl {
       async () => {
         const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
-        const data = await agentService.getBuiltinAgent(slug);
-        if (data?.id) {
+        const result = await agentService.getBuiltinAgentWithAccess(slug);
+        const data = result?.data;
+        if (data?.id && result) {
           getProjectionStoreState().commitAgentConfig(
             scope,
             { ...data, id: data.id },
+            result.access,
             'network',
             observedAt,
           );
@@ -96,7 +100,13 @@ export class BuiltinAgentSliceActionImpl {
             const projectionStore = getProjectionStoreState();
             let record = projectionStore.scopes[scope]?.records.agent[data.id];
             if (!record) {
-              projectionStore.commitAgentConfig(scope, { ...data, id: data.id }, 'network', 0);
+              projectionStore.commitAgentConfig(
+                scope,
+                { ...data, id: data.id },
+                'profile',
+                'network',
+                0,
+              );
               record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
             }
             // Update builtinAgentIdMap with the agent id

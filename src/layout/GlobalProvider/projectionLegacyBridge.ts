@@ -127,7 +127,11 @@ const syncChatGroups = (scope: ProjectionScopeState): void => {
     const detail = selectChatGroupDetail(scope, id);
     const item = detail ?? selectChatGroupItem(record);
     if (item) {
-      groupMap[id] = detail ?? { ...item, agents: groupMap[id]?.agents ?? [] };
+      groupMap[id] = detail ?? {
+        ...groupMap[id],
+        ...item,
+        agents: groupMap[id]?.agents ?? [],
+      };
       delete groupNotFoundMap[id];
     }
   }

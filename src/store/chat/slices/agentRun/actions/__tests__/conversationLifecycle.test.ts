@@ -75,6 +75,10 @@ beforeEach(() => {
   const sessionStore = getSessionStoreState();
   vi.spyOn(sessionStore, 'triggerSessionUpdate').mockResolvedValue(undefined);
   vi.spyOn(agentService, 'getAgentConfigById').mockResolvedValue(createMockAgentConfig() as any);
+  vi.spyOn(agentService, 'getAgentConfigByIdWithAccess').mockImplementation(async (agentId) => {
+    const data = await agentService.getAgentConfigById(agentId);
+    return data ? ({ access: 'full', data } as never) : null;
+  });
   useUserStore.setState({ workspaceUserPreference: {} });
   useFileStore.setState({ chatContextSelectionsByContext: {} });
 

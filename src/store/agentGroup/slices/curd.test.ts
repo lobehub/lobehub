@@ -14,6 +14,7 @@ import { useAgentGroupStore } from '../store';
 vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
     getGroupDetail: vi.fn(),
+    getGroupDetailWithAccess: vi.fn(),
     updateGroup: vi.fn(),
   },
 }));
@@ -128,7 +129,7 @@ describe('ChatGroupCurdSlice', () => {
 
   describe('useFetchGroupDetail', () => {
     it('should remove stale local group data and mark not-found when detail revalidation reports not found', async () => {
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(null as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue(null);
 
       const { result } = renderHook(() => useAgentGroupStore());
 

@@ -7,49 +7,81 @@ import type {
 } from '@lobechat/types';
 
 import { projectionFragment, type ProjectionObservation } from '../../core/ingest';
-import { agentProjectionRecord } from '../agent/ingestors';
+import { type AgentProjectionCoverage, agentProjectionRecord } from '../agent/ingestors';
 
 type ChatGroupProjectionInput = Partial<ChatGroupItem> & {
   groupAvatar?: string | null;
   id: string;
 };
 
-export const chatGroupProjectionRecord = (
+export type ChatGroupProjectionCoverage = 'full' | 'profile' | 'summary';
+
+export interface ChatGroupDetailCoverage {
+  group: Exclude<ChatGroupProjectionCoverage, 'summary'>;
+  members: Record<string, Extract<AgentProjectionCoverage, 'full' | 'profile'>>;
+}
+
+const summaryFragments = (
   item: ChatGroupProjectionInput,
   observation: ProjectionObservation,
-  detail?: AgentGroupDetail,
-): ChatGroupProjection => ({
-  fragments: {
-    access: projectionFragment(
-      { userId: item.userId, visibility: item.visibility, workspaceId: item.workspaceId },
-      observation,
-    ),
+): ChatGroupProjection['fragments'] => ({
+  access: projectionFragment(
+    { userId: item.userId, visibility: item.visibility, workspaceId: item.workspaceId },
+    observation,
+  ),
+  identity: projectionFragment(
+    {
+      avatar: item.avatar,
+      backgroundColor: item.backgroundColor,
+      description: item.description,
+      title: item.title ?? null,
+    },
+    observation,
+  ),
+  lifecycle: projectionFragment(
+    { accessedAt: item.accessedAt, createdAt: item.createdAt, updatedAt: item.updatedAt },
+    observation,
+  ),
+});
+
+const configurationFragment = (
+  item: ChatGroupProjectionInput,
+  observation: ProjectionObservation,
+  coverage: Exclude<ChatGroupProjectionCoverage, 'summary'>,
+): ChatGroupProjection['fragments'] => {
+  const config =
+    coverage === 'profile' && item.config
+      ? {
+          openingMessage: item.config.openingMessage,
+          openingQuestions: item.config.openingQuestions,
+        }
+      : item.config;
+
+  return {
     configuration: projectionFragment(
       {
         clientId: item.clientId,
-        config: item.config,
-        content: item.content,
-        editorData: item.editorData,
+        config,
+        content: coverage === 'full' ? item.content : undefined,
+        editorData: coverage === 'full' ? item.editorData : undefined,
         groupId: item.groupId,
         marketIdentifier: item.marketIdentifier,
         pinned: item.pinned,
       },
       observation,
     ),
-    identity: projectionFragment(
-      {
-        avatar: item.avatar,
-        backgroundColor: item.backgroundColor,
-        description: item.description,
-        groupAvatar: item.groupAvatar,
-        title: item.title ?? null,
-      },
-      observation,
-    ),
-    lifecycle: projectionFragment(
-      { accessedAt: item.accessedAt, createdAt: item.createdAt, updatedAt: item.updatedAt },
-      observation,
-    ),
+  };
+};
+
+export const chatGroupProjectionRecord = (
+  item: ChatGroupProjectionInput,
+  observation: ProjectionObservation,
+  coverage: ChatGroupProjectionCoverage,
+  detail?: AgentGroupDetail,
+): ChatGroupProjection => ({
+  fragments: {
+    ...summaryFragments(item, observation),
+    ...(coverage === 'summary' ? {} : configurationFragment(item, observation, coverage)),
     ...(detail
       ? {
           membership: projectionFragment(
@@ -81,15 +113,18 @@ export const ingestChatGroups = (
       ...observation,
     } satisfies ChatGroupListIndex,
   ],
-  records: items.map((item) => chatGroupProjectionRecord(item, observation)),
+  records: items.map((item) => chatGroupProjectionRecord(item, observation, 'summary')),
 });
 
 export const ingestChatGroupDetail = (
   item: AgentGroupDetail,
   observation: ProjectionObservation,
+  coverage: ChatGroupDetailCoverage,
 ): ProjectionCommit => ({
   records: [
-    chatGroupProjectionRecord(item, observation, item),
-    ...item.agents.map((agent) => agentProjectionRecord(agent, observation)),
+    chatGroupProjectionRecord(item, observation, coverage.group, item),
+    ...item.agents.map((agent) =>
+      agentProjectionRecord(agent, observation, coverage.members[agent.id] ?? 'profile'),
+    ),
   ],
 });

@@ -6,13 +6,13 @@ import { AGENT_FULL_FRAGMENTS } from '../agent/contracts';
 
 const CHAT_GROUP_LIST_FRAGMENTS = [
   'access',
-  'configuration',
   'identity',
   'lifecycle',
 ] as const satisfies readonly ProjectionFragmentName<'chatGroup'>[];
 
 const CHAT_GROUP_DETAIL_FRAGMENTS = [
   ...CHAT_GROUP_LIST_FRAGMENTS,
+  'configuration',
   'membership',
 ] as const satisfies readonly ProjectionFragmentName<'chatGroup'>[];
 

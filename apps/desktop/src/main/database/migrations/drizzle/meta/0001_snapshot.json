@@ -6,7 +6,7 @@
   },
   "dialect": "sqlite",
   "enums": {},
-  "id": "92c3bf6b-2a2f-4bd8-84cb-391079cae7d8",
+  "id": "1929338f-45e4-4bde-b05f-30f8ae7e8b07",
   "internal": {
     "indexes": {}
   },
@@ -139,6 +139,27 @@
         },
         "lifecycle_source": {
           "name": "lifecycle_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata_data": {
+          "name": "metadata_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata_observed_at": {
+          "name": "metadata_observed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata_source": {
+          "name": "metadata_source",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -347,6 +368,22 @@
         "projection_agents_lifecycle_source_valid": {
           "name": "projection_agents_lifecycle_source_valid",
           "value": "\"projection_agents\".\"lifecycle_source\" IS NULL OR \"projection_agents\".\"lifecycle_source\" IN ('mutation', 'network', 'realtime')"
+        },
+        "projection_agents_metadata_complete": {
+          "name": "projection_agents_metadata_complete",
+          "value": "((\"projection_agents\".\"metadata_data\" IS NULL) = (\"projection_agents\".\"metadata_observed_at\" IS NULL)) AND ((\"projection_agents\".\"metadata_data\" IS NULL) = (\"projection_agents\".\"metadata_source\" IS NULL))"
+        },
+        "projection_agents_metadata_data_json": {
+          "name": "projection_agents_metadata_data_json",
+          "value": "\"projection_agents\".\"metadata_data\" IS NULL OR json_valid(\"projection_agents\".\"metadata_data\")"
+        },
+        "projection_agents_metadata_observed_at_positive": {
+          "name": "projection_agents_metadata_observed_at_positive",
+          "value": "\"projection_agents\".\"metadata_observed_at\" IS NULL OR \"projection_agents\".\"metadata_observed_at\" >= 0"
+        },
+        "projection_agents_metadata_source_valid": {
+          "name": "projection_agents_metadata_source_valid",
+          "value": "\"projection_agents\".\"metadata_source\" IS NULL OR \"projection_agents\".\"metadata_source\" IN ('mutation', 'network', 'realtime')"
         },
         "projection_agents_profile_complete": {
           "name": "projection_agents_profile_complete",
@@ -757,6 +794,27 @@
           "notNull": false,
           "autoincrement": false
         },
+        "sidebar_data": {
+          "name": "sidebar_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sidebar_observed_at": {
+          "name": "sidebar_observed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sidebar_source": {
+          "name": "sidebar_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "entity_id": {
           "name": "entity_id",
           "type": "text",
@@ -897,6 +955,22 @@
         "projection_chat_groups_membership_source_valid": {
           "name": "projection_chat_groups_membership_source_valid",
           "value": "\"projection_chat_groups\".\"membership_source\" IS NULL OR \"projection_chat_groups\".\"membership_source\" IN ('mutation', 'network', 'realtime')"
+        },
+        "projection_chat_groups_sidebar_complete": {
+          "name": "projection_chat_groups_sidebar_complete",
+          "value": "((\"projection_chat_groups\".\"sidebar_data\" IS NULL) = (\"projection_chat_groups\".\"sidebar_observed_at\" IS NULL)) AND ((\"projection_chat_groups\".\"sidebar_data\" IS NULL) = (\"projection_chat_groups\".\"sidebar_source\" IS NULL))"
+        },
+        "projection_chat_groups_sidebar_data_json": {
+          "name": "projection_chat_groups_sidebar_data_json",
+          "value": "\"projection_chat_groups\".\"sidebar_data\" IS NULL OR json_valid(\"projection_chat_groups\".\"sidebar_data\")"
+        },
+        "projection_chat_groups_sidebar_observed_at_positive": {
+          "name": "projection_chat_groups_sidebar_observed_at_positive",
+          "value": "\"projection_chat_groups\".\"sidebar_observed_at\" IS NULL OR \"projection_chat_groups\".\"sidebar_observed_at\" >= 0"
+        },
+        "projection_chat_groups_sidebar_source_valid": {
+          "name": "projection_chat_groups_sidebar_source_valid",
+          "value": "\"projection_chat_groups\".\"sidebar_source\" IS NULL OR \"projection_chat_groups\".\"sidebar_source\" IN ('mutation', 'network', 'realtime')"
         }
       }
     },

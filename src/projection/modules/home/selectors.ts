@@ -31,11 +31,13 @@ export const selectHomeSidebarItem = (
     const record = activeRecord(scope.records.chatGroup[ref.id]);
     const identity = record?.fragments.identity?.data;
     const access = record?.fragments.access?.data;
-    if (!identity || !access) return undefined;
+    const sidebar = record?.fragments.sidebar?.data;
+    if (!identity || !access || !sidebar) return undefined;
 
     return {
       ...identity,
       ...access,
+      ...sidebar,
       id: ref.id,
       pinned: ref.pinned,
       title: identity.title ?? null,

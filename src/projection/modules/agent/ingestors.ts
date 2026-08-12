@@ -21,6 +21,23 @@ export type AgentProjectionInput = Partial<AgentItem> &
     id: string;
   };
 
+export type AgentProjectionCoverage = 'full' | 'identity' | 'profile' | 'summary';
+
+const identityFragment = (
+  item: AgentProjectionInput,
+  observation: ProjectionObservation,
+): AgentProjection['fragments'] => ({
+  identity: projectionFragment(
+    {
+      avatar: item.avatar,
+      backgroundColor: item.backgroundColor,
+      name: item.name,
+      title: item.title,
+    },
+    observation,
+  ),
+});
+
 const summaryFragments = (
   item: AgentProjectionInput,
   observation: ProjectionObservation,
@@ -33,21 +50,11 @@ const summaryFragments = (
     },
     observation,
   ),
-  identity: projectionFragment(
-    {
-      avatar: item.avatar,
-      backgroundColor: item.backgroundColor,
-      name: item.name,
-      title: item.title,
-    },
-    observation,
-  ),
+  ...identityFragment(item, observation),
   profile: projectionFragment(
     {
       description: item.description,
-      marketIdentifier: item.marketIdentifier,
       slug: item.slug,
-      tags: item.tags,
     },
     observation,
   ),
@@ -55,55 +62,114 @@ const summaryFragments = (
     {
       heterogeneousType:
         item.heterogeneousType ?? item.heteroType ?? item.agencyConfig?.heterogeneousProvider?.type,
+    },
+    observation,
+  ),
+});
+
+const fullFragments = (
+  item: AgentProjectionInput,
+  observation: ProjectionObservation,
+): AgentProjection['fragments'] => ({
+  configuration: projectionFragment(
+    {
+      agencyConfig: item.agencyConfig ?? undefined,
+      chatConfig: item.chatConfig ?? undefined,
+      clientId: item.clientId,
+      editorData: item.editorData ?? undefined,
+      fewShots: item.fewShots ?? undefined,
+      model: item.model ?? undefined,
+      openingMessage: item.openingMessage ?? undefined,
+      openingQuestions: item.openingQuestions,
+      params: item.params ?? undefined,
+      plugins: item.plugins,
+      provider: item.provider ?? undefined,
+      sessionGroupId: item.sessionGroupId,
+      systemRole: item.systemRole ?? undefined,
+      tts: item.tts ?? undefined,
+    },
+    observation,
+  ),
+  knowledge: projectionFragment(
+    { files: item.files, knowledgeBases: item.knowledgeBases },
+    observation,
+  ),
+  lifecycle: projectionFragment(
+    { createdAt: item.createdAt, updatedAt: item.updatedAt },
+    observation,
+  ),
+  metadata: projectionFragment(
+    {
+      marketIdentifier: item.marketIdentifier,
+      tags: item.tags,
       virtual: item.virtual,
     },
     observation,
   ),
 });
 
+const profileFragments = (
+  item: AgentProjectionInput,
+  observation: ProjectionObservation,
+): AgentProjection['fragments'] => {
+  const agencyConfig = item.agencyConfig
+    ? {
+        executionTarget: item.agencyConfig.executionTarget,
+        executionTargetSelectionPolicy: item.agencyConfig.executionTargetSelectionPolicy,
+        ...(item.agencyConfig.heterogeneousProvider?.type
+          ? {
+              heterogeneousProvider: {
+                type: item.agencyConfig.heterogeneousProvider.type,
+              },
+            }
+          : {}),
+        modelSelectionPolicy: item.agencyConfig.modelSelectionPolicy,
+      }
+    : undefined;
+  const chatConfig =
+    item.chatConfig?.enableAgentMode === undefined
+      ? undefined
+      : { enableAgentMode: item.chatConfig.enableAgentMode };
+
+  return {
+    configuration: projectionFragment(
+      {
+        agencyConfig,
+        chatConfig,
+        model: item.model ?? undefined,
+        openingMessage: item.openingMessage ?? undefined,
+        openingQuestions: item.openingQuestions,
+        provider: item.provider ?? undefined,
+      },
+      observation,
+    ),
+    knowledge: projectionFragment({ files: undefined, knowledgeBases: undefined }, observation),
+    lifecycle: projectionFragment(
+      { createdAt: item.createdAt, updatedAt: item.updatedAt },
+      observation,
+    ),
+    metadata: projectionFragment(
+      {
+        marketIdentifier: item.marketIdentifier,
+        tags: undefined,
+        virtual: item.virtual,
+      },
+      observation,
+    ),
+  };
+};
+
 export const agentProjectionRecord = (
   item: AgentProjectionInput,
   observation: ProjectionObservation,
-  coverage: 'full' | 'summary' = 'full',
+  coverage: AgentProjectionCoverage,
 ): AgentProjection => ({
   fragments: {
-    ...summaryFragments(item, observation),
-    ...(coverage === 'full'
-      ? {
-          configuration: projectionFragment(
-            {
-              agencyConfig: item.agencyConfig ?? undefined,
-              chatConfig: item.chatConfig ?? undefined,
-              editorData: item.editorData ?? undefined,
-              fewShots: item.fewShots ?? undefined,
-              model: item.model ?? undefined,
-              openingMessage: item.openingMessage ?? undefined,
-              openingQuestions: item.openingQuestions,
-              params: item.params ?? undefined,
-              plugins: item.plugins,
-              provider: item.provider ?? undefined,
-              systemRole: item.systemRole ?? undefined,
-              tts: item.tts ?? undefined,
-            },
-            observation,
-          ),
-          knowledge: projectionFragment(
-            { files: item.files, knowledgeBases: item.knowledgeBases },
-            observation,
-          ),
-          lifecycle: projectionFragment(
-            { createdAt: item.createdAt, updatedAt: item.updatedAt },
-            observation,
-          ),
-          routing: projectionFragment(
-            {
-              clientId: item.clientId,
-              sessionGroupId: item.sessionGroupId,
-            },
-            observation,
-          ),
-        }
-      : {}),
+    ...(coverage === 'identity'
+      ? identityFragment(item, observation)
+      : summaryFragments(item, observation)),
+    ...(coverage === 'full' ? fullFragments(item, observation) : {}),
+    ...(coverage === 'profile' ? profileFragments(item, observation) : {}),
   },
   id: item.id,
   kind: 'agent',
@@ -169,4 +235,5 @@ export const ingestAgentSearch = (
 export const ingestAgentConfig = (
   item: AgentProjectionInput,
   observation: ProjectionObservation,
-): ProjectionCommit => ({ records: [agentProjectionRecord(item, observation)] });
+  coverage: AgentProjectionCoverage,
+): ProjectionCommit => ({ records: [agentProjectionRecord(item, observation, coverage)] });

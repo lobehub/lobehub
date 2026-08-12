@@ -22,8 +22,8 @@ export const AGENT_FULL_FRAGMENTS = [
   'identity',
   'knowledge',
   'lifecycle',
+  'metadata',
   'profile',
-  'routing',
   'runtime',
 ] as const satisfies readonly ProjectionFragmentName<'agent'>[];
 
@@ -68,7 +68,7 @@ export const agentSearchViewContract: ProjectionViewContract<{ keyword?: string 
       projectionRecordRequest(
         'chatGroup',
         refs.filter((ref) => ref.kind === 'chatGroup').map((ref) => ref.id),
-        ['access', 'identity'],
+        ['access', 'identity', 'sidebar'],
       ),
     ];
   },

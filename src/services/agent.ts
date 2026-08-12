@@ -10,10 +10,15 @@ export interface AvailableAgentItem {
   avatar: string | null;
   backgroundColor: string | null;
   description: string | null;
+  heteroType?: string | null;
   id: string;
   /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
   name: string | null;
+  slug?: string | null;
   title: string | null;
+  userId?: string;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
 }
 
 /**
@@ -218,6 +223,10 @@ class AgentService {
     return lambdaClient.agent.getAgentConfigById.query({ agentId });
   };
 
+  getAgentConfigByIdWithAccess = async (agentId: string) => {
+    return lambdaClient.agent.getAgentConfigByIdWithAccess.query({ agentId });
+  };
+
   /**
    * @deprecated use getAgentConfigById instead
    */
@@ -252,6 +261,10 @@ class AgentService {
    */
   getBuiltinAgent = async (slug: string) => {
     return lambdaClient.agent.getBuiltinAgent.query({ slug });
+  };
+
+  getBuiltinAgentWithAccess = async (slug: string) => {
+    return lambdaClient.agent.getBuiltinAgentWithAccess.query({ slug });
   };
 
   /**

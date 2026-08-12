@@ -73,11 +73,12 @@ export class ChatForwardActionImpl {
         if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
           const scope = getCacheScope();
           const observedAt = nextProjectionObservedAt();
-          const config = await agentService.getAgentConfigById(id);
-          if (config) {
+          const result = await agentService.getAgentConfigByIdWithAccess(id);
+          if (result) {
             getProjectionStoreState().commitAgentConfig(
               scope,
-              { ...config, id: config.id ?? id },
+              { ...result.data, id: result.data.id ?? id },
+              result.access,
               'network',
               observedAt,
             );

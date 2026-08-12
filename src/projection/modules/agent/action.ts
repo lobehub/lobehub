@@ -6,6 +6,7 @@ import { nextProjectionObservedAt, projectionObservation } from '../../core/inge
 import { removeEntityFromProjectionIndex } from '../../records/indexMutations';
 import type { ProjectionStore } from '../../store';
 import {
+  type AgentProjectionCoverage,
   type AgentProjectionInput,
   ingestAgentConfig,
   ingestAgentDirectory,
@@ -19,6 +20,7 @@ export interface AgentProjectionAction {
   commitAgentConfig: (
     scope: string,
     item: AgentProjectionInput,
+    coverage: AgentProjectionCoverage,
     source?: ProjectionSource,
     observedAt?: number,
   ) => void;
@@ -55,12 +57,13 @@ class AgentProjectionActionImpl implements AgentProjectionAction {
   commitAgentConfig = (
     scope: string,
     item: AgentProjectionInput,
+    coverage: AgentProjectionCoverage,
     source: ProjectionSource = 'network',
     observedAt = nextProjectionObservedAt(),
   ): void => {
     this.#get().internal_commitProjection(
       scope,
-      ingestAgentConfig(item, projectionObservation(source, observedAt)),
+      ingestAgentConfig(item, projectionObservation(source, observedAt), coverage),
     );
   };
 

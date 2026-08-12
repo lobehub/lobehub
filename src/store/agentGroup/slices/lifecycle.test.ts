@@ -10,7 +10,7 @@ vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
     addAgentsToGroup: vi.fn(),
     createGroup: vi.fn(),
-    getGroupDetail: vi.fn(),
+    getGroupDetailWithAccess: vi.fn(),
     getGroups: vi.fn(),
   },
 }));
@@ -69,7 +69,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: 'supervisor-1',
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -99,7 +103,11 @@ describe('ChatGroupLifecycleSlice', () => {
         supervisorAgentId: 'supervisor-1',
       });
       vi.mocked(chatGroupService.addAgentsToGroup).mockResolvedValue({ added: [], existing: [] });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -130,7 +138,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: mockSupervisorAgentId,
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -138,8 +150,8 @@ describe('ChatGroupLifecycleSlice', () => {
         await result.current.createGroup({ title: 'Test Group' });
       });
 
-      // Verify getGroupDetail was called to fetch full group info
-      expect(chatGroupService.getGroupDetail).toHaveBeenCalledWith('new-group-id');
+      // Verify getGroupDetailWithAccess was called to fetch full group info
+      expect(chatGroupService.getGroupDetailWithAccess).toHaveBeenCalledWith('new-group-id');
 
       // Verify supervisorAgentId is stored in groupMap for tools injection
       const groupDetail = result.current.groupMap['new-group-id'];
@@ -170,7 +182,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: 'supervisor-1',
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 

@@ -12,22 +12,24 @@ import { selectAgentProjection } from '../agent/selectors';
 const activeRecord = (record: ChatGroupProjection | undefined): ChatGroupProjection | undefined =>
   activeProjectionRecord(record);
 
+const withoutUndefined = <T extends Record<string, unknown>>(value: T): T =>
+  Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+
 export const selectChatGroupItem = (
   record: ChatGroupProjection | undefined,
 ): ChatGroupItem | undefined => {
   const active = activeRecord(record);
   const identity = active?.fragments.identity?.data;
   const access = active?.fragments.access?.data;
-  const configuration = active?.fragments.configuration?.data;
   const lifecycle = active?.fragments.lifecycle?.data;
-  if (!active || !identity || !access || !configuration || !lifecycle) return undefined;
-  return {
+  if (!active || !identity || !access || !lifecycle) return undefined;
+  return withoutUndefined({
     id: active.id,
-    ...configuration,
+    ...active.fragments.configuration?.data,
     ...identity,
     ...access,
     ...lifecycle,
-  } as ChatGroupItem;
+  }) as ChatGroupItem;
 };
 
 export const selectChatGroupDetail = (
@@ -36,8 +38,10 @@ export const selectChatGroupDetail = (
 ): AgentGroupDetail | undefined => {
   const record = scope.records.chatGroup[id];
   const item = selectChatGroupItem(record);
-  const membership = activeRecord(record)?.fragments.membership?.data;
-  if (!item || !membership) return undefined;
+  const active = activeRecord(record);
+  const configuration = active?.fragments.configuration?.data;
+  const membership = active?.fragments.membership?.data;
+  if (!item || !configuration || !membership) return undefined;
 
   const agents: AgentGroupMember[] = [];
   for (const member of membership.agents) {

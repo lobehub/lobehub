@@ -301,6 +301,31 @@ describe('agentRouter', () => {
 
       await expect(caller.getAgentConfigById({ agentId: 'agent-1' })).resolves.toEqual(fullConfig);
     });
+
+    it('returns an explicit access discriminator for Projection ingestion', async () => {
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(fullConfig);
+      vi.mocked(canPerformResourceAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const caller = agentRouter.createCaller({
+        ...mockCtx,
+        serverDB: {},
+        workspaceId: 'ws-1',
+      });
+
+      await expect(caller.getAgentConfigByIdWithAccess({ agentId: 'agent-1' })).resolves.toEqual({
+        access: 'profile',
+        data: {
+          avatar: 'avatar.png',
+          id: 'agent-1',
+          model: 'private-model',
+          openingMessage: 'Hello',
+          title: 'Public title',
+          userId: 'creator-1',
+          visibility: 'public',
+          workspaceId: 'ws-1',
+        },
+      });
+    });
   });
 
   describe('getKnowledgeBasesAndFiles', () => {

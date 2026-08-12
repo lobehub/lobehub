@@ -12,6 +12,7 @@ import { groupKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import {
   activeProjectionRecord,
+  type ChatGroupDetailCoverage,
   chatGroupListViewContract,
   getProjectionStoreState,
   nextProjectionObservedAt,
@@ -66,6 +67,11 @@ const toAgentGroupDetail = (group: ChatGroupItem): AgentGroupDetail =>
     ...group,
     agents: [],
   }) as AgentGroupDetail;
+
+const profileChatGroupDetailCoverage = (group: AgentGroupDetail): ChatGroupDetailCoverage => ({
+  group: 'profile',
+  members: Object.fromEntries(group.agents.map((agent) => [agent.id, 'profile' as const])),
+});
 
 type Setter = StoreSetter<ChatGroupStore>;
 class ChatGroupInternalAction implements ResetableStore {
@@ -132,8 +138,8 @@ class ChatGroupInternalAction implements ResetableStore {
   internal_fetchGroupDetail = async (groupId: string) => {
     const scope = getCacheScope();
     const observedAt = nextProjectionObservedAt();
-    const groupDetail = await chatGroupService.getGroupDetail(groupId);
-    if (!groupDetail) {
+    const result = await chatGroupService.getGroupDetailWithAccess(groupId);
+    if (!result) {
       getProjectionStoreState().deleteChatGroupProjection(scope, groupId, observedAt);
       const projectionScope = getProjectionStoreState().scopes[scope];
       const canonical = projectionScope
@@ -151,7 +157,14 @@ class ChatGroupInternalAction implements ResetableStore {
       this.#markGroupNotFound(groupId);
       return;
     }
-    getProjectionStoreState().commitChatGroupDetail(scope, groupDetail, 'network', observedAt);
+    const groupDetail = result.data;
+    getProjectionStoreState().commitChatGroupDetail(
+      scope,
+      groupDetail,
+      { group: result.access, members: result.memberAccess },
+      'network',
+      observedAt,
+    );
     const projectionScope = getProjectionStoreState().scopes[scope];
     const record = projectionScope?.records.chatGroup[groupId];
     if (!activeProjectionRecord(record)) {
@@ -272,14 +285,21 @@ class ChatGroupInternalAction implements ResetableStore {
       async () => {
         const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
-        const groupDetail = await chatGroupService.getGroupDetail(groupId);
+        const result = await chatGroupService.getGroupDetailWithAccess(groupId);
         // Resolve to null instead of throwing: "gone / no access" is a settled
         // terminal state (rendered as a 404 card), not a retryable error.
-        if (!groupDetail) {
+        if (!result) {
           getProjectionStoreState().deleteChatGroupProjection(scope, groupId, observedAt);
           return null;
         }
-        getProjectionStoreState().commitChatGroupDetail(scope, groupDetail, 'network', observedAt);
+        const groupDetail = result.data;
+        getProjectionStoreState().commitChatGroupDetail(
+          scope,
+          groupDetail,
+          { group: result.access, members: result.memberAccess },
+          'network',
+          observedAt,
+        );
         return groupDetail;
       },
       {
@@ -305,7 +325,13 @@ class ChatGroupInternalAction implements ResetableStore {
             : undefined;
           const record = projectionScope?.records.chatGroup[groupId];
           if (!record) {
-            projectionStore.commitChatGroupDetail(scope, groupDetail, 'network', 0);
+            projectionStore.commitChatGroupDetail(
+              scope,
+              groupDetail,
+              profileChatGroupDetailCoverage(groupDetail),
+              'network',
+              0,
+            );
             projectionScope = getProjectionStoreState().scopes[scope];
             canonical = projectionScope
               ? selectChatGroupDetail(projectionScope, groupId)

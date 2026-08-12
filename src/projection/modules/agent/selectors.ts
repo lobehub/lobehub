@@ -32,6 +32,7 @@ export const selectAgentProjection = (
     id: active.id,
     ...configuration,
     ...active.fragments.knowledge?.data,
+    ...active.fragments.metadata?.data,
     ...active.fragments.identity?.data,
     ...active.fragments.profile?.data,
     ...active.fragments.access?.data,

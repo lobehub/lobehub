@@ -19,7 +19,6 @@ export interface ChatGroupProjectionFragments {
     avatar?: ProjectionAvatar;
     backgroundColor?: string | null;
     description?: string | null;
-    groupAvatar?: string | null;
     title: string | null;
   };
   lifecycle: {
@@ -31,6 +30,9 @@ export interface ChatGroupProjectionFragments {
     agents: Array<ProjectionRef<'agent'> & { isSupervisor: boolean }>;
     supervisorAgentId?: AgentGroupDetail['supervisorAgentId'];
   };
+  sidebar: {
+    groupAvatar?: string | null;
+  };
 }
 
 export const CHAT_GROUP_PROJECTION_FRAGMENT_NAMES =
@@ -40,4 +42,5 @@ export const CHAT_GROUP_PROJECTION_FRAGMENT_NAMES =
     'identity',
     'lifecycle',
     'membership',
+    'sidebar',
   ]);

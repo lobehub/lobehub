@@ -16,6 +16,7 @@ import { useAgentStore } from '../../store';
 
 const PROJECTION_SCOPE = 'user-1:personal';
 const cacheScopeState = vi.hoisted(() => ({ current: 'user-1:personal' }));
+const agentConfigByIdMock = vi.hoisted(() => vi.fn());
 
 // Mock zustand/traditional for store testing
 vi.mock('zustand/traditional');
@@ -32,7 +33,11 @@ vi.mock('@/services/agent', () => ({
   AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: {
     createAgent: vi.fn(),
-    getAgentConfigById: vi.fn(),
+    getAgentConfigById: agentConfigByIdMock,
+    getAgentConfigByIdWithAccess: vi.fn(async (agentId: string) => {
+      const data = await agentConfigByIdMock(agentId);
+      return data ? { access: 'full' as const, data } : null;
+    }),
     getSessionConfig: vi.fn(),
     queryAgents: vi.fn(),
     updateAgentConfig: vi.fn(),
@@ -321,6 +326,7 @@ describe('AgentSlice Actions', () => {
       getProjectionStoreState().commitAgentConfig(
         PROJECTION_SCOPE,
         { id: 'agent-1', title: 'Canonical title' },
+        'full',
         'mutation',
         Number.MAX_SAFE_INTEGER,
       );

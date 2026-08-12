@@ -1,4 +1,4 @@
-import type { LobeAgentConfig } from '../../agent';
+import type { AgentItem, LobeAgentConfig } from '../../agent';
 import { defineProjectionFragmentNames } from '../runtime';
 import type { ProjectionAvatar, ProjectionVisibility } from './shared';
 
@@ -23,7 +23,8 @@ export interface AgentProjectionFragments {
       | 'provider'
       | 'systemRole'
       | 'tts'
-    >
+    > &
+      Pick<AgentItem, 'clientId' | 'sessionGroupId'>
   >;
   identity: {
     avatar?: ProjectionAvatar;
@@ -36,20 +37,16 @@ export interface AgentProjectionFragments {
     createdAt?: Date | number | string;
     updatedAt?: Date | number | string;
   };
+  metadata: Pick<AgentItem, 'marketIdentifier' | 'tags' | 'virtual'>;
   profile: {
     description?: string | null;
-    marketIdentifier?: string | null;
     slug?: string | null;
-    tags?: string[];
   };
   routing: {
-    clientId?: string | null;
     sessionId?: string | null;
-    sessionGroupId?: string | null;
   };
   runtime: {
     heterogeneousType?: string | null;
-    virtual?: boolean | null;
   };
 }
 
@@ -60,6 +57,7 @@ export const AGENT_PROJECTION_FRAGMENT_NAMES =
     'identity',
     'knowledge',
     'lifecycle',
+    'metadata',
     'profile',
     'routing',
     'runtime',

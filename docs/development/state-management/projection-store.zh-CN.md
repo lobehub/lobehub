@@ -240,9 +240,15 @@ fragment 必须满足：
 1. 至少有一个来源能够一次返回该 fragment 的全部字段。
 2. 更新时整体替换，不对 fragment 内字段做通用 partial merge。
 3. 如果某接口只能返回现有 fragment 的一部分，应拆出更小、所有权更明确的 fragment。
-4. `undefined` 表示来源未覆盖；`null` 表示来源明确给出的空值，两者不可混用。
+4. 未提交某个 fragment 表示来源未覆盖该 fragment；已提交的完整 fragment 中，可选字段缺失
+   表示该 read model 明确不包含该字段，`null` 表示来源明确给出的空值。
 5. 完整 DTO 进入数据层时，必须由领域 Ingestor 拆为所有已建模 fragments；不得保留一份
    opaque raw DTO 作为并行事实来源。
+
+服务端 API 不感知 fragment，也不要求维护 `fieldMask`。服务端只返回稳定的业务 read model；
+客户端 Typed Ingestor 为每个具体响应声明固定 coverage。若同一路由会因权限返回 `profile/full`
+两种完整形态，API 额外返回业务级 `access` discriminator，Ingestor 再据此选择 coverage。不得根据
+响应中 “碰巧存在的字段” 推断 coverage。
 
 ## 7. 冲突与时序
 
@@ -334,8 +340,8 @@ participants 等关联可在后续 pass 中继续解析。若目标数据已在 
 
 | Kind      | Fragments                                                                                                                                                                                                      |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent     | `access`、`configuration`、`identity`、`knowledge`、`lifecycle`、`profile`、`routing`、`runtime`                                                                                                               |
-| ChatGroup | `access`、`configuration`、`identity`、`lifecycle`、`membership`                                                                                                                                               |
+| Agent     | `access`、`configuration`、`identity`、`knowledge`、`lifecycle`、`metadata`、`profile`、`routing`、`runtime`                                                                                                   |
+| ChatGroup | `access`、`configuration`、`identity`、`lifecycle`、`membership`、`sidebar`                                                                                                                                    |
 | Topic     | `activity`、`analytics`、`completion`、`creation`、`details`、`display`、`generation`、`marking`、`navigation`、`ordering`、`ownership`、`preview`、`routing`、`runTiming`、`status`、`summary`、`triggerInfo` |
 | Task      | `assignment`、`description`、`detail`、`display`、`identity`、`lifecycle`、`participants`、`row`                                                                                                               |
 | Brief     | `actions`、`content`、`readState`、`relations`、`resolution`                                                                                                                                                   |
@@ -402,8 +408,8 @@ Electron 物理布局不是通用 KV，而是固定 registry 的实体 read mode
 
 | SQLite table             | 主身份               | 固定内容                                           |
 | ------------------------ | -------------------- | -------------------------------------------------- |
-| `projection_agents`      | `(scope, entity_id)` | Agent registry 的 8 个 typed fragments             |
-| `projection_chat_groups` | `(scope, entity_id)` | ChatGroup registry 的 5 个 typed fragments         |
+| `projection_agents`      | `(scope, entity_id)` | Agent registry 的 9 个 typed fragments             |
+| `projection_chat_groups` | `(scope, entity_id)` | ChatGroup registry 的 6 个 typed fragments         |
 | `projection_topics`      | `(scope, entity_id)` | Topic registry 的 17 个 typed fragments            |
 | `projection_tasks`       | `(scope, entity_id)` | Task registry 的 8 个 typed fragments              |
 | `projection_briefs`      | `(scope, entity_id)` | Brief registry 的 5 个 typed fragments             |
