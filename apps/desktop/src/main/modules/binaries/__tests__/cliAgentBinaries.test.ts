@@ -1,4 +1,5 @@
 import * as childProcess from 'node:child_process';
+import * as fsPromises from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
@@ -16,9 +17,37 @@ vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
 }));
 
+// Resolving a Windows `.cmd` shim to its real target reads the shim off disk.
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof fsPromises>('node:fs/promises');
+  return { ...actual, access: vi.fn(), readFile: vi.fn() };
+});
+
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
 const execMock = vi.mocked(childProcess.exec);
+const accessMock = vi.mocked(fsPromises.access);
+const readFileMock = vi.mocked(fsPromises.readFile);
+
+/** Files present on the fake host: contents for shims, `true` for binaries. */
+const existingFiles = (files: Record<string, string | true>) => {
+  const entries = new Map(
+    Object.entries(files).map(([filePath, content]) => [filePath.toLowerCase(), content]),
+  );
+
+  accessMock.mockImplementation(async (filePath) => {
+    if (!entries.has(String(filePath).toLowerCase())) throw new Error(`missing: ${filePath}`);
+  });
+  readFileMock.mockImplementation((async (filePath: string) => {
+    const content = entries.get(String(filePath).toLowerCase());
+    if (typeof content !== 'string') throw new Error(`unreadable: ${filePath}`);
+    return content;
+  }) as never);
+};
+
+/** A stock npm shim — the shape the resolver knows how to unwrap. */
+const npmShim = (packagePath: string) =>
+  `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
 const callExecFile = (stdout: string, stderr = '') => {
@@ -41,6 +70,9 @@ describe('cliAgentBinaries', () => {
   beforeEach(() => {
     execFileMock.mockReset();
     execMock.mockReset();
+    accessMock.mockReset();
+    readFileMock.mockReset();
+    existingFiles({});
   });
 
   afterEach(() => {
@@ -53,8 +85,15 @@ describe('cliAgentBinaries', () => {
     });
 
     it('resolves `claude` to the .cmd path via `where` without constructing a shell command', async () => {
+      const npmDir = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm';
+      const scriptPath = `${npmDir}\\node_modules\\@anthropic-ai\\claude-code\\cli.js`;
+      existingFiles({
+        [`${npmDir}\\claude.cmd`]: npmShim('node_modules\\@anthropic-ai\\claude-code\\cli.js'),
+        [`${npmDir}\\node.exe`]: true,
+        [scriptPath]: true,
+      });
       // 1) `where claude` → resolves to the .cmd shim under %APPDATA%\npm
-      callExecFile('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd\r\n');
+      callExecFile(`${npmDir}\\claude.cmd\r\n`);
       // 2) validate the resolved command without interpolating it into a shell string
       callExecFile('1.2.3 (Claude Code)');
 
@@ -62,15 +101,14 @@ describe('cliAgentBinaries', () => {
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd');
+      expect(status.path).toBe(`${npmDir}\\claude.cmd`);
       expect(status.version).toBe('1.2.3 (Claude Code)');
 
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
-      expect(execFileMock.mock.calls[1]![0]).toBe(
-        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd',
-      );
-      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
+      // The shim is unwrapped into node + script rather than handed to a shell.
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${npmDir}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
     });
 
     it('returns unavailable when `where` finds nothing', async () => {
@@ -107,12 +145,15 @@ describe('cliAgentBinaries', () => {
       // npm drops a Unix shell-script wrapper (extensionless) alongside the
       // Windows `.cmd` / `.ps1` shims. `where` lists every PATHEXT match;
       // taking the first line would land us on the unrunnable wrapper.
+      const npmDir = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm';
+      const scriptPath = `${npmDir}\\node_modules\\@openai\\codex\\bin\\codex.js`;
+      existingFiles({
+        [`${npmDir}\\codex.cmd`]: npmShim('node_modules\\@openai\\codex\\bin\\codex.js'),
+        [`${npmDir}\\node.exe`]: true,
+        [scriptPath]: true,
+      });
       callExecFile(
-        [
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex',
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd',
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.ps1',
-        ].join('\r\n'),
+        [`${npmDir}\\codex`, `${npmDir}\\codex.cmd`, `${npmDir}\\codex.ps1`].join('\r\n'),
       );
       callExecFile('codex 0.130.0');
 
@@ -120,12 +161,10 @@ describe('cliAgentBinaries', () => {
       const status = await codexBinary.detect();
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd');
+      expect(status.path).toBe(`${npmDir}\\codex.cmd`);
       expect(execMock).not.toHaveBeenCalled();
-      expect(execFileMock.mock.calls[1]![0]).toBe(
-        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd',
-      );
-      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${npmDir}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
     });
 
     it('prefers .exe over .cmd when both are present', async () => {
@@ -144,11 +183,15 @@ describe('cliAgentBinaries', () => {
     });
 
     it('preserves PATH order when npm .cmd precedes a later .exe (Vite+ case)', async () => {
+      const npmDir = 'C:\\Users\\hp\\AppData\\Roaming\\npm';
+      const scriptPath = `${npmDir}\\node_modules\\@anthropic-ai\\claude-code\\cli.js`;
+      existingFiles({
+        [`${npmDir}\\claude.cmd`]: npmShim('node_modules\\@anthropic-ai\\claude-code\\cli.js'),
+        [`${npmDir}\\node.exe`]: true,
+        [scriptPath]: true,
+      });
       callExecFile(
-        [
-          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
-          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
-        ].join('\r\n'),
+        [`${npmDir}\\claude.cmd`, 'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe'].join('\r\n'),
       );
       callExecFile('1.2.3 (Claude Code)');
 
@@ -156,12 +199,33 @@ describe('cliAgentBinaries', () => {
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+      expect(status.path).toBe(`${npmDir}\\claude.cmd`);
       expect(execMock).not.toHaveBeenCalled();
-      expect(execFileMock.mock.calls[1]![0]).toBe(
-        'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
-      );
-      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${npmDir}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
+    });
+
+    it('skips a shim it cannot unwrap and validates the next candidate instead', async () => {
+      // A third-party wrapper that replaced the npm shim forwards through its
+      // own variable, so no shim pattern matches. `execFile` cannot spawn a
+      // .cmd directly (EINVAL since the CVE-2024-27980 fix), so the only way
+      // to stay useful is to move on to the next entry `where` reported.
+      const hijackedShim = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd';
+      const nativeExe = 'C:\\Program Files\\WindowsApps\\OpenAI.Codex\\codex.exe';
+      existingFiles({
+        [hijackedShim]: '@echo off\r\n"%OCX_REAL_CODEX%" %*\r\n',
+        [nativeExe]: true,
+      });
+      callExecFile([hijackedShim, nativeExe].join('\r\n'));
+      callExecFile('codex-cli 0.146.0');
+
+      const { codexBinary } = await import('../cliAgentBinaries');
+      const status = await codexBinary.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe(nativeExe);
+      expect(execFileMock).toHaveBeenCalledTimes(2);
+      expect(execFileMock.mock.calls[1]![0]).toBe(nativeExe);
     });
 
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
