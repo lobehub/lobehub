@@ -13,7 +13,7 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'` | `'opencode'` | `'pi'` | `'qoder'`). */
+  /** Agent type key (`'amp'` | `'claude-code'` | `'codebuddy'` | `'codex'` | `'opencode'` | `'pi'` | `'qoder'`). */
   agentType: string;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
@@ -138,6 +138,24 @@ export const CLAUDE_CODE_BASE_ARGS = [
   CLAUDE_CODE_DISALLOWED_TOOLS.join(','),
 ] as const;
 
+/**
+ * Headless CodeBuddy stream-json flags shared by desktop and `lh hetero exec`.
+ * Interactive questions and background monitoring cannot be serviced reliably
+ * by a one-shot print-mode process, so disable both tools.
+ */
+const CODEBUDDY_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor'] as const;
+
+export const CODEBUDDY_BASE_ARGS = [
+  '-p',
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--disallowedTools',
+  CODEBUDDY_DISALLOWED_TOOLS.join(','),
+] as const;
+
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).
 // Fall back to acceptEdits + pre-approved tools so the agent can still run
 // headlessly without interactive permission prompts.
@@ -221,6 +239,21 @@ const buildClaudeCodeArgs = ({
   ...extraArgs,
 ];
 
+const buildCodeBuddyArgs = ({
+  extraArgs,
+  includePartialMessages,
+  inputArgs,
+  resumeSessionId,
+}: BuildSpawnArgsParams) => [
+  ...CODEBUDDY_BASE_ARGS,
+  ...(includePartialMessages ? ['--include-partial-messages'] : []),
+  '--permission-mode',
+  'bypassPermissions',
+  ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+  ...inputArgs,
+  ...extraArgs,
+];
+
 const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
   const executionModeArgs = hasAnyFlag(extraArgs, CODEX_EXECUTION_MODE_FLAGS)
     ? []
@@ -279,6 +312,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     case 'claude-code': {
       return buildClaudeCodeArgs(params);
     }
+    case 'codebuddy': {
+      return buildCodeBuddyArgs(params);
+    }
     case 'codex': {
       return buildCodexArgs(params);
     }
@@ -325,7 +361,8 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Amp, Claude Code, Codex, OpenCode, Pi, or Qoder) and yield its stream as
+ * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, OpenCode,
+ * Pi, or Qoder) and yield its stream as
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
@@ -355,7 +392,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       workingDirectory: cwd,
     });
   }
-  const childEnv = { ...process.env, ...options.env };
+  const childEnv = {
+    ...process.env,
+    ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),
+    ...options.env,
+  };
   const initialModel =
     options.agentType === 'codex'
       ? (await resolveCodexInitialModel({ args, env: childEnv }))?.model

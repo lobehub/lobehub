@@ -565,7 +565,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
+  agentType: z.enum(['amp', 'claude-code', 'codebuddy', 'codex', 'opencode', 'pi', 'qoder']),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -582,7 +582,7 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
+  agentType: z.enum(['amp', 'claude-code', 'codebuddy', 'codex', 'opencode', 'pi', 'qoder']),
   /** Initial assistant placeholder forwarded by the producer. Unlike the live
    * ingest path, finish may arrive after gateway session completion has already
    * cleared topic.metadata.runningOperation, so this is the durable fallback

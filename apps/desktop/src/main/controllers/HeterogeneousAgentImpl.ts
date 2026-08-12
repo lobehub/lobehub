@@ -628,7 +628,14 @@ export default class HeterogeneousAgentCtr {
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
     if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
-    return { ...inheritedEnv, ...proxyEnv, ...session.env };
+    return {
+      ...inheritedEnv,
+      ...proxyEnv,
+      ...(session.agentType === 'codebuddy'
+        ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
+        : {}),
+      ...session.env,
+    };
   }
 
   private get shouldTraceCliOutput(): boolean {

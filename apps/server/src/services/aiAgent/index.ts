@@ -2025,7 +2025,8 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi / qoder) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codebuddy /
+    // codex / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -2331,6 +2332,7 @@ export class AiAgentService {
       const heteroExecArgs =
         heteroType === 'amp' ||
         heteroType === 'claude-code' ||
+        heteroType === 'codebuddy' ||
         heteroType === 'codex' ||
         heteroType === 'opencode' ||
         heteroType === 'pi' ||
@@ -2615,6 +2617,7 @@ export class AiAgentService {
               assistantMessageId: assistantMessageRecord.id,
               detail:
                 heteroType === 'amp' ||
+                heteroType === 'codebuddy' ||
                 heteroType === 'opencode' ||
                 heteroType === 'pi' ||
                 heteroType === 'qoder'

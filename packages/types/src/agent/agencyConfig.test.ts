@@ -290,6 +290,13 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
+  it('appends CodeBuddy model and effort using its Claude-compatible CLI flags', () => {
+    const provider = { effort: 'high', model: 'gpt-5.4', type: 'codebuddy' } as const;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
+  });
+
   it('preserves existing args and appends after them', () => {
     expect(
       buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code', model: 'sonnet' }),

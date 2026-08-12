@@ -21,7 +21,7 @@ describe('useModelCatalog', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['opencode', 'pi', 'qoder'] as const)(
+  it.each(['codebuddy', 'opencode', 'pi', 'qoder'] as const)(
     'starts loading the %s catalog as soon as the selector mounts',
     async (type) => {
       const pendingCatalog = new Promise<

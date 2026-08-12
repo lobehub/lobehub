@@ -46,7 +46,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'opencode' | 'pi' | 'qoder';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -74,7 +74,7 @@ export type HeterogeneousAgentModelCatalog =
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -272,11 +272,11 @@ const getExplicitCodexSpeedMode = (
 /**
  * Resolve the effective native CLI args for a heterogeneous spawn.
  *
- * For `claude-code` and `codex`, the chat-input selector persists explicit
- * `model` + `effort` selections on the provider config; this is the single
- * place that maps those stored settings onto provider-specific argv for direct
- * local desktop spawns. OpenCode, Pi, and Qoder use their device-local model
- * catalogs and forward the selected model using the native `--model` flag.
+ * For `claude-code`, `codebuddy`, and `codex`, explicit `model` + `effort`
+ * selections are persisted on the provider config; this is the single place
+ * that maps those stored settings onto provider-specific argv for direct local
+ * desktop spawns. OpenCode, Pi, and Qoder use their device-local model catalogs
+ * and forward the selected model using the native `--model` flag.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -292,6 +292,7 @@ export const buildHeteroSpawnArgs = (
   if (!provider) return undefined;
   if (
     provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -303,7 +304,7 @@ export const buildHeteroSpawnArgs = (
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
 
-  if (provider.type === 'claude-code') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -389,6 +390,7 @@ export const buildHeteroExecArgs = (
   if (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -401,7 +403,7 @@ export const buildHeteroExecArgs = (
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
   const selectorArgs: string[] = [];
 
-  if (provider.type === 'claude-code') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);

@@ -9,6 +9,7 @@ import {
   AmpAdapter,
   ClaudeCodeAdapter,
   ClaudeCodeSdkAdapter,
+  CodeBuddyAdapter,
   CodexAdapter,
   OpenCodeAdapter,
   PiAdapter,
@@ -27,6 +28,9 @@ const localAgentRegistry = {
   },
   'claude-code': {
     createAdapter: () => new ClaudeCodeAdapter(),
+  },
+  'codebuddy': {
+    createAdapter: () => new CodeBuddyAdapter(),
   },
   'codex': {
     createAdapter: () => new CodexAdapter(),

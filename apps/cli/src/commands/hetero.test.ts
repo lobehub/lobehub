@@ -117,7 +117,9 @@ describe('hetero exec command', () => {
                   ? 'pi'
                   : agentType === 'qoder'
                     ? 'qodercli'
-                    : 'claude'),
+                    : agentType === 'codebuddy'
+                      ? 'codebuddy'
+                      : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -285,6 +287,30 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
       extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
+  it('passes CodeBuddy --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codebuddy',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('codebuddy', undefined);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      agentType: 'codebuddy',
+      command: 'codebuddy',
+      extraArgs: ['--model', 'gpt-5.4', '--effort', 'high'],
     });
   });
 

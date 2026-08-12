@@ -833,6 +833,27 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
+    it('disables CodeBuddy background tasks in the spawned environment', async () => {
+      const { cliArgs, options } = await runSendPrompt('hello', {
+        agentType: 'codebuddy',
+        command: 'codebuddy',
+      });
+
+      expect(cliArgs).toContain('--include-partial-messages');
+      expect(options.env.CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
+    });
+
+    it('passes the selected model to the native CodeBuddy process', async () => {
+      const { cliArgs } = await runSendPrompt('hello', {
+        agentType: 'codebuddy',
+        args: ['--model', 'gpt-5.4'],
+        command: 'codebuddy',
+      });
+
+      expect(cliArgs).toContain('--model');
+      expect(cliArgs[cliArgs.indexOf('--model') + 1]).toBe('gpt-5.4');
+    });
+
     it('captures the Claude Code session id from stream-json init events', async () => {
       const { ctr, sessionId } = await runSendPrompt('hello', {}, [
         `${JSON.stringify({ session_id: 'sess_cc_123', subtype: 'init', type: 'system' })}\n`,
@@ -962,6 +983,26 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('claude', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('fails fast with CodeBuddy install guidance when CodeBuddy is unavailable', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codebuddy',
+        command: 'codebuddy',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('CodeBuddy CLI was not found');
+
+      expect(detect).toHaveBeenCalledWith('codebuddy', true);
       expect(spawnCalls).toHaveLength(0);
     });
 

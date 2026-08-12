@@ -110,6 +110,20 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it('resolves and validates CodeBuddy using its bare semver output', async () => {
+      callExecFile('/Users/x/.local/bin/codebuddy\n');
+      callExecFile('2.132.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('codebuddy', 'codebuddy');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/codebuddy',
+        version: '2.132.0',
+      });
+    });
+
     it('finds OpenCode in its well-known user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;

@@ -8,7 +8,8 @@ import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi / Qoder).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code /
+ * CodeBuddy / Codex / OpenCode / Pi / Qoder).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -252,6 +253,10 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'claude-code': {
     validateKeywords: ['claude code'],
   },
+  'codebuddy': {
+    // CodeBuddy prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'codex': {
     validateKeywords: ['codex'],
   },
@@ -302,6 +307,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.bun', 'bin', 'claude'),
         path.join(homedir(), '.npm-global', 'bin', 'claude'),
         path.join(homedir(), 'Library', 'pnpm', 'claude'),
+      ];
+    }
+    case 'codebuddy': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'codebuddy.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'codebuddy'),
+        path.join(homedir(), '.bun', 'bin', 'codebuddy'),
+        path.join(homedir(), '.npm-global', 'bin', 'codebuddy'),
+        path.join(homedir(), 'Library', 'pnpm', 'codebuddy'),
       ];
     }
     case 'codex': {

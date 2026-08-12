@@ -19,6 +19,10 @@ const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfi
   heterogeneousProvider: { command: 'amp', type: 'amp' },
   ...over,
 });
+const codeBuddyCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'codebuddy', type: 'codebuddy' },
+  ...over,
+});
 const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'opencode', type: 'opencode' },
   ...over,
@@ -183,6 +187,7 @@ describe('resolveExecutionTarget', () => {
   describe('hetero providers without sandbox execution', () => {
     it.each([
       ['Amp', ampCfg],
+      ['CodeBuddy', codeBuddyCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],
       ['Qoder', qoderCfg],

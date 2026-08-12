@@ -73,9 +73,7 @@ export type HeterogeneousReasoningEffort =
  * sign-in; the Codex CLI silently omits the tier for unsupported models, so
  * passing it is always safe.
  */
-const CODEX_SPEED_MODES = ['fast'] as const;
-
-export type CodexSpeedMode = (typeof CODEX_SPEED_MODES)[number];
+export type CodexSpeedMode = 'fast';
 
 export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
 
@@ -283,6 +281,18 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       resolve: resolveClaudeCodeModel,
       source: 'static',
+    },
+  },
+  'codebuddy': {
+    effort: {
+      encodings: [{ flags: ['--effort'], kind: 'flag' }],
+      levels: () => CLAUDE_CODE_REASONING_EFFORT_LEVELS,
+      resolve: resolveClaudeCodeReasoningEffort,
+    },
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolveClaudeCodeModel,
+      source: 'catalog',
     },
   },
   'codex': {

@@ -18,6 +18,7 @@ import type { IBuiltinToolExecutor } from '../types';
 import {
   ampExecutor,
   claudeCodeExecutor,
+  codeBuddyExecutor,
   codexExecutor,
   openCodeExecutor,
   piExecutor,
@@ -40,6 +41,7 @@ export const builtinToolExecutors = [
   // observe their shell tool results via `onAfterCall` (never invoked).
   ampExecutor,
   claudeCodeExecutor,
+  codeBuddyExecutor,
   codexExecutor,
   openCodeExecutor,
   piExecutor,

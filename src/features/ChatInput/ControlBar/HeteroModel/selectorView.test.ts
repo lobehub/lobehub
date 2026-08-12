@@ -41,6 +41,7 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
+    expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
   });
 
@@ -68,6 +69,13 @@ describe('dimensions per provider', () => {
 
   it('offers model and reasoning but never speed for claude-code', () => {
     expect(dimensionKeys({ model: 'opus', type: 'claude-code' })).toEqual(['model', 'reasoning']);
+  });
+
+  it('loads the CodeBuddy model dimension from its CLI catalog and keeps reasoning in the menu', () => {
+    const view = viewOf({ effort: 'high', model: 'gpt-5.4', type: 'codebuddy' });
+
+    expect(view.isCatalogModel).toBe(true);
+    expect(view.dimensions.map((dimension) => dimension.key)).toEqual(['reasoning']);
   });
 
   it('leaves the model dimension to the catalog picker for qoder', () => {

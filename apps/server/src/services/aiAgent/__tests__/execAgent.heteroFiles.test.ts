@@ -30,7 +30,7 @@ const {
   mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Local hetero (claude-code / codex / opencode) seeds publishAgentRuntimeInit so the
+// Local hetero (claude-code / codebuddy / codex / opencode) seeds publishAgentRuntimeInit so the
 // agent-gateway DO reports `running` on a later reconnect. Stub the factory so
 // the assertion below can verify the init, and so the real one (which probes
 // Redis synchronously) doesn't throw a server-env error in the test env.
@@ -386,6 +386,34 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
   });
 
+  it('dispatches CodeBuddy to a bound device with its model and effort args', async () => {
+    heteroAgentConfig.model = 'codebuddy';
+    heteroAgentConfig.provider = 'codebuddy';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        effort: 'high',
+        model: 'gpt-5.4',
+        type: 'codebuddy',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use CodeBuddy on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'codebuddy',
+        args: ['--model', 'gpt-5.4', '--effort', 'high'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('does not reinject the device workspace note when resuming a native session', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
     heteroAgentConfig.agencyConfig = {
@@ -448,6 +476,24 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Do not run OpenCode in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound CodeBuddy', async () => {
+    heteroAgentConfig.model = 'codebuddy';
+    heteroAgentConfig.provider = 'codebuddy';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'codebuddy' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run CodeBuddy in cloud',
     });
 
     expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));

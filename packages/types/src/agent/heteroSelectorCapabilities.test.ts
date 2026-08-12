@@ -12,6 +12,7 @@ import {
 describe('selector availability', () => {
   it('derives the selectable provider set from the model dimension', () => {
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
+    expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
@@ -28,6 +29,7 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
     expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
     expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('static');
+    expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
   });
 
@@ -68,6 +70,23 @@ describe('applyHeteroSelection', () => {
         { effort: 'low' },
       ),
     ).toEqual({ args: ['-p'], effort: 'low' });
+  });
+
+  it('clears CodeBuddy model and effort flags before applying a selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--model', 'old', '--effort=high', '--verbose'],
+      type: 'codebuddy',
+    };
+    const patch = applyHeteroSelection(provider, { effort: 'low', model: 'gpt-5.4' });
+
+    expect(patch).toEqual({ args: ['--verbose'], effort: 'low', model: 'gpt-5.4' });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--verbose',
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'low',
+    ]);
   });
 
   it('clears both codex model spellings at once', () => {

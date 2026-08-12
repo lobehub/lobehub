@@ -1,5 +1,6 @@
 'use client';
 
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousAgentModel, ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
 import { ActionIcon, Icon, Input, Tooltip } from '@lobehub/ui';
@@ -161,7 +162,7 @@ interface ModelCatalogSelectorProps {
 export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
   ({ agentId, disabled, model, onSelect, permissionReason, type, variant = 'standalone' }) => {
     const { t } = useTranslation('chat');
-    const agentName = type === 'pi' ? 'Pi' : type === 'qoder' ? 'Qoder' : 'OpenCode';
+    const agentName = getHeterogeneousTypeLabel(type) ?? type;
     const [search, setSearch] = useState('');
     const {
       deferSelection: handleSelect,
