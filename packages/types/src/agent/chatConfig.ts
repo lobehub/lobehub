@@ -106,6 +106,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   graph?: null | ReasoningGraph;
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
+  grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -265,6 +266,7 @@ export const AgentChatConfigSchema = z
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),

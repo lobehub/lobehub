@@ -340,6 +340,7 @@ export interface AiModelReasoningConfig {
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
+  grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
   kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
@@ -362,6 +363,7 @@ export const AiModelReasoningConfigSchema = z.object({
   gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
   grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+  grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
   kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
@@ -400,6 +402,7 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   gpt5ReasoningEffort: ['minimal', 'low', 'medium', 'high'],
   grok4_3ReasoningEffort: ['none', 'low', 'medium', 'high'],
   grok4_5ReasoningEffort: ['low', 'medium', 'high'],
+  grok4_6ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
   grok4_20ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
   hy3ReasoningEffort: ['no_think', 'low', 'high'],
   kimiK3ReasoningEffort: ['low', 'high', 'max'],
@@ -429,6 +432,7 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   gpt5ReasoningEffort: 'medium',
   grok4_3ReasoningEffort: 'low',
   grok4_5ReasoningEffort: 'high',
+  grok4_6ReasoningEffort: 'high',
   grok4_20ReasoningEffort: 'medium',
   hy3ReasoningEffort: 'high',
   kimiK3ReasoningEffort: 'max',
@@ -480,6 +484,7 @@ export type ExtendParamsType =
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
   | 'grok4_5ReasoningEffort'
+  | 'grok4_6ReasoningEffort'
   | 'hy3ReasoningEffort'
   | 'kimiK3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
@@ -537,6 +542,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
   'grok4_5ReasoningEffort',
+  'grok4_6ReasoningEffort',
   'hy3ReasoningEffort',
   'kimiK3ReasoningEffort',
   'ring2_6ReasoningEffort',
