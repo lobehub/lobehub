@@ -121,6 +121,15 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses adversarial CodeBuddy help output without polynomial backtracking', async () => {
+    const stdout = `${'--model <model>'.repeat(1000)}${'Currently supported:(('.repeat(1000)}`;
+    const { parseCodeBuddyModelCatalog } = await importModule();
+    const startedAt = performance.now();
+
+    expect(parseCodeBuddyModelCatalog(stdout)).toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(100);
+  });
+
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();

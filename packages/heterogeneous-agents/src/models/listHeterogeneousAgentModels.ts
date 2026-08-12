@@ -16,16 +16,31 @@ import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
-const CODEBUDDY_MODEL_CATALOG_PATTERN =
-  /--model\s+<model>[\s\S]*?Currently supported:\s*\(([^)]+)\)/i;
+const CODEBUDDY_MODEL_OPTION = '--model <model>';
+const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
 
 /** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
 export const parseCodeBuddyModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
-  const supportedModels = CODEBUDDY_MODEL_CATALOG_PATTERN.exec(stdout)?.[1];
-  if (!supportedModels) return [];
+  const modelOptionIndex = stdout.indexOf(CODEBUDDY_MODEL_OPTION);
+  if (modelOptionIndex < 0) return [];
+
+  const labelStart = stdout.indexOf(
+    CODEBUDDY_SUPPORTED_MODELS_LABEL,
+    modelOptionIndex + CODEBUDDY_MODEL_OPTION.length,
+  );
+  if (labelStart < 0) return [];
+
+  const labelEnd = labelStart + CODEBUDDY_SUPPORTED_MODELS_LABEL.length;
+  const modelsStart = stdout.indexOf('(', labelEnd);
+  if (modelsStart < 0 || stdout.slice(labelEnd, modelsStart).trim()) return [];
+
+  const modelsEnd = stdout.indexOf(')', modelsStart + 1);
+  if (modelsEnd < 0) return [];
+
+  const supportedModels = stdout.slice(modelsStart + 1, modelsEnd);
 
   return [...new Set(supportedModels.split(',').map((model) => model.trim()))]
     .filter((id) => id && id !== 'default-model')
