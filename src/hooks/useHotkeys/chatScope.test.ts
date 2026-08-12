@@ -24,9 +24,9 @@ vi.mock('@/store/global', () => ({
 }));
 
 vi.mock('./useHotkeyById', () => ({
-  useHotkeyById: (id: HotkeyId, callback: () => void) => {
+  useHotkeyById: (id: HotkeyId, callback: () => void, options?: unknown) => {
     mocks.hotkeyCallback = callback;
-    mocks.useHotkeyById(id, callback);
+    mocks.useHotkeyById(id, callback, options);
     return { id };
   },
 }));
