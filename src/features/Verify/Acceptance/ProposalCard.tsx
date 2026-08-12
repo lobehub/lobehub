@@ -114,11 +114,14 @@ const ProposalCard = memo<ProposalCardProps>(
           <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
             {t('acceptance.proposal.title')}
           </Text>
-          {/* Provenance belongs beside the claim it qualifies, not parked at the
-              far end of the action row where it read as a stray footnote. */}
-          <span className={styles.muted}>
-            {proposal.provider}/{proposal.model}
-          </span>
+          {/* Provenance sits beside the claim it qualifies, but only once the
+              card is open. Collapsed, the row's job is the finding itself —
+              a model id there just pushes the summary out of view. */}
+          {open && (
+            <span className={styles.muted}>
+              {proposal.provider}/{proposal.model}
+            </span>
+          )}
           {!open && proposal.comment && <span className={styles.preview}>{proposal.comment}</span>}
           {!open && regions.length > 0 && (
             <span className={styles.muted}>
