@@ -301,6 +301,11 @@ interface AcceptancePageProps {
   onDraftToComposer?: (text: string) => boolean;
 }
 
+/** How long to wait between bundle re-fetches while the batch runs. */
+const PREDICT_POLL_INTERVAL_MS = 4000;
+/** ~2 minutes: a bounded batch of 4-concurrent generations settles well inside this. */
+const PREDICT_POLL_ATTEMPTS = 30;
+
 const AcceptancePage = memo<AcceptancePageProps>(
   ({ acceptanceId: explicitAcceptanceId, onDraftToComposer }) => {
     const params = useParams<{ acceptanceId: string; checkId: string }>();
@@ -626,17 +631,39 @@ const AcceptancePage = memo<AcceptancePageProps>(
       [runAction, acceptanceRecordId],
     );
 
-    // Ask for proposals on whatever is still awaiting a verdict. Explicit, so
-    // opening a report never spends model budget on its own.
+    /**
+     * Ask for proposals on whatever is still awaiting a verdict. Explicit, so
+     * opening a report never spends model budget on its own.
+     *
+     * The server dispatches the batch AFTER responding, so the mutation returns
+     * in milliseconds with nothing to show. Poll the bundle until the cards
+     * land, keeping the button in its loading state meanwhile — otherwise the
+     * click reads as a no-op for the ~15s the first generation takes.
+     */
     const handlePredictReviews = useCallback(async () => {
       if (!acceptanceRecordId) return;
       setPredicting(true);
       try {
-        await runAction(() => verifyService.predictReviews(acceptanceRecordId));
+        const { queued } = await verifyService.predictReviews(acceptanceRecordId);
+        if (queued === 0) return;
+
+        for (let attempt = 0; attempt < PREDICT_POLL_ATTEMPTS; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, PREDICT_POLL_INTERVAL_MS));
+          const next = await mutate();
+          // Stop as soon as every queued check has been answered one way or the
+          // other — a check the model passes writes no row, so waiting for
+          // `queued` cards would always run to the timeout.
+          const settled = (next?.checks ?? []).filter(
+            (check) => check.prediction || check.result?.userDecision,
+          ).length;
+          if (settled >= queued) break;
+        }
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
       } finally {
         setPredicting(false);
       }
-    }, [runAction, acceptanceRecordId]);
+    }, [mutate, acceptanceRecordId]);
 
     // Group-scoped feedback — for concerns that belong to no single check (the
     // checks themselves may be accepted) yet must reach the next round.

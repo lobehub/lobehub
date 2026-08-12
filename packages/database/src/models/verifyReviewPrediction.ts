@@ -1,5 +1,5 @@
 import type { ReviewAdjudication, ReviewProposalEdit } from '@lobechat/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 
 import type { NewVerifyReviewPrediction } from '../schemas/verify';
 import { verifyCheckResults, verifyReviewPredictions } from '../schemas/verify';
@@ -99,6 +99,28 @@ export class VerifyReviewPredictionModel {
 
     return row;
   };
+
+  /**
+   * The answered proposal for this exact (result, model, prompt version), if
+   * one exists. The predictor consults it before spending a model call: an
+   * upsert over an adjudicated row would erase a recorded label.
+   */
+  findAdjudicated = async (
+    checkResultId: string,
+    provider: string,
+    model: string,
+    promptVersion: string,
+  ) =>
+    this.db.query.verifyReviewPredictions.findFirst({
+      where: and(
+        eq(verifyReviewPredictions.checkResultId, checkResultId),
+        eq(verifyReviewPredictions.provider, provider),
+        eq(verifyReviewPredictions.model, model),
+        eq(verifyReviewPredictions.promptVersion, promptVersion),
+        isNotNull(verifyReviewPredictions.adjudication),
+        this.ownership(),
+      ),
+    });
 
   findById = async (id: string) =>
     this.db.query.verifyReviewPredictions.findFirst({

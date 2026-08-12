@@ -30,6 +30,16 @@ const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
  */
 const MAX_VISUALS = 3;
 
+/**
+ * How many checks may be judged at once when a whole acceptance is requested.
+ *
+ * Each prediction is a multimodal generation carrying up to three images, so
+ * this is the knob that decides whether one click is a steady queue or a burst
+ * the provider rate-limits. Four keeps a thirty-check acceptance finishing in a
+ * couple of minutes without ever opening more than four generations.
+ */
+export const REVIEW_PREDICT_CONCURRENCY = 4;
+
 export interface PredictReviewParams {
   /** The check result to re-judge. */
   checkResultId: string;
@@ -98,6 +108,22 @@ export class VerifyReviewPredictorService {
 
     const result = await this.resultModel.findById(checkResultId);
     if (!result) return null;
+
+    // An answered proposal is a recorded label. Re-running the SAME model +
+    // prompt version would upsert over it and destroy the reviewer's verdict —
+    // and the ordinary UI reaches here easily, because `not-an-issue` leaves
+    // the check pending so the request button stays available. Skipping also
+    // avoids paying for an opinion that already has its answer.
+    const existing = await this.predictionModel.findAdjudicated(
+      checkResultId,
+      modelConfig.provider,
+      modelConfig.model,
+      REVIEW_PREDICT_PROMPT_VERSION,
+    );
+    if (existing) {
+      log('predict: %s already adjudicated (%s), skipping', checkResultId, existing.adjudication);
+      return null;
+    }
 
     const visuals = await this.collectVisuals(result);
     // Nothing to look at means nothing this reviewer can honestly say. A

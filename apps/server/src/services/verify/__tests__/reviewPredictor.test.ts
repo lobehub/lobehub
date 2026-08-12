@@ -26,4 +26,24 @@ describe('shouldSurfaceProposal', () => {
   it('withholds once the check itself has a verdict', () => {
     expect(shouldSurfaceProposal({}, true)).toBe(false);
   });
+
+  /**
+   * Regression: a STALE review is last round's rejection kept as history, while
+   * this round's result is undecided. Passing it as "settled" hid the proposal
+   * on exactly the repair round where the reviewer has to judge again — the
+   * caller must therefore pass `userReview && !userReview.stale`, not
+   * `Boolean(userReview)`.
+   */
+  it('treats a check as unsettled when its only review is stale', () => {
+    const staleReject = { action: 'reject', stale: true };
+    const settled = Boolean(staleReject && !staleReject.stale);
+    expect(settled).toBe(false);
+    expect(shouldSurfaceProposal({}, settled)).toBe(true);
+  });
+
+  it('treats a check as settled when its review is current', () => {
+    const currentReject = { action: 'reject', stale: false };
+    const settled = Boolean(currentReject && !currentReject.stale);
+    expect(shouldSurfaceProposal({}, settled)).toBe(false);
+  });
 });

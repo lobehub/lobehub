@@ -30,10 +30,13 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  mapWithConcurrency,
   resolveVerifyModelConfig,
+  REVIEW_PREDICT_CONCURRENCY,
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -420,12 +423,18 @@ export const acceptanceRouter = router({
             acceptance.workspaceId ?? undefined,
           ).listByRuns(runs.map((run) => run.id))
         : [];
-      const predictionByCheckItem = new Map<string, (typeof predictions)[number]>();
+      // Keyed by the concrete check RESULT, never by the union row's id. The
+      // union exposes `sourceCriterionId ?? checkItemId` as `check.id` so a
+      // renamed check folds across rounds — but a prediction is stored against
+      // the result it judged. Keying on the logical id silently misses every
+      // plan that uses a distinct snapshot id: generation reports success and
+      // no card ever renders.
+      const predictionByResult = new Map<string, (typeof predictions)[number]>();
       // Newest-first from the model, so the first write per check item wins and
       // later (older) rows are ignored.
       for (const prediction of predictions) {
-        if (!predictionByCheckItem.has(prediction.checkItemId)) {
-          predictionByCheckItem.set(prediction.checkItemId, prediction);
+        if (!predictionByResult.has(prediction.checkResultId)) {
+          predictionByResult.set(prediction.checkResultId, prediction);
         }
       }
 
@@ -447,14 +456,17 @@ export const acceptanceRouter = router({
             return attachments ? { ...review, attachments } : review;
           });
           const latestAttachments = toAttachments(reviews.at(-1)?.fileIds);
-          const prediction = predictionByCheckItem.get(check.id);
+          const prediction = check.result ? predictionByResult.get(check.result.id) : undefined;
+          // A STALE review is last round's rejection carried forward as history;
+          // THIS round's result is undecided. Treating it as a current verdict
+          // hid the proposal on exactly the repair round where the reviewer has
+          // to judge again.
+          const settled = Boolean(userReview && !userReview.stale);
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
             prediction:
-              prediction && shouldSurfaceProposal(prediction, Boolean(userReview))
-                ? prediction
-                : null,
+              prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
@@ -617,20 +629,6 @@ export const acceptanceRouter = router({
           rejectIntent: input.rejectIntent,
         });
 
-        // Mirror the confirmation onto the proposal itself, so every proposal
-        // carries its own outcome regardless of which of the three paths
-        // answered it — one query then yields the full agreement picture.
-        if (input.proposal) {
-          await new VerifyReviewPredictionModel(
-            ctx.serverDB,
-            acceptance.userId,
-            acceptance.workspaceId ?? undefined,
-          ).adjudicate(input.proposal.predictionId, {
-            adjudication: input.proposal.adjudication,
-            edit: input.proposal.edit,
-          });
-        }
-
         return result;
       } catch (error) {
         throw new TRPCError({
@@ -720,20 +718,36 @@ export const acceptanceRouter = router({
       // check spends budget to argue with a decision that is already made.
       const pending = checks.filter((check) => check.result && !check.result.userDecision);
 
-      const predictions = await Promise.all(
-        pending.map((check) =>
-          predictor.predict({
-            checkResultId: check.result!.id,
-            instructionDocumentId: check.planItem?.documentId,
-            modelConfig,
-            requirement: acceptance.requirement,
-            surface: check.surface,
-          }),
-        ),
-      );
+      // Dispatched AFTER the response, with a ceiling on how many model calls
+      // are open at once.
+      //
+      // Awaiting the fan-out inline could not survive real data: each check is
+      // a 10-25s multimodal generation, so a thirty-check acceptance ran well
+      // past any gateway timeout and the reviewer lost every proposal the run
+      // had already paid for. The ceiling is the other half — an unbounded
+      // `Promise.all` opened one generation per check simultaneously, which is
+      // how a single click turns into a provider rate-limit burst.
+      //
+      // The client polls the bundle for the cards to appear; a failed
+      // individual prediction already resolves to null inside `predict`, so one
+      // bad check cannot abort its neighbours.
+      after(async () => {
+        try {
+          await mapWithConcurrency(pending, REVIEW_PREDICT_CONCURRENCY, (check) =>
+            predictor.predict({
+              checkResultId: check.result!.id,
+              instructionDocumentId: check.planItem?.documentId,
+              modelConfig,
+              requirement: acceptance.requirement,
+              surface: check.surface,
+            }),
+          );
+        } catch (error) {
+          console.error('[acceptance] review prediction batch failed', error);
+        }
+      });
 
-      const proposed = predictions.filter(Boolean).length;
-      return { considered: pending.length, proposed };
+      return { queued: pending.length };
     }),
 
   /**

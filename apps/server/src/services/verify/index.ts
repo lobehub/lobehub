@@ -10,6 +10,7 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
 export {
@@ -39,6 +40,7 @@ export {
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
   type PredictReviewParams,
+  REVIEW_PREDICT_CONCURRENCY,
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from './reviewPredictor';

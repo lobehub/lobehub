@@ -209,9 +209,10 @@ export class VerifyService {
   }) => lambdaClient.acceptance.reviewChecks.mutate(input);
 
   /**
-   * Ask for automated proposals on the checks still awaiting a verdict.
-   * Explicit rather than folded into the bundle read so opening a report never
-   * spends model budget.
+   * Queue proposals for the checks still awaiting a verdict. Explicit rather
+   * than folded into the bundle read, so opening a report never spends model
+   * budget. Returns as soon as the batch is dispatched (`queued`), NOT when it
+   * finishes — the caller polls the bundle for the cards to appear.
    */
   predictReviews = (id: string) => lambdaClient.acceptance.predictReviews.mutate({ id });
 
