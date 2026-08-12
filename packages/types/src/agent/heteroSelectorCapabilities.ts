@@ -31,9 +31,6 @@ export const CLAUDE_CODE_REASONING_EFFORT_LEVELS = [
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
-export const CLAUDE_CODE_DEFAULT_MODEL = 'sonnet';
-export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'high' satisfies ClaudeCodeReasoningEffort;
-
 /**
  * Codex reasoning-effort levels, mirrored to the CLI config key
  * `model_reasoning_effort`.
@@ -48,8 +45,6 @@ export const CODEX_REASONING_EFFORT_LEVELS = [
 
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number];
 
-export const CODEX_DEFAULT_MODEL = 'gpt-5.6-sol';
-export const CODEX_DEFAULT_REASONING_EFFORT = 'medium' satisfies CodexReasoningEffort;
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 const CODEX_MAX_REASONING_EFFORT_LEVELS = [
