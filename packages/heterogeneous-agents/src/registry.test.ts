@@ -5,6 +5,7 @@ import {
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CursorAdapter,
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
@@ -31,6 +32,10 @@ describe('registry', () => {
     it('creates a CodexAdapter for "codex"', () => {
       const adapter = createAdapter('codex');
       expect(adapter).toBeInstanceOf(CodexAdapter);
+    });
+
+    it('creates a CursorAdapter for "cursor"', () => {
+      expect(createAdapter('cursor')).toBeInstanceOf(CursorAdapter);
     });
 
     it('creates an OpenCodeAdapter for "opencode"', () => {

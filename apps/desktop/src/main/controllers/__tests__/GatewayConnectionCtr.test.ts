@@ -839,18 +839,23 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'codebuddy', 'opencode'] as const)(
-      'forwards agentType "%s" to spawnLhHeteroExec',
-      async (agentType) => {
-        const client = await connectAndOpen();
-        client.simulateAgentRunRequest(agentType);
-        await vi.advanceTimersByTimeAsync(0);
+    it.each([
+      'openclaw',
+      'hermes',
+      'codex',
+      'claude-code',
+      'codebuddy',
+      'cursor',
+      'opencode',
+    ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
 
-        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-          expect.objectContaining({ agentType }),
-        );
-      },
-    );
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType }),
+      );
+    });
 
     it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();

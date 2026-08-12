@@ -85,6 +85,14 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
+export const cursorBinary: BinarySpec = {
+  description: 'Cursor - Cursor agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('cursor', 'agent'),
+  name: 'agent',
+  priority: 3,
+};
+
 /**
  * Amp CLI
  * @see https://ampcode.com/manual
@@ -180,6 +188,7 @@ export const heterogeneousCliAgentBinaries = {
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'cursor': cursorBinary,
   'opencode': opencodeBinary,
   'pi': piBinary,
   'qoder': qoderBinary,

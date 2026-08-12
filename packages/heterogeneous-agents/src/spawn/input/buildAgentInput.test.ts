@@ -242,6 +242,23 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('cursor', () => {
+    it('passes v1 text input through and explicitly rejects images', async () => {
+      await expect(buildAgentInput('cursor', 'hello')).resolves.toEqual({
+        args: [],
+        stdin: 'hello',
+      });
+      await expect(
+        buildAgentInput('cursor', [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ]),
+      ).rejects.toThrow('Cursor CLI does not support image input.');
+    });
+  });
+
   describe('opencode', () => {
     it('uses raw text stdin and repeatable --file flags', async () => {
       const filePath = path.join(tmp, 'opencode.png');

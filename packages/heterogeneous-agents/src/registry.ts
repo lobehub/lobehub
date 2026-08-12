@@ -11,6 +11,7 @@ import {
   ClaudeCodeSdkAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CursorAdapter,
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
@@ -34,6 +35,9 @@ const localAgentRegistry = {
   },
   'codex': {
     createAdapter: () => new CodexAdapter(),
+  },
+  'cursor': {
+    createAdapter: () => new CursorAdapter(),
   },
   'opencode': {
     createAdapter: () => new OpenCodeAdapter(),

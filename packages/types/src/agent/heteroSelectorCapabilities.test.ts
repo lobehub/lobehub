@@ -19,6 +19,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
 
     expect(isHeteroSelectorAvailable('amp')).toBe(false);
+    expect(isHeteroSelectorAvailable('cursor')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });
@@ -26,6 +27,7 @@ describe('selector availability', () => {
   it('exposes the dimensions each provider actually supports', () => {
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
+    expect(getHeteroSelectorCapability('cursor')?.model).toBeUndefined();
     expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
     expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
     expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('static');
