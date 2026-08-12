@@ -61,9 +61,14 @@ export class CursorAdapter implements AgentEventAdapter {
   sessionId?: string;
   private assistantSegmentText = '';
   private completedTools = new Set<string>();
+  private currentModelCallId?: string;
+  private emittedAssistantText = '';
   private model?: string;
+  private modelCallTexts = new Map<string, string>();
+  private pendingStepBoundary = false;
   private pendingTools = new Map<string, ToolCallPayload>();
   private started = false;
+  private stepIndex = 0;
   private streamOpen = false;
   private terminal = false;
 
@@ -90,18 +95,39 @@ export class CursorAdapter implements AgentEventAdapter {
   private assistant(event: Record<string, unknown>): HeterogeneousAgentEvent[] {
     const content = readAssistantText(event.message);
     if (!content) return [];
-    const partial =
-      typeof event.timestamp_ms === 'number' && typeof event.model_call_id !== 'string';
-    let next = content;
-    if (partial) this.assistantSegmentText += content;
-    else if (content.startsWith(this.assistantSegmentText)) {
-      next = content.slice(this.assistantSegmentText.length);
+    const modelCallId =
+      typeof event.model_call_id === 'string' && event.model_call_id
+        ? event.model_call_id
+        : undefined;
+    if (modelCallId && this.modelCallTexts.has(modelCallId)) {
+      this.modelCallTexts.set(modelCallId, content);
+      return [];
+    }
+    const partial = typeof event.timestamp_ms === 'number' && modelCallId === undefined;
+    const startsNewStep =
+      this.pendingStepBoundary ||
+      (!!modelCallId && !!this.currentModelCallId && modelCallId !== this.currentModelCallId);
+    const next = startsNewStep || partial ? content : this.readBufferedSuffix(content);
+    if (!next) {
+      if (modelCallId) {
+        this.currentModelCallId = modelCallId;
+        this.modelCallTexts.set(modelCallId, content);
+      }
+      this.rememberBufferedContent(content);
+      return [];
+    }
+
+    const events = this.ensureStart();
+    if (startsNewStep) events.push(...this.openNextStep());
+    if (modelCallId) {
+      this.currentModelCallId = modelCallId;
+      this.modelCallTexts.set(modelCallId, content);
       this.assistantSegmentText = content;
-    } else if (this.assistantSegmentText.startsWith(content)) next = '';
-    else this.assistantSegmentText += content;
-    return next
-      ? [...this.ensureStart(), this.event('stream_chunk', { chunkType: 'text', content: next })]
-      : [];
+    } else if (partial) this.assistantSegmentText += content;
+    else this.rememberBufferedContent(content);
+    this.emittedAssistantText += next;
+    events.push(this.event('stream_chunk', { chunkType: 'text', content: next }));
+    return events;
   }
 
   private toolCall(event: Record<string, unknown>): HeterogeneousAgentEvent[] {
@@ -118,30 +144,32 @@ export class CursorAdapter implements AgentEventAdapter {
     };
     if (event.subtype === 'started') {
       if (this.completedTools.has(id) || this.pendingTools.has(id)) return [];
-      this.assistantSegmentText = '';
+      const events = this.ensureStart();
+      if (this.pendingStepBoundary) events.push(...this.openNextStep());
       this.pendingTools.set(id, tool);
-      return [
-        ...this.ensureStart(),
+      events.push(
         this.event('stream_chunk', { chunkType: 'tools_calling', toolsCalling: [tool] }),
         this.event('tool_start', { toolCallId: id }),
-      ];
+      );
+      return events;
     }
     if (event.subtype !== 'completed' || this.completedTools.has(id)) return [];
     this.completedTools.add(id);
     const events = this.ensureStart();
     if (!this.pendingTools.has(id)) {
+      if (this.pendingStepBoundary) events.push(...this.openNextStep());
       events.push(
         this.event('stream_chunk', { chunkType: 'tools_calling', toolsCalling: [tool] }),
         this.event('tool_start', { toolCallId: id }),
       );
     }
     this.pendingTools.delete(id);
-    this.assistantSegmentText = '';
     const result = readResult(data.result);
     events.push(
       this.event('tool_result', { ...result, toolCallId: id } satisfies ToolResultData),
       this.event('tool_end', { isSuccess: !result.isError, toolCallId: id }),
     );
+    if (this.pendingTools.size === 0) this.pendingStepBoundary = true;
     return events;
   }
 
@@ -171,12 +199,47 @@ export class CursorAdapter implements AgentEventAdapter {
     if (this.started) return [];
     this.started = true;
     this.streamOpen = true;
-    const data: StreamStartData = {
+    return [this.event('stream_start', this.getStreamStartData())];
+  }
+
+  private getStreamStartData(extra: Partial<StreamStartData> = {}): StreamStartData {
+    return {
       model: this.model,
       provider: 'cursor',
       sessionId: this.sessionId,
+      ...extra,
     };
-    return [this.event('stream_start', data)];
+  }
+
+  private openNextStep(): HeterogeneousAgentEvent[] {
+    this.pendingStepBoundary = false;
+    this.stepIndex += 1;
+    this.assistantSegmentText = '';
+    this.currentModelCallId = undefined;
+    return [
+      this.event('stream_end', {}),
+      this.event('stream_start', this.getStreamStartData({ newStep: true })),
+    ];
+  }
+
+  private readBufferedSuffix(content: string): string {
+    if (content.startsWith(this.assistantSegmentText)) {
+      return content.slice(this.assistantSegmentText.length);
+    }
+    if (this.assistantSegmentText.startsWith(content)) return '';
+    if (content.startsWith(this.emittedAssistantText)) {
+      return content.slice(this.emittedAssistantText.length);
+    }
+    if (this.emittedAssistantText.startsWith(content)) return '';
+    return content;
+  }
+
+  private rememberBufferedContent(content: string): void {
+    if (content.startsWith(this.assistantSegmentText)) {
+      this.assistantSegmentText = content;
+    } else if (!this.assistantSegmentText.startsWith(content)) {
+      this.assistantSegmentText += content;
+    }
   }
 
   private closePendingTools(): HeterogeneousAgentEvent[] {
@@ -201,6 +264,6 @@ export class CursorAdapter implements AgentEventAdapter {
   }
 
   private event(type: HeterogeneousAgentEvent['type'], data: unknown): HeterogeneousAgentEvent {
-    return { data, stepIndex: 0, timestamp: Date.now(), type };
+    return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type };
   }
 }

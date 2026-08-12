@@ -17,8 +17,8 @@ export const cursorDriver: HeterogeneousAgentDriver = {
         ...args,
         ...input.args,
         '--',
-        input.stdin,
       ],
+      argvPayload: input.stdin,
     };
   },
 };

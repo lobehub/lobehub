@@ -41,8 +41,8 @@ describe('cursorDriver', () => {
         '--model',
         'sonnet-4-thinking',
         '--',
-        '-inspect this repository',
       ],
+      argvPayload: '-inspect this repository',
     });
   });
 });
