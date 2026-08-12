@@ -970,7 +970,13 @@ export class MessengerRouter {
             // Tap-to-switch picker on platforms with button support (mirrors
             // /agents); buttons emit `messenger:mode:<agent|chat>`. Platforms
             // without a picker fall back to the text status + usage reply.
-            if (ctx.binder.sendAgentPicker) {
+            // Only offered where a tap writes the same thread this invocation
+            // resolved: DMs, and slash dispatches (whose ctx.thread IS the
+            // canonical DM that handleModeCallback writes via openDM). A
+            // channel text mention resolves the CHANNEL thread — picker taps
+            // would write the DM while this channel's next run reads its own
+            // state — so it gets the text status instead.
+            if (ctx.binder.sendAgentPicker && (ctx.isDM || ctx.source === 'slash')) {
               await ctx.binder.sendAgentPicker(ctx.chatId, {
                 action: 'mode',
                 entries: MessengerRouter.modePickerEntries(current, strings),

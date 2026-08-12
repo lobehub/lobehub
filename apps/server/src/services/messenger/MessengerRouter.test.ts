@@ -1312,6 +1312,38 @@ describe('MessengerRouter slash command dispatch', () => {
     );
   });
 
+  it('/mode from a channel text mention replies text status instead of the picker', async () => {
+    // A channel text mention resolves the CHANNEL thread, but picker taps
+    // write the canonical DM (handleModeCallback → openDM) — the channel's
+    // next run would still read its own state. So no picker here: text
+    // status via the ephemeral reply instead.
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    mockGetAgentConfigById.mockResolvedValue({ chatConfig: { enableAgentMode: true } });
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    const channelThread = { ...fakeChannelThread(), state: Promise.resolve(null) };
+    await handler(channelThread, fakeMessage({ isMention: true, text: '/mode' }));
+
+    expect(mockSlackBinder.sendAgentPicker).not.toHaveBeenCalled();
+    expect(mockSlackBinder.replyEphemeral).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'C_GENERAL',
+        text: expect.stringContaining('Current mode'),
+        userId: 'U_ALICE',
+      }),
+    );
+  });
+
   it('mode picker tap writes toolMode to the DM thread and re-renders the picker', async () => {
     const router = new MessengerRouter();
     mockFindLink.mockResolvedValue({

@@ -563,6 +563,34 @@ describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
     expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
   });
 
+  it('/mode agent preserves a custom toolMode (hand-picked toolset stays)', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    // `custom` is agent-side; widening it to `agent` would silently grant
+    // tools the agent deliberately excluded.
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('custom');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode chat still disables tools on a custom-toolMode agent', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'chat' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('chat');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
   it('wins over the workspace member-mode override', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,

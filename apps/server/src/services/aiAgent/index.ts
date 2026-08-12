@@ -1475,10 +1475,16 @@ export class AiAgentService {
     // on `toolMode` — otherwise `/mode chat` would keep agentic context while
     // `/mode agent` on a chat-default agent would run tools without it.
     if (toolModeOverride) {
+      // `custom` is agent-side (the `/mode` picker reports it as Agent Mode)
+      // but means "exactly the agent's declared plugins". Returning to Agent
+      // Mode must restore that hand-picked set, not widen it to the full
+      // default toolset by overwriting `custom` with `agent`.
+      const storedToolMode = agentConfig.chatConfig?.toolMode;
       agentConfig.chatConfig = {
         ...agentConfig.chatConfig,
         enableAgentMode: toolModeOverride === 'agent',
-        toolMode: toolModeOverride,
+        toolMode:
+          toolModeOverride === 'agent' && storedToolMode === 'custom' ? 'custom' : toolModeOverride,
       };
     }
 
