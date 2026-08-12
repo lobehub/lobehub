@@ -49,13 +49,17 @@ export function defineConfig(config: CustomNextConfig) {
     },
   };
 
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  const assetPrefix = (process.env.ASSET_BASE_URL || process.env.NEXT_PUBLIC_ASSET_PREFIX)?.replace(
+    /\/+$/,
+    '',
+  );
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
+    crossOrigin: 'anonymous',
 
     compiler: {
       emotion: true,
