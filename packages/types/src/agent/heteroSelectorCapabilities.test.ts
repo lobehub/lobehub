@@ -19,6 +19,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
 
     expect(isHeteroSelectorAvailable('amp')).toBe(false);
+    expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });

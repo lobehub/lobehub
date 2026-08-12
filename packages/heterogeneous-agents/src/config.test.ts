@@ -17,6 +17,7 @@ describe('heterogeneous agent config', () => {
       'claude-code',
       'codebuddy',
       'codex',
+      'kimi-code',
       'opencode',
       'pi',
       'qoder',
@@ -47,6 +48,11 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'amp',
       title: 'Amp',
       type: 'amp',
+    });
+    expect(getHeterogeneousAgentConfig('kimi-code')).toMatchObject({
+      defaultCommand: 'kimi',
+      title: 'Kimi Code',
+      type: 'kimi-code',
     });
     expect(getHeterogeneousAgentConfig('opencode')).toMatchObject({
       defaultCommand: 'opencode',
@@ -83,6 +89,13 @@ describe('heterogeneous agent config', () => {
       docsUrl: 'https://ampcode.com/manual',
       message: 'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
     });
+    expect(isHeterogeneousAgentAuthRequired('kimi-code', 'No model configured')).toBe(true);
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'kimi-code' })).toMatchObject({
+      agentType: 'kimi-code',
+      code: 'auth_required',
+      command: 'kimi',
+      message: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -92,6 +105,7 @@ describe('heterogeneous agent config', () => {
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
       'hermes': 'Hermes',
+      'kimi-code': 'Kimi Code',
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',
       'pi': 'Pi',

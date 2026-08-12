@@ -143,6 +143,13 @@ const buildPiInput = async (
   };
 };
 
+const buildKimiCodeInput = (blocks: AgentContentBlock[]): AgentInputPlan => {
+  if (blocks.some(isImageBlock)) {
+    throw new Error('Kimi Code does not support image attachments in one-shot prompt mode.');
+  }
+  return { args: ['--prompt', collectText(blocks)], stdin: '' };
+};
+
 const buildQoderInput = async (
   blocks: AgentContentBlock[],
   options: BuildAgentInputOptions,
@@ -192,6 +199,9 @@ export const buildAgentInput = async (
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
+    }
+    case 'kimi-code': {
+      return buildKimiCodeInput(blocks);
     }
     case 'opencode': {
       return buildOpenCodeInput(blocks, options);

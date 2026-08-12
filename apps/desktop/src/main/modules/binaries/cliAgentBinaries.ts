@@ -151,16 +151,15 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
 });
 
 /**
- * Kimi CLI (Moonshot)
- * @see https://github.com/MoonshotAI/kimi-cli
+ * Kimi Code (Moonshot AI)
+ * @see https://github.com/MoonshotAI/kimi-code
  */
-export const kimiCliBinary: BinarySpec = defineValidatedBinary({
-  candidates: ['kimi'],
-  description: 'Kimi CLI - Moonshot AI agentic coding CLI',
+export const kimiCliBinary: BinarySpec = {
+  description: 'Kimi Code - Moonshot AI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('kimi-code', 'kimi'),
   name: 'kimi',
   priority: 9,
-  validateKeywords: ['kimi'],
-});
+};
 
 /**
  * Aider - AI pair programming CLI
@@ -180,6 +179,7 @@ export const heterogeneousCliAgentBinaries = {
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,
   'pi': piBinary,
   'qoder': qoderBinary,
@@ -189,7 +189,6 @@ export const cliAgentBinaries: BinarySpec[] = [
   ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
-  kimiCliBinary,
   aiderBinary,
 ];
 

@@ -14,6 +14,7 @@ import {
   CodeBuddy,
   Codex,
   HermesAgent,
+  Kimi,
   OpenClaw,
   OpenCode,
   Pi,
@@ -35,6 +36,7 @@ export interface ConnectableProvider {
     | typeof CodeBuddy
     | typeof Codex
     | typeof HermesAgent
+    | typeof Kimi
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
@@ -64,6 +66,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
   'codex': Codex,
+  'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,

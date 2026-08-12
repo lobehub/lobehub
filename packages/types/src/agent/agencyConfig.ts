@@ -74,7 +74,8 @@ export type HeterogeneousAgentModelCatalog =
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
+ *   `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -294,6 +295,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -338,6 +340,17 @@ export const buildHeteroSpawnArgs = (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasCliFlag(baseArgs, '--model')
     ) {
       extraArgs.push('--model', model);
     }
@@ -392,6 +405,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -445,6 +459,17 @@ export const buildHeteroExecArgs = (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasCliFlag(baseArgs, '--model')
     ) {
       selectorArgs.push('--model', model);
     }
