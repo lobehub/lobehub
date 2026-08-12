@@ -46,7 +46,7 @@ export default {
 
   'empty.desc':
     'Expertise comes from doing, not from writing it down. Point it at something it does often, and the rules will start coming out of the work itself.',
-  'empty.title': 'Nothing learned here yet',
+  'empty.title': 'Turn real work into expertise',
   'headline.alsoDeclining': ' {{name}} has turned back down.',
   'headline.alsoRising': ' {{name}} is still climbing steeply.',
   'headline.flat': '{{name}} has flattened out — it has learned what can be taught.',
@@ -87,7 +87,7 @@ export default {
   'rules.tier.core': 'Backbone',
   'rules.tier.niche': 'Situational',
   'rules.tier.unused': 'Never used',
-  'rules.title': 'Rules, by hits',
+  'rules.title': 'Rules',
   'rules.unanchored': 'no anchor',
 
   'shape.declining': 'turning down = losing ability',
@@ -106,6 +106,11 @@ export default {
   'anchor.noCandidates': 'No directions proposed yet',
   'anchor.noCandidatesDesc':
     'Directions are read out of what this agent has actually been doing. Have a few real conversations in the area you care about, then come back — the more it has done, the sharper the proposals.',
+  'anchor.traceCandidates': '{{count}} possible directions',
+  'anchor.traceCluster': 'Recurring work grouped',
+  'anchor.traceConversations': 'Past conversations',
+  'anchor.traceHelp':
+    'These are two valid ways to define the same body of work, not a system recommendation. Pick the boundary you want this expertise to learn within.',
   'create.cancel': 'Cancel',
   'create.entry': 'Create an expertise',
   'create.failed': 'Could not create it. Try again.',
@@ -115,10 +120,15 @@ export default {
   'create.filterPlaceholder':
     'e.g. the conversation is diagnosing a live incident with observable symptoms. Design discussions and general ops questions do not count.',
   'create.modalTitle': 'Create an expertise',
+  'create.parse': 'Continue',
+  'create.parsedFilter': 'Conversations that count as practice',
+  'create.parsedTitle': 'Expertise name',
   'create.submit': 'Create',
   'create.titleLabel': 'Name',
   'create.titlePlaceholder': 'e.g. Incident response',
   'coverage.blankHint': 'never tested at this layer',
+  'coverage.gaps': 'No rules yet',
+  'coverage.share': '{{title}} · {{count}} rules',
   'coverage.sub': '{{covered}}/{{total}} layers have rules · {{unused}} rules never used',
   'coverage.title': 'Where the learning has landed',
   'create.briefHelp':
@@ -133,6 +143,10 @@ export default {
   'journey.step3': 'Read where it stands',
   'journey.step3Desc': 'the curve becomes readable',
   'rules.hitsShort': '{{count}} uses',
+  'rules.filter.all': 'All rules',
+  'rules.filter.core': 'Backbone',
+  'rules.filter.niche': 'Situational',
+  'rules.filter.unused': 'Never used',
   'rules.neverUsedShort': 'never used',
   'overview.soloNext':
     'Open it to see what counts as practice — the rules start coming the next time a conversation matches.',

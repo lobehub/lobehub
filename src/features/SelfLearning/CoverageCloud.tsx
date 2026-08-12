@@ -7,110 +7,140 @@ import { useTranslation } from 'react-i18next';
 
 import type { ExpertiseDomainDetail } from '@/services/expertise';
 
-/** 三档底色，用现成 token 而不是自己算 rgba —— 深浅色主题各自成立。 */
-const FILLS = [
-  'transparent',
-  cssVar.colorFillQuaternary,
-  cssVar.colorFillTertiary,
-  cssVar.colorFillSecondary,
-];
-
 const styles = createStaticStyles(({ css }) => ({
-  chip: css`
+  empty: css`
     padding-block: 5px;
-    padding-inline: 11px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-  `,
-  /** 空层不给底色 —— 它要看得见，但不能看起来像「有内容」。 */
-  chipEmpty: css`
-    padding-block: 5px;
-    padding-inline: 11px;
+    padding-inline: 10px;
     border: 1px dashed ${cssVar.colorWarningBorder};
     border-radius: 999px;
   `,
+  legendDot: css`
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+  `,
+  segment: css`
+    min-width: 3px;
+    height: 12px;
+
+    &:first-child {
+      border-start-start-radius: 6px;
+      border-end-start-radius: 6px;
+    }
+
+    &:last-child {
+      border-start-end-radius: 6px;
+      border-end-end-radius: 6px;
+    }
+  `,
+  track: css`
+    overflow: hidden;
+    display: flex;
+    gap: 2px;
+
+    width: 100%;
+    padding: 2px;
+    border-radius: 8px;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
 }));
 
-interface CoverageCloudProps {
+const COLORS = [
+  cssVar.colorPrimary,
+  cssVar.colorInfo,
+  cssVar.colorSuccess,
+  cssVar.colorWarning,
+  cssVar.colorTextTertiary,
+];
+
+interface CoverageSnapshotProps {
   detail: ExpertiseDomainDetail;
 }
 
-/**
- * 学习覆盖面 —— 一眼看出它把力气花在了哪一层。
- *
- * 验收原话：「需要一个类似词云或者领域快照之类的东西……现在那个次数统计看着太平了，
- * 没有全局 overview 的感觉」。一列对齐的数字确实是平的：73 和 1 在视觉上一样重，
- * 得逐行读才能比出来。这里让字号与底色浓度随条数走，偏科就是画面上的大小对比本身，
- * 不需要读数字。
- *
- * 空层保留为虚线圈：它是 canonical 分层照出来的缺口，而缺口恰恰是这张图最该被看见的部分。
- */
-const CoverageCloud = memo<CoverageCloudProps>(({ detail }) => {
+/** A composition chart answers “where is the learning concentrated?”; empty layers stay explicit gaps. */
+const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
   const { t } = useTranslation('selfLearning');
   const { domain, layerCounts, lessonStats } = detail;
 
-  const chips = useMemo(() => {
-    const layers = domain.layers ?? [];
-    const max = Math.max(1, ...layers.map((l) => layerCounts[l.key] ?? 0));
-    return layers
-      .map((l) => {
-        const count = layerCounts[l.key] ?? 0;
-        const ratio = count / max;
-        return {
-          count,
-          fontSize: 12 + Math.round(ratio * 10),
-          key: l.key,
-          // 底色也跟着分三档：字号之外再给一层冗余编码，小屏或弱视也能读出轻重
-          level: count === 0 ? 0 : ratio > 0.66 ? 3 : ratio > 0.33 ? 2 : 1,
-          title: l.title,
-        };
-      })
-      .sort((a, b) => b.count - a.count);
+  const { covered, empty, total } = useMemo(() => {
+    const layers = (domain.layers ?? []).map((layer, index) => ({
+      color: COLORS[index % COLORS.length],
+      count: layerCounts[layer.key] ?? 0,
+      key: layer.key,
+      title: layer.title,
+    }));
+    return {
+      covered: layers.filter((layer) => layer.count > 0),
+      empty: layers.filter((layer) => layer.count === 0),
+      total: layers.reduce((sum, layer) => sum + layer.count, 0),
+    };
   }, [domain.layers, layerCounts]);
 
-  if (chips.length === 0) return null;
+  if (covered.length === 0 && empty.length === 0) return null;
 
   return (
-    <Block gap={10} padding={16} variant={'outlined'}>
-      <Flexbox horizontal align={'baseline'} gap={10} justify={'space-between'} wrap={'wrap'}>
+    <Block gap={14} padding={16} variant={'outlined'}>
+      <Flexbox horizontal align={'baseline'} justify={'space-between'} wrap={'wrap'}>
         <Text fontSize={13} weight={600}>
           {t('coverage.title')}
         </Text>
         <Text fontSize={11} type={'secondary'}>
           {t('coverage.sub', {
-            covered: chips.filter((c) => c.count > 0).length,
-            total: chips.length,
+            covered: covered.length,
+            total: covered.length + empty.length,
             unused: lessonStats.unused,
           })}
         </Text>
       </Flexbox>
-      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-        {chips.map((c) => (
-          <Tooltip
-            key={c.key}
-            title={c.count === 0 ? t('coverage.blankHint') : t('layers.count', { count: c.count })}
-          >
-            <Flexbox
-              horizontal
-              align={'baseline'}
-              className={c.count === 0 ? styles.chipEmpty : styles.chip}
-              gap={6}
-              style={c.count === 0 ? undefined : { background: FILLS[c.level] }}
-            >
-              <Text fontSize={c.fontSize} type={c.count === 0 ? 'warning' : undefined} weight={600}>
-                {c.title}
+
+      {total > 0 && (
+        <Flexbox gap={10}>
+          <div className={styles.track}>
+            {covered.map((layer) => (
+              <Tooltip
+                key={layer.key}
+                title={t('coverage.share', { count: layer.count, title: layer.title })}
+              >
+                <div
+                  className={styles.segment}
+                  style={{ background: layer.color, flex: layer.count }}
+                />
+              </Tooltip>
+            ))}
+          </div>
+          <Flexbox horizontal gap={14} wrap={'wrap'}>
+            {covered.map((layer) => (
+              <Flexbox horizontal align={'center'} gap={6} key={layer.key}>
+                <div className={styles.legendDot} style={{ background: layer.color }} />
+                <Text fontSize={11.5}>{layer.title}</Text>
+                <Text fontSize={11} type={'secondary'}>
+                  {layer.count}
+                </Text>
+              </Flexbox>
+            ))}
+          </Flexbox>
+        </Flexbox>
+      )}
+
+      {empty.length > 0 && (
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          <Text fontSize={11} type={'secondary'}>
+            {t('coverage.gaps')}
+          </Text>
+          {empty.map((layer) => (
+            <div className={styles.empty} key={layer.key}>
+              <Text fontSize={11.5} type={'warning'}>
+                {layer.title}
               </Text>
-              <Text fontSize={11} type={'secondary'}>
-                {c.count === 0 ? t('layers.blank') : c.count}
-              </Text>
-            </Flexbox>
-          </Tooltip>
-        ))}
-      </Flexbox>
+            </div>
+          ))}
+        </Flexbox>
+      )}
     </Block>
   );
 });
 
-CoverageCloud.displayName = 'CoverageCloud';
+CoverageSnapshot.displayName = 'CoverageSnapshot';
 
-export default CoverageCloud;
+export default CoverageSnapshot;

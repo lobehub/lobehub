@@ -2,8 +2,8 @@
 
 import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { ChevronLeftIcon, GraduationCapIcon } from 'lucide-react';
+import { createStaticStyles, useTheme } from 'antd-style';
+import { ArrowRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -14,7 +14,6 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
@@ -25,13 +24,6 @@ import RuleList from '../RuleList';
 import FitCurve from './FitCurve';
 
 const styles = createStaticStyles(({ css }) => ({
-  back: css`
-    cursor: pointer;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
   body: css`
     overflow-y: auto;
     display: flex;
@@ -72,7 +64,6 @@ const DomainDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
   const theme = useTheme();
   const params = useParams();
-  const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const domainId = params.domainId;
 
@@ -117,20 +108,7 @@ const DomainDetail = memo(() => {
           >
             {data && (
               <Flexbox gap={24} paddingBlock={'26px 64px'}>
-                <Flexbox horizontal align={'baseline'} justify={'space-between'} wrap={'wrap'}>
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    className={styles.back}
-                    gap={7}
-                    onClick={() => selfLearningPath && navigate(selfLearningPath)}
-                  >
-                    <Icon icon={ChevronLeftIcon} size={14} />
-                    <Icon icon={GraduationCapIcon} size={16} />
-                    <Text fontSize={13} weight={600}>
-                      {t('title')} · {data.domain.title}
-                    </Text>
-                  </Flexbox>
+                <Flexbox horizontal align={'baseline'} justify={'flex-end'} wrap={'wrap'}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('detail.totals', {
                       hits: data.lessonStats.hits,
@@ -304,15 +282,21 @@ const AnchorChoice = memo<{
         <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
           {t('anchor.pendingDesc')}
         </Text>
-        {/* 光说「等你定方向」不够 —— 得说清楚定完之后数据从哪儿来。 */}
-        <Block gap={5} padding={12} variant={'filled'}>
-          <Text fontSize={12} weight={600}>
-            {t('anchor.howTitle')}
-          </Text>
-          <Text fontSize={11.5} lineHeight={1.75} type={'secondary'}>
-            {t('anchor.howBody')}
-          </Text>
-        </Block>
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          {[
+            t('anchor.traceConversations'),
+            t('anchor.traceCluster'),
+            t('anchor.traceCandidates', { count: candidates.length }),
+          ].map((label, index, list) => (
+            <Flexbox horizontal align={'center'} gap={8} key={label}>
+              <Tag size={'small'}>{label}</Tag>
+              {index < list.length - 1 && <Icon icon={ArrowRightIcon} size={12} />}
+            </Flexbox>
+          ))}
+        </Flexbox>
+        <Text fontSize={11.5} lineHeight={1.7} type={'secondary'}>
+          {t('anchor.traceHelp')}
+        </Text>
       </Block>
 
       {candidates.length === 0 ? (
@@ -376,7 +360,6 @@ const FitNote = memo<{ detail: NonNullable<ReturnType<typeof useExpertiseDomain>
   ({ detail }) => {
     const { t } = useTranslation('selfLearning');
     const m = detail.maturity;
-
     if (!m.usable) {
       return (
         <Text fontSize={11.5} lineHeight={1.7} type={'secondary'}>
@@ -415,6 +398,7 @@ const FitMetrics = memo<{ detail: NonNullable<ReturnType<typeof useExpertiseDoma
   ({ detail }) => {
     const { t } = useTranslation('selfLearning');
     const m = detail.maturity;
+    if (!m.usable && detail.runCount > 0) return null;
     // 算不出的时候只留成熟度那张（它承载「为什么算不出」），其余三张整块不渲染。
     // 一排「—」既没有信息又占掉整行，读起来像是坏了而不是「这次没算出来」。
     const cards: [string, string, string][] = m.usable

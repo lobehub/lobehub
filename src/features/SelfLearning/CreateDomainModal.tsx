@@ -1,7 +1,8 @@
 'use client';
 
-import { Flexbox, Text, TextArea } from '@lobehub/ui';
-import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { parseExpertiseDomainBrief } from '@lobechat/types';
+import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Button, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,13 +27,15 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
   const { t } = useTranslation('selfLearning');
   const { close } = useModalContext();
   const [brief, setBrief] = useState('');
+  const [draft, setDraft] = useState<ReturnType<typeof parseExpertiseDomainBrief>>();
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (!brief.trim()) return;
     setLoading(true);
     try {
-      await expertiseService.createDomain({ agentId, brief: brief.trim() });
+      if (!draft) return;
+      await expertiseService.createDomain({ agentId, brief, ...draft });
       onCreated();
       close();
     } catch {
@@ -47,19 +50,44 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
       <Text fontSize={13} lineHeight={1.75} type={'secondary'}>
         {t('create.briefHelp')}
       </Text>
-      <TextArea
-        autoFocus
-        placeholder={t('create.briefPlaceholder')}
-        rows={4}
-        value={brief}
-        onChange={(e) => setBrief(e.target.value)}
-      />
-      <ModalFooter>
+      {draft ? (
+        <Flexbox gap={12}>
+          <Text fontSize={12} type={'secondary'} weight={600}>
+            {t('create.parsedTitle')}
+          </Text>
+          <Input
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+          />
+          <Text fontSize={12} type={'secondary'} weight={600}>
+            {t('create.parsedFilter')}
+          </Text>
+          <TextArea
+            rows={4}
+            value={draft.domainFilter}
+            onChange={(e) => setDraft({ ...draft, domainFilter: e.target.value })}
+          />
+        </Flexbox>
+      ) : (
+        <TextArea
+          autoFocus
+          placeholder={t('create.briefPlaceholder')}
+          rows={4}
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+        />
+      )}
+      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('create.cancel')}</Button>
-        <Button disabled={!brief.trim()} loading={loading} type={'primary'} onClick={submit}>
-          {t('create.submit')}
+        <Button
+          disabled={draft ? !draft.title.trim() || !draft.domainFilter.trim() : !brief.trim()}
+          loading={loading}
+          type={'primary'}
+          onClick={draft ? submit : () => setDraft(parseExpertiseDomainBrief(brief))}
+        >
+          {draft ? t('create.submit') : t('create.parse')}
         </Button>
-      </ModalFooter>
+      </Flexbox>
     </Flexbox>
   );
 });
@@ -73,4 +101,5 @@ export const openCreateDomainModal = (props: CreateDomainContentProps) =>
     maskClosable: true,
     styles: { content: { padding: 0 } },
     title: translate('create.modalTitle', { ns: 'selfLearning' }),
+    width: 'min(88vw, 560px)',
   });

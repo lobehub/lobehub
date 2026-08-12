@@ -59,14 +59,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 700;
     line-height: 1.5;
   `,
-  solo: css`
-    cursor: pointer;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
   swatch: css`
     width: 14px;
     height: 3px;
@@ -162,28 +154,31 @@ const SelfLearning = memo(() => {
             loading={<Loading debugId="SelfLearning" />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
-                <Empty
-                  description={t('empty.desc')}
-                  descriptionProps={{ fontSize: 13 }}
-                  icon={GraduationCapIcon}
-                  style={{ maxWidth: 420 }}
-                  title={t('empty.title')}
-                  action={
-                    <Button
-                      icon={PlusIcon}
-                      type={'primary'}
-                      onClick={() => {
-                        if (!activeAgentId) return;
-                        openCreateDomainModal({
-                          agentId: activeAgentId,
-                          onCreated: () => void mutate(),
-                        });
-                      }}
-                    >
-                      {t('create.entry')}
-                    </Button>
-                  }
-                />
+                <Flexbox align={'center'} gap={20} style={{ maxWidth: 680 }}>
+                  <Empty
+                    description={t('empty.desc')}
+                    descriptionProps={{ fontSize: 13 }}
+                    icon={GraduationCapIcon}
+                    style={{ maxWidth: 420 }}
+                    title={t('empty.title')}
+                    action={
+                      <Button
+                        icon={PlusIcon}
+                        type={'primary'}
+                        onClick={() => {
+                          if (!activeAgentId) return;
+                          openCreateDomainModal({
+                            agentId: activeAgentId,
+                            onCreated: () => void mutate(),
+                          });
+                        }}
+                      >
+                        {t('create.entry')}
+                      </Button>
+                    }
+                  />
+                  <JourneyStrip />
+                </Flexbox>
               </Center>
             }
             onRetry={() => mutate()}
@@ -202,8 +197,6 @@ const SelfLearning = memo(() => {
                   )}
                 </Text>
               )}
-
-              <JourneyStrip domains={domains} />
 
               {hasCurves && (
                 <Block gap={10} padding={16} variant={'outlined'}>
@@ -269,31 +262,22 @@ const SelfLearning = memo(() => {
                 </Flexbox>
               )}
 
-              {/* 只有一个专长时，一行细列表看着像还没加载完 —— 直接铺成一张卡。 */}
-              {domains.length === 1 ? (
-                <SoloDomainCard
-                  color={colors[domains[0].id]}
-                  domain={domains[0]}
-                  onOpen={openDomain}
-                />
-              ) : (
-                <Flexbox gap={8}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('overview.allDomains', { count: domains.length })}
-                  </Text>
-                  <Block padding={0} variant={'outlined'}>
-                    {domains.map((domain) => (
-                      <DomainRow
-                        color={colors[domain.id]}
-                        domain={domain}
-                        key={domain.id}
-                        onHover={setHoverId}
-                        onOpen={openDomain}
-                      />
-                    ))}
-                  </Block>
-                </Flexbox>
-              )}
+              <Flexbox gap={8}>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('overview.allDomains', { count: domains.length })}
+                </Text>
+                <Block padding={0} variant={'outlined'}>
+                  {domains.map((domain) => (
+                    <DomainRow
+                      color={colors[domain.id]}
+                      domain={domain}
+                      key={domain.id}
+                      onHover={setHoverId}
+                      onOpen={openDomain}
+                    />
+                  ))}
+                </Block>
+              </Flexbox>
             </Flexbox>
           </AsyncBoundary>
         </WideScreenContainer>
@@ -301,87 +285,6 @@ const SelfLearning = memo(() => {
     </Flexbox>
   );
 });
-
-interface SoloDomainCardProps {
-  color?: string;
-  domain: ExpertiseDomainItem;
-  onOpen: (id: string) => void;
-}
-
-/**
- * 只有一个专长时的铺开形态。
- *
- * 验收原话：「只有 1 个专长的情况下 UI 不太好看，是否可以考虑直接平铺出来」。一行 44px 的
- * 细列表配一整块留白，读起来像列表还没加载完；一个专长的时候它本来就是这一屏的主角，
- * 所以直接给它整张卡：名字、状态、以及下一步。
- */
-const SoloDomainCard = memo<SoloDomainCardProps>(({ domain, color, onOpen }) => {
-  const { t } = useTranslation('selfLearning');
-  const theme = useTheme();
-  const shape = shapeOf(domain.maturity, domain.delta, domain.runCount);
-
-  return (
-    <Block
-      className={styles.solo}
-      gap={14}
-      padding={20}
-      variant={'outlined'}
-      onClick={() => onOpen(domain.id)}
-    >
-      <Flexbox horizontal align={'center'} gap={10} justify={'space-between'} wrap={'wrap'}>
-        <Flexbox horizontal align={'center'} gap={9}>
-          <Text fontSize={17} weight={600}>
-            {domain.title}
-          </Text>
-          <Tag>{domain.anchorPending ? t('anchor.tag') : t(`shape.tag.${shape}`)}</Tag>
-        </Flexbox>
-        <Flexbox horizontal align={'center'} gap={7}>
-          <Text fontSize={13} weight={600}>
-            {domain.maturity.usable
-              ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%`
-              : t('overview.noNumber')}
-          </Text>
-          <Icon icon={ChevronRightIcon} size={14} />
-        </Flexbox>
-      </Flexbox>
-
-      <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-        <Text fontSize={12.5} type={'secondary'}>
-          {t('overview.rowMeta', { lessons: domain.lessonCount, runs: domain.runCount })}
-        </Text>
-        {domain.series.length > 1 && (
-          <svg height={22} style={{ flex: 'none' }} viewBox={'0 0 120 22'} width={120}>
-            {domain.series.map((p, k) => {
-              const ceiling = domain.maturity.usable
-                ? (domain.maturity.pInf ?? 1)
-                : Math.max(1, ...domain.series.map((x) => x.n));
-              const w = 120 / Math.max(1, domain.series.length);
-              const h = Math.max((p.n / ceiling) * 20, 1.2);
-              return (
-                <rect
-                  fill={color ?? theme.colorTextQuaternary}
-                  height={h}
-                  key={p.run}
-                  opacity={0.5 + (p.n / ceiling) * 0.5}
-                  rx={0.8}
-                  width={Math.max(w - 1.4, 1.4)}
-                  x={k * w}
-                  y={22 - h}
-                />
-              );
-            })}
-          </svg>
-        )}
-      </Flexbox>
-
-      <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
-        {domain.runCount === 0 ? t('overview.soloNext') : t('overview.soloOpen')}
-      </Text>
-    </Block>
-  );
-});
-
-SoloDomainCard.displayName = 'SoloDomainCard';
 
 interface DomainRowProps {
   color?: string;
@@ -455,9 +358,7 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
         type={domain.maturity.usable ? undefined : 'secondary'}
         weight={600}
       >
-        {domain.maturity.usable
-          ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%`
-          : t('overview.noNumber')}
+        {domain.maturity.usable ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%` : '—'}
       </Text>
       <Text
         fontSize={12}
