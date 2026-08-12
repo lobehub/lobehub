@@ -69,8 +69,11 @@ export default {
   'flow.steps.learnYourWorld.analysisFailed':
     'We could not finish analyzing your connected sources.',
   'flow.steps.learnYourWorld.description': 'Building your user profile',
+  'flow.steps.learnYourWorld.factsTitle': 'What we found',
   'flow.steps.learnYourWorld.progress.build': 'Building a user profile based on what we learn.',
+  'flow.steps.learnYourWorld.progress.buildEta': 'about 10–15s',
   'flow.steps.learnYourWorld.progress.explore': 'Exploring more signals to understand you better.',
+  'flow.steps.learnYourWorld.progress.exploreEta': 'about 10s',
   'flow.steps.learnYourWorld.progress.review': 'Reviewing your connected information.',
   'flow.steps.learnYourWorld.retry': 'Retry',
   'flow.steps.learnYourWorld.sectionHint':
