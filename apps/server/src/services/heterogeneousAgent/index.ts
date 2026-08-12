@@ -117,7 +117,8 @@ export interface HeterogeneousAgentServiceOptions {
 
 /**
  * Server-side ingest handler for heterogeneous agent CLIs (`lh hetero exec`
- * for Amp / Claude Code / Codex / OpenCode / Pi / Qoder). Receives `AgentStreamEvent` batches from the
+ * for Amp / Claude Code / CodeBuddy / Codex / OpenCode / Pi / Qoder). Receives
+ * `AgentStreamEvent` batches from the
  * producer and republishes them through the existing `StreamEventManager`
  * fanout, so renderer-side gateway WS subscribers see the same wire shape
  * regardless of whether the run came from the agent gateway or a CLI process.

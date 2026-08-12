@@ -71,6 +71,65 @@ describe('heterogeneous agent model discovery', () => {
     ]);
   });
 
+  it('discovers only model IDs accepted by CodeBuddy --model', async () => {
+    const stdout = [
+      'Usage: codebuddy [options]',
+      '  --model <model>  Model for the current session. Currently supported: (default-model,',
+      '                   gemini-3.1-pro, gpt-5.4, deepseek-v3-2-volc, gpt-5.4)',
+      '  --effort <level> Reasoning effort level',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseCodeBuddyModelCatalog } = await importModule();
+
+    expect(parseCodeBuddyModelCatalog(stdout)).toEqual([
+      { id: 'gemini-3.1-pro', modelId: 'gemini-3.1-pro', providerId: 'codebuddy' },
+      { id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'codebuddy' },
+      {
+        id: 'deepseek-v3-2-volc',
+        modelId: 'deepseek-v3-2-volc',
+        providerId: 'codebuddy',
+      },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/codebuddy',
+        cwd: '/repo',
+        env: { CODEBUDDY_CODE_API_KEY: 'test-key' },
+        type: 'codebuddy',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'gemini-3.1-pro', modelId: 'gemini-3.1-pro', providerId: 'codebuddy' },
+        { id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'codebuddy' },
+        {
+          id: 'deepseek-v3-2-volc',
+          modelId: 'deepseek-v3-2-volc',
+          providerId: 'codebuddy',
+        },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/codebuddy',
+      ['--help'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { CODEBUDDY_CODE_API_KEY: 'test-key' },
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it('parses adversarial CodeBuddy help output without polynomial backtracking', async () => {
+    const stdout = `${'--model <model>'.repeat(1000)}${'Currently supported:(('.repeat(1000)}`;
+    const { parseCodeBuddyModelCatalog } = await importModule();
+    const startedAt = performance.now();
+
+    expect(parseCodeBuddyModelCatalog(stdout)).toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(100);
+  });
+
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();

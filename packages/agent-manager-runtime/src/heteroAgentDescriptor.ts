@@ -5,8 +5,9 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code, Codex, OpenCode, Pi, or Qoder) those fields are misleading:
- * the agent brings its own toolset and ignores the plugin list, so we must instead
+ * CLI/runtime such as Claude Code, CodeBuddy, Codex, OpenCode, Pi, or Qoder)
+ * those fields are misleading: the agent brings its own toolset and ignores
+ * the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
  *
  * This module maps a `LobeAgentAgencyConfig` into a compact, LLM-facing runtime
@@ -52,6 +53,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       "Claude Code — Anthropic's autonomous CLI coding agent. It has full access to a working directory: it can read, edit and write files, run shell commands and tests, search the codebase, and carry multi-step software-engineering tasks (bug fixes, feature work, refactors) end to end on its own. It does NOT use the chat `plugins`/`model` settings — it runs its own built-in toolset and model.",
     displayName: 'Claude Code',
+    kind: 'cli',
+  },
+  'codebuddy': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "CodeBuddy — Tencent's autonomous CLI coding agent. It can read, edit and write files, run shell commands and tests, search a working directory, and complete multi-step software-engineering tasks with its own built-in tools and model.",
+    displayName: 'CodeBuddy',
     kind: 'cli',
   },
   'codex': {

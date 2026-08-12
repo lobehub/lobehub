@@ -15,6 +15,7 @@ describe('heterogeneous agent config', () => {
     expect(HETEROGENEOUS_AGENT_CONFIGS.map((config) => config.type)).toEqual([
       'amp',
       'claude-code',
+      'codebuddy',
       'codex',
       'opencode',
       'pi',
@@ -36,6 +37,11 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'codex',
       title: 'Codex',
       type: 'codex',
+    });
+    expect(getHeterogeneousAgentConfig('codebuddy')).toMatchObject({
+      defaultCommand: 'codebuddy',
+      title: 'CodeBuddy',
+      type: 'codebuddy',
     });
     expect(getHeterogeneousAgentConfig('amp')).toMatchObject({
       defaultCommand: 'amp',
@@ -83,6 +89,7 @@ describe('heterogeneous agent config', () => {
     expect(HETEROGENEOUS_TYPE_LABELS).toEqual({
       'amp': 'Amp',
       'claude-code': 'Claude Code',
+      'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
       'hermes': 'Hermes',
       'openclaw': 'OpenClaw',
@@ -93,6 +100,7 @@ describe('heterogeneous agent config', () => {
   });
 
   it('resolves display labels with safe fallbacks', () => {
+    expect(getHeterogeneousTypeLabel('codebuddy')).toBe('CodeBuddy');
     expect(getHeterogeneousTypeLabel('hermes')).toBe('Hermes');
     expect(getHeterogeneousTypeLabel('future-runtime')).toBe('future-runtime');
     expect(getHeterogeneousTypeLabel('toString')).toBe('toString');
@@ -102,6 +110,7 @@ describe('heterogeneous agent config', () => {
 
   it('classifies local CLIs separately from remote platforms', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
+    expect(isRemoteHeterogeneousType('codebuddy')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('pi')).toBe(false);
     expect(isRemoteHeterogeneousType('qoder')).toBe(false);

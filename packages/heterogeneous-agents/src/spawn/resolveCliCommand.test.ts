@@ -1,4 +1,5 @@
 import * as childProcess from 'node:child_process';
+import * as fsPromises from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
@@ -16,9 +17,37 @@ vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
 }));
 
+// `resolveCliSpawnPlan` reads Windows shims off disk to find their real target,
+// so shim scenarios need a fake filesystem.
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof fsPromises>('node:fs/promises');
+  return { ...actual, access: vi.fn(), readFile: vi.fn() };
+});
+
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
 const execMock = vi.mocked(childProcess.exec);
+const accessMock = vi.mocked(fsPromises.access);
+const readFileMock = vi.mocked(fsPromises.readFile);
+
+/**
+ * Declare the files that exist on the fake host. Map a path to its contents to
+ * make it readable (shims), or to `true` for an opaque binary.
+ */
+const existingFiles = (files: Record<string, string | true>) => {
+  const entries = new Map(
+    Object.entries(files).map(([filePath, content]) => [filePath.toLowerCase(), content]),
+  );
+
+  accessMock.mockImplementation(async (filePath) => {
+    if (!entries.has(String(filePath).toLowerCase())) throw new Error(`missing: ${filePath}`);
+  });
+  readFileMock.mockImplementation((async (filePath: string) => {
+    const content = entries.get(String(filePath).toLowerCase());
+    if (typeof content !== 'string') throw new Error(`unreadable: ${filePath}`);
+    return content;
+  }) as never);
+};
 
 const noErr = null;
 const callExecFile = (stdout: string, stderr = '') => {
@@ -36,12 +65,32 @@ const callExecFileError = (err: Error) => {
     return {} as any;
   }) as any);
 };
+/**
+ * Fail any call a test did not queue. Without this the promisified `execFile`
+ * never settles and the test dies on a 5s timeout that says nothing about
+ * which extra process was spawned.
+ */
+const rejectUnqueuedExecFile = () => {
+  execFileMock.mockImplementation(((file: string, args: any, opts: any, cb: any) => {
+    const callback = typeof opts === 'function' ? opts : cb;
+    callback(new Error(`unexpected execFile: ${file} ${JSON.stringify(args)}`), {
+      stderr: '',
+      stdout: '',
+    });
+    return {} as any;
+  }) as any);
+};
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
   beforeEach(() => {
     execFileMock.mockReset();
     execMock.mockReset();
+    accessMock.mockReset();
+    readFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    // Empty host by default — individual tests opt into the files they need.
+    existingFiles({});
   });
 
   afterEach(() => {
@@ -107,6 +156,20 @@ describe('resolveCliCommand', () => {
         available: true,
         path: '/Users/x/.local/bin/qodercli',
         version: '1.1.15',
+      });
+    });
+
+    it('resolves and validates CodeBuddy using its bare semver output', async () => {
+      callExecFile('/Users/x/.local/bin/codebuddy\n');
+      callExecFile('2.132.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('codebuddy', 'codebuddy');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/codebuddy',
+        version: '2.132.0',
       });
     });
 
@@ -243,51 +306,66 @@ describe('resolveCliCommand', () => {
   });
 
   describe('detectValidatedCommand — Windows npm shims', () => {
+    const NPM_DIR = 'C:\\Users\\x\\AppData\\Roaming\\npm';
+    // A stock npm shim, the shape `resolveCliSpawnPlan` knows how to unwrap.
+    const npmShim = (packagePath: string) =>
+      `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
+
     beforeEach(() => {
       platformMock.mockReturnValue('win32');
     });
 
     it('resolves `codex` to the .cmd shim without constructing a shell command', async () => {
-      callExecFile('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd\r\n');
+      const shimPath = `${NPM_DIR}\\codex.cmd`;
+      const scriptPath = `${NPM_DIR}\\node_modules\\@openai\\codex\\bin\\codex.js`;
+      existingFiles({
+        [`${NPM_DIR}\\node.exe`]: true,
+        [scriptPath]: true,
+        [shimPath]: npmShim('node_modules\\@openai\\codex\\bin\\codex.js'),
+      });
+      callExecFile(`${shimPath}\r\n`);
       callExecFile('codex 0.142.5');
 
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
-      expect(execFileMock.mock.calls[1]![0]).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
-      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
+      expect(status.path).toBe(shimPath);
+      // The shim is unwrapped to node + script, never handed to a shell.
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${NPM_DIR}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
       expect(execMock).not.toHaveBeenCalled();
     });
 
     it('prefers the .cmd shim when `where` returns multiple PATHEXT matches', async () => {
-      callExecFile(
-        [
-          'C:\\Users\\x\\AppData\\Roaming\\npm\\codex',
-          'C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd',
-          'C:\\Users\\x\\AppData\\Roaming\\npm\\codex.ps1',
-        ].join('\r\n'),
-      );
+      const shimPath = `${NPM_DIR}\\codex.cmd`;
+      existingFiles({
+        [`${NPM_DIR}\\node.exe`]: true,
+        [`${NPM_DIR}\\node_modules\\@openai\\codex\\bin\\codex.js`]: true,
+        [shimPath]: npmShim('node_modules\\@openai\\codex\\bin\\codex.js'),
+      });
+      callExecFile([`${NPM_DIR}\\codex`, shimPath, `${NPM_DIR}\\codex.ps1`].join('\r\n'));
       callExecFile('codex 0.142.5');
 
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
+      expect(status.path).toBe(shimPath);
     });
 
-    it('preserves PATH order: earlier .cmd beats later .exe (Vite+ claude.exe case)', async () => {
+    it('preserves PATH order: a runnable earlier .cmd beats a later .exe (Vite+ claude.exe case)', async () => {
       // `where claude` lists every match in PATH order. npm's .cmd shim is
       // earlier; Vite+ ships a later standalone claude.exe. Preferring every
       // .exe over every .cmd would pick Vite+ and break the real install.
-      callExecFile(
-        [
-          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
-          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
-        ].join('\r\n'),
-      );
+      const shimDir = 'C:\\Users\\hp\\AppData\\Roaming\\npm';
+      const shimPath = `${shimDir}\\claude.cmd`;
+      existingFiles({
+        [`${shimDir}\\node.exe`]: true,
+        [`${shimDir}\\node_modules\\@anthropic-ai\\claude-code\\cli.js`]: true,
+        [shimPath]: npmShim('node_modules\\@anthropic-ai\\claude-code\\cli.js'),
+      });
+      callExecFile([shimPath, 'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe'].join('\r\n'));
       callExecFile('1.2.3 (Claude Code)');
 
       const { detectValidatedCommand } = await importModule();
@@ -296,7 +374,175 @@ describe('resolveCliCommand', () => {
       });
 
       expect(status.available).toBe(true);
-      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+      expect(status.path).toBe(shimPath);
+    });
+
+    it('walks past a third-party shim it cannot unwrap to a later native .exe', async () => {
+      // OpenCodex hijacks %APPDATA%\npm\codex.cmd and forwards through a custom
+      // variable, so none of the shim patterns match. The WindowsApps codex.exe
+      // further down PATH runs fine — it just has to get a turn.
+      const hijackedShim = `${NPM_DIR}\\codex.cmd`;
+      const nativeExe =
+        'C:\\Program Files\\WindowsApps\\OpenAI.Codex_1.0.0_x64\\app\\resources\\codex.exe';
+      existingFiles({
+        [hijackedShim]: [
+          '@echo off',
+          'set "OCX_REAL_CODEX=%APPDATA%\\npm\\codex.opencodex-real.cmd"',
+          ':run_codex',
+          '"%OCX_REAL_CODEX%" %*',
+        ].join('\r\n'),
+        [nativeExe]: true,
+      });
+      callExecFile([`${NPM_DIR}\\codex`, hijackedShim, nativeExe].join('\r\n'));
+      callExecFile('codex-cli 0.146.0');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
+
+      expect(status).toMatchObject({
+        available: true,
+        path: nativeExe,
+        version: 'codex-cli 0.146.0',
+      });
+      // The unrunnable shim is never spawned: `execFile` on a .cmd throws
+      // EINVAL since the CVE-2024-27980 fix, so trying it would only waste a
+      // process launch.
+      expect(execFileMock.mock.calls[1]![0]).toBe(nativeExe);
+      expect(execFileMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('probes an unwrappable shim through %ComSpec% when it is the only candidate', async () => {
+      const originalComSpec = process.env.ComSpec;
+      process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+      const hijackedShim = `${NPM_DIR}\\qodercli.cmd`;
+      existingFiles({ [hijackedShim]: '@echo off\r\n"%OCX_REAL%" %*\r\n' });
+
+      try {
+        callExecFile(`${hijackedShim}\r\n`);
+        callExecFile('1.0.39');
+
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand('qodercli', {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({ available: true, path: hijackedShim, version: '1.0.39' });
+        expect(execFileMock.mock.calls[1]![0]).toBe('C:\\Windows\\System32\\cmd.exe');
+        expect(execFileMock.mock.calls[1]![1]).toEqual([
+          '/d',
+          '/s',
+          '/c',
+          `""${hijackedShim}" --version"`,
+        ]);
+      } finally {
+        if (originalComSpec === undefined) delete process.env.ComSpec;
+        else process.env.ComSpec = originalComSpec;
+      }
+    });
+
+    it('retries `where` against the registry PATH when the inherited snapshot is stale', async () => {
+      // A process started before the CLI installer ran keeps the PATH it
+      // inherited at creation time and never sees the new directory.
+      const originalPath = process.env.PATH;
+      const originalSystemRoot = process.env.SystemRoot;
+      const codexBin = 'C:\\Users\\x\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin';
+      process.env.PATH = 'C:\\Windows';
+      process.env.SystemRoot = 'C:\\Windows';
+
+      try {
+        existingFiles({ [`${codexBin}\\codex.exe`]: true });
+        callExecFileError(new Error('INFO: Could not find files')); // where codex
+        callExecFileError(new Error('ERROR: access denied')); // reg query HKLM
+        callExecFile(
+          `\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    ${codexBin};%SystemRoot%\\system32\r\n\r\n`,
+        );
+        callExecFile(`${codexBin}\\codex.exe\r\n`); // where codex (recovered PATH)
+        callExecFile('codex-cli 0.147.0');
+
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe(`${codexBin}\\codex.exe`);
+
+        const regArgs = execFileMock.mock.calls[1]![1] as string[];
+        expect(regArgs[1]).toContain('Session Manager\\Environment');
+        const retryEnv = (execFileMock.mock.calls[3]![2] as { env: NodeJS.ProcessEnv }).env;
+        expect(retryEnv.PATH).toContain(codexBin);
+        // REG_EXPAND_SZ values keep %VAR% references verbatim — `where` needs
+        // them expanded.
+        expect(retryEnv.PATH).toContain('C:\\Windows\\system32');
+        expect(retryEnv.PATH).not.toContain('%SystemRoot%');
+        // The recovered PATH is surfaced so spawn sites inherit it too.
+        expect(status.resolvedPathEnv).toBe(retryEnv.PATH);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+      }
+    });
+
+    it('re-reads the registry on a later scan instead of reusing the first answer', async () => {
+      // The user installs the CLI while the app is already open: the first
+      // scan sees neither the process PATH nor the registry, the rescan must
+      // see the registry entry the installer just wrote.
+      const originalPath = process.env.PATH;
+      const qoderBin = 'C:\\Users\\x\\AppData\\Local\\Programs\\Qoder\\bin';
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [`${qoderBin}\\qodercli.exe`]: true });
+        const { detectValidatedCommand } = await importModule();
+        const options = { validatePattern: /^v?\d+\.\d+\.\d+$/ };
+
+        callExecFileError(new Error('not found')); // where qodercli
+        callExecFileError(new Error('no value')); // reg query HKLM
+        callExecFileError(new Error('no value')); // reg query HKCU
+        expect((await detectValidatedCommand('qodercli', options)).available).toBe(false);
+
+        callExecFileError(new Error('not found')); // where qodercli
+        callExecFileError(new Error('no value')); // reg query HKLM
+        callExecFile(
+          `\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    ${qoderBin}\r\n`,
+        );
+        callExecFile(`${qoderBin}\\qodercli.exe\r\n`); // where qodercli (recovered PATH)
+        callExecFile('1.0.39');
+
+        const status = await detectValidatedCommand('qodercli', options);
+
+        expect(status).toMatchObject({ available: true, path: `${qoderBin}\\qodercli.exe` });
+      } finally {
+        process.env.PATH = originalPath;
+      }
+    });
+
+    it('falls back to the Windows Codex app bundled CLI when nothing is on PATH', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      process.env.LOCALAPPDATA = localAppData;
+      // Single-segment PATH: the recovered PATH then matches it exactly, so no
+      // extra `where` retry runs.
+      process.env.PATH = 'C:\\Windows';
+      const bundledCli = `${localAppData}\\Programs\\OpenAI\\Codex\\bin\\codex.exe`;
+
+      try {
+        existingFiles({ [bundledCli]: true });
+        callExecFileError(new Error('not found')); // where codex
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFile('codex-cli 0.147.0'); // the bundled CLI
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe(bundledCli);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
     });
 
     it('rejects a command containing shell metacharacters', async () => {
@@ -308,6 +554,44 @@ describe('resolveCliCommand', () => {
       expect(status.available).toBe(false);
       expect(execFileMock).not.toHaveBeenCalled();
       expect(execMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('detectValidatedCommand — noisy --version output', () => {
+    beforeEach(() => {
+      platformMock.mockReturnValue('darwin');
+    });
+
+    it('validates the version line even when the CLI appends an upgrade notice', async () => {
+      callExecFile('/Users/x/.local/bin/qodercli\n');
+      callExecFile('1.0.39\nA new version (1.0.42) is available. Run `qodercli upgrade`.');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('qoder', 'qodercli');
+
+      expect(status).toMatchObject({ available: true, version: '1.0.39' });
+    });
+
+    it('validates the version line even when Node writes a warning to stderr', async () => {
+      callExecFile('/Users/x/.local/bin/opencode\n');
+      callExecFile('1.18.3\n', '(node:14512) ExperimentalWarning: WASI is an experimental feature');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+      expect(status).toMatchObject({ available: true, version: '1.18.3' });
+    });
+
+    it('still rejects output whose first line is not a version', async () => {
+      callExecFile('/Users/x/.local/bin/qodercli\n');
+      callExecFile('Usage: qodercli [command]\n1.0.39');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('qodercli', {
+        validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+      });
+
+      expect(status.available).toBe(false);
     });
   });
 

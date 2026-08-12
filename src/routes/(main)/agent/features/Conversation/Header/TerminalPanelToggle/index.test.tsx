@@ -66,7 +66,7 @@ describe('TerminalPanelToggle', () => {
     expect(mocks.toggleTerminalPanel).toHaveBeenCalledWith();
 
     mocks.showTerminalPanel = true;
-    rerender(<TerminalPanelToggle />);
+    rerender(<TerminalPanelToggle key="open" />);
 
     expect(screen.getByTestId('terminal-panel-toggle')).toHaveAttribute('data-active', 'true');
   });

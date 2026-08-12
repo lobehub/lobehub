@@ -106,6 +106,35 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://www.codebuddy.ai/docs/cli/installation',
+      errorMessage: 'CodeBuddy could not authenticate. Run `codebuddy`, use `/login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'please use \\/login',
+        'not logged in',
+      ],
+      signInCommand: 'codebuddy',
+    },
+    defaultCommand: 'codebuddy',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'CodeBuddy',
+    install: {
+      commands: [
+        'npm install -g @tencent-ai/codebuddy-code',
+        'brew install Tencent-CodeBuddy/tap/codebuddy-code',
+      ],
+      docsUrl: 'https://www.codebuddy.ai/docs/cli/installation',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCodeBuddyAgent',
+    menuLabelKey: 'newCodeBuddyAgent',
+    resume: { supported: true },
+    title: 'CodeBuddy',
+    type: 'codebuddy',
+  },
+  {
+    auth: {
       docsUrl: 'https://github.com/openai/codex#installing-and-running-codex-cli',
       errorMessage:
         'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',

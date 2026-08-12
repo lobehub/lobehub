@@ -129,7 +129,7 @@ const buildExtraArgs = (
               : []),
             ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
           ]
-        : options.type === 'claude-code'
+        : options.type === 'claude-code' || options.type === 'codebuddy'
           ? [
               ...(options.model ? ['--model', options.model] : []),
               ...(options.effort ? ['--effort', options.effort] : []),
@@ -947,7 +947,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, `pi`, or `qodercli`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codebuddy`, `codex`, `opencode`, `pi`, or `qodercli`)',
     )
     .option(
       '--operation-id <id>',

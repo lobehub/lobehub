@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { heterogeneousAgentCatalogService } from '@/services/heterogeneousAgent';
 
-import { useHeterogeneousAgentModelCatalog } from './useHeterogeneousAgentModelCatalog';
+import { useModelCatalog } from './useModelCatalog';
 
 const createWrapper = () => {
   const value = { provider: () => new Map() };
@@ -16,12 +16,12 @@ const createWrapper = () => {
   };
 };
 
-describe('useHeterogeneousAgentModelCatalog', () => {
+describe('useModelCatalog', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.each(['opencode', 'pi', 'qoder'] as const)(
+  it.each(['codebuddy', 'opencode', 'pi', 'qoder'] as const)(
     'starts loading the %s catalog as soon as the selector mounts',
     async (type) => {
       const pendingCatalog = new Promise<
@@ -33,7 +33,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
       const { result } = renderHook(
         () =>
-          useHeterogeneousAgentModelCatalog({
+          useModelCatalog({
             isDeviceListLoading: false,
             isPreferenceLoading: false,
             open: false,
@@ -54,7 +54,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
     const { result } = renderHook(
       () =>
-        useHeterogeneousAgentModelCatalog({
+        useModelCatalog({
           isDeviceListLoading: false,
           isPreferenceLoading: true,
           open: false,
@@ -85,7 +85,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
     const { rerender } = renderHook(
       ({ cwd, isDeviceListLoading }: { cwd?: string; isDeviceListLoading: boolean }) =>
-        useHeterogeneousAgentModelCatalog({
+        useModelCatalog({
           cwd,
           deviceId: 'device-1',
           isDeviceListLoading,
@@ -117,7 +117,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
     renderHook(
       () =>
-        useHeterogeneousAgentModelCatalog({
+        useModelCatalog({
           isDeviceListLoading: false,
           isPreferenceLoading: false,
           open: false,
@@ -155,7 +155,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
     const { rerender, result } = renderHook(
       ({ open }) =>
-        useHeterogeneousAgentModelCatalog({
+        useModelCatalog({
           isDeviceListLoading: false,
           isPreferenceLoading: false,
           open,

@@ -72,6 +72,31 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(true);
   });
 
+  it('shows CodeBuddy models only on a concrete runtime that can query its CLI', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'none',
+        isDesktopClient: false,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(false);
+  });
+
   it('shows Pi models for desktop-local execution and an explicit bound device', () => {
     expect(
       shouldShowHeteroModelSelector({

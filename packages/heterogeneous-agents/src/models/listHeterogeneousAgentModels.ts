@@ -9,15 +9,43 @@ import type {
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 
+import { getHeterogeneousTypeLabel } from '../labels';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 
 const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
+const CODEBUDDY_MODEL_OPTION = '--model <model>';
+const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
+
+/** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
+export const parseCodeBuddyModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  const modelOptionIndex = stdout.indexOf(CODEBUDDY_MODEL_OPTION);
+  if (modelOptionIndex < 0) return [];
+
+  const labelStart = stdout.indexOf(
+    CODEBUDDY_SUPPORTED_MODELS_LABEL,
+    modelOptionIndex + CODEBUDDY_MODEL_OPTION.length,
+  );
+  if (labelStart < 0) return [];
+
+  const labelEnd = labelStart + CODEBUDDY_SUPPORTED_MODELS_LABEL.length;
+  const modelsStart = stdout.indexOf('(', labelEnd);
+  if (modelsStart < 0 || stdout.slice(labelEnd, modelsStart).trim()) return [];
+
+  const modelsEnd = stdout.indexOf(')', modelsStart + 1);
+  if (modelsEnd < 0) return [];
+
+  const supportedModels = stdout.slice(modelsStart + 1, modelsEnd);
+
+  return [...new Set(supportedModels.split(',').map((model) => model.trim()))]
+    .filter((id) => id && id !== 'default-model')
+    .map((id) => ({ id, modelId: id, providerId: 'codebuddy' }));
+};
 
 export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
   const seen = new Set<string>();
@@ -110,7 +138,7 @@ const getCatalogErrorMessage = (
   code: HeterogeneousAgentModelCatalogErrorCode,
   type: ListHeterogeneousAgentModelsParams['type'],
 ): string => {
-  const name = type === 'pi' ? 'Pi' : type === 'qoder' ? 'Qoder' : 'OpenCode';
+  const name = getHeterogeneousTypeLabel(type) ?? type;
   if (code === 'cli_not_found') return `${name} CLI was not found`;
   if (code === 'timeout') return `${name} model discovery timed out`;
 
@@ -130,7 +158,12 @@ export const listHeterogeneousAgentModels = async (
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
   const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
-  const args = params.type === 'opencode' ? ['models'] : ['--list-models'];
+  const args =
+    params.type === 'codebuddy'
+      ? ['--help']
+      : params.type === 'opencode'
+        ? ['models']
+        : ['--list-models'];
   const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
   const callerEnv = params.env ?? process.env;
   const mergedPath = [
@@ -157,11 +190,13 @@ export const listHeterogeneousAgentModels = async (
 
     return {
       models:
-        params.type === 'pi'
-          ? parsePiModelCatalog(String(stdout))
-          : params.type === 'qoder'
-            ? parseQoderModelCatalog(String(stdout))
-            : parseOpenCodeModelCatalog(String(stdout)),
+        params.type === 'codebuddy'
+          ? parseCodeBuddyModelCatalog(String(stdout))
+          : params.type === 'pi'
+            ? parsePiModelCatalog(String(stdout))
+            : params.type === 'qoder'
+              ? parseQoderModelCatalog(String(stdout))
+              : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

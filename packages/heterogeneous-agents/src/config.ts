@@ -125,6 +125,7 @@ export const isHeterogeneousAgentAuthRequired = (agentType: string, detail: stri
 // the descriptor catalog rather than maintained as a second metadata table.
 const ampDescriptor = getHeterogeneousAgentConfigOrThrow('amp');
 const claudeCodeDescriptor = getHeterogeneousAgentConfigOrThrow('claude-code');
+const codeBuddyDescriptor = getHeterogeneousAgentConfigOrThrow('codebuddy');
 const codexDescriptor = getHeterogeneousAgentConfigOrThrow('codex');
 const openCodeDescriptor = getHeterogeneousAgentConfigOrThrow('opencode');
 const piDescriptor = getHeterogeneousAgentConfigOrThrow('pi');
@@ -134,6 +135,8 @@ export const AMP_CLI_INSTALL_COMMANDS = ampDescriptor.install.commands;
 export const AMP_CLI_INSTALL_DOCS_URL = ampDescriptor.install.docsUrl;
 export const CLAUDE_CODE_CLI_INSTALL_COMMANDS = claudeCodeDescriptor.install.commands;
 export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = claudeCodeDescriptor.install.docsUrl;
+export const CODEBUDDY_CLI_INSTALL_COMMANDS = codeBuddyDescriptor.install.commands;
+export const CODEBUDDY_CLI_INSTALL_DOCS_URL = codeBuddyDescriptor.install.docsUrl;
 export const CODEX_CLI_INSTALL_COMMANDS = codexDescriptor.install.commands;
 export const CODEX_CLI_INSTALL_DOCS_URL = codexDescriptor.install.docsUrl;
 export const OPENCODE_CLI_INSTALL_COMMANDS = openCodeDescriptor.install.commands;

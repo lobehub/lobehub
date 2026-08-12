@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AmpAdapter,
   ClaudeCodeAdapter,
+  CodeBuddyAdapter,
   CodexAdapter,
   OpenCodeAdapter,
   PiAdapter,
@@ -21,6 +22,10 @@ describe('registry', () => {
     it('creates a ClaudeCodeAdapter for "claude-code"', () => {
       const adapter = createAdapter('claude-code');
       expect(adapter).toBeInstanceOf(ClaudeCodeAdapter);
+    });
+
+    it('creates a CodeBuddyAdapter for "codebuddy"', () => {
+      expect(createAdapter('codebuddy')).toBeInstanceOf(CodeBuddyAdapter);
     });
 
     it('creates a CodexAdapter for "codex"', () => {
