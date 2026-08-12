@@ -1715,13 +1715,15 @@ export class MessengerRouter {
       // member policy rather than granting shared-config semantics.
       let canManage = agentRow?.userId === link.userId;
       const agentWorkspaceId = agentRow?.workspaceId ?? link.workspaceId;
-      if (!canManage && agentRow?.visibility !== 'private') {
+      // Unknown author → skip the lookup and stay fail-closed (member policy
+      // applies), matching the catch branch below.
+      if (!canManage && agentRow?.userId && agentRow.visibility !== 'private') {
         try {
           canManage = await isResourceAuthorOrAdmin({
             db: serverDB,
             meta: {
-              userId: agentRow?.userId,
-              visibility: agentRow?.visibility ?? 'public',
+              userId: agentRow.userId,
+              visibility: agentRow.visibility ?? 'public',
               workspaceId: agentWorkspaceId,
             },
             resourceType: 'agent',
