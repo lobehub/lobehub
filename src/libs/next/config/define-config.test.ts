@@ -3,26 +3,45 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from './define-config';
 
 describe('defineConfig', () => {
+  const originalAssetBaseUrl = process.env.ASSET_BASE_URL;
+  const originalLegacyPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+
+  afterEach(() => {
+    if (originalAssetBaseUrl === undefined) delete process.env.ASSET_BASE_URL;
+    else process.env.ASSET_BASE_URL = originalAssetBaseUrl;
+
+    if (originalLegacyPrefix === undefined) delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
+    else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
+  });
+
   it('disables Next.js agent rule injection', () => {
     expect(defineConfig({}).agentRules).toBe(false);
   });
 
-  it('always sets crossOrigin to anonymous', () => {
-    expect(defineConfig({}).crossOrigin).toBe('anonymous');
+  describe('crossOrigin', () => {
+    it('stays unset when no asset prefix is configured', () => {
+      delete process.env.ASSET_BASE_URL;
+      delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
+
+      expect(defineConfig({}).crossOrigin).toBeUndefined();
+    });
+
+    it('is anonymous when ASSET_BASE_URL is set', () => {
+      process.env.ASSET_BASE_URL = 'https://assets.example.com';
+      delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
+
+      expect(defineConfig({}).crossOrigin).toBe('anonymous');
+    });
+
+    it('is anonymous when only the deprecated NEXT_PUBLIC_ASSET_PREFIX is set', () => {
+      delete process.env.ASSET_BASE_URL;
+      process.env.NEXT_PUBLIC_ASSET_PREFIX = 'https://legacy.example.com';
+
+      expect(defineConfig({}).crossOrigin).toBe('anonymous');
+    });
   });
 
   describe('assetPrefix', () => {
-    const originalAssetBaseUrl = process.env.ASSET_BASE_URL;
-    const originalLegacyPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
-
-    afterEach(() => {
-      if (originalAssetBaseUrl === undefined) delete process.env.ASSET_BASE_URL;
-      else process.env.ASSET_BASE_URL = originalAssetBaseUrl;
-
-      if (originalLegacyPrefix === undefined) delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
-      else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
-    });
-
     it('is undefined when no env is set', () => {
       delete process.env.ASSET_BASE_URL;
       delete process.env.NEXT_PUBLIC_ASSET_PREFIX;

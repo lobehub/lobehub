@@ -59,7 +59,9 @@ export function defineConfig(config: CustomNextConfig) {
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
-    crossOrigin: 'anonymous',
+    // Gated, not unconditional: an asset host that omits Access-Control-Allow-Origin
+    // turns every tag into one the browser refuses to execute. Same-origin needs no opt-in.
+    crossOrigin: assetPrefix ? 'anonymous' : undefined,
 
     compiler: {
       emotion: true,
