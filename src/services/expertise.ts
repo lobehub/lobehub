@@ -27,12 +27,8 @@ class ExpertiseService {
 
   getLesson = async (lessonId: string) => lambdaClient.expertise.getLesson.query({ lessonId });
 
-  createDomain = async (params: {
-    agentId: string;
-    description?: string;
-    domainFilter: string;
-    title: string;
-  }) => lambdaClient.expertise.createDomain.mutate(params);
+  createDomain = async (params: { agentId: string; brief: string }) =>
+    lambdaClient.expertise.createDomain.mutate(params);
 
   chooseAnchor = async (domainId: string, candidateKey: string) =>
     lambdaClient.expertise.chooseAnchor.mutate({ candidateKey, domainId });

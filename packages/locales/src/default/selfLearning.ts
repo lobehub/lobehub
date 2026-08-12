@@ -1,7 +1,7 @@
 export default {
   'anchor.pending': 'Waiting for you to pick a direction',
   'anchor.pendingDesc':
-    'A domain is a choice, not a discovery — the same agent can be anchored two different ways and both are correct. Pick one before it starts building rules.',
+    'A domain is a choice, not a discovery — the same agent can be anchored two different ways and both are correct. Pick one and it starts building rules from the very next matching conversation.',
   'anchor.tag': 'Direction not picked',
 
   'detail.anchorTitle': 'What the anchoring step saw',
@@ -20,10 +20,10 @@ export default {
   'detail.chart.title': 'Rules learned, as a share of the estimated ceiling',
   'detail.chart.today': 'today · {{count}} practices',
   'detail.chart.trustworthy':
-    'At the current pace, {{remaining}} more practices reach 90% (run {{n90}}), and 95% at run {{n95}}. The observation has covered a full learning cycle, so the projection has evidence behind it.',
+    'At the current pace, {{remaining}} more practices reach 90% (run {{n90}}).',
   'detail.domainFilter': 'Domain filter: ',
   'detail.headline': 'Practised {{runs}} times, learned {{lessons}} rules.',
-  'detail.metric.cannot': 'n/a',
+  'detail.metric.cannot': 'needs more practice',
   'detail.metric.maturity': 'Maturity',
   'detail.metric.maturitySub': '{{learned}} of an estimated {{ceiling}}',
   'detail.metric.r2': 'Curve fit',
@@ -45,9 +45,8 @@ export default {
   'detail.totals': '{{runs}} practices · {{lessons}} rules · {{hits}} hits',
 
   'empty.desc':
-    'Rules cannot be written from theory. Let it do real work first and keep the places it got wrong — those are what can be taught.',
-  'empty.title': 'It has not learned anything yet',
-
+    'Expertise comes from doing, not from writing it down. Point it at something it does often, and the rules will start coming out of the work itself.',
+  'empty.title': 'Nothing learned here yet',
   'headline.alsoDeclining': ' {{name}} has turned back down.',
   'headline.alsoRising': ' {{name}} is still climbing steeply.',
   'headline.flat': '{{name}} has flattened out — it has learned what can be taught.',
@@ -72,7 +71,7 @@ export default {
   'maturity.reason.tau-pinned': 'the learning cycle is longer than what has been observed',
 
   'overview.allDomains': 'All {{count}} expertises',
-  'overview.noNumber': 'not yet clear',
+  'overview.noNumber': 'needs more practice',
   'overview.rowMeta': '{{lessons}} rules · practised {{runs}} times',
   'overview.totals': '{{domains}} expertises · {{lessons}} rules in total',
 
@@ -106,7 +105,7 @@ export default {
   'anchor.chooseFailed': 'Could not set the direction. Try again.',
   'anchor.noCandidates': 'No directions proposed yet',
   'anchor.noCandidatesDesc':
-    'Anchoring reads candidate directions out of what this agent has actually been doing. It has not run yet for this expertise, so there is nothing to choose between.',
+    'Directions are read out of what this agent has actually been doing. Have a few real conversations in the area you care about, then come back — the more it has done, the sharper the proposals.',
   'create.cancel': 'Cancel',
   'create.entry': 'Create an expertise',
   'create.failed': 'Could not create it. Try again.',
@@ -119,5 +118,28 @@ export default {
   'create.submit': 'Create',
   'create.titleLabel': 'Name',
   'create.titlePlaceholder': 'e.g. Incident response',
+  'coverage.blankHint': 'never tested at this layer',
+  'coverage.sub': '{{covered}}/{{total}} layers have rules · {{unused}} rules never used',
+  'coverage.title': 'Where the learning has landed',
+  'create.briefHelp':
+    'Say what you want it to get good at, and what does not count. That sentence becomes the test for which conversations feed this expertise — we work the name out from it.',
+  'create.briefPlaceholder':
+    'e.g. I want it to get better at handling live incidents — from symptom to root cause to prevention. Design discussions and general ops questions do not count.',
+  'journey.count': '{{count}} expertises',
+  'journey.step1': 'Pick a direction',
+  'journey.step1Desc': 'what counts as practice',
+  'journey.step2': 'Let it do the work',
+  'journey.step2Desc': 'rules come from real conversations',
+  'journey.step3': 'Read where it stands',
+  'journey.step3Desc': 'the curve becomes readable',
+  'rules.hitsShort': '{{count}} uses',
+  'rules.neverUsedShort': 'never used',
+  'overview.soloNext':
+    'Open it to see what counts as practice — the rules start coming the next time a conversation matches.',
+  'overview.soloOpen':
+    'Open it for the curve, the layers it learns at, and every rule it has picked up.',
+  'anchor.howTitle': 'Where the data comes from',
+  'anchor.howBody':
+    'Once a direction is set, nothing else is required of you: every conversation that matches its filter counts as one practice, and the rules are extracted from the places it got things wrong. Work with it the way you normally would — the curve fills itself in.',
   'title': 'Self-evolving',
 };

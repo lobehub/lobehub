@@ -9,20 +9,27 @@ import type { ExpertiseDomainDetail, ExpertiseLessonItem } from '@/services/expe
 
 import type { ExpertiseTier } from './types';
 
+/** 和分层覆盖用同一个宽度，两块并排时刻度才是同一把尺。 */
+const TRACK = 88;
+
 const styles = createStaticStyles(({ css }) => ({
+  /** 与分层覆盖同一套：定宽靠右。满行长条只能读出「有」，读不出「差多少」。 */
   bar: css`
     overflow: hidden;
-    height: 5px;
-    border-radius: 3px;
-    background: ${cssVar.colorFillSecondary};
+
+    width: ${TRACK}px;
+    height: 4px;
+    border-radius: 2px;
+
+    background: ${cssVar.colorFillTertiary};
   `,
   fill: css`
     height: 100%;
-    border-radius: 3px;
-    background: ${cssVar.colorPrimary};
+    border-radius: 2px;
+    background: ${cssVar.colorTextTertiary};
   `,
   row: css`
-    padding-block: 6px;
+    padding-block: 7px;
   `,
 }));
 
@@ -84,36 +91,40 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
             </Text>
           </Flexbox>
           {items.map((lesson) => (
-            <Flexbox className={styles.row} gap={4} key={lesson.id}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <Text fontSize={10.5} style={{ flex: 'none', width: 34 }} type={'secondary'}>
-                  {lesson.code}
-                </Text>
-                <Text fontSize={11} type={'secondary'}>
-                  {POLARITY_MARK[lesson.polarity] ?? '·'}
-                </Text>
-                <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
-                  {lesson.title}
-                </Text>
-                <Text fontSize={11.5} style={{ flex: 'none' }} weight={600}>
-                  {lesson.hitCount}
-                </Text>
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={6} paddingInline={'42px 0'}>
-                <div className={styles.bar} style={{ flex: 1 }}>
-                  <div
-                    className={styles.fill}
-                    style={{ width: `${(lesson.hitCount / maxHit) * 100}%` }}
-                  />
-                </div>
-                {lesson.canonAnchor ? (
-                  <Text fontSize={10} style={{ flex: 'none' }} type={'secondary'}>
-                    {lesson.canonAnchor}
+            <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={lesson.id}>
+              <Flexbox gap={1} style={{ flex: 1, minWidth: 0 }}>
+                <Flexbox horizontal align={'center'} gap={7}>
+                  <Text fontSize={10.5} style={{ flex: 'none', width: 34 }} type={'secondary'}>
+                    {lesson.code}
                   </Text>
-                ) : (
-                  <Tag size={'small'}>{t('rules.unanchored')}</Tag>
+                  <Text fontSize={11} type={'secondary'}>
+                    {POLARITY_MARK[lesson.polarity] ?? '·'}
+                  </Text>
+                  <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
+                    {lesson.title}
+                  </Text>
+                </Flexbox>
+                {!lesson.canonAnchor && (
+                  <Flexbox horizontal paddingInline={'41px 0'}>
+                    <Tag size={'small'}>{t('rules.unanchored')}</Tag>
+                  </Flexbox>
                 )}
               </Flexbox>
+              <div className={styles.bar}>
+                <div
+                  className={styles.fill}
+                  style={{ width: `${(lesson.hitCount / maxHit) * 100}%` }}
+                />
+              </div>
+              <Text
+                fontSize={11}
+                style={{ flex: 'none', textAlign: 'right', width: 56 }}
+                type={lesson.hitCount === 0 ? 'warning' : 'secondary'}
+              >
+                {lesson.hitCount === 0
+                  ? t('rules.neverUsedShort')
+                  : t('rules.hitsShort', { count: lesson.hitCount })}
+              </Text>
             </Flexbox>
           ))}
         </Flexbox>

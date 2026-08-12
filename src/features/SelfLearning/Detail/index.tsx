@@ -18,6 +18,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
+import CoverageCloud from '../CoverageCloud';
 import { runsToRatio, useExpertiseDomain, useExpertiseLessons } from '../hooks';
 import LayerCoverage from '../LayerCoverage';
 import RuleList from '../RuleList';
@@ -226,6 +227,8 @@ const DomainDetail = memo(() => {
 
                     <FitMetrics detail={data} />
 
+                    <CoverageCloud detail={data} />
+
                     <Flexbox horizontal gap={16} wrap={'wrap'}>
                       <Flexbox gap={0} style={{ flex: 1, minWidth: 330 }}>
                         <LayerCoverage detail={data} />
@@ -298,9 +301,18 @@ const AnchorChoice = memo<{
     <Flexbox gap={12}>
       <Block gap={8} padding={20} variant={'outlined'}>
         <Text weight={600}>{t('anchor.pending')}</Text>
-        <Text fontSize={13} type={'secondary'}>
+        <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
           {t('anchor.pendingDesc')}
         </Text>
+        {/* 光说「等你定方向」不够 —— 得说清楚定完之后数据从哪儿来。 */}
+        <Block gap={5} padding={12} variant={'filled'}>
+          <Text fontSize={12} weight={600}>
+            {t('anchor.howTitle')}
+          </Text>
+          <Text fontSize={11.5} lineHeight={1.75} type={'secondary'}>
+            {t('anchor.howBody')}
+          </Text>
+        </Block>
       </Block>
 
       {candidates.length === 0 ? (

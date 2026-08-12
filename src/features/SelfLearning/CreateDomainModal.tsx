@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
@@ -14,31 +14,25 @@ interface CreateDomainContentProps {
 }
 
 /**
- * 手建一个专长。
+ * 一句话建一个专长。
  *
- * 领域过滤器是必填的，而且是这张表单的重点 —— 它是这个专长唯一可执行的判据：
- * 哪些对话算数、哪些不算。回测里它拒噪极准（后端运维 77% 的实践空手而归，
- * 重复的 DNS 话题全被挡在外面）；留空的话这个专长会把什么都往里学。
+ * 验收原话是「填写太麻烦了，能否改成一个输入框直接填写，然后我们做后台解析」。所以这里
+ * 只剩一个框：你说想让它在什么事情上变强、什么不算，名称由后端拆出来。
  *
- * 人自己写下的过滤器**就是一个已选定的锚点**，所以建完直接进入可练状态，
- * 不再要求人去「确认方向」—— 他刚刚做的就是那件事。
+ * 那句话本身会原样成为领域过滤器 —— 它是这个专长唯一可执行的判据，不做改写：
+ * 替用户改写判断标准，等于替他改了这个专长将来会学什么。
  */
 const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated }) => {
   const { t } = useTranslation('selfLearning');
   const { close } = useModalContext();
-  const [title, setTitle] = useState('');
-  const [domainFilter, setDomainFilter] = useState('');
+  const [brief, setBrief] = useState('');
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
-    if (!title.trim() || !domainFilter.trim()) return;
+    if (!brief.trim()) return;
     setLoading(true);
     try {
-      await expertiseService.createDomain({
-        agentId,
-        domainFilter: domainFilter.trim(),
-        title: title.trim(),
-      });
+      await expertiseService.createDomain({ agentId, brief: brief.trim() });
       onCreated();
       close();
     } catch {
@@ -50,38 +44,19 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
 
   return (
     <Flexbox gap={16} padding={20}>
-      <Flexbox gap={6}>
-        <Text fontSize={13} weight={600}>
-          {t('create.titleLabel')}
-        </Text>
-        <Input
-          placeholder={t('create.titlePlaceholder')}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </Flexbox>
-      <Flexbox gap={6}>
-        <Text fontSize={13} weight={600}>
-          {t('create.filterLabel')}
-        </Text>
-        <Text fontSize={12} lineHeight={1.7} type={'secondary'}>
-          {t('create.filterHelp')}
-        </Text>
-        <TextArea
-          placeholder={t('create.filterPlaceholder')}
-          rows={4}
-          value={domainFilter}
-          onChange={(e) => setDomainFilter(e.target.value)}
-        />
-      </Flexbox>
+      <Text fontSize={13} lineHeight={1.75} type={'secondary'}>
+        {t('create.briefHelp')}
+      </Text>
+      <TextArea
+        autoFocus
+        placeholder={t('create.briefPlaceholder')}
+        rows={4}
+        value={brief}
+        onChange={(e) => setBrief(e.target.value)}
+      />
       <ModalFooter>
         <Button onClick={close}>{t('create.cancel')}</Button>
-        <Button
-          disabled={!title.trim() || !domainFilter.trim()}
-          loading={loading}
-          type={'primary'}
-          onClick={submit}
-        >
+        <Button disabled={!brief.trim()} loading={loading} type={'primary'} onClick={submit}>
           {t('create.submit')}
         </Button>
       </ModalFooter>
