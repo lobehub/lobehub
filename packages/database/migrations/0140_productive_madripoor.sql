@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS "verify_review_predictions" (
 	"provider" text NOT NULL,
 	"model" text NOT NULL,
 	"prompt_version" text NOT NULL,
-	"action" text NOT NULL,
+	"status" text NOT NULL,
+	"action" text,
+	"status_reason" text,
 	"confidence" numeric(3, 2),
 	"comment" text,
 	"rationale" text,
@@ -17,7 +19,8 @@ CREATE TABLE IF NOT EXISTS "verify_review_predictions" (
 	"latency_ms" integer,
 	"prompt_tokens" integer,
 	"completion_tokens" integer,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "verify_review_predictions_action_matches_status" CHECK (("verify_review_predictions"."status" = 'judged') = ("verify_review_predictions"."action" IS NOT NULL))
 );
 --> statement-breakpoint
 ALTER TABLE "verify_review_predictions" DROP CONSTRAINT IF EXISTS "verify_review_predictions_check_result_id_verify_check_results_id_fk";--> statement-breakpoint

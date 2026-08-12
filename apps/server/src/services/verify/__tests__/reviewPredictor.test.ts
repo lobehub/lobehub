@@ -12,19 +12,38 @@ import { shouldSurfaceProposal } from '../reviewPredictor';
  */
 describe('shouldSurfaceProposal', () => {
   it('surfaces an unanswered proposal on an unjudged check', () => {
-    expect(shouldSurfaceProposal({}, false)).toBe(true);
+    expect(shouldSurfaceProposal({ action: 'reject' }, false)).toBe(true);
   });
 
   it('withholds a proposal the reviewer already dismissed', () => {
-    expect(shouldSurfaceProposal({ adjudication: 'not-an-issue' }, false)).toBe(false);
+    expect(shouldSurfaceProposal({ action: 'reject', adjudication: 'not-an-issue' }, false)).toBe(
+      false,
+    );
   });
 
   it('withholds a proposal marked as misidentified', () => {
-    expect(shouldSurfaceProposal({ adjudication: 'misidentified' }, false)).toBe(false);
+    expect(shouldSurfaceProposal({ action: 'reject', adjudication: 'misidentified' }, false)).toBe(
+      false,
+    );
+  });
+
+  /**
+   * Regression: every attempt is now persisted, including the ones with nothing
+   * to show. Before this gate, an `accept` row — or a `skipped` one written
+   * because the check had no screenshot — rendered an empty proposal card
+   * asking the reviewer to adjudicate an opinion that was never formed.
+   */
+  it('withholds a prediction that judged the check as passing', () => {
+    expect(shouldSurfaceProposal({ action: 'accept' }, false)).toBe(false);
+  });
+
+  it('withholds an attempt that produced no verdict at all', () => {
+    expect(shouldSurfaceProposal({ action: null }, false)).toBe(false);
+    expect(shouldSurfaceProposal({}, false)).toBe(false);
   });
 
   it('withholds once the check itself has a verdict', () => {
-    expect(shouldSurfaceProposal({}, true)).toBe(false);
+    expect(shouldSurfaceProposal({ action: 'reject' }, true)).toBe(false);
   });
 
   /**
@@ -38,12 +57,12 @@ describe('shouldSurfaceProposal', () => {
     const staleReject = { action: 'reject', stale: true };
     const settled = Boolean(staleReject && !staleReject.stale);
     expect(settled).toBe(false);
-    expect(shouldSurfaceProposal({}, settled)).toBe(true);
+    expect(shouldSurfaceProposal({ action: 'reject' }, settled)).toBe(true);
   });
 
   it('treats a check as settled when its review is current', () => {
     const currentReject = { action: 'reject', stale: false };
     const settled = Boolean(currentReject && !currentReject.stale);
-    expect(shouldSurfaceProposal({}, settled)).toBe(false);
+    expect(shouldSurfaceProposal({ action: 'reject' }, settled)).toBe(false);
   });
 });

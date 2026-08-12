@@ -10,7 +10,12 @@ import type {
  * does not depend on the DB row type.
  */
 export interface CheckProposal {
-  action: ReviewPredictionAction;
+  /**
+   * Always `reject`. Every attempt is stored, but an `accept` — like a skip or a
+   * provider error — has nothing to ask the reviewer, so the read path only ever
+   * hands this component the rejections.
+   */
+  action: Extract<ReviewPredictionAction, 'reject'>;
   annotations: AcceptanceReviewAnnotation[] | null;
   comment: string | null;
   confidence: number | null;

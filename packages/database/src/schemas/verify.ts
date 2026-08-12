@@ -4,6 +4,7 @@ import {
   acceptanceVisibilities,
   reviewAdjudications,
   reviewPredictionActions,
+  reviewPredictionStatuses,
   reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
@@ -688,8 +689,27 @@ export const verifyReviewPredictions = pgTable(
     /** Bumped whenever the judging prompt changes, so old opinions stay attributable. */
     promptVersion: text('prompt_version').notNull(),
 
-    /** The proposal. Never `ignore` — that is a statement about the reviewer, not the delivery. */
-    action: text('action', { enum: reviewPredictionActions }).notNull(),
+    /**
+     * How the attempt ended. Mirrors the `status` / `verdict` split on
+     * `verify_check_results`: a row records that a review was ATTEMPTED, and
+     * only `judged` carries an opinion.
+     *
+     * Without it, four situations collapse into "no row" — the model passed the
+     * check, there was no frame to look at, the call failed, or nobody asked.
+     * Only the first is the model's opinion, so miss rate would have no
+     * denominator, and a provider outage would be indistinguishable from the
+     * model approving everything.
+     */
+    status: text('status', { enum: reviewPredictionStatuses }).notNull(),
+
+    /**
+     * The verdict — NULL unless `status` is `judged`. Never `ignore`, which is a
+     * statement about the reviewer's priorities rather than about the delivery.
+     */
+    action: text('action', { enum: reviewPredictionActions }),
+
+    /** Why a `skipped` / `errored` attempt produced no verdict. */
+    statusReason: text('status_reason'),
 
     /**
      * Model self-reported 0–1. Stored, but NOT yet trusted as a gate: in the
@@ -738,6 +758,15 @@ export const verifyReviewPredictions = pgTable(
       t.provider,
       t.model,
       t.promptVersion,
+    ),
+    // `status` and `action` only mean anything together: a `judged` row without a
+    // verdict, or a `skipped` row that still carries one, would both be counted
+    // by the agreement stats as an opinion nobody formed. The column enums are
+    // type-level only in drizzle — they emit no constraint — so this is the one
+    // place the pairing is actually enforced.
+    check(
+      'verify_review_predictions_action_matches_status',
+      sql`(${t.status} = 'judged') = (${t.action} IS NOT NULL)`,
     ),
   ],
 );

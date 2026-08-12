@@ -729,8 +729,8 @@ export const acceptanceRouter = router({
       // how a single click turns into a provider rate-limit burst.
       //
       // The client polls the bundle for the cards to appear; a failed
-      // individual prediction already resolves to null inside `predict`, so one
-      // bad check cannot abort its neighbours.
+      // individual prediction is recorded as an `errored` row inside `predict`
+      // rather than thrown, so one bad check cannot abort its neighbours.
       after(async () => {
         try {
           await mapWithConcurrency(pending, REVIEW_PREDICT_CONCURRENCY, (check) =>

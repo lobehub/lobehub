@@ -47,21 +47,27 @@ export class VerifyReviewPredictionModel {
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
       .onConflictDoUpdate({
         set: {
-          action: params.action,
+          // `?? null` on every optional column, not `params.x` — drizzle drops an
+          // `undefined` from the SET clause, so a later attempt that carries no
+          // verdict (skipped / errored) would otherwise leave the previous run's
+          // action and comment sitting under its new status.
+          action: params.action ?? null,
           // A replacement opinion has not been answered — carrying the previous
           // adjudication forward would attach the reviewer's verdict to text
           // they never saw, and permanently hide the new proposal.
           adjudicatedAt: null,
           adjudication: null,
           adjudicationEdit: null,
-          annotations: params.annotations,
-          comment: params.comment,
-          completionTokens: params.completionTokens,
-          confidence: params.confidence,
+          annotations: params.annotations ?? null,
+          comment: params.comment ?? null,
+          completionTokens: params.completionTokens ?? null,
+          confidence: params.confidence ?? null,
           createdAt: new Date(),
-          latencyMs: params.latencyMs,
-          promptTokens: params.promptTokens,
-          rationale: params.rationale,
+          latencyMs: params.latencyMs ?? null,
+          promptTokens: params.promptTokens ?? null,
+          rationale: params.rationale ?? null,
+          status: params.status,
+          statusReason: params.statusReason ?? null,
         },
         target: [
           verifyReviewPredictions.checkResultId,

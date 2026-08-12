@@ -187,6 +187,12 @@ export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
 export type ReviewPredictionAction = 'accept' | 'reject';
 
 /**
+ * How a review attempt ended — see `@lobechat/const/verify` for why this is
+ * separate from the verdict. `skipped` / `errored` carry no `action`.
+ */
+export type ReviewPredictionStatus = 'judged' | 'skipped' | 'errored';
+
+/**
  * The reviewer's verdict on a model proposal. `misidentified` is separate from
  * `not-an-issue` on purpose: it carries the OPPOSITE signal on the judgement
  * (there really is a problem) while still marking the grounding wrong.
@@ -203,7 +209,8 @@ export type ReviewProposalEdit = 'verbatim' | 'comment-edited' | 'region-moved' 
  * model version.
  */
 export interface ReviewPrediction {
-  action: ReviewPredictionAction;
+  /** The verdict — absent unless `status` is `judged`. */
+  action?: ReviewPredictionAction | null;
   /** Regions the model circled, same shape the human's annotations use. */
   annotations?: AcceptanceReviewAnnotation[];
   /** The one-line justification shown to the reviewer. */
@@ -217,6 +224,7 @@ export interface ReviewPrediction {
   provider: string;
   /** Full reasoning, kept for training; not surfaced in the collapsed card. */
   rationale?: string;
+  status: ReviewPredictionStatus;
 }
 
 /**

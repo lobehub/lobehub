@@ -257,6 +257,25 @@ export const reviewPredictionActions = ['accept', 'reject'] as const;
 export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
 
 /**
+ * How a review attempt ended. Split from the verdict for the same reason
+ * `verify_check_results` splits `status` from `verdict`: an attempt can finish
+ * without producing a judgement at all, and "no judgement" must be recorded
+ * rather than inferred from a missing row.
+ *
+ * Without this, four different situations collapse into "no row" — the model
+ * passed the check, it had no frame to look at, the call failed, or nobody ever
+ * asked. Only the first is the model's opinion, so miss rate (the metric this
+ * whole feature exists to move) has no denominator. A silent provider outage
+ * also becomes indistinguishable from "the model approved everything".
+ *
+ * - judged:  the model returned a verdict; `action` is set
+ * - skipped: nothing judgeable (no screenshot/GIF evidence); `action` is null
+ * - errored: the call failed or its output did not parse; `action` is null
+ */
+export const reviewPredictionStatuses = ['judged', 'skipped', 'errored'] as const;
+export type ReviewPredictionStatus = (typeof reviewPredictionStatuses)[number];
+
+/**
  * The reviewer's verdict on a model proposal. Three-way on purpose — a flat
  * accept/dismiss would merge two opposite training signals: "you saw a problem
  * that isn't there" (the judgement was wrong) and "there IS a problem but you

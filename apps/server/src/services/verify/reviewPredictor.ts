@@ -52,18 +52,27 @@ export interface PredictReviewParams {
 }
 
 /**
- * Whether a stored proposal should still be shown to the reviewer.
+ * Whether a stored prediction should be shown to the reviewer as a proposal.
  *
- * Both reasons to withhold one were real defects when missing:
+ * Every attempt is persisted, including the ones with nothing to say, so this is
+ * where "we have a row" narrows to "the reviewer should look at something":
+ *  - only a `reject` is a proposal at all — an `accept`, a skip and an error are
+ *    recorded for the agreement stats and render no card;
  *  - the reviewer already answered this proposal — `not-an-issue` and
  *    `misidentified` deliberately leave the CHECK unjudged, so gating on the
  *    check's verdict alone resurrects a dismissed card on every reload;
  *  - the check itself has been ruled on, so the proposal has nothing left to ask.
  */
-export const shouldSurfaceProposal = (
-  prediction: { adjudication?: string | null },
+export const shouldSurfaceProposal = <
+  T extends { action?: string | null; adjudication?: string | null },
+>(
+  prediction: T,
   hasUserReview: boolean,
-): boolean => !hasUserReview && !prediction.adjudication;
+  // A type predicate, not a plain boolean: the card's own `action: 'reject'`
+  // field is only true BECAUSE of this gate, so narrowing here is what stops the
+  // two from drifting — widen the gate and the UI type stops compiling.
+): prediction is T & { action: 'reject' } =>
+  prediction.action === 'reject' && !hasUserReview && !prediction.adjudication;
 
 /**
  * Produces an automated second opinion on a check the verifier already judged.
@@ -98,10 +107,14 @@ export class VerifyReviewPredictorService {
   }
 
   /**
-   * Re-judge one check. Returns null (rather than throwing) whenever the check
-   * cannot be judged — no visual evidence, model failure — because this runs
-   * opportunistically behind the reviewer's own work and must never take a page
-   * down with it.
+   * Re-judge one check.
+   *
+   * Never throws: this runs opportunistically behind the reviewer's own work and
+   * must not take a page down with it. Anything that stops a verdict from
+   * forming — no frame to look at, a provider failure, unparseable output — is
+   * written as a non-`judged` row instead, so the attempt stays visible to the
+   * analysis set. Only a check that does not exist, or one whose proposal has
+   * already been answered, returns null.
    */
   async predict(params: PredictReviewParams) {
     const { checkResultId, modelConfig } = params;
@@ -131,7 +144,7 @@ export class VerifyReviewPredictorService {
     // reasoning back at the user, which is worse than silence.
     if (visuals.length === 0) {
       log('predict: %s has no visual evidence, skipping', checkResultId);
-      return null;
+      return this.record(params, 'skipped', 'no visual evidence to judge');
     }
 
     const instruction = params.instructionDocumentId
@@ -182,25 +195,21 @@ export class VerifyReviewPredictorService {
       );
     } catch (error) {
       log('predict: model call failed for %s — %O', checkResultId, error);
-      return null;
+      return this.record(params, 'errored', error instanceof Error ? error.message : String(error));
     }
 
     const parsed = ReviewPredictionSchema.safeParse(raw);
     if (!parsed.success) {
       log('predict: unparseable output for %s — %O', checkResultId, parsed.error.flatten());
-      return null;
+      return this.record(params, 'errored', 'model output did not match the schema');
     }
 
     const prediction = parsed.data;
-    // An `accept` carries no proposal for the reviewer to act on — the check
-    // already reads as passing. Persisting it would grow the table by ~4x for a
-    // card that renders nothing.
-    if (prediction.action === 'accept') {
-      log('predict: %s judged accept, nothing to propose', checkResultId);
-      return null;
-    }
-
     const annotations = this.toAnnotations(prediction.regions, visuals);
+
+    // An `accept` renders no card, but it is still the model's opinion and the
+    // row is what makes miss rate computable: without it, "the model passed
+    // this" is indistinguishable from "we never looked".
 
     return this.predictionModel.upsert({
       action: prediction.action,
@@ -213,6 +222,23 @@ export class VerifyReviewPredictorService {
       provider: modelConfig.provider,
       promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
       rationale: prediction.rationale ?? undefined,
+      status: 'judged',
+    });
+  }
+
+  /**
+   * Record an attempt that produced no verdict. Kept as a row rather than a
+   * silent `return null` so the analysis set can tell "nothing to judge" and
+   * "the call broke" apart from "the model approved it".
+   */
+  private record(params: PredictReviewParams, status: 'errored' | 'skipped', reason: string) {
+    return this.predictionModel.upsert({
+      checkResultId: params.checkResultId,
+      model: params.modelConfig.model,
+      promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+      provider: params.modelConfig.provider,
+      status,
+      statusReason: reason,
     });
   }
 

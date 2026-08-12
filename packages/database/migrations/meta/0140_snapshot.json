@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "4ebf2d65-02b8-4fd3-90c5-e530a3dafd46",
+  "id": "230aabba-c4d5-4105-8a59-c1d9e913566f",
   "policies": {},
   "prevId": "5e08d9a7-4720-4250-aa8d-96fc9a3dd85a",
   "roles": {},
@@ -26140,11 +26140,23 @@
           "primaryKey": false,
           "notNull": true
         },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "action": {
           "name": "action",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "status_reason": {
+          "name": "status_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "confidence": {
           "name": "confidence",
@@ -26347,7 +26359,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "verify_review_predictions_action_matches_status": {
+          "name": "verify_review_predictions_action_matches_status",
+          "value": "(\"verify_review_predictions\".\"status\" = 'judged') = (\"verify_review_predictions\".\"action\" IS NOT NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.verify_rubric_criteria": {

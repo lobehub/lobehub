@@ -5,6 +5,7 @@ import type {
   AcceptanceSubjectType,
   ReviewAdjudication,
   ReviewPredictionAction,
+  ReviewPredictionStatus,
   ReviewProposalEdit,
   VerifierType,
   VerifyCheckResultStatus,
@@ -28,6 +29,7 @@ import type {
   acceptanceSubjectTypes,
   reviewAdjudications,
   reviewPredictionActions,
+  reviewPredictionStatuses,
   reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
@@ -80,6 +82,9 @@ describe('verify vocabulary', () => {
     expectTypeOf<
       (typeof reviewPredictionActions)[number]
     >().toEqualTypeOf<ReviewPredictionAction>();
+    expectTypeOf<
+      (typeof reviewPredictionStatuses)[number]
+    >().toEqualTypeOf<ReviewPredictionStatus>();
     expectTypeOf<(typeof reviewAdjudications)[number]>().toEqualTypeOf<ReviewAdjudication>();
     expectTypeOf<(typeof reviewProposalEdits)[number]>().toEqualTypeOf<ReviewProposalEdit>();
   });
