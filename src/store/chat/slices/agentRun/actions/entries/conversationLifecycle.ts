@@ -60,8 +60,8 @@ import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispa
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
-import type { OperationType, QueuedFile } from '@/store/chat/slices/operation/types';
-import { QUEUE_BLOCKING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import type { QueuedFile } from '@/store/chat/slices/operation/types';
+import { isQueueBlockingOperation } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -178,8 +178,6 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
-
-const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
 const throwIfSendAborted = (signal?: AbortSignal) => {
   if (!signal?.aborted) return;
@@ -602,6 +600,7 @@ export class ConversationLifecycleActionImpl {
     ];
     const findRunningBlockingOp = (key: string) => {
       const contextOpIds = this.#get().operationsByContext[key] || [];
+      const hasQueuedMessages = (this.#get().queuedMessages[key]?.length ?? 0) > 0;
       const ownVoiceUploadIndex = optimisticUserMessageId
         ? contextOpIds.findIndex((id) => {
             const operation = this.#get().operations[id];
@@ -617,8 +616,10 @@ export class ConversationLifecycleActionImpl {
         .find(
           ({ index, operation }) =>
             operation &&
-            QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type) &&
-            operation.status === 'running' &&
+            // Shared predicate — an op the composer already treats as finished
+            // (aborting, or done with its visible output) must NOT swallow this
+            // send into the tray.
+            isQueueBlockingOperation(operation, { hasQueuedMessages }) &&
             // The upload transaction calls this lifecycle after its own binary is ready. It must
             // not queue behind itself (or a later voice upload); earlier voice uploads still block.
             !(
