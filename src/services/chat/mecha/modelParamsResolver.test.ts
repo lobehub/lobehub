@@ -363,10 +363,10 @@ describe('resolveModelExtendParams', () => {
       });
 
       it('should enable thinking and set low reasoning_effort for DeepSeek', () => {
+        mockModelReasoningConfig({ deepseekV4ReasoningEffort: 'low' });
+
         const result = resolveModelExtendParams({
-          chatConfig: {
-            deepseekV4ReasoningEffort: 'low',
-          } as any,
+          chatConfig: {} as any,
           model: 'deepseek-v4-pro',
           provider: 'deepseek',
         });
