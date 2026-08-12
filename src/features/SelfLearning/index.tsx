@@ -1,8 +1,9 @@
 'use client';
 
 import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { ChevronRightIcon, GraduationCapIcon, SparklesIcon } from 'lucide-react';
+import { ChevronRightIcon, GraduationCapIcon, PlusIcon, SparklesIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -16,6 +17,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainItem } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
+import { openCreateDomainModal } from './CreateDomainModal';
 import Curves from './Curves';
 import { type ExpertiseShape, shapeOf, useExpertiseOverview } from './hooks';
 
@@ -71,6 +73,7 @@ const useShapeLabels = () => {
   const theme = useTheme();
   return {
     declining: { color: theme.colorWarning, label: t('shape.declining') },
+    fresh: { color: theme.colorTextQuaternary, label: t('shape.fresh') },
     flat: { color: theme.colorSuccess, label: t('shape.flat') },
     rising: { color: theme.colorInfo, label: t('shape.rising') },
     stuck: { color: theme.colorTextTertiary, label: t('shape.stuck') },
@@ -86,6 +89,8 @@ const SelfLearning = memo(() => {
   const shapes = useShapeLabels();
 
   const domains = useMemo(() => data?.domains ?? [], [data]);
+  /** 全都还没练过的时候，坐标轴会退化成一排「第 1 次」—— 那张空网格不如不画。 */
+  const hasCurves = domains.some((d) => d.series.length > 1);
 
   const openDomain = (domainId: string) => {
     if (!activeAgentId) return;
@@ -106,7 +111,7 @@ const SelfLearning = memo(() => {
       .map((d) => d.id);
     return {
       colors: Object.fromEntries(
-        domains.map((d) => [d.id, shapes[shapeOf(d.maturity, d.delta)].color]),
+        domains.map((d) => [d.id, shapes[shapeOf(d.maturity, d.delta, d.runCount)].color]),
       ),
       focusIds: ids,
     };
@@ -115,7 +120,7 @@ const SelfLearning = memo(() => {
   /** 一句判断句放在最前面 —— 用户先要的是结论，不是图。 */
   const headline = useMemo(() => {
     if (domains.length === 0) return null;
-    const withShape = domains.map((d) => ({ d, shape: shapeOf(d.maturity, d.delta) }));
+    const withShape = domains.map((d) => ({ d, shape: shapeOf(d.maturity, d.delta, d.runCount) }));
     const flat = withShape.find((x) => x.shape === 'flat');
     const declining = withShape.find((x) => x.shape === 'declining');
     const rising = withShape.find((x) => x.shape === 'rising');
@@ -154,27 +159,27 @@ const SelfLearning = memo(() => {
                   icon={GraduationCapIcon}
                   style={{ maxWidth: 420 }}
                   title={t('empty.title')}
+                  action={
+                    <Button
+                      icon={PlusIcon}
+                      type={'primary'}
+                      onClick={() => {
+                        if (!activeAgentId) return;
+                        openCreateDomainModal({
+                          agentId: activeAgentId,
+                          onCreated: () => void mutate(),
+                        });
+                      }}
+                    >
+                      {t('create.entry')}
+                    </Button>
+                  }
                 />
               </Center>
             }
             onRetry={() => mutate()}
           >
             <Flexbox gap={24} paddingBlock={'26px 64px'}>
-              <Flexbox horizontal align={'baseline'} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} gap={7}>
-                  <Icon icon={GraduationCapIcon} size={16} />
-                  <Text fontSize={13} weight={600}>
-                    {t('title')}
-                  </Text>
-                </Flexbox>
-                <Text fontSize={13} type={'secondary'}>
-                  {t('overview.totals', {
-                    domains: data?.totals.domains ?? 0,
-                    lessons: data?.totals.lessons ?? 0,
-                  })}
-                </Text>
-              </Flexbox>
-
               {headline && (
                 <Text className={styles.sentence}>
                   {headline.lead}
@@ -189,33 +194,43 @@ const SelfLearning = memo(() => {
                 </Text>
               )}
 
-              <Block gap={10} padding={16} variant={'outlined'}>
-                <Curves
-                  colors={colors}
-                  domains={domains}
-                  focusIds={focusIds}
-                  hoverId={hoverId}
-                  onHover={setHoverId}
-                  onOpen={openDomain}
-                />
-                <Flexbox horizontal align={'center'} gap={14} wrap={'wrap'}>
-                  {(Object.keys(shapes) as ExpertiseShape[]).map((key) => (
-                    <Flexbox horizontal align={'center'} gap={6} key={key}>
-                      <div className={styles.swatch} style={{ background: shapes[key].color }} />
-                      <Text fontSize={11.5} type={'secondary'}>
-                        {shapes[key].label}
-                      </Text>
-                    </Flexbox>
-                  ))}
-                </Flexbox>
-              </Block>
+              {hasCurves && (
+                <Block gap={10} padding={16} variant={'outlined'}>
+                  <Curves
+                    colors={colors}
+                    domains={domains}
+                    focusIds={focusIds}
+                    hoverId={hoverId}
+                    onHover={setHoverId}
+                    onOpen={openDomain}
+                  />
+                  <Flexbox horizontal align={'center'} gap={14} wrap={'wrap'}>
+                    {(['flat', 'rising', 'declining', 'stuck'] as ExpertiseShape[]).map((key) => (
+                      <Flexbox horizontal align={'center'} gap={6} key={key}>
+                        <div className={styles.swatch} style={{ background: shapes[key].color }} />
+                        <Text fontSize={11.5} type={'secondary'}>
+                          {shapes[key].label}
+                        </Text>
+                      </Flexbox>
+                    ))}
+                  </Flexbox>
+                </Block>
+              )}
 
               {!!data?.insights.length && (
                 <Flexbox gap={10}>
-                  <Flexbox horizontal align={'center'} gap={7}>
-                    <Icon icon={SparklesIcon} size={14} />
-                    <Text fontSize={13} weight={600}>
-                      {t('insights.title')}
+                  <Flexbox horizontal align={'center'} justify={'space-between'}>
+                    <Flexbox horizontal align={'center'} gap={7}>
+                      <Icon icon={SparklesIcon} size={14} />
+                      <Text fontSize={13} weight={600}>
+                        {t('insights.title')}
+                      </Text>
+                    </Flexbox>
+                    <Text fontSize={12.5} type={'secondary'}>
+                      {t('overview.totals', {
+                        domains: data.totals.domains,
+                        lessons: data.totals.lessons,
+                      })}
                     </Text>
                   </Flexbox>
                   {data.insights.map((it) => (
@@ -283,7 +298,7 @@ interface DomainRowProps {
 const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
   const { t } = useTranslation('selfLearning');
   const theme = useTheme();
-  const shape = shapeOf(domain.maturity, domain.delta);
+  const shape = shapeOf(domain.maturity, domain.delta, domain.runCount);
   const ceiling = domain.maturity.usable
     ? (domain.maturity.pInf ?? 0)
     : Math.max(1, ...domain.series.map((p) => p.n));
@@ -335,7 +350,7 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
 
       <Text
         fontSize={12.5}
-        style={{ flex: 'none', textAlign: 'right', width: 46 }}
+        style={{ flex: 'none', textAlign: 'right', width: 68 }}
         type={domain.maturity.usable ? undefined : 'secondary'}
         weight={600}
       >

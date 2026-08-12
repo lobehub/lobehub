@@ -26,9 +26,16 @@ export const runsToRatio = (tau: number, ratio: number) => Math.ceil(-tau * Math
  * 刻意不只读 plateauKind：它描述拟合出的形状，而「掉头」是规则被退休的结果，
  * 在形状上仍然可能被拟合成 saturated。两者一起判断才对得上用户看见的那条线。
  */
-export type ExpertiseShape = 'flat' | 'rising' | 'declining' | 'stuck';
+export type ExpertiseShape = 'flat' | 'rising' | 'declining' | 'stuck' | 'fresh';
 
-export const shapeOf = (maturity: ExpertiseMaturity, delta: number): ExpertiseShape => {
+export const shapeOf = (
+  maturity: ExpertiseMaturity,
+  delta: number,
+  runCount = 1,
+): ExpertiseShape => {
+  // 一次都没练过 ≠ 练了没学到。前者是还没开始，后者是花了力气没有产出 ——
+  // 把刚建好的专长标成「练了没学到」，等于开局先给人判个不及格。
+  if (runCount === 0) return 'fresh';
   if (delta < 0) return 'declining';
   if (maturity.usable && (maturity.maturity ?? 0) >= 0.9) return 'flat';
   if (delta === 0) return 'stuck';
