@@ -21,6 +21,13 @@
       "when": 1786450616830,
       "tag": "0002_naive_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786525486668,
+      "tag": "0003_allow_scheduled_task_projection",
+      "breakpoints": true
     }
   ],
   "version": "7"

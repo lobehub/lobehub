@@ -10,12 +10,13 @@ import type {
 import { agentSearchIndexKey } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 import { selectHomeSidebarItem } from '../home/selectors';
 
 export type AgentProjectionView = { id: string } & Partial<AgentItem> & Partial<LobeAgentConfig>;
 
 const activeRecord = (record: AgentProjection | undefined): AgentProjection | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+  activeProjectionRecord(record);
 
 const withoutUndefined = <T extends Record<string, unknown>>(value: T): T =>
   Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
@@ -77,7 +78,7 @@ export const selectAgentDirectory = (
   const items: AgentProjectionView[] = [];
   for (const ref of index.refs) {
     const record = scope.records.agent[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const item = selectAgentSummary(record);
     if (!item) return undefined;
     items.push(item);
@@ -103,7 +104,7 @@ export const selectAgentSearch = (
   for (const ref of index.refs) {
     const record =
       ref.kind === 'chatGroup' ? scope.records.chatGroup[ref.id] : scope.records.agent[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const item = selectHomeSidebarItem(scope, ref);
     if (!item) return undefined;
     items.push(item);

@@ -12,18 +12,18 @@ import { agentService } from '@/services/agent';
  * Call the returned function on mouseEnter to warm the cache before navigation.
  *
  * Warms the exact key `useFetchAgentConfig` reads — the workspace-augmented
- * form of `agentConfigKeys.config(agentId)` — so the prefetch actually hits the
- * consumer's cache entry.
+ * form of `agentConfigKeys.config(agentId, scope)` — so the prefetch actually
+ * hits the consumer's cache entry without crossing identity partitions.
  */
 export const usePrefetchAgent = () => {
   return useCallback((agentId: string) => {
     if (!agentId) return;
 
+    const scope = getCacheScope();
     const key = augmentKey(
-      agentConfigKeys.config(agentId),
+      agentConfigKeys.config(agentId, scope),
       getActiveWorkspaceId(),
     ) as readonly unknown[];
-    const scope = getCacheScope();
     const observedAt = nextProjectionObservedAt();
     const request = agentService.getAgentConfigById(agentId).then((data) => {
       if (data) {

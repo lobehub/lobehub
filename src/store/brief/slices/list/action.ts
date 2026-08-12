@@ -4,7 +4,12 @@ import { type SWRResponse } from 'swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState, nextProjectionObservedAt, useBriefNews } from '@/projection';
+import {
+  activeProjectionRecord,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  useBriefNews,
+} from '@/projection';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -54,14 +59,14 @@ export class BriefListActionImpl {
 
   deleteBrief = async (id: string) => {
     const scope = getCacheScope();
-    const observedAt = nextProjectionObservedAt();
     await briefService.delete(id);
+    const observedAt = nextProjectionObservedAt();
     getProjectionStoreState().deleteBriefProjection(scope, id, observedAt);
     const record = getProjectionStoreState().scopes[scope]?.records.brief[id];
     // A newer local edit may have crossed this request and defeated its older
     // tombstone. Projection stays canonical, so do not remove that active row
     // from the legacy list after the commit has already resolved the conflict.
-    if (record && !record.tombstoneAt) return;
+    if (activeProjectionRecord(record)) return;
 
     const previous = this.#get().briefs;
     const briefs = previous.filter((b) => b.id !== id);
@@ -75,8 +80,8 @@ export class BriefListActionImpl {
 
   markBriefRead = async (id: string) => {
     const scope = getCacheScope();
-    const observedAt = nextProjectionObservedAt();
     const result = await briefService.markRead(id);
+    const observedAt = nextProjectionObservedAt();
     const readAt = result.data.readAt ?? new Date().toISOString();
     this.internal_updateBrief(id, { readAt });
     getProjectionStoreState().updateBriefReadState(scope, id, readAt, observedAt);
@@ -92,10 +97,10 @@ export class BriefListActionImpl {
     // Capture the scope these ids belong to *before* awaiting — a workspace
     // switch mid-request must not land the resolution in the next partition.
     const scope = getCacheScope();
-    const observedAt = nextProjectionObservedAt();
     const result = await briefService.resolveManyAsRead(ids);
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
+    const observedAt = nextProjectionObservedAt();
 
     getProjectionStoreState().resolveBriefProjectionsAsRead(
       scope,
@@ -116,8 +121,8 @@ export class BriefListActionImpl {
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
     const scope = getCacheScope();
-    const observedAt = nextProjectionObservedAt();
     const result = await briefService.resolve(id, { action, comment });
+    const observedAt = nextProjectionObservedAt();
     const resolvedAction = result.data.resolvedAction ?? action ?? null;
     const resolvedAt = result.data.resolvedAt ?? new Date().toISOString();
     const resolvedComment = result.data.resolvedComment ?? comment ?? null;

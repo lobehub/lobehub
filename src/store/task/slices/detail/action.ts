@@ -173,7 +173,7 @@ export class TaskDetailSliceActionImpl {
       detail ? (detail.id ?? detail.identifier) : resolvedId,
     );
     const canonical = selectTaskDetail(record);
-    if (record?.tombstoneAt || !canonical) {
+    if (!canonical) {
       // Mark the *resolved* not-found so the read side can tell it apart from a
       // network / 500 rejection (which propagates from `taskService.getDetail`
       // above with an HTTP status). Without this tag both would render the same

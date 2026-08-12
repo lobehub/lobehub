@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../core/initialState';
+import { activeProjectionRecord } from '../core/record';
 import { getProjectionStoreState } from '../store';
 import type { ProjectionViewContract } from './types';
 
@@ -18,7 +19,7 @@ const missingRecordRequest = (
   const table = scope?.records[request.kind] as Record<string, ProjectionRecord> | undefined;
   const ids = request.ids.filter((id) => {
     const record = table?.[id];
-    if (record?.tombstoneAt) return false;
+    if (record && !activeProjectionRecord(record)) return false;
     const fragments = record?.fragments as Record<string, unknown> | undefined;
     return request.fragments.some((fragment) => !fragments?.[fragment]);
   });

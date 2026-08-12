@@ -194,6 +194,46 @@ describe('ProjectionStore mutation paths', () => {
     expect(scope.indexes['home.sidebar']?.groups[0].items).toEqual([]);
   });
 
+  it('removes topics cascade-deleted with an Agent or ChatGroup from Home indexes', () => {
+    getProjectionStoreState().internal_commitProjection(SCOPE, {
+      indexes: [
+        {
+          key: 'home.inboxTopics',
+          observedAt: 100,
+          refs: [
+            { id: 'agent-topic', kind: 'topic' },
+            { id: 'group-topic', kind: 'topic' },
+          ],
+          source: 'network',
+        },
+      ],
+      records: [
+        {
+          fragments: {
+            routing: { data: { agentId: 'agent-1' }, observedAt: 100, source: 'network' },
+          },
+          id: 'agent-topic',
+          kind: 'topic',
+        },
+        {
+          fragments: {
+            routing: { data: { groupId: 'group-1' }, observedAt: 100, source: 'network' },
+          },
+          id: 'group-topic',
+          kind: 'topic',
+        },
+      ],
+    });
+
+    getProjectionStoreState().deleteAgentProjection(SCOPE, 'agent-1', 200);
+    getProjectionStoreState().deleteChatGroupProjection(SCOPE, 'group-1', 201);
+
+    const scope = getProjectionStoreState().scopes[SCOPE];
+    expect(scope.indexes['home.inboxTopics']?.refs).toEqual([]);
+    expect(scope.records.topic['agent-topic'].tombstoneAt).toBe(200);
+    expect(scope.records.topic['group-topic'].tombstoneAt).toBe(201);
+  });
+
   it('removes deleted Task and Brief records from all migrated list indexes', () => {
     getProjectionStoreState().ingestHomeTasks(SCOPE, [task], 1, 100);
     getProjectionStoreState().commitTaskList(SCOPE, [task], 1, { visibility: 'all' }, 100);

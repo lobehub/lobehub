@@ -1,4 +1,9 @@
-import type { HomeDailyBriefResponse, HomeRecentItem, SidebarVisibility } from '../../home';
+import type {
+  HomeDailyBriefResponse,
+  HomeRecentItem,
+  SidebarAgentLabel,
+  SidebarVisibility,
+} from '../../home';
 import type { TaskAutomationMode, TaskItem, TaskStatus } from '../../task';
 import type { ProjectionRef, ProjectionSource } from '../base';
 
@@ -17,6 +22,7 @@ export interface HomeIndexBase<K extends HomeIndexKey> {
 }
 
 export interface HomeSidebarProjectionRef extends ProjectionRef<'agent' | 'chatGroup'> {
+  labels?: SidebarAgentLabel[];
   pinned: boolean;
   unreadCount?: number;
   updatedAt: Date;

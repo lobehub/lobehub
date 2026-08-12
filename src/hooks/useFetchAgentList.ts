@@ -1,11 +1,6 @@
 'use client';
 
-import isEqual from 'fast-deep-equal';
-import { useLayoutEffect } from 'react';
-
-import { useHomeSidebarRequest, useProjectionStore } from '@/projection';
-import { selectHomeSidebar } from '@/projection/modules/home/selectors';
-import { useHomeStore } from '@/store/home';
+import { useHomeSidebarRequest } from '@/projection';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -17,21 +12,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
  */
 export const useFetchAgentList = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { isInitialized, isValidating, error, mutate, scope } = useHomeSidebarRequest(isLogin);
-  const syncLegacyProjection = useHomeStore((state) => state.internal_syncAgentListProjection);
-
-  // Existing non-Home consumers still select the old HomeStore list. Drive
-  // that projection through an imperative subscription so callers of this
-  // request hook never become React subscribers to the aggregate EntityView.
-  useLayoutEffect(
-    () =>
-      useProjectionStore.subscribe(
-        (state) => selectHomeSidebar(state.scopes[scope]),
-        (data) => syncLegacyProjection(data, scope),
-        { equalityFn: isEqual, fireImmediately: true },
-      ),
-    [scope, syncLegacyProjection],
-  );
+  const { isInitialized, isValidating, error, mutate } = useHomeSidebarRequest(isLogin);
 
   return {
     error,

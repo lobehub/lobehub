@@ -1,4 +1,5 @@
 export { nextProjectionObservedAt } from './core/ingest';
+export { activeProjectionRecord } from './core/record';
 export * from './core/scope';
 export type { AgentProjectionAction } from './modules/agent/action';
 export * from './modules/agent/contracts';
@@ -32,6 +33,7 @@ export type { ChatTopicDetailView, ChatTopicListItemView } from './modules/chat/
 export {
   selectChatTopicDetailItem,
   selectChatTopicListItem,
+  selectChatTopicProjectionIds,
   selectChatTopicsIndex,
   selectChatTopicsItems,
 } from './modules/chat/selectors';

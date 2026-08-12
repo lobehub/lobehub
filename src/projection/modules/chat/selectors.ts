@@ -7,6 +7,7 @@ import type {
 import { chatAgentViewTopicsIndexKey, chatSidebarTopicsIndexKey } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 
 export interface ChatTopicListItemView {
   completedAt?: Date | null;
@@ -35,10 +36,28 @@ export interface ChatTopicDetailView extends ChatTopicListItemView {
 }
 
 const activeRecord = (record: TopicProjection | undefined): TopicProjection | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+  activeProjectionRecord(record);
 
 const withoutUndefined = <T extends Record<string, unknown>>(value: T): T =>
   Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+
+export const selectChatTopicProjectionIds = (
+  scope: ProjectionScopeState | undefined,
+  filter: { agentId?: string; groupId?: string; userId?: string } = {},
+): string[] => {
+  if (!scope) return [];
+
+  return Object.values(scope.records.topic).flatMap((record) => {
+    const active = activeRecord(record);
+    if (!active) return [];
+    const routing = active.fragments.routing?.data;
+    const ownership = active.fragments.ownership?.data;
+    if (filter.agentId !== undefined && routing?.agentId !== filter.agentId) return [];
+    if (filter.groupId !== undefined && routing?.groupId !== filter.groupId) return [];
+    if (filter.userId !== undefined && ownership?.userId !== filter.userId) return [];
+    return [active.id];
+  });
+};
 
 export const selectChatTopicsIndex = (
   scope: ProjectionScopeState | undefined,
@@ -121,7 +140,7 @@ export const selectChatTopicsItems = (
   const items: ChatTopicListItemView[] = [];
   for (const ref of index.refs) {
     const record = scope.records.topic[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const item = index.signature.withDetails
       ? selectChatTopicDetailItem(scope, ref.id)
       : selectChatTopicListItem(scope, ref.id);

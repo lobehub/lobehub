@@ -36,21 +36,31 @@ export type HomeBriefInput = Omit<BriefItem, 'actions' | 'type'> & {
   type: string;
 };
 
-const isBriefAction = (value: unknown): value is BriefAction => {
-  if (!value || typeof value !== 'object') return false;
-  const action = value as Record<string, unknown>;
-  return (
-    typeof action.key === 'string' &&
-    typeof action.label === 'string' &&
-    (action.type === 'resolve' || action.type === 'comment' || action.type === 'link') &&
-    (action.url === undefined || typeof action.url === 'string')
-  );
-};
-
 const parseBriefActions = (value: unknown): BriefAction[] | null => {
   if (value === null) return null;
-  if (Array.isArray(value) && value.every(isBriefAction)) return value;
-  throw new TypeError('Invalid Brief actions payload');
+  if (!Array.isArray(value)) return null;
+
+  return value.flatMap((candidate, index): BriefAction[] => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const action = candidate as Record<string, unknown>;
+    if (typeof action.label !== 'string') return [];
+
+    const legacyType = typeof action.type === 'string' ? action.type : undefined;
+    const type =
+      legacyType === 'comment' || legacyType === 'link' || legacyType === 'resolve'
+        ? legacyType
+        : 'resolve';
+    const key = typeof action.key === 'string' ? action.key : (legacyType ?? `action-${index + 1}`);
+
+    return [
+      {
+        key,
+        label: action.label,
+        type,
+        ...(typeof action.url === 'string' ? { url: action.url } : {}),
+      },
+    ];
+  });
 };
 
 const parseBriefType = (value: string): BriefType => {
@@ -72,7 +82,7 @@ const parseTaskStatus = (value: string): TaskStatus => {
   ) {
     return value;
   }
-  throw new TypeError('Invalid Task status payload');
+  return 'backlog';
 };
 
 const fragment = <T>(data: T, observation: ProjectionObservation): ProjectionFragment<T> => ({
@@ -87,7 +97,14 @@ export const sidebarItemProjectionRecord = (
   if (item.type === 'group') {
     return {
       fragments: {
-        access: fragment({ userId: item.userId, visibility: item.visibility }, observation),
+        access: fragment(
+          {
+            userId: item.userId,
+            visibility: item.visibility,
+            ...('workspaceId' in item ? { workspaceId: item.workspaceId } : {}),
+          },
+          observation,
+        ),
         identity: fragment(
           {
             avatar: item.avatar,
@@ -106,7 +123,14 @@ export const sidebarItemProjectionRecord = (
 
   return {
     fragments: {
-      access: fragment({ userId: item.userId, visibility: item.visibility }, observation),
+      access: fragment(
+        {
+          userId: item.userId,
+          visibility: item.visibility,
+          ...('workspaceId' in item ? { workspaceId: item.workspaceId } : {}),
+        },
+        observation,
+      ),
       identity: fragment(
         {
           avatar: item.avatar,
@@ -128,6 +152,7 @@ export const sidebarItemProjectionRecord = (
 const sidebarRef = (item: SidebarAgentItem): HomeSidebarProjectionRef => ({
   id: item.id,
   kind: item.type === 'group' ? 'chatGroup' : 'agent',
+  ...(item.labels ? { labels: item.labels } : {}),
   pinned: item.pinned,
   unreadCount: item.unreadCount,
   updatedAt: item.updatedAt,
@@ -225,7 +250,10 @@ const inboxTopicRecord = (
     ...(item.createdAt ? { creation: fragment({ createdAt: item.createdAt }, observation) } : {}),
     display: fragment({ title: item.title }, observation),
     ownership: fragment({ userId: item.userId }, observation),
-    preview: fragment({ lastAssistantMessage: item.lastAssistantMessage }, observation),
+    preview: fragment(
+      { description: item.description, lastAssistantMessage: item.lastAssistantMessage },
+      observation,
+    ),
     routing: fragment({ agentId: item.agentId }, observation),
     runTiming: fragment({ runStartedAt: item.runStartedAt }, observation),
     status: fragment({ status: item.status }, observation),
@@ -282,10 +310,15 @@ const ingestHomeTaskList = (
 ): ProjectionCommit => {
   const participantAgents = new Map<
     string,
-    { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }
+    {
+      avatar: string | null;
+      backgroundColor: string | null;
+      id: string;
+      name?: string | null;
+      title: string | null;
+    }
   >();
   for (const task of items) {
-    parseTaskStatus(task.status);
     for (const participant of task.participants) {
       if (participant.type !== 'agent') continue;
       participantAgents.set(participant.id, participant);
@@ -294,7 +327,9 @@ const ingestHomeTaskList = (
 
   return {
     records: [
-      ...items.map((item) => taskListProjectionRecord(item, observation)),
+      ...items.map((item) =>
+        taskListProjectionRecord({ ...item, status: parseTaskStatus(item.status) }, observation),
+      ),
       ...Array.from(participantAgents.values(), (agent) => agentIdentityRecord(agent, observation)),
     ],
     indexes: [

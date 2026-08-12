@@ -37,6 +37,7 @@ import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/execut
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import {
+  activeProjectionRecord,
   getProjectionStoreState,
   nextProjectionObservedAt,
   selectAgentProjection,
@@ -392,7 +393,6 @@ export class ConversationLifecycleActionImpl {
         getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
       }
       const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-      if (record?.tombstoneAt) throw new Error(`Mentioned agent not found: ${agentId}`);
       const canonical = selectAgentProjection(record);
       if (!canonical) throw new Error(`Mentioned agent not found: ${agentId}`);
       agentState.internal_dispatchAgentMap(agentId, canonical, {
@@ -1045,7 +1045,7 @@ export class ConversationLifecycleActionImpl {
         }
         const projectionScope = getProjectionStoreState().scopes[scope];
         const record = projectionScope?.records.topic[id];
-        if (record?.tombstoneAt) return null;
+        if (record && !activeProjectionRecord(record)) return null;
         const canonical = projectionScope
           ? selectChatTopicListItem(projectionScope, id)
           : undefined;

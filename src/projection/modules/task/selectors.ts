@@ -10,10 +10,11 @@ import type {
 import { taskGroupListIndexKey, taskListIndexKey } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 import { selectAgentSummary } from '../agent/selectors';
 
 const activeRecord = (record: TaskProjection | undefined): TaskProjection | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+  activeProjectionRecord(record);
 
 export const selectTaskRow = (record: TaskProjection | undefined): TaskItem | undefined => {
   const active = activeRecord(record);
@@ -64,6 +65,7 @@ export const selectTaskListItem = (
       avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
       backgroundColor: agent.backgroundColor ?? null,
       id: agent.id,
+      name: agent.name,
       title: agent.title ?? agent.name ?? '',
       type: 'agent',
     });
@@ -130,7 +132,7 @@ export const selectTaskGroupList = (
     const tasks: TaskItem[] = [];
     for (const ref of refs) {
       const record = scope.records.task[ref.id];
-      if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+      if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
       const item = selectTaskRow(record);
       if (!item) return undefined;
       tasks.push(item);

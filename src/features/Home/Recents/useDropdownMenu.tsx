@@ -18,6 +18,8 @@ import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
 
+import { persistRecentRename } from './renameRecent';
+
 export const useRecentItemDropdownMenu = (
   item: RecentItem,
   toggleEditing: (visible?: boolean) => void,
@@ -44,25 +46,14 @@ export const useRecentItemDropdownMenu = (
 
   const handleRename = useCallback(
     async (newTitle: string) => {
+      const scope = getCacheScope();
       // Optimistic update
       updateRecentTitle(item.id, newTitle);
 
       try {
-        // Persist to server
-        switch (item.type) {
-          case 'document': {
-            await documentService.updateDocument({ id: item.id, title: newTitle });
-            break;
-          }
-          case 'task': {
-            await taskService.update(item.id, { name: newTitle });
-            break;
-          }
-          case 'topic': {
-            await topicService.updateTopic(item.id, { title: newTitle });
-            break;
-          }
-        }
+        // A revalidation may observe the pre-mutation row while the request is
+        // in flight, so persistence also re-stamps the confirmed canonical row.
+        await persistRecentRename(item, newTitle, scope);
       } catch (error) {
         // Re-read both the legacy list projection and the canonical Topic
         // fragment so a rejected optimistic rename cannot remain authoritative.

@@ -105,7 +105,6 @@ const AgentSelect = memo(() => {
             getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
           }
           const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-          if (record?.tombstoneAt) return;
           const canonical = selectAgentProjection(record);
           if (!canonical) return;
           agentState.internal_dispatchAgentMap(agentId, canonical, {

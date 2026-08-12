@@ -10,7 +10,7 @@ import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
 import { topicKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState } from '@/projection';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -79,6 +79,7 @@ vi.mock('i18next', () => ({
 beforeEach(() => {
   // Setup initial state and mocks before each test
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useChatStore.setState(
     {
       activeAgentId: undefined,
@@ -1459,6 +1460,33 @@ describe('topic action', () => {
 
       expect(topicService.removeTopicsByAgentId).toHaveBeenCalledWith('agent-owner', 'workspace');
     });
+
+    it('tombstones agent topics that exist only in the canonical Projection graph', async () => {
+      const scope = getCacheScope();
+      getProjectionStoreState().internal_commitProjection(scope, {
+        records: [
+          {
+            fragments: {
+              routing: {
+                data: { agentId: 'projection-agent' },
+                observedAt: 100,
+                source: 'network',
+              },
+            },
+            id: 'projection-agent-topic',
+            kind: 'topic',
+          },
+        ],
+      });
+      const { result } = renderHook(() => useChatStore());
+      useChatStore.setState({ activeAgentId: 'projection-agent' });
+
+      await act(async () => result.current.removeSessionTopics('workspace'));
+
+      expect(
+        getProjectionStoreState().scopes[scope].records.topic['projection-agent-topic'].tombstoneAt,
+      ).toBeDefined();
+    });
   });
   describe('removeGroupTopics', () => {
     it('should remove all topics through the group-scoped endpoint and refresh state', async () => {
@@ -1485,6 +1513,32 @@ describe('topic action', () => {
 
       expect(topicService.removeTopicsByGroupId).toHaveBeenCalledWith('group-owner', 'workspace');
     });
+
+    it('tombstones group topics that exist only in the canonical Projection graph', async () => {
+      const scope = getCacheScope();
+      getProjectionStoreState().internal_commitProjection(scope, {
+        records: [
+          {
+            fragments: {
+              routing: {
+                data: { groupId: 'projection-group' },
+                observedAt: 100,
+                source: 'network',
+              },
+            },
+            id: 'projection-group-topic',
+            kind: 'topic',
+          },
+        ],
+      });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => result.current.removeGroupTopics('projection-group', 'workspace'));
+
+      expect(
+        getProjectionStoreState().scopes[scope].records.topic['projection-group-topic'].tombstoneAt,
+      ).toBeDefined();
+    });
   });
   describe('removeAllTopics', () => {
     it('should remove all topics and refresh the topic list', async () => {
@@ -1498,6 +1552,34 @@ describe('topic action', () => {
 
       expect(topicService.removeAllTopic).toHaveBeenCalled();
       expect(refreshTopicSpy).toHaveBeenCalled();
+    });
+
+    it('tombstones topics that exist only in the canonical Projection graph', async () => {
+      const scope = getCacheScope();
+      getProjectionStoreState().internal_commitProjection(scope, {
+        records: [
+          {
+            fragments: {
+              routing: {
+                data: { agentId: 'projection-agent' },
+                observedAt: 100,
+                source: 'network',
+              },
+            },
+            id: 'projection-only-topic',
+            kind: 'topic',
+          },
+        ],
+      });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.removeAllTopics();
+      });
+
+      expect(
+        getProjectionStoreState().scopes[scope].records.topic['projection-only-topic'].tombstoneAt,
+      ).toBeDefined();
     });
   });
   describe('removeTopic', () => {

@@ -1,6 +1,7 @@
 import type { ProjectionSource, TopicProjection } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { activeProjectionRecord } from './record';
 import { applyProjectionCommit } from './reducer';
 
 const topicFragment = (
@@ -57,7 +58,8 @@ describe('applyProjectionCommit', () => {
     const afterOlderDelete = applyProjectionCommit(current, {
       tombstones: [{ id: 'topic-1', kind: 'topic', observedAt: 100 }],
     });
-    expect(afterOlderDelete.records.topic['topic-1'].tombstoneAt).toBeUndefined();
+    expect(afterOlderDelete.records.topic['topic-1'].tombstoneAt).toBe(100);
+    expect(activeProjectionRecord(afterOlderDelete.records.topic['topic-1'])).toBeDefined();
     expect(afterOlderDelete.records.topic['topic-1'].fragments.display?.data).toEqual({
       title: 'Current',
     });
@@ -84,10 +86,16 @@ describe('applyProjectionCommit', () => {
         },
       ],
     });
-    expect(revived.records.topic['topic-1'].tombstoneAt).toBeUndefined();
+    expect(revived.records.topic['topic-1'].tombstoneAt).toBe(300);
+    expect(activeProjectionRecord(revived.records.topic['topic-1'])).toBeDefined();
     expect(revived.records.topic['topic-1'].fragments.display?.data).toEqual({
       title: 'Recreated',
     });
     expect(revived.records.topic['topic-1'].fragments.status).toBeUndefined();
+
+    const afterDelayedPreDeleteResponse = applyProjectionCommit(revived, {
+      records: [topicFragment('topic-1', 'status', { status: 'unread' }, 290, 'network')],
+    });
+    expect(afterDelayedPreDeleteResponse.records.topic['topic-1'].fragments.status).toBeUndefined();
   });
 });

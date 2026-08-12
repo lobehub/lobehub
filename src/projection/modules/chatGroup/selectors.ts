@@ -6,10 +6,11 @@ import type {
 } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 import { selectAgentProjection } from '../agent/selectors';
 
 const activeRecord = (record: ChatGroupProjection | undefined): ChatGroupProjection | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+  activeProjectionRecord(record);
 
 export const selectChatGroupItem = (
   record: ChatGroupProjection | undefined,

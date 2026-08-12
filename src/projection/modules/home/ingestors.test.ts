@@ -7,6 +7,8 @@ import type {
 } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { applyProjectionCommit } from '../../core/reducer';
+import { agentProjectionRecord } from '../agent/ingestors';
 import {
   ingestHomeBriefs,
   ingestHomeInboxTopics,
@@ -21,6 +23,7 @@ const sidebarAgent: SidebarAgentItem = {
   backgroundColor: '#fff',
   description: 'Agent description',
   id: 'agent-1',
+  labels: [{ color: '#f00', id: 'label-1', name: 'Research' }],
   pinned: true,
   sessionId: 'session-1',
   slug: 'agent-one',
@@ -29,6 +32,7 @@ const sidebarAgent: SidebarAgentItem = {
   updatedAt: new Date('2026-07-31T00:00:00.000Z'),
   userId: 'user-1',
   visibility: 'public',
+  workspaceId: 'workspace-1',
 };
 
 const brief: BriefItem = {
@@ -81,11 +85,50 @@ describe('Home projection ingestors', () => {
     expect(index.pinned[0]).toEqual({
       id: 'agent-1',
       kind: 'agent',
+      labels: sidebarAgent.labels,
       pinned: true,
       updatedAt: sidebarAgent.updatedAt,
     });
     expect(index.pinned[0]).not.toHaveProperty('title');
     expect(index.ungrouped[0].id).toBe(index.pinned[0].id);
+    const record = commit.records?.[0];
+    expect(record?.kind).toBe('agent');
+    if (record?.kind !== 'agent') throw new Error('Expected Agent Projection');
+    expect(record.fragments.access?.data.workspaceId).toBe('workspace-1');
+  });
+
+  it('does not erase workspace identity when a newer sidebar observation replaces access', () => {
+    let scope = applyProjectionCommit(undefined, {
+      records: [
+        agentProjectionRecord(
+          {
+            id: sidebarAgent.id,
+            title: sidebarAgent.title,
+            userId: sidebarAgent.userId ?? undefined,
+            workspaceId: sidebarAgent.workspaceId ?? undefined,
+          },
+          networkObservation,
+        ),
+      ],
+    });
+    scope = applyProjectionCommit(
+      scope,
+      ingestHomeSidebar(
+        {
+          groups: [],
+          pinned: [sidebarAgent],
+          privateGroups: [],
+          privatePinned: [],
+          privateUngrouped: [],
+          ungrouped: [],
+        },
+        { observedAt: 200, source: 'network' },
+      ),
+    );
+
+    expect(scope.records.agent[sidebarAgent.id].fragments.access?.data.workspaceId).toBe(
+      'workspace-1',
+    );
   });
 
   it('normalizes nested Brief enrichments into canonical Agent and Task records', () => {
@@ -110,13 +153,16 @@ describe('Home projection ingestors', () => {
     expect(briefRecord?.fragments).not.toHaveProperty('taskName');
   });
 
-  it('rejects malformed Brief actions at the DTO boundary', () => {
-    expect(() =>
-      ingestHomeBriefs(
-        [{ ...brief, actions: [{ key: 'approve', label: 'Approve', type: 'unsupported' }] }],
-        networkObservation,
-      ),
-    ).toThrow('Invalid Brief actions payload');
+  it('normalizes legacy Brief actions accepted by the API without aborting the feed', () => {
+    const commit = ingestHomeBriefs(
+      [{ ...brief, actions: [{ label: 'Approve', type: 'approve' }] }],
+      networkObservation,
+    );
+    const record = commit.records?.find((item) => item.kind === 'brief');
+
+    expect(record?.fragments.actions?.data.actions).toEqual([
+      { key: 'approve', label: 'Approve', type: 'resolve' },
+    ]);
   });
 
   it('rejects an unknown Brief type at the DTO boundary', () => {
@@ -125,7 +171,7 @@ describe('Home projection ingestors', () => {
     ).toThrow('Invalid Brief type payload');
   });
 
-  it('rejects an unknown Task status at the DTO boundary', () => {
+  it('maps a legacy Task status to backlog without aborting the Home feed', () => {
     const task = {
       assigneeAgentId: null,
       description: null,
@@ -138,9 +184,69 @@ describe('Home projection ingestors', () => {
       workspaceId: null,
     } as unknown as TaskListItem;
 
-    expect(() => ingestHomeTasks([task], 1, networkObservation)).toThrow(
-      'Invalid Task status payload',
+    const commit = ingestHomeTasks([task], 1, networkObservation);
+    const record = commit.records?.find((item) => item.kind === 'task');
+
+    expect(record?.fragments.lifecycle?.data.status).toBe('backlog');
+  });
+
+  it('preserves the complete participant identity and Inbox preview fragments', () => {
+    const task = {
+      assigneeAgentId: 'agent-1',
+      description: null,
+      id: 'task-1',
+      identifier: 'TASK-1',
+      name: 'Task One',
+      participants: [
+        {
+          avatar: null,
+          backgroundColor: null,
+          id: 'agent-1',
+          name: 'Ada',
+          title: 'Researcher',
+          type: 'agent',
+        },
+      ],
+      status: 'running',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    } as unknown as TaskListItem;
+
+    const taskCommit = ingestHomeTasks([task], 1, networkObservation);
+    const agent = taskCommit.records?.find((item) => item.kind === 'agent');
+    expect(agent?.fragments.identity?.data.name).toBe('Ada');
+
+    const initialScope = applyProjectionCommit(undefined, {
+      records: [
+        agentProjectionRecord(
+          { id: 'agent-1', name: 'Ada', title: 'Researcher' },
+          networkObservation,
+        ),
+      ],
+    });
+    const taskScope = applyProjectionCommit(
+      initialScope,
+      ingestHomeTasks([task], 1, { observedAt: 200, source: 'network' }),
     );
+    expect(taskScope.records.agent['agent-1'].fragments.identity?.data.name).toBe('Ada');
+
+    const topicCommit = ingestHomeInboxTopics(
+      [
+        {
+          description: 'Keep this note',
+          id: 'topic-1',
+          lastAssistantMessage: 'Latest reply',
+          title: 'Topic',
+          updatedAt: 100,
+        },
+      ],
+      networkObservation,
+    );
+    const topic = topicCommit.records?.find((item) => item.kind === 'topic');
+    expect(topic?.fragments.preview?.data).toEqual({
+      description: 'Keep this note',
+      lastAssistantMessage: 'Latest reply',
+    });
   });
 
   it('commits explicit empty coverage instead of treating an empty response as uninitialized', () => {

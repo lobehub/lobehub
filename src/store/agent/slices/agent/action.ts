@@ -17,8 +17,9 @@ import type { PartialDeep } from 'type-fest';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import { activeProjectionRecord } from '@/projection/core/record';
 import { agentAvailableViewContract } from '@/projection/modules/agent/contracts';
 import { type AgentProjectionInput } from '@/projection/modules/agent/ingestors';
 import {
@@ -155,6 +156,7 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
+    const projectionScope = getCacheScope();
     // Seed a personal name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
@@ -168,7 +170,7 @@ export class AgentSliceActionImpl {
 
     const result = await agentService.createAgent({ ...params, config });
     getProjectionStoreState().commitAgentConfig(
-      getCacheScope(),
+      projectionScope,
       { ...config, id: result.agentId } as unknown as AgentProjectionInput,
       'mutation',
     );
@@ -410,16 +412,16 @@ export class AgentSliceActionImpl {
     isLogin: boolean | undefined,
     agentId: string,
   ): SWRResponse<LobeAgentConfig> => {
+    const scope = useCacheScope();
     const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId)
+        ? agentConfigKeys.config(agentId, scope)
         : null;
 
     const projection = useAgentProjectionState(swrKey ? agentId : undefined);
     const request = useClientDataSWRWithSync<LobeAgentConfig>(
       swrKey,
       async () => {
-        const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
         const data = await agentService.getAgentConfigById(agentId);
         if (data) {
@@ -436,15 +438,15 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
+          if (getCacheScope() !== scope) return;
           const projectionStore = getProjectionStoreState();
-          const scope = getCacheScope();
           let record = projectionStore.scopes[scope]?.records.agent[agentId];
 
           // A successful fetch that resolves to null means the agent doesn't
           // exist or the caller lost access (e.g. a workspace agent switched
           // back to private) — a settled state, not "still loading".
           if (!data) {
-            if (record && !record.tombstoneAt) {
+            if (activeProjectionRecord(record)) {
               this.#clearAgentNotFound(agentId);
               return;
             }
@@ -455,7 +457,7 @@ export class AgentSliceActionImpl {
           // Runtime SWR cache entries from before this migration do not carry
           // an observation marker. Seed only a missing Projection at epoch 0;
           // every hydrated record, mutation, or tombstone therefore wins.
-          if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+          if (!record) {
             projectionStore.commitAgentConfig(
               scope,
               { ...data, id: data.id ?? agentId },
@@ -464,7 +466,7 @@ export class AgentSliceActionImpl {
             );
             record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
           }
-          if (record?.tombstoneAt) {
+          if (!activeProjectionRecord(record)) {
             this.#markAgentNotFound(agentId);
             return;
           }
@@ -497,6 +499,7 @@ export class AgentSliceActionImpl {
           this.#clearAgentConfigError(agentId);
         },
         onError: (error) => {
+          if (getCacheScope() !== scope) return;
           this.#set(
             (state) => ({
               agentConfigErrorMap: {
@@ -531,7 +534,11 @@ export class AgentSliceActionImpl {
     this.#clearAgentConfigError(id);
 
     await mutate(
-      (key) => Array.isArray(key) && key[0] === agentConfigKeys.config.root && key[1] === id,
+      (key) =>
+        Array.isArray(key) &&
+        key[0] === agentConfigKeys.config.root &&
+        key[1] === id &&
+        key[2] === getCacheScope(),
     );
   };
 
@@ -588,16 +595,16 @@ export class AgentSliceActionImpl {
     isLogin: boolean | undefined,
     agentId: string,
   ): SWRResponse<LobeAgentConfig> => {
+    const scope = useCacheScope();
     const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId)
+        ? agentConfigKeys.config(agentId, scope)
         : null;
 
     const projection = useAgentProjectionState(swrKey ? agentId : undefined);
     const request = useClientDataSWRWithSync<LobeAgentConfig>(
       swrKey,
       async () => {
-        const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
         const data = await agentService.getAgentConfigById(agentId);
         if (data) {
@@ -614,18 +621,18 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
+          if (getCacheScope() !== scope) return;
           const projectionStore = getProjectionStoreState();
-          const scope = getCacheScope();
           let record = projectionStore.scopes[scope]?.records.agent[agentId];
           if (!data) {
-            if (record && !record.tombstoneAt) {
+            if (activeProjectionRecord(record)) {
               this.#clearAgentNotFound(agentId);
               return;
             }
             this.#markAgentNotFound(agentId);
             return;
           }
-          if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+          if (!record) {
             projectionStore.commitAgentConfig(
               scope,
               { ...data, id: data.id ?? agentId },
@@ -634,7 +641,7 @@ export class AgentSliceActionImpl {
             );
             record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
           }
-          if (record?.tombstoneAt) {
+          if (!activeProjectionRecord(record)) {
             this.#markAgentNotFound(agentId);
             return;
           }
@@ -889,7 +896,7 @@ export class AgentSliceActionImpl {
   };
 
   internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate(agentConfigKeys.config(id));
+    await mutate(agentConfigKeys.config(id, getCacheScope()));
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

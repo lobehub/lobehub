@@ -224,6 +224,160 @@ describe('ProjectionCacheService', () => {
     ]);
   });
 
+  it('merges partial renderer commits without erasing newer persisted Fragments', async () => {
+    const scope = 'user-1:personal';
+
+    await projectionCache.commit({
+      records: [
+        {
+          fragments: { display: fragment({ title: 'Current title' }, 200) },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+    await projectionCache.commit({
+      records: [
+        {
+          fragments: { status: fragment({ status: 'running' }, 300) },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+    await projectionCache.commit({
+      records: [
+        {
+          fragments: { display: fragment({ title: 'Stale title' }, 100) },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+
+    await expect(
+      projectionCache.hydrate({
+        records: [{ fragments: ['display', 'status'], ids: ['topic-1'], kind: 'topic' }],
+        scope,
+      }),
+    ).resolves.toMatchObject({
+      records: [
+        {
+          fragments: {
+            display: fragment({ title: 'Current title' }, 200),
+            status: fragment({ status: 'running' }, 300),
+          },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+    });
+  });
+
+  it('retains a persisted tombstone as a barrier after a newer Fragment revives a record', async () => {
+    const scope = 'user-1:personal';
+    await projectionCache.commit({
+      records: [{ fragments: {}, id: 'topic-1', kind: 'topic', tombstoneAt: 200 }],
+      scope,
+    });
+    await projectionCache.commit({
+      records: [
+        {
+          fragments: { display: fragment({ title: 'Revived title' }, 300) },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+    await projectionCache.commit({
+      records: [
+        {
+          fragments: { display: fragment({ title: 'Pre-delete title' }, 100) },
+          id: 'topic-1',
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+
+    await expect(
+      projectionCache.hydrate({
+        records: [{ fragments: ['display'], ids: ['topic-1'], kind: 'topic' }],
+        scope,
+      }),
+    ).resolves.toMatchObject({
+      records: [
+        {
+          fragments: { display: fragment({ title: 'Revived title' }, 300) },
+          id: 'topic-1',
+          kind: 'topic',
+          tombstoneAt: 200,
+        },
+      ],
+    });
+  });
+
+  it('persists the scheduled-task Home index', async () => {
+    const scope = 'user-1:personal';
+    const index = {
+      data: superjson.stringify({ refs: [{ id: 'task-1', kind: 'task' }] }),
+      key: 'home.scheduledTasks' as const,
+      observedAt: 10,
+      source: 'network' as const,
+    };
+
+    await projectionCache.commit({ indexes: [index], scope });
+
+    await expect(projectionCache.hydrate({ indexes: [index.key], scope })).resolves.toMatchObject({
+      indexes: [index],
+    });
+  });
+
+  it('collects unreferenced records when a persisted Home index is replaced', async () => {
+    const scope = 'user-1:personal';
+    const indexedCommit = (id: string, observedAt: number): DesktopProjectionCommit => ({
+      indexes: [
+        {
+          data: superjson.stringify({ refs: [{ id, kind: 'topic' }] }),
+          key: 'home.inboxTopics',
+          observedAt,
+          source: 'network',
+        },
+      ],
+      records: [
+        {
+          fragments: { display: fragment({ title: id }, observedAt) },
+          id,
+          kind: 'topic',
+        },
+      ],
+      scope,
+    });
+    await projectionCache.commit(indexedCommit('topic-old', 1));
+
+    await projectionCache.commit(indexedCommit('topic-current', 2));
+
+    await expect(projectionCache.listCollections()).resolves.toEqual(
+      expect.arrayContaining([{ entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.topic }]),
+    );
+    await expect(
+      projectionCache.hydrate({
+        records: [
+          {
+            fragments: ['display'],
+            ids: ['topic-old', 'topic-current'],
+            kind: 'topic',
+          },
+        ],
+        scope,
+      }),
+    ).resolves.toMatchObject({ records: [expect.objectContaining({ id: 'topic-current' })] });
+  });
+
   it('rejects unknown Fragment columns before starting the durable transaction', async () => {
     await expect(
       projectionCache.commit({

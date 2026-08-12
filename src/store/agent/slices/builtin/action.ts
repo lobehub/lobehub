@@ -52,7 +52,6 @@ export class BuiltinAgentSliceActionImpl {
         observedAt,
       );
       const record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
-      if (record?.tombstoneAt) return;
       const canonical = selectAgentProjection(record);
       if (!canonical) return;
       this.#get().internal_dispatchAgentMap(data.id, canonical as PartialDeep<LobeAgentConfig>, {
@@ -96,11 +95,10 @@ export class BuiltinAgentSliceActionImpl {
             const scope = getCacheScope();
             const projectionStore = getProjectionStoreState();
             let record = projectionStore.scopes[scope]?.records.agent[data.id];
-            if (!selectAgentProjection(record) && !record?.tombstoneAt) {
+            if (!record) {
               projectionStore.commitAgentConfig(scope, { ...data, id: data.id }, 'network', 0);
               record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
             }
-            if (record?.tombstoneAt) return;
             // Update builtinAgentIdMap with the agent id
             // Update agentMap with the agent config
             // AgentItem contains all fields needed for LobeAgentConfig

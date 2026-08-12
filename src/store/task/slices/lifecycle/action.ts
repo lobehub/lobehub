@@ -2,7 +2,11 @@ import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState } from '@/projection';
+import {
+  activeProjectionRecord,
+  findTaskRecordByIdentity,
+  getProjectionStoreState,
+} from '@/projection';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
@@ -59,22 +63,52 @@ export class TaskLifecycleSliceActionImpl {
     params?: { continueTopicId?: string; prompt?: string },
     options?: { throwOnError?: boolean },
   ): Promise<Awaited<ReturnType<typeof taskService.run>> | null> => {
+    const projectionScope = getCacheScope();
+    const projectionRecord = findTaskRecordByIdentity(
+      getProjectionStoreState().scopes[projectionScope],
+      id,
+    );
+    const previousStatusCandidate =
+      this.#get().taskDetailMap[id]?.status ??
+      this.#get().tasks.find((task) => task.identifier === id || task.id === id)?.status ??
+      this.#get()
+        .taskGroups.flatMap((group) => group.tasks)
+        .find((task) => task.identifier === id || task.id === id)?.status ??
+      activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
+    const previousStatus = isTaskStatus(previousStatusCandidate)
+      ? previousStatusCandidate
+      : undefined;
+
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
-    getProjectionStoreState().updateTaskProjectionStatus(getCacheScope(), id, 'running');
+    getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, 'running');
 
     let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
       result = await taskService.run(id, params);
     } catch (error) {
       log('Failed to run task %s: %O', id, error);
-      const refreshResults = await Promise.allSettled([
-        this.#get().internal_refreshTaskDetail(id),
-        this.#get().refreshTaskList(),
-      ]);
+      if (previousStatus) {
+        if (getCacheScope() === projectionScope) {
+          this.#get().internal_dispatchTaskDetail({
+            id,
+            type: 'updateTaskDetail',
+            value: { status: previousStatus },
+          });
+          this.#patchTaskCollectionsStatus(id, previousStatus);
+        }
+        getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, previousStatus);
+      }
+      const refreshResults =
+        getCacheScope() === projectionScope
+          ? await Promise.allSettled([
+              this.#get().internal_refreshTaskDetail(id),
+              this.#get().refreshTaskList(),
+            ])
+          : [];
       for (const refreshResult of refreshResults) {
         if (refreshResult.status === 'rejected') {
           log('Failed to refresh task %s after run failure: %O', id, refreshResult.reason);
@@ -87,10 +121,13 @@ export class TaskLifecycleSliceActionImpl {
     // The server-side execution has already succeeded. Cache refreshes are
     // best-effort and must not turn that success into a retryable run failure,
     // because retrying would create a duplicate execution.
-    const refreshResults = await Promise.allSettled([
-      this.#get().internal_refreshTaskDetail(id),
-      this.#get().refreshTaskList(),
-    ]);
+    const refreshResults =
+      getCacheScope() === projectionScope
+        ? await Promise.allSettled([
+            this.#get().internal_refreshTaskDetail(id),
+            this.#get().refreshTaskList(),
+          ])
+        : [];
     for (const refreshResult of refreshResults) {
       if (refreshResult.status === 'rejected') {
         log('Failed to refresh task %s after successful run: %O', id, refreshResult.reason);
@@ -137,15 +174,21 @@ export class TaskLifecycleSliceActionImpl {
     extraUpdate?: Partial<TaskDetailData>,
     error?: string,
   ): Promise<void> => {
+    const projectionScope = getCacheScope();
+    const projectionRecord = findTaskRecordByIdentity(
+      getProjectionStoreState().scopes[projectionScope],
+      id,
+    );
     const transitionVersion = ++this.#nextStatusTransitionVersion;
     this.#statusTransitionVersions.set(id, transitionVersion);
 
     const previousStatusCandidate =
       this.#get().taskDetailMap[id]?.status ??
-      this.#get().tasks.find((task) => task.identifier === id)?.status ??
+      this.#get().tasks.find((task) => task.identifier === id || task.id === id)?.status ??
       this.#get()
         .taskGroups.flatMap((group) => group.tasks)
-        .find((task) => task.identifier === id)?.status;
+        .find((task) => task.identifier === id || task.id === id)?.status ??
+      activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
     const previousStatus = isTaskStatus(previousStatusCandidate)
       ? previousStatusCandidate
       : undefined;
@@ -156,7 +199,7 @@ export class TaskLifecycleSliceActionImpl {
       value: { status, ...extraUpdate },
     });
     this.#patchTaskCollectionsStatus(id, status);
-    getProjectionStoreState().updateTaskProjectionStatus(getCacheScope(), id, status);
+    getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, status);
 
     try {
       await runMutation(this.#set, this.#get, {
@@ -169,27 +212,34 @@ export class TaskLifecycleSliceActionImpl {
           if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
           if (previousStatus) {
-            this.#patchTaskCollectionsStatus(id, previousStatus);
+            if (getCacheScope() === projectionScope) {
+              this.#patchTaskCollectionsStatus(id, previousStatus);
+            }
             getProjectionStoreState().updateTaskProjectionStatus(
-              getCacheScope(),
+              projectionScope,
               id,
               previousStatus,
             );
           }
-          try {
-            await this.#get().internal_refreshTaskDetail(id);
-          } catch (refreshError) {
-            console.error(
-              `[TaskStore] Failed to refresh task ${id} after status failure:`,
-              refreshError,
-            );
+          if (getCacheScope() === projectionScope) {
+            try {
+              await this.#get().internal_refreshTaskDetail(id);
+            } catch (refreshError) {
+              console.error(
+                `[TaskStore] Failed to refresh task ${id} after status failure:`,
+                refreshError,
+              );
+            }
+            saveToast(err, {
+              retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
+            });
           }
-          saveToast(err, {
-            retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
-          });
         },
         setStatus: (s) => {
-          if (this.#statusTransitionVersions.get(id) === transitionVersion) {
+          if (
+            this.#statusTransitionVersions.get(id) === transitionVersion &&
+            getCacheScope() === projectionScope
+          ) {
             this.#get().internal_setTaskSaveStatus(id, s);
           }
         },
@@ -197,10 +247,13 @@ export class TaskLifecycleSliceActionImpl {
 
       if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
-      const refreshResults = await Promise.allSettled([
-        this.#get().internal_refreshTaskDetail(id),
-        this.#get().refreshTaskList(),
-      ]);
+      const refreshResults =
+        getCacheScope() === projectionScope
+          ? await Promise.allSettled([
+              this.#get().internal_refreshTaskDetail(id),
+              this.#get().refreshTaskList(),
+            ])
+          : [];
       for (const refreshResult of refreshResults) {
         if (refreshResult.status === 'rejected') {
           log(

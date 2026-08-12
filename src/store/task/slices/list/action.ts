@@ -6,7 +6,7 @@ import { getCacheScope } from '@/libs/swr/useCacheScope';
 import {
   getProjectionStoreState,
   nextProjectionObservedAt,
-  selectTaskGroupListIndex,
+  selectTaskGroupList,
   selectTaskListIndex,
   selectTaskListItem,
   taskGroupListViewContract,
@@ -185,21 +185,11 @@ export class TaskListSliceActionImpl {
         onSuccess: () => {
           const scope = getCacheScope();
           const projectionScope = getProjectionStoreState().scopes[scope];
-          const index = selectTaskGroupListIndex(projectionScope, {
+          const taskGroups = selectTaskGroupList(projectionScope, {
             agentKey: effectiveKey,
             visibility: listVisibility,
           });
-          if (!index) return;
-          const taskGroups = index.groups.map(({ refs, ...group }) => ({
-            ...group,
-            tasks: refs.flatMap((ref) => {
-              const item = selectTaskListItem(
-                projectionScope,
-                projectionScope?.records.task[ref.id],
-              );
-              return item ? [item] : [];
-            }),
-          }));
+          if (!taskGroups) return;
           this.#set(
             { isTaskGroupListInit: true, taskGroups },
             false,

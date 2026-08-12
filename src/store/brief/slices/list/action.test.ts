@@ -100,18 +100,21 @@ describe('BriefListActionImpl', () => {
     );
   });
 
-  it('uses the request-start observation for an authoritative Brief resolution', async () => {
+  it('stamps an authoritative Brief resolution after the server confirms it', async () => {
     const brief = createBrief('brief-1');
     const state = { briefs: [brief], isBriefsInit: true };
     const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
     const action = new BriefListActionImpl(set as never, () => state as BriefStore);
-    vi.spyOn(briefService, 'resolve').mockResolvedValue({
-      data: {
-        resolvedAction: 'approve',
-        resolvedAt: '2026-07-31T02:00:00.000Z',
-        resolvedComment: null,
-      },
-    } as never);
+    vi.spyOn(briefService, 'resolve').mockImplementation(async () => {
+      vi.mocked(Date.now).mockReturnValue(200);
+      return {
+        data: {
+          resolvedAction: 'approve',
+          resolvedAt: '2026-07-31T02:00:00.000Z',
+          resolvedComment: null,
+        },
+      } as never;
+    });
 
     await action.resolveBrief(brief.id, 'approve');
 
@@ -125,7 +128,7 @@ describe('BriefListActionImpl', () => {
       'user-1:workspace-1',
       brief.id,
       resolution,
-      expect.any(Number),
+      200,
     );
   });
 

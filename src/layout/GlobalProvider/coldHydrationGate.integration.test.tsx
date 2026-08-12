@@ -14,7 +14,7 @@
 import type * as LobeConst from '@lobechat/const';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import useSWR, { type Cache, SWRConfig, unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +27,7 @@ import { projectionRepository } from '@/projection/registry';
 import { useProjectionStore } from '@/projection/store';
 import { useProjectionViewHydration } from '@/projection/views/hook';
 import { setAppPainted, setAppReady } from '@/spa/atoms/app';
+import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 
 import AppBootstrapGate, { isAppBootstrapReady } from './AppBootstrapGate';
@@ -79,6 +80,19 @@ const ProjectionProbe = () => {
   projectionProbed = useProjectionStore((state) =>
     selectHomeDailyBrief(state.scopes[accountScope]),
   );
+  useEffect(
+    () => () => {
+      projectionProbed = undefined;
+    },
+    [],
+  );
+  return null;
+};
+
+let legacyAgentTitles: Array<string | null | undefined> = [];
+const LegacyAgentProbe = () => {
+  const title = useAgentStore((state) => state.agentMap['agent-1']?.title);
+  legacyAgentTitles.push(title);
   return null;
 };
 
@@ -113,7 +127,9 @@ describe('CacheHydrationGate + provider + consumer', () => {
     mockScope = SCOPE;
     probed = undefined;
     projectionProbed = undefined;
+    legacyAgentTitles = [];
     useProjectionStore.setState({ scopes: {} });
+    useAgentStore.setState({ agentMap: {} });
     useUserStore.setState({
       isLoaded: false,
       isSignedIn: false,
@@ -135,6 +151,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
       user: undefined,
     });
     useProjectionStore.setState({ scopes: {} });
+    useAgentStore.setState({ agentMap: {} });
     await localDataCache.clearScope(SCOPE);
   });
 
@@ -201,7 +218,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
     const snapshot = {
       data: { pairs: [{ hint: 'Cached hint', welcome: 'Cached welcome' }] },
       key: 'home.dailyBrief' as const,
-      observedAt: 100,
+      observedAt: Date.now(),
       source: 'network' as const,
     };
     const hydrate = vi.spyOn(projectionRepository, 'hydrate').mockImplementation(async (scope) => ({
@@ -242,13 +259,13 @@ describe('CacheHydrationGate + provider + consumer', () => {
     const firstSnapshot = {
       data: { pairs: [{ hint: 'User one hint', welcome: 'User one welcome' }] },
       key: 'home.dailyBrief' as const,
-      observedAt: 100,
+      observedAt: Date.now(),
       source: 'network' as const,
     };
     const secondSnapshot = {
       data: { pairs: [{ hint: 'User two hint', welcome: 'User two welcome' }] },
       key: 'home.dailyBrief' as const,
-      observedAt: 200,
+      observedAt: Date.now() + 1,
       source: 'network' as const,
     };
     let releaseSecondAccount!: () => void;
@@ -279,11 +296,21 @@ describe('CacheHydrationGate + provider + consumer', () => {
         createElement(
           AppBootstrapGate,
           null,
-          createElement(ProjectionHydrationGate, null, createElement(ProjectionProbe)),
+          createElement(
+            ProjectionHydrationGate,
+            null,
+            createElement(ProjectionProbe),
+            createElement(LegacyAgentProbe),
+          ),
         ),
       ),
     );
     await waitFor(() => expect(projectionProbed).toEqual(firstSnapshot.data));
+    act(() => {
+      useAgentStore.setState({ agentMap: { 'agent-1': { title: 'User one agent' } as never } });
+    });
+    expect(legacyAgentTitles.at(-1)).toBe('User one agent');
+    legacyAgentTitles = [];
 
     act(() => {
       mockScope = SECOND_SCOPE;
@@ -291,6 +318,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
     });
 
     expect(projectionProbed).toBeUndefined();
+    expect(legacyAgentTitles).not.toContain('User one agent');
     expect(hydrate).not.toHaveBeenCalledWith(SECOND_SCOPE, expect.anything());
     expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE, {
       indexes: undefined,
@@ -300,6 +328,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
 
     releaseSecondAccount();
     await waitFor(() => expect(projectionProbed).toEqual(secondSnapshot.data));
+    expect(legacyAgentTitles).not.toContain('User one agent');
   });
 
   it('DECISIVE: an early orphaned subscriber does NOT poison the key for a later one', async () => {

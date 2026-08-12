@@ -4,7 +4,7 @@ import { type SWRResponse } from 'swr';
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys, projectionKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import {
   getProjectionStoreState,
   nextProjectionObservedAt,
@@ -102,13 +102,13 @@ export class AgentListActionImpl {
   };
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
+    const scope = useCacheScope();
     const projection = useAgentSearchProjectionState(keyword);
     const request = useClientDataSWRWithSync<SidebarAgentItem[]>(
-      agentConfigKeys.search(keyword),
+      agentConfigKeys.search(keyword, scope),
       async () => {
         if (!keyword) return [];
 
-        const scope = getCacheScope();
         const observedAt = nextProjectionObservedAt();
         const items = await homeService.searchAgents(keyword);
         getProjectionStoreState().commitAgentSearch(scope, items, { keyword }, observedAt);
@@ -117,7 +117,6 @@ export class AgentListActionImpl {
       {
         onData: (items) => {
           const projectionStore = getProjectionStoreState();
-          const scope = getCacheScope();
           if (!selectAgentSearchIndex(projectionStore.scopes[scope], keyword)) {
             projectionStore.commitAgentSearch(scope, items, { keyword }, 0);
           }

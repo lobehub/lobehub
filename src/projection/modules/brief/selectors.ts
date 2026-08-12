@@ -2,10 +2,11 @@ import type { BriefItem, BriefNewsIndex, BriefProjection } from '@lobechat/types
 import { briefNewsIndexKey } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 import { selectAgentSummary } from '../agent/selectors';
 
 const activeRecord = (record: BriefProjection | undefined): BriefProjection | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+  activeProjectionRecord(record);
 
 export const selectBriefItem = (
   scope: ProjectionScopeState,
@@ -59,7 +60,7 @@ export const selectBriefNews = (
   const items: BriefItem[] = [];
   for (const ref of index.refs) {
     const record = scope.records.brief[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const item = selectBriefItem(scope, record);
     if (!item) return undefined;
     items.push(item);

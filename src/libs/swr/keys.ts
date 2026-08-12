@@ -382,8 +382,12 @@ export const homeInboxKeys = {
 // (agentKeys.list defined above)
 export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
-  config: def('agent:config', (agentId: string) => ['agent:config', agentId]),
-  search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
+  config: def('agent:config', (agentId: string, scope: string) => ['agent:config', agentId, scope]),
+  search: def('agent:search', (keyword: string | undefined, scope: string) => [
+    'agent:search',
+    keyword,
+    scope,
+  ]),
 };
 
 // ---- aiModel ------------------------------------------------------------

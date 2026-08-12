@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as cacheScope from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { taskService } from '@/services/task';
 
 import { useTaskStore } from '../../store';
@@ -22,6 +24,7 @@ const mockDetail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useTaskStore.setState({
     activeTaskId: 'T-1',
     taskDetailMap: { 'T-1': { ...mockDetail } },
@@ -62,6 +65,42 @@ describe('TaskLifecycleSliceAction', () => {
       await useTaskStore.getState().runTask('T-1');
 
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+    });
+
+    it('rolls the canonical status back when launch and refresh both fail', async () => {
+      const scope = 'user-1:workspace-1';
+      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue(scope);
+      getProjectionStoreState().internal_commitProjection(scope, {
+        records: [
+          {
+            fragments: {
+              identity: {
+                data: { identifier: 'T-1' },
+                observedAt: 1,
+                source: 'network',
+              },
+              lifecycle: {
+                data: { status: 'backlog' },
+                observedAt: 1,
+                source: 'network',
+              },
+            },
+            id: 'task-1',
+            kind: 'task',
+          },
+        ],
+      });
+      useTaskStore.setState({ taskDetailMap: {}, taskGroups: [], tasks: [] });
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.run).mockRejectedValue(new Error('launch failed'));
+      vi.mocked(mutate).mockRejectedValueOnce(new Error('refresh failed'));
+
+      await useTaskStore.getState().runTask('T-1');
+
+      expect(
+        getProjectionStoreState().scopes[scope].records.task['task-1'].fragments.lifecycle?.data
+          .status,
+      ).toBe('backlog');
     });
 
     it('should surface the run failure when the caller requires it', async () => {
@@ -157,6 +196,57 @@ describe('TaskLifecycleSliceAction', () => {
         tasks: [],
         total: 0,
       });
+    });
+
+    it('rolls a failed transition back only in its originating Projection scope', async () => {
+      let scope = 'user-1:workspace-a';
+      vi.spyOn(cacheScope, 'getCacheScope').mockImplementation(() => scope);
+      const seedStatus = (targetScope: string, status: 'backlog' | 'paused') =>
+        getProjectionStoreState().internal_commitProjection(targetScope, {
+          records: [
+            {
+              fragments: {
+                identity: {
+                  data: { identifier: 'T-1' },
+                  observedAt: 1,
+                  source: 'network',
+                },
+                lifecycle: { data: { status }, observedAt: 1, source: 'network' },
+              },
+              id: 'task-1',
+              kind: 'task',
+            },
+          ],
+        });
+      seedStatus('user-1:workspace-a', 'backlog');
+      seedStatus('user-1:workspace-b', 'paused');
+      vi.mocked(taskService.updateStatus).mockImplementation(async () => {
+        scope = 'user-1:workspace-b';
+        useTaskStore.setState({
+          taskDetailMap: { 'T-1': { ...mockDetail, status: 'paused' } },
+          taskGroups: [
+            { key: 'backlog', tasks: [], total: 0 },
+            { key: 'needsInput', tasks: [{ identifier: 'T-1', status: 'paused' }], total: 1 },
+          ] as never,
+          tasks: [{ identifier: 'T-1', status: 'paused' }] as never,
+        });
+        throw new Error('fail');
+      });
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
+        'fail',
+      );
+
+      expect(
+        getProjectionStoreState().scopes['user-1:workspace-a'].records.task['task-1'].fragments
+          .lifecycle?.data.status,
+      ).toBe('backlog');
+      expect(
+        getProjectionStoreState().scopes['user-1:workspace-b'].records.task['task-1'].fragments
+          .lifecycle?.data.status,
+      ).toBe('paused');
+      expect(useTaskStore.getState().taskDetailMap['T-1'].status).toBe('paused');
+      expect(useTaskStore.getState().tasks[0].status).toBe('paused');
     });
 
     it('should preserve the committed status when cache refreshes fail', async () => {

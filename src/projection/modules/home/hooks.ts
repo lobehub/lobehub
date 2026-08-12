@@ -35,6 +35,7 @@ import {
 } from './contracts';
 import {
   selectHomeBriefs,
+  selectHomeDailyBrief,
   selectHomeInboxTopics,
   selectHomeRecentTopics,
   selectHomeScheduledTasks,
@@ -303,11 +304,8 @@ export const useHomeDailyBriefData = (
     Boolean(isLogin && userId),
     accountScope,
   );
-  const snapshot = useProjectionStore(
-    (state) => state.scopes[accountScope]?.snapshots['home.dailyBrief'],
-  );
-  const data = snapshot?.key === 'home.dailyBrief' ? snapshot.data : undefined;
-  const isInitialized = snapshot?.key === 'home.dailyBrief';
+  const data = useProjectionStore((state) => selectHomeDailyBrief(state.scopes[accountScope]));
+  const isInitialized = data !== undefined;
 
   const request = useClientDataSWR<ProjectionRequestMarker>(
     isLogin && userId ? homeKeys.dailyBrief(userId) : null,

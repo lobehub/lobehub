@@ -111,6 +111,8 @@ export interface SidebarAgentItem {
    * for personal-mode rows that pre-date the column.
    */
   visibility?: SidebarVisibility;
+  /** Workspace owning the row. Personal-scope payloads may omit it or use `null`. */
+  workspaceId?: string | null;
 }
 
 /**

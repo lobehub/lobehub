@@ -158,7 +158,6 @@ const getPreviewData = async (
       }
       const recordId = data?.id ?? reference.agentId;
       const record = getProjectionStoreState().scopes[scope]?.records.agent[recordId];
-      if (record?.tombstoneAt) return null;
       return selectAgentProjection(record) ?? null;
     }
     case 'document': {
@@ -182,7 +181,6 @@ const getPreviewData = async (
       }
       const projectionScope = getProjectionStoreState().scopes[scope];
       const record = findTaskRecordByIdentity(projectionScope, reference.taskId);
-      if (record?.tombstoneAt) return null;
       const canonical = selectTaskDetail(record);
       return canonical
         ? {

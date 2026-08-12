@@ -46,6 +46,7 @@ describe('shared workspace sidebar skeleton', () => {
     for (const member of [memberA, memberB]) {
       const view = await new HomeRepository(clientDB, member, ws).getSidebarAgentList();
       expect(view.pinned.map((a) => a.id)).toContain(agent.id);
+      expect(view.pinned.find((item) => item.id === agent.id)?.workspaceId).toBe(ws);
       expect(view.ungrouped.map((a) => a.id)).not.toContain(agent.id);
     }
   });
@@ -95,5 +96,6 @@ describe('shared workspace sidebar skeleton', () => {
 
     const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList();
     expect(result.pinned.map((a) => a.id)).toContain(agent.id);
+    expect(result.pinned.find((item) => item.id === agent.id)?.workspaceId).toBeUndefined();
   });
 });

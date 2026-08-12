@@ -13,9 +13,10 @@ import { ensureProjectionLegacyBridge, syncProjectionLegacyStores } from './proj
 /**
  * Prepares trusted identity partitions before the first application surface
  * mounts. Entity data is intentionally not loaded here: each mounted surface
- * hydrates its bounded View Contract. Later scope changes prepare their own
- * empty partition without blanking the running application; every Projection
- * selector remains explicitly scoped, so a previous identity cannot leak.
+ * hydrates its bounded View Contract. Later identity changes close the gate
+ * synchronously until both new partitions are ready, so neither scoped
+ * selectors nor compatibility stores expose the previous identity for a
+ * transition frame.
  */
 const ProjectionHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
@@ -27,7 +28,10 @@ const ProjectionHydrationGate = ({ children }: PropsWithChildren) => {
       state.scopes[scope]?.hydrationStatus === 'ready' &&
       state.scopes[accountScope]?.hydrationStatus === 'ready',
   );
-  const [released, setReleased] = useState(scopesReady);
+  const scopeKey = `${scope}\u0000${accountScope}`;
+  const [releasedScopeKey, setReleasedScopeKey] = useState<string | undefined>(() =>
+    scopesReady ? scopeKey : undefined,
+  );
 
   useEffect(() => {
     ensureProjectionLegacyBridge();
@@ -43,10 +47,14 @@ const ProjectionHydrationGate = ({ children }: PropsWithChildren) => {
   }, [accountScope, prepareProjectionScope, scope]);
 
   useEffect(() => {
-    if (scopesReady) setReleased(true);
-  }, [scopesReady]);
+    if (scopesReady) setReleasedScopeKey(scopeKey);
+  }, [scopeKey, scopesReady]);
 
-  if (!released) return null;
+  // A scope transition must close the gate synchronously. The effects above
+  // then reset the legacy stores, prepare the new partitions, and release only
+  // after both scopes are ready; children never receive one render of the
+  // previous workspace's materialized state.
+  if (releasedScopeKey !== scopeKey || !scopesReady) return null;
   return <>{children}</>;
 };
 

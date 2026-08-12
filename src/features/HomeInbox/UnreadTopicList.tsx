@@ -5,7 +5,7 @@ import { Avatar, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
-import { lazy, memo, Suspense, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
@@ -18,6 +18,7 @@ import { useHomeInboxTopic } from '@/projection';
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';
+import { reconcileRetainedUnreadTopics, removeRetainedUnreadTopic } from './retainedUnreadTopics';
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
 
@@ -255,6 +256,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
 interface UnreadTopicListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
+  indexObservedAt: number | undefined;
   onFollowUpSent?: (topicId: string) => void;
   /** Team view: tag each row with who triggered it. */
   showAuthor?: boolean;
@@ -266,19 +268,35 @@ interface UnreadTopicListProps {
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
 const UnreadTopicList = memo<UnreadTopicListProps>(
-  ({ bare, topicIds, onFollowUpSent, showAuthor }) => (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
-      {topicIds.map((topicId) => (
-        <UnreadTopicItem
-          bare={bare}
-          key={topicId}
-          showAuthor={showAuthor}
-          topicId={topicId}
-          onFollowUpSent={onFollowUpSent}
-        />
-      ))}
-    </Flexbox>
-  ),
+  ({ bare, indexObservedAt, topicIds, onFollowUpSent, showAuthor }) => {
+    const [retained, setRetained] = useState(() => ({ ids: topicIds, indexObservedAt }));
+
+    useEffect(() => {
+      setRetained((current) => reconcileRetainedUnreadTopics(current, topicIds, indexObservedAt));
+    }, [indexObservedAt, topicIds]);
+
+    const handleFollowUpSent = useCallback(
+      (topicId: string) => {
+        setRetained((current) => removeRetainedUnreadTopic(current, topicId));
+        onFollowUpSent?.(topicId);
+      },
+      [onFollowUpSent],
+    );
+
+    return (
+      <Flexbox className={bare ? styles.bareList : styles.list}>
+        {retained.ids.map((topicId) => (
+          <UnreadTopicItem
+            bare={bare}
+            key={topicId}
+            showAuthor={showAuthor}
+            topicId={topicId}
+            onFollowUpSent={handleFollowUpSent}
+          />
+        ))}
+      </Flexbox>
+    );
+  },
 );
 
 export default UnreadTopicList;

@@ -11,6 +11,7 @@ import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { groupKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import {
+  activeProjectionRecord,
   chatGroupListViewContract,
   getProjectionStoreState,
   nextProjectionObservedAt,
@@ -153,7 +154,7 @@ class ChatGroupInternalAction implements ResetableStore {
     getProjectionStoreState().commitChatGroupDetail(scope, groupDetail, 'network', observedAt);
     const projectionScope = getProjectionStoreState().scopes[scope];
     const record = projectionScope?.records.chatGroup[groupId];
-    if (record?.tombstoneAt) {
+    if (!activeProjectionRecord(record)) {
       this.removeStaleGroup(groupId);
       this.#markGroupNotFound(groupId);
       return;
@@ -303,14 +304,14 @@ class ChatGroupInternalAction implements ResetableStore {
             ? selectChatGroupDetail(projectionScope, groupId)
             : undefined;
           const record = projectionScope?.records.chatGroup[groupId];
-          if (!canonical && !record?.tombstoneAt) {
+          if (!record) {
             projectionStore.commitChatGroupDetail(scope, groupDetail, 'network', 0);
             projectionScope = getProjectionStoreState().scopes[scope];
             canonical = projectionScope
               ? selectChatGroupDetail(projectionScope, groupId)
               : undefined;
           }
-          if (projectionScope?.records.chatGroup[groupId]?.tombstoneAt) {
+          if (!activeProjectionRecord(projectionScope?.records.chatGroup[groupId])) {
             this.#markGroupNotFound(groupId);
             return;
           }

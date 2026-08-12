@@ -7,6 +7,7 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useBriefStore } from '@/store/brief';
 import { useChatStore } from '@/store/chat';
+import { useHomeStore } from '@/store/home';
 import { useTaskStore } from '@/store/task';
 
 import { ensureProjectionLegacyBridge } from './projectionLegacyBridge';
@@ -36,6 +37,16 @@ describe('Projection legacy store bridge', () => {
     useAgentGroupStore.setState({ groupMap: {}, groupNotFoundMap: {}, groups: [] });
     useBriefStore.setState({ briefs: [], briefsScope: undefined, isBriefsInit: false });
     useChatStore.setState({ agentTopicsViewMap: {}, searchTopics: [], topicDataMap: {} });
+    useHomeStore.setState({
+      agentGroups: [],
+      agentListScope: undefined,
+      isAgentListInit: false,
+      pinnedAgents: [],
+      privateAgentGroups: [],
+      privatePinnedAgents: [],
+      privateUngroupedAgents: [],
+      ungroupedAgents: [],
+    });
     useTaskStore.setState({
       isTaskListInit: false,
       listAgentId: '__all__',
@@ -76,6 +87,35 @@ describe('Projection legacy store bridge', () => {
     });
 
     expect(useChatStore.getState().topicDataMap.inbox?.items[0]?.title).toBe('Edited in DevDock');
+  });
+
+  it('materializes the Home sidebar through the singleton bridge', () => {
+    useProjectionStore.getState().ingestHomeSidebar(
+      SCOPE,
+      {
+        groups: [],
+        pinned: [
+          {
+            id: 'agent-1',
+            pinned: true,
+            title: 'Pinned agent',
+            type: 'agent',
+            updatedAt: new Date(100),
+          },
+        ],
+        privateGroups: [],
+        privatePinned: [],
+        privateUngrouped: [],
+        ungrouped: [],
+      },
+      100,
+    );
+
+    expect(useHomeStore.getState()).toMatchObject({
+      agentListScope: SCOPE,
+      isAgentListInit: true,
+      pinnedAgents: [expect.objectContaining({ id: 'agent-1', title: 'Pinned agent' })],
+    });
   });
 
   it('reflects Agent, ChatGroup, Task, and Brief edits in their business stores', async () => {

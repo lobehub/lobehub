@@ -85,7 +85,6 @@ export class ChatForwardActionImpl {
             getProjectionStoreState().deleteAgentProjection(scope, id, observedAt);
           }
           const record = getProjectionStoreState().scopes[scope]?.records.agent[id];
-          if (record?.tombstoneAt) throw new Error(`Forwarding target agent not found: ${id}`);
           const canonical = selectAgentProjection(record);
           if (!canonical) throw new Error(`Forwarding target agent not found: ${id}`);
           getAgentStoreState().internal_dispatchAgentMap(id, canonical, {

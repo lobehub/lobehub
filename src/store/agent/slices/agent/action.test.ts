@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
-import { getProjectionStoreState, useProjectionStore } from '@/projection';
+import { activeProjectionRecord, getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -15,15 +15,16 @@ import { withSWR } from '~test-utils';
 import { useAgentStore } from '../../store';
 
 const PROJECTION_SCOPE = 'user-1:personal';
+const cacheScopeState = vi.hoisted(() => ({ current: 'user-1:personal' }));
 
 // Mock zustand/traditional for store testing
 vi.mock('zustand/traditional');
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
-  getCacheScope: () => PROJECTION_SCOPE,
+  getCacheScope: () => cacheScopeState.current,
   isAnonymousScope: () => false,
   isScopeTrusted: () => false,
-  useCacheScope: () => PROJECTION_SCOPE,
+  useCacheScope: () => cacheScopeState.current,
 }));
 
 // Mock agentService
@@ -74,6 +75,7 @@ vi.mock('swr', async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cacheScopeState.current = PROJECTION_SCOPE;
   setScopedMutate(vi.fn() as any);
   useProjectionStore.setState({ scopes: {} });
   useAgentStore.setState({
@@ -231,6 +233,29 @@ describe('AgentSlice Actions', () => {
 
       expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe('Ada');
     });
+
+    it('commits a delayed creation only to the scope that initiated it', async () => {
+      let resolveCreation!: (value: { agentId: string }) => void;
+      vi.mocked(agentService.createAgent).mockImplementation(
+        async () =>
+          new Promise((resolve) => {
+            resolveCreation = resolve;
+          }),
+      );
+      const { result } = renderHook(() => useAgentStore());
+
+      const creation = result.current.createAgent({ config: { name: 'Ada', title: 'Math Tutor' } });
+      cacheScopeState.current = 'user-2:personal';
+      resolveCreation({ agentId: 'agent-created' });
+      await act(async () => creation);
+
+      expect(
+        getProjectionStoreState().scopes[PROJECTION_SCOPE].records.agent['agent-created'],
+      ).toBeDefined();
+      expect(
+        getProjectionStoreState().scopes['user-2:personal']?.records.agent['agent-created'],
+      ).toBeUndefined();
+    });
   });
 
   describe('useFetchAgentDocuments', () => {
@@ -350,6 +375,34 @@ describe('AgentSlice Actions', () => {
       });
       // The background fetch only populates agentMap; it must not steal the active agent.
       expect(result.current.activeAgentId).toBe('routed-agent');
+    });
+
+    it('keeps a delayed config response out of the next scope legacy store', async () => {
+      let resolveConfig!: (value: LobeAgentConfig) => void;
+      vi.mocked(agentService.getAgentConfigById).mockImplementationOnce(
+        async () =>
+          new Promise((resolve) => {
+            resolveConfig = resolve;
+          }),
+      );
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-delayed'), {
+        wrapper: withSWR,
+      });
+      cacheScopeState.current = 'user-2:personal';
+      resolveConfig({ id: 'agent-delayed', title: 'Previous user agent' } as LobeAgentConfig);
+
+      await waitFor(() =>
+        expect(
+          getProjectionStoreState().scopes[PROJECTION_SCOPE].records.agent['agent-delayed'],
+        ).toBeDefined(),
+      );
+      expect(useAgentStore.getState().agentMap['agent-delayed']).toBeUndefined();
+      expect(
+        activeProjectionRecord(
+          getProjectionStoreState().scopes['user-2:personal']?.records.agent['agent-delayed'],
+        ),
+      ).toBeUndefined();
     });
 
     it('replaces a stale profile snapshot so omitted editorData is cleared', async () => {
@@ -905,9 +958,11 @@ describe('AgentSlice Actions', () => {
       });
 
       const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+        ([key]) =>
+          JSON.stringify(key) ===
+          JSON.stringify(agentConfigKeys.config('agent-1', PROJECTION_SCOPE)),
       );
-      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
+      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1', PROJECTION_SCOPE)]]);
     });
 
     it('should not refresh agent config SWR cache when save fails', async () => {
@@ -932,7 +987,9 @@ describe('AgentSlice Actions', () => {
       });
 
       const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+        ([key]) =>
+          JSON.stringify(key) ===
+          JSON.stringify(agentConfigKeys.config('agent-1', PROJECTION_SCOPE)),
       );
       expect(configCacheCalls).toHaveLength(0);
       expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
@@ -1143,6 +1200,39 @@ describe('AgentSlice Actions', () => {
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-current');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
+    });
+
+    it('keeps a delayed hydration response out of the next scope legacy store', async () => {
+      let resolveConfig!: (value: LobeAgentConfig) => void;
+      vi.mocked(agentService.getAgentConfigById).mockImplementationOnce(
+        async () =>
+          new Promise((resolve) => {
+            resolveConfig = resolve;
+          }),
+      );
+
+      renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-hydrate-delayed'), {
+        wrapper: withSWR,
+      });
+      cacheScopeState.current = 'user-2:personal';
+      resolveConfig({
+        id: 'agent-hydrate-delayed',
+        title: 'Previous user agent',
+      } as LobeAgentConfig);
+
+      await waitFor(() =>
+        expect(
+          getProjectionStoreState().scopes[PROJECTION_SCOPE].records.agent['agent-hydrate-delayed'],
+        ).toBeDefined(),
+      );
+      expect(useAgentStore.getState().agentMap['agent-hydrate-delayed']).toBeUndefined();
+      expect(
+        activeProjectionRecord(
+          getProjectionStoreState().scopes['user-2:personal']?.records.agent[
+            'agent-hydrate-delayed'
+          ],
+        ),
+      ).toBeUndefined();
     });
 
     it('should mark agentNotFoundMap when the hydrate fetch resolves to null', async () => {

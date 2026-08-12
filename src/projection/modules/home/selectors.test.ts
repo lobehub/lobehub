@@ -15,6 +15,7 @@ import {
 } from './ingestors';
 import {
   selectHomeBriefs,
+  selectHomeDailyBrief,
   selectHomeInboxTopics,
   selectHomeRecentTopics,
   selectHomeSidebar,
@@ -178,5 +179,16 @@ describe('Home Projection selectors', () => {
     });
 
     expect(selectHomeBriefs(deleted)).toEqual([]);
+  });
+
+  it('exposes a persisted daily brief only on the local day it was observed', () => {
+    const data = { pairs: [{ hint: 'Hint', welcome: 'Welcome' }] };
+    const observedAt = new Date(2026, 7, 12, 8).getTime();
+    const scope = applyProjectionCommit(undefined, {
+      snapshots: [{ data, key: 'home.dailyBrief', observedAt, source: 'network' }],
+    });
+
+    expect(selectHomeDailyBrief(scope, new Date(2026, 7, 12, 23).getTime())).toEqual(data);
+    expect(selectHomeDailyBrief(scope, new Date(2026, 7, 13, 0).getTime())).toBeUndefined();
   });
 });

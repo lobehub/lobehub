@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
+
 import { useTaskStore } from '../../store';
+
+const PROJECTION_SCOPE = 'anon:personal';
+
+vi.mock('@/libs/swr/useCacheScope', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getCacheScope: () => PROJECTION_SCOPE,
+}));
 
 // Mock task service
 vi.mock('@/services/task', () => ({
   taskService: {
+    groupList: vi.fn(),
     list: vi.fn(),
   },
 }));
@@ -17,11 +27,14 @@ vi.mock('@/libs/swr', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useTaskStore.setState({
     isTaskListInit: false,
     listAgentId: undefined,
     listQueryAutomated: undefined,
     listQueryVisibility: 'all',
+    listVisibility: 'all',
+    taskGroups: [],
     tasks: [],
     tasksTotal: 0,
   });
@@ -222,6 +235,54 @@ describe('TaskListSliceAction', () => {
       expect(state.tasks).toEqual([]);
       expect(state.tasksTotal).toBe(0);
       expect(state.isTaskListInit).toBe(false);
+    });
+  });
+
+  describe('useFetchTaskGroupList', () => {
+    it('materializes grouped Task rows without requiring list-only participants', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      getProjectionStoreState().commitTaskGroupList(
+        PROJECTION_SCOPE,
+        [
+          {
+            hasMore: false,
+            key: 'backlog',
+            limit: 20,
+            offset: 0,
+            tasks: [
+              {
+                assigneeAgentId: null,
+                createdAt: new Date('2026-08-12T00:00:00.000Z'),
+                description: null,
+                id: 'task-1',
+                identifier: 'TASK-1',
+                name: 'Grouped Task',
+                status: 'backlog',
+                updatedAt: new Date('2026-08-12T00:00:00.000Z'),
+                visibility: 'public',
+                workspaceId: null,
+              } as never,
+            ],
+            total: 1,
+          },
+        ],
+        { agentKey: '__all__', visibility: 'all' },
+        100,
+      );
+
+      useTaskStore.getState().useFetchTaskGroupList({ allAgents: true });
+      const groupRequest = vi
+        .mocked(useClientDataSWR)
+        .mock.calls.find(([key]) => Array.isArray(key) && key[0] === 'task:groupList');
+      const options = groupRequest?.[2] as { onSuccess?: () => void } | undefined;
+      options?.onSuccess?.();
+
+      expect(useTaskStore.getState().taskGroups).toEqual([
+        expect.objectContaining({
+          key: 'backlog',
+          tasks: [expect.objectContaining({ identifier: 'TASK-1', name: 'Grouped Task' })],
+        }),
+      ]);
     });
   });
 

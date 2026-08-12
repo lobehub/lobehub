@@ -9,6 +9,7 @@ import type {
   HomeSidebarProjectionRef,
   HomeTaskCardView,
   HomeTopicView,
+  ProjectionRecord,
   SidebarAgentItem,
   SidebarAgentListResponse,
   SidebarGroup,
@@ -17,9 +18,10 @@ import type {
 } from '@lobechat/types';
 
 import type { ProjectionScopeState } from '../../core/initialState';
+import { activeProjectionRecord } from '../../core/record';
 
-const activeRecord = <T extends { tombstoneAt?: number }>(record: T | undefined): T | undefined =>
-  record && !record.tombstoneAt ? record : undefined;
+const activeRecord = <T extends ProjectionRecord>(record: T | undefined): T | undefined =>
+  activeProjectionRecord(record);
 
 export const selectHomeSidebarItem = (
   scope: ProjectionScopeState,
@@ -58,6 +60,7 @@ export const selectHomeSidebarItem = (
     ...routing,
     ...runtime,
     id: ref.id,
+    labels: ref.labels,
     pinned: ref.pinned,
     title: identity.title ?? null,
     type: 'agent',
@@ -75,7 +78,7 @@ const sidebarItems = (
   for (const ref of refs) {
     const record =
       ref.kind === 'chatGroup' ? scope.records.chatGroup[ref.id] : scope.records.agent[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= indexObservedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= indexObservedAt) continue;
     const item = selectHomeSidebarItem(scope, ref);
     if (!item) return undefined;
     items.push(item);
@@ -161,7 +164,7 @@ export const selectHomeRecentTopics = (
   const views: HomeRecentTopicView[] = [];
   for (const ref of limit === undefined ? index.refs : index.refs.slice(0, limit)) {
     const record = scope.records.topic[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const topicView = selectHomeRecentTopic(record);
     if (!topicView) return undefined;
     views.push(topicView);
@@ -215,7 +218,7 @@ export const selectHomeInboxTopics = (
   const views: HomeTopicView[] = [];
   for (const ref of index.refs) {
     const record = scope.records.topic[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const view = selectHomeInboxTopic(record);
     if (!view) return undefined;
     views.push(view);
@@ -269,7 +272,7 @@ const selectHomeTaskList = (
   const views: HomeTaskCardView[] = [];
   for (const ref of index.refs) {
     const record = scope.records.task[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const view = selectHomeTask(record);
     if (!view) return undefined;
     views.push(view);
@@ -342,7 +345,7 @@ export const selectHomeBriefs = (
   const views: BriefItem[] = [];
   for (const ref of index.refs) {
     const record = scope.records.brief[ref.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
     const relations = record?.fragments.relations?.data;
     const view = selectHomeBrief(
       record,
@@ -357,7 +360,17 @@ export const selectHomeBriefs = (
 
 export const selectHomeDailyBrief = (
   scope: ProjectionScopeState | undefined,
+  now = Date.now(),
 ): HomeDailyBriefResponse | undefined => {
   const snapshot = scope?.snapshots['home.dailyBrief'];
-  return snapshot?.key === 'home.dailyBrief' ? snapshot.data : undefined;
+  if (snapshot?.key !== 'home.dailyBrief') return undefined;
+
+  const observed = new Date(snapshot.observedAt);
+  const current = new Date(now);
+  const isCurrentLocalDay =
+    observed.getFullYear() === current.getFullYear() &&
+    observed.getMonth() === current.getMonth() &&
+    observed.getDate() === current.getDate();
+
+  return isCurrentLocalDay ? snapshot.data : undefined;
 };

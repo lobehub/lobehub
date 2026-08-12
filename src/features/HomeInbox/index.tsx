@@ -355,6 +355,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       node: (
         <UnreadTopicList
           bare={isRail}
+          indexObservedAt={topics.indexObservedAt}
           showAuthor={teamView}
           topicIds={topics.unreadIds}
           onFollowUpSent={topics.promoteToRunning}

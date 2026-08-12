@@ -12,7 +12,7 @@ import type {
   DesktopProjectionSource,
 } from '@lobechat/electron-client-ipc';
 import { DESKTOP_PROJECTION_CACHE_TABLES } from '@lobechat/electron-client-ipc';
-import { and, asc, count, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { AnySQLiteColumn, AnySQLiteTable } from 'drizzle-orm/sqlite-core';
 import superjson from 'superjson';
 
@@ -31,12 +31,57 @@ import { ServiceModule } from './index';
 import LocalDatabaseService from './LocalDatabaseSrv';
 
 const SOURCES = new Set<DesktopProjectionSource>(['mutation', 'network', 'realtime']);
+const SOURCE_PRIORITY: Record<DesktopProjectionSource, number> = {
+  mutation: 3,
+  network: 1,
+  realtime: 2,
+};
+
+const shouldReplaceObservation = (
+  current: { observedAt: number; source: DesktopProjectionSource } | undefined,
+  incoming: { observedAt: number; source: DesktopProjectionSource },
+): boolean =>
+  !current ||
+  incoming.observedAt > current.observedAt ||
+  (incoming.observedAt === current.observedAt &&
+    SOURCE_PRIORITY[incoming.source] >= SOURCE_PRIORITY[current.source]);
+
+const mergeDesktopProjectionRecord = (
+  current: DesktopProjectionRecord | undefined,
+  incoming: DesktopProjectionRecord,
+): DesktopProjectionRecord => {
+  const tombstoneAt =
+    current?.tombstoneAt === undefined
+      ? incoming.tombstoneAt
+      : incoming.tombstoneAt === undefined
+        ? current.tombstoneAt
+        : Math.max(current.tombstoneAt, incoming.tombstoneAt);
+  const fragments = Object.fromEntries(
+    Object.entries(current?.fragments ?? {}).filter(
+      ([, fragment]) => tombstoneAt === undefined || fragment.observedAt > tombstoneAt,
+    ),
+  );
+
+  for (const [name, candidate] of Object.entries(incoming.fragments)) {
+    if (tombstoneAt !== undefined && candidate.observedAt <= tombstoneAt) continue;
+    if (!shouldReplaceObservation(fragments[name], candidate)) continue;
+    fragments[name] = candidate;
+  }
+
+  return {
+    fragments,
+    id: incoming.id,
+    kind: incoming.kind,
+    ...(tombstoneAt === undefined ? {} : { tombstoneAt }),
+  } as DesktopProjectionRecord;
+};
 const STATIC_INDEX_KEYS = new Set([
   'agent.available',
   'agent.directory',
   'chatGroup.list',
   'home.inboxTopics',
   'home.recentTopics',
+  'home.scheduledTasks',
   'home.sidebar',
   'home.tasks',
   'home.unresolvedBriefs',
@@ -94,6 +139,40 @@ const FRAGMENTS: Record<DesktopProjectionKind, ReadonlySet<string>> = {
     'summary',
     'triggerInfo',
   ]),
+};
+
+const projectionRefKey = (kind: DesktopProjectionKind, id: string): string => `${kind}:${id}`;
+
+const collectIndexRefs = (
+  serialized: string,
+): Map<string, { id: string; kind: DesktopProjectionKind }> => {
+  const refs = new Map<string, { id: string; kind: DesktopProjectionKind }>();
+  try {
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+
+      const candidate = value as Record<string, unknown>;
+      if (
+        typeof candidate.id === 'string' &&
+        typeof candidate.kind === 'string' &&
+        candidate.kind in FRAGMENTS
+      ) {
+        const kind = candidate.kind as DesktopProjectionKind;
+        refs.set(projectionRefKey(kind, candidate.id), { id: candidate.id, kind });
+      }
+      for (const nested of Object.values(candidate)) visit(nested);
+    };
+
+    visit(superjson.parse(serialized));
+  } catch {
+    // Commit validation already guarantees valid serialized JSON. If an older
+    // row cannot be decoded, retain its records rather than risking eager GC.
+  }
+  return refs;
 };
 
 const isTimestamp = (value: unknown): value is number =>
@@ -618,10 +697,24 @@ export default class ProjectionCacheService extends ServiceModule {
 
     await this.localDatabase.runWrite(() =>
       this.runtime.db.transaction(async (tx) => {
+        const gcCandidates = new Map<string, { id: string; kind: DesktopProjectionKind }>();
+        const committedRecords = new Set(
+          (commit.records ?? []).map((record) => projectionRefKey(record.kind, record.id)),
+        );
+
         for (const record of commit.records ?? []) {
           switch (record.kind) {
             case 'agent': {
-              const values = agentValues(commit.scope, record);
+              const [stored] = await tx
+                .select()
+                .from(projectionAgents)
+                .where(eq(projectionAgents.storageId, storageId(commit.scope, record.id)))
+                .limit(1);
+              const merged = mergeDesktopProjectionRecord(
+                stored ? readAgent(stored) : undefined,
+                record,
+              );
+              const values = agentValues(commit.scope, merged);
               await tx
                 .insert(projectionAgents)
                 .values(values)
@@ -630,7 +723,16 @@ export default class ProjectionCacheService extends ServiceModule {
               break;
             }
             case 'brief': {
-              const values = briefValues(commit.scope, record);
+              const [stored] = await tx
+                .select()
+                .from(projectionBriefs)
+                .where(eq(projectionBriefs.storageId, storageId(commit.scope, record.id)))
+                .limit(1);
+              const merged = mergeDesktopProjectionRecord(
+                stored ? readBrief(stored) : undefined,
+                record,
+              );
+              const values = briefValues(commit.scope, merged);
               await tx
                 .insert(projectionBriefs)
                 .values(values)
@@ -639,7 +741,16 @@ export default class ProjectionCacheService extends ServiceModule {
               break;
             }
             case 'chatGroup': {
-              const values = chatGroupValues(commit.scope, record);
+              const [stored] = await tx
+                .select()
+                .from(projectionChatGroups)
+                .where(eq(projectionChatGroups.storageId, storageId(commit.scope, record.id)))
+                .limit(1);
+              const merged = mergeDesktopProjectionRecord(
+                stored ? readChatGroup(stored) : undefined,
+                record,
+              );
+              const values = chatGroupValues(commit.scope, merged);
               await tx
                 .insert(projectionChatGroups)
                 .values(values)
@@ -648,7 +759,16 @@ export default class ProjectionCacheService extends ServiceModule {
               break;
             }
             case 'task': {
-              const values = taskValues(commit.scope, record);
+              const [stored] = await tx
+                .select()
+                .from(projectionTasks)
+                .where(eq(projectionTasks.storageId, storageId(commit.scope, record.id)))
+                .limit(1);
+              const merged = mergeDesktopProjectionRecord(
+                stored ? readTask(stored) : undefined,
+                record,
+              );
+              const values = taskValues(commit.scope, merged);
               await tx
                 .insert(projectionTasks)
                 .values(values)
@@ -657,7 +777,16 @@ export default class ProjectionCacheService extends ServiceModule {
               break;
             }
             case 'topic': {
-              const values = topicValues(commit.scope, record);
+              const [stored] = await tx
+                .select()
+                .from(projectionTopics)
+                .where(eq(projectionTopics.storageId, storageId(commit.scope, record.id)))
+                .limit(1);
+              const merged = mergeDesktopProjectionRecord(
+                stored ? readTopic(stored) : undefined,
+                record,
+              );
+              const values = topicValues(commit.scope, merged);
               await tx
                 .insert(projectionTopics)
                 .values(values)
@@ -669,6 +798,20 @@ export default class ProjectionCacheService extends ServiceModule {
         }
 
         for (const item of commit.indexes ?? []) {
+          const itemStorageId = storageId(commit.scope, item.key);
+          const [stored] = await tx
+            .select({
+              data: projectionHomeIndexes.data,
+              observedAt: projectionHomeIndexes.observedAt,
+              source: projectionHomeIndexes.source,
+            })
+            .from(projectionHomeIndexes)
+            .where(eq(projectionHomeIndexes.storageId, itemStorageId))
+            .limit(1);
+          if (stored && !shouldReplaceObservation(stored, item)) continue;
+          if (stored) {
+            for (const [key, ref] of collectIndexRefs(stored.data)) gcCandidates.set(key, ref);
+          }
           const values = {
             data: item.data,
             key: item.key as typeof projectionHomeIndexes.$inferInsert.key,
@@ -676,7 +819,7 @@ export default class ProjectionCacheService extends ServiceModule {
             schemaVersion: PROJECTION_CACHE_SCHEMA_VERSION,
             scope: commit.scope,
             source: item.source,
-            storageId: storageId(commit.scope, item.key),
+            storageId: itemStorageId,
           };
           await tx
             .insert(projectionHomeIndexes)
@@ -686,6 +829,16 @@ export default class ProjectionCacheService extends ServiceModule {
         }
 
         for (const item of commit.snapshots ?? []) {
+          const itemStorageId = storageId(commit.scope, item.key);
+          const [stored] = await tx
+            .select({
+              observedAt: projectionHomeSnapshots.observedAt,
+              source: projectionHomeSnapshots.source,
+            })
+            .from(projectionHomeSnapshots)
+            .where(eq(projectionHomeSnapshots.storageId, itemStorageId))
+            .limit(1);
+          if (stored && !shouldReplaceObservation(stored, item)) continue;
           const values = {
             data: item.data,
             key: item.key as typeof projectionHomeSnapshots.$inferInsert.key,
@@ -693,13 +846,95 @@ export default class ProjectionCacheService extends ServiceModule {
             schemaVersion: PROJECTION_CACHE_SCHEMA_VERSION,
             scope: commit.scope,
             source: item.source,
-            storageId: storageId(commit.scope, item.key),
+            storageId: itemStorageId,
           };
           await tx
             .insert(projectionHomeSnapshots)
             .values(values)
             .onConflictDoUpdate({ set: values, target: projectionHomeSnapshots.storageId })
             .run();
+        }
+
+        if (gcCandidates.size > 0) {
+          const persistedIndexes = await tx
+            .select({ data: projectionHomeIndexes.data })
+            .from(projectionHomeIndexes)
+            .where(eq(projectionHomeIndexes.scope, commit.scope));
+          const retained = new Set<string>();
+          for (const { data } of persistedIndexes) {
+            for (const key of collectIndexRefs(data).keys()) retained.add(key);
+          }
+
+          for (const [key, candidate] of gcCandidates) {
+            if (retained.has(key) || committedRecords.has(key)) continue;
+            switch (candidate.kind) {
+              case 'agent': {
+                await tx
+                  .delete(projectionAgents)
+                  .where(
+                    and(
+                      eq(projectionAgents.scope, commit.scope),
+                      eq(projectionAgents.entityId, candidate.id),
+                      isNull(projectionAgents.tombstoneAt),
+                    ),
+                  )
+                  .run();
+                break;
+              }
+              case 'brief': {
+                await tx
+                  .delete(projectionBriefs)
+                  .where(
+                    and(
+                      eq(projectionBriefs.scope, commit.scope),
+                      eq(projectionBriefs.entityId, candidate.id),
+                      isNull(projectionBriefs.tombstoneAt),
+                    ),
+                  )
+                  .run();
+                break;
+              }
+              case 'chatGroup': {
+                await tx
+                  .delete(projectionChatGroups)
+                  .where(
+                    and(
+                      eq(projectionChatGroups.scope, commit.scope),
+                      eq(projectionChatGroups.entityId, candidate.id),
+                      isNull(projectionChatGroups.tombstoneAt),
+                    ),
+                  )
+                  .run();
+                break;
+              }
+              case 'task': {
+                await tx
+                  .delete(projectionTasks)
+                  .where(
+                    and(
+                      eq(projectionTasks.scope, commit.scope),
+                      eq(projectionTasks.entityId, candidate.id),
+                      isNull(projectionTasks.tombstoneAt),
+                    ),
+                  )
+                  .run();
+                break;
+              }
+              case 'topic': {
+                await tx
+                  .delete(projectionTopics)
+                  .where(
+                    and(
+                      eq(projectionTopics.scope, commit.scope),
+                      eq(projectionTopics.entityId, candidate.id),
+                      isNull(projectionTopics.tombstoneAt),
+                    ),
+                  )
+                  .run();
+                break;
+              }
+            }
+          }
         }
       }),
     );

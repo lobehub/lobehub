@@ -3,6 +3,7 @@ import isEqual from 'fast-deep-equal';
 
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { ProjectionScopeState } from '@/projection/core/initialState';
+import { activeProjectionRecord } from '@/projection/core/record';
 import { selectAgentProjection, selectAgentSummary } from '@/projection/modules/agent/selectors';
 import {
   selectChatTopicListItem,
@@ -13,10 +14,10 @@ import {
   selectChatGroupItem,
   selectChatGroupList,
 } from '@/projection/modules/chatGroup/selectors';
-import { selectHomeBriefs } from '@/projection/modules/home/selectors';
+import { selectHomeBriefs, selectHomeSidebar } from '@/projection/modules/home/selectors';
 import {
   selectTaskDetail,
-  selectTaskGroupListIndex,
+  selectTaskGroupList,
   selectTaskListIndex,
   selectTaskListItem,
 } from '@/projection/modules/task/selectors';
@@ -26,12 +27,13 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { useBriefStore } from '@/store/brief';
 import { useChatStore } from '@/store/chat';
 import type { TopicData } from '@/store/chat/slices/topic/initialState';
+import { getHomeStoreState } from '@/store/home/store';
 import { useTaskStore } from '@/store/task';
 
 let bridgeStarted = false;
 let lastScope: string | undefined;
 
-const resetScopedLegacyState = (): void => {
+const resetScopedLegacyState = (scopeName: string): void => {
   useAgentStore.setState({
     agentConfigErrorMap: {},
     agentMap: {},
@@ -62,6 +64,7 @@ const resetScopedLegacyState = (): void => {
     briefsScope: undefined,
     isBriefsInit: false,
   });
+  getHomeStoreState().internal_syncAgentListProjection(undefined, scopeName);
 };
 
 const syncAgents = (scope: ProjectionScopeState): void => {
@@ -70,7 +73,7 @@ const syncAgents = (scope: ProjectionScopeState): void => {
   const agentNotFoundMap = { ...current.agentNotFoundMap };
 
   for (const [id, record] of Object.entries(scope.records.agent)) {
-    if (record.tombstoneAt) {
+    if (!activeProjectionRecord(record)) {
       delete agentMap[id];
       agentNotFoundMap[id] = true;
       continue;
@@ -116,7 +119,7 @@ const syncChatGroups = (scope: ProjectionScopeState): void => {
   const groupNotFoundMap = { ...current.groupNotFoundMap };
 
   for (const [id, record] of Object.entries(scope.records.chatGroup)) {
-    if (record.tombstoneAt) {
+    if (!activeProjectionRecord(record)) {
       delete groupMap[id];
       groupNotFoundMap[id] = true;
       continue;
@@ -181,7 +184,7 @@ const syncTopics = (scope: ProjectionScopeState): void => {
   const agentTopicsViewMap = { ...current.agentTopicsViewMap };
   const searchTopics = current.searchTopics.flatMap((item) => {
     const record = scope.records.topic[item.id];
-    if (record?.tombstoneAt) return [];
+    if (record && !activeProjectionRecord(record)) return [];
     const canonical = selectChatTopicListItem(scope, item.id);
     return [canonical ? (canonical as ChatTopic) : item];
   });
@@ -216,7 +219,7 @@ const syncTasks = (scope: ProjectionScopeState): void => {
   const taskDetailMap = { ...current.taskDetailMap };
 
   for (const [recordId, record] of Object.entries(scope.records.task)) {
-    if (record.tombstoneAt) {
+    if (!activeProjectionRecord(record)) {
       for (const [key, detail] of Object.entries(taskDetailMap)) {
         if (key === recordId || detail.id === recordId || detail.identifier === recordId) {
           delete taskDetailMap[key];
@@ -245,20 +248,12 @@ const syncTasks = (scope: ProjectionScopeState): void => {
   const tasksTotal = listIndex?.total ?? current.tasksTotal;
   const isTaskListInit = listIndex ? true : current.isTaskListInit;
 
-  const groupIndex = selectTaskGroupListIndex(scope, {
+  const projectedTaskGroups = selectTaskGroupList(scope, {
     agentKey: current.listAgentId,
     visibility: current.listVisibility,
   });
-  const taskGroups = groupIndex
-    ? groupIndex.groups.map(({ refs, ...group }) => ({
-        ...group,
-        tasks: refs.flatMap((ref) => {
-          const item = selectTaskListItem(scope, scope.records.task[ref.id]);
-          return item ? [item] : [];
-        }),
-      }))
-    : current.taskGroups;
-  const isTaskGroupListInit = groupIndex ? true : current.isTaskGroupListInit;
+  const taskGroups = projectedTaskGroups ?? current.taskGroups;
+  const isTaskGroupListInit = projectedTaskGroups ? true : current.isTaskGroupListInit;
 
   if (
     isEqual(current.taskDetailMap, taskDetailMap) &&
@@ -294,9 +289,13 @@ const syncBriefs = (scopeName: string, scope: ProjectionScopeState): void => {
   useBriefStore.setState({ briefs, briefsScope: scopeName, isBriefsInit: true });
 };
 
+const syncHomeSidebar = (scopeName: string, scope: ProjectionScopeState): void => {
+  getHomeStoreState().internal_syncAgentListProjection(selectHomeSidebar(scope), scopeName);
+};
+
 export const syncProjectionLegacyStores = (scopeName: string): void => {
   if (lastScope !== scopeName) {
-    resetScopedLegacyState();
+    resetScopedLegacyState(scopeName);
     lastScope = scopeName;
   }
 
@@ -307,6 +306,7 @@ export const syncProjectionLegacyStores = (scopeName: string): void => {
   syncTopics(scope);
   syncTasks(scope);
   syncBriefs(scopeName, scope);
+  syncHomeSidebar(scopeName, scope);
 };
 
 /**

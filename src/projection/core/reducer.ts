@@ -34,30 +34,38 @@ const mergeProjectionRecord = (
   incoming: ProjectionRecord,
 ): ProjectionRecord => {
   const tombstoneBarrier =
-    Math.max(current?.tombstoneAt ?? 0, incoming.tombstoneAt ?? 0) || undefined;
+    current?.tombstoneAt === undefined
+      ? incoming.tombstoneAt
+      : incoming.tombstoneAt === undefined
+        ? current.tombstoneAt
+        : Math.max(current.tombstoneAt, incoming.tombstoneAt);
   const fragments = Object.fromEntries(
     Object.entries(
       (current?.fragments ?? {}) as Record<string, ProjectionFragment<unknown>>,
-    ).filter(([, candidate]) => !tombstoneBarrier || candidate.observedAt > tombstoneBarrier),
+    ).filter(
+      ([, candidate]) => tombstoneBarrier === undefined || candidate.observedAt > tombstoneBarrier,
+    ),
   );
 
   for (const [name, candidate] of Object.entries(
     incoming.fragments as Record<string, ProjectionFragment<unknown>>,
   )) {
-    if (tombstoneBarrier && candidate.observedAt <= tombstoneBarrier) continue;
+    if (tombstoneBarrier !== undefined && candidate.observedAt <= tombstoneBarrier) continue;
     if (!shouldReplace(fragments[name], candidate)) continue;
 
     fragments[name] = candidate;
   }
 
-  const tombstoneAt =
-    tombstoneBarrier && Object.keys(fragments).length === 0 ? tombstoneBarrier : undefined;
+  // Keep the deletion time as a permanent barrier even after newer fragments
+  // revive the record. Otherwise a delayed pre-delete response can overwrite
+  // the revived fragment because the reducer has forgotten the tombstone.
+  const tombstoneAt = tombstoneBarrier;
 
   return {
     fragments,
     id: incoming.id,
     kind: incoming.kind,
-    ...(tombstoneAt ? { tombstoneAt } : {}),
+    ...(tombstoneAt === undefined ? {} : { tombstoneAt }),
   } as ProjectionRecord;
 };
 
@@ -87,7 +95,7 @@ export const applyProjectionCommit = (
   for (const tombstone of commit.tombstones ?? []) {
     const table = next.records[tombstone.kind] as Record<string, ProjectionRecord>;
     const record = table[tombstone.id];
-    if (record?.tombstoneAt && record.tombstoneAt >= tombstone.observedAt) continue;
+    if (record?.tombstoneAt !== undefined && record.tombstoneAt >= tombstone.observedAt) continue;
 
     const newerFragments = Object.fromEntries(
       Object.entries(
@@ -99,6 +107,7 @@ export const applyProjectionCommit = (
         fragments: newerFragments,
         id: tombstone.id,
         kind: tombstone.kind,
+        tombstoneAt: tombstone.observedAt,
       } as ProjectionRecord;
       continue;
     }

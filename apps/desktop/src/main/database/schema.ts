@@ -531,7 +531,7 @@ export const projectionHomeIndexes = sqliteTable(
     check('projection_home_indexes_data_json', sql`json_valid(${table.data})`),
     check(
       'projection_home_indexes_key_valid',
-      sql`${table.key} IN ('agent.available', 'agent.directory', 'chatGroup.list', 'home.inboxTopics', 'home.recentTopics', 'home.sidebar', 'home.tasks', 'home.unresolvedBriefs') OR ${table.key} LIKE 'agent.search:%' OR ${table.key} LIKE 'brief.news:%' OR ${table.key} LIKE 'chat.agentViewTopics:%' OR ${table.key} LIKE 'chat.sidebarTopics:%' OR ${table.key} LIKE 'task.groupList:%' OR ${table.key} LIKE 'task.list:%'`,
+      sql`${table.key} IN ('agent.available', 'agent.directory', 'chatGroup.list', 'home.inboxTopics', 'home.recentTopics', 'home.scheduledTasks', 'home.sidebar', 'home.tasks', 'home.unresolvedBriefs') OR ${table.key} LIKE 'agent.search:%' OR ${table.key} LIKE 'brief.news:%' OR ${table.key} LIKE 'chat.agentViewTopics:%' OR ${table.key} LIKE 'chat.sidebarTopics:%' OR ${table.key} LIKE 'task.groupList:%' OR ${table.key} LIKE 'task.list:%'`,
     ),
     check('projection_home_indexes_observed_at_positive', sql`${table.observedAt} >= 0`),
     check('projection_home_indexes_schema_version_current', sql`${table.schemaVersion} = 1`),

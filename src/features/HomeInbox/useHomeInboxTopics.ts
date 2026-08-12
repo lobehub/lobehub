@@ -3,12 +3,15 @@ import { useCallback } from 'react';
 import {
   getProjectionStoreState,
   useHomeInboxTopicIds,
+  useHomeInboxTopicsIndex,
   useHomeInboxTopicsRequest,
 } from '@/projection';
 import { type ChatTopicStatus } from '@/types/topic';
 
 export interface HomeInboxTopics {
   error: unknown;
+  /** Changes only when the authoritative inbox feed is replaced. */
+  indexObservedAt: number | undefined;
   isInit: boolean;
   /** Optimistically move a replied topic into the running index view. */
   promoteToRunning: (topicId: string) => void;
@@ -30,6 +33,7 @@ export const useHomeInboxTopics = (
   requireAgentId = false,
 ): HomeInboxTopics => {
   const request = useHomeInboxTopicsRequest(isLogin);
+  const index = useHomeInboxTopicsIndex();
   const runningIds = useHomeInboxTopicIds('running', userIdFilter, requireAgentId);
   const unreadIds = useHomeInboxTopicIds('unread', userIdFilter);
 
@@ -49,6 +53,7 @@ export const useHomeInboxTopics = (
   return {
     error: request.error && !request.isInitialized ? request.error : undefined,
     isInit: request.isInitialized,
+    indexObservedAt: index?.observedAt,
     promoteToRunning,
     reload,
     runningIds,

@@ -156,7 +156,7 @@ export const useHomeInboxTopicIds = (
     const ids: string[] = [];
     for (const ref of index.refs) {
       const record = projectionScope.records.topic[ref.id];
-      if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) continue;
+      if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) continue;
       const topic = selectHomeInboxTopic(record);
       if (!topic || topic.status !== status) continue;
       if (userIdFilter !== null && topic.userId !== userIdFilter) continue;
@@ -271,7 +271,7 @@ export const useHomeBriefIds = (section?: HomeBriefSection): string[] => {
 
     const briefs = index.refs.flatMap((ref) => {
       const record = projectionScope.records.brief[ref.id];
-      if (record?.tombstoneAt && record.tombstoneAt >= index.observedAt) return [];
+      if (record?.tombstoneAt !== undefined && record.tombstoneAt >= index.observedAt) return [];
       const relations = record?.fragments.relations?.data;
       const brief = selectHomeBrief(
         record,
