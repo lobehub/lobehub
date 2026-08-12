@@ -44,6 +44,13 @@ describe('defineConfig', () => {
       expect(defineConfig({}).assetPrefix).toBe('https://legacy.example.com');
     });
 
+    it('strips a trailing slash from the deprecated NEXT_PUBLIC_ASSET_PREFIX too', () => {
+      delete process.env.ASSET_BASE_URL;
+      process.env.NEXT_PUBLIC_ASSET_PREFIX = 'https://legacy.example.com/';
+
+      expect(defineConfig({}).assetPrefix).toBe('https://legacy.example.com');
+    });
+
     it('prefers ASSET_BASE_URL over the deprecated key', () => {
       process.env.ASSET_BASE_URL = 'https://assets.example.com';
       process.env.NEXT_PUBLIC_ASSET_PREFIX = 'https://legacy.example.com';
