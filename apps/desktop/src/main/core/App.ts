@@ -25,6 +25,7 @@ import {
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
+import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
 import * as electronIs from '@/utils/platform';
 import { refreshShellPath } from '@/utils/shellPath';
@@ -251,6 +252,7 @@ export class App {
     // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
     await this.browserManager.initializeBrowsers();
+    this.prewarmLocalDatabaseAfterNavigation();
     await this.runControllerHooks('afterAppReady');
 
     const initializeNativeShell = async () => {
@@ -330,6 +332,25 @@ export class App {
     this.screenCaptureManager.prewarmPermissionCheck();
 
     logger.info('Post-first-frame initialization completed');
+  };
+
+  private prewarmLocalDatabaseAfterNavigation = () => {
+    // BrowserManager starts the initial loadURL call while constructing the main
+    // window. Yield one event-loop turn so Chromium can begin serving navigation
+    // requests before node:sqlite performs its synchronous open and migrations.
+    setImmediate(() => {
+      if (this.isQuiting) return;
+
+      const startedAt = performance.now();
+      try {
+        this.getService(LocalDatabaseService).initialize();
+        logger.debug(
+          `Local database prewarm completed in ${(performance.now() - startedAt).toFixed(2)}ms`,
+        );
+      } catch (error) {
+        logger.warn('Local database prewarm failed:', error);
+      }
+    });
   };
 
   getService<T>(serviceClass: Class<T>): T {
