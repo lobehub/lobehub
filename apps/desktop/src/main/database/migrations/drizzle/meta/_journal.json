@@ -11,22 +11,8 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1786440092073,
-      "tag": "0001_marvelous_blue_shield",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1786450616830,
-      "tag": "0002_naive_blizzard",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1786525486668,
-      "tag": "0003_allow_scheduled_task_projection",
+      "when": 1786535738831,
+      "tag": "0001_initialize_projection_cache",
       "breakpoints": true
     }
   ],

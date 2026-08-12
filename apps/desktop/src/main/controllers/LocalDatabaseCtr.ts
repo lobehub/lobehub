@@ -15,13 +15,6 @@ import { ControllerModule, IpcMethod } from './index';
 export default class LocalDatabaseController extends ControllerModule {
   static override readonly groupName = 'localDatabase';
 
-  private static readonly legacyProjectionCollections = new Set([
-    'entity-indexes',
-    'entity-meta',
-    'entity-records',
-    'entity-snapshots',
-  ]);
-
   private get service() {
     return this.app.getService(LocalDatabaseService);
   }
@@ -89,9 +82,7 @@ export default class LocalDatabaseController extends ControllerModule {
       this.projectionCacheService.listCollections(),
     ]);
 
-    return [...generic, ...projection]
-      .filter(({ name }) => !LocalDatabaseController.legacyProjectionCollections.has(name))
-      .sort((left, right) => left.name.localeCompare(right.name));
+    return [...generic, ...projection].sort((left, right) => left.name.localeCompare(right.name));
   }
 
   @IpcMethod()
