@@ -202,7 +202,9 @@ export class CursorAdapter implements AgentEventAdapter {
     return [this.event('stream_start', this.getStreamStartData())];
   }
 
-  private getStreamStartData(extra: Partial<StreamStartData> = {}): StreamStartData {
+  private getStreamStartData(
+    extra: Partial<StreamStartData> & { newStep?: boolean } = {},
+  ): StreamStartData & { newStep?: boolean } {
     return {
       model: this.model,
       provider: 'cursor',
