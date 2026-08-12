@@ -262,16 +262,15 @@ const styles = createStaticStyles(({ css }) => ({
 
     animation: acceptance-celebrate-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   `,
+  /* No card chrome: the row separators alone carry the list's structure. A
+     border plus inline padding stole horizontal room from every row and made a
+     long checklist read as a boxed-in panel rather than a dense inventory. */
   groupCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
   groupHeader: css`
     cursor: pointer;
     padding-block: 10px;
-    padding-inline: 16px;
     background: ${cssVar.colorFillQuaternary};
 
     .acceptance-group-actions {
@@ -304,9 +303,9 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    /* The card already draws the outer border — a first row's separator would
-       stack on it and read as a 2px top edge. Grouped lists are unaffected:
-       their first child is the group header, so rows are never first. */
+    /* The list opens flush with the content above it. Grouped lists are
+       unaffected: their first child is the group header, so rows are never
+       first. */
     &:first-child {
       border-block-start: none;
     }
@@ -343,7 +342,6 @@ const styles = createStaticStyles(({ css }) => ({
   rowHeader: css`
     cursor: pointer;
     padding-block: 12px;
-    padding-inline: 16px;
 
     &:hover,
     &:focus-within {
@@ -1256,11 +1254,7 @@ const CheckRow = memo<{
         )}
 
         {expanded && (
-          <Flexbox
-            gap={10}
-            paddingBlock={detailMode ? 0 : '0 14px'}
-            paddingInline={detailMode ? 0 : 16}
-          >
+          <Flexbox gap={10} paddingBlock={detailMode ? 0 : '0 14px'} paddingInline={0}>
             {/* The model's proposal leads the detail: it is a claim about this
               check that the reviewer is being asked to rule on, so it belongs
               above the verifier's narrative rather than buried under it.

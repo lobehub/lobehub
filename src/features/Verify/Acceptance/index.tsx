@@ -559,6 +559,24 @@ const AcceptancePage = memo<AcceptancePageProps>(
       };
     }, [data]);
 
+    /**
+     * Checks the predictor could actually act on: executed (so there is a
+     * result to judge), not yet ruled on, and carrying a frame to look at.
+     *
+     * Deliberately NOT `counts.pending`, which counts any check without a
+     * standing review — including ones that never ran. That gate showed the
+     * button on acceptances where the server would consider zero checks, and
+     * the reverse case reads even worse: a page whose remaining "pending" item
+     * is un-executed loses the button with no visible reason.
+     */
+    const predictableCount = useMemo(
+      () =>
+        (data?.checks ?? []).filter(
+          (check) => check.result && !check.result.userDecision && hasVisualEvidence(check),
+        ).length,
+      [data],
+    );
+
     const acceptanceRecordId = data?.acceptance.id;
     const runAction = useCallback(
       async (action: () => Promise<unknown>) => {
@@ -1734,7 +1752,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   {/* Explicit, and only while something is still unreviewed —
                     asking for proposals on a fully-judged acceptance would
                     spend budget to produce cards nobody can act on. */}
-                  {isOwner && counts.pending > 0 && (
+                  {isOwner && predictableCount > 0 && (
                     <ActionIcon
                       icon={Sparkles}
                       loading={predicting}
