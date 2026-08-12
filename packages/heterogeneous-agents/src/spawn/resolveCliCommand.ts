@@ -93,6 +93,18 @@ const isWindowsShimPath = (line: string): boolean => {
 
 const pickWindowsRunnables = (lines: string[]): string[] => lines.filter(isWindowsRunnablePath);
 
+/**
+ * Whether the command already names a location instead of something to look up
+ * on PATH. Windows is judged by Windows rules — `path.isAbsolute` follows the
+ * host, so `C:\…` reads as a bare command name anywhere but Windows, which
+ * matters for the `lh hetero exec` CLI resolving a Windows path off-host and
+ * keeps this in step with `resolveCliSpawnPlan`.
+ */
+const isPathLikeCommand = (command: string): boolean =>
+  isWindows()
+    ? path.win32.isAbsolute(command) || /[\\/]/.test(command)
+    : path.isAbsolute(command) || command.includes(path.sep);
+
 const getLoginShellPath = async (): Promise<string | undefined> => {
   if (isWindows()) return undefined;
 
@@ -233,7 +245,7 @@ const resolveCommandCandidates = async (command: string): Promise<ResolvedComman
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return [];
 
-  if (path.isAbsolute(trimmedCommand) || trimmedCommand.includes(path.sep)) {
+  if (isPathLikeCommand(trimmedCommand)) {
     return [{ path: trimmedCommand }];
   }
 

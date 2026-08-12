@@ -65,6 +65,21 @@ const callExecFileError = (err: Error) => {
     return {} as any;
   }) as any);
 };
+/**
+ * Fail any call a test did not queue. Without this the promisified `execFile`
+ * never settles and the test dies on a 5s timeout that says nothing about
+ * which extra process was spawned.
+ */
+const rejectUnqueuedExecFile = () => {
+  execFileMock.mockImplementation(((file: string, args: any, opts: any, cb: any) => {
+    const callback = typeof opts === 'function' ? opts : cb;
+    callback(new Error(`unexpected execFile: ${file} ${JSON.stringify(args)}`), {
+      stderr: '',
+      stdout: '',
+    });
+    return {} as any;
+  }) as any);
+};
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
@@ -73,6 +88,7 @@ describe('resolveCliCommand', () => {
     execMock.mockReset();
     accessMock.mockReset();
     readFileMock.mockReset();
+    rejectUnqueuedExecFile();
     // Empty host by default — individual tests opt into the files they need.
     existingFiles({});
   });
