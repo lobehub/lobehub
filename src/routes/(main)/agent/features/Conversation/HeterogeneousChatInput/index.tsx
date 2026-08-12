@@ -1,6 +1,7 @@
 'use client';
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -105,17 +106,8 @@ const HeterogeneousChatInput = memo(() => {
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
-  // Codex show the selector on every execution path (local / sandbox / device)
-  // since dispatch forwards --model/--effort everywhere.
-  const isSelectableHeteroProvider =
-    providerType === 'claude-code' ||
-    providerType === 'codex' ||
-    providerType === 'opencode' ||
-    providerType === 'pi' ||
-    providerType === 'qoder';
   const showHeteroModel =
-    isSelectableHeteroProvider &&
+    isHeteroSelectorAvailable(providerType) &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget,

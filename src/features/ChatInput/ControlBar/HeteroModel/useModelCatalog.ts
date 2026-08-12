@@ -38,7 +38,7 @@ interface UseHeterogeneousAgentModelCatalogParams {
  * revalidate a failed preload if the user opens the selector after the target
  * becomes available.
  */
-export const useHeterogeneousAgentModelCatalog = ({
+export const useModelCatalog = ({
   cwd,
   deviceId,
   isDeviceListLoading,

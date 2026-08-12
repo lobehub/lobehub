@@ -4,20 +4,22 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
-  codexModelSupportsFastSpeed,
-  codexModelSupportsReasoningEffort,
-  getCodexReasoningEffortLevels,
-  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+} from './agencyConfig';
+import {
+  codexModelSupportsFastSpeed,
+  codexModelSupportsReasoningEffort,
+  getCodexReasoningEffortLevels,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
-} from './agencyConfig';
+} from './heteroSelectorCapabilities';
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {
