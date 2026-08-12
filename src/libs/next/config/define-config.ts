@@ -115,7 +115,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [

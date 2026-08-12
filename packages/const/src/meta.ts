@@ -9,4 +9,4 @@ export const DEFAULT_BACKGROUND_COLOR = undefined;
 export const DEFAULT_AGENT_META: MetaData = {};
 export const DEFAULT_INBOX_TITLE = 'Lobe AI';
 export const DEFAULT_INBOX_AVATAR = BRANDING_LOGO_URL || '/avatars/lobe-ai.png';
-export const DEFAULT_USER_AVATAR_URL = BRANDING_LOGO_URL || '/icons/icon-192x192.png';
+export const DEFAULT_USER_AVATAR_URL = BRANDING_LOGO_URL || '/app-icons/icon-192x192.png';
