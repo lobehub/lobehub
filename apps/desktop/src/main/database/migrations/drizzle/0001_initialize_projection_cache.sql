@@ -5,7 +5,6 @@ CREATE TABLE `projection_agents` (
 	`configuration_data` text,
 	`configuration_observed_at` integer,
 	`configuration_source` text,
-	`entity_id` text NOT NULL,
 	`identity_data` text,
 	`identity_observed_at` integer,
 	`identity_source` text,
@@ -24,6 +23,7 @@ CREATE TABLE `projection_agents` (
 	`runtime_data` text,
 	`runtime_observed_at` integer,
 	`runtime_source` text,
+	`entity_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
 	`scope` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
@@ -73,7 +73,6 @@ CREATE TABLE `projection_briefs` (
 	`content_data` text,
 	`content_observed_at` integer,
 	`content_source` text,
-	`entity_id` text NOT NULL,
 	`read_state_data` text,
 	`read_state_observed_at` integer,
 	`read_state_source` text,
@@ -83,6 +82,7 @@ CREATE TABLE `projection_briefs` (
 	`resolution_data` text,
 	`resolution_observed_at` integer,
 	`resolution_source` text,
+	`entity_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
 	`scope` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
@@ -120,7 +120,6 @@ CREATE TABLE `projection_chat_groups` (
 	`configuration_data` text,
 	`configuration_observed_at` integer,
 	`configuration_source` text,
-	`entity_id` text NOT NULL,
 	`identity_data` text,
 	`identity_observed_at` integer,
 	`identity_source` text,
@@ -130,6 +129,7 @@ CREATE TABLE `projection_chat_groups` (
 	`membership_data` text,
 	`membership_observed_at` integer,
 	`membership_source` text,
+	`entity_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
 	`scope` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
@@ -160,7 +160,7 @@ CREATE TABLE `projection_chat_groups` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `projection_chat_groups_scope_entity_unique` ON `projection_chat_groups` (`scope`,`entity_id`);--> statement-breakpoint
 CREATE INDEX `projection_chat_groups_scope_idx` ON `projection_chat_groups` (`scope`);--> statement-breakpoint
-CREATE TABLE `projection_home_indexes` (
+CREATE TABLE `projection_indexes` (
 	`data` text NOT NULL,
 	`key` text NOT NULL,
 	`observed_at` integer NOT NULL,
@@ -168,16 +168,16 @@ CREATE TABLE `projection_home_indexes` (
 	`scope` text NOT NULL,
 	`source` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
-	CONSTRAINT "projection_home_indexes_data_json" CHECK(json_valid("projection_home_indexes"."data")),
-	CONSTRAINT "projection_home_indexes_key_valid" CHECK("projection_home_indexes"."key" IN ('agent.available', 'agent.directory', 'chatGroup.list', 'home.inboxTopics', 'home.recentTopics', 'home.scheduledTasks', 'home.sidebar', 'home.tasks', 'home.unresolvedBriefs') OR "projection_home_indexes"."key" LIKE 'agent.search:%' OR "projection_home_indexes"."key" LIKE 'brief.news:%' OR "projection_home_indexes"."key" LIKE 'chat.agentViewTopics:%' OR "projection_home_indexes"."key" LIKE 'chat.sidebarTopics:%' OR "projection_home_indexes"."key" LIKE 'task.groupList:%' OR "projection_home_indexes"."key" LIKE 'task.list:%'),
-	CONSTRAINT "projection_home_indexes_observed_at_positive" CHECK("projection_home_indexes"."observed_at" >= 0),
-	CONSTRAINT "projection_home_indexes_schema_version_current" CHECK("projection_home_indexes"."schema_version" = 1),
-	CONSTRAINT "projection_home_indexes_source_valid" CHECK("projection_home_indexes"."source" IN ('mutation', 'network', 'realtime'))
+	CONSTRAINT "projection_indexes_data_json" CHECK(json_valid("projection_indexes"."data")),
+	CONSTRAINT "projection_indexes_key_not_empty" CHECK(length("projection_indexes"."key") > 0),
+	CONSTRAINT "projection_indexes_observed_at_positive" CHECK("projection_indexes"."observed_at" >= 0),
+	CONSTRAINT "projection_indexes_schema_version_current" CHECK("projection_indexes"."schema_version" = 1),
+	CONSTRAINT "projection_indexes_source_valid" CHECK("projection_indexes"."source" IN ('mutation', 'network', 'realtime'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `projection_home_indexes_scope_key_unique` ON `projection_home_indexes` (`scope`,`key`);--> statement-breakpoint
-CREATE INDEX `projection_home_indexes_scope_idx` ON `projection_home_indexes` (`scope`);--> statement-breakpoint
-CREATE TABLE `projection_home_snapshots` (
+CREATE UNIQUE INDEX `projection_indexes_scope_key_unique` ON `projection_indexes` (`scope`,`key`);--> statement-breakpoint
+CREATE INDEX `projection_indexes_scope_idx` ON `projection_indexes` (`scope`);--> statement-breakpoint
+CREATE TABLE `projection_snapshots` (
 	`data` text NOT NULL,
 	`key` text NOT NULL,
 	`observed_at` integer NOT NULL,
@@ -185,15 +185,15 @@ CREATE TABLE `projection_home_snapshots` (
 	`scope` text NOT NULL,
 	`source` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
-	CONSTRAINT "projection_home_snapshots_data_json" CHECK(json_valid("projection_home_snapshots"."data")),
-	CONSTRAINT "projection_home_snapshots_key_valid" CHECK("projection_home_snapshots"."key" = 'home.dailyBrief'),
-	CONSTRAINT "projection_home_snapshots_observed_at_positive" CHECK("projection_home_snapshots"."observed_at" >= 0),
-	CONSTRAINT "projection_home_snapshots_schema_version_current" CHECK("projection_home_snapshots"."schema_version" = 1),
-	CONSTRAINT "projection_home_snapshots_source_valid" CHECK("projection_home_snapshots"."source" IN ('mutation', 'network', 'realtime'))
+	CONSTRAINT "projection_snapshots_data_json" CHECK(json_valid("projection_snapshots"."data")),
+	CONSTRAINT "projection_snapshots_key_not_empty" CHECK(length("projection_snapshots"."key") > 0),
+	CONSTRAINT "projection_snapshots_observed_at_positive" CHECK("projection_snapshots"."observed_at" >= 0),
+	CONSTRAINT "projection_snapshots_schema_version_current" CHECK("projection_snapshots"."schema_version" = 1),
+	CONSTRAINT "projection_snapshots_source_valid" CHECK("projection_snapshots"."source" IN ('mutation', 'network', 'realtime'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `projection_home_snapshots_scope_key_unique` ON `projection_home_snapshots` (`scope`,`key`);--> statement-breakpoint
-CREATE INDEX `projection_home_snapshots_scope_idx` ON `projection_home_snapshots` (`scope`);--> statement-breakpoint
+CREATE UNIQUE INDEX `projection_snapshots_scope_key_unique` ON `projection_snapshots` (`scope`,`key`);--> statement-breakpoint
+CREATE INDEX `projection_snapshots_scope_idx` ON `projection_snapshots` (`scope`);--> statement-breakpoint
 CREATE TABLE `projection_tasks` (
 	`assignment_data` text,
 	`assignment_observed_at` integer,
@@ -207,7 +207,6 @@ CREATE TABLE `projection_tasks` (
 	`display_data` text,
 	`display_observed_at` integer,
 	`display_source` text,
-	`entity_id` text NOT NULL,
 	`identity_data` text,
 	`identity_observed_at` integer,
 	`identity_source` text,
@@ -220,6 +219,7 @@ CREATE TABLE `projection_tasks` (
 	`row_data` text,
 	`row_observed_at` integer,
 	`row_source` text,
+	`entity_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
 	`scope` text NOT NULL,
 	`storage_id` text PRIMARY KEY NOT NULL,
@@ -281,7 +281,6 @@ CREATE TABLE `projection_topics` (
 	`display_data` text,
 	`display_observed_at` integer,
 	`display_source` text,
-	`entity_id` text NOT NULL,
 	`generation_data` text,
 	`generation_observed_at` integer,
 	`generation_source` text,
@@ -306,19 +305,20 @@ CREATE TABLE `projection_topics` (
 	`run_timing_data` text,
 	`run_timing_observed_at` integer,
 	`run_timing_source` text,
-	`schema_version` integer DEFAULT 1 NOT NULL,
-	`scope` text NOT NULL,
 	`status_data` text,
 	`status_observed_at` integer,
 	`status_source` text,
-	`storage_id` text PRIMARY KEY NOT NULL,
 	`summary_data` text,
 	`summary_observed_at` integer,
 	`summary_source` text,
-	`tombstone_at` integer,
 	`trigger_info_data` text,
 	`trigger_info_observed_at` integer,
 	`trigger_info_source` text,
+	`entity_id` text NOT NULL,
+	`schema_version` integer DEFAULT 1 NOT NULL,
+	`scope` text NOT NULL,
+	`storage_id` text PRIMARY KEY NOT NULL,
+	`tombstone_at` integer,
 	CONSTRAINT "projection_topics_schema_version_current" CHECK("projection_topics"."schema_version" = 1),
 	CONSTRAINT "projection_topics_tombstone_at_positive" CHECK("projection_topics"."tombstone_at" IS NULL OR "projection_topics"."tombstone_at" >= 0),
 	CONSTRAINT "projection_topics_activity_complete" CHECK((("projection_topics"."activity_data" IS NULL) = ("projection_topics"."activity_observed_at" IS NULL)) AND (("projection_topics"."activity_data" IS NULL) = ("projection_topics"."activity_source" IS NULL))),

@@ -6,7 +6,7 @@
   },
   "dialect": "sqlite",
   "enums": {},
-  "id": "aeb0c321-cd28-4c56-b2d7-1eeef58e11dc",
+  "id": "92c3bf6b-2a2f-4bd8-84cb-391079cae7d8",
   "internal": {
     "indexes": {}
   },
@@ -79,13 +79,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
           "autoincrement": false
         },
         "identity_data": {
@@ -212,6 +205,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "schema_version": {
@@ -443,13 +443,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "read_state_data": {
           "name": "read_state_data",
           "type": "text",
@@ -511,6 +504,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "schema_version": {
@@ -694,13 +694,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "identity_data": {
           "name": "identity_data",
           "type": "text",
@@ -762,6 +755,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "schema_version": {
@@ -900,8 +900,8 @@
         }
       }
     },
-    "projection_home_indexes": {
-      "name": "projection_home_indexes",
+    "projection_indexes": {
+      "name": "projection_indexes",
       "columns": {
         "data": {
           "name": "data",
@@ -955,13 +955,13 @@
         }
       },
       "indexes": {
-        "projection_home_indexes_scope_key_unique": {
-          "name": "projection_home_indexes_scope_key_unique",
+        "projection_indexes_scope_key_unique": {
+          "name": "projection_indexes_scope_key_unique",
           "columns": ["scope", "key"],
           "isUnique": true
         },
-        "projection_home_indexes_scope_idx": {
-          "name": "projection_home_indexes_scope_idx",
+        "projection_indexes_scope_idx": {
+          "name": "projection_indexes_scope_idx",
           "columns": ["scope"],
           "isUnique": false
         }
@@ -970,30 +970,30 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "projection_home_indexes_data_json": {
-          "name": "projection_home_indexes_data_json",
-          "value": "json_valid(\"projection_home_indexes\".\"data\")"
+        "projection_indexes_data_json": {
+          "name": "projection_indexes_data_json",
+          "value": "json_valid(\"projection_indexes\".\"data\")"
         },
-        "projection_home_indexes_key_valid": {
-          "name": "projection_home_indexes_key_valid",
-          "value": "\"projection_home_indexes\".\"key\" IN ('agent.available', 'agent.directory', 'chatGroup.list', 'home.inboxTopics', 'home.recentTopics', 'home.scheduledTasks', 'home.sidebar', 'home.tasks', 'home.unresolvedBriefs') OR \"projection_home_indexes\".\"key\" LIKE 'agent.search:%' OR \"projection_home_indexes\".\"key\" LIKE 'brief.news:%' OR \"projection_home_indexes\".\"key\" LIKE 'chat.agentViewTopics:%' OR \"projection_home_indexes\".\"key\" LIKE 'chat.sidebarTopics:%' OR \"projection_home_indexes\".\"key\" LIKE 'task.groupList:%' OR \"projection_home_indexes\".\"key\" LIKE 'task.list:%'"
+        "projection_indexes_key_not_empty": {
+          "name": "projection_indexes_key_not_empty",
+          "value": "length(\"projection_indexes\".\"key\") > 0"
         },
-        "projection_home_indexes_observed_at_positive": {
-          "name": "projection_home_indexes_observed_at_positive",
-          "value": "\"projection_home_indexes\".\"observed_at\" >= 0"
+        "projection_indexes_observed_at_positive": {
+          "name": "projection_indexes_observed_at_positive",
+          "value": "\"projection_indexes\".\"observed_at\" >= 0"
         },
-        "projection_home_indexes_schema_version_current": {
-          "name": "projection_home_indexes_schema_version_current",
-          "value": "\"projection_home_indexes\".\"schema_version\" = 1"
+        "projection_indexes_schema_version_current": {
+          "name": "projection_indexes_schema_version_current",
+          "value": "\"projection_indexes\".\"schema_version\" = 1"
         },
-        "projection_home_indexes_source_valid": {
-          "name": "projection_home_indexes_source_valid",
-          "value": "\"projection_home_indexes\".\"source\" IN ('mutation', 'network', 'realtime')"
+        "projection_indexes_source_valid": {
+          "name": "projection_indexes_source_valid",
+          "value": "\"projection_indexes\".\"source\" IN ('mutation', 'network', 'realtime')"
         }
       }
     },
-    "projection_home_snapshots": {
-      "name": "projection_home_snapshots",
+    "projection_snapshots": {
+      "name": "projection_snapshots",
       "columns": {
         "data": {
           "name": "data",
@@ -1047,13 +1047,13 @@
         }
       },
       "indexes": {
-        "projection_home_snapshots_scope_key_unique": {
-          "name": "projection_home_snapshots_scope_key_unique",
+        "projection_snapshots_scope_key_unique": {
+          "name": "projection_snapshots_scope_key_unique",
           "columns": ["scope", "key"],
           "isUnique": true
         },
-        "projection_home_snapshots_scope_idx": {
-          "name": "projection_home_snapshots_scope_idx",
+        "projection_snapshots_scope_idx": {
+          "name": "projection_snapshots_scope_idx",
           "columns": ["scope"],
           "isUnique": false
         }
@@ -1062,25 +1062,25 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "projection_home_snapshots_data_json": {
-          "name": "projection_home_snapshots_data_json",
-          "value": "json_valid(\"projection_home_snapshots\".\"data\")"
+        "projection_snapshots_data_json": {
+          "name": "projection_snapshots_data_json",
+          "value": "json_valid(\"projection_snapshots\".\"data\")"
         },
-        "projection_home_snapshots_key_valid": {
-          "name": "projection_home_snapshots_key_valid",
-          "value": "\"projection_home_snapshots\".\"key\" = 'home.dailyBrief'"
+        "projection_snapshots_key_not_empty": {
+          "name": "projection_snapshots_key_not_empty",
+          "value": "length(\"projection_snapshots\".\"key\") > 0"
         },
-        "projection_home_snapshots_observed_at_positive": {
-          "name": "projection_home_snapshots_observed_at_positive",
-          "value": "\"projection_home_snapshots\".\"observed_at\" >= 0"
+        "projection_snapshots_observed_at_positive": {
+          "name": "projection_snapshots_observed_at_positive",
+          "value": "\"projection_snapshots\".\"observed_at\" >= 0"
         },
-        "projection_home_snapshots_schema_version_current": {
-          "name": "projection_home_snapshots_schema_version_current",
-          "value": "\"projection_home_snapshots\".\"schema_version\" = 1"
+        "projection_snapshots_schema_version_current": {
+          "name": "projection_snapshots_schema_version_current",
+          "value": "\"projection_snapshots\".\"schema_version\" = 1"
         },
-        "projection_home_snapshots_source_valid": {
-          "name": "projection_home_snapshots_source_valid",
-          "value": "\"projection_home_snapshots\".\"source\" IN ('mutation', 'network', 'realtime')"
+        "projection_snapshots_source_valid": {
+          "name": "projection_snapshots_source_valid",
+          "value": "\"projection_snapshots\".\"source\" IN ('mutation', 'network', 'realtime')"
         }
       }
     },
@@ -1171,13 +1171,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "identity_data": {
           "name": "identity_data",
           "type": "text",
@@ -1260,6 +1253,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "schema_version": {
@@ -1575,13 +1575,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "generation_data": {
           "name": "generation_data",
           "type": "text",
@@ -1750,21 +1743,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "schema_version": {
-          "name": "schema_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "scope": {
-          "name": "scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "status_data": {
           "name": "status_data",
           "type": "text",
@@ -1784,13 +1762,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
-        },
-        "storage_id": {
-          "name": "storage_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
           "autoincrement": false
         },
         "summary_data": {
@@ -1814,13 +1785,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "tombstone_at": {
-          "name": "tombstone_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "trigger_info_data": {
           "name": "trigger_info_data",
           "type": "text",
@@ -1838,6 +1802,42 @@
         "trigger_info_source": {
           "name": "trigger_info_source",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "storage_id": {
+          "name": "storage_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tombstone_at": {
+          "name": "tombstone_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

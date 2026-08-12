@@ -1,4 +1,5 @@
 import type { TaskGroupListIndex, TaskListIndex } from '@lobechat/types';
+import { TASK_LIST_INDEX_PREFIX, taskIndexKeySpace } from '@lobechat/types';
 
 import { hasObservation, isObject, isProjectionRef } from '../../core/validation';
 
@@ -11,9 +12,10 @@ const isSignature = (value: unknown): boolean =>
 
 export const isTaskIndex = (value: unknown): value is TaskGroupListIndex | TaskListIndex => {
   if (!isObject(value) || typeof value.key !== 'string' || !hasObservation(value)) return false;
+  if (!taskIndexKeySpace.isKey(value.key)) return false;
   if (!isSignature(value.signature)) return false;
 
-  if (value.key.startsWith('task.list:')) {
+  if (value.key.startsWith(TASK_LIST_INDEX_PREFIX)) {
     return (
       Array.isArray(value.refs) &&
       value.refs.every((ref) => isProjectionRef(ref, 'task')) &&
@@ -23,7 +25,7 @@ export const isTaskIndex = (value: unknown): value is TaskGroupListIndex | TaskL
     );
   }
 
-  if (!value.key.startsWith('task.groupList:') || !Array.isArray(value.groups)) return false;
+  if (!Array.isArray(value.groups)) return false;
   return value.groups.every(
     (group) =>
       isObject(group) &&

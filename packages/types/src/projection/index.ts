@@ -7,4 +7,7 @@ export * from './modules/chat';
 export * from './modules/chatGroup';
 export * from './modules/home';
 export * from './modules/task';
+export * from './observation';
 export * from './records';
+export * from './registry';
+export * from './runtime';

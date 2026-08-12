@@ -4,70 +4,10 @@ import type {
   ProjectionIndex,
   ProjectionRecord,
   ProjectionSnapshot,
-  ProjectionSource,
 } from '@lobechat/types';
+import { mergeProjectionRecord, shouldReplaceProjectionObservation } from '@lobechat/types';
 
 import { createEmptyProjectionScope, type ProjectionScopeState } from './initialState';
-
-const SOURCE_PRIORITY: Record<ProjectionSource, number> = {
-  mutation: 3,
-  network: 1,
-  realtime: 2,
-};
-
-interface TimestampedValue {
-  observedAt: number;
-  source: ProjectionSource;
-}
-
-const shouldReplace = (
-  current: TimestampedValue | undefined,
-  incoming: TimestampedValue,
-): boolean =>
-  !current ||
-  incoming.observedAt > current.observedAt ||
-  (incoming.observedAt === current.observedAt &&
-    SOURCE_PRIORITY[incoming.source] >= SOURCE_PRIORITY[current.source]);
-
-const mergeProjectionRecord = (
-  current: ProjectionRecord | undefined,
-  incoming: ProjectionRecord,
-): ProjectionRecord => {
-  const tombstoneBarrier =
-    current?.tombstoneAt === undefined
-      ? incoming.tombstoneAt
-      : incoming.tombstoneAt === undefined
-        ? current.tombstoneAt
-        : Math.max(current.tombstoneAt, incoming.tombstoneAt);
-  const fragments = Object.fromEntries(
-    Object.entries(
-      (current?.fragments ?? {}) as Record<string, ProjectionFragment<unknown>>,
-    ).filter(
-      ([, candidate]) => tombstoneBarrier === undefined || candidate.observedAt > tombstoneBarrier,
-    ),
-  );
-
-  for (const [name, candidate] of Object.entries(
-    incoming.fragments as Record<string, ProjectionFragment<unknown>>,
-  )) {
-    if (tombstoneBarrier !== undefined && candidate.observedAt <= tombstoneBarrier) continue;
-    if (!shouldReplace(fragments[name], candidate)) continue;
-
-    fragments[name] = candidate;
-  }
-
-  // Keep the deletion time as a permanent barrier even after newer fragments
-  // revive the record. Otherwise a delayed pre-delete response can overwrite
-  // the revived fragment because the reducer has forgotten the tombstone.
-  const tombstoneAt = tombstoneBarrier;
-
-  return {
-    fragments,
-    id: incoming.id,
-    kind: incoming.kind,
-    ...(tombstoneAt === undefined ? {} : { tombstoneAt }),
-  } as ProjectionRecord;
-};
 
 export const applyProjectionCommit = (
   scopeState: ProjectionScopeState | undefined,
@@ -122,14 +62,14 @@ export const applyProjectionCommit = (
 
   for (const index of commit.indexes ?? []) {
     const existing = next.indexes[index.key] as ProjectionIndex | undefined;
-    if (shouldReplace(existing, index)) {
+    if (shouldReplaceProjectionObservation(existing, index)) {
       (next.indexes as Record<string, ProjectionIndex | undefined>)[index.key] = index;
     }
   }
 
   for (const snapshot of commit.snapshots ?? []) {
     const existing = next.snapshots[snapshot.key] as ProjectionSnapshot | undefined;
-    if (shouldReplace(existing, snapshot)) {
+    if (shouldReplaceProjectionObservation(existing, snapshot)) {
       (next.snapshots as Record<string, ProjectionSnapshot | undefined>)[snapshot.key] = snapshot;
     }
   }

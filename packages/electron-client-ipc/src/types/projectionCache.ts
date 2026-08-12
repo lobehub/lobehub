@@ -1,13 +1,21 @@
-export type DesktopProjectionSource = 'mutation' | 'network' | 'realtime';
+import type {
+  ProjectionFragmentName,
+  ProjectionIndexKey,
+  ProjectionKind,
+  ProjectionSnapshotKey,
+  ProjectionSource,
+} from '@lobechat/types';
 
-export type DesktopProjectionKind = 'agent' | 'brief' | 'chatGroup' | 'task' | 'topic';
+export type DesktopProjectionSource = ProjectionSource;
+
+export type DesktopProjectionKind = ProjectionKind;
 
 export const DESKTOP_PROJECTION_CACHE_TABLES = {
   agent: 'projection_agents',
   brief: 'projection_briefs',
   chatGroup: 'projection_chat_groups',
-  homeIndexes: 'projection_home_indexes',
-  homeSnapshots: 'projection_home_snapshots',
+  indexes: 'projection_indexes',
+  snapshots: 'projection_snapshots',
   task: 'projection_tasks',
   topic: 'projection_topics',
 } as const;
@@ -22,17 +30,19 @@ export interface DesktopProjectionFragment {
   source: DesktopProjectionSource;
 }
 
-export interface DesktopProjectionRecord {
-  fragments: Record<string, DesktopProjectionFragment>;
-  id: string;
-  kind: DesktopProjectionKind;
-  tombstoneAt?: number;
-}
+export type DesktopProjectionRecord = {
+  [Kind in ProjectionKind]: {
+    fragments: Partial<Record<ProjectionFragmentName<Kind>, DesktopProjectionFragment>>;
+    id: string;
+    kind: Kind;
+    tombstoneAt?: number;
+  };
+}[ProjectionKind];
 
 export interface DesktopProjectionIndex {
   /** SuperJSON-encoded index fields excluding key and observation metadata. */
   data: string;
-  key: string;
+  key: ProjectionIndexKey;
   observedAt: number;
   source: DesktopProjectionSource;
 }
@@ -40,7 +50,7 @@ export interface DesktopProjectionIndex {
 export interface DesktopProjectionSnapshot {
   /** SuperJSON-encoded snapshot payload. */
   data: string;
-  key: string;
+  key: ProjectionSnapshotKey;
   observedAt: number;
   source: DesktopProjectionSource;
 }
@@ -64,16 +74,18 @@ export interface DesktopProjectionHydrationTiming {
   databaseReadMs: number;
 }
 
-export interface DesktopProjectionRecordHydrationRequest {
-  fragments: string[];
-  ids: string[];
-  kind: DesktopProjectionKind;
-}
+export type DesktopProjectionRecordHydrationRequest = {
+  [Kind in ProjectionKind]: {
+    fragments: ProjectionFragmentName<Kind>[];
+    ids: string[];
+    kind: Kind;
+  };
+}[ProjectionKind];
 
 export interface DesktopProjectionHydrationRequest extends DesktopProjectionScope {
-  indexes?: string[];
+  indexes?: ProjectionIndexKey[];
   records?: DesktopProjectionRecordHydrationRequest[];
-  snapshots?: string[];
+  snapshots?: ProjectionSnapshotKey[];
 }
 
 export interface DesktopProjectionScope {

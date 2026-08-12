@@ -400,15 +400,15 @@ Fragment 冲突规则与 hydration API，差异只存在于 persistence adapter 
 
 Electron 物理布局不是通用 KV，而是固定 registry 的实体 read model：
 
-| SQLite table                | 主身份               | 固定内容                                                                                        |
-| --------------------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
-| `projection_agents`         | `(scope, entity_id)` | Agent registry 的 8 个 typed fragments                                                          |
-| `projection_chat_groups`    | `(scope, entity_id)` | ChatGroup registry 的 5 个 typed fragments                                                      |
-| `projection_topics`         | `(scope, entity_id)` | Topic registry 的 17 个 typed fragments                                                         |
-| `projection_tasks`          | `(scope, entity_id)` | Task registry 的 8 个 typed fragments                                                           |
-| `projection_briefs`         | `(scope, entity_id)` | Brief registry 的 5 个 typed fragments                                                          |
-| `projection_home_indexes`   | `(scope, key)`       | 名称因首期迁移保留；实际保存 registry 允许的 Agent/Chat/ChatGroup/Task/Brief/Home typed indexes |
-| `projection_home_snapshots` | `(scope, key)`       | 受约束的 `home.dailyBrief` snapshot                                                             |
+| SQLite table             | 主身份               | 固定内容                                           |
+| ------------------------ | -------------------- | -------------------------------------------------- |
+| `projection_agents`      | `(scope, entity_id)` | Agent registry 的 8 个 typed fragments             |
+| `projection_chat_groups` | `(scope, entity_id)` | ChatGroup registry 的 5 个 typed fragments         |
+| `projection_topics`      | `(scope, entity_id)` | Topic registry 的 17 个 typed fragments            |
+| `projection_tasks`       | `(scope, entity_id)` | Task registry 的 8 个 typed fragments              |
+| `projection_briefs`      | `(scope, entity_id)` | Brief registry 的 5 个 typed fragments             |
+| `projection_indexes`     | `(scope, key)`       | 所有模块经 runtime registry 注册的 typed indexes   |
+| `projection_snapshots`   | `(scope, key)`       | 所有模块经 runtime registry 注册的 typed snapshots |
 
 每个实体 Fragment 对应固定的 `*_data / *_observed_at / *_source` 三列。SQLite 约束保证：
 
@@ -416,7 +416,11 @@ Electron 物理布局不是通用 KV，而是固定 registry 的实体 read mode
 - `observed_at >= 0`；
 - source 只能为 `network / realtime / mutation`；
 - data 是合法 JSON；
-- schema version、index key、snapshot key 只能取当前 registry 允许值。
+- schema version 固定为当前版本，Index/Snapshot key 不为空。
+
+业务 key 与 Fragment 名称不在 SQLite `CHECK` 中重复枚举。`@lobechat/types` 中的 Projection
+runtime registry 是唯一注册源：Renderer validator、Electron IPC 类型与 Main 进程边界校验共同消费
+该 registry；SQLite 仅保护物理结构。新增 Index/Snapshot key 因此不构成数据库 schema 变化。
 
 Fragment data 使用 SuperJSON 保留 Date 等结构化类型；hydration 后仍必须运行 Record、Index、
 Snapshot 领域 validator，无效行按 cache miss 处理。一次 materialized commit 的实体、index、
@@ -428,9 +432,11 @@ Desktop 只查询请求中的 key/ID，并只向 renderer 返回请求中的 fra
 注入整个 scope。Task 路由使用业务 identifier，Desktop 查询同时解析 Task `entity_id` 与持久化
 identity fragment，从而支持冷启动直接打开 `/task/:identifier`。
 
-SQLite schema 变化必须新增 Desktop local migration，不修改已发布 migration。当前扩展通过 migration
-重建实体表并显式复制旧 fragment 列；新增列以 `NULL` 初始化，网络重新验证后逐步补齐。Entity Cache
-仍是可重建 read model，不把旧的通用 KV 行反序列化为未验证的业务实体。
+每个实体表的 Fragment 三元组和约束由同一 Fragment registry 生成，Desktop entity adapter registry
+负责通用读写、hydrate、GC 与 inspection。Task identifier 查询作为 Task adapter 的显式扩展存在。
+新增 Fragment 仍会增加物理列，因此必须新增 Desktop local migration；已发布 migration 不得修改，未发布
+的 feature migration 应从最终 schema 重新生成。Entity Cache 仍是可重建 read model，不把旧的通用 KV
+行反序列化为未验证的业务实体。
 
 ## 12. 请求与 SWR 协议
 
@@ -616,7 +622,7 @@ client read source。既有 Store 按以下原则过渡：
 5. request-start 单调时间戳、mutation 优先级与 tombstone 阻止慢响应回滚或复活旧数据。
 6. 既有业务 Store API 和 UI 行为保持不变；兼容桥接只允许 Projection → Store 单向物化。
 7. DevDock 可编辑字段实时反馈到 Projection-native 与旧业务 UI；immutable 字段保持只读。
-8. Desktop migration 保留旧 fragments，并以 `NULL` 初始化新增列；约束与 hydration validator 生效。
+8. Desktop 已发布 migration 保留旧 fragments，并以 `NULL` 初始化新增列；约束与 hydration validator 生效。
 9. warm reload、空结果、刷新失败、scope/account switch 的行为测试通过。
 10. `src/projection/core` 不依赖具体业务模块；所有模块通过 composition root 接入同一 graph。
 11. Zustand 中不存在未被已挂载 View 请求的全 scope 实体灌入；Index-first 与关联 follow-up 的

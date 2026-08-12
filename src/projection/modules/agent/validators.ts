@@ -1,4 +1,5 @@
 import type { AgentAvailableIndex, AgentDirectoryIndex, AgentSearchIndex } from '@lobechat/types';
+import { AGENT_INDEX_KEYS, agentIndexKeySpace } from '@lobechat/types';
 
 import { hasObservation, isObject, isProjectionRef } from '../../core/validation';
 
@@ -6,18 +7,12 @@ export const isAgentIndex = (
   value: unknown,
 ): value is AgentAvailableIndex | AgentDirectoryIndex | AgentSearchIndex => {
   if (!isObject(value) || !hasObservation(value) || typeof value.key !== 'string') return false;
-  if (
-    value.key !== 'agent.available' &&
-    value.key !== 'agent.directory' &&
-    !value.key.startsWith('agent.search:')
-  ) {
-    return false;
-  }
+  if (!agentIndexKeySpace.isKey(value.key)) return false;
   if (!Array.isArray(value.refs)) {
     return false;
   }
   const validRefs =
-    value.key === 'agent.available' || value.key === 'agent.directory'
+    value.key === AGENT_INDEX_KEYS.available || value.key === AGENT_INDEX_KEYS.directory
       ? value.refs.every((ref) => isProjectionRef(ref, 'agent'))
       : value.refs.every(
           (ref) =>

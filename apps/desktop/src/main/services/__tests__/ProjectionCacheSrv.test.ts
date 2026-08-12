@@ -2,7 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { DesktopProjectionCommit } from '@lobechat/electron-client-ipc';
+import type {
+  DesktopProjectionCommit,
+  DesktopProjectionHydrationRequest,
+} from '@lobechat/electron-client-ipc';
 import { DESKTOP_PROJECTION_CACHE_TABLES } from '@lobechat/electron-client-ipc';
 import superjson from 'superjson';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -105,18 +108,20 @@ describe('ProjectionCacheService', () => {
 
     await projectionCache.commit(commit);
 
-    await expect(
-      projectionCache.hydrate({
-        indexes: commit.indexes?.map((item) => item.key),
-        records: commit.records?.map((item) => ({
-          fragments: Object.keys(item.fragments),
-          ids: [item.id],
-          kind: item.kind,
-        })),
-        scope,
-        snapshots: commit.snapshots?.map((item) => item.key),
-      }),
-    ).resolves.toEqual({
+    const hydrationRequest: DesktopProjectionHydrationRequest = {
+      indexes: ['agent.directory', 'home.inboxTopics'],
+      records: [
+        { fragments: ['identity'], ids: ['agent-1'], kind: 'agent' },
+        { fragments: ['readState'], ids: ['brief-1'], kind: 'brief' },
+        { fragments: ['identity'], ids: ['group-1'], kind: 'chatGroup' },
+        { fragments: ['lifecycle'], ids: ['task-1'], kind: 'task' },
+        { fragments: ['activity'], ids: ['topic-1'], kind: 'topic' },
+      ],
+      scope,
+      snapshots: ['home.dailyBrief'],
+    };
+
+    await expect(projectionCache.hydrate(hydrationRequest)).resolves.toEqual({
       indexes: commit.indexes,
       records: commit.records,
       snapshots: commit.snapshots,
@@ -127,8 +132,8 @@ describe('ProjectionCacheService', () => {
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.agent },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.brief },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.chatGroup },
-        { entryCount: 2, name: DESKTOP_PROJECTION_CACHE_TABLES.homeIndexes },
-        { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.homeSnapshots },
+        { entryCount: 2, name: DESKTOP_PROJECTION_CACHE_TABLES.indexes },
+        { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.snapshots },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.task },
         { entryCount: 1, name: DESKTOP_PROJECTION_CACHE_TABLES.topic },
       ]),
@@ -337,6 +342,39 @@ describe('ProjectionCacheService', () => {
     });
   });
 
+  it('uses the shared key grammar at the Main-process boundary', async () => {
+    const scope = 'user-1:personal';
+    await projectionCache.commit({
+      indexes: [
+        {
+          data: superjson.stringify({ refs: [], signature: {} }),
+          key: 'agent.search:',
+          observedAt: 1,
+          source: 'network',
+        },
+      ],
+      scope,
+    });
+
+    await expect(
+      projectionCache.commit({
+        indexes: [
+          {
+            data: superjson.stringify({ persistRefLimit: 20, refs: [], signature: {}, total: 0 }),
+            key: 'chat.sidebarTopics:',
+            observedAt: 2,
+            source: 'network',
+          },
+        ],
+        scope,
+      } as DesktopProjectionCommit),
+    ).rejects.toThrow('Unsupported Projection index: chat.sidebarTopics:');
+
+    await expect(
+      projectionCache.hydrate({ indexes: ['agent.search:'], scope }),
+    ).resolves.toMatchObject({ indexes: [expect.objectContaining({ key: 'agent.search:' })] });
+  });
+
   it('collects unreferenced records when a persisted Home index is replaced', async () => {
     const scope = 'user-1:personal';
     const indexedCommit = (id: string, observedAt: number): DesktopProjectionCommit => ({
@@ -389,7 +427,7 @@ describe('ProjectionCacheService', () => {
           },
         ],
         scope: 'user-1:personal',
-      }),
+      } as unknown as DesktopProjectionCommit),
     ).rejects.toThrow('Unsupported topic fragment: unknown');
 
     await expect(
@@ -417,6 +455,27 @@ describe('ProjectionCacheService', () => {
         )
         .run('scope::agent-1', 'scope', 'agent-1', superjson.stringify({ userId: 'u1' })),
     ).toThrow();
+  });
+
+  it('keeps business key registration outside the SQLite schema', () => {
+    const database = localDatabase.getRuntime().database;
+
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO projection_indexes
+            (storage_id, scope, key, data, observed_at, source)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'scope::future.index',
+          'scope',
+          'future.index',
+          superjson.stringify({ refs: [] }),
+          1,
+          'network',
+        ),
+    ).not.toThrow();
   });
 
   it('clears one scope across all typed tables without affecting another scope', async () => {

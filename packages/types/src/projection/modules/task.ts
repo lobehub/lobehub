@@ -1,7 +1,21 @@
 import type { ProjectionRef, ProjectionSource } from '../base';
+import type { ProjectionKeyOf } from '../runtime';
+import { defineProjectionKeySpace } from '../runtime';
 
-export type TaskListIndexKey = `task.list:${string}`;
-export type TaskGroupListIndexKey = `task.groupList:${string}`;
+export const TASK_GROUP_LIST_INDEX_PREFIX = 'task.groupList:';
+export const TASK_LIST_INDEX_PREFIX = 'task.list:';
+
+export const taskIndexKeySpace = defineProjectionKeySpace({
+  patterns: [{ prefix: TASK_GROUP_LIST_INDEX_PREFIX }, { prefix: TASK_LIST_INDEX_PREFIX }],
+  staticKeys: [],
+});
+
+type TaskIndexKey = ProjectionKeyOf<typeof taskIndexKeySpace>;
+export type TaskListIndexKey = Extract<TaskIndexKey, `${typeof TASK_LIST_INDEX_PREFIX}${string}`>;
+export type TaskGroupListIndexKey = Extract<
+  TaskIndexKey,
+  `${typeof TASK_GROUP_LIST_INDEX_PREFIX}${string}`
+>;
 
 export interface TaskListQuerySignature {
   agentKey?: string;
@@ -44,9 +58,10 @@ const taskQueryIdentity = (agentKey: string | undefined, visibility: string): st
 export const taskListIndexKey = (
   agentKey: string | undefined,
   visibility: TaskListQuerySignature['visibility'],
-): TaskListIndexKey => `task.list:${taskQueryIdentity(agentKey, visibility)}`;
+): TaskListIndexKey => `${TASK_LIST_INDEX_PREFIX}${taskQueryIdentity(agentKey, visibility)}`;
 
 export const taskGroupListIndexKey = (
   agentKey: string | undefined,
   visibility: TaskListQuerySignature['visibility'],
-): TaskGroupListIndexKey => `task.groupList:${taskQueryIdentity(agentKey, visibility)}`;
+): TaskGroupListIndexKey =>
+  `${TASK_GROUP_LIST_INDEX_PREFIX}${taskQueryIdentity(agentKey, visibility)}`;

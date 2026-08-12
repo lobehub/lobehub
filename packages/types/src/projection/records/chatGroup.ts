@@ -1,5 +1,6 @@
 import type { AgentGroupDetail, ChatGroupItem } from '../../agentGroup';
 import type { ProjectionRef } from '../base';
+import { defineProjectionFragmentNames } from '../runtime';
 import type { ProjectionAvatar, ProjectionVisibility } from './shared';
 
 export interface ChatGroupProjectionFragments {
@@ -31,3 +32,12 @@ export interface ChatGroupProjectionFragments {
     supervisorAgentId?: AgentGroupDetail['supervisorAgentId'];
   };
 }
+
+export const CHAT_GROUP_PROJECTION_FRAGMENT_NAMES =
+  defineProjectionFragmentNames<ChatGroupProjectionFragments>()([
+    'access',
+    'configuration',
+    'identity',
+    'lifecycle',
+    'membership',
+  ]);

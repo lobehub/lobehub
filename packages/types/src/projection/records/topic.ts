@@ -1,4 +1,5 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '../../topic';
+import { defineProjectionFragmentNames } from '../runtime';
 
 export interface TopicProjectionFragments {
   activity: { updatedAt: Date | number | string };
@@ -30,3 +31,24 @@ export interface TopicProjectionFragments {
   summary: { historySummary?: string | null };
   triggerInfo: { trigger?: string | null };
 }
+
+export const TOPIC_PROJECTION_FRAGMENT_NAMES =
+  defineProjectionFragmentNames<TopicProjectionFragments>()([
+    'activity',
+    'analytics',
+    'completion',
+    'creation',
+    'details',
+    'display',
+    'generation',
+    'marking',
+    'navigation',
+    'ordering',
+    'ownership',
+    'preview',
+    'routing',
+    'runTiming',
+    'status',
+    'summary',
+    'triggerInfo',
+  ]);

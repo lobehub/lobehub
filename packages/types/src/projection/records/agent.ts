@@ -1,4 +1,5 @@
 import type { LobeAgentConfig } from '../../agent';
+import { defineProjectionFragmentNames } from '../runtime';
 import type { ProjectionAvatar, ProjectionVisibility } from './shared';
 
 export interface AgentProjectionFragments {
@@ -51,3 +52,15 @@ export interface AgentProjectionFragments {
     virtual?: boolean | null;
   };
 }
+
+export const AGENT_PROJECTION_FRAGMENT_NAMES =
+  defineProjectionFragmentNames<AgentProjectionFragments>()([
+    'access',
+    'configuration',
+    'identity',
+    'knowledge',
+    'lifecycle',
+    'profile',
+    'routing',
+    'runtime',
+  ]);

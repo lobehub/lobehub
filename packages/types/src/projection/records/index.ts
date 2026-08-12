@@ -12,13 +12,6 @@ export * from './shared';
 export * from './task';
 export * from './topic';
 
-export type AgentProjection = ProjectionRecordBase<'agent', AgentProjectionFragments>;
-export type ChatGroupProjection = ProjectionRecordBase<'chatGroup', ChatGroupProjectionFragments>;
-export type TopicProjection = ProjectionRecordBase<'topic', TopicProjectionFragments>;
-export type TaskProjection = ProjectionRecordBase<'task', TaskProjectionFragments>;
-export type BriefProjection = ProjectionRecordBase<'brief', BriefProjectionFragments>;
-
-export type ProjectionKind = 'agent' | 'brief' | 'chatGroup' | 'task' | 'topic';
 export interface ProjectionFragmentMap {
   agent: AgentProjectionFragments;
   brief: BriefProjectionFragments;
@@ -26,16 +19,18 @@ export interface ProjectionFragmentMap {
   task: TaskProjectionFragments;
   topic: TopicProjectionFragments;
 }
+export type ProjectionKind = keyof ProjectionFragmentMap;
 export type ProjectionFragmentName<K extends ProjectionKind> = Extract<
   keyof ProjectionFragmentMap[K],
   string
 >;
-export interface ProjectionRecordMap {
-  agent: AgentProjection;
-  brief: BriefProjection;
-  chatGroup: ChatGroupProjection;
-  task: TaskProjection;
-  topic: TopicProjection;
-}
-export type ProjectionRecord =
-  AgentProjection | BriefProjection | ChatGroupProjection | TaskProjection | TopicProjection;
+export type ProjectionRecordMap = {
+  [K in ProjectionKind]: ProjectionRecordBase<K, ProjectionFragmentMap[K]>;
+};
+
+export type AgentProjection = ProjectionRecordMap['agent'];
+export type BriefProjection = ProjectionRecordMap['brief'];
+export type ChatGroupProjection = ProjectionRecordMap['chatGroup'];
+export type TaskProjection = ProjectionRecordMap['task'];
+export type TopicProjection = ProjectionRecordMap['topic'];
+export type ProjectionRecord = ProjectionRecordMap[ProjectionKind];

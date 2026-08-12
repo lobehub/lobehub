@@ -1,4 +1,5 @@
 import type { BriefItem } from '../../brief';
+import { defineProjectionFragmentNames } from '../runtime';
 
 export interface BriefProjectionFragments {
   actions: Pick<BriefItem, 'actions'>;
@@ -7,3 +8,12 @@ export interface BriefProjectionFragments {
   relations: Pick<BriefItem, 'agentId' | 'cronJobId' | 'taskId' | 'topicId' | 'userId'>;
   resolution: Pick<BriefItem, 'resolvedAction' | 'resolvedAt' | 'resolvedComment'>;
 }
+
+export const BRIEF_PROJECTION_FRAGMENT_NAMES =
+  defineProjectionFragmentNames<BriefProjectionFragments>()([
+    'actions',
+    'content',
+    'readState',
+    'relations',
+    'resolution',
+  ]);

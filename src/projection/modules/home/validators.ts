@@ -1,15 +1,7 @@
 import type { HomeIndex, HomeSnapshot } from '@lobechat/types';
+import { homeIndexKeySpace, homeSnapshotKeySpace } from '@lobechat/types';
 
 import { hasObservation, isObject, isProjectionRef } from '../../core/validation';
-
-const INDEX_KEYS = new Set([
-  'home.inboxTopics',
-  'home.recentTopics',
-  'home.scheduledTasks',
-  'home.sidebar',
-  'home.tasks',
-  'home.unresolvedBriefs',
-]);
 
 const isSidebarRef = (value: unknown): boolean =>
   isObject(value) &&
@@ -27,12 +19,7 @@ const isSidebarGroup = (value: unknown): boolean =>
   value.items.every(isSidebarRef);
 
 export const isHomeIndex = (value: unknown): value is HomeIndex => {
-  if (
-    !isObject(value) ||
-    typeof value.key !== 'string' ||
-    !INDEX_KEYS.has(value.key) ||
-    !hasObservation(value)
-  ) {
+  if (!isObject(value) || !homeIndexKeySpace.isKey(value.key) || !hasObservation(value)) {
     return false;
   }
 
@@ -77,7 +64,7 @@ export const isHomeIndex = (value: unknown): value is HomeIndex => {
 
 export const isHomeSnapshot = (value: unknown): value is HomeSnapshot =>
   isObject(value) &&
-  value.key === 'home.dailyBrief' &&
+  homeSnapshotKeySpace.isKey(value.key) &&
   hasObservation(value) &&
   isObject(value.data) &&
   Array.isArray(value.data.pairs) &&

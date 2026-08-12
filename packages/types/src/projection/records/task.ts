@@ -1,5 +1,6 @@
 import type { TaskDetailData, TaskListItem, TaskParticipant, TaskStatus } from '../../task';
 import type { ProjectionRef } from '../base';
+import { defineProjectionFragmentNames } from '../runtime';
 
 export type TaskProjectionParticipant =
   (ProjectionRef<'agent'> & { type: 'agent' }) | (Omit<TaskParticipant, 'type'> & { type: 'user' });
@@ -25,3 +26,15 @@ export interface TaskProjectionFragments {
     | 'workspaceId'
   >;
 }
+
+export const TASK_PROJECTION_FRAGMENT_NAMES =
+  defineProjectionFragmentNames<TaskProjectionFragments>()([
+    'assignment',
+    'description',
+    'detail',
+    'display',
+    'identity',
+    'lifecycle',
+    'participants',
+    'row',
+  ]);

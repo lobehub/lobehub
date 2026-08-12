@@ -6,14 +6,39 @@ import type {
 } from '../../home';
 import type { TaskAutomationMode, TaskItem, TaskStatus } from '../../task';
 import type { ProjectionRef, ProjectionSource } from '../base';
+import type { ProjectionKeyOf } from '../runtime';
+import { defineProjectionKeySpace } from '../runtime';
 
-export type HomeIndexKey =
-  | 'home.inboxTopics'
-  | 'home.recentTopics'
-  | 'home.scheduledTasks'
-  | 'home.sidebar'
-  | 'home.tasks'
-  | 'home.unresolvedBriefs';
+export const HOME_INDEX_KEYS = {
+  inboxTopics: 'home.inboxTopics',
+  recentTopics: 'home.recentTopics',
+  scheduledTasks: 'home.scheduledTasks',
+  sidebar: 'home.sidebar',
+  tasks: 'home.tasks',
+  unresolvedBriefs: 'home.unresolvedBriefs',
+} as const;
+
+export const HOME_SNAPSHOT_KEYS = {
+  dailyBrief: 'home.dailyBrief',
+} as const;
+
+export const homeIndexKeySpace = defineProjectionKeySpace({
+  patterns: [],
+  staticKeys: Object.values(HOME_INDEX_KEYS),
+});
+
+export const homeSnapshotKeySpace = defineProjectionKeySpace({
+  patterns: [],
+  staticKeys: Object.values(HOME_SNAPSHOT_KEYS),
+});
+
+export type HomeIndexKey = ProjectionKeyOf<typeof homeIndexKeySpace>;
+export type HomeInboxTopicsIndexKey = typeof HOME_INDEX_KEYS.inboxTopics;
+export type HomeRecentTopicsIndexKey = typeof HOME_INDEX_KEYS.recentTopics;
+export type HomeScheduledTasksIndexKey = typeof HOME_INDEX_KEYS.scheduledTasks;
+export type HomeSidebarIndexKey = typeof HOME_INDEX_KEYS.sidebar;
+export type HomeTasksIndexKey = typeof HOME_INDEX_KEYS.tasks;
+export type HomeUnresolvedBriefsIndexKey = typeof HOME_INDEX_KEYS.unresolvedBriefs;
 
 export interface HomeIndexBase<K extends HomeIndexKey> {
   key: K;
@@ -36,7 +61,7 @@ export interface HomeSidebarGroupIndex {
   visibility?: SidebarVisibility;
 }
 
-export interface HomeSidebarIndex extends HomeIndexBase<'home.sidebar'> {
+export interface HomeSidebarIndex extends HomeIndexBase<HomeSidebarIndexKey> {
   groups: HomeSidebarGroupIndex[];
   pinned: HomeSidebarProjectionRef[];
   privateGroups: HomeSidebarGroupIndex[];
@@ -47,53 +72,53 @@ export interface HomeSidebarIndex extends HomeIndexBase<'home.sidebar'> {
 
 export type HomeRecentTopicsView = 'mine' | 'team';
 
-export interface HomeRecentTopicsIndex extends HomeIndexBase<'home.recentTopics'> {
+export interface HomeRecentTopicsIndex extends HomeIndexBase<HomeRecentTopicsIndexKey> {
   limit: number;
   refs: ProjectionRef<'topic'>[];
   /** Workspace mine/team feed the refs were fetched for — the views must not bleed into each other. */
   view: HomeRecentTopicsView;
 }
 
-export interface HomeInboxTopicsIndex extends HomeIndexBase<'home.inboxTopics'> {
+export interface HomeInboxTopicsIndex extends HomeIndexBase<HomeInboxTopicsIndexKey> {
   refs: ProjectionRef<'topic'>[];
 }
 
-export interface HomeTasksIndex extends HomeIndexBase<'home.tasks'> {
+export interface HomeTasksIndex extends HomeIndexBase<HomeTasksIndexKey> {
   refs: ProjectionRef<'task'>[];
   total: number;
 }
 
-export interface HomeScheduledTasksIndex extends HomeIndexBase<'home.scheduledTasks'> {
+export interface HomeScheduledTasksIndex extends HomeIndexBase<HomeScheduledTasksIndexKey> {
   refs: ProjectionRef<'task'>[];
   total: number;
 }
 
-export interface HomeUnresolvedBriefsIndex extends HomeIndexBase<'home.unresolvedBriefs'> {
+export interface HomeUnresolvedBriefsIndex extends HomeIndexBase<HomeUnresolvedBriefsIndexKey> {
   refs: ProjectionRef<'brief'>[];
 }
 
 export interface HomeIndexMap {
-  'home.inboxTopics': HomeInboxTopicsIndex;
-  'home.recentTopics': HomeRecentTopicsIndex;
-  'home.scheduledTasks': HomeScheduledTasksIndex;
-  'home.sidebar': HomeSidebarIndex;
-  'home.tasks': HomeTasksIndex;
-  'home.unresolvedBriefs': HomeUnresolvedBriefsIndex;
+  [HOME_INDEX_KEYS.inboxTopics]: HomeInboxTopicsIndex;
+  [HOME_INDEX_KEYS.recentTopics]: HomeRecentTopicsIndex;
+  [HOME_INDEX_KEYS.scheduledTasks]: HomeScheduledTasksIndex;
+  [HOME_INDEX_KEYS.sidebar]: HomeSidebarIndex;
+  [HOME_INDEX_KEYS.tasks]: HomeTasksIndex;
+  [HOME_INDEX_KEYS.unresolvedBriefs]: HomeUnresolvedBriefsIndex;
 }
 
 export type HomeIndex = HomeIndexMap[keyof HomeIndexMap];
 
-export type HomeSnapshotKey = 'home.dailyBrief';
+export type HomeSnapshotKey = ProjectionKeyOf<typeof homeSnapshotKeySpace>;
 
 export interface HomeDailyBriefSnapshot {
   data: HomeDailyBriefResponse;
-  key: 'home.dailyBrief';
+  key: HomeSnapshotKey;
   observedAt: number;
   source: ProjectionSource;
 }
 
 export interface HomeSnapshotMap {
-  'home.dailyBrief': HomeDailyBriefSnapshot;
+  [HOME_SNAPSHOT_KEYS.dailyBrief]: HomeDailyBriefSnapshot;
 }
 
 export type HomeSnapshot = HomeSnapshotMap[keyof HomeSnapshotMap];

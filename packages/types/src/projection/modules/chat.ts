@@ -1,5 +1,18 @@
 import type { TopicQuerySortBy } from '../../topic';
 import type { ProjectionRef, ProjectionSource } from '../base';
+import type { ProjectionKeyOf } from '../runtime';
+import { defineProjectionKeySpace } from '../runtime';
+
+export const CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX = 'chat.agentViewTopics:';
+export const CHAT_SIDEBAR_TOPICS_INDEX_PREFIX = 'chat.sidebarTopics:';
+
+export const chatIndexKeySpace = defineProjectionKeySpace({
+  patterns: [
+    { prefix: CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX },
+    { prefix: CHAT_SIDEBAR_TOPICS_INDEX_PREFIX },
+  ],
+  staticKeys: [],
+});
 
 export interface ChatTopicsQuerySignature {
   excludeStatuses?: string[];
@@ -9,8 +22,15 @@ export interface ChatTopicsQuerySignature {
   withDetails?: boolean;
 }
 
-export type ChatSidebarTopicsIndexKey = `chat.sidebarTopics:${string}`;
-export type ChatAgentViewTopicsIndexKey = `chat.agentViewTopics:${string}`;
+type ChatIndexKey = ProjectionKeyOf<typeof chatIndexKeySpace>;
+export type ChatSidebarTopicsIndexKey = Extract<
+  ChatIndexKey,
+  `${typeof CHAT_SIDEBAR_TOPICS_INDEX_PREFIX}${string}`
+>;
+export type ChatAgentViewTopicsIndexKey = Extract<
+  ChatIndexKey,
+  `${typeof CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX}${string}`
+>;
 
 interface ChatTopicsIndexBase<K extends string> {
   key: K;
@@ -33,7 +53,7 @@ export type ChatIndexMap = { [K in ChatAgentViewTopicsIndexKey]: ChatAgentViewTo
 };
 
 export const chatSidebarTopicsIndexKey = (containerKey: string): ChatSidebarTopicsIndexKey =>
-  `chat.sidebarTopics:${containerKey}`;
+  `${CHAT_SIDEBAR_TOPICS_INDEX_PREFIX}${containerKey}`;
 
 export const chatAgentViewTopicsIndexKey = (containerKey: string): ChatAgentViewTopicsIndexKey =>
-  `chat.agentViewTopics:${containerKey}`;
+  `${CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX}${containerKey}`;

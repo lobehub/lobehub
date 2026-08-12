@@ -1,8 +1,7 @@
 import type { ChatTopicsIndex } from '@lobechat/types';
+import { chatIndexKeySpace } from '@lobechat/types';
 
 import { hasObservation, isObject, isProjectionRef } from '../../core/validation';
-
-const PREFIXES = ['chat.agentViewTopics:', 'chat.sidebarTopics:'];
 
 const isStringArray = (value: unknown): boolean =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -19,8 +18,7 @@ export const isChatIndex = (value: unknown): value is ChatTopicsIndex => {
   if (!isObject(value)) return false;
   const key = value.key;
   if (typeof key !== 'string' || !hasObservation(value)) return false;
-  const prefix = PREFIXES.find((candidate) => key.startsWith(candidate));
-  if (!prefix || key.length === prefix.length) return false;
+  if (!chatIndexKeySpace.isKey(key)) return false;
 
   return (
     Array.isArray(value.refs) &&

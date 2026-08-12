@@ -1,8 +1,25 @@
 import type { ProjectionRef, ProjectionSource } from '../base';
+import type { ProjectionKeyOf } from '../runtime';
+import { defineProjectionKeySpace } from '../runtime';
 
-export type AgentAvailableIndexKey = 'agent.available';
-export type AgentDirectoryIndexKey = 'agent.directory';
-export type AgentSearchIndexKey = `agent.search:${string}`;
+export const AGENT_SEARCH_INDEX_PREFIX = 'agent.search:';
+export const AGENT_INDEX_KEYS = {
+  available: 'agent.available',
+  directory: 'agent.directory',
+} as const;
+
+export const agentIndexKeySpace = defineProjectionKeySpace({
+  patterns: [{ allowEmptySuffix: true, prefix: AGENT_SEARCH_INDEX_PREFIX }],
+  staticKeys: Object.values(AGENT_INDEX_KEYS),
+});
+
+type AgentIndexKey = ProjectionKeyOf<typeof agentIndexKeySpace>;
+export type AgentAvailableIndexKey = typeof AGENT_INDEX_KEYS.available;
+export type AgentDirectoryIndexKey = typeof AGENT_INDEX_KEYS.directory;
+export type AgentSearchIndexKey = Extract<
+  AgentIndexKey,
+  `${typeof AGENT_SEARCH_INDEX_PREFIX}${string}`
+>;
 
 export interface AgentQuerySignature {
   keyword?: string;
@@ -39,10 +56,9 @@ export interface AgentSearchIndex extends AgentListIndexBase<
   AgentSearchProjectionRef
 > {}
 
-export type AgentIndexMap = {
-  'agent.available': AgentAvailableIndex;
-  'agent.directory': AgentDirectoryIndex;
+export type AgentIndexMap = { [K in AgentAvailableIndexKey]: AgentAvailableIndex } & {
+  [K in AgentDirectoryIndexKey]: AgentDirectoryIndex;
 } & { [K in AgentSearchIndexKey]: AgentSearchIndex };
 
 export const agentSearchIndexKey = (keyword = ''): AgentSearchIndexKey =>
-  `agent.search:${encodeURIComponent(keyword)}`;
+  `${AGENT_SEARCH_INDEX_PREFIX}${encodeURIComponent(keyword)}`;
