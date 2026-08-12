@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  appEnv: { APP_URL: 'https://example.com' },
-  betterAuth: vi.fn((options) => options),
-  clearMismatchedOIDCSession: vi.fn(),
-  EnvHttpProxyAgent: vi.fn((options) => ({ options })),
-  serverDB: {},
-  setGlobalDispatcher: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const authHandler = vi.fn(async () => new Response(null));
+
+  return {
+    appEnv: { APP_URL: 'https://example.com' },
+    authHandler,
+    betterAuth: vi.fn((options) => ({ ...options, handler: authHandler })),
+    clearMismatchedOIDCSession: vi.fn(),
+    EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+    serverDB: {},
+    setGlobalDispatcher: vi.fn(),
+  };
+});
 
 vi.mock('@better-auth/expo', () => ({
   expo: vi.fn(() => ({ id: 'expo' })),
@@ -108,6 +113,13 @@ vi.mock('@/server/services/email', () => ({
 vi.mock('@/server/services/user', () => ({
   UserService: vi.fn(),
 }));
+
+const createResponseWithCookie = (cookie: string) => {
+  const response = new Response(null);
+  response.headers.append('set-cookie', cookie);
+
+  return response;
+};
 
 describe('defineConfig', () => {
   const originalEnv = process.env;
@@ -245,4 +257,40 @@ describe('defineConfig', () => {
       expect(options.advanced.crossSubDomainCookies).toBeUndefined();
     },
   );
+
+  it('should expire the legacy host-only twin of every domain-scoped cookie', async () => {
+    mocks.appEnv.APP_URL = 'https://app.example.com';
+    mocks.authHandler.mockResolvedValueOnce(
+      createResponseWithCookie(
+        '__Secure-better-auth.session_token=token; Path=/; Domain=.example.com; HttpOnly; Secure; SameSite=Lax',
+      ),
+    );
+    const { defineConfig } = await import('./define-config');
+
+    const auth = defineConfig({ cookieDomain: '.example.com', plugins: [] });
+    const response = await auth.handler(
+      new Request('https://app.example.com/api/auth/get-session'),
+    );
+
+    expect(response.headers.getSetCookie()).toEqual([
+      '__Secure-better-auth.session_token=token; Path=/; Domain=.example.com; HttpOnly; Secure; SameSite=Lax',
+      '__Secure-better-auth.session_token=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; HttpOnly; Secure',
+    ]);
+  });
+
+  it('should leave cookies alone when no cookie domain is configured', async () => {
+    mocks.authHandler.mockResolvedValueOnce(
+      createResponseWithCookie('__Secure-better-auth.session_token=token; Path=/; Secure'),
+    );
+    const { defineConfig } = await import('./define-config');
+
+    const auth = defineConfig({ plugins: [] });
+    const response = await auth.handler(
+      new Request('https://app.example.com/api/auth/get-session'),
+    );
+
+    expect(response.headers.getSetCookie()).toEqual([
+      '__Secure-better-auth.session_token=token; Path=/; Secure',
+    ]);
+  });
 });

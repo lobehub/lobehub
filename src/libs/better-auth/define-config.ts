@@ -23,6 +23,7 @@ import {
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
+import { expireLegacyHostOnlyCookies } from '@/libs/better-auth/utils/host-only-cookies';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { clearMismatchedOIDCSession } from '@/libs/oidc-provider/session-cleanup';
 import { EmailService } from '@/server/services/email';
@@ -386,5 +387,12 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     ],
   } satisfies BetterAuthOptions;
 
-  return betterAuth(options);
+  const instance = betterAuth(options);
+  if (!cookieDomain) return instance;
+
+  const handleRequest = instance.handler;
+  instance.handler = async (request) =>
+    expireLegacyHostOnlyCookies(request, await handleRequest(request), cookieDomain);
+
+  return instance;
 }
