@@ -1,8 +1,4 @@
-import {
-  CUSTOM_DOCUMENT_FILE_TYPE,
-  CUSTOM_FOLDER_FILE_TYPE,
-  DERIVED_DOCUMENT_SOURCE_TYPE,
-} from '@lobechat/const';
+import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -18,6 +14,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -27,7 +24,7 @@ import { assertCanPerformResourceAction } from '@/server/services/resourcePermis
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
+import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -149,6 +146,7 @@ const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -197,15 +195,25 @@ export const fileRouter = router({
         }
       }
 
+      let knowledgeBaseVisibility: 'private' | 'public' | undefined;
+      if (ctx.workspaceId && input.knowledgeBaseId) {
+        const knowledgeBase = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+        if (!knowledgeBase) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+        }
+        knowledgeBaseVisibility = knowledgeBase.visibility;
+      }
+
       // Visibility precedence (workspace mode only — personal mode ignores the
       // column entirely):
-      //   1. Explicit caller value wins.
-      //   2. Otherwise inherit the parent document's visibility so a file
+      //   1. A library upload always uses the knowledge base visibility.
+      //   2. Otherwise an explicit caller value wins.
+      //   3. Otherwise inherit the parent document's visibility so a file
       //      uploaded inside a private folder stays private.
-      //   3. Otherwise default top-level uploads to 'private' so new content
+      //   4. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
-        ? (input.visibility ?? parentVisibility ?? 'private')
+        ? (knowledgeBaseVisibility ?? input.visibility ?? parentVisibility ?? 'private')
         : undefined;
 
       let actualSize = input.size;
@@ -272,6 +280,11 @@ export const fileRouter = router({
             name: input.name,
             parentId: resolvedParentId,
             size: actualSize,
+            // Attribution the caller supplied (e.g. a page-editor paste). The
+            // wire type is a loose string for older clients, so unknown values
+            // are dropped rather than persisted — `source` drives the resource
+            // library's origin filter and its hidden-source exclusion.
+            source: toFileSource(input.source),
             url: input.url,
             ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
           },
@@ -554,11 +567,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for files only (exclude documents/pages)
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough files after filtering
-      const fileItems = allItems
-        .filter((item) => item.sourceType === 'file' && item.fileType !== CUSTOM_DOCUMENT_FILE_TYPE)
-        .slice(0, limit);
+      // Files only (pages are excluded in SQL, so `limit` can't be eaten by
+      // page rows that are then filtered out).
+      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file');
 
       if (fileItems.length === 0) return [];
 
@@ -614,15 +625,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for pages (documents) only, exclude folders
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough pages after filtering
-      return allItems
-        .filter(
-          (item) =>
-            item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE &&
-            item.fileType !== CUSTOM_FOLDER_FILE_TYPE,
-        )
-        .slice(0, limit);
+      // Pages only (folders and files are excluded in SQL, so `limit` can't be
+      // eaten by rows that are then filtered out).
+      return ctx.knowledgeRepo.queryRecent(limit, 'page');
     }),
 
   removeFile: fileProcedure
@@ -638,6 +643,20 @@ export const fileRouter = router({
       if (!file) return;
 
       // delete the file from S3 if it is not used by other files
+      await ctx.fileService.deleteFile(file.url!);
+    }),
+
+  removeUnreferencedFile: fileProcedure
+    .use(withScopedPermission('file:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.fileModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      if (!file) return;
+
       await ctx.fileService.deleteFile(file.url!);
     }),
 

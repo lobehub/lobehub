@@ -12,10 +12,13 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
+import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -120,12 +123,14 @@ export const acceptanceRouter = router({
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
+        title: z.string().trim().min(1).max(500).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
           requirement: input.requirement,
+          title: input.title,
         });
       } catch (error) {
         throw new TRPCError({
@@ -143,7 +148,19 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
     }),
 
   /**
@@ -205,6 +222,14 @@ export const acceptanceRouter = router({
         await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
           requirement: input.requirement,
         });
+        // A Task acceptance is instantiated from tasks.config.verify. Mirror
+        // edits back to that source so the next run cannot restore an older goal.
+        if (input.subjectType === 'task') {
+          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+          const task = await taskModel.resolve(input.subjectId);
+          if (!task) throw new Error('Task not found in the current workspace');
+          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
+        }
         return { id: aggregate.id, requirement: input.requirement };
       } catch (error) {
         throw new TRPCError({
@@ -229,9 +254,14 @@ export const acceptanceRouter = router({
   getBundle: publicAcceptanceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const acceptance = await ctx.serverDB.query.acceptances.findFirst({
-        where: eq(acceptances.id, input.id),
-      });
+      // Public entry fed by shared links: a chat autolinker can glue trailing
+      // CJK punctuation onto the URL, so a malformed uuid must read as
+      // NOT_FOUND instead of aborting in Postgres (22P02 → 500).
+      const acceptance = isUuid(input.id)
+        ? await ctx.serverDB.query.acceptances.findFirst({
+            where: eq(acceptances.id, input.id),
+          })
+        : undefined;
       if (!acceptance) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
@@ -323,6 +353,18 @@ export const acceptanceRouter = router({
       };
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -345,7 +387,11 @@ export const acceptanceRouter = router({
             },
           };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
@@ -397,6 +443,27 @@ export const acceptanceRouter = router({
 
   /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+
+  /**
+   * Acceptance status for a known set of subjects, in one read.
+   *
+   * `list` is recency-capped and spans every subject type, so a list surface
+   * that derived per-row state from it would silently mis-read any subject
+   * pushed past the cap. This answers about exactly the subjects asked for.
+   */
+  listStatusesBySubjects: acceptanceProcedure
+    .input(
+      z.object({
+        subjectIds: z.array(z.string()).max(200),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.acceptanceService.acceptanceModel.listStatusesBySubjects(
+        input.subjectType,
+        input.subjectIds,
+      ),
+    ),
 
   /**
    * Feedback addressed to a check GROUP (business category) rather than any
@@ -588,7 +655,7 @@ export const acceptanceRouter = router({
 
   /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
-   * an owner override (mark accepted / rejected, or reopen for another look).
+   * an owner override (mark accepted / closed / rejected, or reopen for another look).
    *
    * accept / reject go through the SERVICE, never a bare status write: the
    * service applies `requireDecidableAcceptance` (a premature `accepted` is
@@ -598,7 +665,12 @@ export const acceptanceRouter = router({
    * not be forced back to a decision-pending state by hand.
    */
   updateStatus: acceptanceWriteProcedure
-    .input(z.object({ id: z.string(), status: z.enum(['delivered', 'accepted', 'rejected']) }))
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['delivered', 'accepted', 'closed', 'rejected']),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
@@ -606,6 +678,8 @@ export const acceptanceRouter = router({
       try {
         if (input.status === 'accepted') {
           await ctx.acceptanceService.accept(acceptance.id);
+        } else if (input.status === 'closed') {
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
         } else if (input.status === 'rejected') {
           await ctx.acceptanceService.reject(
             acceptance.id,
@@ -614,7 +688,11 @@ export const acceptanceRouter = router({
         } else {
           // Reopen (→ delivered): only a decided aggregate can be re-opened; a
           // live round recomputes its own status and must not be clobbered.
-          if (acceptance.status !== 'accepted' && acceptance.status !== 'rejected') {
+          if (
+            acceptance.status !== 'accepted' &&
+            acceptance.status !== 'closed' &&
+            acceptance.status !== 'rejected'
+          ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,

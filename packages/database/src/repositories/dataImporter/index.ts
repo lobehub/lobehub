@@ -106,6 +106,10 @@ const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
   {
     relations: [
       {
+        field: 'agentId',
+        sourceTable: 'agents',
+      },
+      {
         field: 'sessionId',
         sourceTable: 'sessions',
       },

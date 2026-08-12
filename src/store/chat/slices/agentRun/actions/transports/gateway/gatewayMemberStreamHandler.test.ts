@@ -68,7 +68,7 @@ describe('createGatewayMemberStreamHandler', () => {
     expect(store.completeOperation).not.toHaveBeenCalled();
   });
 
-  it('skips the visible loading hint while the member row is not yet in the store (LOBE-11501)', () => {
+  it('skips the visible loading hint while the member row is not yet in the store ', () => {
     // Group hydration is still in flight, so the member row hasn't landed. Clearing
     // loading here would show a "done" column with no text — the guard skips it and
     // lets the terminal barrier reconcile.

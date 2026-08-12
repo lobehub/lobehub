@@ -1,0 +1,110 @@
+name: Release SDK
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches:
+      - canary
+    paths:
+      - packages/sdk/**
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish SDK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.2'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Check generated SDK is in sync
+        run: bun scripts/generate-sdk.ts --check
+        working-directory: packages/sdk
+
+      - name: Test package
+        run: pnpm --filter @lobehub/sdk test
+
+      - name: Build package
+        run: pnpm --filter @lobehub/sdk build
+
+      - name: Prepare publish package
+        id: version
+        run: |
+          BASE_VERSION=$(node -p "require('./packages/sdk/package.json').version.split('.').slice(0, 2).join('.')")
+          SDK_VERSION="${BASE_VERSION}.$(date -u +%Y%m%d%H%M%S)"
+          export SDK_VERSION
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const packagePath = 'packages/sdk/package.json';
+          const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const toDistExport = (sourcePath) => sourcePath.replace('./src/', './dist/').replace(/\.ts$/, '.mjs');
+
+          packageJson.version = process.env.SDK_VERSION;
+          packageJson.type = 'module';
+          packageJson.main = './dist/index.mjs';
+          packageJson.types = './dist/index.d.mts';
+          packageJson.files = ['dist'];
+          packageJson.repository = {
+            type: 'git',
+            url: 'https://github.com/lobehub/lobehub',
+            directory: 'packages/sdk',
+          };
+          packageJson.exports = Object.fromEntries(
+            Object.entries(packageJson.exports).map(([key, value]) => {
+              if (typeof value !== 'string') return [key, value];
+
+              const distPath = toDistExport(value);
+
+              return [
+                key,
+                {
+                  types: distPath.replace(/\.mjs$/, '.d.mts'),
+                  import: distPath,
+                  default: distPath,
+                },
+              ];
+            }),
+          );
+
+          delete packageJson.private;
+          delete packageJson.devDependencies;
+          delete packageJson.scripts;
+
+          fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+          NODE
+
+          echo "version=${SDK_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Prepared @lobehub/sdk@${SDK_VERSION}"
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        working-directory: packages/sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

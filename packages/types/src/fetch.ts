@@ -28,6 +28,16 @@ export const ChatErrorType = {
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
   DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
 
+  // ******* Desktop Backend-Proxy Network Errors ******* //
+  // Emitted by the Electron backend proxy when the upstream fetch fails at the
+  // network level — usually the user's own network/proxy/VPN, not a server bug.
+  RemoteServerOffline: 'RemoteServerOffline',
+  RemoteServerTimeout: 'RemoteServerTimeout',
+  RemoteServerDNSFailed: 'RemoteServerDNSFailed',
+  RemoteServerConnectionRefused: 'RemoteServerConnectionRefused',
+  RemoteServerCertInvalid: 'RemoteServerCertInvalid',
+  RemoteServerUnreachable: 'RemoteServerUnreachable',
+
   // ******* Client Errors ******* //
   BadRequest: 400,
   Unauthorized: 401,
@@ -44,6 +54,24 @@ export const ChatErrorType = {
 } as const;
 
 export type ErrorType = (typeof ChatErrorType)[keyof typeof ChatErrorType];
+
+const remoteServerNetworkErrorTypes = [
+  ChatErrorType.RemoteServerOffline,
+  ChatErrorType.RemoteServerTimeout,
+  ChatErrorType.RemoteServerDNSFailed,
+  ChatErrorType.RemoteServerConnectionRefused,
+  ChatErrorType.RemoteServerCertInvalid,
+  ChatErrorType.RemoteServerUnreachable,
+] as const;
+
+export type RemoteServerNetworkErrorType = (typeof remoteServerNetworkErrorTypes)[number];
+
+const remoteServerNetworkErrorTypeSet = new Set<string>(remoteServerNetworkErrorTypes);
+
+export const isRemoteServerNetworkError = (
+  errorType: unknown,
+): errorType is RemoteServerNetworkErrorType =>
+  typeof errorType === 'string' && remoteServerNetworkErrorTypeSet.has(errorType);
 
 export interface ErrorResponse {
   body: any;

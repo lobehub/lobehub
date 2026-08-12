@@ -11,7 +11,6 @@ import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess'
 import { useEffectiveAgentMode } from '../hooks/useEffectiveAgentMode';
 import { useChatInputStore } from '../store';
 import ApprovalMode from './ApprovalMode';
-import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
 import ModeSelector from './ModeSelector';
 import WorkspaceControls from './WorkspaceControls';
 
@@ -43,15 +42,15 @@ const styles = createStaticStyles(({ css }) => ({
 
 const ControlBar = memo(() => {
   const agentId = useAgentId();
-  const { canConfigureResource, isAccessLoading } = useChatInputResourceAccess();
+  const { canShowControls } = useChatInputResourceAccess();
   const showContextWindow = useChatInputStore((s) =>
     s.rightActions.flat().includes('contextWindow'),
   );
 
   const isLoading = useAgentStore((s) => agentByIdSelectors.isAgentConfigLoadingById(agentId)(s));
-  const { isAgentRuntimeMode } = useEffectiveAgentMode(agentId);
+  const { isAgentRuntimeMode, isPreferenceLoading } = useEffectiveAgentMode(agentId);
 
-  if (isAccessLoading) return null;
+  if (!canShowControls || isPreferenceLoading) return null;
 
   // Skeleton placeholder to prevent layout jump during loading
   if (!agentId || isLoading) {
@@ -59,18 +58,6 @@ const ControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.bar} gap={4}>
         <Skeleton.Button active size="small" style={{ height: 22, minWidth: 64, width: 64 }} />
         <Skeleton.Button active size="small" style={{ height: 22, minWidth: 100, width: 100 }} />
-      </Flexbox>
-    );
-  }
-
-  // Can-use members (and viewers, whose chat input is already disabled) see
-  // only the execution device. It is a per-member usage choice, not shared
-  // AgentConfig; fixed agents keep the same chip visible but disabled.
-  if (!canConfigureResource) {
-    if (!isAgentRuntimeMode) return null;
-    return (
-      <Flexbox horizontal align={'center'} className={styles.bar}>
-        <HeteroDeviceSwitcher agentId={agentId} />
       </Flexbox>
     );
   }

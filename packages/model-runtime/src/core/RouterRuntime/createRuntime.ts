@@ -39,6 +39,7 @@ import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestErr
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type {
   CreateImageOptions,
@@ -127,10 +128,19 @@ interface RouteAttemptMetadata {
 }
 
 interface RouteAttemptContext {
+  allowedApiTypes?: ReadonlySet<ApiType>;
   metadata?: Record<string, unknown>;
   toolsCount?: number;
   user?: string;
 }
+
+const RAW_AUDIO_API_TYPES = new Set<ApiType>(['google', 'openai', 'vertexai']);
+
+const hasRawAudioInput = (payload: ChatStreamPayload) =>
+  payload.messages.some(
+    (message) =>
+      Array.isArray(message.content) && message.content.some((part) => part.type === 'audio_url'),
+  );
 
 interface RouteAttemptContextValidationParams extends RouteAttemptContext {
   apiType: string;
@@ -498,6 +508,12 @@ export const createRouterRuntime = ({
         ...this._options,
         ...optionOverrides,
       };
+      const signatureScopeSource = {
+        apiType: resolvedApiType,
+        channelId,
+        provider: this._id,
+        routerId: router.id ?? this._id,
+      };
 
       /**
        * Vertex AI uses GoogleGenAI credentials flow rather than API keys.
@@ -530,11 +546,14 @@ export const createRouterRuntime = ({
           );
         }
 
+        const runtime = LobeVertexAI.initFromVertexAI(vertexOptions);
+        setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
+
         return {
           channelId,
           id: resolvedApiType,
           remark,
-          runtime: LobeVertexAI.initFromVertexAI(vertexOptions),
+          runtime,
         };
       }
 
@@ -544,6 +563,7 @@ export const createRouterRuntime = ({
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
+      setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
 
       if (this._id === 'lobehub') {
         timing(
@@ -569,14 +589,23 @@ export const createRouterRuntime = ({
       routeContext: RouteAttemptContext = {},
     ): Promise<T> {
       const totalStartedAt = Date.now();
-      const { metadata, toolsCount, user } = routeContext;
+      const { allowedApiTypes, metadata, toolsCount, user } = routeContext;
       const matchedRouter = await this.resolveMatchedRouter(model);
-      const routerOptions = await this.applySortRouterOptions(
+      const sortedRouterOptions = await this.applySortRouterOptions(
         matchedRouter,
         model,
         this.normalizeRouterOptions(matchedRouter),
       );
+      const routerOptions = allowedApiTypes
+        ? sortedRouterOptions.filter((option) =>
+            allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
+          )
+        : sortedRouterOptions;
       const totalOptions = routerOptions.length;
+
+      if (totalOptions === 0) {
+        throw new TypeError(`No provider route supports raw audio input for model ${model}`);
+      }
 
       if (this._id === 'lobehub') {
         timing(
@@ -837,10 +866,13 @@ export const createRouterRuntime = ({
      */
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
+        const containsRawAudio = hasRawAudioInput(payload);
+
         return await this.runWithFallback(
           payload.model,
           (runtime) => runtime.chat!(payload, options),
           {
+            allowedApiTypes: containsRawAudio ? RAW_AUDIO_API_TYPES : undefined,
             metadata: options?.metadata,
             toolsCount: payload.tools?.length ?? 0,
             user: options?.user,

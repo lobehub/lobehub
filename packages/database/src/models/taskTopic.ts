@@ -66,7 +66,7 @@ export class TaskTopicModel {
     params: {
       operationId?: string;
       seq: number;
-      trigger?: 'manual' | 'schedule' | 'heartbeat';
+      trigger?: 'manual' | 'schedule' | 'heartbeat' | 'goal';
     },
   ): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
@@ -221,13 +221,13 @@ export class TaskTopicModel {
    * source.
    *
    * `triggers` filters on the `trigger` column so the maxExecutions quota can
-   * count only automation ticks and ignore ad-hoc manual runs (LOBE-11391).
+   * count only automation ticks and ignore ad-hoc manual runs.
    * Legacy rows have a NULL trigger; they are excluded whenever `triggers` is
    * passed (they predate the column and can't be attributed to a schedule).
    */
   async countByTask(
     taskId: string,
-    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat'> },
+    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat' | 'goal'> },
   ): Promise<number> {
     const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
@@ -296,6 +296,7 @@ export class TaskTopicModel {
         // assignee (which changes when the task is reassigned).
         agentId: topics.agentId,
         completedAt: topics.completedAt,
+        totalCost: topics.totalCost,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         metadata: topics.metadata,
@@ -304,6 +305,7 @@ export class TaskTopicModel {
         status: taskTopics.status,
         title: topics.title,
         topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
       })
       .from(taskTopics)
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
@@ -322,6 +324,7 @@ export class TaskTopicModel {
         // assignee (which changes when the task is reassigned).
         agentId: topics.agentId,
         completedAt: topics.completedAt,
+        totalCost: topics.totalCost,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         metadata: topics.metadata,
@@ -334,6 +337,7 @@ export class TaskTopicModel {
         status: taskTopics.status,
         title: topics.title,
         topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
       })
       .from(taskTopics)
       .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))

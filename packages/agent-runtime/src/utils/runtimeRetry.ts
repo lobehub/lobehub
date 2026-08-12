@@ -1,5 +1,4 @@
 const DEFAULT_LLM_MAX_RETRIES = 5;
-const DEFAULT_EMPTY_COMPLETION_MAX_RETRIES = 2;
 const DEFAULT_LLM_RETRY_BASE_DELAY_MS = 1000;
 const DEFAULT_LLM_RETRY_MAX_DELAY_MS = 30_000;
 
@@ -7,8 +6,6 @@ export type RuntimeRetryKind = 'retry' | 'stop';
 export type RuntimeToolFailureKind = 'replan' | 'retry' | 'stop';
 
 export interface LLMRetryPolicyOptions {
-  emptyCompletionMaxRetries?: number;
-  isEmptyCompletionError?: (error: unknown) => boolean;
   maxRetries?: number;
   noRetryProviders?: readonly string[];
   retryBaseDelayMs?: number;
@@ -38,25 +35,11 @@ const resolveLLMMaxRetries = (provider: string, options: LLMRetryPolicyOptions =
 export const shouldRetryLLM = (kind: RuntimeRetryKind, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
 
-/**
- * Retry budget for a specific failed attempt. Empty completions can opt into a
- * dedicated floor even when the provider-level policy disables general retries.
- */
-export const resolveLLMRetryBudget = (
-  provider: string,
-  error: unknown,
-  options: LLMRetryPolicyOptions = {},
-) =>
-  options.isEmptyCompletionError?.(error)
-    ? (options.emptyCompletionMaxRetries ?? DEFAULT_EMPTY_COMPLETION_MAX_RETRIES)
-    : resolveLLMMaxRetries(provider, options);
+export const resolveLLMRetryBudget = (provider: string, options: LLMRetryPolicyOptions = {}) =>
+  resolveLLMMaxRetries(provider, options);
 
-/** Loop bound — must accommodate the largest budget any error kind can request. */
 export const resolveLLMMaxAttempts = (provider: string, options: LLMRetryPolicyOptions = {}) =>
-  Math.max(
-    resolveLLMMaxRetries(provider, options),
-    options.emptyCompletionMaxRetries ?? DEFAULT_EMPTY_COMPLETION_MAX_RETRIES,
-  ) + 1;
+  resolveLLMMaxRetries(provider, options) + 1;
 
 export const getLLMRetryDelayMs = (attempt: number, options: LLMRetryPolicyOptions = {}) =>
   Math.min(

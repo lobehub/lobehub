@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSelectExecutionTarget } from './useSelectExecutionTarget';
 
 const testState = vi.hoisted(() => ({
+  access: {
+    canManageAgent: true,
+    isAccessLoading: false,
+  },
   agent: {
     agencyConfig: undefined as
       | {
@@ -11,9 +15,13 @@ const testState = vi.hoisted(() => ({
           executionTargetSelectionPolicy?: 'fixed' | 'member';
           executionTarget?: string;
           heterogeneousProvider?: { type: string };
+          localSandbox?: boolean;
         }
       | undefined,
-    agentMap: {} as Record<string, { workspaceId?: string | null }>,
+    agentMap: {} as Record<
+      string,
+      { visibility?: 'private' | 'public'; workspaceId?: string | null }
+    >,
     isHetero: false,
     updateAgentConfigById: vi.fn(),
   },
@@ -25,7 +33,10 @@ const testState = vi.hoisted(() => ({
   user: {
     updateWorkspaceUserPreference: vi.fn(),
     workspaceUserPreference: {} as {
-      agentDeviceOverrides?: Record<string, { boundDeviceId?: string; executionTarget?: string }>;
+      agentDeviceOverrides?: Record<
+        string,
+        { boundDeviceId?: string; executionTarget?: string; localSandbox?: boolean }
+      >;
     },
   },
 }));
@@ -40,6 +51,10 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
   gatewayConnectionService: {
     getDeviceInfo: () => testState.getDeviceInfo(),
   },
+}));
+
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => testState.access,
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -64,6 +79,8 @@ vi.mock('@/store/user', () => ({
 
 describe('useSelectExecutionTarget', () => {
   beforeEach(() => {
+    testState.access.canManageAgent = true;
+    testState.access.isAccessLoading = false;
     testState.agent.agencyConfig = undefined;
     testState.agent.agentMap = {};
     testState.agent.isHetero = false;
@@ -136,6 +153,84 @@ describe('useSelectExecutionTarget', () => {
       });
     });
 
+    // automatic corrections must not trigger phantom save-error toasts: the device switcher defaults an unset target to `local` on
+    // mount. In a workspace that write can be rejected (edit lock / resource
+    // access), and the generic failure toast then claims the user's change was
+    // not applied — on an agent they only opened, having changed nothing.
+    it('suppresses the failure toast when the target is being defaulted automatically', async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { silent: true });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        { agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' } },
+        { showErrorMessage: false },
+      );
+    });
+
+    it("keeps the failure toast for a user's own pick", async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
+      });
+    });
+
+    it('records the sandbox choice alongside a local pick', async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { localSandbox: true });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'this-machine',
+          executionTarget: 'local',
+          localSandbox: true,
+        },
+      });
+    });
+
+    it('clears the sandbox when the plain local row is picked', async () => {
+      // Switching back has to be an explicit `false`, not an omission — a
+      // leftover `true` would keep fencing a run the user just un-fenced.
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      testState.agent.agencyConfig = { executionTarget: 'local', localSandbox: true };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { localSandbox: false });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'this-machine',
+          executionTarget: 'local',
+          localSandbox: false,
+        },
+      });
+    });
+
+    it('leaves the stored sandbox choice dormant when switching to another environment', async () => {
+      // Cloud Sandbox has no opinion about how the user's own machine is
+      // fenced, so flipping away and back must not silently forget it.
+      testState.agent.agencyConfig = { executionTarget: 'local', localSandbox: true };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { executionTarget: 'sandbox', localSandbox: true },
+      });
+    });
+
     it('does not switch a heterogeneous agent to local when no device can be resolved', async () => {
       testState.agent.isHetero = true;
       testState.getDeviceInfo.mockRejectedValue(new Error('no gateway'));
@@ -148,9 +243,12 @@ describe('useSelectExecutionTarget', () => {
     });
   });
 
-  describe('workspace agent — writes to workspace_user_settings.preference.agentDeviceOverrides (LOBE-11689)', () => {
+  describe('workspace agent — writes to workspace_user_settings.preference.agentDeviceOverrides ', () => {
     beforeEach(() => {
-      testState.agent.agentMap = { 'agent-id': { workspaceId: 'ws-1' } };
+      testState.access.canManageAgent = false;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
     });
 
     it('routes a workspace device pick into the workspace-scoped caller preference, never the shared config', async () => {
@@ -213,6 +311,35 @@ describe('useSelectExecutionTarget', () => {
       });
     });
 
+    it("keeps a member's own sandbox choice in their override when they switch environment", async () => {
+      // One member fencing their own machine is theirs alone — it must live in
+      // the per-user override and survive a target switch, never reach the
+      // shared row where it would apply to everyone.
+      testState.user.workspaceUserPreference = {
+        agentDeviceOverrides: {
+          'agent-id': {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'local',
+            localSandbox: true,
+          },
+        },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'sandbox',
+            localSandbox: true,
+          },
+        },
+      });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
     it('drops boundDeviceId when it cannot be resolved (e.g. web caller picks local)', async () => {
       testState.isDesktop = false;
       const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
@@ -222,6 +349,52 @@ describe('useSelectExecutionTarget', () => {
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: { 'agent-id': { executionTarget: 'sandbox' } },
       });
+    });
+
+    it('lets the author or Workspace admin update the shared target while members are fixed', async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agencyConfig = {
+        boundDeviceId: 'fixed-device',
+        executionTargetSelectionPolicy: 'fixed',
+        executionTarget: 'device',
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'fixed-device',
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('private Workspace agent — writes to the owner-controlled shared config', () => {
+    it('switches target directly even when the future public policy is fixed', async () => {
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'private', workspaceId: 'ws-1' },
+      };
+      testState.agent.agencyConfig = {
+        boundDeviceId: 'owner-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
   });
 });

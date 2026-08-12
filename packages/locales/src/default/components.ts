@@ -63,8 +63,11 @@ export default {
   'FileManager.emptyStatus.actions.file': 'Upload File',
   'FileManager.emptyStatus.actions.folder': 'Upload Folder',
   'FileManager.emptyStatus.actions.knowledgeBase': 'Create Library',
+  'FileManager.emptyStatus.actions.showAllSources': 'Show all sources',
+  'FileManager.emptyStatus.filteredTitle': 'Nothing from this source yet',
   'FileManager.emptyStatus.or': 'or',
   'FileManager.emptyStatus.title': 'Drag files or folders here',
+  'FileManager.image.loadFailed': 'Preview unavailable',
   'FileManager.noFolders': 'No folders available',
   'FileManager.search.noResults': 'No files found',
   'FileManager.search.placeholder': 'Search files...',
@@ -72,6 +75,10 @@ export default {
   'FileManager.sort.dateAdded': 'Date Added',
   'FileManager.sort.name': 'Name',
   'FileManager.sort.size': 'Size',
+  'FileManager.source.acceptance': 'Acceptance',
+  'FileManager.source.all': 'All',
+  'FileManager.source.generated': 'AI Generated',
+  'FileManager.source.uploaded': 'Uploaded',
   'FileManager.title.createdAt': 'Created At',
   'FileManager.title.size': 'Size',
   'FileManager.title.title': 'File',
@@ -144,6 +151,25 @@ export default {
   'ModelSelect.featureTag.vision': 'This model supports visual recognition.',
   'ModelSelect.removed':
     'The model is not in the list. It will be automatically removed if deselected.',
+  'ModelSelect.staleModel.current': 'Current selection',
+  'ModelSelect.staleModel.notEnabled.action': 'Enable this model',
+  'ModelSelect.staleModel.notEnabled.actionFailed': 'Failed to enable the model. Please try again.',
+  'ModelSelect.staleModel.notEnabled.hint':
+    'This model is not enabled. Features using it keep working; switch it on here or choose another model.',
+  'ModelSelect.staleModel.notEnabled.tag': 'Not enabled',
+  'ModelSelect.staleModel.notEnabled.tooltip':
+    'This model is not enabled in its provider. Features using it keep working; switch it on in the list or choose another model.',
+  'ModelSelect.staleModel.redirected.action': 'Update to {{successorName}}',
+  'ModelSelect.staleModel.redirected.hint':
+    'Requests are actually served by {{successorName}}. Update to it, or choose another model.',
+  'ModelSelect.staleModel.redirected.tag': 'Redirected',
+  'ModelSelect.staleModel.redirected.tooltip':
+    'This model has been retired; requests are automatically handled by {{successorName}}, so related features keep working.',
+  'ModelSelect.staleModel.removed.hint':
+    'This model is no longer available and calls to it may fail. Choose a model below.',
+  'ModelSelect.staleModel.removed.tag': 'Unavailable',
+  'ModelSelect.staleModel.removed.tooltip':
+    'This model has been removed from the service. Related features may fail — please choose another model.',
   'ModelSwitchPanel.byModel': 'By Model',
   'ModelSwitchPanel.byProvider': 'By Provider',
   'ModelSwitchPanel.detail.abilities': 'Abilities',

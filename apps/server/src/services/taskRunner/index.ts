@@ -26,7 +26,7 @@ export interface RunTaskParams {
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
    * path (TRPC `task.run`, agent `runTask` tool). The scheduler ticks pass
    * `'schedule'` / `'heartbeat'` so the lifecycle can tell an ad-hoc run apart
-   * from an automation tick (LOBE-11388/11391).
+   * from an automation tick ().
    */
   trigger?: TaskRunTrigger;
 }
@@ -216,6 +216,7 @@ export class TaskRunnerService {
               // knows whether this was a manual run or an automation tick.
               body: { runTrigger: trigger, taskId, taskIdentifier, userId },
               delivery: 'qstash' as const,
+              fallback: 'none' as const,
               url: '/api/workflows/task/on-topic-complete',
             },
           },
@@ -262,7 +263,7 @@ export class TaskRunnerService {
             // scheduling state is not a per-run health signal. Restore the
             // resting 'scheduled' state so the next tick still fires (this is
             // the sync mirror of the async onTopicComplete error handling —
-            // LOBE-11388/11389). Non-automation (ad-hoc / dependency) tasks keep
+            //). Non-automation (ad-hoc / dependency) tasks keep
             // the legacy pause-for-attention behavior.
             if (failedTask.automationMode) {
               await this.taskModel.updateStatus(failedTask.id, 'scheduled', { error: errorText });

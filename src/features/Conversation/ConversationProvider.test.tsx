@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +10,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ChatList from './ChatList';
 import { ConversationProvider } from './ConversationProvider';
-import { dataSelectors, useConversationStore } from './store';
+import { dataSelectors, useConversationStore, useConversationStoreApi } from './store';
 
 const chatListMocks = vi.hoisted(() => ({
   isStreaming: false,
@@ -74,8 +74,10 @@ vi.mock('@/features/Conversation/Messages/Contexts/MessageActionProvider', () =>
 }));
 
 vi.mock('@/features/WideScreenContainer', () => ({
-  default: ({ children }: { children?: ReactNode }) => (
-    <div data-testid={'welcome'}>{children}</div>
+  default: ({ children, style }: { children?: ReactNode; style?: React.CSSProperties }) => (
+    <div data-testid={'welcome'} style={style}>
+      {children}
+    </div>
   ),
 }));
 
@@ -105,8 +107,9 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/chat', () => ({
   getChatStoreState: () => ({}),
-  useChatStore: (selector: (state: { activeAgentId: string }) => unknown) =>
-    selector({ activeAgentId: 'agt_old' }),
+  useChatStore: (
+    selector: (state: { activeAgentId: string; creatingTopicIds: string[] }) => unknown,
+  ) => selector({ activeAgentId: 'agt_old', creatingTopicIds: [] }),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -170,6 +173,12 @@ const Probe = ({
   return null;
 };
 
+const OverlayHeightSetter = () => {
+  const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+
+  return <button onClick={() => setChatInputOverlayHeight(48)}>set overlay height</button>;
+};
+
 const renderChatList = (messages?: UIChatMessage[]) =>
   render(
     <ConversationProvider
@@ -189,6 +198,101 @@ describe('ConversationProvider', () => {
     chatListMocks.refreshError.isRetrying = false;
   });
 
+  it('keeps the same store instance across context changes', () => {
+    const apis: unknown[] = [];
+    const ApiProbe = () => {
+      apis.push(useConversationStoreApi());
+      return null;
+    };
+
+    const { rerender } = render(
+      <ConversationProvider hasInitMessages context={oldContext} messages={oldMessages}>
+        <ApiProbe />
+      </ConversationProvider>,
+    );
+
+    rerender(
+      <ConversationProvider context={nextContext} hasInitMessages={false}>
+        <ApiProbe />
+      </ConversationProvider>,
+    );
+
+    expect(new Set(apis).size).toBe(1);
+  });
+
+  it('resets conversation-ephemeral state in place while preserving infra fields', () => {
+    let api: ReturnType<typeof useConversationStoreApi> | undefined;
+    const ApiCapture = () => {
+      api = useConversationStoreApi();
+      return null;
+    };
+
+    const { rerender } = render(
+      <ConversationProvider hasInitMessages context={oldContext} messages={oldMessages}>
+        <ApiCapture />
+      </ConversationProvider>,
+    );
+
+    const fakeEditor = { focus: vi.fn() };
+    const fakeScrollMethods = {
+      getItemOffset: vi.fn(),
+      getItemSize: vi.fn(),
+      getScrollOffset: vi.fn(),
+      getScrollSize: vi.fn(),
+      getTotalCount: vi.fn(),
+      getViewportSize: vi.fn(),
+      scrollTo: vi.fn(),
+      scrollToIndex: vi.fn(),
+    };
+
+    act(() => {
+      api!.setState({
+        activeIndex: 3,
+        atBottom: false,
+        chatInputOverlayHeight: 48,
+        editor: fakeEditor,
+        heteroOverloadRetryAttempts: { msg_old: 2 },
+        heteroOverloadWaitOpIds: { msg_old: 'op_1' },
+        inputMessage: 'unsent draft',
+        isScrolling: true,
+        messageEditingIds: ['msg_old'],
+        messageLoadingIds: ['msg_old'],
+        scheduledSendAt: '2026-08-07T10:00:00.000Z',
+        selectedMessageIds: ['msg_old'],
+        selectionAnchorId: 'msg_old',
+        selectionMode: true,
+        virtuaScrollMethods: fakeScrollMethods,
+        visibleItems: new Map([[0, { bottom: 1, ratio: 1, top: 0 }]]),
+      });
+    });
+
+    rerender(
+      <ConversationProvider context={nextContext} hasInitMessages={false}>
+        <ApiCapture />
+      </ConversationProvider>,
+    );
+
+    const state = api!.getState();
+
+    expect(state.selectionMode).toBe(false);
+    expect(state.selectedMessageIds).toEqual([]);
+    expect(state.selectionAnchorId).toBeUndefined();
+    expect(state.messageEditingIds).toEqual([]);
+    expect(state.messageLoadingIds).toEqual([]);
+    expect(state.heteroOverloadRetryAttempts).toEqual({});
+    expect(state.heteroOverloadWaitOpIds).toEqual({});
+    expect(state.inputMessage).toBe('');
+    expect(state.scheduledSendAt).toBeUndefined();
+    expect(state.activeIndex).toBeNull();
+    expect(state.atBottom).toBe(true);
+    expect(state.isScrolling).toBe(false);
+    expect(state.visibleItems.size).toBe(0);
+
+    expect(state.editor).toBe(fakeEditor);
+    expect(state.virtuaScrollMethods).toBe(fakeScrollMethods);
+    expect(state.chatInputOverlayHeight).toBe(48);
+  });
+
   it('does not expose the previous local conversation store after context changes', () => {
     const snapshots: Snapshot[] = [];
 
@@ -204,13 +308,14 @@ describe('ConversationProvider', () => {
       </ConversationProvider>,
     );
 
-    const mismatchedNextContextSnapshots = snapshots.filter(
-      (snapshot) =>
-        snapshot.expectedContextKey === messageMapKey(nextContext) &&
-        snapshot.actualContextKey !== snapshot.expectedContextKey,
-    );
-
-    expect(mismatchedNextContextSnapshots).toEqual([]);
+    // The in-place reset lands in a layout effect, so one intermediate commit
+    // renders with the new context props against the old store state. React
+    // flushes the resulting store update synchronously before paint — what must
+    // hold is that the *final* (painted) frame is fully consistent.
+    const lastSnapshot = snapshots.at(-1)!;
+    expect(lastSnapshot.expectedContextKey).toBe(messageMapKey(nextContext));
+    expect(lastSnapshot.actualContextKey).toBe(messageMapKey(nextContext));
+    expect(lastSnapshot.displayMessageIds).toEqual([]);
   });
 
   it('renders the message skeleton before the first request settles', () => {
@@ -238,6 +343,22 @@ describe('ConversationProvider', () => {
     expect(screen.getByText('WELCOME')).toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(chatListMocks.refreshError.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves composer overlay space in the settled empty welcome', () => {
+    const { container } = render(
+      <ConversationProvider hasInitMessages context={oldContext} messages={[]}>
+        <ChatList welcome={<div>WELCOME</div>} />
+        <OverlayHeightSetter />
+      </ConversationProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'set overlay height' }));
+
+    expect(container.querySelector('[data-testid="welcome"]')).toHaveStyle({
+      boxSizing: 'border-box',
+      paddingBottom: '60px',
+    });
   });
 
   it('renders a settled message list through the virtualized list', () => {

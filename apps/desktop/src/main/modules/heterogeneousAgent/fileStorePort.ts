@@ -75,7 +75,16 @@ const lambdaMutation = async <T>(
 export const createLambdaFileStorePort = async (
   auth: RemoteServerAuth,
 ): Promise<FileStorePort | undefined> => {
-  const [serverUrl, accessToken] = await Promise.all([auth.getServerUrl(), auth.getAccessToken()]);
+  // Sequential on purpose. Both reads are local (settings store + `safeStorage`
+  // decryption), so there is nothing to win by parallelizing — while
+  // `Promise.all([auth.getServerUrl(), auth.getAccessToken()])` is a trap: the
+  // argument list is evaluated first, so a callback that throws *synchronously*
+  // abandons the array before `Promise.all` ever subscribes to its sibling,
+  // orphaning that rejection. In Electron main an unhandled rejection is fatal
+  // (`process-error-handlers` re-throws it), so an injected-callback bug would
+  // kill the app instead of degrading to "no image upload".
+  const serverUrl = await auth.getServerUrl();
+  const accessToken = await auth.getAccessToken();
 
   if (!serverUrl || !accessToken) {
     logger.debug('No authed remote server — skipping tool_result image upload');

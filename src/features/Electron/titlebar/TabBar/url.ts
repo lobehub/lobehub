@@ -1,5 +1,9 @@
+// Tab identity ignores the fragment: `/settings/agent#llm` and `/settings/agent`
+// are the same tab, so an anchor jump keeps the tab's cached meta instead of
+// looking like a navigation to a different page.
 export const normalizeTabUrl = (url: string): string => {
-  const [rawPath = '', rawQuery = ''] = url.split('?');
+  const [withoutHash = ''] = url.split('#');
+  const [rawPath = '', rawQuery = ''] = withoutHash.split('?');
 
   let pathname = rawPath || '/';
   if (pathname.length > 1 && pathname.endsWith('/')) {
@@ -7,7 +11,7 @@ export const normalizeTabUrl = (url: string): string => {
   }
   if (!pathname.startsWith('/')) pathname = `/${pathname}`;
 
-  const queryString = rawQuery.split('#')[0] ?? '';
+  const queryString = rawQuery;
   if (!queryString) return pathname;
 
   const params = new URLSearchParams(queryString);
@@ -32,7 +36,8 @@ const AGENT_TOPIC_PATH = /^\/agent\/([^/]+)\/(tpc_[^/]+)(?:\/|$)/;
 const AGENT_PATH = /^\/agent\/([^/]+)(?:\/|$)/;
 
 export const parseAgentTabContext = (url: string): AgentTabContext | null => {
-  const [rawPath = '', rawQuery = ''] = url.split('?');
+  const [withoutHash = ''] = url.split('#');
+  const [rawPath = '', rawQuery = ''] = withoutHash.split('?');
 
   const workspaceTopicMatch = rawPath.match(WORKSPACE_AGENT_TOPIC_PATH);
   if (workspaceTopicMatch) {
@@ -48,7 +53,7 @@ export const parseAgentTabContext = (url: string): AgentTabContext | null => {
 
   const workspaceAgentMatch = rawPath.match(WORKSPACE_AGENT_PATH);
   if (workspaceAgentMatch) {
-    const queryTopic = new URLSearchParams(rawQuery.split('#')[0] ?? '').get('topic');
+    const queryTopic = new URLSearchParams(rawQuery).get('topic');
     return {
       agentId: workspaceAgentMatch[2],
       topicId: queryTopic || null,
@@ -59,6 +64,6 @@ export const parseAgentTabContext = (url: string): AgentTabContext | null => {
   const agentMatch = rawPath.match(AGENT_PATH);
   if (!agentMatch) return null;
 
-  const queryTopic = new URLSearchParams(rawQuery.split('#')[0] ?? '').get('topic');
+  const queryTopic = new URLSearchParams(rawQuery).get('topic');
   return { agentId: agentMatch[1], topicId: queryTopic || null };
 };

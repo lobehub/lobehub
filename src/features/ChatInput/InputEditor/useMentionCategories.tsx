@@ -1,5 +1,7 @@
-import { Avatar, Icon } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
@@ -30,6 +32,7 @@ export const useMentionCategories = (): MentionCategory[] => {
   const workspaceGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const workspaceUngrouped = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
 
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
@@ -48,22 +51,54 @@ export const useMentionCategories = (): MentionCategory[] => {
   return useMemo(() => {
     const categories: MentionCategory[] = [];
 
-    const toItem = (agent: SidebarAgentItem) => ({
-      icon: (
-        <Avatar
-          avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
-          background={agent.backgroundColor ?? undefined}
-          size={24}
-        />
-      ),
-      key: `agent-${agent.id}`,
-      label: agent.title || 'Untitled Agent',
-      metadata: {
-        id: agent.id,
-        timestamp: agent.updatedAt ? new Date(agent.updatedAt).getTime() : 0,
-        type: 'agent' as const,
-      },
-    });
+    const toItem = (agent: SidebarAgentItem) => {
+      const name = agent.name?.trim();
+      const title = agent.title?.trim();
+      const description = agent.description?.trim();
+      const displayName = agentDisplayName(agent, 'Untitled Agent');
+      // The headline slot holds the personal name; the role only moves to the
+      // secondary slot when a name occupies the headline — otherwise the role IS
+      // the headline and repeating it would read "架构工程师 · 架构工程师".
+      const secondary = [name ? title : undefined, description].filter(Boolean).join(' · ');
+
+      return {
+        icon: (
+          <Avatar
+            avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+            background={agent.backgroundColor ?? undefined}
+            size={24}
+          />
+        ),
+        key: `agent-${agent.id}`,
+        label: secondary ? (
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
+            <span style={{ flex: 'none' }}>{displayName}</span>
+            <span
+              style={{
+                color: cssVar.colorTextDescription,
+                fontSize: 12,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {secondary}
+            </span>
+          </Flexbox>
+        ) : (
+          displayName
+        ),
+        metadata: {
+          id: agent.id,
+          // The rendered label is a ReactNode; keep the plain-text identity here
+          // for the inserted chip (`mentionOnSelect`) and for Fuse search.
+          label: displayName,
+          searchText: [name, title, description].filter(Boolean).join(' '),
+          timestamp: agent.updatedAt ? new Date(agent.updatedAt).getTime() : 0,
+          type: 'agent' as const,
+        },
+      };
+    };
 
     const dedupeAgents = (list: SidebarAgentItem[]): SidebarAgentItem[] => {
       const seen = new Set<string>();
@@ -89,6 +124,7 @@ export const useMentionCategories = (): MentionCategory[] => {
       // even inside the caller's own private agent — the bug this fixes.
       const privateAgentIds = new Set<string>();
       for (const g of privateGroups) for (const a of g.items) privateAgentIds.add(a.id);
+      for (const a of privatePinned) privateAgentIds.add(a.id);
       for (const a of privateUngrouped) privateAgentIds.add(a.id);
 
       const workspaceCandidates = dedupeAgents([
@@ -97,6 +133,7 @@ export const useMentionCategories = (): MentionCategory[] => {
         ...workspaceUngrouped,
       ]);
       const privateCandidates = dedupeAgents([
+        ...privatePinned,
         ...privateGroups.flatMap((g) => g.items),
         ...privateUngrouped,
       ]);
@@ -246,6 +283,7 @@ export const useMentionCategories = (): MentionCategory[] => {
     workspaceGroups,
     workspaceUngrouped,
     privateGroups,
+    privatePinned,
     privateUngrouped,
     currentAgentId,
     topics,

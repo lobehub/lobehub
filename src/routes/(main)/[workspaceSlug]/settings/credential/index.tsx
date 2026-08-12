@@ -8,15 +8,12 @@ import { Plus, UserRoundIcon, UsersIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
+import CredsList from '@/features/Settings/creds/features/CredsList';
+import { type CredsApi, CredsApiProvider } from '@/features/Settings/creds/features/useCredsApi';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
-import { createCreateCredModal } from '@/routes/(main)/settings/creds/features/CreateCredModal';
-import CredsList from '@/routes/(main)/settings/creds/features/CredsList';
-import {
-  type CredsApi,
-  CredsApiProvider,
-} from '@/routes/(main)/settings/creds/features/useCredsApi';
 
 import PersonalCredsSection from './features/PersonalCredsSection';
 
@@ -122,8 +119,8 @@ const WorkspaceCredsSetting = () => {
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
-  // The owner-only `manage_provider_key` gate mirrors the server's
-  // `requireWorkspaceRole('owner')` on workspaceCreds writes — but it only
+  // The Admin-or-higher `manage_provider_key` gate mirrors the server's
+  // `requireWorkspaceRole('admin')` on workspaceCreds writes — but it only
   // applies to the workspace scope. Personal credentials are the caller's own
   // (`market.creds`), so workspace RBAC never disables creation there.
   const canCreate = scope === 'workspace' ? canManageCredentials : true;

@@ -86,6 +86,8 @@ export const resolveBlockedTools =
     const topicId = operation.topicId ?? state.metadata?.topicId;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
+    const blockedContent = payload.blockedContent ?? BLOCKED_TOOL_CONTENT;
+    const blockedReason = payload.blockedReason ?? BLOCKED_TOOL_ERROR;
     const toolResults: Array<{ data: ToolRunResult; toolCallId: string }> = [];
     const toolMessageIds: string[] = [];
 
@@ -97,10 +99,13 @@ export const resolveBlockedTools =
 
     for (const toolPayload of payload.toolsCalling) {
       const result: ToolRunResult = {
-        content: BLOCKED_TOOL_CONTENT,
-        error: BLOCKED_TOOL_ERROR,
+        content: blockedContent,
+        error: blockedReason,
         executionTime: 0,
-        state: { type: 'blocked' },
+        state: {
+          ...(payload.blockedReason && { reason: blockedReason }),
+          type: 'blocked',
+        },
         success: false,
       };
 
@@ -128,7 +133,7 @@ export const resolveBlockedTools =
           plugin: toolPayload as any,
           pluginError: result.error,
           pluginIntervention: {
-            rejectedReason: BLOCKED_TOOL_ERROR,
+            rejectedReason: blockedReason,
             status: 'rejected',
           },
           pluginState: result.state,
@@ -205,20 +210,36 @@ export const resolveAbortedTools =
 
     const newState = structuredClone(state);
 
+    const existingToolMessageIds = payload.existingToolMessageIds ?? {};
+
     for (const toolPayload of payload.toolsCalling) {
+      const existingMessageId = existingToolMessageIds[toolPayload.id];
       try {
-        await transports.messages.createToolMessage({
-          agentId,
-          content: ABORTED_TOOL_CONTENT,
-          groupId,
-          parentId: payload.parentMessageId,
-          plugin: toolPayload as any,
-          pluginIntervention: { status: 'aborted' },
-          role: 'tool',
-          threadId,
-          tool_call_id: toolPayload.id,
-          topicId,
-        });
+        if (existingMessageId) {
+          // The approval pause already wrote a row for this call. Settle THAT
+          // row: inserting a second one would duplicate the tool in the turn
+          // and leave the original `pending`, so the approval card survives the
+          // Stop that was supposed to clear it.
+          await transports.messages.updateToolMessage(existingMessageId, {
+            content: ABORTED_TOOL_CONTENT,
+          });
+          await transports.messages.updateToolIntervention(existingMessageId, {
+            status: 'aborted',
+          });
+        } else {
+          await transports.messages.createToolMessage({
+            agentId,
+            content: ABORTED_TOOL_CONTENT,
+            groupId,
+            parentId: payload.parentMessageId,
+            plugin: toolPayload as any,
+            pluginIntervention: { status: 'aborted' },
+            role: 'tool',
+            threadId,
+            tool_call_id: toolPayload.id,
+            topicId,
+          });
+        }
       } catch (error) {
         await publishPersistError(host, error);
         throw error;

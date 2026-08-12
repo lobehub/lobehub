@@ -1,17 +1,38 @@
+import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { isDesktop } from '@lobechat/const';
 import { uuid } from '@lobechat/utils';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { getElectronStoreState } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { getSystemLanguage } from '@/utils/client/systemLanguage';
 
+import { resolveEffectiveWorkingDirectory } from '../effectiveWorkingDirectory';
 import { globalAgentContextManager } from '../GlobalAgentContextManager';
 
 const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
+
+const WORKING_DIRECTORY_UNSPECIFIED = '(not specified, use user Home directory as default)';
+
+/**
+ * The effective working directory as an actual filesystem path, or `undefined`
+ * when nothing is configured (or off-desktop). This is the SAME resolution the
+ * `{{workingDirectory}}` system-prompt placeholder shows the model — keep them
+ * sourced from here so what the prompt promises ("defaults to the working
+ * directory") matches what tools actually search. Unlike the placeholder, this
+ * returns `undefined` instead of a human-readable "(not specified…)" string, so
+ * callers can safely use it as a path / scope default.
+ *
+ * Pass `topicId` for async work (e.g. a streaming tool call) so the directory is
+ * bound to the topic that *started* the request, not whatever topic is active
+ * now — the user may have switched topics mid-stream, and reading global
+ * active-topic state would then search the wrong project. Omit it (prompt-build
+ * time) to resolve against the active topic.
+ */
+export const getEffectiveWorkingDirectoryPath = (topicId?: string | null): string | undefined =>
+  resolveEffectiveWorkingDirectory(useChatStore.getState(), topicId);
 
 export const VARIABLE_GENERATORS = {
   /**
@@ -113,7 +134,7 @@ export const VARIABLE_GENERATORS = {
    * | `{{user_agent}}` | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0 |
    *
    */
-  language: () => (typeof navigator !== 'undefined' ? navigator.language : ''),
+  language: () => (typeof navigator !== 'undefined' ? getSystemLanguage() : ''),
   platform: () => (typeof navigator !== 'undefined' ? navigator.platform : ''),
   user_agent: () => (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
 
@@ -143,9 +164,22 @@ export const VARIABLE_GENERATORS = {
    * | `{{videosPath}}` | /Users/username/Videos |
    * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
+   * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
+   * | `{{shellSyntaxGuidance}}` | Write PowerShell syntax; ... |
+   * | `{{arch}}` | arm64 |
    *
    */
+  arch: () => globalAgentContextManager.getContext().arch ?? '',
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
+  // Fallback keeps the surrounding prompt sentence readable when the desktop
+  // context has not (yet) provided the detected shell.
+  defaultShell: () =>
+    globalAgentContextManager.getContext().defaultShell ??
+    'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
+  // Syntax rules matching the shell above, so the model never sees guidance
+  // for a shell it is not running in (see getShellSyntaxGuidance).
+  shellSyntaxGuidance: () =>
+    getShellSyntaxGuidance(globalAgentContextManager.getContext().defaultShell),
   desktopPath: () => globalAgentContextManager.getContext().desktopPath ?? '',
   documentsPath: () => globalAgentContextManager.getContext().documentsPath ?? '',
   downloadsPath: () => globalAgentContextManager.getContext().downloadsPath ?? '',
@@ -158,15 +192,7 @@ export const VARIABLE_GENERATORS = {
    */
   workingDirectory: () => {
     if (!isDesktop) return '';
-
-    const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
-    if (topicWorkingDir) return topicWorkingDir;
-
-    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentWorkingDir = agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(
-      useAgentStore.getState(),
-    );
-    return agentWorkingDir ?? '(not specified, use user Home directory as default)';
+    return getEffectiveWorkingDirectoryPath() ?? WORKING_DIRECTORY_UNSPECIFIED;
   },
 } as Record<string, () => string>;
 

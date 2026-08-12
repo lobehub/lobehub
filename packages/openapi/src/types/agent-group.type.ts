@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { SessionGroupItem } from '@/database/schemas';
-
+import type { PublicAgentGroup } from '../helpers/public-fields';
 // ==================== Agent Group CRUD Types ====================
 // Agent group (stored in sessionGroups table) related type definitions
 
@@ -44,7 +43,7 @@ export interface DeleteAgentGroupRequest {
 /**
  * Agent group list response type
  */
-export type AgentGroupListResponse = SessionGroupItem[];
+export type AgentGroupListResponse = PublicAgentGroup[];
 
 // ==================== Common Schemas ====================
 

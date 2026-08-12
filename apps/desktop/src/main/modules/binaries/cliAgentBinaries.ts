@@ -1,3 +1,4 @@
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
@@ -99,6 +100,25 @@ export const opencodeBinary: BinarySpec = {
 };
 
 /**
+ * Pi coding agent CLI
+ * @see https://github.com/earendil-works/pi
+ */
+export const piBinary: BinarySpec = {
+  description: 'Pi - Minimal coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('pi', 'pi'),
+  name: 'pi',
+  priority: 5,
+};
+
+/** Qoder CLI @see https://docs.qoder.com/cli/install.md */
+export const qoderBinary: BinarySpec = {
+  description: 'Qoder - AI coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('qoder', 'qodercli'),
+  name: 'qodercli',
+  priority: 6,
+};
+
+/**
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
  */
@@ -106,7 +126,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
-  priority: 5,
+  priority: 7,
   validateKeywords: ['gemini'],
 });
 
@@ -118,7 +138,7 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
-  priority: 6,
+  priority: 8,
   validateKeywords: ['qwen'],
 });
 
@@ -130,7 +150,7 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['kimi'],
   description: 'Kimi CLI - Moonshot AI agentic coding CLI',
   name: 'kimi',
-  priority: 7,
+  priority: 9,
   validateKeywords: ['kimi'],
 });
 
@@ -141,19 +161,28 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
  */
 export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
-  priority: 8,
+  priority: 10,
 });
 
 /**
  * All CLI agent binaries
  */
+export const heterogeneousCliAgentBinaries = {
+  'amp': ampBinary,
+  'claude-code': claudeCodeBinary,
+  'codex': codexBinary,
+  'opencode': opencodeBinary,
+  'pi': piBinary,
+  'qoder': qoderBinary,
+} satisfies Record<LocalHeterogeneousAgentType, BinarySpec>;
+
 export const cliAgentBinaries: BinarySpec[] = [
-  claudeCodeBinary,
-  codexBinary,
-  ampBinary,
-  opencodeBinary,
+  ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
   kimiCliBinary,
   aiderBinary,
 ];
+
+export const listHeterogeneousCliBinaryTypes = (): LocalHeterogeneousAgentType[] =>
+  Object.keys(heterogeneousCliAgentBinaries) as LocalHeterogeneousAgentType[];

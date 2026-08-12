@@ -5,6 +5,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
   getDefaultResourceAccessLevel,
+  getLegacyViewerAccessLevel,
   PERMISSION_RESOURCE_TYPES,
   RESOURCE_ACCESS_LEVELS,
 } from '@/database/schemas';
@@ -15,6 +16,7 @@ import {
   canManageResourcePermission,
   getResourceMeta,
   isAccessLevelAllowed,
+  isCollaborativeBuiltinAgent,
 } from '@/server/services/resourcePermission';
 
 import { getWorkspaceGroupVirtualAgentIds } from './_helpers/workspaceAgentGuard';
@@ -65,8 +67,8 @@ export const resourcePermissionRouter = router({
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Resource not found' });
     }
 
-    const [accessLevel, canManage] = await Promise.all([
-      ctx.permissionModel.getEffectiveAccessLevel(input.resourceType, input.resourceId),
+    const [explicitAccessLevel, canManage] = await Promise.all([
+      ctx.permissionModel.getAccessLevel(input.resourceType, input.resourceId),
       canManageResourcePermission({
         db: ctx.serverDB,
         grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
@@ -78,6 +80,16 @@ export const resourcePermissionRouter = router({
         workspaceId: ctx.workspaceId,
       }),
     ]);
+
+    // A collaborative builtin with no explicit row is editable by every capable
+    // member (`canPerformResourceAction`), so report that as its access level
+    // rather than the resource default — the client's config gate reads this
+    // field, and `canManage` deliberately stays author/admin-only for these rows.
+    const accessLevel =
+      explicitAccessLevel ??
+      (isCollaborativeBuiltinAgent(input.resourceType, meta)
+        ? 'edit'
+        : getDefaultResourceAccessLevel(input.resourceType));
 
     return buildResourcePermissionState({
       accessLevel,
@@ -129,16 +141,19 @@ export const resourcePermissionRouter = router({
         });
       }
 
-      if (meta.visibility === 'private') {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Private resources do not have Workspace access',
-        });
-      }
+      // A private resource may carry a level too: it is the creator deciding
+      // what members get the moment they publish, and the publish paths read it
+      // back instead of overwriting with the default. It grants nothing while
+      // private — visibility, not this row, is what lets a member in — and
+      // demoting to private clears the row again (`removeAll`). The
+      // creator-only guard above already keeps other members out.
 
+      // A released client sends only `role`, and its `viewer` is an explicit
+      // "less than editor" choice — resolve it through the legacy map, never
+      // through the default (which is `edit` for agents and groups).
       const accessLevel =
         input.accessLevel ??
-        (input.role === 'editor' ? 'edit' : getDefaultResourceAccessLevel(input.resourceType));
+        (input.role === 'editor' ? 'edit' : getLegacyViewerAccessLevel(input.resourceType));
       if (!isAccessLevelAllowed(input.resourceType, accessLevel)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -174,7 +189,7 @@ export const resourcePermissionRouter = router({
         accessLevel,
         canManage: true,
         creatorId: meta.userId,
-        visibility: 'public',
+        visibility: (meta.visibility ?? 'public') as 'private' | 'public',
       });
     }),
 });

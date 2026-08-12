@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./client/executor": "./src/client/executor/index.ts"
+    "./client/executor": "./src/client/executor/index.ts",
+    "./planRuntime": "./src/client/executor/PlanRuntime/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -17,6 +18,7 @@
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/utils": "workspace:*"
   },
   "devDependencies": {

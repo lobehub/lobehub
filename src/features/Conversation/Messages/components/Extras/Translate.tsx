@@ -1,6 +1,6 @@
 import { type ChatTranslate } from '@lobechat/types';
 import { ActionIcon, copyToClipboard, Flexbox, Icon, Markdown, Tag } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ChevronsRight, ChevronUp, CopyIcon, TrashIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -20,7 +20,6 @@ const Translate = memo<TranslateProps>(({ content = '', from, to, id, loading })
   const [show, setShow] = useState(true);
   const clearTranslate = useConversationStore((s) => s.clearTranslate);
 
-  const { message } = App.useApp();
   return (
     <Flexbox gap={8}>
       <Flexbox horizontal align={'center'} justify={'space-between'}>
@@ -38,7 +37,7 @@ const Translate = memo<TranslateProps>(({ content = '', from, to, id, loading })
             title={t('copy')}
             onClick={async () => {
               await copyToClipboard(content);
-              message.success(t('copySuccess'));
+              toast.success(t('copySuccess'));
             }}
           />
           <ActionIcon

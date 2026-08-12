@@ -6,6 +6,7 @@ import type {
   HeterogeneousAgentDefaultSelection,
   HeterogeneousProviderConfig,
   HeterogeneousSpeedMode,
+  QoderReasoningEffort,
 } from '@lobechat/types';
 import {
   CLAUDE_CODE_REASONING_EFFORT_LEVELS,
@@ -15,11 +16,14 @@ import {
   codexModelSupportsReasoningEffort,
   getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  QODER_REASONING_EFFORT_FLAG,
+  QODER_REASONING_EFFORT_LEVELS,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
+  resolveQoderReasoningEffort,
 } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import {
@@ -35,9 +39,8 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-  Tooltip,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -50,12 +53,15 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
-import { OpenCodeModelSelector } from './OpenCodeModelSelector';
+import { HeterogeneousAgentModelSelector } from './HeterogeneousAgentModelSelector';
 
 type HeteroReasoningEffort =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | QoderReasoningEffort
+  | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Fable 5', value: 'fable' },
@@ -243,15 +249,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
 }));
 
 interface SelectorSubmenuProps {
@@ -352,7 +349,11 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
 ): type is SelectableHeteroProviderType =>
-  type === 'claude-code' || type === 'codex' || type === 'opencode';
+  type === 'claude-code' ||
+  type === 'codex' ||
+  type === 'opencode' ||
+  type === 'pi' ||
+  type === 'qoder';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -403,10 +404,10 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model/effort picks write the shared agencyConfig — view-only General
-  // access disables the whole picker (disabled, not hidden).
-  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
-  const enabled = canCreateContent && canUseResource;
+  // Model/effort picks write the shared heterogeneous-provider config. Hide
+  // the selector when this caller cannot configure that shared resource.
+  const { canConfigureResource } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canConfigureResource;
   const [open, setOpen] = useState(false);
 
   const patchProvider = useCallback(
@@ -429,9 +430,20 @@ const HeteroModel = memo(() => {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
         }
-      } else if (providerType === 'opencode') {
+      } else if (providerType === 'qoder') {
         if ('model' in patch) {
           nextPatch.args = stripCliFlags(provider?.args, ['--model', '-m']);
+        }
+        if ('effort' in patch) {
+          const sourceArgs = nextPatch.args ?? provider?.args;
+          nextPatch.args = stripCliFlags(sourceArgs, [QODER_REASONING_EFFORT_FLAG]);
+        }
+      } else if (providerType === 'opencode' || providerType === 'pi') {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(
+            provider?.args,
+            providerType === 'pi' ? ['--model', '--provider'] : ['--model', '-m'],
+          );
         }
       } else {
         if ('model' in patch) {
@@ -492,19 +504,98 @@ const HeteroModel = memo(() => {
   );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+  if (!enabled) return null;
 
-  if (provider.type === 'opencode') {
+  if (provider.type === 'qoder') {
+    const model =
+      provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? provider.model
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+    const effort = resolveQoderReasoningEffort(provider);
+    const defaultLabel = t('heteroAgent.modelSelector.default');
+    const modelLabel = getModelLabel(model, defaultLabel);
+    const effortLabel = t(EFFORT_LABEL_KEYS[effort]);
+    const triggerText = getTriggerText({
+      defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
+      defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
+      defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
+      effort,
+      effortLabel,
+      model,
+      modelLabel,
+    });
+    const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [
+      { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
+      ...QODER_REASONING_EFFORT_LEVELS.map((level) => ({
+        label: t(EFFORT_LABEL_KEYS[level]),
+        value: level,
+      })),
+    ];
+
+    return (
+      <DropdownMenuRoot open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger nativeButton={false}>
+          <div
+            className={styles.trigger}
+            aria-label={t('heteroAgent.modelSelector.ariaLabel', {
+              model: modelLabel,
+              reasoning: effortLabel,
+            })}
+          >
+            <span className={styles.label}>{triggerText}</span>
+            <Icon icon={ChevronDownIcon} size={12} />
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+            <DropdownMenuPopup className={styles.popup} style={{ width: 240 }}>
+              <HeterogeneousAgentModelSelector
+                agentId={agentId}
+                disabled={false}
+                model={model}
+                permissionReason={reason}
+                type={provider.type}
+                variant="submenu"
+                onSelect={selectModel}
+              />
+              <SelectorSubmenu
+                currentValue={effortLabel}
+                label={t('heteroAgent.modelSelector.reasoning')}
+              >
+                {effortOptions.map((option) => (
+                  <DropdownMenuItem
+                    className={styles.option}
+                    data-selected={effort === option.value ? 'true' : undefined}
+                    key={`effort-${option.value}`}
+                    onClick={() => selectReasoningEffort(option.value)}
+                  >
+                    <span className={styles.optionLabel}>{option.label}</span>
+                    {effort === option.value && (
+                      <Icon className={styles.check} icon={CheckIcon} size={16} />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </SelectorSubmenu>
+            </DropdownMenuPopup>
+          </DropdownMenuPositioner>
+        </DropdownMenuPortal>
+      </DropdownMenuRoot>
+    );
+  }
+
+  if (provider.type === 'opencode' || provider.type === 'pi') {
     const model =
       provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? provider.model
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
     return (
-      <OpenCodeModelSelector
+      <HeterogeneousAgentModelSelector
         agentId={agentId}
-        disabled={!canCreateContent}
+        disabled={false}
         model={model}
         permissionReason={reason}
+        type={provider.type}
         onSelect={(value) => void patchProvider({ model: value })}
       />
     );
@@ -584,7 +675,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !enabled && styles.triggerDisabled)}
+      className={styles.trigger}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -595,19 +686,6 @@ const HeteroModel = memo(() => {
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
-
-  if (!enabled)
-    return (
-      <Tooltip
-        title={
-          !canCreateContent
-            ? reason
-            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
-        }
-      >
-        <div>{trigger}</div>
-      </Tooltip>
-    );
 
   const renderOption = <T extends string>(
     title: string,

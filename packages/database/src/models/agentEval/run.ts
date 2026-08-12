@@ -35,6 +35,7 @@ export class AgentEvalRunModel {
   query = async (filter?: {
     benchmarkId?: string;
     datasetId?: string;
+    experimentId?: string;
     limit?: number;
     offset?: number;
     status?: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
@@ -43,6 +44,10 @@ export class AgentEvalRunModel {
 
     if (filter?.datasetId) {
       conditions.push(eq(agentEvalRuns.datasetId, filter.datasetId));
+    }
+
+    if (filter?.experimentId) {
+      conditions.push(eq(agentEvalRuns.experimentId, filter.experimentId));
     }
 
     if (filter?.benchmarkId) {
@@ -96,6 +101,33 @@ export class AgentEvalRunModel {
       .update(agentEvalRuns)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .returning();
+    return result;
+  };
+
+  /**
+   * Atomically queue a newly-created idle run. This prevents idempotent REST
+   * retries from dispatching the same QStash workflow more than once.
+   */
+  queue = async (id: string) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ status: 'pending', updatedAt: new Date() })
+      .where(and(eq(agentEvalRuns.id, id), eq(agentEvalRuns.status, 'idle'), this.ownership()))
+      .returning();
+    return result;
+  };
+
+  /**
+   * Atomically claim a pending run (pending -> running) via a single
+   * conditional update. Returns the updated run, or undefined when the run is
+   * not owned / not currently pending (already claimed or terminal).
+   */
+  claim = async (id: string) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ startedAt: new Date(), status: 'running', updatedAt: new Date() })
+      .where(and(eq(agentEvalRuns.id, id), eq(agentEvalRuns.status, 'pending'), this.ownership()))
       .returning();
     return result;
   };

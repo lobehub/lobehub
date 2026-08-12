@@ -114,6 +114,85 @@ describe('WorkspaceUserSettingsModel', () => {
     });
   });
 
+  it('deep-merges agentModeOverrides so a single-agent patch never drops other agents', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ agentModeOverrides: { agentX: true } });
+
+    await model.updatePreference({ agentModeOverrides: { agentY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
+  });
+
+  it('deep-merges sidebarAgentVisibilityOverrides across single-item patches', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentX: true } });
+
+    await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarAgentVisibilityOverrides).toEqual({ agentX: true, agentY: false });
+  });
+
+  it.each([
+    ['sidebarGroupAssignments', 'folder-1'],
+    ['sidebarPinnedOverrides', true],
+  ] as const)(
+    'keeps deep-merging the deprecated %s for clients from before the shared sidebar',
+    async (key, value) => {
+      // The fields are deprecated but still on the API, so a released client
+      // can patch a single item. A top-level replace would let one such write
+      // shred the rest of that user's map — the very data the deprecation
+      // promises to leave intact for a rollback.
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      await model.updatePreference({ [key]: { itemX: value } } as any);
+
+      await model.updatePreference({ [key]: { itemY: value } } as any);
+
+      const preference = await model.getPreference();
+      expect((preference as any)[key]).toEqual({ itemX: value, itemY: value });
+    },
+  );
+
+  it('replaces sidebarHiddenGroupIds wholesale — the caller always writes the full list', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarHiddenGroupIds: ['folder-1', 'folder-2'] });
+
+    // Un-hiding folder-1 sends the remaining list, not a delta.
+    await model.updatePreference({ sidebarHiddenGroupIds: ['folder-2'] });
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarHiddenGroupIds).toEqual(['folder-2']);
+  });
+
+  it('deep-merges notification so a single-switch patch never drops other toggles', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_member_joined: false } } },
+        inbox: { enabled: false },
+      },
+    });
+
+    // Patch a single other leaf — the earlier email item toggle and the inbox
+    // master switch must both survive the write.
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_payment_failed: false } } },
+      },
+    });
+
+    const preference = await model.getPreference();
+    expect(preference.notification).toEqual({
+      email: {
+        items: {
+          workspace: { workspace_member_joined: false, workspace_payment_failed: false },
+        },
+      },
+      inbox: { enabled: false },
+    });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);
@@ -121,10 +200,12 @@ describe('WorkspaceUserSettingsModel', () => {
     await modelA.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'A-device', executionTarget: 'device' } },
       agentModelOverrides: { shared: { model: 'A-model', provider: 'A-provider' } },
+      agentModeOverrides: { shared: true },
     });
     await modelB.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'B-device', executionTarget: 'device' } },
       agentModelOverrides: { shared: { model: 'B-model', provider: 'B-provider' } },
+      agentModeOverrides: { shared: false },
     });
 
     const [prefA, prefB] = await Promise.all([modelA.getPreference(), modelB.getPreference()]);
@@ -132,6 +213,8 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(prefB.agentDeviceOverrides?.shared?.boundDeviceId).toBe('B-device');
     expect(prefA.agentModelOverrides?.shared?.model).toBe('A-model');
     expect(prefB.agentModelOverrides?.shared?.model).toBe('B-model');
+    expect(prefA.agentModeOverrides?.shared).toBe(true);
+    expect(prefB.agentModeOverrides?.shared).toBe(false);
   });
 
   it('cascades on workspace delete — FK removes every row for that workspace', async () => {

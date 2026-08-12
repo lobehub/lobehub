@@ -1,12 +1,11 @@
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { tryGetMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
-import { pathExistsSync } from 'fs-extra';
 
 import { createLogger } from '@/utils/logger';
-
-import { getExportMimeType } from '../../utils/mime';
 
 type ResolveRendererFilePath = (url: URL) => Promise<string | null>;
 
@@ -127,7 +126,7 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
     this.rendererDir = rendererDir;
     this.resolveRendererFilePath = resolveRendererFilePath;
 
-    if (!pathExistsSync(this.rendererDir)) {
+    if (!existsSync(this.rendererDir)) {
       this.logger.warn(`Renderer directory not found: ${this.rendererDir}`);
     }
   }
@@ -194,7 +193,7 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
 
     const buffer = await readFile(targetPath);
     const headers = new Headers();
-    const mimeType = getExportMimeType(targetPath);
+    const mimeType = tryGetMimeType(targetPath);
 
     if (mimeType) headers.set('Content-Type', mimeType);
 

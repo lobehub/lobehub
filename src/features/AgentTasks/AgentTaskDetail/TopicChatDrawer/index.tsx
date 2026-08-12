@@ -4,12 +4,15 @@ import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
 import { FloatingPanel } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
+import ChatList from '@/features/Conversation/ChatList';
+import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
+import MessageItem from '@/features/Conversation/Messages';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
@@ -25,78 +28,87 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import TopicStatusIcon from '../TopicStatusIcon';
+import AssigneeAvatar from '../../features/AssigneeAvatar';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 
-interface TopicChatDrawerBodyProps {
+export interface TopicChatDrawerBodyProps {
   agentId: string;
+  defaultInputExpanded?: boolean;
+  disableInputCollapse?: boolean;
   topicId: string;
 }
 
-const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
+export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
+  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  useHydrateAgentConfig(isLogin, agentId);
+    useHydrateAgentConfig(isLogin, agentId);
 
-  const context = useMemo<ConversationContext>(
-    () => ({
-      agentId,
-      isolatedTopic: true,
-      scope: 'main',
-      topicId,
-    }),
-    [agentId, topicId],
-  );
+    const context = useMemo<ConversationContext>(
+      () => ({
+        agentId,
+        isolatedTopic: true,
+        scope: 'main',
+        topicId,
+      }),
+      [agentId, topicId],
+    );
 
-  const chatKey = messageMapKey(context);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const operationState = useOperationState(context);
+    const chatKey = messageMapKey(context);
+    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+    const replaceMessages = useChatStore((s) => s.replaceMessages);
+    const operationState = useOperationState(context);
 
-  const runningOperation = useTaskStore(
-    (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
-  );
-  useGatewayReconnect(topicId, runningOperation);
+    const runningOperation = useTaskStore(
+      (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
+    );
+    // Pass this drawer's agent explicitly — the run drawer also mounts on the
+    // home surface, where the chat store's `activeAgentId` is unset.
+    useGatewayReconnect(topicId, runningOperation, agentId);
 
-  const itemContent = useCallback(
-    (index: number, id: string) => (
-      <MessageItem
-        disableEditing
-        defaultWorkflowExpandLevel="full"
-        id={id}
-        index={index}
-        key={id}
-      />
-    ),
-    [],
-  );
+    const itemContent = useCallback(
+      (index: number, id: string) => (
+        <MessageItem
+          disableEditing
+          defaultWorkflowExpandLevel="full"
+          id={id}
+          index={index}
+          key={id}
+        />
+      ),
+      [],
+    );
 
-  return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
-      }}
-    >
-      <TaskCardScopeProvider value={true}>
-        <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-          <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
-            <ChatList disableActionsBar itemContent={itemContent} />
+    return (
+      <ConversationProvider
+        context={context}
+        hasInitMessages={!!messages}
+        messages={messages}
+        operationState={operationState}
+        onMessagesChange={(msgs, ctx, meta) => {
+          replaceMessages(msgs, { context: ctx, source: meta?.source });
+        }}
+      >
+        <TaskCardScopeProvider value={true}>
+          <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+              <ChatList disableActionsBar itemContent={itemContent} />
+            </Flexbox>
+            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              <FeedbackInput
+                defaultExpanded={defaultInputExpanded}
+                disableCollapse={disableInputCollapse}
+              />
+            </Flexbox>
           </Flexbox>
-          <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
-            <FeedbackInput />
-          </Flexbox>
-        </Flexbox>
-      </TaskCardScopeProvider>
-    </ConversationProvider>
-  );
-});
+        </TaskCardScopeProvider>
+      </ConversationProvider>
+    );
+  },
+);
 
 TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 
@@ -117,7 +129,6 @@ const TopicChatDrawer = memo(() => {
   useFetchTaskDetail(topicId ? activeTaskId : undefined);
 
   const open = !!topicId && !!agentId;
-  const status = activity?.status;
 
   const shareContext = useMemo<Partial<ConversationContext>>(
     () => ({ agentId: agentId ?? undefined, topicId: topicId ?? undefined }),
@@ -161,7 +172,7 @@ const TopicChatDrawer = memo(() => {
       gap={8}
       style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
     >
-      <TopicStatusIcon size={16} status={status} />
+      <AssigneeAvatar agentId={agentId} size={20} />
       {activity?.sourceTaskIdentifier && (
         <Tag
           size={'small'}
@@ -222,7 +233,10 @@ const TopicChatDrawer = memo(() => {
       width={640}
       styles={{
         body: { padding: 0 },
-        panel: { maxHeight: 'calc(100dvh - 16px)' },
+        panel: {
+          background: cssVar.colorBgContainer,
+          maxHeight: 'calc(100dvh - 16px)',
+        },
         title: {
           boxSizing: 'border-box',
           maxWidth: '100%',

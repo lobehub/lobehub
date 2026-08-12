@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -82,13 +82,13 @@ describe('formatErrorForState', () => {
       });
     });
 
-    it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
+    it('enriches a thrown ModelEmptyError into a readable non-retryable terminal error', () => {
       const result = formatErrorForState(
         new ModelEmptyError(undefined, {
-          attempt: 3,
-          maxAttempts: 3,
-          outputTokens: 1,
-          retryEvents: [{ attempt: 2, delayMs: 1000, maxAttempts: 3 }],
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
         }),
       );
 
@@ -98,17 +98,46 @@ describe('formatErrorForState', () => {
       expect(result.type).toBe(AgentRuntimeErrorType.ModelEmptyCompletion);
       expect(result.category).toBe('provider');
       expect(result.attribution).toBe('provider');
-      expect(result.retryable).toBe(true);
+      expect(result.retryable).toBe(false);
       expect(result.countAsFailure).toBe(true);
       expect(result.numericId).toBe(8014);
       expect(result.message).toContain('empty completion');
       expect(result.body).toMatchObject({
         diagnostics: {
-          attempt: 3,
-          maxAttempts: 3,
-          outputTokens: 1,
-          retryEvents: [expect.objectContaining({ attempt: 2 })],
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
         },
+      });
+    });
+
+    it('enriches a thrown ModelRefusalError without counting it as an operational failure', () => {
+      const result = formatErrorForState(
+        new ModelRefusalError(undefined, {
+          attempt: 1,
+          finishReason: 'refusal',
+          model: 'fable',
+          provider: 'lobehub',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        attribution: 'provider',
+        body: {
+          diagnostics: {
+            attempt: 1,
+            finishReason: 'refusal',
+            model: 'fable',
+            provider: 'lobehub',
+          },
+        },
+        category: 'provider',
+        countAsFailure: false,
+        httpStatus: 471,
+        numericId: 8015,
+        retryable: false,
+        type: AgentRuntimeErrorType.ModelRefusal,
       });
     });
 

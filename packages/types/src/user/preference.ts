@@ -8,6 +8,7 @@ import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
 import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
+import type { NotificationSettings } from './settings/notification';
 
 /**
  * Per-agent override for the device execution decision. Stored on
@@ -18,7 +19,9 @@ import type { UserSettings } from './settings';
  * another. See `resolveAgencyConfig` in
  * `packages/types/src/agent/agencyConfig.ts` for the merge implementation.
  *
- * Two fields only, deliberately: `executionTarget` + `boundDeviceId`.
+ * Routing fields only, deliberately: `executionTarget`, `boundDeviceId`, and
+ * the two `localSandbox*` fields (which qualify *this member's* local execution
+ * — how hard their own machine is fenced is theirs to decide).
  * `heterogeneousProvider`, `verifyRubricId`, and `workingDirByDevice` remain
  * agent-shared because they describe *what the agent is*, not *how this user
  * routes it*.
@@ -26,6 +29,8 @@ import type { UserSettings } from './settings';
 export interface AgentDeviceOverride {
   boundDeviceId?: string;
   executionTarget?: DeviceExecutionTarget;
+  localSandbox?: boolean;
+  localSandboxNetwork?: boolean;
 }
 
 /**
@@ -45,10 +50,76 @@ export interface AgentDeviceOverride {
  * deserve its own column (à la `user_settings.hotkey` / `user_settings.tts`),
  * split it out at that point.
  */
+/**
+ * Per-user sidebar layout config for one workspace. Mirrors the two
+ * client-side `status.workspace.*` overlay fields that are worth syncing
+ * across devices; expansion state stays device-local.
+ */
+export interface SidebarLayoutPreference {
+  /** Section keys hidden from the sidebar (customize-sidebar "Hide"). */
+  hiddenSections?: string[];
+  /** Full sidebar item order, including the flex-spacer sentinel. */
+  items?: string[];
+}
+
 export interface WorkspaceUserPreference {
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
   /** Personal model choices for workspace agents that allow member selection. */
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
+  /** Per-member Agent/Chat runtime mode for shared workspace agents. */
+  agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * This member's notification preferences for workspace-scoped scenarios
+   * (the `workspace` category of the scenario registry). Same shape as the
+   * personal `user_settings.notification` bag; missing = every workspace
+   * notification enabled. Workspace notifications consult only this bag —
+   * personal notification settings no longer apply to them.
+   */
+  notification?: NotificationSettings;
+  /**
+   * Per-member sidebar sections layout (order + hidden sections). Written as
+   * a complete object on every update — partial patches would drop the
+   * sibling field through the model's top-level merge.
+   */
+  sidebar?: SidebarLayoutPreference;
+  /**
+   * Explicit per-member sidebar membership for workspace Agents / chat groups
+   * (itemId -> visible). The workspace sidebar is a shared structure, so every
+   * item a member can see is listed by default; an entry here is that member's
+   * personal opt-out (`false`) or an explicit re-show of something the legacy
+   * hidden-id list removed. An explicit entry always wins over that list.
+   */
+  sidebarAgentVisibilityOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Per-member folder assignment for sidebar items.
+   *
+   * @deprecated Folder membership is workspace-shared again — it lives on the
+   *   `agents.sessionGroupId` / `chat_groups.groupId` columns. Existing keys
+   *   are ignored; nothing reads or writes this map.
+   */
+  sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
+  /**
+   * Sidebar agents/chat-groups the caller removed from their own sidebar
+   * before ownership-based workspace defaults were introduced. Retained for
+   * backward compatibility; new workspace writes use
+   * `sidebarAgentVisibilityOverrides`. Personal mode still uses this list.
+   */
+  sidebarHiddenAgentIds?: string[];
+  /**
+   * Sidebar folders (Categories) the caller removed from their own sidebar in
+   * this workspace. Folders themselves are shared, so this is the personal
+   * mask over them: absent id = shown. Hiding a folder hides the whole
+   * section, its items included — they stay reachable from the agents list.
+   */
+  sidebarHiddenGroupIds?: string[];
+  /**
+   * Per-member pins for sidebar items.
+   *
+   * @deprecated Pinning is workspace-shared again — it lives on the
+   *   `agents.pinned` / `chat_groups.pinned` columns. Existing keys are
+   *   ignored; nothing reads or writes this map.
+   */
+  sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
 }
 
 export interface LobeUser {
@@ -95,17 +166,21 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
-   * show the built-in terminal panel on the chat page (desktop only)
-   */
-  enableBuiltinTerminal: z.boolean().optional(),
-  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
-   * enable the Fleet view (side-by-side running-task dashboard)
+   * run Codex hetero sessions through codex app-server instead of one-shot CLI spawn
    */
-  enableFleet: z.boolean().optional(),
+  enableCodexAppServer: z.boolean().optional(),
+  /**
+   * enable displaying two desktop tabs side by side
+   */
+  enableDesktopSplitView: z.boolean().optional(),
+  /**
+   * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
+   */
+  enableHeteroSessionImport: z.boolean().optional(),
   /**
    * enable multi-agent group chat mode
    */
@@ -130,10 +205,6 @@ export const UserLabSchema = z.object({
    * show OAuth app management in personal and workspace settings
    */
   enableOAuthApps: z.boolean().optional(),
-  /**
-   * show the "Add Platform Agent" entry in the create menu
-   */
-  enablePlatformAgent: z.boolean().optional(),
   /**
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
@@ -168,9 +239,26 @@ export interface UserPreference {
    */
   lastWorkspaceId?: string | null;
   /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenAgentIds}: agents/chat-groups
+   * removed from the personal sidebar via the View All page.
+   */
+  sidebarHiddenAgentIds?: string[];
+  /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenGroupIds}: folders
+   * (Categories) hidden from the personal sidebar via Category Management.
+   */
+  sidebarHiddenGroupIds?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
+  /**
+   * CSS font-family value used by the desktop built-in terminal.
+   * Empty or whitespace-only values fall back to the application code font.
+   */
+  terminalFontFamily?: string;
   topicGroupMode?: TopicGroupMode;
   /**
    * whether to include completed topics in the topic list
@@ -235,6 +323,9 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    sidebarHiddenAgentIds: z.array(z.string()).optional(),
+    sidebarHiddenGroupIds: z.array(z.string()).optional(),
+    terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

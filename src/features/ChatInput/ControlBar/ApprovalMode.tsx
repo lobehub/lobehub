@@ -96,8 +96,8 @@ const ModeSelector = memo(() => {
     [disabled],
   );
 
-  const menuItems = useMemo<MenuProps['items']>(
-    () => [
+  const menuItems = useCallback(
+    (): MenuProps['items'] => [
       {
         extra: approvalMode === 'auto-run' ? <Icon icon={Check} /> : undefined,
         key: 'auto-run',

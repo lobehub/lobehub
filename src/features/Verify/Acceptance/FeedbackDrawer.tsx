@@ -1,7 +1,8 @@
 'use client';
 
 import type { AcceptanceAttachment } from '@lobechat/types';
-import { Drawer, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { memo } from 'react';

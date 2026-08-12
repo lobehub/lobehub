@@ -23,6 +23,7 @@ import {
   gt,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
@@ -32,9 +33,19 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, messagePlugins, messages, threads, topicDocuments, topics } from '../schemas';
+import {
+  agentOperations,
+  agents,
+  messagePlugins,
+  messages,
+  threads,
+  topicDocuments,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
+import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -52,10 +63,18 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  * text is one click away in the topic itself.
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
   lastAssistantMessage?: string | null;
+  /**
+   * When the topic's current run started (`agent_operations.startedAt` of its
+   * latest top-level running operation). Only computed for `running` topics;
+   * null for everything else, and for runs that never wrote an operation row
+   * (e.g. client-mode runs) — callers must keep a fallback.
+   */
+  runStartedAt?: Date | null;
 }
 
 export interface CreateTopicParams {
@@ -64,6 +83,9 @@ export interface CreateTopicParams {
   groupId?: string | null;
   messages?: string[];
   metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
+  model?: string | null;
+  provider?: string | null;
   sessionId?: string | null;
   /**
    * Initial status. Defaults to the column default (`active`). A topic created
@@ -83,6 +105,19 @@ interface QueryTopicParams {
    */
   containerId?: string | null;
   current?: number;
+  /**
+   * Restrict an `agentId` query to the builder conversations that configured
+   * one specific target (`metadata.editingAgentId` / `metadata.editingGroupId`).
+   *
+   * Builder panels run on a single builtin agent shared by every target, whose
+   * topics deliberately carry no `groupId` / `sessionId` — those columns mark a
+   * topic as part of the target's own chat read path. The builder panel itself
+   * shows the unfiltered history on purpose; these exist so a caller that wants
+   * one target's builds can ask for them. Only meaningful alongside `agentId`;
+   * ignored by the group / container branches.
+   */
+  editingAgentId?: string | null;
+  editingGroupId?: string | null;
   /**
    * Exclude topics by status (e.g. ['completed'])
    */
@@ -167,9 +202,8 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
   WHEN 'running' THEN 3
   WHEN 'scheduled' THEN 4
   WHEN 'active' THEN 5
-  WHEN 'paused' THEN 6
-  WHEN 'completed' THEN 7
-  WHEN 'archived' THEN 8
+  WHEN 'completed' THEN 6
+  WHEN 'archived' THEN 7
   ELSE 5 END`;
 
 // Favorites always float to the top; the rest are ordered by the requested
@@ -185,17 +219,31 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * ```sql
  * (metadata ->> 'cronJobId')          IS NULL          -- 💥
  * (metadata #>> '{a,b}')              IS NOT NULL      -- 💥
- * (metadata ->> 'status')             IS DISTINCT FROM 'done'  -- 💥
  * ```
  *
- * The engine backing production is not stock Postgres, and this query *shape*
- * crashes it outright — `rt_fetch used out-of-bounds`, SQLSTATE XX000, thrown
- * before any row is read (a table with zero matching rows crashes just the same,
- * so no test on real Postgres will ever catch it). Drizzle then reports it as a
- * bare `Failed query:`, with the real cause only in the driver's `[cause]`.
+ * The crash is `pg_search`'s (ParadeDB BM25) planner hook, and it fires on any
+ * table carrying a `bm25` index: `rt_fetch used out-of-bounds`, SQLSTATE XX000.
+ * Drizzle reports it as a bare `Failed query:`, with the real cause only in the
+ * driver's `[cause]`. Four properties make it uniquely nasty:
+ *
+ * - It fires at PLAN time. `EXPLAIN` alone crashes, so a table with zero
+ *   matching rows crashes exactly like a full one.
+ * - Stock Postgres, PGlite, and any table *without* a bm25 index run these
+ *   predicates happily — no test we can write will ever catch it.
+ * - It has nothing to do with jsonb. `upper(col) IS NULL` and `(id + 1) IS NULL`
+ *   crash identically; the trigger is a null test over a *computed expression*
+ *   in a qual. A null test over a bare column is fine.
+ * - Only quals crash — WHERE, JOIN ON, HAVING, and the WHERE of a subquery, CTE,
+ *   UPDATE or DELETE. SELECT lists, ORDER BY and `UPDATE … SET` targets are safe.
+ *
+ * `topics` and `messages` carry bm25 indexes today, but so do `agents`, `files`,
+ * `documents`, `chat_groups`, `knowledge_bases` and every `user_memories*`
+ * table — and that list is one migration away from growing. A predicate written
+ * today outlives the index list, so the rule is table-independent: never write
+ * the shape.
  *
  * COALESCE the extracted value to a sentinel instead — same semantics, a shape
- * the engine survives:
+ * the planner survives:
  *
  * ```sql
  * COALESCE(metadata ->> 'cronJobId', '') = ''                     -- "is null"
@@ -203,9 +251,14 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * COALESCE(metadata ->> 'status', '') <> 'done'                   -- IS DISTINCT FROM
  * ```
  *
- * This has now bitten twice: `getLatestSpineMessageId` (LOBE-11376, #16693) and
- * `getDueScheduledTopics` (#17077 — the scheduled-run cron crashed on every tick
- * from the day it shipped, so rate-limit continuations never once resumed).
+ * (`IS DISTINCT FROM` measured safe on pg_search 0.15.26, but the guard bans it
+ * anyway — it sits one planner-hook change from the crashing family and the
+ * COALESCE form costs nothing.)
+ *
+ * This has now bitten three times: #13040, `getLatestSpineMessageId` (#16693)
+ * and `getDueScheduledTopics` (#17077 — the scheduled-run cron crashed on every
+ * tick from the day it shipped, so rate-limit continuations never once resumed).
+ * `jsonbNullTest.test.ts` is the source-shape guard that holds the line.
  */
 export class TopicModel {
   private userId: string;
@@ -237,6 +290,8 @@ export class TopicModel {
     agentId,
     containerId,
     current = 0,
+    editingAgentId,
+    editingGroupId,
     excludeStatuses,
     excludeTriggers,
     includeTriggers,
@@ -325,6 +380,14 @@ export class TopicModel {
             not(inArray(topics.status, excludeStatuses as ChatTopicStatus[])),
           )
         : undefined;
+    // Topics created before the marker existed carry neither key and therefore
+    // match no target — they cannot: what they configured was never recorded
+    // anywhere in the row. `topics_agent_id_idx` still drives the scan, so the
+    // unindexed JSONB comparison only runs over one agent's rows.
+    const editingTargetCondition = and(
+      editingAgentId ? sql`${topics.metadata}->>'editingAgentId' = ${editingAgentId}` : undefined,
+      editingGroupId ? sql`${topics.metadata}->>'editingGroupId' = ${editingGroupId}` : undefined,
+    );
 
     // If groupId is provided, query topics by groupId directly
     if (groupId) {
@@ -354,6 +417,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                model: topics.model,
+                provider: topics.provider,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -363,7 +428,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. (LOBE-11543)
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -408,6 +473,7 @@ export class TopicModel {
       const agentWhere = and(
         this.ownership(),
         agentCondition,
+        editingTargetCondition,
         includeTriggerCondition,
         excludeTriggerCondition,
         triggerCondition,
@@ -428,6 +494,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                model: topics.model,
+                provider: topics.provider,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -437,7 +505,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. (LOBE-11543)
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -497,6 +565,8 @@ export class TopicModel {
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topics.metadata,
+              model: topics.model,
+              provider: topics.provider,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
@@ -507,7 +577,7 @@ export class TopicModel {
               // display `updatedAt` above matches the client-side sort key to the server
               // order (otherwise the two disagree and the list visibly jumps) while a
               // rename/favorite edit still shows its real edit time. See rankTopics for
-              // the same activity-time pattern. (LOBE-11543)
+              // the same activity-time pattern.
               sortUpdatedAt: topicActivityAt,
               // Workspace sidebars filter maintenance actions client-side by
               // ownership (own vs workspace scope) — the filter needs the row
@@ -590,9 +660,9 @@ export class TopicModel {
   };
 
   /**
-   * Query the current user's topics, optionally filtered by status. Used by the
-   * Fleet view to list actively-running topics across all agents without
-   * pulling the full topic set to the client.
+   * Query the current user's topics, optionally filtered by status — e.g. to
+   * list actively-running topics across all agents without pulling the full
+   * topic set to the client.
    *
    * `withLastMessage` additionally pulls each topic's last assistant reply, so a
    * list can show what the agent actually said instead of just a title. The
@@ -615,9 +685,40 @@ export class TopicModel {
         : undefined,
     );
 
+    // When the topic's current run started, so a list can show live elapsed
+    // time instead of `updatedAt` (which moves on every message write). The
+    // latest *top-level* running operation is the current run: sub-operations
+    // (callAgent) would restart the clock at their own spawn time, and an
+    // abandoned `running` row from a crashed earlier run sorts below the live
+    // one. Not scoped by `ownership()` — in a workspace the run may have been
+    // started by another member, and the topic join is already ownership-gated.
+    const runStartedAtSubquery = this.db
+      .select({ value: agentOperations.startedAt })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topics.id),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
+        ),
+      )
+      .orderBy(desc(agentOperations.startedAt))
+      .limit(1);
+
+    // CASE-gated so only rows that are actually running pay for the lookup —
+    // and a stale running op under a finished topic can't resurrect a timer.
+    const runStartedAtColumn =
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+        .mapWith(agentOperations.startedAt)
+        .as('run_started_at');
+
     if (!withLastMessage) {
       return this.db
-        .select()
+        .select({
+          ...getTableColumns(topics),
+          runStartedAt: runStartedAtColumn,
+        })
         .from(topics)
         .where(where)
         .orderBy(desc(topics.updatedAt))
@@ -654,6 +755,7 @@ export class TopicModel {
         lastAssistantMessage: sql<string | null>`(${lastAssistantMessageSubquery})`.as(
           'last_assistant_message',
         ),
+        runStartedAt: runStartedAtColumn,
       })
       .from(topics)
       .where(where)
@@ -667,6 +769,33 @@ export class TopicModel {
           ? `${row.lastAssistantMessage.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
           : row.lastAssistantMessage,
     }));
+  };
+
+  /**
+   * Recent topics from the same IM channel, most-recent first. Matches the
+   * channel via the `metadata.bot.platformThreadId` path written at topic
+   * creation (see `ChatTopicBotContext`). Used to pre-inject cross-session
+   * history on platforms that can't read chat history at runtime (e.g. WeChat,
+   * whose `readMessages` throws), so a fresh topic still knows what the channel
+   * was just talking about.
+   */
+  findRecentByBotThread = async (
+    platformThreadId: string,
+    { limit = 3 }: { limit?: number } = {},
+  ): Promise<TopicItem[]> => {
+    if (!platformThreadId) return [];
+
+    return this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          this.ownership(),
+          sql`${topics.metadata} -> 'bot' ->> 'platformThreadId' = ${platformThreadId}`,
+        ),
+      )
+      .orderBy(desc(topics.updatedAt))
+      .limit(limit);
   };
 
   queryByKeyword = async (
@@ -973,6 +1102,7 @@ export class TopicModel {
             { userId: this.userId, workspaceId: this.workspaceId },
             {
               ...originalTopic,
+              ...COPIED_TOPIC_USAGE_RESET,
               clientId: null,
               id: this.genId(),
               title: newTitle || originalTopic?.title,
@@ -1034,6 +1164,10 @@ export class TopicModel {
             ...message,
             clientId: null,
             id: newId,
+            // A duplicate consumed no tokens: mark it so usage reports do not
+            // count the source's generation twice (the figures themselves stay
+            // — they are what the transcript records).
+            metadata: markCopiedMessageMetadata(message.metadata),
             parentId: newParentId,
             tools: newTools,
             topicId: duplicatedTopic.id,
@@ -1141,6 +1275,26 @@ export class TopicModel {
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(topics.id, id), this.ownership()))
       .returning();
+  };
+
+  /**
+   * Settle a topic out of `running` once its run has terminated server-side.
+   *
+   * Guarded on `status = 'running'` so it is race-tolerant with clients: an
+   * attached renderer writes 'active' (focused) or 'unread' (backgrounded) on
+   * the terminal stream event, and whichever write lands first wins — this one
+   * degrades to a no-op instead of clobbering it. Without a server-side settle,
+   * a run with no client attached (cron-dispatched scheduled resume, app closed
+   * mid-run) leaves the topic at `running` forever.
+   *
+   * Returns the settled row, or nothing when the guard didn't match.
+   */
+  settleRunningStatus = async (id: string, status: TopicItem['status'] = 'unread') => {
+    return this.db
+      .update(topics)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(topics.id, id), eq(topics.status, 'running'), this.ownership()))
+      .returning({ id: topics.id, status: topics.status });
   };
 
   /**
@@ -1260,6 +1414,77 @@ export class TopicModel {
         .set({ metadata: mergedMetadata })
         .where(and(eq(topics.id, id), this.ownership()))
         .returning();
+    });
+  };
+
+  /**
+   * Atomically reserve an idle topic for one task-callback delivery.
+   *
+   * The topic row lock closes the check/set race between callback workers:
+   * only one callback can observe both `runningOperation` and the reservation
+   * as empty. Foreground/tool continuations clear `runningOperation` before a
+   * callback can claim the topic, so the callback always re-anchors on the
+   * completed turn's latest spine.
+   */
+  tryReserveTaskCallback = async (id: string, messageId: string): Promise<boolean | null> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (!existing) return null;
+
+      const reservation = existing.metadata?.taskCallbackReservation;
+      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
+      const hasLiveReservation =
+        reservation &&
+        Number.isFinite(reservedAt) &&
+        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+
+      if (reservation?.messageId === messageId && hasLiveReservation) return true;
+      if (existing.metadata?.runningOperation || hasLiveReservation) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            taskCallbackReservation: {
+              messageId,
+              reservedAt: new Date().toISOString(),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return true;
+    });
+
+  /**
+   * Release only the caller's reservation. The ownership check prevents a
+   * delayed finally block from clearing a newer callback's claim.
+   */
+  releaseTaskCallbackReservation = async (id: string, messageId: string): Promise<void> => {
+    await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (existing?.metadata?.taskCallbackReservation?.messageId !== messageId) return;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            taskCallbackReservation: null,
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
     });
   };
 

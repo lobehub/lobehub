@@ -17,11 +17,12 @@ import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
+import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
@@ -66,13 +67,26 @@ const mockStartSession = vi.fn();
 const mockSendPrompt = vi.fn();
 const mockStopSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
+const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
+    getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
     startSession: (...args: any[]) => mockStartSession(...args),
     stopSession: (...args: any[]) => mockStopSession(...args),
+  },
+}));
+
+// agentQuotaService — account routing (pre-spawn) + usage ledger (per turn).
+// Unmocked, both fire REAL trpc fetches from inside the executor.
+const mockSelectAccountForAgent = vi.fn(async (..._args: any[]): Promise<unknown> => null);
+const mockRecordQuotaUsage = vi.fn(async (..._args: any[]) => undefined);
+vi.mock('@/services/agentQuota', () => ({
+  agentQuotaService: {
+    recordUsage: (...args: any[]) => mockRecordQuotaUsage(...args),
+    selectAccountForAgent: (...args: any[]) => mockSelectAccountForAgent(...args),
   },
 }));
 
@@ -1666,6 +1680,36 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('should inject local workspace context only when starting a native session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const params = {
+        ...defaultParams,
+        heterogeneousProvider: {
+          command: 'codex',
+          systemContext: 'Follow the agent rules.',
+          type: 'codex' as const,
+        },
+        workingDirectory: '/Users/me/repo',
+      };
+
+      await executeHeterogeneousAgent(get, params);
+
+      expect(mockSendPrompt.mock.calls[0][0].systemContext).toContain(
+        "You are running on the user's own machine. Your working directory is `/Users/me/repo`.",
+      );
+
+      await executeHeterogeneousAgent(get, {
+        ...params,
+        resumeSessionId: 'codex-thread-existing',
+      });
+
+      const resumedSystemContext = mockSendPrompt.mock.calls[1][0].systemContext;
+      expect(resumedSystemContext).toBe('Follow the agent rules.');
+      expect(resumedSystemContext).not.toContain('## Workspace');
+      expect(resumedSystemContext).not.toContain('/Users/me/repo');
+    });
+
     it('should forward context selections as heterogeneous system context', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1749,6 +1793,53 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             'model_reasoning_effort="xhigh"',
           ],
         }),
+      );
+    });
+
+    it('should execute a persisted legacy provider config without type', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const legacyProvider = {
+        command: '/usr/local/bin/custom-codex',
+      } as unknown as HeterogeneousProviderConfig;
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: legacyProvider,
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'codex',
+          command: '/usr/local/bin/custom-codex',
+        }),
+      );
+    });
+
+    it('should pass the Codex app-server lab preference to the desktop session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableCodexAppServer: true },
+        },
+      }));
+
+      try {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        });
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({ useCodexAppServer: true }),
       );
     });
 
@@ -3913,6 +4004,57 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(threadAssistantIds.size).toBeGreaterThan(0);
     });
 
+    // A CC Task/subagent burns the SAME subscription as its parent, so its
+    // turns must reach the usage ledger too — only ledgering main-agent turns
+    // understates the account and skews capacity calibration high.
+    it('ledgers subagent turn usage via agentQuotaService.recordUsage', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // subagent closing turn with real usage on message.usage (batch mode)
+        {
+          message: {
+            content: [{ text: 'sub done', type: 'text' }],
+            id: 'msg_sub_1',
+            role: 'assistant',
+            usage: { cache_read_input_tokens: 300, input_tokens: 40, output_tokens: 60 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccResult(),
+      ]);
+
+      const subagentLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.usage?.output === 60,
+      );
+      expect(subagentLedgerCall).toBeDefined();
+      expect(subagentLedgerCall![0]).toMatchObject({
+        provider: 'claude-code',
+        usage: { cacheRead: 300, input: 40, output: 60 },
+      });
+    });
+
+    it('ledgers main-agent turn usage via agentQuotaService.recordUsage', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01', 'claude-opus-4-6'),
+        ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+        ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+        ccResult(),
+      ]);
+
+      const mainLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.usage?.output === 20,
+      );
+      expect(mainLedgerCall).toBeDefined();
+      expect(mainLedgerCall![0]).toMatchObject({
+        model: 'claude-opus-4-6',
+        provider: 'claude-code',
+        usage: { input: 100, output: 20 },
+      });
+    });
+
     it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {
       await runWithEvents(
         [
@@ -5579,6 +5721,42 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           topicId: 'topic-1',
         }),
       );
+    });
+
+    // ── 5b. CLI-reported stop → non-error terminal, but still not a completion ──
+    it('a CLI-reported stop writes "active", fires NO notification and NO drain', async () => {
+      desktopFlag.value = true;
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+        updateTopicStatus,
+      });
+
+      // No abortController: the stop was reported by the CLI itself, so
+      // `isAborted()` is false and only the terminal's `interrupted` reason
+      // can distinguish this from a finished run.
+      await runToComplete(store, [
+        ccInit(),
+        ccText('msg_01', 'partial'),
+        {
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          subtype: 'error_during_execution',
+          terminal_reason: 'aborted_streaming',
+          type: 'result',
+        },
+      ]);
+
+      // Not a failure: no error persisted, topic left neutral.
+      expect(mockUpdateMessageError).not.toHaveBeenCalled();
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      // Not a completion either: announcing it or draining the queue would
+      // treat the user's stop as a finished turn.
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
     // ── 5. stuck-spinner regression: status reset must not wait on queued persistence ──

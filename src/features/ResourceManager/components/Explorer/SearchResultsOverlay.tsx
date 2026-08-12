@@ -11,9 +11,13 @@ import { Virtuoso } from 'react-virtuoso';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import {
+  getResourceQueryVisibility,
+  getResourceSourceFilter,
+} from '@/features/ResourceManager/store/selectors';
 import { useClientDataSWR } from '@/libs/swr';
 import { resourceKeys } from '@/libs/swr/keys';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import {
@@ -21,7 +25,7 @@ import {
   INITIAL_STATUS,
 } from '@/store/global/initialState';
 import type { AsyncTaskStatus } from '@/types/asyncTask';
-import type { FileListItem } from '@/types/files';
+import { type FileListItem, type ResourceSourceFilter } from '@/types/files';
 
 import { useExplorerSelectionEligibility } from './hooks/useExplorerSelection';
 import FileListItemComponent from './ListView/ListItem';
@@ -31,9 +35,15 @@ import { useMasonryColumnCount } from './useMasonryColumnCount';
 
 const SearchResultsOverlay = memo(() => {
   const { t } = useTranslation('components');
-  const [searchQuery, libraryId, category, viewMode, listVisibility] = useResourceManagerStore(
-    (s) => [s.searchQuery, s.libraryId, s.category, s.viewMode, s.listVisibility],
-  );
+  const [searchQuery, libraryId, category, viewMode, listVisibility, sourceFilter] =
+    useResourceManagerStore((s) => [
+      s.searchQuery,
+      s.libraryId,
+      s.category,
+      s.viewMode,
+      s.listVisibility,
+      getResourceSourceFilter(s),
+    ]);
 
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const { isItemSelectable } = useExplorerSelectionEligibility();
@@ -48,8 +58,8 @@ const SearchResultsOverlay = memo(() => {
   // Personal account has only one uploader (the user themselves), so hide the
   // column entirely there — it only makes sense in a workspace with multiple members.
   const activeWorkspaceId = useActiveWorkspaceId();
-  const showUploader = !!activeWorkspaceId && listVisibility !== 'private';
-  const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
+  const showUploader = !!activeWorkspaceId && (!!libraryId || listVisibility !== 'private');
+  const visibility = getResourceQueryVisibility(libraryId, listVisibility);
 
   const {
     data: rawData,
@@ -62,12 +72,24 @@ const SearchResultsOverlay = memo(() => {
           category: libraryId ? undefined : category,
           libraryId,
           q: searchQuery,
+          // Search narrows the list the user is looking at, so it has to honour
+          // the source they picked. Omitting it left the chip visibly selected
+          // while results came back from every non-hidden source — and made
+          // `Acceptance` search unusable, since that source is hidden unless
+          // explicitly asked for.
+          sourceFilter,
           visibility,
         })
       : null,
     async ([, params]: [
       string,
-      { category?: string; libraryId?: string; q: string; visibility: 'private' | 'public' },
+      {
+        category?: string;
+        libraryId?: string;
+        q: string;
+        sourceFilter?: ResourceSourceFilter;
+        visibility?: 'private' | 'public';
+      },
     ]) => {
       const response = await resourceService.queryResources({
         ...params,

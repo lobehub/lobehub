@@ -37,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
     container-type: inline-size;
   `,
   configPanel: css`
-    padding: 16px;
+    padding: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
@@ -56,7 +56,7 @@ const ProfileEditor = memo(() => {
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
+  const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -80,7 +80,7 @@ const ProfileEditor = memo(() => {
 
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateAgentConfigById(agentId, {
-      agencyConfig: { ...config.agencyConfig, boundDeviceId, executionTarget: 'device' },
+      agencyConfig: { ...config?.agencyConfig, boundDeviceId, executionTarget: 'device' },
     });
   };
 
@@ -174,8 +174,8 @@ const ProfileEditor = memo(() => {
                   disabled={!canEdit}
                   popupWidth={400}
                   value={{
-                    model: config.model,
-                    provider: config.provider,
+                    model: config?.model,
+                    provider: config?.provider,
                   }}
                   onChange={(value) => {
                     if (!canEdit) return;

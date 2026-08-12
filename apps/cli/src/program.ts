@@ -23,6 +23,7 @@ import { registerMigrateCommand } from './commands/migrate';
 import { registerModelCommand } from './commands/model';
 import { registerNotifyCommand } from './commands/notify';
 import { registerPluginCommand } from './commands/plugin';
+import { registerProjectCommand } from './commands/project';
 import { registerProviderCommand } from './commands/provider';
 import { registerSearchCommand } from './commands/search';
 import { registerSessionGroupCommand } from './commands/session-group';
@@ -94,6 +95,7 @@ export function createProgram() {
   registerModelCommand(program);
   registerNotifyCommand(program);
   registerProviderCommand(program);
+  registerProjectCommand(program);
   registerPluginCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);

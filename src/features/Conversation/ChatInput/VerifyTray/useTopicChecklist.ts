@@ -92,7 +92,7 @@ const persistGoal = (topicId: string, goal: string, checks: TrayCheck[]) =>
 
 /**
  * Set the topic's Goal without a mounted tray (used by the composer "+" →
- * "Set goal" entry). Reads the current state, writes the goal, and revalidates
+ * "Goal" entry). Reads the current state, writes the goal, and revalidates
  * the shared SWR key so the tray reflects it.
  */
 export const setTopicGoal = async (topicId: string, goal: string) => {
@@ -109,6 +109,9 @@ export const openTopicGoalModal = async (topicId: string) => {
   const current = await read(topicId);
   openGoalModal({
     initialGoal: current.goal || undefined,
+    // Only offer delete when there's an existing goal to clear. Clearing writes
+    // an empty requirement, which hides the tray (checks kept).
+    onDelete: current.goal ? () => setTopicGoal(topicId, '') : undefined,
     onSubmit: (goal) => setTopicGoal(topicId, goal),
   });
 };

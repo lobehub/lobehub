@@ -7,7 +7,7 @@ import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorCon
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
 import { useDocumentStore } from '@/store/document';
 import { pageSelectors, usePageStore } from '@/store/page';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
 import { type PublicState } from './store';
 import { usePageEditorStore, useStoreApi } from './store';

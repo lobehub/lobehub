@@ -171,22 +171,28 @@ reachable.
 
 ### When the instance comes up signed out
 
-Sign it in **yourself** — never hand this step to the user. The desktop flow is
-OAuth+PKCE against `/oidc/auth`, and the redirect target is a **server page the app
-then polls** (`/oidc/callback/desktop`), not a `lobehub://` deep link — so no other
-app can steal the callback, and no click is needed when the default browser already
-has a LobeHub session:
+**NEVER trigger the OAuth sign-in flow (`requestAuthorization` / opening
+`/oidc/auth` in any form).** `AuthCtr` runs it through `shell.openExternal`, so
+it **hijacks the user's default browser with a login/authorize page** — visibly,
+on their machine, possibly repeatedly. Worse, dev instances sit on per-instance
+ports (`localhost:3024`, …), so the authorize URL targets a localhost origin
+whose session/callback state is broken or already dead — the opened page can
+never complete. This recipe used to live here; it was a mistake.
 
-```bash
-agent-browser --session s<port> --cdp <port> eval --stdin << 'EOF'
-(async () => {
-  const m = await import('/src/services/electron/remoteServer.ts');
-  return JSON.stringify(await (m.remoteServerService || m.default).requestAuthorization({ storageMode: 'cloud' }));
-})()
-EOF
-# poll until user().user.id appears, then capture it:
-$EDEV save-login <id>
-```
+Login state must be **injected directly**, never acquired through a login page:
+
+1. **Restore the login snapshot** — `$EDEV login-status` to inspect
+   `~/.lobehub/agent-testing/electron-login`, and let `start` seed the instance
+   from it. A signed-out boot usually means the snapshot is stale because a
+   previous instance was killed instead of stopped (see the traps below) — a
+   `save-login <id>` from any still-live signed-in instance repairs it.
+2. **Mint the state via CLI/API** — the same philosophy as `web-seed`: create
+   the session server-side (seeded better-auth session / dev token issuance)
+   and inject it into the app's storage, with zero UI login. Prefer building on
+   `setup-auth.sh` seeding over anything that renders a sign-in page.
+3. **Neither works → report auth as ❌ Blocked and stop.** Tell the user the
+   Electron surface needs one manual sign-in (once — the snapshot then covers
+   future runs). Do not open any login page on their behalf.
 
 Three traps behind a signed-out instance:
 

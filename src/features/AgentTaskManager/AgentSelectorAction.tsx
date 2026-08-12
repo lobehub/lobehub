@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Center, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -7,11 +8,11 @@ import { useTranslation } from 'react-i18next';
 
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
+import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
@@ -57,6 +58,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
   const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateUngroupedAgents = useHomeStore(
     homeAgentListSelectors.privateUngroupedAgents,
     isEqual,
@@ -97,8 +99,10 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
 
   const privateAgents = useMemo<SidebarAgentItem[]>(() => {
     const groupedItems = privateAgentGroups.flatMap((group) => group.items);
-    return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
-  }, [privateAgentGroups, privateUngroupedAgents]);
+    return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
+      (agent) => agent.type === 'agent',
+    );
+  }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents]);
 
   const activeAgent = useMemo(
     () => [...privateAgents, ...workspaceAgents].find((agent) => agent.id === agentId),
@@ -116,8 +120,9 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
     list.map((agent) => (
       <AgentItem
         active={agent.id === agentId}
+        agent={agent}
         agentId={agent.id}
-        agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+        agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
         avatar={agent.avatar}
         key={agent.id}
         onAgentChange={handleAgentChange}

@@ -38,8 +38,8 @@ afterEach(async () => {
 
 describe('ResourcePermissionModel', () => {
   it.each([
-    ['agent', 'use'],
-    ['agentGroup', 'use'],
+    ['agent', 'edit'],
+    ['agentGroup', 'edit'],
     ['document', 'view'],
   ] as const)(
     'falls back to %s-specific default %s without a row',

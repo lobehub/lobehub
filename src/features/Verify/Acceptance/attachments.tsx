@@ -2,8 +2,8 @@
 
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { Flexbox, Icon, Image } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Upload } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Upload } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ImagePlus, Loader2, X } from 'lucide-react';
 import { type ClipboardEvent, memo, useCallback, useState } from 'react';
@@ -90,7 +90,7 @@ const pickImages = (files: File[]): File[] =>
  */
 export const useFeedbackAttachments = (max = 6) => {
   const { t } = useTranslation('verify');
-  const { message } = App.useApp();
+
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -102,14 +102,14 @@ export const useFeedbackAttachments = (max = 6) => {
 
       const room = max - attachments.length;
       if (room <= 0) {
-        message.info(t('acceptance.review.attachLimit', { count: max }));
+        toast.info(t('acceptance.review.attachLimit', { count: max }));
         return;
       }
 
       await Promise.all(
         images.slice(0, room).map(async (file) => {
           if (file.size > MAX_ATTACHMENT_SIZE) {
-            message.error(t('acceptance.review.attachTooLarge'));
+            toast.error(t('acceptance.review.attachTooLarge'));
             return;
           }
           setUploadingCount((count) => count + 1);
@@ -123,14 +123,14 @@ export const useFeedbackAttachments = (max = 6) => {
             }
           } catch (error) {
             console.error('[acceptance] attachment upload failed', error);
-            message.error(t('acceptance.review.attachFailed'));
+            toast.error(t('acceptance.review.attachFailed'));
           } finally {
             setUploadingCount((count) => count - 1);
           }
         }),
       );
     },
-    [attachments.length, max, message, t, uploadWithProgress],
+    [attachments.length, max, t, uploadWithProgress],
   );
 
   const handlePaste = useCallback(
@@ -239,7 +239,17 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) =>
   const usable = (attachments ?? []).filter((attachment) => attachment.url);
   if (usable.length === 0) return null;
   return (
-    <Flexbox horizontal gap={6} wrap={'wrap'}>
+    // Every host row is itself clickable (jump to the check), and that jump closes the
+    // drawer this list often lives in — which would unmount the zoom viewer in the same
+    // tick it opened. Zooming a thumbnail is its own action, so it stops here.
+    <Flexbox
+      horizontal
+      gap={6}
+      wrap={'wrap'}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+    >
       {usable.map((attachment) => (
         <div className={styles.thumb} key={attachment.id}>
           <Image alt={attachment.name ?? ''} src={attachment.url!} />

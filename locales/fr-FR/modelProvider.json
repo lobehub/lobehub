@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Tri personnalisé des modèles",
   "providerModels.list.enabledEmpty": "Aucun modèle activé disponible. Veuillez activer vos modèles préférés ci-dessous~",
   "providerModels.list.fetcher.clear": "Effacer les modèles récupérés",
+  "providerModels.list.fetcher.duplicatesRemoved": "Entrées en double supprimées ({{count}}) : {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Entrées en double supprimées ({{count}}) : {{ids}} (+{{remainingCount}} autres identifiants)",
   "providerModels.list.fetcher.error": "Échec de la récupération des modèles : {{message}}",
   "providerModels.list.fetcher.errorFallback": "Erreur inconnue",
   "providerModels.list.fetcher.fetch": "Récupérer les modèles",

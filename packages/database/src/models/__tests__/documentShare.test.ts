@@ -1,14 +1,11 @@
 // @vitest-environment node
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, documentShares, users, workspaces } from '../../schemas';
+import { documents, documentShares, users, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
 import { DocumentShareModel } from '../documentShare';
-import { RbacModel } from '../rbac';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -290,12 +287,9 @@ describe('DocumentShareModel', () => {
 
     describe('findByDocumentIdWithAccessCheck — private is creator-only, even in a workspace', () => {
       beforeEach(async () => {
-        await seedWorkspaceRoles(serverDB, workspaceId);
-        await new RbacModel(serverDB, userId2).assignWorkspaceRole({
-          roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-          userId: userId2,
-          workspaceId,
-        });
+        await serverDB
+          .insert(workspaceMembers)
+          .values({ role: 'viewer', userId: userId2, workspaceId });
       });
 
       it('rejects a workspace member (viewer role) for a private share', async () => {

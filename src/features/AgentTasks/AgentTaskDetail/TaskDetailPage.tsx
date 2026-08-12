@@ -7,8 +7,7 @@ import { Link } from 'react-router';
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import Loading from '@/components/Loading/BrandTextLoading';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -106,11 +105,14 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
       />
       <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
         <WideScreenContainer>
-          {isInitialLoading ? <Loading debugId="TaskDetail" /> : <TaskDetailSections />}
+          {isInitialLoading ? (
+            <SurfaceSkeleton header={false} variant={'editor'} />
+          ) : (
+            <TaskDetailSections />
+          )}
         </WideScreenContainer>
       </Flexbox>
       <TopicChatDrawer />
-      <DocumentPreviewModal />
     </Flexbox>
   );
 });

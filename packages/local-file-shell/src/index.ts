@@ -1,6 +1,6 @@
 export * from './contentSearch';
 export * from './file';
-export * from './fileSearch';
+export { BaseFileSearch, createFileSearchModule } from './fileSearch';
 export * from './git';
 export { createLogger, type Logger, type LoggerFactory, setLoggerFactory } from './logger';
 export * from './shell';

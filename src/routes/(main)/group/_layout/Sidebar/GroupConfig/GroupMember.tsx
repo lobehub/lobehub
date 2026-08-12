@@ -1,17 +1,18 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { UserMinus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import UserAvatar from '@/features/User/UserAvatar';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -49,7 +50,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   const { canEditResource } = useResourceAccess('agentGroup', groupId);
   const canEdit = hasEditPermission && canEditResource;
   const router = useQueryRoute();
-  const location = useLocation();
+  const location = useActiveLocation();
   const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.username(s),
@@ -122,7 +123,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                   avatar={item.avatar || DEFAULT_AVATAR}
                   background={item.backgroundColor ?? undefined}
                   isExternal={!item.virtual}
-                  title={item.title || t('defaultSession', { ns: 'common' })}
+                  title={agentDisplayName(item, t('defaultSession', { ns: 'common' }))}
                   actions={
                     <ActionIcon
                       danger

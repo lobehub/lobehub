@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "사용자 정의 모델 정렬",
   "providerModels.list.enabledEmpty": "활성화된 모델이 없습니다. 아래 목록에서 원하는 모델을 활성화해 보세요~",
   "providerModels.list.fetcher.clear": "가져온 모델 지우기",
+  "providerModels.list.fetcher.duplicatesRemoved": "중복 항목 제거됨 ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "중복 항목 제거됨 ({{count}}): {{ids}} (+{{remainingCount}}개의 ID 추가)",
   "providerModels.list.fetcher.error": "모델을 가져오는 데 실패했습니다: {{message}}",
   "providerModels.list.fetcher.errorFallback": "알 수 없는 오류",
   "providerModels.list.fetcher.fetch": "모델 목록 가져오기",

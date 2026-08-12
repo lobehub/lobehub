@@ -2,15 +2,32 @@ import { AgentPluginEntrySchema, InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
+import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
+import {
+  AGENT_TRANSFER_IN_PROGRESS,
+  AgentTransferJobModel,
+} from '@/database/models/agentTransferJob';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
-import { AgentGroupRepository } from '@/database/repositories/agentGroup';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
+import {
+  AgentGroupRepository,
+  GROUP_HAS_INACCESSIBLE_MEMBER,
+} from '@/database/repositories/agentGroup';
+import type { ResourceAccessLevel } from '@/database/schemas';
+import {
+  DEFAULT_RESOURCE_ACCESS_LEVELS,
+  LEGACY_VIEWER_ACCESS_LEVELS,
+  RESOURCE_ACCESS_LEVELS_BY_TYPE,
+} from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import { GROUP_MEMBER_ROLES } from '@/database/utils/groupMembership';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
@@ -21,7 +38,10 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -31,6 +51,7 @@ import {
   redactGroupConfig,
   type ResourceConfigAccess,
 } from './_helpers/resourceConfigGuard';
+import { getWorkspaceGroupVirtualAgentIds } from './_helpers/workspaceAgentGuard';
 
 const resourceConfigGuardCtx = (ctx: {
   serverDB: Parameters<typeof getResourceConfigAccess>[0]['db'];
@@ -147,6 +168,45 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 // delete + member adds/removes). Reads keep the bare proc.
 const agentGroupProcedureWrite = agentGroupProcedure.use(withScopedPermission('agent:update'));
 
+/**
+ * Write a group's access level onto the group AND the group-owned virtual
+ * agents (supervisor + generated members).
+ *
+ * The cascade is not decorative: `assertCanEditResource` authorizes an agent by
+ * that agent's OWN ACL, with no parent-group term. A virtual agent left without
+ * a row falls back to the agent default (`edit`), so publishing a group as
+ * `use`/`view` while skipping the cascade leaves its supervisor editable by
+ * every member who can resolve its id — the group restriction would apply to
+ * the group resource only. Mirrors `resourcePermission.setGeneralAccess`;
+ * standalone agents linked into the group keep their own ACL.
+ */
+const applyGroupAccessLevel = async ({
+  accessLevel,
+  ctx,
+  groupId,
+  permissionModel,
+  workspaceId,
+}: {
+  accessLevel: ResourceAccessLevel;
+  ctx: { serverDB: LobeChatDatabase; userId: string };
+  groupId: string;
+  permissionModel: ResourcePermissionModel;
+  workspaceId: string;
+}): Promise<void> => {
+  const virtualAgentIds = await getWorkspaceGroupVirtualAgentIds({
+    db: ctx.serverDB,
+    groupId,
+    workspaceId,
+  });
+
+  await Promise.all([
+    permissionModel.setAccessLevel('agentGroup', groupId, accessLevel, ctx.userId),
+    ...virtualAgentIds.map((agentId) =>
+      permissionModel.setAccessLevel('agent', agentId, accessLevel, ctx.userId),
+    ),
+  ]);
+};
+
 export const agentGroupRouter = router({
   addAgentsToGroup: agentGroupProcedureWrite
     .input(
@@ -234,6 +294,52 @@ export const agentGroupRouter = router({
    * Check agents before removal to identify virtual agents that will be permanently deleted.
    * This allows the frontend to show a confirmation dialog.
    */
+  /**
+   * Progress of the async history backfill after a heavy group transfer/copy,
+   * plus the topic ids still awaiting their turn (the UI's gray-out set).
+   * Returns null when no backfill is running for the group.
+   *
+   * The group twin of `agent.getTransferJobStatus`. Only the lookup key
+   * differs: a group's job is found through the group junction, not the member
+   * agents — a group with an empty roster registers no agent rows at all.
+   * Queue-jumping stays on `agent.prioritizeTransferTopic`, which is keyed by
+   * topic and authorizes by topic visibility, so it already serves both.
+   */
+  getTransferJobStatus: agentGroupProcedure
+    .input(
+      z.object({
+        groupId: z.string(),
+        /**
+         * Topics the client currently shows (sidebar rows + active topic).
+         * `pendingTopicIds` is the intersection with the job's queue, keeping
+         * the poll payload bounded however large the backfill is.
+         */
+        topicIds: z.array(z.string()).max(1000),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      // Scope check: only report migration state for groups visible to the
+      // caller's current personal/workspace scope (group ids are guessable).
+      const group = await ctx.chatGroupModel.findById(input.groupId);
+      if (!group) return null;
+
+      const job = await AgentTransferJobModel.findPendingJobForGroup(ctx.serverDB, input.groupId);
+      if (!job) return null;
+      const pendingTopicIds = await AgentTransferJobModel.getPendingTopicIds(
+        ctx.serverDB,
+        job.id,
+        input.topicIds,
+      );
+      return {
+        completedTopics: job.completedTopics,
+        jobId: job.id,
+        pendingTopicIds,
+        totalTopics: job.totalTopics,
+        // `transfer` vs `copy` — the client words its progress hints by it.
+        type: job.type,
+      };
+    }),
+
   checkAgentsBeforeRemoval: agentGroupProcedure
     .input(
       z.object({
@@ -319,6 +425,31 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Resolve the folder BEFORE creating the member agents. The same check
+      // runs inside `createGroupWithSupervisor`, but that happens after these
+      // inserts and outside their transaction, so a bad folder id would leave
+      // orphaned virtual agents behind.
+      const groupFolderId = input.groupConfig?.groupId;
+      let folderVisibility: 'private' | 'public' | undefined;
+
+      if (groupFolderId) {
+        folderVisibility = await ctx.agentGroupRepo.getAssignableFolderVisibility(groupFolderId);
+        const requested = input.groupConfig?.visibility;
+
+        if (requested && requested !== folderVisibility)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `A ${requested} chat group cannot be created in a ${folderVisibility} folder`,
+          });
+      }
+
+      // The synthetic members inherit the group's visibility, the same way the
+      // supervisor does. Left to the column default they would be public
+      // workspace resources while their group is private — visible to
+      // permission checks that look agents up by id rather than through the
+      // group. Must match `createGroupWithSupervisor`'s own derivation.
+      const groupVisibility = input.groupConfig?.visibility ?? folderVisibility ?? undefined;
+
       // 1. Batch create virtual member agents
       const memberConfigs = input.members.map((member) => ({
         ...member,
@@ -327,6 +458,7 @@ export const agentGroupRouter = router({
         plugins: member.plugins as unknown as string[] | undefined,
         tags: member.tags as string[] | undefined,
         virtual: true,
+        ...(groupVisibility ? { visibility: groupVisibility } : {}),
       }));
 
       const createdAgents = await ctx.agentModel.batchCreate(memberConfigs);
@@ -570,11 +702,42 @@ export const agentGroupRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
-      return ctx.agentGroupRepo.removeAgentsFromGroup(
-        input.groupId,
-        input.agentIds,
-        input.deleteVirtualAgents,
-      );
+      try {
+        return await ctx.agentGroupRepo.removeAgentsFromGroup(
+          input.groupId,
+          input.agentIds,
+          input.deleteVirtualAgents,
+        );
+      } catch (error) {
+        // A backfill still maps these agents' message rows — removing a member
+        // now would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: "A previous transfer of this group's agents is still migrating history",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        throw error;
+      }
+    }),
+
+  /**
+   * Members these groups only reference (the roster's `External` rows).
+   *
+   * Asked before a transfer: those agents stay in the source scope and the
+   * group takes clones of them instead, which is a visible enough change that
+   * the user should agree to it up front.
+   */
+  listReferencedMembers: agentGroupProcedure
+    .input(z.object({ groupIds: z.array(z.string()).min(1).max(100) }))
+    .query(async ({ input, ctx }) => {
+      return ctx.agentGroupRepo.listReferencedMembers([...new Set(input.groupIds)]);
     }),
 
   transferGroup: agentGroupProcedureWrite
@@ -634,25 +797,80 @@ export const agentGroupRouter = router({
         });
       }
 
-      // The transfer rehomes member agents and every group conversation — a
-      // non-owner member must not move teammates' rows along with their group.
+      // The transfer rehomes member agents and every group conversation — only
+      // the primary owner may move teammates' rows along with a group;
+      // co-admins and members may not.
       if (
-        isWorkspaceNonOwner(ctx) &&
+        ctx.workspaceId &&
+        !(await isWorkspacePrimaryOwner({
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) &&
         (await ctx.agentGroupRepo.transferHasForeignRows(input.groupId))
       ) {
         throw new TRPCError({
           cause: { data: { code: TransferErrorCode.OwnerOnly } },
           code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer a group carrying others' content",
+          message: "Only the workspace owner can transfer a group carrying others' content",
         });
       }
 
-      const result = await ctx.agentGroupRepo.transferToWorkspace(
-        input.groupId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let result;
+      try {
+        result = await ctx.agentGroupRepo.transferToWorkspace(
+          input.groupId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer a group carrying others' content",
+          });
+        }
+        if (error instanceof Error && error.message === GROUP_HAS_INACCESSIBLE_MEMBER) {
+          throw new TRPCError({
+            // No group or member id in the payload: which member is hidden is
+            // exactly what the caller is not entitled to learn.
+            cause: { data: { code: TransferErrorCode.GroupHasInaccessibleMember } },
+            code: 'FORBIDDEN',
+            message: 'This group includes a member you do not have access to',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferInProgress } },
+            code: 'CONFLICT',
+            message: "A previous transfer of this group's agents is still migrating history",
+          });
+        }
+        throw error;
+      }
+
+      // Nothing moved: the group was not in this scope, or a racing transfer
+      // took it before we got the row lock. Return before the permission writes
+      // below — they would wipe the source ACL and grant access in the target
+      // for a group this call did not transfer.
+      if (!result) return result;
+
+      // Heavy history goes through an async backfill — kick the driver now
+      // that the transfer transaction has committed.
+      if (result.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
@@ -661,17 +879,29 @@ export const agentGroupRouter = router({
         );
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        // A released client's two-valued `viewer` is an explicit "less than
+        // editor" choice, so it resolves through the legacy map rather than the
+        // default (which is `edit`); saying nothing at all still means "what a
+        // newly created group would get".
         const targetAccessLevel =
           input.targetAccessLevel ??
-          (input.targetGeneralAccess === 'editor'
-            ? 'edit'
+          (input.targetGeneralAccess
+            ? input.targetGeneralAccess === 'editor'
+              ? 'edit'
+              : LEGACY_VIEWER_ACCESS_LEVELS.agentGroup
             : DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup);
-        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
-          'agentGroup',
-          input.groupId,
-          targetAccessLevel,
-          ctx.userId,
-        );
+        // `transferToWorkspace` makes the moved supervisor / generated members
+        // public in the target too, so they need the same cascade as the
+        // publish paths — otherwise their own ACL falls back to the agent
+        // default (`edit`) and target members can edit the owned agents of a
+        // use/view-only group.
+        await applyGroupAccessLevel({
+          accessLevel: targetAccessLevel,
+          ctx,
+          groupId: input.groupId,
+          permissionModel: new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId),
+          workspaceId: input.targetWorkspaceId,
+        });
       }
 
       return result;
@@ -685,7 +915,12 @@ export const agentGroupRouter = router({
         updates: z.object({
           enabled: z.boolean().optional(),
           order: z.number().optional(),
-          role: z.string().optional(),
+          // Closed set rather than free text: `role` decides how the runtime
+          // treats a member, and `supervisor` in particular carries the
+          // lifecycle invariant the delete/transfer paths rely on. An unknown
+          // string here used to be accepted and then quietly behave as
+          // "not a supervisor" everywhere.
+          role: z.enum(GROUP_MEMBER_ROLES).optional(),
         }),
       }),
     )
@@ -709,16 +944,47 @@ export const agentGroupRouter = router({
    * back to `private`. Restricted to the creator's own still-private group.
    */
   publishGroupToWorkspace: agentGroupProcedureWrite
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        accessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agentGroup).optional(),
+        id: z.string(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
+      // Same rule `setGroupVisibility` enforces, on the other route to the same
+      // transition: a private group may hold the creator's private member
+      // agents, and publishing the group without them leaves everyone else
+      // with a group whose members they cannot see. Guarding only one of two
+      // publish paths guards neither.
+      if (ctx.workspaceId) {
+        const privateMembers = await ctx.chatGroupModel.countPrivateGroupAgents(input.id);
+
+        if (privateMembers > 0)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot publish a group that still contains private agents. Publish or remove those agents first.',
+          });
+      }
+
       const result = await ctx.chatGroupModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
-          'agentGroup',
-          input.id,
-          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup,
-          ctx.userId,
-        );
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        // Same rule as `publishAgentToWorkspace`: an explicit request wins;
+        // otherwise keep whatever the creator already chose on the Permission
+        // page while the group was still private — rewriting the default here
+        // would silently discard that decision.
+        const accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
+        await applyGroupAccessLevel({
+          accessLevel,
+          ctx,
+          groupId: input.id,
+          permissionModel,
+          workspaceId: ctx.workspaceId,
+        });
       }
       return result;
     }),
@@ -809,19 +1075,24 @@ export const agentGroupRouter = router({
       const updated = await ctx.chatGroupModel.setVisibility(input.id, input.visibility);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
 
-      const accessLevel =
-        input.visibility === 'private'
-          ? 'edit'
-          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup);
+      let accessLevel: ResourceAccessLevel;
       if (input.visibility === 'private') {
+        accessLevel = 'edit';
         await permissionModel.removeAll('agentGroup', input.id);
       } else {
-        await permissionModel.setAccessLevel(
-          'agentGroup',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup,
-          ctx.userId,
-        );
+        // Same rule as `publishGroupToWorkspace`: promotion keeps a level the
+        // creator already set while private instead of resetting to the default.
+        accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agentGroup', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agentGroup;
+        await applyGroupAccessLevel({
+          accessLevel,
+          ctx,
+          groupId: input.id,
+          permissionModel,
+          workspaceId: ctx.workspaceId,
+        });
       }
 
       return buildResourcePermissionState({

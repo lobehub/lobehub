@@ -58,6 +58,18 @@ class MessengerService {
   pollWechatQrSession = async (sessionId: string) => {
     return lambdaClient.messenger.pollWechatQrSession.mutate({ sessionId });
   };
+
+  getMessengerPushWindow = async (platform: MessengerPlatform, tenantId?: string) => {
+    return lambdaClient.messenger.getMessengerPushWindow.query({ platform, tenantId });
+  };
+
+  sendMessengerPush = async (params: {
+    content: string;
+    platform: MessengerPlatform;
+    tenantId?: string;
+  }) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate(params);
+  };
 }
 
 export const messengerService = new MessengerService();

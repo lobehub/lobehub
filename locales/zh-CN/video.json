@@ -26,6 +26,8 @@
   "generation.status.failed": "生成失败",
   "generation.status.generating": "生成中...",
   "generation.validation.endFrameRequiresStartFrame": "使用结束画面前需先设置起始画面。请先设置起始画面。",
+  "notice.modelRemoved": "当前模型已不在 {{name}} 的模型列表中，请先切换可用模型",
+  "notice.providerDisabled": "当前模型所属的服务商 {{name}} 未启用，请先启用或切换可用模型",
   "topic.createNew": "创作新主题",
   "topic.createdBy": "由 {{name}} 创建",
   "topic.deleteConfirm": "删除视频主题",

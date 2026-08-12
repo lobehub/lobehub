@@ -56,8 +56,38 @@ const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.to
 
 const getTopicById =
   (id: string) =>
-  (s: ChatStoreState): ChatTopic | undefined =>
-    currentTopics(s)?.find((topic) => topic.id === id); // Don't filter here, need to access all topics by ID
+  (s: ChatStoreState): ChatTopic | undefined => {
+    const currentTopic = currentTopics(s)?.find((topic) => topic.id === id);
+    if (currentTopic) return currentTopic;
+
+    // Multiple desktop tab routers can render topics from different agents at
+    // the same time. The global activeAgentId only describes the focused tab,
+    // so fall back to the other already-loaded agent buckets for background
+    // panes. Topic ids are globally unique.
+    for (const topicData of Object.values(s.topicDataMap)) {
+      const topic = topicData.items.find((item) => item.id === id);
+      if (topic) return topic;
+    }
+  };
+
+/**
+ * The `topicDataMap` bucket that actually holds this topic, or undefined when
+ * no loaded bucket does.
+ *
+ * Writes must target it rather than the active agent/group bucket: the Agent
+ * Builder panels render a whole conversation for a builtin agent while
+ * `activeAgentId` still points at the agent being edited, so a write keyed on
+ * the active pair silently lands in a bucket without the row — the optimistic
+ * update no-ops and the revalidation refreshes the wrong list, leaving the
+ * panel showing a stale value forever (the server row having changed).
+ */
+const getTopicContainerKeyById =
+  (id: string) =>
+  (s: ChatStoreState): string | undefined => {
+    for (const [key, data] of Object.entries(s.topicDataMap)) {
+      if (data.items.some((item) => item.id === id)) return key;
+    }
+  };
 
 /**
  * Get topics by specific agentId (for AgentBuilder scenarios where agentId differs from activeAgentId)
@@ -83,13 +113,36 @@ const currentActiveTopicSummary = (s: ChatStoreState): ChatTopicSummary | undefi
 const currentTopicMetadata = (s: ChatStoreState) => currentActiveTopic(s)?.metadata;
 
 /**
- * Get current active topic's working directory.
+ * Get the model/provider pinned to a specific topic (snapshotted on creation,
+ * updated when the user switches model while the topic is active).
+ * Returns undefined when the topic has no model recorded (e.g. legacy topics),
+ * in which case callers should fall back to the agent default.
+ */
+const getTopicModelById =
+  (id: string) =>
+  (s: ChatStoreState): { model: string; provider: string } | undefined => {
+    const topic = getTopicById(id)(s);
+    if (!topic?.model) return undefined;
+
+    return { model: topic.model, provider: topic.provider || '' };
+  };
+
+/**
+ * The model/provider pinned to the active topic, or undefined when there is no
+ * active topic or it has no model recorded.
+ */
+const activeTopicModel = (s: ChatStoreState): { model: string; provider: string } | undefined => {
+  if (!s.activeTopicId) return undefined;
+  return getTopicModelById(s.activeTopicId)(s);
+};
+
+/**
+ * Extract a topic's working directory from its metadata.
  * On desktop: local filesystem path.
  * On web (cloud): primary GitHub repo URL (repos[0]), or workingDirectory if set directly.
  */
-const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => {
-  const activeTopic = currentActiveTopic(s);
-  if (!activeTopic) return;
+const extractTopicWorkingDirectory = (topic: ChatTopic | undefined): string | undefined => {
+  if (!topic) return;
 
   // Route the raw `workingDirectory` through the extractor too: it is typed as a
   // string, but a malformed legacy topic may have persisted a `WorkingDirConfig`
@@ -97,17 +150,38 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   // and this selector's declared `string | undefined` must hold at runtime.
   if (isDesktop) {
     return getWorkingDirEffectivePath(
-      activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
+      topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
     );
   }
 
   // Web: return primary repo from repos list, or workingDirectory if set directly
-  const meta = activeTopic.metadata;
+  const meta = topic.metadata;
   return (
     meta?.repos?.[0] ??
     getWorkingDirEffectivePath(meta?.workingDirectoryConfig ?? meta?.workingDirectory)
   );
 };
+
+/**
+ * Get a topic's working directory by id, falling back to the active topic only
+ * when the argument is omitted. An explicit null represents a new-topic route
+ * and therefore has no topic-level directory. Prefer the explicit-id form for async work (e.g. a streaming
+ * tool call): the executing topic is captured at request time, so reading the
+ * *active* topic here would return the wrong project if the user switched topics
+ * mid-stream.
+ */
+const getTopicWorkingDirectory =
+  (id?: string | null) =>
+  (s: ChatStoreState): string | undefined =>
+    id === null
+      ? undefined
+      : extractTopicWorkingDirectory(id ? getTopicById(id)(s) : currentActiveTopic(s));
+
+/**
+ * Get current active topic's working directory.
+ */
+const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
+  extractTopicWorkingDirectory(currentActiveTopic(s));
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 
@@ -224,7 +298,8 @@ const groupedTopicsForSidebar =
     // though their persisted status says otherwise — that's the one client-only
     // overlay (see resolveStatusBucket). Unread is now a persisted status, so it
     // buckets straight from `topic.status`.
-    const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
+    const loadingTopicIds =
+      groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
     return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
   };
 
@@ -270,6 +345,7 @@ const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
   agentTopicsViewData(s)?.loadMoreError;
 
 export const topicSelectors = {
+  activeTopicModel,
   agentTopicsViewHasMore,
   agentTopicsViewIsLoadingMore,
   agentTopicsViewLoadMoreError,
@@ -287,6 +363,9 @@ export const topicSelectors = {
   displayTopics,
   displayTopicsForSidebar,
   getTopicById,
+  getTopicContainerKeyById,
+  getTopicModelById,
+  getTopicWorkingDirectory,
   getTopicsByAgentId,
   groupedTopicsForSidebar,
   groupedTopicsSelector,

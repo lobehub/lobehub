@@ -26,6 +26,8 @@
   "generation.status.failed": "Falha na Geração",
   "generation.status.generating": "Gerando...",
   "generation.validation.endFrameRequiresStartFrame": "O quadro final não pode ser usado sem um quadro inicial. Por favor, defina primeiro um quadro inicial.",
+  "notice.modelRemoved": "O modelo atual não está mais disponível em {{name}}. Por favor, mude para um modelo disponível.",
+  "notice.providerDisabled": "O provedor {{name}} do modelo atual está desativado. Por favor, ative-o ou mude para um modelo disponível.",
   "topic.createNew": "Criar Novo Tópico",
   "topic.createdBy": "Criado por {{name}}",
   "topic.deleteConfirm": "Excluir Tópico de Vídeo",

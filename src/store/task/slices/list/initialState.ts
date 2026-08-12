@@ -17,12 +17,18 @@ export type TaskViewMode = 'kanban' | 'list';
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
 
 export interface TaskListSliceState {
+  isScheduledTaskListInit: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /** Effective visibility of the task data currently stored in `tasks`. */
+  listQueryVisibility: TaskListVisibilityFilter;
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
+  /** Tasks driven by a schedule or heartbeat — a separate query from `tasks`. */
+  scheduledTasks: TaskListItem[];
+  scheduledTasksTotal: number;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
@@ -30,9 +36,13 @@ export interface TaskListSliceState {
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
+  isScheduledTaskListInit: false,
   isTaskGroupListInit: false,
   isTaskListInit: false,
+  listQueryVisibility: 'all',
   listVisibility: 'all',
+  scheduledTasks: [],
+  scheduledTasksTotal: 0,
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,

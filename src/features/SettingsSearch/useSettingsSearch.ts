@@ -4,7 +4,7 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCategory } from '@/routes/(main)/settings/hooks/useCategory';
+import { useCategory } from '@/features/Settings/hooks/useCategory';
 import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
@@ -13,6 +13,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { getPlatform } from '@/utils/platform';
 
 import {
   SETTINGS_SEARCH_ITEMS,
@@ -102,6 +103,7 @@ export const useSettingsSearch = (
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
+      isWindows: getPlatform() === 'Windows',
       showAiImage: !!showAiImage,
     };
 

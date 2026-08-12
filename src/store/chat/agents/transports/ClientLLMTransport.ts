@@ -10,12 +10,17 @@ import type {
   LLMTransport,
 } from '@lobechat/agent-runtime';
 import {
-  classifyLLMError,
+  createLLMErrorClassifier,
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { isEmptyModelCompletion, ModelEmptyError } from '@lobechat/model-runtime';
+import {
+  ERROR_CODE_SPECS,
+  getErrorCodeSpec,
+  isEmptyModelCompletion,
+  ModelEmptyError,
+} from '@lobechat/model-runtime/errors';
 import type { ChatMessageError, MessageMetadata, ModelReasoning } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { t } from 'i18next';
@@ -31,9 +36,13 @@ import type { ClientLLMModelParameters } from './ClientContextBuilder';
 import type { ClientRuntimeSession } from './ClientRuntimeStreamSink';
 
 const CLIENT_LLM_RETRY_POLICY = {
-  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
   noRetryProviders: [BRANDING_PROVIDER],
 };
+
+const classifyClientLLMError = createLLMErrorClassifier({
+  errorCodeSpecs: Object.values(ERROR_CODE_SPECS),
+  getErrorCodeSpec,
+});
 
 const createStreamExecutionError = (errorData: unknown) => {
   if (errorData instanceof Error) return errorData;
@@ -113,21 +122,14 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
   ) {}
 
   classifyError(error: unknown) {
-    return classifyLLMError(error);
+    return classifyClientLLMError(error);
   }
 
   maxAttempts(provider: string) {
     return resolveLLMMaxAttempts(provider, CLIENT_LLM_RETRY_POLICY);
   }
 
-  onError({ error, events, interrupted, retryBudget }: LLMCallErrorInput) {
-    if (error instanceof ModelEmptyError && error.diagnostics) {
-      error.diagnostics.retryBudget = retryBudget;
-      error.diagnostics.retryEvents = events
-        .filter((event) => event.type === 'stream_retry')
-        .map((event) => event.data);
-    }
-
+  onError({ error, interrupted }: LLMCallErrorInput) {
     if (interrupted || !this.session.assistantMessageId) return;
 
     const localizedError = toChatMessageError(
@@ -143,14 +145,42 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
       },
       { operationId: this.operationId },
     );
+
+    // callLlm only invokes onError for the terminal attempt. End the operation
+    // here so Stop/loading clear with the message error, not after outer completeRun.
+    const operation = this.get().operations[this.operationId];
+    if (operation?.status === 'running') {
+      this.get().failOperation(this.operationId, {
+        message: localizedError.message || 'LLM execution failed',
+        type: String(localizedError.type ?? 'runtime_error'),
+      });
+
+      // Match completeRun's client failed-path topic reset. streamingExecutor
+      // writes status:'running' at start; without this, the sidebar keeps the
+      // spinner until the outer loop later reaches completeRun.
+      const { agentId, groupId, scope, topicId } = operation.context;
+      if (topicId && scope !== 'sub_agent') {
+        void this.get()
+          .updateTopicStatus?.({
+            agentId,
+            groupId,
+            ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
+            status: 'active',
+            topicId,
+          })
+          ?.catch((error) => {
+            console.error('[ClientLLMTransport] topic status reset failed:', error);
+          });
+      }
+    }
   }
 
   onRetry(_input: LLMRetryInput) {
     // The package publishes the canonical stream_retry event through StreamSink.
   }
 
-  resolveRetryBudget(provider: string, error: unknown) {
-    return resolveLLMRetryBudget(provider, error, CLIENT_LLM_RETRY_POLICY);
+  resolveRetryBudget(provider: string) {
+    return resolveLLMRetryBudget(provider, CLIENT_LLM_RETRY_POLICY);
   }
 
   async waitForRetry(delayMs: number): Promise<void> {
@@ -319,6 +349,7 @@ export class ClientLLMTransport implements LLMTransport {
         error: new ModelEmptyError(undefined, {
           attempt: input.attempt,
           contentLength: output.content.length,
+          cost: output.usage?.cost,
           finishReason: output.finishReason,
           imageCount: output.imageList.length,
           maxAttempts: input.maxAttempts,

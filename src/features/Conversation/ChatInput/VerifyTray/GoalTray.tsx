@@ -121,10 +121,21 @@ const GoalTray = memo<GoalTrayProps>(({ topAttached }) => {
     disarm(agentId);
   }, [enabled, agentId, armedAt, topicId, isLoading, goal, displayMessages, setGoal, disarm]);
 
+  // The pre-topic "armed" state is surfaced as a chip in the composer action bar
+  // (see GoalArmedChip), not as a tray here — the tray is only the "goal set"
+  // home once a topic exists.
   if (!enabled || !topicId || !goal) return null;
 
   const openAddCheck = () => openCheckEditModal({ onSubmit: (v) => addCheck(v) });
-  const openEditGoal = () => openGoalModal({ initialGoal: goal, onSubmit: (v) => setGoal(v) });
+  const openEditGoal = () =>
+    openGoalModal({
+      initialGoal: goal,
+      // Clearing the goal writes an empty requirement — the tray hides itself
+      // once there's no goal (tracking checks are kept, so re-setting a goal
+      // brings them back).
+      onDelete: () => setGoal(''),
+      onSubmit: (v) => setGoal(v),
+    });
 
   return (
     <Flexbox className={cx(styles.container, topAttached && styles.containerTopAttached)}>

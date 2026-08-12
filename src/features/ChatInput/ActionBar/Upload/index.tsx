@@ -1,32 +1,26 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { type ItemType } from '@lobehub/ui';
 import { Icon, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
-import isEqual from 'fast-deep-equal';
-import { ArrowRight, FileUp, FolderUp, ImageUp, LibraryBig, Paperclip } from 'lucide-react';
+import { FileUp, FolderUp, ImageUp, Paperclip } from 'lucide-react';
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
-import FileIcon from '@/components/FileIcon';
-import RepoIcon from '@/components/LibIcon';
 import TipGuide from '@/components/TipGuide';
-import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
-import CheckboxItem from '../components/CheckboxWithLoading';
+import { ChatInputAction } from '../components/ChatInputAction';
+import { MENU_ICON_SIZE, useKnowledgeMenuItems } from './useKnowledgeMenuItems';
 
 const hotArea = css`
   &::before {
@@ -36,11 +30,6 @@ const hotArea = css`
     background-color: transparent;
   }
 `;
-
-// Keep every row's leading icon the same width. The menu's icon slot sizes to its
-// content, so a larger file-type icon next to a smaller line icon would widen that
-// slot and push its label out of alignment with the upload / "view more" rows.
-const MENU_ICON_SIZE = 20;
 
 const FileUpload = memo(() => {
   const { t } = useTranslation('chat');
@@ -53,10 +42,9 @@ const FileUpload = memo(() => {
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
 
-  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
     agentId,
@@ -69,16 +57,7 @@ const FileUpload = memo(() => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  const files = useAgentStore((s) => agentByIdSelectors.getAgentFilesById(agentId)(s), isEqual);
-  const knowledgeBases = useAgentStore(
-    (s) => agentByIdSelectors.getAgentKnowledgeBasesById(agentId)(s),
-    isEqual,
-  );
-
-  const [toggleFile, toggleKnowledgeBase] = useAgentStore((s) => [
-    s.toggleFile,
-    s.toggleKnowledgeBase,
-  ]);
+  const knowledgeItems = useKnowledgeMenuItems({ onUpdatingChange: setUpdating });
 
   // Viewer doesn't have `file:upload` permission — backend would 403.
   // Render the disabled paperclip with a tooltip so the entry stays visible
@@ -91,7 +70,12 @@ const FileUpload = memo(() => {
   if (!canUpload) {
     return (
       <Tooltip title={reason}>
-        <Action disabled icon={Paperclip} showTooltip={false} title={t('upload.action.tooltip')} />
+        <ChatInputAction
+          disabled
+          icon={Paperclip}
+          showTooltip={false}
+          title={t('upload.action.tooltip')}
+        />
       </Tooltip>
     );
   }
@@ -142,7 +126,7 @@ const FileUpload = memo(() => {
             // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
-              message.error(
+              toast.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
                   maxSize: validation.maxSize,
@@ -182,7 +166,7 @@ const FileUpload = memo(() => {
             // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
-              message.error(
+              toast.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
                   maxSize: validation.maxSize,
@@ -204,84 +188,10 @@ const FileUpload = memo(() => {
     },
   ];
 
-  const knowledgeItems: ItemType[] = [];
-
-  // Only add knowledge base items if there are files or knowledge bases
-  if (files.length > 0 || knowledgeBases.length > 0) {
-    knowledgeItems.push({
-      children: [
-        // first the files
-        ...files.map((item) => ({
-          icon: <FileIcon fileName={item.name} fileType={item.type} size={MENU_ICON_SIZE} />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleFile(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-
-        // then the knowledge bases
-        ...knowledgeBases.map((item) => ({
-          icon: <RepoIcon size={MENU_ICON_SIZE} />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleKnowledgeBase(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-      ],
-      key: 'relativeFilesOrLibraries',
-      label: t('knowledgeBase.relativeFilesOrLibraries'),
-      type: 'group',
-    });
-  }
-
-  if (knowledgeItems.length > 0) {
-    knowledgeItems.push(
-      {
-        type: 'divider',
-      },
-      {
-        extra: <Icon icon={ArrowRight} />,
-        icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
-        key: 'knowledge-base-store',
-        label: t('knowledgeBase.viewMore'),
-        onClick: () => {
-          openAttachKnowledgeModal();
-        },
-      },
-    );
-  } else {
-    knowledgeItems.push({
-      disabled: true,
-      key: 'knowledge-empty',
-      label: t('knowledgeBase.related.empty'),
-    });
-  }
-
-  const items: ActionDropdownMenuItems = [
-    ...uploadItems,
-    ...(knowledgeItems.length > 0 ? knowledgeItems : []),
-  ];
+  const items: ActionDropdownMenuItems = [...uploadItems, ...knowledgeItems];
 
   const content = (
-    <Action
+    <ChatInputAction
       icon={Paperclip}
       loading={updating}
       open={dropdownOpen}
@@ -299,7 +209,9 @@ const FileUpload = memo(() => {
   );
 
   return (
-    <Suspense fallback={<Action disabled icon={Paperclip} title={t('upload.action.tooltip')} />}>
+    <Suspense
+      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+    >
       {showTip ? (
         <TipGuide
           open={showTip}

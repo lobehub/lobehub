@@ -104,10 +104,10 @@ export async function dispatchNonHeteroSubAgent(
     }
 
     case 'gateway': {
-      // Switch agentId to the target agent so the gateway runs the correct one.
-      // The gateway loads conversation history from the topic DB, so we do NOT
-      // pass the client-side message array. The instruction becomes a real user
-      // message created on the server.
+      // Execute with the target agent, but route persisted/streamed messages to
+      // the parent conversation. This keeps speaker identity and conversation
+      // ownership separate instead of hiding cross-agent replies in another
+      // messageMap bucket.
       await store.executeGatewayAgent({
         context: {
           ...ctx.conversationContext,
@@ -116,6 +116,7 @@ export async function dispatchNonHeteroSubAgent(
           subAgentId: intent.targetAgentId,
         },
         message: intent.instruction,
+        messageContext: ctx.conversationContext,
         parentOperationId: ctx.parentOperationId,
       });
       break;

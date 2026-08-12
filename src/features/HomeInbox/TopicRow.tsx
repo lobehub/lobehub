@@ -1,12 +1,14 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import Time from '@/routes/(main)/home/features/components/Time';
 
+import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';
 import { type InboxTopic } from './useHomeInboxTopics';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -51,14 +53,19 @@ const TopicRow = memo<TopicRowProps>(({ topic, leading, trailing }) => {
           shape={'circle'}
           size={22}
           style={{ flex: 'none' }}
-          title={agent.title}
+          title={agentDisplayName(agent)}
         />
       )}
-      <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-        {topic.title}
-      </Text>
+      <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
+        <Text ellipsis fontSize={13} style={{ minWidth: 0 }}>
+          {topic.title}
+        </Text>
+        <RunningElapsedTime startTime={topic.runStartedAt} />
+      </Flexbox>
       {trailing}
-      <Time date={topic.updatedAt ?? topic.createdAt} />
+      <Time
+        date={resolveTopicTriggerTime(topic.runStartedAt, topic.updatedAt ?? topic.createdAt)}
+      />
     </Flexbox>
   );
 });

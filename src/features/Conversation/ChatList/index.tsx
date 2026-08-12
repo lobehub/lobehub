@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -20,13 +20,23 @@ import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, useConversationStore } from '../store';
+import { dataSelectors, inputSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
+
+const MessageAuthorConfigLoader = memo<{ agentId: string; isLogin: boolean | undefined }>(
+  ({ agentId, isLogin }) => {
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    useFetchAgentConfig(isLogin, agentId);
+    return null;
+  },
+);
+
+MessageAuthorConfigLoader.displayName = 'MessageAuthorConfigLoader';
 
 export interface ChatListProps {
   /**
@@ -97,8 +107,19 @@ const ChatList = memo<ChatListProps>(
     // mid-fan-out and clobber the in-memory streamed state with a stale
     // assistant placeholder.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
+    // A client-minted topic whose server row does not exist yet (first-send
+    // window) must not be fetched: the query would legitimately return an empty
+    // list and `onData` would wipe the optimistic messages already on screen.
+    // Cleared when the server confirms the topic (`replaceTopicId`), at which
+    // point fetching resumes as normal.
+    const isCreatingTopic = useChatStore(
+      (s) => !!context.topicId && s.creatingTopicIds.includes(context.topicId),
+    );
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    const messagesSWR = useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const messagesSWR = useFetchMessages(context, {
+      revalidateOnFocus: !isStreaming,
+      skipFetch: skipFetch || isCreatingTopic,
+    });
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,
       identity: getMessageListCacheIdentity(context),
@@ -107,6 +128,7 @@ const ChatList = memo<ChatListProps>(
     });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
     // Skip fetching notebook and memories for share pages (they require authentication)
@@ -124,14 +146,20 @@ const ChatList = memo<ChatListProps>(
     // Ensure this conversation's agent config (meta) is loaded into the agent
     // store, so message author titles resolve via useAgentMeta instead of
     // falling back to "Untitled Agent". Route-level layouts already init the
-    // active agent, but secondary mounts never do — each Fleet column shows a
-    // different agent, and the share page mounts an arbitrary author's agent;
-    // without this they render "未命名助理".
+    // active agent, but secondary mounts never do — e.g. the share page mounts
+    // an arbitrary author's agent; without this they render "未命名助理".
     // Idempotent: SWR dedupes against any route-level init by the same key,
     // and is gated on isLogin (no fetch for anonymous share viewers).
     const isLogin = useUserStore(authSelectors.isLogin);
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
     useFetchAgentConfig(isLogin, context.agentId);
+    const messageAuthorAgentIds = useMemo(
+      () =>
+        [...new Set(displayMessages.map((message) => message.agentId).filter(Boolean))].filter(
+          (agentId) => agentId !== context.agentId,
+        ) as string[],
+      [context.agentId, displayMessages],
+    );
 
     // Fetch conversation context data when a conversation is visible (skip for share pages).
     // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
@@ -199,7 +227,9 @@ const ChatList = memo<ChatListProps>(
       (showWelcome || displayMessageIds.length === 0) && welcome ? (
         <WideScreenContainer
           style={{
+            boxSizing: 'border-box',
             height: '100%',
+            paddingBottom: overlayHeight > 0 ? overlayHeight + 12 : undefined,
           }}
           wrapperStyle={{
             minHeight: '100%',
@@ -221,6 +251,9 @@ const ChatList = memo<ChatListProps>(
 
     return (
       <Flexbox style={{ height: '100%', minHeight: 0 }}>
+        {messageAuthorAgentIds.map((agentId) => (
+          <MessageAuthorConfigLoader agentId={agentId} isLogin={isLogin} key={agentId} />
+        ))}
         <Flexbox flex={1} style={{ minHeight: 0 }}>
           {content}
         </Flexbox>

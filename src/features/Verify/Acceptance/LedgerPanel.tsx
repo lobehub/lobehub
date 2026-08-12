@@ -12,6 +12,7 @@ import {
   Loader2,
   PanelRightClose,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -139,24 +140,41 @@ const LedgerPanel = memo<LedgerPanelProps>(
           const accepted = rv?.accepted ?? 0;
           const allAccepted = total > 0 && accepted >= total;
 
+          // A round the user sent back is a distinct outcome, not "still
+          // pending" — without this it renders identically to an unreviewed
+          // round, so the ledger cannot show which round triggered a rerun.
+          const rejected = round.run.userDecision === 'reject';
+
           const stateColor = runningMeta
             ? runningMeta.color
-            : allAccepted
-              ? cssVar.colorSuccess
-              : cssVar.colorTextTertiary;
-          const stateIcon = runningMeta ? runningMeta.icon : allAccepted ? CheckCircle2 : Circle;
+            : rejected
+              ? cssVar.colorError
+              : allAccepted
+                ? cssVar.colorSuccess
+                : cssVar.colorTextTertiary;
+          const stateIcon = runningMeta
+            ? runningMeta.icon
+            : rejected
+              ? RotateCcw
+              : allAccepted
+                ? CheckCircle2
+                : Circle;
           const stateLabel = runningMeta
             ? t(`acceptance.roundStatus.${runStatus}` as 'acceptance.roundStatus.verifying', {
                 defaultValue: runStatus,
               })
-            : allAccepted
-              ? t('acceptance.ledger.accepted')
-              : t('acceptance.ledger.pending');
+            : rejected
+              ? t('acceptance.status.rejected')
+              : allAccepted
+                ? t('acceptance.ledger.accepted')
+                : t('acceptance.ledger.pending');
 
           // Acceptance-framed stats: how many of THIS round's checks are signed
-          // off (accepted/total), or all still awaiting.
-          const stats =
-            running || total === 0
+          // off (accepted/total), or all still awaiting. A rejected round shows
+          // the reason instead — it is the input that seeded the next round.
+          const stats = rejected
+            ? round.run.decisionDetail?.comment || t('acceptance.banner.rejectedHint')
+            : running || total === 0
               ? null
               : accepted > 0
                 ? t('acceptance.ledger.acceptedStats', { accepted, total })

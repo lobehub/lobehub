@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 import { Outlet } from 'react-router';
 
 import AgentDocumentRightPanel from '../RightPanel';
 
-const AgentDocumentLayout = memo(() => (
+const AgentDocumentLayout = () => (
   <Flexbox
     horizontal
     flex={1}
@@ -19,8 +18,6 @@ const AgentDocumentLayout = memo(() => (
     </Flexbox>
     <AgentDocumentRightPanel />
   </Flexbox>
-));
-
-AgentDocumentLayout.displayName = 'AgentDocumentLayout';
+);
 
 export default AgentDocumentLayout;

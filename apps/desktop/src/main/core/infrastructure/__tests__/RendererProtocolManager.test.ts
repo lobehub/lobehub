@@ -42,8 +42,8 @@ vi.mock('electron', () => ({
   protocol: mockProtocol,
 }));
 
-vi.mock('fs-extra', () => ({
-  pathExistsSync: mockPathExistsSync,
+vi.mock('node:fs', () => ({
+  existsSync: mockPathExistsSync,
 }));
 
 vi.mock('node:fs/promises', () => ({

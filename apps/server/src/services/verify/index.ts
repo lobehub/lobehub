@@ -18,6 +18,14 @@ export {
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
+export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
+export {
+  goalExhaustedBriefCopy,
+  type GoalLoopOutcome,
+  goalReadyForReviewBriefCopy,
+  maybeContinueGoalLoop,
+  syncGoalToolState,
+} from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
 export { isHeterogeneousVerifyProvider, resolveVerifyModelConfig } from './modelConfig';
 export { type GeneratePlanParams, VerifyPlanGeneratorService } from './planGenerator';
@@ -30,5 +38,7 @@ export {
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
+export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
+export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

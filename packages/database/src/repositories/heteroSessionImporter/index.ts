@@ -4,12 +4,15 @@ import type {
   HeteroSessionImportResult,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { and, count, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 
 import { messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+/** topic clientId convention of an imported session: `<source>-session-<sessionId>` */
+const IMPORT_CLIENT_ID_PREFIXES = ['claude-code-session-', 'codex-session-'];
 
 export interface ImportHeteroSessionsParams {
   agentId: string;
@@ -70,16 +73,14 @@ export class HeteroSessionImporterRepo {
     groupId?: string | null,
   ): Promise<HeteroSessionImportResult> =>
     this.db.transaction(async (tx) => {
-      // the source transcript's last timestamp — the picker UI compares it with
-      // a fresh digest's endAt to detect "grew since last import" (message
-      // counts are NOT comparable across transcript records and DB rows)
-      const sourceEndAt = [
-        ...session.messages,
-        ...(session.threads ?? []).flatMap((t) => t.messages),
-      ].reduce<string | undefined>(
-        (max, m) => (m.createdAt && (!max || m.createdAt > max) ? m.createdAt : max),
-        undefined,
-      );
+      // the source transcript's last raw-record timestamp — the picker compares it
+      // with a fresh digest's endAt to detect "grew since last import" (message
+      // counts are NOT comparable across transcript records and DB rows).
+      // It MUST come from the parser: deriving it from the normalized messages
+      // yields an earlier value (assistant records sharing a `message.id` merge
+      // onto the first record's timestamp), which would make every imported
+      // session look perpetually out of sync.
+      const sourceEndAt = session.sourceEndAt;
 
       // hetero resume + project grouping read the bound cwd off
       // `topic.metadata.workingDirectory` — persist the transcript cwd so
@@ -302,21 +303,24 @@ export class HeteroSessionImporterRepo {
   };
 
   /**
-   * Import status of local sessions, for the picker UI badges:
-   * - `imported`: a topic with the session's clientId exists (re-import = incremental sync)
-   * - `linked`: a topic carries the sessionId in `metadata.heteroSessionId` but was NOT
+   * Import status of the caller's hetero-session topics, for the picker UI badges:
+   * - `imported`: a topic whose clientId follows the `<source>-session-<id>` convention
+   *   (re-import = incremental sync)
+   * - `linked`: a topic carries a sessionId in `metadata.heteroSessionId` but was NOT
    *   imported — the session originated from a LobeHub live run and importing it
    *   would duplicate the conversation
+   *
+   * Takes no input on purpose: a machine can hold thousands of local transcripts, and
+   * passing them all in would blow the tRPC query input limit (`maxURLLength` 2083 —
+   * about 16 sessions). The result is bounded by what the user already has in LobeHub,
+   * and the picker matches its local digests against it client-side.
    */
-  getImportStatus = async (
-    sessions: { sessionId: string; topicClientId: string }[],
-  ): Promise<HeteroSessionImportStatus> => {
-    if (sessions.length === 0) return { imported: [], linked: [] };
-
-    const clientIds = sessions.map((s) => s.topicClientId);
-    const sessionIds = sessions.map((s) => s.sessionId);
+  getImportStatus = async (): Promise<HeteroSessionImportStatus> => {
     const metadataSessionId = sql<string>`${topics.metadata}->>'heteroSessionId'`;
     const metadataSourceEndAt = sql<string>`${topics.metadata}->>'heteroSourceEndAt'`;
+    const isImportedClientId = or(
+      ...IMPORT_CLIENT_ID_PREFIXES.map((prefix) => like(topics.clientId, `${prefix}%`)),
+    );
 
     const rows = await this.db
       .select({
@@ -326,15 +330,11 @@ export class HeteroSessionImporterRepo {
         sourceEndAt: metadataSourceEndAt,
       })
       .from(topics)
-      .where(
-        and(
-          this.scopeWhere(topics),
-          or(inArray(topics.clientId, clientIds), inArray(metadataSessionId, sessionIds)),
-        ),
-      );
+      .where(and(this.scopeWhere(topics), or(isImportedClientId, isNotNull(metadataSessionId))));
 
-    const wantedClientIds = new Set(clientIds);
-    const importedRows = rows.filter((r) => r.clientId && wantedClientIds.has(r.clientId));
+    const importedRows = rows.filter(
+      (r) => r.clientId && IMPORT_CLIENT_ID_PREFIXES.some((p) => r.clientId!.startsWith(p)),
+    );
 
     const messageCounts = new Map<string, number>();
     if (importedRows.length > 0) {

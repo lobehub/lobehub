@@ -4,7 +4,11 @@ import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
 import { topicSelectors } from '../topic/selectors';
-import { createLocalFileScopeKey, getLocalFileTabId } from './helpers';
+import {
+  createLocalFileScopeKey,
+  createSandboxLocalFileScopeKey,
+  getLocalFileTabId,
+} from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
@@ -28,6 +32,13 @@ const stackDepth = (s: ChatStoreState): number => {
 };
 
 const showPortal = (s: ChatStoreState) => s.showPortal;
+const showTopicComments = (s: ChatStoreState) => {
+  const viewType = currentViewType(s);
+  return (
+    viewType === PortalViewType.TopicComments || viewType === PortalViewType.TopicCommentThread
+  );
+};
+const showStandalonePortal = (s: ChatStoreState) => showPortal(s) && !showTopicComments(s);
 
 // ============== View Type Guards ==============
 
@@ -41,6 +52,7 @@ const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
 const showTaskDetail = (s: ChatStoreState) => currentViewType(s) === PortalViewType.TaskDetail;
+const showTopicChat = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Topic;
 
 // ============== Data Extractors ==============
 
@@ -152,6 +164,11 @@ const currentLocalFileScopeKey = (s: ChatStoreState): string | undefined => {
 const isLocalFileInCurrentScope = (s: ChatStoreState, file: OpenLocalFileEntry): boolean => {
   if (file.allowExternalFilePreview) return true;
 
+  // Sandbox tabs carry no client-side working directory — scope them by the
+  // topic whose sandbox serves the read; the cwd filter would drop them in
+  // project-scoped topics.
+  if (file.sandboxTopicId) return file.sandboxTopicId === s.activeTopicId;
+
   const workingDirectory = currentLocalFileScopeWorkingDirectory(s);
   return workingDirectory ? file.workingDirectory === workingDirectory : true;
 };
@@ -162,10 +179,22 @@ const openLocalFiles = (s: ChatStoreState): OpenLocalFileEntry[] =>
 const activeLocalFileId = (s: ChatStoreState): string | undefined => {
   const files = openLocalFiles(s);
   const scopeKey = currentLocalFileScopeKey(s);
-  const scopedActiveId = scopeKey ? s.activeLocalFileIdsByScope?.[scopeKey] : s.activeLocalFileId;
+  // Without a cwd scope, the legacy global id may have been overwritten by a
+  // sandbox tab activated in another unscoped topic — fall back to this
+  // topic's own sandbox-scope entry before giving up.
+  const scopedActiveIds = scopeKey
+    ? [s.activeLocalFileIdsByScope?.[scopeKey]]
+    : [
+        s.activeLocalFileId,
+        s.activeTopicId
+          ? s.activeLocalFileIdsByScope?.[createSandboxLocalFileScopeKey(s.activeTopicId)]
+          : undefined,
+      ];
 
-  if (scopedActiveId && files.some((file) => getLocalFileTabId(file) === scopedActiveId)) {
-    return scopedActiveId;
+  for (const scopedActiveId of scopedActiveIds) {
+    if (scopedActiveId && files.some((file) => getLocalFileTabId(file) === scopedActiveId)) {
+      return scopedActiveId;
+    }
   }
 
   const active = s.activeLocalFilePath;
@@ -220,6 +249,16 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+// Topic chat selectors — the second, side-by-side topic opened in the portal
+const portalTopicId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.Topic);
+  return view?.topicId;
+};
+
+const topicCommentsView = (s: ChatStoreState) => getViewData(s, PortalViewType.TopicComments);
+const topicCommentThreadView = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.TopicCommentThread);
+
 // Tool UI / Plugin selectors
 const currentToolUI = (
   s: ChatStoreState,
@@ -241,6 +280,7 @@ const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.c
 const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyReport)?.runId;
 const acceptancePortalId = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
+const acceptanceCheckPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.AcceptanceCheck);
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -251,6 +291,8 @@ export const chatPortalSelectors = {
   canGoBack,
   stackDepth,
   showPortal,
+  showStandalonePortal,
+  showTopicComments,
 
   // View type guards
   showArtifactUI,
@@ -262,6 +304,7 @@ export const chatPortalSelectors = {
   showMessageDetail,
   showPluginUI,
   showTaskDetail,
+  showTopicChat,
 
   // Agent detail data
   agentDetailId,
@@ -303,6 +346,13 @@ export const chatPortalSelectors = {
   // Task detail data
   taskDetailId,
 
+  // Topic chat data
+  portalTopicId,
+
+  // Topic comment data
+  topicCommentsView,
+  topicCommentThreadView,
+
   // Tool UI data
   currentToolUI,
   toolMessageId,
@@ -316,6 +366,7 @@ export const chatPortalSelectors = {
   verifyReportRunId,
 
   // Acceptance data
+  acceptanceCheckPortal,
   acceptancePortalId,
 };
 

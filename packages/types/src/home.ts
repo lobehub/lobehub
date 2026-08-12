@@ -19,6 +19,28 @@ export interface GroupMemberAvatar {
 }
 
 /**
+ * Label applied to a sidebar agent. Mirrors the `agent_labels` registry
+ * (workspace-shared, or personal when outside a workspace).
+ */
+export interface SidebarAgentLabel {
+  color?: string | null;
+  id: string;
+  name: string;
+}
+
+/**
+ * Full agent-label registry entry, as returned by the label management API.
+ * Extends the lightweight {@link SidebarAgentLabel} with management fields.
+ */
+export interface AgentLabelListItem extends SidebarAgentLabel {
+  archived: boolean;
+  createdAt: Date;
+  description?: string | null;
+  /** Number of agents currently carrying this label. */
+  usageCount: number;
+}
+
+/**
  * Sidebar agent item - represents an agent or chat group in the sidebar
  */
 export interface SidebarAgentItem {
@@ -47,6 +69,16 @@ export interface SidebarAgentItem {
    */
   heterogeneousType?: string | null;
   id: string;
+  /**
+   * Labels applied to the agent (absent for chat groups and unlabeled
+   * agents). Used by the agents list to render label tags and group by label.
+   */
+  labels?: SidebarAgentLabel[];
+  /**
+   * The agent's personal name. Absent for chat groups and for agents created
+   * before names existed — resolve the label with `agentDisplayName(item)`.
+   */
+  name?: string | null;
   pinned: boolean;
   sessionId?: string | null;
   /**
@@ -104,6 +136,12 @@ export interface SidebarAgentListResponse {
    * `visibility = 'private'`. Empty array in personal mode.
    */
   privateGroups: SidebarGroup[];
+  /**
+   * Workspace-only: pinned agents/chat groups owned by the current user with
+   * `visibility = 'private'`. Kept out of {@link pinned} so the sidebar can
+   * render them inside the Private section. Empty array in personal mode.
+   */
+  privatePinned: SidebarAgentItem[];
   /**
    * Workspace-only: ungrouped private agents/chat groups owned by the current
    * user. Empty array in personal mode.

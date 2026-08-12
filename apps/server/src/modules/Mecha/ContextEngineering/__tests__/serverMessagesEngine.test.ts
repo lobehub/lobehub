@@ -32,6 +32,57 @@ describe('serverMessagesEngine', () => {
     } as UIChatMessage,
   ];
 
+  describe('TODO context', () => {
+    const items = [{ status: 'processing' as const, text: 'Keep server context in sync' }];
+
+    it('forwards non-empty planTodo state to MessagesEngine', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
+        provider: 'openai',
+      });
+      const userContent = result.find((message) => message.role === 'user')?.content;
+
+      expect(userContent).toContain('<todo_context>');
+      expect(userContent).toContain('Keep server context in sync');
+    });
+
+    it('does not inject an empty TODO state', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items: [], updatedAt: 'canonical-clear' } },
+        provider: 'openai',
+      });
+
+      expect(result.find((message) => message.role === 'user')?.content).not.toContain(
+        '<todo_context>',
+      );
+    });
+
+    it('matches client-style stepContext and server planTodo output', async () => {
+      const todos = { items, updatedAt: 'same' };
+      const clientResult = await new MessagesEngine({
+        enableSystemDate: false,
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        stepContext: { todos },
+      }).process();
+      const serverResult = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos },
+        provider: 'openai',
+      });
+
+      expect(serverResult.find((message) => message.role === 'user')?.content).toBe(
+        clientResult.messages.find((message) => message.role === 'user')?.content,
+      );
+    });
+  });
+
   describe('basic functionality', () => {
     it('should process messages with required parameters', async () => {
       const messages = createBasicMessages();
@@ -70,7 +121,7 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
-    it('renders {{workingDirectory}} to a fallback instead of leaking the literal (LOBE-11473)', async () => {
+    it('renders {{workingDirectory}} to a fallback instead of leaking the literal ', async () => {
       const messages = createBasicMessages();
       const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';
 
@@ -97,6 +148,70 @@ describe('serverMessagesEngine', () => {
         '<working-directory>/Users/tj/project</working-directory>',
       );
       expect(resolved[0].content).not.toContain('(not specified');
+    });
+
+    it('renders every temporal placeholder instead of leaking the literal', async () => {
+      const messages = createBasicMessages();
+      const systemRole =
+        'Date: {{date}} Day: {{day}} Weekday: {{weekday}} Hour: {{hour}} ' +
+        'Minute: {{minute}} Second: {{second}} Month: {{month}} Year: {{year}} ' +
+        'ISO: {{iso}} Timestamp: {{timestamp}} Locale: {{locale}}';
+
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+        userTimezone: 'Asia/Shanghai',
+      });
+
+      expect(result[0].content).not.toContain('{{');
+      expect(result[0].content).toMatch(/ISO: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+      expect(result[0].content).toMatch(/Timestamp: \d{13}/);
+      expect(result[0].content).toMatch(
+        /Weekday: (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
+      );
+      expect(result[0].content).toContain('Locale: en-US');
+    });
+
+    it('lets additionalVariables override the locale fallback', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        additionalVariables: { locale: 'zh-CN' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Locale: {{locale}}',
+      });
+
+      expect(result[0].content).toContain('Locale: zh-CN');
+      expect(result[0].content).not.toContain('en-US');
+    });
+
+    it('renders wall-clock components in the user timezone', async () => {
+      const messages = createBasicMessages();
+
+      // Kiritimati is UTC+14 — always a different hour (and often day) than UTC,
+      // so a UTC-based rendering cannot accidentally pass.
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Hour: {{hour}} Day: {{day}}',
+        userTimezone: 'Pacific/Kiritimati',
+      });
+
+      const expected = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        hour: '2-digit',
+        hourCycle: 'h23',
+        timeZone: 'Pacific/Kiritimati',
+      }).formatToParts(new Date());
+      const partsMap = Object.fromEntries(expected.map((part) => [part.type, part.value]));
+
+      expect(result[0].content).toContain(`Hour: ${partsMap.hour}`);
+      expect(result[0].content).toContain(`Day: ${partsMap.day}`);
     });
 
     it('should inject model knowledge cutoff when provided', async () => {

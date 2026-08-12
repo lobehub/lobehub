@@ -73,6 +73,12 @@ export interface HeteroSessionImportPayload {
   /** native session id from the source CLI (Claude Code sessionId / Codex rollout id) */
   sessionId: string;
   source: HeteroSessionImportSource;
+  /**
+   * last raw record timestamp of the source transcript, stored on the topic so a
+   * later scan can tell whether the session grew. Must come from the same helper
+   * that produces the digest's `endAt` — do NOT re-derive it from `messages`.
+   */
+  sourceEndAt?: string;
   /** subagent / sidechain transcripts, imported as threads */
   threads?: HeteroSessionImportThread[];
   title?: string;
@@ -198,6 +204,9 @@ export const heteroSessionImportPayloadSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   sessionId: z.string(),
   source: z.enum(['claude-code', 'codex']),
+  // keep in sync with HeteroSessionImportPayload — zod strips unknown keys, so a
+  // field missing here silently never reaches the importer
+  sourceEndAt: z.string().optional(),
   threads: z.array(heteroSessionImportThreadSchema).optional(),
   title: z.string().optional(),
   topicClientId: z.string(),

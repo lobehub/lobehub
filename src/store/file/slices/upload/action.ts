@@ -1,14 +1,15 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
-import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
 import { type UploadFileItem } from '@/types/files';
+import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { type FileStore } from '../../store';
@@ -30,6 +31,12 @@ type OnStatusUpdate = (
 interface UploadWithProgressParams {
   abortController?: AbortController;
   file: File;
+  /**
+   * Additional metadata persisted with the file record. Media capture flows use
+   * this for duration/codec while the storage path metadata continues to come
+   * from the upload service.
+   */
+  fileMetadata?: Record<string, unknown>;
   knowledgeBaseId?: string;
   onStatusUpdate?: OnStatusUpdate;
   parentId?: string;
@@ -134,12 +141,18 @@ export class FileUploadActionImpl {
     uploadId,
     abortController,
     visibility,
+    fileMetadata,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
 
     try {
       const fileArrayBuffer = await file.arrayBuffer();
       const normalizedFile = await normalizeUploadedImageFileType(file, fileArrayBuffer);
+      const extensionAudioMime = audioMimeFromExtension(normalizedFile.name);
+      const audioDurationPromise =
+        normalizedFile.type.startsWith('audio/') || extensionAudioMime
+          ? getAudioDuration(normalizedFile).catch(() => undefined)
+          : undefined;
 
       // 1. extract image dimensions if applicable
       const dimensions = await getImageDimensions(normalizedFile);
@@ -165,13 +178,13 @@ export class FileUploadActionImpl {
           abortController,
           onNotSupported: () => {
             onStatusUpdate?.({ id: statusId, type: 'removeFile' });
-            message.info({
-              content: t('upload.fileOnlySupportInServerMode', {
+            toast.info({
+              description: t('upload.fileOnlySupportInServerMode', {
                 cloud: LOBE_CHAT_CLOUD,
                 ext: normalizedFile.name.split('.').pop(),
                 ns: 'error',
               }),
-              duration: 5,
+              duration: 5000,
             });
           },
           onProgress: (status, upload) => {
@@ -201,8 +214,11 @@ export class FileUploadActionImpl {
       // Audio containers like .m4a share the ISO-BMFF box with .mp4, so both the browser and
       // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
       // classified (and rendered) as audio.
-      const audioMime = audioMimeFromExtension(normalizedFile.name);
-      if (audioMime && !fileType.startsWith('audio/')) fileType = audioMime;
+      if (extensionAudioMime && !fileType.startsWith('audio/')) fileType = extensionAudioMime;
+
+      const durationMs = fileType.startsWith('audio/')
+        ? await (audioDurationPromise ?? getAudioDuration(normalizedFile).catch(() => undefined))
+        : undefined;
 
       // 5. create file to db
       // Fall back to the global file URL when legacy/generated metadata has no `path`.
@@ -213,7 +229,12 @@ export class FileUploadActionImpl {
         {
           fileType,
           hash,
-          metadata: { ...metadata, ...dimensions },
+          metadata: {
+            ...fileMetadata,
+            ...metadata,
+            ...dimensions,
+            ...(durationMs === undefined ? {} : { durationMs }),
+          },
           name: normalizedFile.name,
           parentId,
           size: normalizedFile.size,
@@ -239,7 +260,12 @@ export class FileUploadActionImpl {
     } catch (error) {
       if (
         handleFileUploadError(error, {
-          onUploadBlocked: () => onStatusUpdate?.({ id: statusId, type: 'removeFile' }),
+          onUploadBlocked: ({ code, description }) =>
+            onStatusUpdate?.({
+              id: statusId,
+              type: 'updateFile',
+              value: { error: description, errorCode: code, status: 'error' },
+            }),
         })
       ) {
         return;

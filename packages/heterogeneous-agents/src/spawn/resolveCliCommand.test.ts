@@ -36,14 +36,6 @@ const callExecFileError = (err: Error) => {
     return {} as any;
   }) as any);
 };
-const callExec = (stdout: string, stderr = '') => {
-  execMock.mockImplementationOnce(((cmd: string, opts: any, cb: any) => {
-    const callback = typeof opts === 'function' ? opts : cb;
-    callback(noErr, { stdout, stderr });
-    return {} as any;
-  }) as any);
-};
-
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
@@ -101,6 +93,20 @@ describe('resolveCliCommand', () => {
         available: true,
         path: '/Users/x/.opencode/bin/opencode',
         version: '1.18.3',
+      });
+    });
+
+    it('resolves and validates Qoder using its bare semver output', async () => {
+      callExecFile('/Users/x/.local/bin/qodercli\n');
+      callExecFile('1.1.15');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('qoder', 'qodercli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/qodercli',
+        version: '1.1.15',
       });
     });
 
@@ -241,18 +247,18 @@ describe('resolveCliCommand', () => {
       platformMock.mockReturnValue('win32');
     });
 
-    it('resolves `codex` to the .cmd shim via `where`, then runs it through the shell', async () => {
+    it('resolves `codex` to the .cmd shim without constructing a shell command', async () => {
       callExecFile('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd\r\n');
-      callExec('codex 0.142.5');
+      callExecFile('codex 0.142.5');
 
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
-      expect(execMock.mock.calls[0]![0]).toBe(
-        '"C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd" --version',
-      );
+      expect(execFileMock.mock.calls[1]![0]).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--version']);
+      expect(execMock).not.toHaveBeenCalled();
     });
 
     it('prefers the .cmd shim when `where` returns multiple PATHEXT matches', async () => {
@@ -263,13 +269,34 @@ describe('resolveCliCommand', () => {
           'C:\\Users\\x\\AppData\\Roaming\\npm\\codex.ps1',
         ].join('\r\n'),
       );
-      callExec('codex 0.142.5');
+      callExecFile('codex 0.142.5');
 
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
+    });
+
+    it('preserves PATH order: earlier .cmd beats later .exe (Vite+ claude.exe case)', async () => {
+      // `where claude` lists every match in PATH order. npm's .cmd shim is
+      // earlier; Vite+ ships a later standalone claude.exe. Preferring every
+      // .exe over every .cmd would pick Vite+ and break the real install.
+      callExecFile(
+        [
+          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
+          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
+        ].join('\r\n'),
+      );
+      callExecFile('1.2.3 (Claude Code)');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('claude', {
+        validateKeywords: ['claude code'],
+      });
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
     });
 
     it('rejects a command containing shell metacharacters', async () => {
@@ -302,6 +329,16 @@ describe('resolveCliCommand', () => {
     it('defines opencode as the default OpenCode command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
+    });
+
+    it('defines pi as the default Pi command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
+    });
+
+    it('defines qodercli as the default Qoder command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

@@ -1,26 +1,63 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveAgentModelConfig } from './modelSelection';
+import { resolveAgentModelConfig, resolveAgentModelSelectionPolicy } from './modelSelection';
 
 const shared = {
   model: 'shared-model',
   provider: 'shared-provider',
 };
+const workspaceShared = {
+  ...shared,
+  visibility: 'public' as const,
+  workspaceId: 'workspace-1',
+};
+
+describe('resolveAgentModelSelectionPolicy', () => {
+  it('defaults a legacy public Workspace Agent to member selection', () => {
+    expect(resolveAgentModelSelectionPolicy(workspaceShared)).toBe('member');
+  });
+
+  it('keeps personal and private Agents fixed when the policy is missing', () => {
+    expect(resolveAgentModelSelectionPolicy({ workspaceId: null })).toBe('fixed');
+    expect(resolveAgentModelSelectionPolicy({ ...workspaceShared, visibility: 'private' })).toBe(
+      'fixed',
+    );
+  });
+
+  it('preserves an explicit fixed policy for a public Workspace Agent', () => {
+    expect(
+      resolveAgentModelSelectionPolicy({
+        ...workspaceShared,
+        agencyConfig: { modelSelectionPolicy: 'fixed' },
+      }),
+    ).toBe('fixed');
+  });
+
+  it('forces member selection on a personal-selection Agent', () => {
+    expect(
+      resolveAgentModelSelectionPolicy({
+        ...workspaceShared,
+        agencyConfig: { modelSelectionPolicy: 'fixed' },
+        personalModelSelection: true,
+      }),
+    ).toBe('member');
+  });
+});
 
 describe('resolveAgentModelConfig', () => {
-  it('treats a missing policy as fixed for existing workspace agents', () => {
+  it('uses a member override for a legacy public Workspace Agent', () => {
     expect(
-      resolveAgentModelConfig(shared, {
+      resolveAgentModelConfig(workspaceShared, {
         model: 'member-model',
         provider: 'member-provider',
       }),
-    ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
+    ).toEqual({ model: 'member-model', provider: 'member-provider' });
   });
 
   it('ignores a retained member override while the policy is fixed', () => {
     expect(
       resolveAgentModelConfig(
-        { ...shared, agencyConfig: { modelSelectionPolicy: 'fixed' } },
+        { ...workspaceShared, agencyConfig: { modelSelectionPolicy: 'fixed' } },
         { model: 'member-model', provider: 'member-provider' },
       ),
     ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
@@ -29,10 +66,50 @@ describe('resolveAgentModelConfig', () => {
   it('uses the member override when the author allows member selection', () => {
     expect(
       resolveAgentModelConfig(
-        { ...shared, agencyConfig: { modelSelectionPolicy: 'member' } },
+        { ...workspaceShared, agencyConfig: { modelSelectionPolicy: 'member' } },
         { model: 'member-model', provider: 'member-provider' },
       ),
     ).toEqual({ model: 'member-model', provider: 'member-provider' });
+  });
+
+  it('ignores member overrides for an author or Workspace admin', () => {
+    expect(
+      resolveAgentModelConfig(
+        {
+          ...workspaceShared,
+          agencyConfig: { modelSelectionPolicy: 'member' },
+          canManage: true,
+        },
+        { model: 'member-model', provider: 'member-provider' },
+      ),
+    ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
+  });
+
+  it('applies the member override on a personal-selection Agent even for an admin', () => {
+    expect(
+      resolveAgentModelConfig(
+        {
+          ...workspaceShared,
+          canManage: true,
+          personalModelSelection: true,
+        },
+        { model: 'member-model', provider: 'member-provider' },
+      ),
+    ).toEqual({ model: 'member-model', provider: 'member-provider' });
+  });
+
+  it('ignores the member override while the workspace Agent is private', () => {
+    expect(
+      resolveAgentModelConfig(
+        {
+          ...shared,
+          agencyConfig: { modelSelectionPolicy: 'member' },
+          visibility: 'private',
+          workspaceId: 'workspace-1',
+        },
+        { model: 'member-model', provider: 'member-provider' },
+      ),
+    ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
   });
 
   it('keeps the shared model when member selection is enabled but no choice was saved', () => {
@@ -40,6 +117,8 @@ describe('resolveAgentModelConfig', () => {
       resolveAgentModelConfig({
         ...shared,
         agencyConfig: { modelSelectionPolicy: 'member' },
+        visibility: 'public',
+        workspaceId: 'workspace-1',
       }),
     ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
   });
@@ -47,7 +126,7 @@ describe('resolveAgentModelConfig', () => {
   it('applies explicit per-run overrides after the member choice', () => {
     expect(
       resolveAgentModelConfig(
-        { ...shared, agencyConfig: { modelSelectionPolicy: 'member' } },
+        { ...workspaceShared, agencyConfig: { modelSelectionPolicy: 'member' } },
         { model: 'member-model', provider: 'member-provider' },
         { model: 'run-model' },
       ),

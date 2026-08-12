@@ -8,6 +8,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -437,6 +438,8 @@ export interface OperationCreationParams {
   parentOperationId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Search route resolved once before the operation starts. */
+  searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**

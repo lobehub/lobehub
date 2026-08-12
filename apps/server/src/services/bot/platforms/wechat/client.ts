@@ -2,6 +2,7 @@ import type { WechatRawMessage } from '@lobechat/chat-adapter-wechat';
 import {
   createWechatAdapter,
   downloadMediaFromRawMessage,
+  getWechatTextSendCount,
   MessageItemType,
   MessageState,
   MessageType,
@@ -30,6 +31,7 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { consumeSendCredits, recordInboundToken, type WechatWindowRedis } from './contextWindow';
 import { sendWechatAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:wechat:bot');
@@ -267,7 +269,7 @@ class WechatGatewayClient implements PlatformClient {
 
       // Cache context token in memory and persist to Redis for queue-mode callbacks
       this.contextTokens.set(msg.from_user_id, msg.context_token);
-      this.persistContextToken(msg.from_user_id, msg.context_token);
+      await this.persistContextToken(msg.from_user_id, msg.context_token);
 
       // Forward to webhook
       await this.forwardToWebhook(webhookUrl, msg);
@@ -302,15 +304,41 @@ class WechatGatewayClient implements PlatformClient {
     return `wechat:ctx-token:${this.applicationId}:${userId}`;
   }
 
-  private persistContextToken(userId: string, token: string): void {
+  private async persistContextToken(userId: string, token: string): Promise<void> {
     if (!this.context.redisClient) return;
-    const key = this.contextTokenRedisKey(userId);
-    // 24h TTL — tokens are refreshed on every inbound message.
-    // The redisClient is a raw ioredis instance (cast via `as any`), so use
-    // positional args instead of the { ex } object form.
-    (this.context.redisClient as any).set(key, token, 'EX', 86_400).catch((err: any) => {
+    // Refresh the send window (token + outbound quota + 24h TTL); also mirrors
+    // the legacy `wechat:ctx-token:*` key for older readers.
+    try {
+      await recordInboundToken(
+        this.context.redisClient as unknown as WechatWindowRedis,
+        this.applicationId,
+        userId,
+        token,
+      );
+    } catch (err) {
       log('WechatBot appId=%s failed to persist context token: %s', this.applicationId, err);
-    });
+    }
+  }
+
+  /**
+   * Best-effort quota bookkeeping for reply-path sends (overdraft allowed —
+   * we never refuse to answer a user who just messaged us). Keeping the
+   * counter honest here is what lets the proactive-push path know how much of
+   * the 10-send window is actually left.
+   */
+  private async trackOutboundSends(userId: string, count: number): Promise<void> {
+    if (!this.context.redisClient || count <= 0) return;
+    try {
+      await consumeSendCredits(
+        this.context.redisClient as unknown as WechatWindowRedis,
+        this.applicationId,
+        userId,
+        count,
+        { allowOverdraft: true },
+      );
+    } catch (err) {
+      log('WechatBot appId=%s failed to track outbound sends: %s', this.applicationId, err);
+    }
   }
 
   private sleep(ms: number): Promise<void> {
@@ -331,6 +359,9 @@ class WechatGatewayClient implements PlatformClient {
         baseUrl: this.config.credentials.baseUrl,
         botId: this.config.credentials.botId,
         botToken: this.config.credentials.botToken,
+        onBeforeSendMessage: async ({ count, toUserId }) => {
+          await this.trackOutboundSends(toUserId, count);
+        },
       }),
     };
   }
@@ -439,6 +470,10 @@ class WechatGatewayClient implements PlatformClient {
       const text = messengerContentText(input);
       const attachments = typeof input === 'string' ? undefined : input.attachments;
       const token = await resolveToken();
+      await this.trackOutboundSends(
+        targetId,
+        (text.trim() ? getWechatTextSendCount(text) : 0) + (attachments?.length ?? 0),
+      );
       if (text.trim()) {
         await this.api.sendMessage(targetId, text, token);
       }

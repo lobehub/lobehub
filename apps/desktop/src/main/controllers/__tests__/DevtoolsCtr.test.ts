@@ -4,11 +4,15 @@ import type { App } from '@/core/App';
 
 import DevtoolsCtr from '../DevtoolsCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { getAppMetricsMock, ipcMainHandleMock } = vi.hoisted(() => ({
+  getAppMetricsMock: vi.fn(),
   ipcMainHandleMock: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
+  app: {
+    getAppMetrics: getAppMetricsMock,
+  },
   ipcMain: {
     handle: ipcMainHandleMock,
   },
@@ -48,6 +52,24 @@ describe('DevtoolsCtr', () => {
       expect(mockRetrieveByIdentifier).toHaveBeenCalledWith('devtools');
       // Verify that the show method of the returned object is called
       expect(mockShow).toHaveBeenCalled();
+    });
+  });
+
+  describe('getAppCpuUsage', () => {
+    it('should sum percentCPUUsage across all app processes', async () => {
+      getAppMetricsMock.mockReturnValue([
+        { cpu: { percentCPUUsage: 1.5 } },
+        { cpu: { percentCPUUsage: 2.25 } },
+        { cpu: { percentCPUUsage: 0 } },
+      ]);
+
+      await expect(devtoolsCtr.getAppCpuUsage()).resolves.toEqual({ percent: 3.75 });
+    });
+
+    it('should return zero when there are no process metrics', async () => {
+      getAppMetricsMock.mockReturnValue([]);
+
+      await expect(devtoolsCtr.getAppCpuUsage()).resolves.toEqual({ percent: 0 });
     });
   });
 });

@@ -94,6 +94,7 @@ describe('AgentDocumentsService', () => {
     findById: vi.fn(),
     findByAgent: vi.fn(),
     findContextByAgent: vi.fn(),
+    findByDocumentId: vi.fn(),
     findByDocumentIds: vi.fn(),
     findByFilename: vi.fn(),
     findByParentAndFilename: vi.fn(),
@@ -568,24 +569,46 @@ describe('AgentDocumentsService', () => {
 
   describe('getDocumentSnapshotById', () => {
     it('should fall back to markdown content when editor data is empty', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
       mockModel.findById.mockResolvedValue({
         agentId: 'agent-1',
         content: 'fallback content',
         editorData: { root: { children: [] } },
-        id: 'agent-doc-1',
+        id: agentDocumentId,
         title: 'Doc',
       });
 
       const service = new AgentDocumentsService(db, userId);
-      const result = await service.getDocumentSnapshotById('agent-doc-1', 'agent-1');
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
 
       expect(result).toEqual({
         agentId: 'agent-1',
         content: 'fallback content',
         editorData: { root: { children: [] } },
-        id: 'agent-doc-1',
+        id: agentDocumentId,
         litexml: '<p id="node-1">content</p>',
         title: 'Doc',
+      });
+    });
+
+    it('should resolve a backing document id without querying the UUID binding column', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'backing content',
+        documentId: 'docs_backing-doc-1',
+        id: agentDocumentId,
+        title: 'Doc',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById('docs_backing-doc-1', 'agent-1');
+
+      expect(mockModel.findByDocumentId).toHaveBeenCalledWith('agent-1', 'docs_backing-doc-1');
+      expect(mockModel.findById).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        documentId: 'docs_backing-doc-1',
+        id: agentDocumentId,
       });
     });
   });

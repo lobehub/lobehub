@@ -33,8 +33,8 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: mockMessageError, success: mockMessageSuccess },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: mockMessageError, success: mockMessageSuccess },
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => ({
@@ -485,7 +485,7 @@ describe('useSignIn', () => {
 
   describe('handleForgotPassword', () => {
     it('should call requestPasswordReset and land on the email-sent state', async () => {
-      mockRequestPasswordReset.mockResolvedValue(undefined);
+      mockRequestPasswordReset.mockResolvedValue({ data: { status: true }, error: null });
 
       mockFetch.mockResolvedValueOnce({
         json: async () => ({ exists: true, hasPassword: true }),
@@ -522,6 +522,35 @@ describe('useSignIn', () => {
 
       expect(mockRequestPasswordReset).not.toHaveBeenCalled();
       expect(result.current.step).toBe('email');
+    });
+
+    // The better-auth client resolves with `{ data, error }` rather than
+    // throwing, so a rejected-promise test alone leaves the failure branch
+    // unreachable and a failed send lands on the "email sent" screen.
+    it('should show error and stay put when the client resolves with an error', async () => {
+      mockRequestPasswordReset.mockResolvedValue({
+        data: null,
+        error: { message: 'Email provider rejected the request', status: 503 },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      await act(async () => {
+        await result.current.handleForgotPassword();
+      });
+
+      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.step).toBe('password');
+      expect(result.current.sentInfo).toBeNull();
     });
 
     it('should show error on failure', async () => {
@@ -572,7 +601,7 @@ describe('useSignIn', () => {
 
   describe('handleResendEmail', () => {
     it('should resend the password reset email and confirm', async () => {
-      mockRequestPasswordReset.mockResolvedValue(undefined);
+      mockRequestPasswordReset.mockResolvedValue({ data: { status: true }, error: null });
       mockFetch.mockResolvedValueOnce({
         json: async () => ({ exists: true, hasPassword: true }),
         ok: true,
@@ -601,7 +630,7 @@ describe('useSignIn', () => {
 
   describe('handleBackFromSent', () => {
     it('should return to the email entry (not the password step) after a reset email', async () => {
-      mockRequestPasswordReset.mockResolvedValue(undefined);
+      mockRequestPasswordReset.mockResolvedValue({ data: { status: true }, error: null });
       mockFetch.mockResolvedValueOnce({
         json: async () => ({ exists: true, hasPassword: true }),
         ok: true,

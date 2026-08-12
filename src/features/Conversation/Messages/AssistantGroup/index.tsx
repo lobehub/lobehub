@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
@@ -36,6 +38,10 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import EditedFilesCard from '../EditedFilesCard';
+import { useOperationEditedFiles } from '../EditedFilesCard/useOperationEditedFiles';
+import GoalWorkCard from '../GoalWorkCard';
+import { useOperationGoals } from '../GoalWorkCard/useOperationGoals';
 import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
@@ -109,6 +115,7 @@ const GroupMessage = memo<GroupMessageProps>(
       isEqual,
     );
     const { t } = useTranslation('chat');
+    const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
     // Collect fileList from all children blocks
     const aggregatedFileList = useMemo(() => {
@@ -119,6 +126,22 @@ const GroupMessage = memo<GroupMessageProps>(
       () => findLatestWorkRootOperationId(metadata, children, taskCompletions),
       [children, metadata, taskCompletions],
     );
+    // Codex-style aggregate of files edited this round. Purely derived from the
+    // group's tool calls (entity-format files are excluded — they surface as
+    // `file` Works below), so it rides the same afterActions slot as Works.
+    // The card is a turn-end artifact, so skip the scan entirely while the group
+    // (or any child block) is still streaming: `children` changes on every token,
+    // and the finished card is all users see anyway.
+    const isGroupGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(id),
+    );
+    const editedFiles = useOperationEditedFiles(
+      isGroupGenerating ? undefined : children,
+      // The sandbox-entity → Work handoff only happens on server-runtime rounds
+      // (the work anchor marks them); without it the card keeps every entry.
+      !!workRootOperationId,
+    );
+    const operationGoals = useOperationGoals(isGroupGenerating ? undefined : children);
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -146,7 +169,10 @@ const GroupMessage = memo<GroupMessageProps>(
     const addReaction = useConversationStore((s) => s.addReaction);
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
-    const reactions: EmojiReaction[] = metadata?.reactions || [];
+    const reactions = useMemo<EmojiReaction[]>(
+      () => metadata?.reactions || [],
+      [metadata?.reactions],
+    );
 
     const handleReactionClick = useCallback(
       (emoji: string) => {
@@ -157,7 +183,7 @@ const GroupMessage = memo<GroupMessageProps>(
           addReaction(id, emoji);
         }
       },
-      [id, reactions, addReaction, removeReaction],
+      [addReaction, id, reactions, removeReaction, userId],
     );
 
     const isReactionActive = useCallback(
@@ -165,7 +191,7 @@ const GroupMessage = memo<GroupMessageProps>(
         const reaction = reactions.find((r) => r.emoji === emoji);
         return !!reaction && reaction.users.includes(userId);
       },
-      [reactions],
+      [reactions, userId],
     );
 
     const setMessageItemActionElementPortialContext =
@@ -193,16 +219,35 @@ const GroupMessage = memo<GroupMessageProps>(
       } else {
         openChatSettings();
       }
-    }, [isInbox]);
+    }, [isInbox, openChatSettings, toggleSystemRole]);
 
     return (
       <ChatItem
         showTitle
-        avatar={isSupervisor ? { ...avatar, title: groupMeta.title } : avatar}
+        // The supervisor row is labelled by the group, not by the agent behind it —
+        // drop `name` too, or the renderer's name-first resolution would surface the
+        // agent's personal name over the group title.
+        avatar={isSupervisor ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
         id={id}
         placement={'left'}
         time={createdAt}
         titleAddon={isSupervisor ? <Tag>{t('supervisor.label')}</Tag> : undefined}
+        actionAddon={
+          reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
+            <>
+              {reactions.length > 0 && (
+                <ReactionDisplay
+                  isActive={isReactionActive}
+                  reactions={reactions}
+                  onReactionClick={handleReactionClick}
+                />
+              )}
+              {commentCount > 0 && commentTopicId && (
+                <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+              )}
+            </>
+          ) : undefined
+        }
         actions={
           !disableEditing && (
             <>
@@ -218,7 +263,19 @@ const GroupMessage = memo<GroupMessageProps>(
           )
         }
         afterActions={
-          workRootOperationId ? <MessageWorks rootOperationId={workRootOperationId} /> : undefined
+          // Virtual round artifacts (edited files / Goal handoffs) are derived
+          // from the group's tool calls and stay visible after the tool steps
+          // collapse. Only mount the wrapper when one exists: a work anchor can
+          // be present while `MessageWorks` itself resolves to null.
+          editedFiles.length > 0 || operationGoals.length > 0 ? (
+            <Flexbox gap={8}>
+              {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
+              {operationGoals.length > 0 && <GoalWorkCard goals={operationGoals} />}
+              {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
+            </Flexbox>
+          ) : workRootOperationId ? (
+            <MessageWorks rootOperationId={workRootOperationId} />
+          ) : undefined
         }
         customAvatarRender={
           isSupervisor
@@ -249,10 +306,10 @@ const GroupMessage = memo<GroupMessageProps>(
               blocks={children}
               content={lastAssistantMsg?.content}
               contentId={contentId}
-              disableEditing={disableEditing}
               // Folding a finished turn's process is the default behavior now
               // (graduated from Labs) — always on for the conversation.
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
+              disableEditing={disableEditing}
               id={id}
               isLatestItem={isLatestItem}
               messageIndex={index}
@@ -283,14 +340,6 @@ const GroupMessage = memo<GroupMessageProps>(
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
         {footerRender}
-        {reactions.length > 0 && (
-          <ReactionDisplay
-            isActive={isReactionActive}
-            messageId={id}
-            reactions={reactions}
-            onReactionClick={handleReactionClick}
-          />
-        )}
         <Suspense fallback={null}>
           {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}
         </Suspense>

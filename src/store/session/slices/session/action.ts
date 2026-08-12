@@ -1,11 +1,11 @@
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { sessionKeys } from '@/libs/swr/keys';
@@ -103,26 +103,20 @@ export class SessionActionImpl {
 
     const newTitle = t('duplicateSession.title', { ns: 'chat', title });
 
-    const messageLoadingKey = 'duplicateSession.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const newId = await sessionService.cloneSession(id, newTitle);
 
     // duplicate Session Error
     if (!newId) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await refreshSessions();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     switchSession(newId);
   };

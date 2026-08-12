@@ -83,7 +83,7 @@ Agent Runtime 是整个 chat 流程的**核心执行引擎**。
 2. 通过 `createAgentToolsEngine()` 创建工具注册表
 3. 创建 `GeneralChatAgent`（"大脑"，决定下一步做什么）
    和 `AgentRuntime`（"引擎"，执行指令）
-4. 通过 `createAgentExecutors()` 注入自定义执行器
+4. 通过 `createClientRuntimeExecutors()` 将 package 共享执行器绑定到客户端 transport
 
 **执行循环**：
 

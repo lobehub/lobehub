@@ -7,7 +7,6 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CirclePause,
   CircleSlash,
   CircleX,
   Clock,
@@ -23,8 +22,8 @@ export interface ExecutionStatusVisual {
 
 /**
  * Canonical glyph + color per execution-status semantic, shared by tasks and
- * topics (sidebar rows, group headers, kanban columns, management table, fleet
- * sidebar). One semantic → one visual, so the same state never renders with
+ * topics (sidebar rows, group headers, kanban columns, management table). One
+ * semantic → one visual, so the same state never renders with
  * different icons across surfaces. Live "running" rows may still swap the
  * static glyph for the animated `RingLoadingIcon` — same circle family and
  * warning color, animation just signals liveness.
@@ -36,7 +35,6 @@ const VISUALS = {
   completed: { color: cssVar.colorSuccess, icon: CircleCheck },
   failed: { color: cssVar.colorError, icon: CircleX },
   idle: { color: cssVar.colorTextTertiary, icon: Circle },
-  paused: { color: cssVar.colorTextDescription, icon: CirclePause },
   running: { color: cssVar.colorWarning, icon: CircleDot },
   scheduled: { color: cssVar.colorWarning, icon: Clock },
   waitingForHuman: { color: cssVar.colorInfo, icon: HandIcon },
@@ -64,7 +62,6 @@ export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual
   // like a failed task run — the warning triangle reads that way, the circled X
   // reads as "closed/rejected".
   failed: { ...VISUALS.failed, icon: TriangleAlert },
-  paused: VISUALS.paused,
   running: VISUALS.running,
   scheduled: VISUALS.scheduled,
   // `unread` rows render a custom ripple dot; this is the fallback glyph.

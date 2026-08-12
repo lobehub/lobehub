@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { StrictOnly } from '../zodStrict';
 import type { UserMemoryIdentity } from './identity';
 import type {
   UserMemoryActivity,
@@ -96,7 +97,7 @@ const searchMemoryYearIntentSchema = z.object({
 
 const searchMemoryLegacyRelativeDayAnchorSchema = z.enum(['today', 'yesterday']);
 
-const searchMemoryTimeIntentSchema: z.ZodType<SearchMemoryTimeIntent> = z.lazy(() =>
+const searchMemoryTimeIntentSchema: z.ZodType<StrictOnly<SearchMemoryTimeIntent>> = z.lazy(() =>
   z.union([
     z.object({
       selector: searchMemoryPresetTimeSelectorSchema,

@@ -1,18 +1,21 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import type {
   ChatImageItem,
+  ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import { resolveAgencyConfig } from '@lobechat/types';
+import { resolveAgentAgencyConfig } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
+import { getEffectiveConversationModel } from '@/features/Conversation/store/utils/effectiveModel';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
@@ -37,6 +40,7 @@ import {
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { type Store as ConversationStore } from '../../action';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
@@ -95,14 +99,22 @@ const settleGenerationEntry = (
 const getEffectiveAgencyConfig = (agentId: string) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
-  const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
-  const deviceOverride = isWorkspaceAgent
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const currentUserId = userProfileSelectors.userId(getUserStoreState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const deviceOverride = usesWorkspaceMemberSelection
     ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
 
   return {
-    agencyConfig: resolveAgencyConfig(sharedAgencyConfig, deviceOverride),
-    workspaceScoped: resolveWorkspaceScoped(isWorkspaceAgent, deviceOverride),
+    agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
+      canManage: isAuthor,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    }),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   };
 };
 
@@ -183,7 +195,7 @@ const runHeterogeneousFromExistingMessage = async (
     context,
     agentId,
   );
-  if (cwdChanged) antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+  if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
 
   const assistantMsg = await messageService.createMessage({
     agentId,
@@ -201,8 +213,6 @@ const runHeterogeneousFromExistingMessage = async (
   // the executor runs (the executor only dispatches updates, not creates).
   await chatStore.refreshMessages();
 
-  if (context.topicId) chatStore.internal_updateTopicLoading(context.topicId, true);
-
   const { operationId: heteroOpId } = chatStore.startOperation({
     context,
     label: 'Heterogeneous Agent Execution',
@@ -212,23 +222,18 @@ const runHeterogeneousFromExistingMessage = async (
   });
   chatStore.associateMessageWithOperation(assistantMsg.id, heteroOpId);
 
-  try {
-    const { executeHeterogeneousAgent } =
-      await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
-    await executeHeterogeneousAgent(() => useChatStore.getState(), {
-      assistantMessageId: assistantMsg.id,
-      context,
-      heterogeneousProvider,
-      imageList: imageList?.length ? imageList : undefined,
-      message: prompt,
-      operationId: heteroOpId,
-      resumeSessionId,
-      workingDirectory,
-    });
-  } finally {
-    if (context.topicId)
-      useChatStore.getState().internal_updateTopicLoading(context.topicId, false);
-  }
+  const { executeHeterogeneousAgent } =
+    await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
+  await executeHeterogeneousAgent(() => useChatStore.getState(), {
+    assistantMessageId: assistantMsg.id,
+    context,
+    heterogeneousProvider,
+    imageList: imageList?.length ? imageList : undefined,
+    message: prompt,
+    operationId: heteroOpId,
+    resumeSessionId,
+    workingDirectory,
+  });
 
   return assistantMsg.id;
 };
@@ -240,6 +245,198 @@ export interface HeteroContinuationScheduleParams {
     resetsAt?: number;
   };
 }
+
+interface RegenerateUserMessageSource {
+  context: ConversationContext;
+  displayMessages: ConversationStore['displayMessages'];
+  hooks: ConversationStore['hooks'];
+  readDbMessages: () => ConversationStore['dbMessages'];
+}
+
+const captureRegenerateUserMessageSource = (
+  get: () => ConversationStore,
+): RegenerateUserMessageSource => {
+  const { context, dbMessages, displayMessages, hooks } = get();
+  const contextKey = messageMapKey(context);
+
+  return {
+    context,
+    displayMessages,
+    hooks,
+    readDbMessages: () => {
+      const currentState = get();
+      if (messageMapKey(currentState.context) === contextKey) return currentState.dbMessages;
+
+      return useChatStore.getState().dbMessagesMap[contextKey] ?? dbMessages;
+    },
+  };
+};
+
+const regenerateUserMessageFromSource = async (
+  messageId: string,
+  source: RegenerateUserMessageSource,
+) => {
+  const { context, displayMessages, hooks, readDbMessages } = source;
+  const chatStore = useChatStore.getState();
+
+  // Block a genuine double-regenerate, and ONLY that. The guard used to be
+  // `isMessageProcessing`, i.e. "this message has any running operation at all" —
+  // so an unrelated op that outlived its run (a translate, a never-settled
+  // gateway regenerate whose WS dropped non-terminally) permanently and silently
+  // killed retry for that turn. Narrowing to the regenerate op keeps the
+  // duplicate-click protection without letting any stray op wedge the turn, and
+  // the toast means the refusal is never invisible again.
+  if (operationSelectors.isMessageRegenerating(messageId)(chatStore)) {
+    toast.info(t('messageAction.regenerateAlreadyRunning', { ns: 'chat' }));
+    return;
+  }
+
+  // Find the message in the captured conversation messages. The source remains
+  // bound to the initiating context even if StoreUpdater reuses this store for
+  // another topic while an earlier delete or preflight request is in flight.
+  const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
+  const item = displayMessages[currentIndex];
+  if (!item) return;
+  // Start the interim regenerate op BEFORE the async preflight below
+  // (document-context resolve + onBeforeRegenerate hook). In page / bound-
+  // document contexts those reads are real round trips, so creating the op
+  // afterwards would leave the input/Stop state dead during exactly the
+  // pre-generation window the INPUT_LOADING_OPERATION_TYPES whitelist covers.
+  // Complete it if any preflight guard bails out before generation starts.
+  const { operationId } = chatStore.startOperation({
+    context: { ...context, messageId },
+    type: 'regenerate',
+  });
+
+  try {
+    const initialContext = mergeAgentRuntimeInitialContexts(
+      await resolveActiveTopicDocumentInitialContext(context),
+      buildRetryInitialContext(item.editorData),
+    );
+
+    // Get context messages up to and including the target message
+    const contextMessages = displayMessages.slice(0, currentIndex + 1);
+    if (contextMessages.length <= 0) {
+      chatStore.completeOperation(operationId);
+      return;
+    }
+
+    // ===== Hook: onBeforeRegenerate =====
+    if (hooks.onBeforeRegenerate) {
+      const shouldProceed = await hooks.onBeforeRegenerate(messageId);
+      if (shouldProceed === false) {
+        chatStore.completeOperation(operationId);
+        return;
+      }
+    }
+
+    // If the user hit Stop during the preflight awaits above, stopGenerating has
+    // already cancelled this interim op (cancelOperation flips its status but
+    // keeps the record). Bail out before switching branches or starting a run —
+    // otherwise the Stop is swallowed and a new assistant turn starts anyway. No
+    // child runtime exists yet, so cancelOperation had nothing to propagate to;
+    // this is the only place that can honour the Stop.
+    const preflightOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+    if (preflightOp && preflightOp.status !== 'running') return;
+
+    // Read the database messages from the captured conversation. If the shared
+    // ConversationStore has switched context, the source falls back to the old
+    // context's ChatStore bucket instead of observing the new topic.
+    const dbMessages = readDbMessages();
+    const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
+    const nextBranchIndex = childrenCount;
+
+    // Switch to the new branch so the UI shows the incoming response immediately
+    await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
+      operationId,
+    });
+
+    // Re-check after switchMessageBranch: it is another await round-trip, so a
+    // Stop pressed during it lands *after* the preflight guard above. Bail
+    // before starting the runtime so the Stop isn't swallowed. The branch is
+    // already switched, which is harmless — no assistant turn has started yet.
+    const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+    if (postSwitchOp && postSwitchOp.status !== 'running') return;
+
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+    const runtimeType = selectRuntimeType({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      heterogeneousProvider,
+      isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isWorkspaceAgent: workspaceScoped,
+    });
+
+    // ── Gateway mode: trigger server-side regeneration ──
+    if (runtimeType === 'gateway') {
+      // Hand the wrapper op off at phase-1 (`executeGatewayAgent` completes
+      // `parentOperationId` once the child `execServerAgentRuntime` op is
+      // running) — the documented interim-op contract this branch used to
+      // deviate from by keeping the wrapper alive until session end. That
+      // deviation is what made a WS drop before `onComplete` leave a running
+      // `regenerate` op on the user turn FOREVER, and the retry guard reads
+      // exactly that op type — so one dropped socket permanently bricked
+      // retry for the turn. Forwarding the id also wires the wrapper's abort
+      // signal into the preflight round trip, so a Stop pressed there now
+      // actually aborts the request instead of being swallowed.
+      // `onComplete` still fires at session end for the UI hook; re-completing
+      // the already-settled wrapper is an idempotent no-op.
+      await chatStore.executeGatewayAgent({
+        context,
+        message: item.content,
+        onComplete: () =>
+          settleGenerationEntry(chatStore, operationId, () =>
+            hooks.onRegenerateComplete?.(messageId),
+          ),
+        parentMessageId: messageId,
+        parentOperationId: operationId,
+      });
+
+      return;
+    }
+
+    // ── Hetero mode: re-run the local CLI against the original user prompt ──
+    // Creates a fresh assistant row branched off the existing user message so
+    // the CC / Codex turn replaces the previous attempt without rewriting
+    // history, and resumes the same session id (when the cwd still matches)
+    // so prior context is preserved.
+    if (runtimeType === 'hetero' && heterogeneousProvider) {
+      await runHeterogeneousFromExistingMessage(chatStore, {
+        context,
+        heterogeneousProvider,
+        // Forward the original user message's images so regenerate re-runs
+        // the CLI with the same vision input as the first attempt. Without
+        // this, regenerate silently drops attachments (the send path reads
+        // imageList off the persisted user message; this path must too).
+        imageList: item.imageList,
+        parentMessageId: messageId,
+        parentOperationId: operationId,
+        prompt: item.content,
+      });
+      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
+      return;
+    }
+
+    // ── Client mode: run agent locally ──
+    await chatStore.executeClientAgent({
+      context,
+      initialContext,
+      messages: contextMessages,
+      parentMessageId: messageId,
+      parentMessageType: 'user',
+      parentOperationId: operationId,
+    });
+
+    settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
+  } catch (error) {
+    chatStore.failOperation(operationId, {
+      message: error instanceof Error ? error.message : String(error),
+      type: 'RegenerateError',
+    });
+    throw error;
+  }
+};
 
 /**
  * Generation Actions
@@ -263,6 +460,12 @@ export interface GenerationAction {
   cancelScheduledRun: () => Promise<void>;
 
   /**
+   * Clear TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  clearMessageTTS: (messageId: string) => Promise<void>;
+
+  /**
    * Clear all operations
    */
   clearOperations: () => void;
@@ -274,20 +477,20 @@ export interface GenerationAction {
   clearTranslate: (messageId: string) => Promise<void>;
 
   /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
+   * Continue generation from a message.
+   *
+   * Resolves `true` only when a generation actually started. Every bail-out
+   * (message gone, no longer a group, no block to continue from) resolves
+   * `false` so a caller that already mutated history can recover instead of
+   * silently leaving the turn dead — see {@link retryFailedAssistantStep}.
    */
-  clearTTS: (messageId: string) => Promise<void>;
+  continueGeneration: (displayMessageId: string) => Promise<boolean>;
 
   /**
-   * Continue generation from a message
+   * Continue generation from a specific block. Resolves `true` only when a
+   * generation actually started; see {@link continueGeneration}.
    */
-  continueGeneration: (displayMessageId: string) => Promise<void>;
-
-  /**
-   * Continue generation from a specific block
-   */
-  continueGenerationMessage: (displayMessageId: string, messageId: string) => Promise<void>;
+  continueGenerationMessage: (displayMessageId: string, messageId: string) => Promise<boolean>;
 
   /**
    * Resume a heterogeneous (CC / Codex) run whose LAST step died on a status
@@ -374,7 +577,34 @@ export interface GenerationAction {
    */
   resetHeteroOverloadRetry: (scopeId: string) => void;
 
+  /**
+   * Retry the failed step of an assistant turn, from the error card rendered on
+   * that step.
+   *
+   * Guarantees a terminal outcome: either a continuation actually starts, or the
+   * whole turn is regenerated. The previous call site deleted the failed block
+   * and then *hoped* `continueGeneration` still found a group to continue — when
+   * it didn't (single-step turn, or a turn that stops parsing as a group once the
+   * block is gone) the user was left with a deleted answer and nothing running.
+   *
+   * @param groupMessageId - the assistantGroup id (the turn)
+   * @param blockId - the child block that carries the error
+   */
+  retryFailedAssistantStep: (groupMessageId: string, blockId: string) => Promise<void>;
+
+  /**
+   * Save TTS metadata for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  saveMessageTTS: (messageId: string, data: Required<ChatTTS>) => Promise<void>;
+
   scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
+
+  /**
+   * Start TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  startMessageTTS: (messageId: string) => void;
 
   /**
    * Stop current generation
@@ -386,15 +616,6 @@ export interface GenerationAction {
    * @deprecated Temporary bridge to ChatStore
    */
   translateMessage: (messageId: string, targetLang: string) => Promise<void>;
-
-  /**
-   * TTS a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  ttsMessage: (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => Promise<void>;
 }
 
 export const generationSlice: StateCreator<
@@ -474,9 +695,9 @@ export const generationSlice: StateCreator<
     // Operations are now managed by ChatStore, nothing to clear locally
   },
 
-  clearTTS: async (messageId: string) => {
+  clearMessageTTS: async (messageId: string) => {
     const chatStore = useChatStore.getState();
-    await chatStore.clearTTS(messageId);
+    await chatStore.clearMessageTTS(messageId);
   },
 
   clearTranslate: async (messageId: string) => {
@@ -489,12 +710,12 @@ export const generationSlice: StateCreator<
 
     // Find the message
     const message = displayMessages.find((m) => m.id === groupMessageId);
-    if (!message) return;
+    if (!message) return false;
 
     // If it's an assistantGroup, find the last child's ID as blockId
     let lastBlockId: string | undefined;
 
-    if (message.role !== 'assistantGroup') return;
+    if (message.role !== 'assistantGroup') return false;
 
     if (message.children && message.children.length > 0) {
       const lastChild = message.children.at(-1);
@@ -504,9 +725,9 @@ export const generationSlice: StateCreator<
       }
     }
 
-    if (!lastBlockId) return;
+    if (!lastBlockId) return false;
 
-    await get().continueGenerationMessage(groupMessageId, lastBlockId);
+    return get().continueGenerationMessage(groupMessageId, lastBlockId);
   },
 
   continueGenerationMessage: async (displayMessageId: string, dbMessageId: string) => {
@@ -515,12 +736,12 @@ export const generationSlice: StateCreator<
 
     // Find the message (blockId refers to the assistant message to continue from)
     const message = displayMessages.find((m) => m.id === displayMessageId);
-    if (!message) return;
+    if (!message) return false;
 
     // ===== Hook: onBeforeContinue =====
     if (hooks.onBeforeContinue) {
       const shouldProceed = await hooks.onBeforeContinue(displayMessageId);
-      if (shouldProceed === false) return;
+      if (shouldProceed === false) return false;
     }
 
     const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
@@ -536,7 +757,19 @@ export const generationSlice: StateCreator<
     // — each prompt is a fresh user turn from their perspective. Bail out
     // rather than synthesize a fake "please continue" turn that would pollute
     // the session and confuse the model. The button is a no-op in this mode.
-    if (runtimeType === 'hetero') return;
+    if (runtimeType === 'hetero') return false;
+
+    // Claude 4.6+/5 removed assistant prefill: a payload ending with an
+    // assistant turn is rejected (400), and the model runtime strips trailing
+    // assistant messages for these models — so "continue" would silently
+    // regenerate instead of continuing. Surface that instead of pretending.
+    // Resolve the effective model (topic override > agent default) — the topic
+    // may have been switched to/from a prefill-capable model independently.
+    const continueModel = getEffectiveConversationModel(context);
+    if (continueModel && shouldDropUnsupportedClaudeAssistantPrefill(continueModel)) {
+      toast.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
+      return false;
+    }
 
     // Create continue operation with ConversationStore context (includes groupId)
     const { operationId } = chatStore.startOperation({
@@ -559,7 +792,7 @@ export const generationSlice: StateCreator<
             ),
           parentMessageId: dbMessageId,
         });
-        return;
+        return true;
       }
 
       // ── Client mode: run agent locally ──
@@ -574,6 +807,8 @@ export const generationSlice: StateCreator<
       settleGenerationEntry(chatStore, operationId, () =>
         hooks.onContinueComplete?.(displayMessageId),
       );
+
+      return true;
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),
@@ -719,7 +954,8 @@ export const generationSlice: StateCreator<
   },
 
   delAndRegenerateMessage: async (messageId: string) => {
-    const { context, displayMessages } = get();
+    const regenerationSource = captureRegenerateUserMessageSource(get);
+    const { context, displayMessages } = regenerationSource;
     const chatStore = useChatStore.getState();
 
     // Find the assistant message and get parent user message ID before deletion
@@ -748,7 +984,7 @@ export const generationSlice: StateCreator<
       // nothing regenerated — destructive data loss. Stop pressed in this
       // sub-second window is best-effort; complete the retry atomically and honor
       // the next Stop (on the fresh run) normally.
-      await get().regenerateUserMessage(userId);
+      await regenerateUserMessageFromSource(userId, regenerationSource);
       chatStore.completeOperation(operationId);
     } catch (error) {
       // Settle the wrapper op on failure. `regenerate` now drives input-loading +
@@ -884,6 +1120,47 @@ export const generationSlice: StateCreator<
     set({ heteroOverloadRetryAttempts: next }, false, 'resetHeteroOverloadRetry');
   },
 
+  retryFailedAssistantStep: async (groupMessageId: string, blockId: string) => {
+    const { displayMessages } = get();
+
+    const group = displayMessages.find((m) => m.id === groupMessageId);
+    const erroredBlock = group?.children?.find((child) => child.id === blockId);
+
+    // A hetero status error (rate limit, upstream overload, auth, missing CLI)
+    // means the run died but its CLI session survives — that path resumes the
+    // session and already owns its own whole-turn fallback.
+    if (isHeterogeneousAgentStatusGuideError(erroredBlock?.error?.body)) {
+      await get().continueHeteroAfterError(groupMessageId);
+      return;
+    }
+
+    // Captured BEFORE any mutation: once the failed block is gone the turn may
+    // stop resolving as a group, and the parent user message is the only anchor
+    // left to regenerate from.
+    const parentUserId = group?.parentId;
+
+    // Nothing to continue from — the failed block IS the whole turn, so deleting
+    // it would destroy the group and leave `continueGeneration` with nothing to
+    // find. Replace the turn outright instead of deleting speculatively.
+    const hasEarlierSteps = (group?.children?.length ?? 0) > 1;
+    if (!hasEarlierSteps) {
+      await get().delAndRegenerateMessage(groupMessageId);
+      return;
+    }
+
+    await get().deleteDBMessage(blockId);
+
+    if (await get().continueGeneration(groupMessageId)) return;
+
+    // Continue turned out to be impossible after all (the turn stopped parsing
+    // as a group once the block was removed, the runtime has no continue
+    // primitive, ...). The failed block is already gone, so the only honest
+    // outcome left is replacing the whole turn — never a silent no-op.
+    const groupStillExists = get().displayMessages.some((m) => m.id === groupMessageId);
+    if (groupStillExists) await get().delAndRegenerateMessage(groupMessageId);
+    else if (parentUserId) await get().regenerateUserMessage(parentUserId);
+  },
+
   regenerateAssistantMessage: async (messageId: string) => {
     const { displayMessages } = get();
 
@@ -901,152 +1178,8 @@ export const generationSlice: StateCreator<
     await get().regenerateUserMessage(userId);
   },
 
-  regenerateUserMessage: async (messageId: string) => {
-    const { context, displayMessages, hooks } = get();
-    const chatStore = useChatStore.getState();
-
-    // Check if already regenerating via operation system
-    const isRegenerating = operationSelectors.isMessageProcessing(messageId)(chatStore);
-    if (isRegenerating) return;
-
-    // Find the message in current conversation messages
-    const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
-    const item = displayMessages[currentIndex];
-    if (!item) return;
-    // Start the interim regenerate op BEFORE the async preflight below
-    // (document-context resolve + onBeforeRegenerate hook). In page / bound-
-    // document contexts those reads are real round trips, so creating the op
-    // afterwards would leave the input/Stop state dead during exactly the
-    // pre-generation window the INPUT_LOADING_OPERATION_TYPES whitelist covers.
-    // Complete it if any preflight guard bails out before generation starts.
-    const { operationId } = chatStore.startOperation({
-      context: { ...context, messageId },
-      type: 'regenerate',
-    });
-
-    try {
-      const initialContext = mergeAgentRuntimeInitialContexts(
-        await resolveActiveTopicDocumentInitialContext(context),
-        buildRetryInitialContext(item.editorData),
-      );
-
-      // Get context messages up to and including the target message
-      const contextMessages = displayMessages.slice(0, currentIndex + 1);
-      if (contextMessages.length <= 0) {
-        chatStore.completeOperation(operationId);
-        return;
-      }
-
-      // ===== Hook: onBeforeRegenerate =====
-      if (hooks.onBeforeRegenerate) {
-        const shouldProceed = await hooks.onBeforeRegenerate(messageId);
-        if (shouldProceed === false) {
-          chatStore.completeOperation(operationId);
-          return;
-        }
-      }
-
-      // If the user hit Stop during the preflight awaits above, stopGenerating has
-      // already cancelled this interim op (cancelOperation flips its status but
-      // keeps the record). Bail out before switching branches or starting a run —
-      // otherwise the Stop is swallowed and a new assistant turn starts anyway. No
-      // child runtime exists yet, so cancelOperation had nothing to propagate to;
-      // this is the only place that can honour the Stop.
-      const preflightOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
-      if (preflightOp && preflightOp.status !== 'running') return;
-
-      // Calculate next branch index by counting children of this user message
-      // We need to count how many assistant messages have this user message as parent
-      const { dbMessages } = get();
-      const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
-      // New branch index = current children count (since index is 0-based)
-      const nextBranchIndex = childrenCount;
-
-      // Switch to the new branch so the UI shows the incoming response immediately
-      await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
-        operationId,
-      });
-
-      // Re-check after switchMessageBranch: it is another await round-trip, so a
-      // Stop pressed during it lands *after* the preflight guard above. Bail
-      // before starting the runtime so the Stop isn't swallowed. The branch is
-      // already switched, which is harmless — no assistant turn has started yet.
-      const postSwitchOp = operationSelectors.getOperationById(operationId)(
-        useChatStore.getState(),
-      );
-      if (postSwitchOp && postSwitchOp.status !== 'running') return;
-
-      const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
-      const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
-      const runtimeType = selectRuntimeType({
-        boundDeviceId: agencyConfig?.boundDeviceId,
-        executionTarget: agencyConfig?.executionTarget,
-        heterogeneousProvider,
-        isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-        isWorkspaceAgent: workspaceScoped,
-      });
-
-      // ── Gateway mode: trigger server-side regeneration ──
-      if (runtimeType === 'gateway') {
-        // Keep the regenerate operation running until the gateway session completes,
-        // so isMessageRegenerating stays true and duplicate clicks are blocked.
-        await chatStore.executeGatewayAgent({
-          context,
-          message: item.content,
-          onComplete: () =>
-            settleGenerationEntry(chatStore, operationId, () =>
-              hooks.onRegenerateComplete?.(messageId),
-            ),
-          parentMessageId: messageId,
-        });
-
-        return;
-      }
-
-      // ── Hetero mode: re-run the local CLI against the original user prompt ──
-      // Creates a fresh assistant row branched off the existing user message so
-      // the CC / Codex turn replaces the previous attempt without rewriting
-      // history, and resumes the same session id (when the cwd still matches)
-      // so prior context is preserved.
-      if (runtimeType === 'hetero' && heterogeneousProvider) {
-        await runHeterogeneousFromExistingMessage(chatStore, {
-          context,
-          heterogeneousProvider,
-          // Forward the original user message's images so regenerate re-runs
-          // the CLI with the same vision input as the first attempt. Without
-          // this, regenerate silently drops attachments (the send path reads
-          // imageList off the persisted user message; this path must too).
-          imageList: item.imageList,
-          parentMessageId: messageId,
-          parentOperationId: operationId,
-          prompt: item.content,
-        });
-        settleGenerationEntry(chatStore, operationId, () =>
-          hooks.onRegenerateComplete?.(messageId),
-        );
-        return;
-      }
-
-      // ── Client mode: run agent locally ──
-      // Execute agent runtime with full context from ConversationStore
-      await chatStore.executeClientAgent({
-        context,
-        initialContext,
-        messages: contextMessages,
-        parentMessageId: messageId,
-        parentMessageType: 'user',
-        parentOperationId: operationId,
-      });
-
-      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
-    } catch (error) {
-      chatStore.failOperation(operationId, {
-        message: error instanceof Error ? error.message : String(error),
-        type: 'RegenerateError',
-      });
-      throw error;
-    }
-  },
+  regenerateUserMessage: async (messageId: string) =>
+    regenerateUserMessageFromSource(messageId, captureRegenerateUserMessageSource(get)),
 
   resendThreadMessage: async (messageId: string) => {
     // Resend is essentially regenerating the user message in thread context
@@ -1055,20 +1188,29 @@ export const generationSlice: StateCreator<
 
   stopGenerating: () => {
     const state = get();
-    const { context, hooks } = state;
-    const { agentId, topicId } = context;
+    const { context, editor, hooks } = state;
+    const { agentId, groupId, isNew, scope, threadId, topicId } = context;
 
     const chatStore = useChatStore.getState();
 
     // Cancel all running operations in this conversation context
     // Includes sendMessage, AI runtime (client-side and server-side), and agent mode stream
     chatStore.cancelOperations(
-      { agentId, status: 'running', topicId, type: INPUT_LOADING_OPERATION_TYPES },
+      {
+        agentId,
+        groupId,
+        isNew,
+        scope,
+        status: 'running',
+        threadId,
+        topicId,
+        type: INPUT_LOADING_OPERATION_TYPES,
+      },
       MESSAGE_CANCEL_FLAT,
     );
 
     // Restore editor content if a sendMessage operation was cancelled
-    chatStore.cancelSendMessageInServer(topicId ?? undefined);
+    chatStore.cancelSendMessageInServer(context, editor);
 
     // ===== Hook: onGenerationStop =====
     if (hooks.onGenerationStop) {
@@ -1081,11 +1223,13 @@ export const generationSlice: StateCreator<
     await chatStore.translateMessage(messageId, targetLang);
   },
 
-  ttsMessage: async (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => {
+  saveMessageTTS: async (messageId: string, data: Required<ChatTTS>) => {
     const chatStore = useChatStore.getState();
-    await chatStore.ttsMessage(messageId, state);
+    await chatStore.saveMessageTTS(messageId, data);
+  },
+
+  startMessageTTS: (messageId: string) => {
+    const chatStore = useChatStore.getState();
+    chatStore.startMessageTTS(messageId);
   },
 });

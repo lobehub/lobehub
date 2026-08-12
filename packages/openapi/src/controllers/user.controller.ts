@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 
+import { type ApiKeyScope, hasApiKeyScope, isFullAccessApiKey } from '@/const/apiKeyScope';
+
 import { BaseController } from '../common/base.controller';
 import { UserService } from '../services';
 import type {
@@ -14,22 +16,44 @@ import type {
  * Handles user-related HTTP requests and responses
  */
 export class UserController extends BaseController {
+  /** Session / OIDC callers and full-access keys hold every scope implicitly. */
+  private callerHasScope(c: Context, scope: ApiKeyScope): boolean {
+    if (c.get('authType') !== 'apikey') return true;
+
+    const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+    return isFullAccessApiKey(scopes) || hasApiKeyScope(scopes, scope);
+  }
+
   /**
-   * Retrieves the currently logged-in user's information
-   * @param c Hono Context
-   * @returns User public information response
+   * `/me` is reachable by every authenticated caller so a key can resolve its
+   * own identity — `lh login` depends on it (LOBE-12934). What it *returns*
+   * is still scoped, because identity bootstrap needs an id, not a profile:
+   *
+   * - without `user:read` the response is narrowed to the id, keeping the
+   *   caller's email, phone, preferences and role names out of a key that was
+   *   only granted, say, `model:invoke`
+   * - `messageCount` is chat-usage metadata and additionally needs `chat:read`
+   *
+   * Narrowed rather than rejected throughout: `includeCount` defaults to true,
+   * so answering with 403 would make identity resolution depend on a query
+   * parameter — the exact trap this endpoint just came out of.
    */
   async getCurrentUser(c: Context): Promise<Response> {
     try {
       const includeCountQuery = c.req.query('includeCount');
-      const includeCount = includeCountQuery !== '0' && includeCountQuery !== 'false';
+      const countRequested = includeCountQuery !== '0' && includeCountQuery !== 'false';
+      const includeCount = countRequested && this.callerHasScope(c, 'chat:read');
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const userInfo = await userService.getCurrentUser(includeCount);
 
-      return this.success(c, userInfo, 'User info retrieved successfully');
+      return this.success(
+        c,
+        this.callerHasScope(c, 'user:read') ? userInfo : { id: userInfo?.id },
+        'User info retrieved successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

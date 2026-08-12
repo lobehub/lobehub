@@ -3,7 +3,7 @@ import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import type { ConversationContext } from '@/features/Conversation';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -102,7 +102,7 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
     // Get operation state for reactive updates
     const operationState = useOperationState(context);
 
-    if (!pageAgentId) return <Loading debugId="PageAgentProvider" />;
+    if (!pageAgentId) return <ConversationSegmentSkeleton />;
 
     return (
       <ConversationProvider
@@ -110,8 +110,8 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
         hasInitMessages={!!messages}
         messages={messages}
         operationState={operationState}
-        onMessagesChange={(msgs, ctx) => {
-          replaceMessages(msgs, { context: ctx });
+        onMessagesChange={(msgs, ctx, meta) => {
+          replaceMessages(msgs, { context: ctx, source: meta?.source });
         }}
       >
         {children}

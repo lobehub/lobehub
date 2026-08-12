@@ -493,10 +493,15 @@ export const CACHE_TIERS = {
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
     'recent:list',
+    // Home's chat-mode recents. Matching is substring-based, so `recent:list`
+    // does not cover this sibling key — without its own entry the list is
+    // memory-only and every cold boot pays a skeleton for data we already had.
+    'recent:topicList',
     'fetchRecentTopics',
     'fetchRecentResources',
     'fetchRecentPages',
     'group:list',
+    'agentBuilder:suggestions', // builder opening-suggestion chips (skip LLM regen on revisit)
     'taskTemplate:', // home task-template recommendations
     'modelConfig:', // small remote model config shells used by home starter chips
   ],

@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localSystemExecutor } from './index';
 
-const { globFilesMock } = vi.hoisted(() => ({
+const { globFilesMock, runCommandMock, searchFilesMock } = vi.hoisted(() => ({
   globFilesMock: vi.fn(),
+  runCommandMock: vi.fn(),
+  searchFilesMock: vi.fn(),
 }));
 
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: {
     globFiles: globFilesMock,
+    runCommand: runCommandMock,
+    searchLocalFiles: searchFilesMock,
   },
 }));
 
@@ -31,6 +35,7 @@ describe('LocalSystemExecutor', () => {
       });
 
       expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
         pattern: '**/*.{png,jpg,jpeg,gif,webp}',
         scope: '/tmp/images',
       });
@@ -113,5 +118,174 @@ describe('LocalSystemExecutor', () => {
         totalCount: 0,
       });
     });
+
+    it('resolves omitted scope to ctx.workingDirectory', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/home/user/project',
+      });
+    });
+
+    it('resolves scope "." to ctx.workingDirectory', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts', scope: '.' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/home/user/project',
+      });
+    });
+
+    it('preserves explicit absolute scope', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts', scope: '/explicit/path' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/explicit/path',
+      });
+    });
+  });
+
+  describe('searchFiles', () => {
+    it('resolves omitted scope to ctx.workingDirectory', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        directory: '/home/user/project',
+        limit: 100,
+      });
+    });
+
+    it('resolves scope "." to ctx.workingDirectory', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test', scope: '.' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        scope: '.',
+        directory: '/home/user/project',
+        limit: 100,
+      });
+    });
+
+    it('preserves explicit absolute scope', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test', scope: '/explicit/path' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        scope: '/explicit/path',
+        directory: '/explicit/path',
+        limit: 100,
+      });
+    });
+  });
+});
+
+describe('LocalSystemExecutor.runCommand', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    runCommandMock.mockResolvedValue({ content: '', success: true });
+  });
+
+  it('fences the command and anchors it to the run cwd when the context says so', async () => {
+    await localSystemExecutor.runCommand(
+      { command: 'git status' },
+      { localSandbox: true, messageId: 'm-1', workingDirectory: '/repo' },
+    );
+
+    expect(runCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'git status',
+        cwd: '/repo',
+        sandbox: true,
+        sandboxNetwork: false,
+      }),
+    );
+  });
+
+  it('forwards the network allowance for a fenced run', async () => {
+    await localSystemExecutor.runCommand(
+      { command: 'npm install' },
+      {
+        localSandbox: true,
+        localSandboxNetwork: true,
+        messageId: 'm-1',
+        workingDirectory: '/repo',
+      },
+    );
+
+    expect(runCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sandbox: true, sandboxNetwork: true }),
+    );
+  });
+
+  it('leaves an unfenced command without either sandbox field', async () => {
+    // The historical path must not shift for agents that never opted in.
+    await localSystemExecutor.runCommand(
+      { command: 'git status' },
+      { messageId: 'm-1', workingDirectory: '/repo' },
+    );
+
+    const args = runCommandMock.mock.calls[0][0];
+    expect(args).not.toHaveProperty('sandbox');
+    expect(args).not.toHaveProperty('sandboxNetwork');
+  });
+
+  it('never lets the model pick what it is fenced to', async () => {
+    // The runtime drops an args-supplied `cwd` while `trustArgsCwd` is off, and
+    // the sandbox roots itself at that same cwd — so a model that guesses the
+    // field cannot widen its own fence to an arbitrary directory.
+    await localSystemExecutor.runCommand(
+      { command: 'git status', cwd: '/etc' },
+      { localSandbox: true, messageId: 'm-1', workingDirectory: '/repo' },
+    );
+
+    expect(runCommandMock).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/repo' }));
   });
 });

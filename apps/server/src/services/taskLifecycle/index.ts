@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
@@ -91,7 +93,7 @@ export interface TopicCompleteParams {
   operationId: string;
   reason: string; // 'done' | 'error' | 'interrupted' | ...
   // What triggered the run. Manual "run now" failures are ad-hoc and must not
-  // change an automation task's scheduling state (LOBE-11388). Undefined is
+  // change an automation task's scheduling state. Undefined is
   // treated as 'manual' for backward compatibility with older callers.
   runTrigger?: TaskRunTrigger;
   taskId: string;
@@ -191,7 +193,20 @@ export class TaskLifecycleService {
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
-      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+      //
+      //    Goal-loop rounds are deliberately silent. The outer loop can run many
+      //    rounds before it converges, and a card per round buries the one moment
+      //    that actually needs the user. The settle path owns those moments:
+      //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
+      //    loop succeeds and the budget-exhausted alert when it stops.
+      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      if (
+        !isGoalLoopRound &&
+        getBriefMode(currentTask) === 'auto' &&
+        currentTask &&
+        topicId &&
+        lastAssistantContent
+      ) {
         await this.synthesizeTopicBrief(
           taskId,
           taskIdentifier,
@@ -247,7 +262,7 @@ export class TaskLifecycleService {
           // 'scheduled' state and clears the live error column. Before clearing
           // it, stamp a durable recovery marker + reset the failure fuse so the
           // recovery is auditable and a later query can still tell the task once
-          // failed — the live `error` alone would silently self-heal (LOBE-11390).
+          // failed — the live `error` alone would silently self-heal.
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
@@ -332,7 +347,7 @@ export class TaskLifecycleService {
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'paused', { error: errorText });
       } else if (!isAutomationTick) {
-        // LOBE-11388: a manual "run now" of an automation task failed. This is
+        // a manual "run now" of an automation task failed. This is
         // an ad-hoc debug/backfill run — its failure is NOT a health signal for
         // the automation. Restore the resting 'scheduled' state (the run had
         // flipped it to 'running') so the next scheduled tick still fires, and
@@ -341,7 +356,7 @@ export class TaskLifecycleService {
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
       } else if (currentTask.automationMode === 'schedule') {
-        // LOBE-11389: a scheduled tick failed. A single transient error must not
+        // a scheduled tick failed. A single transient error must not
         // permanently pause a recurring task. Count consecutive failures and
         // only pause once the fuse blows; otherwise keep the task 'scheduled' so
         // the next tick retries. (Heartbeat tasks are handled by
@@ -454,7 +469,7 @@ export class TaskLifecycleService {
     const runCount = await this.taskTopicModel.countByTask(task.id, {
       since: new Date(startedAtIso),
       // Only scheduled ticks consume the quota — manual "run now" invocations
-      // are ad-hoc and must not push the task toward its cap (LOBE-11391).
+      // are ad-hoc and must not push the task toward its cap.
       triggers: ['schedule'],
     });
     return runCount >= maxExecutions;
@@ -464,7 +479,7 @@ export class TaskLifecycleService {
    * Append a failure to the durable lifecycle audit trail
    * (`context.lifecycle`). Unlike the live `tasks.error` column — cleared by
    * the next successful run — this history survives a later success so a missed
-   * fire / prior pause stays diagnosable after the fact (LOBE-11390).
+   * fire / prior pause stays diagnosable after the fact.
    *
    * When `extra.pauseReason` is set, also stamps `lastPausedAt`/`lastPauseReason`
    * (the failure fuse just auto-paused the task). When `extra.consecutiveFailures`
@@ -566,6 +581,7 @@ export class TaskLifecycleService {
 
     try {
       const scheduler = createTaskSchedulerModule();
+      const tickToken = randomUUID();
 
       // Cancel any prior tick (defensive — we usually wouldn't have one
       // pending here, since the prior tick has already fired to bring us
@@ -577,6 +593,7 @@ export class TaskLifecycleService {
       const tickMessageId = await scheduler.scheduleNextTopic({
         delay: task.heartbeatInterval,
         taskId: task.id,
+        tickToken,
         userId: this.userId,
       });
 
@@ -585,6 +602,7 @@ export class TaskLifecycleService {
           consecutiveFailures,
           scheduledAt: new Date().toISOString(),
           tickMessageId,
+          tickToken,
         },
       });
 

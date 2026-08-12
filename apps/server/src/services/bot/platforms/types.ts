@@ -73,6 +73,18 @@ export interface FieldSchema {
    * when the platform access meta reports the feature as not allowed.
    */
   paidFeature?: string;
+  /**
+   * Format constraint for `string` / `password` fields, as a regex **source
+   * string** — the schema is serialized over TRPC to drive the frontend form,
+   * so it cannot carry a `RegExp` instance. Enforced on both sides: the form
+   * turns it into an antd rule, and the save mutation re-checks it so callers
+   * bypassing the UI can't persist a malformed credential.
+   *
+   * Empty values are exempt — `required` owns that check.
+   */
+  pattern?: string;
+  /** i18n key for the message shown when the value fails `pattern`. */
+  patternMessage?: string;
   placeholder?: string;
   /** Nested fields (for type: 'object') */
   properties?: FieldSchema[];
@@ -212,7 +224,7 @@ export interface PlatformClient {
    * Discord: the auto-created per-mention reply thread never adds the
    * mentioning user as a member — the reply lands in a thread the user is
    * not notified about, and thread-pill rendering on the origin message has
-   * proven unreliable (LOBE-11632: two separate clients showed no pill for
+   * proven unreliable (two separate clients showed no pill for
    * hours while the API said `HAS_THREAD`). Explicit membership bypasses
    * both gaps. Best-effort — implementations must swallow failures.
    *
@@ -507,6 +519,19 @@ export interface PlatformDefinition {
    * Defaults to true.
    */
   supportsMessageEdit?: boolean;
+
+  /**
+   * `lobe-message` channel API names this platform does NOT support — either the
+   * service throws `PlatformUnsupportedError`, or the optional method is absent
+   * and the execution runtime rejects it generically (e.g. `sendDirectMessage`).
+   * Sourced from `PLATFORM_UNSUPPORTED_MESSAGE_APIS` and surfaced into the agent
+   * runtime's manifest resolve context so `resolveMessageManifest` removes them
+   * from the tool list — otherwise the model calls an operation that can only
+   * fail (the WeChat `readMessages` "刚刚聊了啥" case). A missing/empty value means
+   * "fully supported", so a limited platform MUST populate this. See
+   * `messageCapabilities.ts` (kept honest against the services by its test).
+   */
+  unsupportedMessageApis?: string[];
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */

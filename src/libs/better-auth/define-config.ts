@@ -24,6 +24,7 @@ import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
+import { clearMismatchedOIDCSession } from '@/libs/oidc-provider/session-cleanup';
 import { EmailService } from '@/server/services/email';
 import { UserService } from '@/server/services/user';
 
@@ -215,6 +216,21 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
      * Ref: https://www.better-auth.com/docs/reference/options#databasehooks
      */
     databaseHooks: {
+      session: {
+        create: {
+          before: async (session, context) => {
+            try {
+              await clearMismatchedOIDCSession(serverDB, session.userId, context);
+            } catch (error) {
+              /**
+               * OIDC cleanup is a provider-specific recovery guard. Its failure must not prevent
+               * Better Auth from creating the primary application session.
+               */
+              console.error('[Better Auth] Failed to clear a stale OIDC session:', error);
+            }
+          },
+        },
+      },
       user: {
         create: {
           after: async (user) => {

@@ -36,6 +36,20 @@ export const parseJsonlRecords = (content: string): any[] => {
   return records;
 };
 
+/**
+ * Timestamp fingerprint of a transcript's main conversation: the last raw
+ * record of the given kind. The picker compares a fresh digest's `endAt` with
+ * the `sourceEndAt` stored at import time to decide whether a session grew
+ * ("New messages"), so BOTH must be produced by this one helper — deriving one
+ * of them from the normalized messages instead makes them disagree (assistant
+ * records sharing a `message.id` merge onto the first record's timestamp) and
+ * every imported session then looks perpetually out of sync.
+ */
+export const transcriptEndAt = (
+  records: any[],
+  isConversational: (record: any) => boolean,
+): string | undefined => records.findLast((r) => isConversational(r))?.timestamp;
+
 export const truncateTitle = (text: string | undefined, max = 50): string | undefined => {
   const cleaned = text?.replaceAll(/\s+/g, ' ').trim();
   if (!cleaned) return undefined;

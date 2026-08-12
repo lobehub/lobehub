@@ -77,6 +77,47 @@ describe('AgentEvalRunService', () => {
       }
     });
 
+    it('should store caseSelection without changing internal topic pre-creation', async () => {
+      const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
+      const benchmark = await benchmarkModel.create({
+        identifier: 'test-benchmark',
+        isSystem: false,
+        name: 'Test Benchmark',
+        rubrics: [],
+      });
+
+      const [dataset] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({
+          benchmarkId: benchmark.id,
+          identifier: 'test-dataset',
+          name: 'Test Dataset',
+          userId,
+        })
+        .returning();
+
+      for (let i = 0; i < 2; i++) {
+        await serverDB.insert(agentEvalTestCases).values({
+          userId,
+          content: { input: `Question ${i + 1}` },
+          datasetId: dataset.id,
+          metadata: { caseId: `case_${i + 1}` },
+          sortOrder: i + 1,
+        });
+      }
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      const caseSelection = { caseIds: ['case_1'], mode: 'include' as const };
+      const run = await service.createRun({ config: { caseSelection }, datasetId: dataset.id });
+
+      // Stored verbatim
+      expect((run.config as any).caseSelection).toEqual(caseSelection);
+
+      // Storage-only scope: internal pre-creation is unaffected (all cases)
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      expect(await runTopicModel.findByRunId(run.id)).toHaveLength(2);
+    });
+
     it('should handle dataset with no test cases', async () => {
       const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
       const benchmark = await benchmarkModel.create({

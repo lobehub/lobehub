@@ -9,7 +9,7 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 
 export const useClearCurrentMessages = () => {
   const clearMessage = useChatStore((s) => s.clearMessage);
@@ -57,7 +57,7 @@ const Clear = memo(() => {
         updateConfirmOpened(open);
       }}
     >
-      <Action
+      <ChatInputAction
         icon={Eraser}
         title={actionTitle}
         tooltipProps={{

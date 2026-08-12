@@ -14,7 +14,7 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
-import { extractActivatedSkillsFromMessages } from '../utils';
+import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
 const TOOL_MESSAGE_PERSIST_PHASE = 'tool_message_persist';
@@ -162,6 +162,11 @@ const createRunContext = ({
     agentId: host.operation.agentId ?? state.metadata?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
+    // Todo state is reconstructed from message history for the same reason the
+    // prompt side does it (`serverCallLlmContextBuilder`): the plan document is
+    // a best-effort mirror that only exists once `createPlan` has run, so the
+    // tool-execution side must not treat it as the source of truth.
+    currentTodos: extractTodosFromMessages(state.messages)?.items,
     effectiveManifestMap: buildEffectiveManifestMap(state),
     groupId: host.operation.groupId ?? state.metadata?.groupId,
     messageId: state.metadata?.sourceMessageId,
@@ -529,9 +534,7 @@ export const callTool =
       const legacyAgentInvocationStateType = executionResult.state?.type as string | undefined;
       const isLegacyAgentInvocationState =
         legacyAgentInvocationStateType === 'execSubAgent' ||
-        legacyAgentInvocationStateType === 'execSubAgents' ||
-        legacyAgentInvocationStateType === 'execClientSubAgent' ||
-        legacyAgentInvocationStateType === 'execClientSubAgents';
+        legacyAgentInvocationStateType === 'execSubAgents';
 
       if (executionResult.stop && !isLegacyAgentInvocationState) {
         newState.status = 'done';
@@ -584,10 +587,12 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
+    // Batch human approval resumes onto rows the approval pause already created.
+    const existingToolMessageIds = (payload.existingToolMessageIds ?? {}) as Record<string, string>;
     const tools = requireToolTransport(host);
     const events: AgentEvent[] = [];
     const clientTools: ChatToolPayload[] = [];
@@ -608,7 +613,6 @@ export const callToolsBatch =
       });
     }
 
-    const toolMessageIds: string[] = [];
     const toolResults: ToolResultEntry[] = [];
     const deferredTools: ChatToolPayload[] = [];
     // `tool_call_id → placeholder message id` for the deferred tools in this batch.
@@ -617,7 +621,17 @@ export const callToolsBatch =
 
     await Promise.all(
       toolsToExecute.map(async (tool) => {
-        const runContext = createRunContext({ host, mode: 'batch', parentMessageId, state, tool });
+        const existingMessageId = existingToolMessageIds[tool.id];
+        const runContext = createRunContext({
+          host,
+          mode: 'batch',
+          parentMessageId,
+          reuseExistingMessage: !!existingMessageId,
+          state,
+          stepContext: runtimeContext?.stepContext,
+          tool,
+          toolMessageId: existingMessageId,
+        });
 
         await host.transports.stream.publishEvent({
           data: { parentMessageId, toolCalling: tool },
@@ -659,6 +673,12 @@ export const callToolsBatch =
             if (!execution.resultPersisted) {
               await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
             }
+          } else if (existingMessageId) {
+            // Batch approval resume: fill the pending placeholder in place.
+            // Creating a fresh row here would leave the approved-but-empty
+            // original stranded under the same assistant.
+            toolMessageId = existingMessageId;
+            await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
           } else {
             const toolMessage = await createToolMessage({
               host,
@@ -669,7 +689,6 @@ export const callToolsBatch =
             });
             toolMessageId = toolMessage.id;
           }
-          toolMessageIds.push(toolMessageId);
 
           // `sourceMessageId` + `workRegistration` are carried so the
           // post-batch accumulate loop can persist the Work version ONCE with
@@ -785,7 +804,15 @@ export const callToolsBatch =
       newState,
       nextContext: {
         payload: {
-          parentMessageId: toolMessageIds.at(-1) ?? parentMessageId,
+          // The assistant that emitted this batch — i.e. the previous LLM call.
+          // A step is one LLM call, and the batch's tool rows are inline data of
+          // that call, so the continuation assistant chains onto the caller and
+          // the tools stay its children. Anchoring on a tool row instead makes
+          // the spine depend on which tool `Promise.all` happened to settle
+          // last, which forks the parent chain and (via the reader's DFS over
+          // the parentId forest) strands the other tools after the whole rest of
+          // the conversation.
+          parentMessageId,
           toolCount: toolsCalling.length,
           toolResults,
         },

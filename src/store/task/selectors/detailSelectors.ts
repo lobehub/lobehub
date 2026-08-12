@@ -9,6 +9,8 @@ const activeTaskId = (s: TaskStoreState) => s.activeTaskId;
 const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
   s.activeTaskId ? s.taskDetailMap[s.activeTaskId] : undefined;
 
+const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
+
 const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
@@ -26,6 +28,9 @@ const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
 const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
+
+const activeTaskInstructionRevision = (s: TaskStoreState) =>
+  (s.activeTaskId ? s.taskInstructionRevisionMap[s.activeTaskId] : undefined) ?? 0;
 
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
 
@@ -122,6 +127,7 @@ export const taskDetailSelectors = {
   activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskCreatedByUserId,
+  activeTaskDatabaseId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,
@@ -131,6 +137,7 @@ export const taskDetailSelectors = {
   activeTaskFiles,
   activeTaskId,
   activeTaskInstruction,
+  activeTaskInstructionRevision,
   activeTaskName,
   activeTaskParent,
   activeTaskPeriodicInterval,

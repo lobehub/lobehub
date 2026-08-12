@@ -15,11 +15,17 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { isDesktop, resolveSubAgentModel } from '@lobechat/const';
+import {
+  getSubAgentChatConfigOverride,
+  isDesktop,
+  resolveSubAgentChatConfig,
+  resolveSubAgentModel,
+} from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
+  type LobeAgentChatConfig,
   type MessageMetadata,
   type RunSubAgentResult,
   type RuntimeInitialContext,
@@ -29,7 +35,7 @@ import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { aiAgentService } from '@/services/aiAgent';
-import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
+import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
@@ -38,7 +44,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
-import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import { topicSelectors } from '@/store/chat/selectors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import {
@@ -52,7 +58,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
@@ -84,7 +90,8 @@ const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): 
   return walk(editorData.root);
 };
 
-const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
+const getMediaAvailability = (messages: UIChatMessage[]) => ({
+  hasAudios: messages.some((message) => message.role === 'user' && !!message.audioList?.length),
   hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
   hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
 });
@@ -119,6 +126,7 @@ export class StreamingExecutorActionImpl {
     subAgentId: paramSubAgentId,
     isSubAgent,
     modelOverride,
+    chatConfigOverride,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -138,6 +146,8 @@ export class StreamingExecutorActionImpl {
     isSubAgent?: boolean;
     /** Model/provider the run is forced onto, resolved by the caller that spawns it. */
     modelOverride?: { model: string; provider: string };
+    /** chatConfig patch merged over the resolved chatConfig (sub-agent thinking overrides). */
+    chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -172,16 +182,35 @@ export class StreamingExecutorActionImpl {
       scope, // Pass scope from operation context
     });
 
-    // A model/provider override resolved by the spawn site (see runClientSubAgent),
-    // not re-derived here: `isSubAgent` is also set for isolated group members —
-    // which must keep their own model — so it cannot gate this on its own.
+    // Resolve the effective model/provider, in precedence order:
+    // 1. `modelOverride` — forced by the spawn site (see runClientSubAgent); not
+    //    re-derived here because `isSubAgent` is also set for isolated group
+    //    members which must keep their own model, so it can't gate on its own.
+    // 2. Topic-scoped model — a topic snapshots the model it was created with and
+    //    remembers switches made while active (top-level `topics.model`/`provider`
+    //    columns, read via `getTopicModelById`), overriding the agent default so
+    //    the whole model→topic chain (tools, context window, generation) uses it.
     // resolveAgentConfig returns an immer-frozen config, so build a new object
     // rather than mutating in place.
+    const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(this.#get()) : undefined;
+    const modelResolution = modelOverride ?? topicModel;
     const agentConfig: ResolvedAgentConfig =
-      modelOverride && resolvedAgentConfig.agentConfig
+      (modelResolution || chatConfigOverride) && resolvedAgentConfig.agentConfig
         ? {
             ...resolvedAgentConfig,
-            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelOverride },
+            ...(modelResolution
+              ? { agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelResolution } }
+              : {}),
+            ...(chatConfigOverride
+              ? {
+                  chatConfig:
+                    resolveSubAgentChatConfig(resolvedAgentConfig.chatConfig, chatConfigOverride) ??
+                    resolvedAgentConfig.chatConfig,
+                  // Keep the raw override so the model-params resolver can re-apply
+                  // explicit sub-agent reasoning choices over model-instance defaults
+                  subAgentChatConfigOverride: chatConfigOverride,
+                }
+              : {}),
           }
         : resolvedAgentConfig;
 
@@ -198,21 +227,23 @@ export class StreamingExecutorActionImpl {
 
     // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    const visualMediaAvailability = getVisualMediaAvailability(messages);
+    const mediaAvailability = getMediaAvailability(messages);
     const serverConfigState = getServerConfigStoreState();
-    const visualUnderstandingConfigured =
-      !!serverConfigState && serverConfigSelectors.enableVisualUnderstanding(serverConfigState);
-    const shouldEnableVisualUnderstanding =
-      visualUnderstandingConfigured &&
-      ((visualMediaAvailability.hasImages &&
-        !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
-        (visualMediaAvailability.hasVideos &&
+    const multimodalUnderstandingConfigured =
+      !!serverConfigState && serverConfigSelectors.enableMultimodalUnderstanding(serverConfigState);
+    const shouldEnableMultimodalUnderstanding =
+      multimodalUnderstandingConfigured &&
+      ((mediaAvailability.hasAudios &&
+        !isCanUseAudio(agentConfigData.model, agentConfigData.provider!)) ||
+        (mediaAvailability.hasImages &&
+          !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
+        (mediaAvailability.hasVideos &&
           !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
     const runtimePluginIds = [
       ...new Set([
         ...(pluginIds || []),
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
-        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+        ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
       ]),
     ];
     const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
@@ -480,6 +511,12 @@ export class StreamingExecutorActionImpl {
      * keep their own model.
      */
     modelOverride?: { model: string; provider: string };
+    /**
+     * chatConfig overrides (thinking / reasoning-effort extend params) merged
+     * over the resolved chatConfig, skipping nulled keys. Passed by
+     * `runClientSubAgent` from the parent's `agencyConfig.subagent.chatConfig`.
+     */
+    chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
     userMessageId?: string;
   }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
@@ -554,8 +591,8 @@ export class StreamingExecutorActionImpl {
     });
 
     // Persist `running` on the topic so surfaces that read the stored status
-    // rather than this tab's live operations — the home inbox and the Fleet
-    // board — see the run in flight. The gateway/hetero transports already do
+    // rather than this tab's live operations — e.g. the home inbox — see the
+    // run in flight. The gateway/hetero transports already do
     // this; the client one didn't, so a client-driven run was invisible off the
     // active conversation. Top-level runs only (a sub-agent shares the topic and
     // would just rewrite the same status). The terminal lifecycle flips it back
@@ -609,6 +646,7 @@ export class StreamingExecutorActionImpl {
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
       modelOverride: params.modelOverride,
+      chatConfigOverride: params.chatConfigOverride,
     });
 
     if (params.skipCreateFirstMessage) {
@@ -652,13 +690,12 @@ export class StreamingExecutorActionImpl {
     });
 
     const runtime = new AgentRuntime(agent, {
-      executors: createAgentExecutors({
+      executors: createClientRuntimeExecutors({
         agentConfig, // Pass pre-resolved config to callLLM executor
         get: this.#get,
         metadata: params.metadata,
         messageKey,
         operationId,
-        parentId: params.parentMessageId,
         toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
       }),
       getOperation: (opId: string) => {
@@ -998,15 +1035,33 @@ export class StreamingExecutorActionImpl {
       }
 
       // 6. Run the sub-agent with the current client runtime.
-      //    A sub-agent runs on its own model rather than inheriting the parent's
-      //    main one, resolved here at the spawn site from the parent's
-      //    `agencyConfig.subagent` (mirrors the server's callSubAgent runner).
+      //    The model is resolved here at the spawn site (mirrors the server's
+      //    callSubAgent runner): an explicit `agencyConfig.subagent` override
+      //    wins, otherwise the sub-agent follows the parent's *effective* model
+      //    — topic-pinned model over the agent default, the same precedence
+      //    internal_createAgentState applies to the parent run itself.
       const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const parentEffectiveModel =
+        topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
+      const subAgentModel = resolveSubAgentModel(
+        parentAgentConfig?.agencyConfig?.subagent,
+        parentEffectiveModel,
+      );
+      // Warm the sub-agent model's user-level reasoning config before the run:
+      // the ChatInput loader only fetches the parent's effective model, while
+      // resolveModelExtendParams reads this cache synchronously mid-run.
+      await getAiInfraStoreState().ensureModelReasoningConfig(
+        subAgentModel.model,
+        subAgentModel.provider,
+      );
       const runtimeResult = await this.#get().executeClientAgent({
+        chatConfigOverride: getSubAgentChatConfigOverride(
+          parentAgentConfig?.agencyConfig?.subagent,
+        ),
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
-        modelOverride: resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent),
+        modelOverride: subAgentModel,
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',

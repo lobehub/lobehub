@@ -219,7 +219,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
     const result = await caller().create(baseCustomInput);
 
-    expect(result).toEqual({ id: 'conn-existing' });
+    expect(result).toEqual({ id: 'conn-existing', isNew: false });
     expect(connectorModelMock.create).not.toHaveBeenCalled();
     expect(connectorModelMock.update).toHaveBeenCalledTimes(1);
     expect(connectorModelMock.update).toHaveBeenCalledWith(
@@ -251,7 +251,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
     const result = await caller().create(baseCustomInput);
 
-    expect(result).toEqual({ id: 'conn-new' });
+    expect(result).toEqual({ id: 'conn-new', isNew: true });
     expect(connectorModelMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'legacy-mcp', sourceType: 'custom' }),
     );
@@ -259,7 +259,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
   });
 });
 
-describe('connectorRouter.delete — agent connector unpins from the owning agent (LOBE-11682)', () => {
+describe('connectorRouter.delete — agent connector unpins from the owning agent ', () => {
   // Deleting an agent-owned connector must also remove its tool from that
   // agent's `plugins`, so the unified settings delete matches the agent-profile
   // delete (row + pin) and never leaves a dangling pin. Done server-side so the
@@ -334,7 +334,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
   });
 });
 
-describe('connectorRouter.listAgentBound — hides connectors of unseen agents (LOBE-11681)', () => {
+describe('connectorRouter.listAgentBound — hides connectors of unseen agents ', () => {
   // `queryAllAgentScoped` filters only by `workspace_id`, so a member could
   // otherwise see connectors owned by another member's PRIVATE agent. Gate the
   // result on the visibility-aware agent set (`getAgentAvatarsByIds`).

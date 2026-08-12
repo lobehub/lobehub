@@ -12,7 +12,6 @@ const SPA_ROUTE_ROOTS = new Set([
   'community',
   'downloads',
   'eval',
-  'fleet',
   'group',
   'image',
   'memory',

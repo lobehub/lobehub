@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MCP_LABEL_DESCRIPTIONS,
-  MCP_MANUAL_REVIEW_LABEL,
-  MCP_RESCAN_LABEL,
+  MCP_LEGACY_MANUAL_REVIEW_LABEL,
+  MCP_LEGACY_RESCAN_LABEL,
   MCP_SUBMISSION_LABEL,
   MCP_TRIGGER_TRIAGE_LABEL,
 } from '../../.github/scripts/shared/mcp-labels';
@@ -13,21 +13,13 @@ import { shouldDedupeIssue } from '../../.github/scripts/should-run-dedupe';
 describe('MCP issue labels', () => {
   it('uses normalized names and descriptions for the MCP submission workflow', () => {
     expect(MCP_SUBMISSION_LABEL).toBe('mcp:submission');
-    expect(MCP_MANUAL_REVIEW_LABEL).toBe('mcp:manual-review');
-    expect(MCP_RESCAN_LABEL).toBe('mcp:rescan');
     expect(MCP_TRIGGER_TRIAGE_LABEL).toBe('trigger:mcp-triage');
     expect(MCP_LABEL_DESCRIPTIONS.submission).toBe(
-      'MCP marketplace listing submission handled by the MCP submission workflow',
-    );
-    expect(MCP_LABEL_DESCRIPTIONS.manualReview).toBe(
-      'MCP submission cannot be resolved by the self-service CLI; maintainer review required',
-    );
-    expect(MCP_LABEL_DESCRIPTIONS.rescan).toBe(
-      'Existing MCP marketplace listing needs a rescan/refresh; maintainer or automation action required',
+      'MCP marketplace listing request (new listing, refresh, or rescan) redirected to self-service CLI',
     );
   });
 
-  it('skips duplicate detection for MCP workflow labels', () => {
+  it('skips duplicate detection for MCP workflow labels (including legacy)', () => {
     const baseIssue = {
       body: '',
       labels: [],
@@ -35,7 +27,11 @@ describe('MCP issue labels', () => {
       title: 'Regular issue',
     };
 
-    for (const label of [MCP_SUBMISSION_LABEL, MCP_MANUAL_REVIEW_LABEL, MCP_RESCAN_LABEL]) {
+    for (const label of [
+      MCP_SUBMISSION_LABEL,
+      MCP_LEGACY_MANUAL_REVIEW_LABEL,
+      MCP_LEGACY_RESCAN_LABEL,
+    ]) {
       expect(
         shouldDedupeIssue({
           ...baseIssue,
@@ -53,11 +49,11 @@ describe('MCP issue labels', () => {
       title: '[Request] Rescan elecz MCP listing to v1.9.6',
     });
     expect(decision.shouldDedupe).toBe(false);
-    expect(decision.reason).toContain('rescan');
+    expect(decision.reason).toMatch(/rescan|listing request/i);
   });
 });
 
-describe('classify: listing-ops (rescan of an existing listing)', () => {
+describe('classify: marketplace listing requests (submit + rescan)', () => {
   // Real historical issue titles from lobehub/lobehub.
   const rescanTitles = [
     '[MCP Marketplace] Scoring stuck for @apexfdn/copilot-mcp — manual rescan needed',
@@ -73,19 +69,18 @@ describe('classify: listing-ops (rescan of an existing listing)', () => {
     'MCP Server re-index request: degen0root-panchanga_api',
   ];
 
-  it.each(rescanTitles)('flags "%s" as listing-ops', (title) => {
+  it.each(rescanTitles)('handles rescan/refresh "%s" as a listing request', (title) => {
     const result = classify(title, '');
-    expect(result.kind).toBe('listing-ops');
-    expect(result.isSubmission).toBe(false);
+    expect(result.isSubmission).toBe(true);
+    expect(result.reason).toMatch(/rescan|refresh/i);
   });
 
-  it('prefers listing-ops over submission when both intents appear', () => {
+  it('handles combined add + rescan intent as a listing request', () => {
     const result = classify(
       '[Request] Add scholar-sidekick-mcp to the MCP marketplace (rescan existing v0.3.0 listing to v0.4.1)',
       'https://github.com/mlava/scholar-sidekick-mcp — please rescan, npx install works.',
     );
-    expect(result.kind).toBe('listing-ops');
-    expect(result.isSubmission).toBe(false);
+    expect(result.isSubmission).toBe(true);
   });
 
   it('does not flag MCP product bugs that merely mention refreshing or lists', () => {
@@ -95,16 +90,54 @@ describe('classify: listing-ops (rescan of an existing listing)', () => {
       '自定义添加的mcp服务器无法自动更新工具列表',
     ];
     for (const title of productBugTitles) {
-      expect(classify(title, '').kind).toBe('none');
+      expect(classify(title, '').isSubmission).toBe(false);
     }
   });
 
-  it('still classifies a plain new-server submission as submission', () => {
+  it('classifies a plain new-server submission as a listing request', () => {
     const result = classify(
       '[MCP Submission] Add my weather server to the marketplace',
       'Please add https://github.com/someone/weather-mcp — install with `npx weather-mcp`.',
     );
-    expect(result.kind).toBe('submission');
     expect(result.isSubmission).toBe(true);
+    expect(result.repoUrl).toBe('https://github.com/someone/weather-mcp');
+  });
+
+  it('also handles remote-only listing requests (redirect to CLI / website)', () => {
+    const result = classify(
+      '[Request] Add DC Hub Intelligence to the MCP marketplace',
+      `Remote MCP server for data-center intelligence.
+
+- Endpoint: https://dchub.cloud/mcp
+- Repo: https://github.com/azmartone67/dchub-mcp-server`,
+    );
+    expect(result.isSubmission).toBe(true);
+    expect(result.repoUrl).toBe('https://github.com/azmartone67/dchub-mcp-server');
+  });
+
+  it('allows new listing requests without a public repo URL (private repos via CLI)', () => {
+    const result = classify(
+      '[Request] Add my private weather MCP server to the marketplace',
+      'Please list our internal MCP server. The repo is private; I will submit via the CLI after github connect.',
+    );
+    expect(result.isSubmission).toBe(true);
+    expect(result.repoUrl).toBeNull();
+  });
+
+  it('does not auto-handle rescan + CLI claim failure (avoids close loop)', () => {
+    const result = classify(
+      '[Request] Rescan my MCP listing',
+      'Please rescan my listing — I moved the repo to an org and market-cli cannot claim it (rejects org).',
+    );
+    expect(result.isSubmission).toBe(false);
+    expect(result.reason).toMatch(/CLI|marketplace\/listing bug|limitation/i);
+  });
+
+  it('does not auto-handle claim failure even when the title says rescan', () => {
+    const result = classify(
+      'Rescan needed after org migration',
+      'MCP marketplace listing stuck. Cannot claim via CLI: rejects org-owned repos even with push access.',
+    );
+    expect(result.isSubmission).toBe(false);
   });
 });

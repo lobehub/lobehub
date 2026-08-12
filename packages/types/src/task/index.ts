@@ -23,8 +23,10 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 scheduling state, nor count against the maxExecutions quota.
  * - `schedule`  — a cron `schedule` tick fired the run.
  * - `heartbeat` — a heartbeat interval tick fired the run.
+ * - `goal`      — the goal outer loop spawned this round after a failed verify.
+ *                 Like `manual`, it never counts against automation quotas.
  */
-export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat';
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
 // ── Config types ──
 
@@ -51,6 +53,21 @@ export interface CheckpointConfig {
  * config when present, otherwise the nearest ancestor's config in full (never a
  * field-level merge). Resolved at runtime via `TaskModel.resolveVerifyConfig`.
  */
+/**
+ * Goal-driven loop config, persisted under `tasks.config.goal`. Written by the
+ * `createGoal` builtin tool; its presence marks the task as a goal task and
+ * enables the outer verify-driven round loop (a failed verify run spawns a new
+ * task topic instead of pausing, until a budget below runs out).
+ */
+export interface TaskGoalConfig {
+  /** Max execution rounds (task topics). Null = uncapped by the user. */
+  maxIterations?: number | null;
+  /** Total USD budget across all rounds and their verify runs. Null = uncapped. */
+  maxTotalCost?: number | null;
+  /** Conversation topic that spawned the goal — terminal callbacks post back here. */
+  originTopicId?: string | null;
+}
+
 export interface TaskVerifyConfig {
   /** Whether the verify gate runs on topic completion. */
   enabled?: boolean;
@@ -155,6 +172,10 @@ export interface TaskSchedulerContext {
   // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
   // cancel when the user wants an interval change to take effect immediately.
   tickMessageId?: string;
+  // Generation token carried by the currently active tick. A delivered tick
+  // must match this value so a failed best-effort cancellation cannot create
+  // a second heartbeat chain.
+  tickToken?: string;
 }
 
 /**
@@ -163,7 +184,8 @@ export interface TaskSchedulerContext {
  * cleared on the next successful run so the UI only shows the *current* error —
  * this pocket is append-style history that a later success does NOT wipe. It
  * exists so "the morning check silently didn't fire" is diagnosable after the
- * fact instead of being masked by a later manual success (LOBE-11390).
+ * fact instead of being masked by a later manual success (paused tasks were
+ * silently overwritten to "scheduled" with error cleared on next success).
  */
 export interface TaskLifecycleAudit {
   // Monotonic lifetime count of failed runs (never reset on success).
@@ -242,12 +264,15 @@ export interface TaskItem {
   name: string | null;
   parentTaskId: string | null;
   priority: number | null;
+  projectId: string | null;
   schedulePattern: string | null;
   scheduleTimezone: string | null;
   seq: number;
   sortOrder: number | null;
   startedAt: Date | null;
   status: string;
+  totalRunCost?: number | null;
+  totalRunDuration?: number | null;
   totalTopics: number | null;
   updatedAt: Date;
   // 'private' tasks are only visible to their creator in workspace mode.
@@ -286,6 +311,7 @@ export interface NewTask {
   name?: string | null;
   parentTaskId?: string | null;
   priority?: number | null;
+  projectId?: string | null;
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
   seq: number;
@@ -324,6 +350,7 @@ export interface TaskDetailSubtask {
   runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
+  updatedAt?: string;
 }
 
 export interface TaskDetailWorkspaceNode {
@@ -353,6 +380,8 @@ export interface TaskDetailActivityAgent {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
@@ -371,6 +400,8 @@ export interface TaskDetailActivity {
    */
   completedAt?: string;
   content?: string;
+  /** Topic-only: denormalized total run cost in USD. */
+  cost?: number | null;
   createdAt?: string;
   cronJobId?: string | null;
   /** Comment-only: rich Lexical JSON state. When present, supersedes `content` for rendering. */
@@ -414,8 +445,28 @@ export interface TaskDetailActivity {
   time?: string;
   title?: string;
   topicId?: string | null;
+  /** Topic-only: what opened this round — `goal` marks a loop-spawned rerun. */
+  trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
+  /**
+   * Topic-only: the verification bound to this run. Present as soon as a
+   * verify session exists — `status` is null while it is still being planned,
+   * so the row can say "verifying" before there is a verdict.
+   */
+  verify?: TaskRunVerifySummary | null;
+}
+
+export interface TaskRunVerifySummary {
+  /** The aggregate this round is chained onto — the link target. */
+  acceptanceId: string | null;
+  /** Checks that returned a passing verdict in this round. */
+  passed: number;
+  roundIndex: number | null;
+  runId: string;
+  status: string | null;
+  /** Checks this round produced a result for; 0 while the plan is unexecuted. */
+  total: number;
 }
 
 export interface TaskDetailData {
@@ -439,8 +490,12 @@ export interface TaskDetailData {
   heartbeat?: {
     interval?: number | null;
     lastAt?: string | null;
+    /** When the currently pending heartbeat tick was enqueued. */
+    scheduledAt?: string | null;
     timeout?: number | null;
   };
+  /** Stable database identity used by subject-bound aggregates such as Acceptance. */
+  id?: string;
   identifier: string;
   instruction: string;
   name?: string | null;
@@ -454,6 +509,7 @@ export interface TaskDetailData {
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;
+  updatedAt?: string;
   userId?: string | null;
   /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
   verify?: TaskVerifyConfig | null;

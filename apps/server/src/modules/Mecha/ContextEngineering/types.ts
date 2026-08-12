@@ -8,16 +8,22 @@ import type {
   DiscordContext,
   EvalContext,
   FileContent,
+  GroupAgentBuilderContext,
   KnowledgeBaseInfo,
   LobeToolManifest,
   OnboardingContext,
+  PlanTodoConfig,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
-import type { RuntimeInitialContext, UIChatMessage } from '@lobechat/types';
+import type {
+  RuntimeAdditionalContextFragment,
+  RuntimeInitialContext,
+  UIChatMessage,
+} from '@lobechat/types';
 
 /**
  * Model capability checker functions for server-side
@@ -72,6 +78,8 @@ export interface ServerUserMemoryConfig {
  * instead of fetching from stores
  */
 export interface ServerMessagesEngineParams {
+  /** Agent-materialized presentation contexts for this LLM call */
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Additional variable values to merge with defaults (e.g. device paths) */
   additionalVariables?: Record<string, string>;
   /** Agent documents to inject into context based on load rules and positions */
@@ -85,6 +93,8 @@ export interface ServerMessagesEngineParams {
   agentGroup?: AgentGroupConfig;
   /** Agent Management context (optional, available models and plugins) */
   agentManagementContext?: AgentManagementContext;
+  /** Group Agent Builder context (optional, for editing the current group) */
+  groupAgentBuilderContext?: GroupAgentBuilderContext;
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
@@ -139,6 +149,9 @@ export interface ServerMessagesEngineParams {
 
   /** Page content context (optional, for document editing) */
   pageContentContext?: PageContentContext;
+
+  /** Plan document TODO state used when conversation messages contain no TODO state */
+  planTodo?: PlanTodoConfig;
 
   /** Provider ID */
   provider: string;

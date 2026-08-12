@@ -9,6 +9,8 @@ import {
   MESSAGE_LIST_VERIFICATION_INTERVAL,
   runMessageListQuery,
 } from '@/services/message/cache';
+import { useChatStore } from '@/store/chat';
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { createStore } from '../../index';
 import { dataSelectors } from './selectors';
@@ -301,6 +303,73 @@ describe('DataSlice', () => {
       expect(state.displayMessages).toHaveLength(0);
       expect(state.dbMessages).toHaveLength(0);
     });
+
+    it('should sync internal replacements to the external store via onMessagesChange', () => {
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const messages: UIChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(messages);
+
+      expect(onMessagesChange).toHaveBeenCalledWith(messages, store.getState().context);
+    });
+
+    it('should NOT echo external prop sync back through onMessagesChange (skipOnMessagesChange)', () => {
+      // Regression: StoreUpdater's external → internal sync used to echo the
+      // bucket back to ChatStore, whose write-through mutate re-wrote the SWR
+      // cache with the (possibly partial) bucket and discarded an in-flight
+      // switch-time revalidation — locking the UI on a partial message list.
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const partialBucket: UIChatMessage[] = [
+        { id: 'msg-first', content: 'seed', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(partialBucket, { skipOnMessagesChange: true });
+
+      // State still updates…
+      expect(store.getState().dbMessages).toHaveLength(1);
+      expect(store.getState().displayMessages[0].id).toBe('msg-first');
+      // …but nothing is echoed back to the external store.
+      expect(onMessagesChange).not.toHaveBeenCalled();
+    });
+
+    it('discards an async replacement when the store has switched conversations', () => {
+      const oldContext = { agentId: 'agent-1', threadId: null, topicId: 'topic-old' };
+      const currentContext = { agentId: 'agent-1', threadId: null, topicId: 'topic-current' };
+      const currentMessages: UIChatMessage[] = [
+        {
+          content: 'current topic',
+          createdAt: 2000,
+          id: 'msg-current',
+          role: 'user',
+          updatedAt: 2000,
+        },
+      ];
+      const store = createStore({ context: currentContext, initialMessages: currentMessages });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().replaceMessages(
+        [
+          {
+            content: 'late old topic result',
+            createdAt: 1000,
+            id: 'msg-old',
+            role: 'assistant',
+            updatedAt: 1000,
+          },
+        ],
+        { expectedContext: oldContext },
+      );
+
+      expect(store.getState().dbMessages).toEqual(currentMessages);
+      expect(onMessagesChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('selectors', () => {
@@ -544,6 +613,7 @@ describe('DataSlice', () => {
     beforeEach(() => {
       vi.clearAllMocks();
       clearMessageListClientCacheState();
+      useChatStore.setState({ voiceMessageUploadMap: {} });
     });
 
     it('should pass threadId to messageService.getMessages', async () => {
@@ -578,6 +648,76 @@ describe('DataSlice', () => {
           topicId: 'test-topic',
         });
       });
+    });
+
+    it("tags the onData echo with source 'fetch' so handlers skip the cache write-through", async () => {
+      // Regression: without the tag, ChatStore.replaceMessages writes the
+      // echoed (possibly stale) snapshot through the SWR cache at mount, which
+      // trips SWR's mutation race guard and discards the in-flight
+      // revalidation — the conversation locks on the stale/partial list.
+      const mockMessages: UIChatMessage[] = [
+        { id: 'sync-msg-1', content: 'Synced', role: 'user', createdAt: 1000, updatedAt: 1000 },
+      ];
+      vi.mocked(messageService.getMessages).mockResolvedValue(mockMessages);
+
+      const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+      const store = createStore({ context });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().useFetchMessages(context);
+
+      await waitFor(() => {
+        expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
+      });
+    });
+
+    it('discards a fetch result that resolves after switching conversations', async () => {
+      let resolveFetch!: (messages: UIChatMessage[]) => void;
+      vi.mocked(messageService.getMessages).mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+
+      const oldContext = { agentId: 'test-session', threadId: null, topicId: 'topic-old' };
+      const currentContext = { agentId: 'test-session', threadId: null, topicId: 'topic-current' };
+      const currentMessages: UIChatMessage[] = [
+        {
+          content: 'current topic',
+          createdAt: 2000,
+          id: 'msg-current',
+          role: 'user',
+          updatedAt: 2000,
+        },
+      ];
+      const store = createStore({ context: oldContext });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().useFetchMessages(oldContext);
+      store.setState({
+        context: currentContext,
+        dbMessages: currentMessages,
+        displayMessages: currentMessages,
+        messagesInit: true,
+      });
+
+      await act(async () => {
+        resolveFetch([
+          {
+            content: 'late old topic result',
+            createdAt: 1000,
+            id: 'msg-old',
+            role: 'assistant',
+            updatedAt: 1000,
+          },
+        ]);
+        await Promise.resolve();
+      });
+
+      expect(store.getState().dbMessages).toEqual(currentMessages);
+      expect(onMessagesChange).not.toHaveBeenCalled();
     });
 
     it('should pass null threadId when provided as null', async () => {
@@ -879,6 +1019,168 @@ describe('DataSlice', () => {
       await waitFor(() => {
         expect(store.getState().dbMessages[0].error).toEqual(localError);
         expect(store.getState().dbMessages[0].updatedAt).toBe(2000);
+      });
+    });
+
+    it('should preserve a local-only message that is missing from fetched data', async () => {
+      const persistedMessage: UIChatMessage = {
+        id: 'persisted-message',
+        content: 'Persisted message',
+        role: 'assistant',
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+      const localVoiceMessage: UIChatMessage = {
+        id: 'tmp-voice-message',
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
+        content: '',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        createdAt: 2000,
+        updatedAt: 2000,
+      };
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([persistedMessage]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+      store.setState({ dbMessages: [localVoiceMessage] });
+      useChatStore.setState({
+        voiceMessageUploadMap: {
+          [localVoiceMessage.id]: { progress: 50, status: 'uploading' },
+        },
+      });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages).toEqual([persistedMessage, localVoiceMessage]);
+      });
+    });
+
+    it('should keep an earlier local-only voice row ahead of a later fetched message', async () => {
+      const localVoiceMessage: UIChatMessage = {
+        id: 'tmp-voice-message',
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
+        content: '',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+      const laterFetchedMessage: UIChatMessage = {
+        id: 'later-message',
+        content: 'Later text',
+        role: 'user',
+        createdAt: 2000,
+        updatedAt: 2000,
+      };
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([laterFetchedMessage]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+      store.setState({ dbMessages: [localVoiceMessage] });
+      useChatStore.setState({
+        voiceMessageUploadMap: {
+          [localVoiceMessage.id]: { progress: 50, status: 'uploading' },
+        },
+      });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages).toEqual([localVoiceMessage, laterFetchedMessage]);
+      });
+    });
+
+    it('should drop a missing local-only message after its voice transaction settles', async () => {
+      const persistedMessage: UIChatMessage = {
+        id: 'persisted-message',
+        content: 'Persisted message',
+        role: 'assistant',
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+      const settledLocalVoiceMessage: UIChatMessage = {
+        id: 'tmp-settled-voice-message',
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:stale-voice-preview' }],
+        content: '',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        createdAt: 2000,
+        updatedAt: 2000,
+      };
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([persistedMessage]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+      store.setState({ dbMessages: [settledLocalVoiceMessage] });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages).toEqual([persistedMessage]);
+      });
+    });
+
+    it('should let a fetched server row replace a newer local-only row with the same id', async () => {
+      const fetchedMessage: UIChatMessage = {
+        id: 'tmp-voice-message',
+        audioList: [
+          { alt: 'voice.webm', id: 'persisted-audio', url: 'https://example.com/voice.webm' },
+        ],
+        content: 'Persisted message',
+        role: 'user',
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+      const localVoiceMessage: UIChatMessage = {
+        id: 'tmp-voice-message',
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
+        content: '',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        createdAt: 1000,
+        updatedAt: 2000,
+      };
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([fetchedMessage]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+      store.setState({ dbMessages: [localVoiceMessage] });
+      useChatStore.setState({
+        voiceMessageUploadMap: {
+          [localVoiceMessage.id]: { progress: 100, status: 'sending' },
+        },
+      });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages).toEqual([fetchedMessage]);
       });
     });
 

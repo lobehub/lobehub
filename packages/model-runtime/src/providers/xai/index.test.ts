@@ -4,6 +4,7 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
+import { LobeSuperGrokAI } from '../superGrok';
 import type { XAIModelCard } from './index';
 import { LobeXAI } from './index';
 
@@ -33,6 +34,37 @@ describe('LobeXAI - custom features', () => {
   });
 
   describe('Responses API routing', () => {
+    it('should add a stable prompt cache key for Grok requests with a user', async () => {
+      await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'grok-4.5',
+        },
+        { user: 'user-1' },
+      );
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(createCall.prompt_cache_key).toBe('lobe:user-1:grok-4.5');
+    });
+
+    it('should add a stable prompt cache key for SuperGrok requests with a user', async () => {
+      const superGrok = new LobeSuperGrokAI({ apiKey: 'test_api_key' });
+      const create = vi
+        .spyOn(superGrok['client'].responses, 'create')
+        .mockResolvedValue(new ReadableStream() as any);
+
+      await superGrok.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'grok-4.5',
+        },
+        { user: 'user-1' },
+      );
+
+      expect(create.mock.calls[0][0].prompt_cache_key).toBe('lobe:user-1:grok-4.5');
+    });
+
     it('should ignore chatCompletion apiMode and remove camelCase penalty parameters', async () => {
       await instance.chat({
         apiMode: 'chatCompletion',

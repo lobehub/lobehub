@@ -1,3 +1,4 @@
+import { MESSENGER_PUSH_CONTENT_MAX_LENGTH } from '@lobechat/builtin-tool-message';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -36,6 +37,11 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
+import {
+  wechatLegacyTokenKey,
+  wechatPendingPushKey,
+  wechatWindowKey,
+} from '@/server/services/bot/platforms/wechat/contextWindow';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import {
@@ -54,6 +60,11 @@ import {
   releaseWechatQrFinalizeLock,
 } from '@/server/services/messenger';
 import { wechatInstallationKey } from '@/server/services/messenger/installations';
+import {
+  getMessengerPushWindow,
+  MESSENGER_PUSH_PLATFORMS,
+  sendMessengerPush,
+} from '@/server/services/messenger/push';
 
 const platformEnum = z.enum([
   'telegram',
@@ -135,7 +146,11 @@ const disconnectWechatAccountLink = async (
   if (!link.applicationId) return;
   const redis = getAgentRuntimeRedisClient();
   if (redis) {
-    await redis.del(`wechat:ctx-token:${link.applicationId}:${link.tenantId}`);
+    await redis.del(
+      wechatLegacyTokenKey(link.applicationId, link.tenantId),
+      wechatWindowKey(link.applicationId, link.tenantId),
+      wechatPendingPushKey(link.applicationId, link.tenantId),
+    );
   }
 };
 
@@ -797,6 +812,53 @@ export const messengerRouter = router({
   }),
 
   /**
+   * Proactive-push window status for the caller's link on a platform:
+   * deliverability mode, remaining quota, expiry, and queued messages.
+   * Read-only; used by the messenger settings UI.
+   */
+  getMessengerPushWindow: messengerProcedure
+    .input(
+      z.object({
+        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+        tenantId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return getMessengerPushWindow({
+        platform: input.platform,
+        serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
+        userId: ctx.userId,
+      });
+    }),
+
+  /**
+   * Proactively push a message to the caller's linked messenger account.
+   *
+   * Platform-agnostic entry (see services/messenger/push): windowed platforms
+   * like WeChat deliver inside the current send window and queue outside it —
+   * the caller gets `queued`, never a silent drop. This is the low-level
+   * capability the notification-channel integration will build on.
+   */
+  sendMessengerPush: messengerProcedure
+    .input(
+      z.object({
+        content: z.string().trim().min(1).max(MESSENGER_PUSH_CONTENT_MAX_LENGTH),
+        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+        tenantId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return sendMessengerPush({
+        content: input.content,
+        platform: input.platform,
+        serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
+        userId: ctx.userId,
+      });
+    }),
+
+  /**
    * Set which agent the IM session routes to. Pass `agentId: null` to clear
    * the active agent (next inbound message will get the "/agents to pick"
    * prompt). Pass `tenantId` to scope to a specific Slack workspace.
@@ -909,6 +971,15 @@ export const messengerRouter = router({
         })),
     );
 
+    // Telegram is deliberately absent here even though the account link makes it
+    // reachable. This list doubles as send-target discovery for the client tool
+    // adapter, which resolves a per-agent `botId` from `platform` and ignores
+    // `messengerInstallationId` (see LOBE-12706). Surfacing the synthetic
+    // singleton would turn a clean "I can't reach Telegram" into a confusing
+    // `No enabled bot found for platform "telegram"` for anyone who linked the
+    // System Bot but has no per-agent Telegram provider. Reaching the user
+    // themselves does not need this list at all — that is `sendMessengerPush`,
+    // which routes through the account link directly.
     return [...installationViews, ...wechatViews];
   }),
 

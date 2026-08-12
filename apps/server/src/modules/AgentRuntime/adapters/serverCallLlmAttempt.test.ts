@@ -7,14 +7,27 @@ import type { RuntimeExecutorContext } from '../context';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
+const recordModelCompletionFailureMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@lobechat/model-runtime', async () => {
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  const { ModelRefusalError } =
+    await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
 
-  return { consumeStreamUntilDone, isEmptyModelCompletion, ModelEmptyError };
+  return {
+    consumeStreamUntilDone,
+    isEmptyModelCompletion,
+    ModelEmptyError,
+    ModelRefusalError,
+  };
 });
+
+vi.mock('@/business/server/recordModelCompletionFailure', () => ({
+  recordModelCompletionFailure: recordModelCompletionFailureMock,
+}));
 
 vi.mock('@/envs/file', () => ({
   fileEnv: { NEXT_PUBLIC_S3_FILE_PATH: 'files' },
@@ -110,6 +123,7 @@ describe('ServerCallLlmAttempt', () => {
         await callback?.onToolsCalling?.({ chunk: [], toolsCalling: [rawToolCall] });
         await callback?.onCompletion?.({
           finishReason: 'tool_use',
+          reasoning: { content: 'Reasoning', signature: 'encrypted-signature' },
           speed: { tps: 20, ttft: 100 },
           text: '',
           usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
@@ -124,6 +138,10 @@ describe('ServerCallLlmAttempt', () => {
     expect(snapshot.content).toBe('Visible answer');
     expect(snapshot.thinkingContent).toBe('Reasoning');
     expect(snapshot.grounding).toEqual({ searchQueries: ['docs'] });
+    expect(snapshot.reasoning).toEqual({
+      content: 'Reasoning',
+      signature: 'encrypted-signature',
+    });
     expect(snapshot.finishReason).toBe('tool_use');
     expect(snapshot.speed).toEqual({ tps: 20, ttft: 100 });
     expect(snapshot.usage).toEqual({
@@ -279,6 +297,226 @@ describe('ServerCallLlmAttempt', () => {
           { image: 'https://files.example/image.png', type: 'image' },
         ],
         hasContentImages: true,
+      }),
+    );
+  });
+
+  it('accepts an image-only multimodal completion as non-empty', async () => {
+    const blobStore: BlobStore = {
+      persistBase64: vi.fn().mockResolvedValue({
+        fileId: 'file-1',
+        key: 'files/generations/image.png',
+        url: 'https://files.example/image.png',
+      }),
+      resolveUrl: vi.fn(),
+    };
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onContentPart?.({
+        content: 'BASE64_IMAGE',
+        mimeType: 'image/png',
+        partType: 'image',
+      });
+      await callback?.onCompletion?.({
+        finishReason: 'stop',
+        text: '',
+        usage: { outputImageTokens: 1120, totalOutputTokens: 1120 },
+      });
+    }, blobStore);
+
+    await expect(attempt.execute()).resolves.toBeUndefined();
+    expect(attempt.snapshot()).toEqual(
+      expect.objectContaining({
+        content: '',
+        contentParts: [{ image: 'https://files.example/image.png', type: 'image' }],
+        hasContentImages: true,
+      }),
+    );
+  });
+
+  it('classifies an empty refusal separately and records complete normalized evidence', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onContentPart?.({
+        content: '',
+        partType: 'text',
+        thoughtSignature: 'content-thought-signature',
+      });
+      await callback?.onReasoningPart?.({
+        content: '',
+        partType: 'text',
+        thoughtSignature: 'reasoning-thought-signature',
+      });
+      await callback?.onCompletion?.({
+        finishReason: 'refusal',
+        reasoning: { content: '', signature: 'reasoning-signature' },
+        text: '',
+        usage: { totalInputTokens: 10, totalOutputTokens: 0, totalTokens: 10 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      errorType: 'ModelRefusal',
+      message: 'The model declined to answer this request.',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attempt: 1,
+        maxAttempts: 3,
+        model: 'test-model',
+        operationId: 'operation-1',
+        operationLogId: 'operation-1:2',
+        provider: 'test-provider',
+        reason: 'refusal',
+        request: expect.objectContaining({
+          messages: [{ content: 'Question', role: 'user' }],
+        }),
+        response: {
+          base64ImageEvents: [],
+          completion: expect.objectContaining({
+            finishReason: 'refusal',
+            reasoning: { content: '', signature: 'reasoning-signature' },
+          }),
+          contentPartEvents: [
+            {
+              content: '',
+              partType: 'text',
+              thoughtSignature: 'content-thought-signature',
+            },
+          ],
+          output: expect.objectContaining({
+            finishReason: 'refusal',
+            reasoning: { content: '', signature: 'reasoning-signature' },
+          }),
+          reasoningPartEvents: [
+            {
+              content: '',
+              partType: 'text',
+              thoughtSignature: 'reasoning-thought-signature',
+            },
+          ],
+        },
+        stepIndex: 2,
+        topicId: 'topic-1',
+        trigger: 'user',
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  it('keeps a refusal with visible provider text as a normal completion', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onText?.('I cannot help with that request.');
+      await callback?.onCompletion?.({
+        finishReason: 'refusal',
+        text: 'I cannot help with that request.',
+        usage: { totalOutputTokens: 8 },
+      });
+    });
+
+    await expect(attempt.execute()).resolves.toBeUndefined();
+    expect(attempt.snapshot().content).toBe('I cannot help with that request.');
+    expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('classifies a refusal with only hidden reasoning as ModelRefusal', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onThinking?.('Internal refusal analysis');
+      await callback?.onCompletion?.({
+        finishReason: 'refusal',
+        reasoning: { content: 'Internal refusal analysis', signature: 'reasoning-signature' },
+        text: '',
+        usage: { totalOutputTokens: 12 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      diagnostics: expect.objectContaining({ reasoningLength: 25 }),
+      errorType: 'ModelRefusal',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'refusal' }),
+    );
+  });
+
+  it('records an unexplained blank completion before throwing ModelEmptyError', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onCompletion?.({
+        finishReason: 'stop',
+        text: '',
+        usage: { totalInputTokens: 5, totalOutputTokens: 0, totalTokens: 5 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      errorType: 'ModelEmptyCompletion',
+      message: 'The model provider returned an empty completion.',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'empty_completion',
+        response: expect.objectContaining({
+          completion: expect.objectContaining({ finishReason: 'stop' }),
+          output: expect.objectContaining({ finishReason: 'stop' }),
+        }),
+      }),
+    );
+  });
+
+  it('records route and provider-boundary evidence with an empty completion', async () => {
+    const rawResponseBody = 'data: {"type":"message_delta"}\n\ndata: {"type":"message_stop"}\n\n';
+    const providerEvidence = {
+      providerRequest: {
+        apiMode: 'messages',
+        payload: { messages: [{ content: 'Final provider prompt', role: 'user' }] },
+        sentAt: 100,
+      },
+      providerResponse: {
+        eventCount: 5,
+        hasNonWhitespaceText: false,
+        hasNonWhitespaceThinking: false,
+        rawEvents: [
+          { delta: { stop_reason: 'end_turn' }, type: 'message_delta' },
+          { type: 'message_stop' },
+        ],
+        rawResponse: {
+          body: rawResponseBody,
+          byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+          status: 'captured',
+        },
+        requestId: 'request-1',
+        status: 200,
+        stopReason: 'end_turn',
+        thinkingChars: 1,
+      },
+    };
+    const routeEvidence = {
+      apiType: 'deepseek',
+      channelId: 'deepseek',
+      optionIndex: 0,
+      providerId: 'lobehub',
+      routerId: 'deepseek',
+      success: true,
+      totalOptions: 3,
+    };
+    const { attempt } = createAttempt(async ({ callback, diagnostics, metadata }) => {
+      Object.assign(diagnostics!, providerEvidence);
+      metadata!.routeAttempt = routeEvidence;
+      await callback?.onThinking?.(' ');
+      await callback?.onCompletion?.({
+        finishReason: 'end_turn',
+        text: '',
+        usage: { totalInputTokens: 206_384, totalOutputTokens: 1, totalTokens: 206_385 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      errorType: 'ModelEmptyCompletion',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtime: {
+          provider: providerEvidence,
+          route: routeEvidence,
+        },
       }),
     );
   });

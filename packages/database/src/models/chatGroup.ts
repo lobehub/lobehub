@@ -1,5 +1,6 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -9,8 +10,17 @@ import type {
 } from '../schemas';
 import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import type { GroupMemberRole } from '../utils/groupMembership';
+import {
+  GROUP_SUPERVISOR_ROLE,
+  isOwnedMembership,
+  resolveGroupMembershipType,
+} from '../utils/groupMembership';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/** Slugs owned by builtin provisioning; a group delete must never reach one. */
+const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
 
 export class ChatGroupModel {
   private userId: string;
@@ -38,7 +48,7 @@ export class ChatGroupModel {
    * (the junction row) does not grant access to the agent: when a member agent
    * is switched back to private by its owner, every roster read must drop it
    * for other members — otherwise the join would keep leaking the agent's
-   * config/meta through group surfaces (LOBE-11772).
+   * config/meta through group surfaces.
    */
   private memberAgentVisibility = () =>
     buildWorkspaceWhere(
@@ -220,10 +230,66 @@ export class ChatGroupModel {
 
   // ******* Update Methods ******* //
 
+  /**
+   * A move target must be a folder the caller can see, and a workspace-public
+   * group may only sit in a public folder. `chat_groups.groupId` is read by
+   * every member's sidebar now, and the foreign key only proves the folder
+   * exists — another workspace's folder, or another member's private one,
+   * satisfies it and then renders as Ungrouped for everyone who cannot see it.
+   * Mirrors `AgentModel.assertSessionGroupAssignable`.
+   */
+  private async assertFolderAssignable(id: string, groupId: string) {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, groupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${groupId} not found in current scope`);
+
+    if (!this.workspaceId) return;
+
+    const [group] = await this.db
+      .select({ visibility: chatGroups.visibility })
+      .from(chatGroups)
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+
+    // Same exact-match rule as agents: the render path resolves a private
+    // item's folder only against private folders and a public item's only
+    // against public ones, so either mismatch lands it in Ungrouped.
+    if (group && group.visibility !== folder.visibility)
+      throw new Error(
+        `A ${group.visibility} chat group cannot be moved into a ${folder.visibility} folder`,
+      );
+  }
+
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
+    if (value.groupId) await this.assertFolderAssignable(id, value.groupId);
+
+    // Scope columns never travel through the generic update. The router hands
+    // this a partial insert schema, so without stripping them a member could
+    // re-scope another member's group now that the ownership predicate spans
+    // every visible workspace row. Ignored rather than rejected so a client
+    // that sends an extra field still gets its real edit applied. Publishing
+    // has its own path and writes `visibility` directly.
+    const { userId: _userId, visibility: _visibility, workspaceId: _workspaceId, ...safe } = value;
+
     const [result] = await this.db
       .update(chatGroups)
-      .set(value)
+      .set(safe)
       .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
@@ -240,9 +306,26 @@ export class ChatGroupModel {
    * `private`. Restricted to the creator's own still-private group.
    */
   async publishToWorkspace(id: string): Promise<ChatGroupItem> {
+    // Rehome exactly as `setVisibility` does. A folder cannot mix
+    // visibilities, so publishing out of a private Category has to release the
+    // folder too — left in place, the group would be public while its folder
+    // is not, and the sidebar would show it in Ungrouped rather than where the
+    // user published it from.
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const clearFolder = current?.folderVisibility != null && current.folderVisibility !== 'public';
+
     const [result] = await this.db
       .update(chatGroups)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearFolder ? { groupId: null } : {}),
+      })
       .where(
         and(
           eq(chatGroups.id, id),
@@ -343,7 +426,7 @@ export class ChatGroupModel {
   async addAgentToGroup(
     groupId: string,
     agentId: string,
-    options?: { order?: number; role?: string },
+    options?: { order?: number; role?: GroupMemberRole },
   ): Promise<NewChatGroupAgent> {
     const params: NewChatGroupAgent = {
       agentId,
@@ -390,7 +473,9 @@ export class ChatGroupModel {
       const visibleAgents = await this.db
         .select({
           id: agents.id,
+          slug: agents.slug,
           userId: agents.userId,
+          virtual: agents.virtual,
           visibility: agents.visibility,
         })
         .from(agents)
@@ -418,6 +503,57 @@ export class ChatGroupModel {
           // Caller owns this private agent (visibility predicate would have
           // hidden it otherwise) but the group can't hold private members.
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        }
+      }
+
+      // `resolveGroupMembershipType` treats a virtual member as OWNED by its
+      // group: the delete path takes it down with the group, the transfer path
+      // rehomes it. Both are sound only while such an agent belongs to exactly
+      // ONE group — otherwise deleting either group destroys an agent the
+      // other still lists.
+      //
+      // The invariant is "exactly one", not "never joins one": the group agent
+      // builder legitimately creates a `virtual: true` agent and adds it here,
+      // and that is its first and only membership. So reject only a virtual
+      // agent that is ALREADY on another group's roster — which nothing in the
+      // product does, since the member picker filters virtual agents
+      // (`buildQueryAgentsWhere`), leaving this enforced by a query rather
+      // than by the write until now.
+      // Builtins (Inbox, the agent builders) are provisioned per user and are
+      // `virtual` like a group's own members, so the membership rules would
+      // classify one as group-OWNED the moment it joined a roster — and
+      // `removeAgentsFromGroup` deletes owned members. Letting someone add
+      // their Inbox to a group and then leave the group would delete the
+      // Inbox. They are nobody's group member; refuse at the door.
+      const builtinAgentId = agentIds.find((id) => {
+        const slug = visibleById.get(id)?.slug;
+        return !!slug && RESERVED_BUILTIN_AGENT_SLUGS.includes(slug);
+      });
+      if (builtinAgentId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A builtin agent cannot join a chat group',
+        });
+      }
+
+      const virtualAgentIds = agentIds.filter((id) => visibleById.get(id)?.virtual);
+      if (virtualAgentIds.length > 0) {
+        const [poached] = await this.db
+          .select({ agentId: chatGroupsAgents.agentId })
+          .from(chatGroupsAgents)
+          .where(
+            and(
+              inArray(chatGroupsAgents.agentId, virtualAgentIds),
+              ne(chatGroupsAgents.chatGroupId, groupId),
+            ),
+          )
+          .limit(1);
+
+        if (poached) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'A group-owned agent cannot join another group',
+          });
         }
       }
     }
@@ -489,8 +625,34 @@ export class ChatGroupModel {
   async updateAgentInGroup(
     groupId: string,
     agentId: string,
-    updates: Partial<Pick<NewChatGroupAgent, 'order' | 'role'>>,
+    updates: Partial<Pick<NewChatGroupAgent, 'enabled' | 'order'>> & { role?: GroupMemberRole },
   ): Promise<NewChatGroupAgent> {
+    // A supervisor is the group's own synthetic orchestrator: every path that
+    // creates one creates a fresh virtual agent for it, and the delete/transfer
+    // paths rely on `supervisor ⟹ owned`. Promoting a `referenced` member would
+    // break that invariant and put a member's personal agent on the group's
+    // lifecycle, so it is refused rather than silently reclassified.
+    if (updates.role === GROUP_SUPERVISOR_ROLE) {
+      const [row] = await this.db
+        .select({ role: chatGroupsAgents.role, slug: agents.slug, virtual: agents.virtual })
+        .from(chatGroupsAgents)
+        .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+        .where(
+          and(
+            eq(chatGroupsAgents.chatGroupId, groupId),
+            eq(chatGroupsAgents.agentId, agentId),
+            this.agentsOwnership(),
+          ),
+        );
+
+      if (row && resolveGroupMembershipType(row) !== 'owned') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only a group-owned member can act as the group supervisor',
+        });
+      }
+    }
+
     const [result] = await this.db
       .update(chatGroupsAgents)
       .set({ ...updates, updatedAt: new Date() })
@@ -508,22 +670,109 @@ export class ChatGroupModel {
 
   // ******* Delete Methods ******* //
 
-  async delete(id: string): Promise<ChatGroupItem> {
-    // Agents are automatically deleted due to CASCADE constraint
-    const [result] = await this.db
-      .delete(chatGroups)
-      .where(and(eq(chatGroups.id, id), this.ownership()))
-      .returning();
+  /**
+   * Agent ids that die with the given groups.
+   *
+   * `agents` has NO foreign key to `chat_groups` — the cascade only reaches the
+   * junction — so deleting a group leaves its synthetic supervisor and its
+   * group-built members behind forever: `virtual: true` hides them from every
+   * list, so nothing will ever surface or reclaim them.
+   *
+   * Read from the RAW junction rows, with no visibility or ownership predicate
+   * on the member agent. Those predicates belong to reads: a member another
+   * workspace user flipped back to `private` is still owned by this group, and
+   * filtering it out here is precisely how the previous service-level cleanup
+   * leaked. The caller has already proven it may delete the group itself.
+   */
+  private findOwnedMemberAgentIds = async (
+    executor: LobeChatDatabase,
+    groupIds: string[],
+  ): Promise<string[]> => {
+    if (groupIds.length === 0) return [];
 
-    if (!result) {
-      throw new Error('Chat group not found or access denied');
-    }
+    const rows = await executor
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), isOwnedMembership()));
 
-    return result;
+    return [...new Set(rows.map((row) => row.agentId))];
+  };
+
+  /**
+   * Builtin agents (Inbox, the agent builders, …) are provisioned per user and
+   * are `virtual` like a group's own members, so `owned` on a malformed
+   * junction row would be enough to take one down with a group. Their reserved
+   * slugs are the one thing that always tells them apart — a cheap belt to the
+   * `owned` braces, on a delete whose blast radius is somebody's Inbox.
+   */
+  private deleteOwnedMemberAgents = async (
+    executor: LobeChatDatabase,
+    agentIds: string[],
+  ): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+
+    const deleted = await executor
+      .delete(agents)
+      .where(
+        and(
+          inArray(agents.id, agentIds),
+          eq(agents.virtual, true),
+          // A NULL slug predates slug generation and is not a builtin;
+          // `NOT IN` alone would evaluate to NULL and skip those rows.
+          or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+        ),
+      )
+      .returning({ id: agents.id });
+
+    return deleted.map((row) => row.id);
+  };
+
+  /**
+   * Delete a group together with the agents that only existed to serve it.
+   *
+   * Returns the deleted owned-agent ids so callers can report them; the delete
+   * itself needs no follow-up.
+   */
+  async delete(id: string): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
+    return this.db.transaction(async (trx) => {
+      // Collect BEFORE the delete: the junction rows cascade away with the
+      // group, taking the only record of which agents were group-owned.
+      const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, [id]);
+
+      const [result] = await trx
+        .delete(chatGroups)
+        .where(and(eq(chatGroups.id, id), this.ownership()))
+        .returning();
+
+      if (!result) {
+        throw new Error('Chat group not found or access denied');
+      }
+
+      // Same transaction as the group delete: a cleanup that can be interrupted
+      // between the two statements is a leak with extra steps.
+      const deletedOwnedAgentIds = await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+
+      return { deletedOwnedAgentIds, group: result };
+    });
   }
 
   async deleteAll(): Promise<void> {
-    await this.db.delete(chatGroups).where(this.ownership());
+    await this.db.transaction(async (trx) => {
+      const groupIds = await trx
+        .select({ id: chatGroups.id })
+        .from(chatGroups)
+        .where(this.ownership());
+
+      const ownedAgentIds = await this.findOwnedMemberAgentIds(
+        trx,
+        groupIds.map((group) => group.id),
+      );
+
+      await trx.delete(chatGroups).where(this.ownership());
+
+      await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+    });
   }
 
   // ******* Agent Query Methods ******* //
@@ -564,6 +813,7 @@ export class ChatGroupModel {
       .select({
         agentId: chatGroupsAgents.agentId,
         description: agents.description,
+        name: agents.name,
         role: chatGroupsAgents.role,
         title: agents.title,
       })
@@ -593,6 +843,12 @@ export class ChatGroupModel {
         and(
           eq(chatGroupsAgents.chatGroupId, groupId),
           eq(agents.visibility, 'private'),
+          // The synthetic supervisor mirrors the group's own visibility, so a
+          // private group always owns one private agent. Counting it makes the
+          // publish guard unsatisfiable — every private group would look like
+          // it still holds private members and could never be shared. Only
+          // real members can block a publish.
+          ne(chatGroupsAgents.role, 'supervisor'),
           this.agentsOwnership(),
         ),
       );

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -11,11 +12,18 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
+import HeterogeneousAgentCtr from '../HeterogeneousAgentImpl';
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'linux') };
+});
+
+const platformMock = vi.mocked(os.platform);
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, existsSync: vi.fn(() => true) };
 });
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
@@ -28,6 +36,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
     getAppPath: vi.fn(() => '/fake/appPath'),
+    getVersion: vi.fn(() => '1.0.0-test'),
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
     on: vi.fn(),
@@ -45,9 +54,18 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-const { claudeSdkSessionCloseMock, claudeSdkSessionConstructMock } = vi.hoisted(() => ({
+const {
+  claudeSdkSessionCloseMock,
+  claudeSdkSessionConstructMock,
+  codexAppServerCloseMock,
+  codexAppServerConstructMock,
+  codexAppServerInterruptMock,
+} = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
+  codexAppServerCloseMock: vi.fn(),
+  codexAppServerConstructMock: vi.fn(),
+  codexAppServerInterruptMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -98,9 +116,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockCodexAppServerSession {
+    constructor(private readonly options: any) {
+      codexAppServerConstructMock(options);
+    }
+
+    close() {
+      codexAppServerCloseMock();
+    }
+
+    async interrupt() {
+      codexAppServerInterruptMock();
+    }
+
+    async run() {
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'codex-app-server',
+      });
+      this.options.onSessionId('thread_app_server');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'codex-app-server' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'codex-app-server',
+      });
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
+    CodexAppServerSession: MockCodexAppServerSession,
   };
 });
 
@@ -189,21 +251,31 @@ const getFlagValues = (args: string[], flag: string) =>
 describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
   let originalClaudeSdkLabEnv: string | undefined;
+  let originalCodexAppServerLabEnv: string | undefined;
 
   beforeEach(async () => {
     originalClaudeSdkLabEnv = process.env.LOBE_CLAUDE_CODE_SDK;
+    originalCodexAppServerLabEnv = process.env.LOBE_CODEX_APP_SERVER;
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
+    codexAppServerCloseMock.mockReset();
+    codexAppServerConstructMock.mockReset();
+    codexAppServerInterruptMock.mockReset();
     mockGetAllWindows.mockReset();
+    platformMock.mockReturnValue('linux');
+    vi.mocked(existsSync).mockReturnValue(true);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
+    delete process.env.LOBE_CODEX_APP_SERVER;
   });
 
   afterEach(async () => {
     if (originalClaudeSdkLabEnv === undefined) delete process.env.LOBE_CLAUDE_CODE_SDK;
     else process.env.LOBE_CLAUDE_CODE_SDK = originalClaudeSdkLabEnv;
+    if (originalCodexAppServerLabEnv === undefined) delete process.env.LOBE_CODEX_APP_SERVER;
+    else process.env.LOBE_CODEX_APP_SERVER = originalCodexAppServerLabEnv;
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
@@ -576,6 +648,45 @@ describe('HeterogeneousAgentCtr', () => {
       ]);
     });
 
+    it('cleans up the intervention when Windows command-line validation rejects before spawn', async () => {
+      platformMock.mockReturnValue('win32');
+      const operationId = 'op-oversized-windows-argv';
+      const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await rm(tmpConfigPath, { force: true });
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: {
+          detect: vi.fn().mockResolvedValue({
+            available: true,
+            path: 'C:\\claude.exe',
+          }),
+        },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        args: ['a'.repeat(32_767)],
+        command: 'claude',
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          agentId: 'agent-1',
+          operationId,
+          prompt: 'hello',
+          sessionId,
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/resolved Windows command line requires/);
+
+      expect(spawnCalls).toHaveLength(0);
+      expect((ctr as any).opIdToIntervention.has(operationId)).toBe(false);
+      expect((ctr as any).opIdToBrowserBinding.has(operationId)).toBe(false);
+      expect((ctr as any).builtinMcpServer.hasOperation(operationId)).toBe(false);
+      await expect(access(tmpConfigPath)).rejects.toThrow();
+    });
+
     it('uses Claude SDK streaming lab instead of spawning claude -p', async () => {
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
       const send = vi.fn();
@@ -787,6 +898,53 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('validates the default desktop directory when the session cwd is omitted', async () => {
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate === FAKE_DESKTOP_PATH);
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
+
+      expect(existsSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH);
+      expect(detect).toHaveBeenCalledWith('codex', true);
+    });
+
+    it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
+      const missingCwd = '/tmp/lobehub-deleted-worktree';
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      const detect = vi.fn().mockResolvedValue({
+        available: true,
+        path: '/Applications/ChatGPT.app/Contents/Resources/codex',
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        cwd: missingCwd,
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow(`Working directory does not exist: ${missingCwd}`);
+
+      expect(detect).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(0);
+    });
+
     it('fails fast when Claude Code CLI is unavailable instead of attempting spawn', async () => {
       const detect = vi.fn().mockResolvedValue({ available: false });
       const ctr = new HeterogeneousAgentCtr({
@@ -980,6 +1138,67 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
+    });
+
+    it('uses Codex app-server lab instead of spawning codex exec', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args: ['--model', 'gpt-5.5-codex'],
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'stream this', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(codexAppServerConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'gpt-5.5-codex'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'codex',
+          cwd: FAKE_DESKTOP_PATH,
+          input: [{ text: 'stream this', text_elements: [], type: 'text' }],
+          operationId: 'op-test',
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'thread_app_server',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('falls back to codex exec when app-server cannot preserve a CLI argument', async () => {
+      // Fallback path still spawns `codex exec`; without a fake process, sendPrompt hangs.
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args: ['--profile', 'work'],
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve profile', sessionId });
+
+      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(1);
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--profile', 'work']));
     });
 
     it('places system context before the user prompt in codex stdin', async () => {
@@ -1329,6 +1548,159 @@ describe('HeterogeneousAgentCtr', () => {
         stderr:
           'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
+    });
+
+    it('classifies missing credentials for Pi as an auth-required error', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const payload = (ctr as any).getSessionErrorPayload(
+        'No API key found for provider anthropic',
+        {
+          agentType: 'pi',
+          args: [],
+          command: 'pi',
+          sessionId: 'session-1',
+        },
+      );
+
+      expect(payload).toEqual({
+        agentType: 'pi',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        command: 'pi',
+        docsUrl: 'https://github.com/earendil-works/pi',
+        message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
+        stderr: 'No API key found for provider anthropic',
+      });
+    });
+  });
+
+  describe('spawnLhHeteroExec', () => {
+    const params = {
+      agentType: 'opencode',
+      assistantMessageId: 'asst-gateway',
+      jwt: 'device-jwt',
+      operationId: 'op-gateway',
+      prompt: 'inspect the repository',
+      serverUrl: 'https://server.example.com',
+      topicId: 'topic-gateway',
+    };
+
+    const createGatewayCliProc = () => {
+      const proc = new EventEmitter() as any;
+      const stdin = new EventEmitter() as any;
+      stdin.end = vi.fn();
+      stdin.write = vi.fn(() => true);
+      proc.stdin = stdin;
+      return proc;
+    };
+
+    beforeEach(() => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      spawnCalls.length = 0;
+      nextFakeProc = null;
+    });
+
+    it('uses the self-contained embedded CLI instead of a global lh from PATH', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+
+      expect(spawnCalls).toHaveLength(1);
+      const [spawnCall] = spawnCalls;
+      expect(spawnCall.command).toBe(process.execPath);
+      expect(spawnCall.args.slice(0, 7)).toEqual([
+        '/fake/cli/dist/index.js',
+        'hetero',
+        'exec',
+        '--type',
+        'opencode',
+        '--operation-id',
+        'op-gateway',
+      ]);
+      expect(spawnCall.options.env).toEqual(
+        expect.objectContaining({
+          ELECTRON_RUN_AS_NODE: '1',
+          LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst-gateway',
+          LOBEHUB_JWT: 'device-jwt',
+          LOBEHUB_SERVER: 'https://server.example.com',
+        }),
+      );
+      expect(proc.stdin.write).not.toHaveBeenCalled();
+
+      proc.emit('spawn');
+
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+      expect(proc.stdin.write).toHaveBeenCalledOnce();
+      expect(proc.stdin.end).toHaveBeenCalledOnce();
+    });
+
+    it('rejects the gateway request when the embedded CLI cannot spawn', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      proc.emit('error', new Error('spawn EACCES'));
+
+      await expect(ack).resolves.toEqual({ reason: 'spawn EACCES', status: 'rejected' });
+      expect(proc.stdin.write).not.toHaveBeenCalled();
+    });
+
+    it('rejects before spawn when the embedded CLI is missing', async () => {
+      vi.mocked(existsSync).mockReturnValueOnce(false);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
+        reason: 'Embedded CLI not found at /fake/cli/dist/index.js',
+        status: 'rejected',
+      });
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('rejects a synchronous stdin write failure without throwing from the event handler', async () => {
+      const proc = createGatewayCliProc();
+      proc.stdin.write.mockImplementationOnce(() => {
+        throw new Error('write EPIPE');
+      });
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      expect(() => proc.emit('spawn')).not.toThrow();
+
+      await expect(ack).resolves.toEqual({ reason: 'write EPIPE', status: 'rejected' });
+    });
+
+    it('handles a late stdin EPIPE after acceptance without an uncaught stream error', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      proc.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+      expect(() => proc.stdin.emit('error', new Error('write EPIPE'))).not.toThrow();
     });
   });
 

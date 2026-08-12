@@ -15,8 +15,12 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import AgentConfigError from './AgentConfigError';
 import { useSendMenuItems } from './useSendMenuItems';
 
-const contextWindowRightActions: ActionKeys[] = ['contextWindow'];
-const promptTransformRightActions: ActionKeys[] = ['promptTransform', 'contextWindow'];
+const contextWindowRightActions: ActionKeys[] = ['voiceMessage', 'contextWindow'];
+const promptTransformRightActions: ActionKeys[] = [
+  'promptTransform',
+  'voiceMessage',
+  'contextWindow',
+];
 
 /**
  * MainChatInput
@@ -39,6 +43,8 @@ const MainChatInput = memo(() => {
     ? promptTransformRightActions
     : contextWindowRightActions;
 
+  // Reasoning effort lives inside the "+" menu (Plus → 推理强度) rather than as
+  // a standalone action — per the effort parameter refactoring.
   const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
 
   return (

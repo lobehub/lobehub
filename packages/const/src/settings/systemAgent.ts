@@ -39,6 +39,15 @@ export const DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
 };
 
+// Opt-in: summarizing runs unattended in the background and spends the user's
+// own budget, so it stays off until they turn it on. Model/provider follow the
+// branded defaults rather than a hardcoded pair, so the deployment's own
+// gateway resolves the credentials instead of a per-provider server env key.
+export const DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  ...DEFAULT_SYSTEM_AGENT_ITEM,
+  enabled: false,
+};
+
 export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   model: DEFAULT_EMBEDDING_MODEL,
   provider: DEFAULT_EMBEDDING_PROVIDER,
@@ -51,10 +60,13 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  onboardingUnderstanding: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   userMemoryEmbedding: DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM,
   userMemoryPersonaWriter: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   promptRewrite: DEFAULT_PROMPT_REWRITE_SYSTEM_AGENT_ITEM,
   thread: DEFAULT_SYSTEM_AGENT_ITEM,
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
   translation: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
 };

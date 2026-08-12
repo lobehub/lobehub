@@ -1,13 +1,14 @@
 import { Flexbox, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
 
+import { useChatInputStore } from '@/features/ChatInput/store';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
-import { useAgentId } from '../../hooks/useAgentId';
 import FileItem from '../FilePreview/FileItem';
 import ContextItem from './ContextItem';
+import ElementItem from './ElementItem';
 import SelectionItem from './SelectionItem';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -23,22 +24,15 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ContextList = memo(() => {
-  const agentId = useAgentId();
-  const prevAgentIdRef = useRef<string | undefined>(undefined);
+  const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
   const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList);
   const showFileList = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
-  const rawSelectionList = useFileStore(fileChatSelectors.chatContextSelections);
-  const showSelectionList = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
-  const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
-
-
-  // Clear selections only when agentId changes (not on initial mount)
-  useEffect(() => {
-    if (prevAgentIdRef.current !== undefined && prevAgentIdRef.current !== agentId) {
-      clearChatContextSelections();
-    }
-    prevAgentIdRef.current = agentId;
-  }, [agentId, clearChatContextSelections]);
+  const rawSelectionList = useFileStore(
+    fileChatSelectors.chatContextSelections(contextSelectionKey),
+  );
+  const showSelectionList = useFileStore(
+    fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
+  );
 
   // Filter duplicates based on preview content
   const selectionList = rawSelectionList.filter(
@@ -98,9 +92,13 @@ const ContextList = memo(() => {
             style={{ paddingBlockStart: 8 }}
             wrap={'wrap'}
           >
-            {selectionList.map((item) => (
-              <SelectionItem key={item.id} {...item} />
-            ))}
+            {selectionList.map((item) =>
+              item.source === 'element' ? (
+                <ElementItem key={item.id} {...item} />
+              ) : (
+                <SelectionItem key={item.id} {...item} />
+              ),
+            )}
             {completedFiles.map((item) => (
               <ContextItem key={item.id} {...item} />
             ))}

@@ -1,5 +1,12 @@
+import { isRemoteServerNetworkError } from '@lobechat/types';
 import { type TRPCLink } from '@trpc/client';
-import { createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
+import {
+  createTRPCClient,
+  httpBatchLink,
+  httpLink,
+  httpSubscriptionLink,
+  splitLink,
+} from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import { observable } from '@trpc/server/observable';
 import debug from 'debug';
@@ -74,11 +81,14 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
                       // If user is still marked as signed in but got 401,
                       // session is invalid - clear client state first
                       if (isSignedIn) {
-                        await logout();
+                        const params = new URLSearchParams({ callbackUrl: location.toString() });
+                        params.set('reason', 'sessionExpired');
+                        await logout({ redirectTo: `/signin?${params.toString()}` });
+                      } else {
+                        const { loginRequired } =
+                          await import('@/components/Error/loginRequiredNotification');
+                        loginRequired.redirect({ reason: 'sessionExpired' });
                       }
-                      const { loginRequired } =
-                        await import('@/components/Error/loginRequiredNotification');
-                      loginRequired.redirect();
                     }
                   }
                 }
@@ -100,11 +110,33 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
     );
 };
 
+// Desktop backend proxy serializes upstream network failures (offline, timeout,
+// DNS, refused) as a 502 JSON ErrorResponse — surface those as a network-problem
+// toast so users don't read their own connectivity issues as app bugs.
+// `X-Proxy-Error` is set only by the desktop proxy's failure paths, so a real
+// server-side 502 (no header) is never mistaken for a local network problem.
+const isProxyNetworkFailure = (response: Response) =>
+  response.status === 502 && response.headers.has('X-Proxy-Error');
+
+const notifyRemoteServerNetworkError = async (response: Response) => {
+  try {
+    const data = (await response.clone().json()) as { errorType?: unknown };
+    if (!isRemoteServerNetworkError(data.errorType)) return;
+
+    const { remoteServerErrorToast } = await import('@/components/Error/remoteServerErrorToast');
+    remoteServerErrorToast(data.errorType);
+  } catch {
+    /* body was not the proxy envelope */
+  }
+};
+
 // 2. Shared link options
 const linkOptions = {
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     // Ensure credentials are included to send cookies (like mp_token)
-    return fetch(input, { ...init, credentials: 'include' });
+    const response = await fetch(input, { ...init, credentials: 'include' });
+    if (isDesktop && isProxyNetworkFailure(response)) void notifyRemoteServerNetworkError(response);
+    return response;
   },
   headers: async () => {
     // dynamic import to avoid circular dependency
@@ -144,9 +176,15 @@ const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedur
 
 // 3. splitLink to conditionally disable batching
 const customSplitLink = splitLink({
-  condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-  false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
-  true: httpLink(linkOptions),
+  condition: (op) => op.type === 'subscription',
+  false: splitLink({
+    condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+    false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
+    true: httpLink(linkOptions),
+  }),
+  // EventSource sends the same-origin session cookie. Subscription event payloads are progress
+  // hints only; all durable onboarding state is still read via the authenticated polling calls.
+  true: httpSubscriptionLink({ transformer: superjson, url: linkOptions.url }),
 });
 
 // 4. assembly links
@@ -178,9 +216,13 @@ export const createWorkspaceLambdaClient = (workspaceId: string) => {
     links: [
       errorHandlingLink,
       splitLink({
-        condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-        false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
-        true: httpLink(scopedLinkOptions),
+        condition: (op) => op.type === 'subscription',
+        false: splitLink({
+          condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+          false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
+          true: httpLink(scopedLinkOptions),
+        }),
+        true: httpSubscriptionLink({ transformer: superjson, url: scopedLinkOptions.url }),
       }),
     ],
   });

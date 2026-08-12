@@ -5,6 +5,8 @@ import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
+import type { OnboardingUnderstandingSession } from '../understanding';
+import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
 
 // Type definitions
 export type ShareVisibility = 'private' | 'link';
@@ -19,7 +21,7 @@ export type TopicSortBy = 'createdAt' | 'updatedAt';
  * Server-side ordering for the topic list query.
  * - `updatedAt` (default): favorites first, then most-recently-updated.
  * - `status`: favorites first, then by status priority
- *   (waitingForHuman → running → active → paused → failed → completed →
+ *   (waitingForHuman → running → active → failed → completed →
  *   archived), then most-recently-updated within each status. Backs the
  *   sidebar "group by status" mode so the highest-priority topics stay on the
  *   first page regardless of pagination.
@@ -102,14 +104,45 @@ export interface OnboardingSessionSnapshot {
   lastActiveAt: string;
   phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
   startedAt: string;
+  taskRecommendations?: OnboardingTaskRecommendationSession;
+  understanding?: OnboardingUnderstandingSession;
   userIdentityCompletedAt?: string;
   version: number;
 }
 
 export interface ChatTopicMetadata {
+  /** Watermark written by the background topic-summary workflow. */
+  autoSummary?: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: string;
+    summarizedAt: string;
+    version: number;
+  };
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
+  /**
+   * The agent whose Profile page this Agent Builder conversation was started
+   * from (mirrors `ExecAgentAppContext.editingAgentId`).
+   *
+   * Recorded for the same reason as {@link editingGroupId} — see there.
+   */
+  editingAgentId?: string;
+  /**
+   * The group whose Profile page this Group Agent Builder conversation was
+   * started from (mirrors `ExecAgentAppContext.editingGroupId`).
+   *
+   * Builder panels run on one builtin agent shared by every target, and their
+   * topics carry no `groupId` / `sessionId` on purpose — those columns would
+   * pull the builder's side-conversation into the target's own chat read path.
+   * So nothing else in the row records what the conversation was configuring.
+   *
+   * Showing the builder's full build history in one list is intentional, so
+   * nothing filters on this today. It is captured because it can only be
+   * captured now: the association exists solely at run time, and a topic
+   * written without it can never be attributed afterwards.
+   */
+  editingGroupId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -153,6 +186,12 @@ export interface ChatTopicMetadata {
   heteroSourceEndAt?: string;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
+  /**
+   * Measured dominant model by token volume, written by the usage roll-up
+   * (`topicUsage.recompute`). This is an analytics projection of "what actually
+   * ran", NOT the topic's configured model — the pinned/config model lives in
+   * the top-level `topics.model` column (see `ChatTopic.model`).
+   */
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.
@@ -160,6 +199,7 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
    * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
@@ -174,6 +214,14 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    /** Device selected for a notify-based platform task. */
+    deviceId?: string;
+    /** Personal-device owner used to route dispatch and cancellation through the same principal. */
+    deviceUserId?: string;
+    /** Workspace principal used for a workspace-enrolled device. */
+    deviceWorkspaceId?: string;
+    /** Notify-based platform type used to select the cancellation protocol. */
+    heteroType?: string;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.
      *
@@ -199,6 +247,17 @@ export interface ChatTopicMetadata {
    * `runningOperation`); every reader treats a nullish value as "not scheduled".
    */
   scheduledRun?: TopicScheduledRun | null;
+  /**
+   * Short-lived ownership marker used while a task result is being appended
+   * and its continuation is being dispatched. Callback deliveries acquire
+   * this only when `runningOperation` is empty, which serializes callback
+   * bursts behind the foreground turn without holding a database transaction
+   * open while the agent operation starts.
+   */
+  taskCallbackReservation?: {
+    messageId: string;
+    reservedAt: string;
+  } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
@@ -417,10 +476,21 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      deviceId: z.string().optional(),
+      deviceUserId: z.string().optional(),
+      deviceWorkspaceId: z.string().optional(),
+      heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
+    })
+    .nullable()
+    .optional(),
+  taskCallbackReservation: z
+    .object({
+      messageId: z.string(),
+      reservedAt: z.string(),
     })
     .nullable()
     .optional(),
@@ -447,7 +517,6 @@ export interface ChatTopicSummary {
 export const TOPIC_STATUSES = [
   'active',
   'running',
-  'paused',
   'waitingForHuman',
   'scheduled',
   'failed',
@@ -473,13 +542,23 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   /** Total message count for the topic. */
   messageCount?: number | null;
   metadata?: ChatTopicMetadata;
+  /**
+   * The topic's pinned model — snapshotted from the agent default when the topic
+   * is created, and overwritten when the user switches model while the topic is
+   * active. Generation and ChatInput display resolve the effective model as
+   * "topic model if present, else agent default" (see
+   * `topicSelectors.getTopicModelById`). Distinct from the analytics
+   * `metadata.model` (measured dominant model from the usage roll-up).
+   */
+  model?: string | null;
+  provider?: string | null;
   sessionId?: string;
   /**
    * Sort key for the sidebar list: the topic's latest message-activity time
    * (server `topicActivityAt`), falling back to `updatedAt`. Kept separate from
    * `updatedAt` so the client sort matches the server ORDER BY (no list jumping)
    * while `updatedAt` still reflects real row edits like rename/favorite.
-   * (LOBE-11543)
+   *
    */
   sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;
@@ -530,6 +609,10 @@ export interface CreateTopicParams {
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
+  metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
+  model?: string;
+  provider?: string;
   sessionId?: string | null;
   title: string;
   trigger?: string;
@@ -538,6 +621,12 @@ export interface CreateTopicParams {
 export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
+  /**
+   * Scope an `agentId` query to the builder conversations that configured one
+   * target — see `ChatTopicMetadata.editingGroupId`. Ignored without `agentId`.
+   */
+  editingAgentId?: string | null;
+  editingGroupId?: string | null;
   /**
    * Exclude topics by status (e.g. ['completed'])
    */
@@ -599,6 +688,8 @@ export interface SharedTopicData {
     avatar?: string | null;
     backgroundColor?: string | null;
     marketIdentifier?: string | null;
+    /** Personal name; renderers resolve the label with `agentDisplayName`. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -611,6 +702,8 @@ export interface SharedTopicData {
       avatar: string | null;
       backgroundColor: string | null;
       id: string;
+      /** Personal name; renderers resolve the label with `agentDisplayName`. */
+      name?: string | null;
       title: string | null;
     }[];
     title?: string | null;

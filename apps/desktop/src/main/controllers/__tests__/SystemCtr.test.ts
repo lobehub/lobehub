@@ -8,21 +8,28 @@ import { __resetMacPermissionsModuleCache, __setMacPermissionsModule } from '@/u
 
 import SystemController from '../SystemCtr';
 
-const { ipcHandlers, ipcMainHandleMock, permissionsMock } = vi.hoisted(() => {
-  const handlers = new Map<string, (event: any, ...args: any[]) => any>();
-  const handle = vi.fn((channel: string, handler: any) => {
-    handlers.set(channel, handler);
-  });
-  const permissions = {
-    askForAccessibilityAccess: vi.fn(() => undefined),
-    askForCameraAccess: vi.fn(() => Promise.resolve('authorized')),
-    askForFullDiskAccess: vi.fn(() => undefined),
-    askForMicrophoneAccess: vi.fn(() => Promise.resolve('authorized')),
-    askForScreenCaptureAccess: vi.fn(() => undefined),
-    getAuthStatus: vi.fn(() => 'authorized'),
-  };
-  return { ipcHandlers: handlers, ipcMainHandleMock: handle, permissionsMock: permissions };
-});
+const { fontListGetFonts2Mock, ipcHandlers, ipcMainHandleMock, permissionsMock } = vi.hoisted(
+  () => {
+    const handlers = new Map<string, (event: any, ...args: any[]) => any>();
+    const handle = vi.fn((channel: string, handler: any) => {
+      handlers.set(channel, handler);
+    });
+    const permissions = {
+      askForAccessibilityAccess: vi.fn(() => undefined),
+      askForCameraAccess: vi.fn(() => Promise.resolve('authorized')),
+      askForFullDiskAccess: vi.fn(() => undefined),
+      askForMicrophoneAccess: vi.fn(() => Promise.resolve('authorized')),
+      askForScreenCaptureAccess: vi.fn(() => undefined),
+      getAuthStatus: vi.fn(() => 'authorized'),
+    };
+    return {
+      fontListGetFonts2Mock: vi.fn(),
+      ipcHandlers: handlers,
+      ipcMainHandleMock: handle,
+      permissionsMock: permissions,
+    };
+  },
+);
 
 const invokeIpc = async <T = any>(
   channel: string,
@@ -59,6 +66,7 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(() => '/mock/app/path'),
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
+    getPreferredSystemLanguages: vi.fn(() => ['en-US']),
   },
   desktopCapturer: {
     getSources: vi.fn(async () => []),
@@ -84,9 +92,19 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock electron-is
-vi.mock('electron-is', () => ({
+// Mock platform detection
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
+}));
+
+// Sever RemoteServerConfigCtr's heavy import chain — the class only serves as
+// the getController token here, and mockApp.getController ignores it anyway.
+vi.mock('../RemoteServerConfigCtr', () => ({
+  default: class MockRemoteServerConfigCtr {},
+}));
+
+vi.mock('font-list', () => ({
+  getFonts2: fontListGetFonts2Mock,
 }));
 
 // Mock node-mac-permissions
@@ -118,9 +136,17 @@ const mockI18n = {
   ns: vi.fn((namespace: string) => (key: string) => `${namespace}.${key}`),
 };
 
+const mockGetDesktopBootstrapIdentity = vi.fn(() => ({
+  isIdentityResolved: true,
+  userId: 'user_1',
+}));
+
 const mockApp = {
   appStoragePath: '/mock/storage',
   browserManager: mockBrowserManager,
+  getController: vi.fn(() => ({
+    getDesktopBootstrapIdentity: mockGetDesktopBootstrapIdentity,
+  })),
   i18n: mockI18n,
   storeManager: mockStoreManager,
 } as unknown as App;
@@ -136,6 +162,7 @@ describe('SystemController', () => {
     // Reset and inject mock permissions module for testing
     __resetMacPermissionsModuleCache();
     __setMacPermissionsModule(permissionsMock as any);
+    fontListGetFonts2Mock.mockResolvedValue([]);
     controller = new SystemController(mockApp);
   });
 
@@ -160,6 +187,68 @@ describe('SystemController', () => {
     });
   });
 
+  describe('desktop onboarding', () => {
+    it('persists the explicit completion state', async () => {
+      await invokeIpc('system.setDesktopOnboardingCompleted', true);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('desktopOnboardingCompleted', true);
+    });
+  });
+
+  describe('setLastWorkspaceSlug', () => {
+    it("records the slug under the current account's entry", async () => {
+      mockStoreManager.get.mockReturnValueOnce({ user_2: 'other' });
+
+      await invokeIpc('system.setLastWorkspaceSlug', 'acme');
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('lastWorkspaceSlugByAccount', {
+        user_1: 'acme',
+        user_2: 'other',
+      });
+    });
+
+    it("clears only the current account's entry on personal scope", async () => {
+      mockStoreManager.get.mockReturnValueOnce({ user_1: 'acme', user_2: 'other' });
+
+      await invokeIpc('system.setLastWorkspaceSlug', null);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('lastWorkspaceSlugByAccount', {
+        user_2: 'other',
+      });
+    });
+
+    it('does nothing when no account identity is available', async () => {
+      mockGetDesktopBootstrapIdentity.mockReturnValueOnce({ isIdentityResolved: true } as any);
+
+      await invokeIpc('system.setLastWorkspaceSlug', 'acme');
+
+      expect(mockStoreManager.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getSystemMonospaceFonts', () => {
+    it('returns sorted unique monospace families and caches the system query', async () => {
+      fontListGetFonts2Mock.mockResolvedValue([
+        { familyName: 'Inter', monospace: false, name: 'Inter' },
+        { familyName: ' Menlo ', monospace: true, name: ' Menlo ' },
+        { familyName: '"Courier New"', monospace: true, name: 'Courier New' },
+        { familyName: 'menlo', monospace: true, name: 'menlo' },
+        { familyName: '', monospace: true, name: '' },
+      ]);
+
+      const firstResult = await invokeIpc('system.getSystemMonospaceFonts');
+      const secondResult = await invokeIpc('system.getSystemMonospaceFonts');
+
+      expect(firstResult).toEqual([
+        { label: 'Courier New', value: '"Courier New"' },
+        { label: 'Menlo', value: 'Menlo' },
+      ]);
+      expect(secondResult).toEqual(firstResult);
+      expect(fontListGetFonts2Mock).toHaveBeenCalledOnce();
+      expect(fontListGetFonts2Mock).toHaveBeenCalledWith();
+    });
+  });
+
   describe('accessibility', () => {
     it('should request accessibility access on macOS', async () => {
       permissionsMock.getAuthStatus.mockReturnValue('authorized');
@@ -172,7 +261,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS when requesting accessibility access', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
       // Clear the injected module to simulate non-macOS behavior
       __setMacPermissionsModule(null);
@@ -231,7 +320,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       const { shell } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
       // Clear the injected module to simulate non-macOS behavior
@@ -270,7 +359,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS and not open settings', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
 
       const result = await invokeIpc('system.requestScreenAccess');
@@ -305,7 +394,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
 
       const result = await invokeIpc('system.getFullDiskAccessStatus');

@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,7 +53,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const MessengerSettings = memo(() => {
   const { t, ready } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
   const selected: MessengerPlatform | null = isMessengerPlatform(params.sub) ? params.sub : null;
@@ -96,21 +95,21 @@ const MessengerSettings = memo(() => {
     if (!installed && !error) return;
 
     if (installed && selected === 'slack') {
-      message.success(t('messenger.slack.installResult.success'));
+      toast.success(t('messenger.slack.installResult.success'));
     } else if (error === 'already_installed' && selected === 'slack') {
       setBlocked({ name: workspace ?? '', platform: 'slack' });
     } else if (error && selected === 'slack') {
-      message.error(
+      toast.error(
         t('messenger.slack.installResult.failed', {
           reason: getSlackInstallErrorReason(t, error),
         }),
       );
     } else if (installed && selected === 'discord') {
-      message.success(t('messenger.discord.installResult.success'));
+      toast.success(t('messenger.discord.installResult.success'));
     } else if (error === 'already_installed' && selected === 'discord') {
       setBlocked({ name: workspace ?? '', platform: 'discord' });
     } else if (error && selected === 'discord') {
-      message.error(
+      toast.error(
         t('messenger.discord.installResult.failed', {
           reason: getDiscordInstallErrorReason(t, error),
         }),
@@ -121,7 +120,7 @@ const MessengerSettings = memo(() => {
     url.searchParams.delete('error');
     url.searchParams.delete('workspace');
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
-  }, [message, t, selected, ready]);
+  }, [t, selected, ready]);
 
   const platforms = platformsSWR.data ?? [];
   const selectedMeta = platforms.find((p) => p.id === selected);

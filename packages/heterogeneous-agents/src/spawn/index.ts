@@ -21,6 +21,7 @@ export {
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
+  HETERO_WORKING_DIRECTORY_NOT_FOUND,
   isHeteroStatusGuideErrorData,
 } from './classifyProcessFailure';
 export {
@@ -32,6 +33,16 @@ export {
   type HeterogeneousAgentRuntimeTask,
 } from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
+export {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  CodexAppServerSession,
+  type CodexAppServerSessionOptions,
+  type CodexAppServerThreadParams,
+  type CodexAppServerUserInput,
+  getCodexAppServerUnsupportedArgs,
+} from './codexAppServerSession';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
   type CodexInitialModelResolution,
@@ -72,13 +83,23 @@ export { JsonlStreamProcessor } from './jsonlProcessor';
 // import time. Import it from the dedicated `@lobechat/heterogeneous-agents/
 // resolveCliCommand` subpath instead.
 export {
+  ensureClaudeCodeResumeTranscript,
+  type EnsureResumeTranscriptReason,
+  type EnsureResumeTranscriptResult,
+  resolveClaudeCodeTranscriptPath,
+} from './ensureResumeTranscript';
+export {
   AMP_BASE_ARGS,
+  buildQoderArgs,
   CLAUDE_CODE_BASE_ARGS,
   CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
   OPENCODE_BASE_ARGS,
+  PI_BASE_ARGS,
+  QODER_BASE_ARGS,
+  type QoderSpawnArgsOptions,
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { findNewComponentTestAdvisories } from './advisories';
 import { diffStat, renderDiffsForStdout } from './autofix';
 import { hostRootFromGitdir } from './delegate';
 import { lobehubPipelines } from './pipelines';
@@ -129,6 +130,31 @@ describe('relatedTestCandidates', () => {
   it('returns nothing for non-source files', () => {
     expect(relatedTestCandidates('AGENTS.md')).toEqual([]);
     expect(relatedTestCandidates('image.png')).toEqual([]);
+  });
+});
+
+describe('findNewComponentTestAdvisories', () => {
+  it('warns only for new .test.tsx files', async () => {
+    const advisories = await findNewComponentTestAdvisories(
+      ['src/New.test.tsx', 'src/Existing.test.tsx', 'src/useFeature.test.ts'],
+      async (file) => ({
+        baseRef: 'origin/canary',
+        exists: file.includes('Existing'),
+      }),
+    );
+
+    expect(advisories).toEqual([
+      expect.stringContaining('src/New.test.tsx: new .test.tsx file relative to origin/canary'),
+    ]);
+    expect(advisories[0]).toContain(
+      '.agents/skills/testing/SKILL.md (Core Principles: "No new component tests")',
+    );
+  });
+
+  it('skips the warning when the configured base cannot be inspected', async () => {
+    await expect(
+      findNewComponentTestAdvisories(['src/New.test.tsx'], async () => undefined),
+    ).resolves.toEqual([]);
   });
 });
 

@@ -7,12 +7,16 @@ import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 export const isDeepSeekV4Model = (model: string | undefined) => isDeepSeekV4FamilyModel(model);
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
-const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against DeepSeek — empty reasoning falls back to the proven `' '` placeholder.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
 
 const buildThinkingBlock = (reasoning: any) =>
   hasReasoningContent(reasoning)
@@ -78,9 +82,31 @@ const normalizeMessagesForAnthropic = (
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // DeepSeek's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
     const effectiveThinkingBlock =
-      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : undefined);
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking
+        ? { thinking: ' ', type: 'thinking' as const }
+        : undefined);
+
+    if (existingParts) {
+      const contentParts = effectiveThinkingBlock
+        ? [effectiveThinkingBlock, ...existingParts]
+        : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (!effectiveThinkingBlock) return rest;
 

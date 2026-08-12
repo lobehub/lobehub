@@ -67,6 +67,24 @@ describe('AcceptanceModel', () => {
     expect(third.requirement).toBe('Review UX polish ships end to end');
   });
 
+  it('keeps the first standalone display title and backfills one when initially absent', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const subjectId = 'standalone-external-delivery';
+
+    const first = await model.ensureForSubject('standalone', subjectId);
+    expect(first.metadata?.title).toBeUndefined();
+
+    const titled = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'External delivery' },
+    });
+    expect(titled.metadata?.title).toBe('External delivery');
+
+    const unchanged = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'Replacement title' },
+    });
+    expect(unchanged.metadata?.title).toBe('External delivery');
+  });
+
   it('defaults visibility by scope: personal public, workspace private', async () => {
     const personal = new AcceptanceModel(serverDB, userId);
     const personalRow = await personal.ensureForSubject('topic', topicId);
@@ -93,6 +111,40 @@ describe('AcceptanceModel', () => {
     expect(await otherModel.findBySubject('topic', topicId)).toBeUndefined();
   });
 
+  it('reads many subjects statuses in one call, however old they are', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const olderTopicId = 'acceptance-test-topic-older';
+    await serverDB.insert(topics).values([{ id: olderTopicId, userId }]);
+
+    const older = await model.ensureForSubject('topic', olderTopicId);
+    await model.updateStatus(older.id, 'accepted');
+    const newer = await model.ensureForSubject('topic', topicId);
+    await model.updateStatus(newer.id, 'delivered');
+
+    // The recency-capped feed is what this exists to replace: asked about a
+    // subject, it answers about that subject, not about the newest N rows.
+    const statuses = await model.listStatusesBySubjects('topic', [olderTopicId, topicId]);
+
+    expect(Object.fromEntries(statuses.map((row) => [row.subjectId, row.status]))).toEqual({
+      [olderTopicId]: 'accepted',
+      [topicId]: 'delivered',
+    });
+  });
+
+  it('omits subjects with no acceptance, and never crosses owners', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    await model.ensureForSubject('topic', topicId);
+
+    await expect(model.listStatusesBySubjects('topic', ['no-such-subject'])).resolves.toEqual([]);
+    await expect(model.listStatusesBySubjects('topic', [])).resolves.toEqual([]);
+    // Same subject id, different owner — must not leak.
+    await expect(
+      new AcceptanceModel(serverDB, otherUserId).listStatusesBySubjects('topic', [topicId]),
+    ).resolves.toEqual([]);
+    // Right id, wrong subject type.
+    await expect(model.listStatusesBySubjects('task', [topicId])).resolves.toEqual([]);
+  });
+
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const row = await model.ensureForSubject('topic', topicId);
@@ -103,9 +155,25 @@ describe('AcceptanceModel', () => {
     await model.updateStatus(row.id, 'accepted');
     expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
 
+    await model.updateStatus(row.id, 'closed');
+    expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
+
     // A new round re-opening the loop clears the completion stamp.
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();
+  });
+
+  it('findById reads a malformed uuid as not-found instead of aborting in Postgres', async () => {
+    // Chat autolinkers glue trailing CJK punctuation onto shared links, so the
+    // route param can arrive as `<uuid>（本轮` — 22P02 (→ 500) before the guard.
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+
+    await expect(model.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
+    await expect(model.findById('not-a-uuid')).resolves.toBeUndefined();
+
+    const runModel = new VerifyRunModel(serverDB, userId);
+    await expect(runModel.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
   });
 });
 

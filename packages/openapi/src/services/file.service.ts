@@ -29,6 +29,7 @@ import { nanoid } from '@/utils/uuid';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicFile, projectPublicUser } from '../helpers/public-fields';
 import type {
   AsyncTaskErrorResponse,
   BatchFileUploadRequest,
@@ -108,7 +109,7 @@ export class FileUploadService extends BaseService {
     const fullUrl = await this.ensureFullUrl(file.url);
 
     return {
-      ...file,
+      ...projectPublicFile(file),
       url: fullUrl || file.url,
     };
   }
@@ -1058,6 +1059,7 @@ export class FileUploadService extends BaseService {
         '.xml',
         '.csv',
         '.tsv',
+        '.ipynb',
         '.pdf',
         '.doc',
         '.docx',
@@ -1376,7 +1378,7 @@ export class FileUploadService extends BaseService {
           // Avoid adding the same user twice
           const existingUsers = hashUsersMap.get(file.fileHash)!;
           if (!existingUsers.some((u) => u.id === user.id)) {
-            existingUsers.push(user);
+            existingUsers.push(projectPublicUser(user as Parameters<typeof projectPublicUser>[0]));
           }
         }
       }
@@ -1453,7 +1455,7 @@ export class FileUploadService extends BaseService {
             ? usersData.find((u) => u.id === file.userId) || null
             : file.user || null;
           if (currentUser) {
-            fileUsers = [currentUser];
+            fileUsers = [projectPublicUser(currentUser as Parameters<typeof projectPublicUser>[0])];
           }
         }
 
@@ -1506,14 +1508,13 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权更新文件');
       }
 
-      // 2. Query file
-      const file = await this.findFileByIdWithPermission(fileId, permissionResult);
+      // 2. Verify the file exists and is writable by the caller.
+      await this.findFileByIdWithPermission(fileId, permissionResult);
 
       // 3. Handle knowledge base association
       if ('knowledgeBaseId' in updateData) {
         await this.db.transaction(async (trx) => {
-          // Delete existing knowledge base association (for global permission users, use the file's actual userId)
-          const targetUserId = file.userId;
+          // Delete the existing knowledge base association within the active workspace scope.
           await trx
             .delete(knowledgeBaseFiles)
             .where(

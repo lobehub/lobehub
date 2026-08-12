@@ -46,13 +46,13 @@ describe('resolveAgentConfig', () => {
     vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
       () => mockAgentConfig as any,
     );
-    vi.spyOn(agentSelectors.agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(
-      () => false,
+    vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+      () => undefined as any,
     );
     vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
       () => mockChatConfig as any,
     );
-    useUserStore.setState({ workspaceUserPreference: {} });
+    useUserStore.setState({ user: undefined, workspaceUserPreference: {} });
   });
 
   describe('regular agent (non-builtin)', () => {
@@ -151,8 +151,8 @@ describe('resolveAgentConfig', () => {
     });
 
     it('uses the current member model override for a workspace Agent that allows it', () => {
-      vi.spyOn(agentSelectors.agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(
-        () => true,
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
       );
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
@@ -176,9 +176,9 @@ describe('resolveAgentConfig', () => {
       expect(result.agentConfig.provider).toBe('member-provider');
     });
 
-    it('ignores a retained member model override when the workspace policy is missing', () => {
-      vi.spyOn(agentSelectors.agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(
-        () => true,
+    it('uses a retained member model override when a legacy workspace policy is missing', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
       );
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () => ({ ...mockAgentConfig, provider: 'openai' }) as any,
@@ -193,8 +193,126 @@ describe('resolveAgentConfig', () => {
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
+      expect(result.agentConfig.model).toBe('member-model');
+      expect(result.agentConfig.provider).toBe('member-provider');
+    });
+
+    it('uses the member model override on a collaborative builtin the caller created', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () =>
+          ({
+            slug: 'group-agent-builder',
+            userId: 'member-1',
+            virtual: true,
+            visibility: 'public',
+            workspaceId: 'workspace-1',
+          }) as any,
+      );
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () => ({ ...mockAgentConfig, provider: 'openai' }) as any,
+      );
+      useUserStore.setState({
+        user: { id: 'member-1' } as any,
+        workspaceUserPreference: {
+          agentModelOverrides: {
+            'test-agent': { model: 'member-model', provider: 'member-provider' },
+          },
+        },
+      });
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.model).toBe('member-model');
+      expect(result.agentConfig.provider).toBe('member-provider');
+    });
+
+    it('ignores a retained member model override when the workspace policy is fixed', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
+      );
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            agencyConfig: { modelSelectionPolicy: 'fixed' },
+            provider: 'openai',
+          }) as any,
+      );
+      useUserStore.setState({
+        workspaceUserPreference: {
+          agentModelOverrides: {
+            'test-agent': { model: 'member-model', provider: 'member-provider' },
+          },
+        },
+      });
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
       expect(result.agentConfig.model).toBe('gpt-4');
       expect(result.agentConfig.provider).toBe('openai');
+    });
+
+    it('ignores a retained member model override for a private workspace Agent', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ visibility: 'private', workspaceId: 'workspace-1' }) as any,
+      );
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            agencyConfig: { modelSelectionPolicy: 'member' },
+            provider: 'openai',
+          }) as any,
+      );
+      useUserStore.setState({
+        workspaceUserPreference: {
+          agentModelOverrides: {
+            'test-agent': { model: 'member-model', provider: 'member-provider' },
+          },
+        },
+      });
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.model).toBe('gpt-4');
+      expect(result.agentConfig.provider).toBe('openai');
+    });
+
+    it('uses an ordinary member personal Agent/Chat mode for a public Workspace Agent', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ userId: 'author-1', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+      );
+      vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
+        () => ({ enableAgentMode: true, enableStreaming: true }) as any,
+      );
+      useUserStore.setState({
+        user: { id: 'member-1' } as any,
+        workspaceUserPreference: { agentModeOverrides: { 'test-agent': false } },
+      });
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.chatConfig).toMatchObject({
+        enableAgentMode: false,
+        enableStreaming: true,
+      });
+    });
+
+    it('ignores a personal mode override for the public Workspace Agent author', () => {
+      vi.spyOn(agentSelectors.agentByIdSelectors, 'getAgentById').mockReturnValue(
+        () => ({ userId: 'author-1', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+      );
+      vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
+        () => ({ enableAgentMode: true }) as any,
+      );
+      useUserStore.setState({
+        user: { id: 'author-1' } as any,
+        workspaceUserPreference: { agentModeOverrides: { 'test-agent': false } },
+      });
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.chatConfig.enableAgentMode).toBe(true);
     });
 
     describe('params adjustment based on chatConfig', () => {

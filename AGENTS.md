@@ -6,11 +6,16 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 - Next.js 16 + React 19 + TypeScript
 - SPA inside Next.js with `react-router-dom`
-- `@lobehub/ui`, antd for components; antd-style for CSS-in-JS — **prefer `createStaticStyles` with `cssVar.*`** (zero-runtime); only fall back to `createStyles` + `token` when styles genuinely need runtime computation. See `.cursor/docs/createStaticStyles_migration_guide.md`.
-- **Component priority**: `@lobehub/ui/base-ui` (headless primitives) **first**, then `@lobehub/ui` root, then antd as last resort. When the component exists in base-ui, use it — never reach for the root or antd counterpart. Base-ui covers `Select`, `Modal` / `createModal` / `confirmModal`, `DropdownMenu`, `ContextMenu`, `Popover`, `ScrollArea`, `Switch`, `Toast`, `FloatingSheet`. Prefer `@lobehub/ui/base-ui` for new code and migrate root-package call sites opportunistically.
+- `@lobehub/ui`, antd, and antd-style for UI implementation
 - react-i18next for i18n; zustand for state management
 - SWR for data fetching; TRPC for type-safe backend
 - Drizzle ORM with PostgreSQL; Vitest for testing
+
+## Agent Skills
+
+`AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
+
+- **React and TSX**: Before editing components, component state, render boundaries, or memoization, read [`.agents/skills/react/SKILL.md`](.agents/skills/react/SKILL.md). It owns component selection, styling, state locality, and render-performance rules.
 
 ## Project Structure
 
@@ -62,7 +67,7 @@ When adding or changing SPA routes:
 1. In `src/routes/`, add only the route segment files (layout + page) that delegate to features.
 2. Implement layout and page content under `src/features/<Domain>/` and export from there.
 3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
-4. **Register the desktop route tree in both configs:** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` must stay in sync (same paths and nesting). Updating only one can cause **blank screens** if the other build path expects the route. `desktopRouter.sync.test.tsx` guards this invariant — keep it passing.
+4. **Register shared desktop content routes once:** add common Web/Electron paths, nesting, metadata, lazy loaders, and `preloadId` values in `src/spa/router/desktopRouter.shared.tsx`. The thin `desktopRouter.config.tsx` and `desktopRouter.config.desktop.tsx` files contain only runtime differences: Web mounts the content tree directly, while Electron keeps slim root stubs and mounts the same tree in per-tab memory routers through `src/spa/router/tabRouter.tsx`. Add code to a platform adapter only when the route is genuinely platform-specific. `desktopRouter.sync.test.tsx` guards the shared behavior and explicit differences — keep it passing.
 
 See the **spa-routes** skill for the full convention and file-division rules.
 
@@ -115,7 +120,7 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 bun run check [changed-files...]
 ```
 
-- Every bug fix must include a corresponding regression test that fails before the fix and passes after it.
+- Every bug fix must include a corresponding regression test that fails before the fix and passes after it. **Skip** when the fix is pure style/CSS (selector, hover, mask, spacing, color) and the only practical assertion would be source-string matching on the stylesheet — that is not a regression test worth shipping.
 - No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
 - `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
 - `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
@@ -125,8 +130,9 @@ bun run check [changed-files...]
 ### i18n
 
 - Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
-- Hand-write en-US + zh-CN for dev preview: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
-- Before opening the PR, run `bun run i18n` (slow) to fill the remaining locales with the script — don't hand-translate those.
+- Ship en-US and zh-CN by hand in the same PR: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
+- Leave all other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Missing locale keys fall back to English until that PR is merged.
+- Run `bun run i18n` manually only when the translated locales are needed immediately instead of waiting for the daily workflow. It is slow and requires `OPENAI_API_KEY`; don't hand-translate the generated locales.
 
 ### Code Style
 

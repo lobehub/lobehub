@@ -2,6 +2,7 @@ import { and, eq, type SQL, sql } from 'drizzle-orm';
 
 import { topics } from '../schemas';
 import type { Transaction } from '../type';
+import { NOT_COPIED_TRANSCRIPT_SQL } from '../utils/copiedTranscript';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 interface ToolUsageEntry {
@@ -188,7 +189,8 @@ const aggregateOperationUsage = async (
  *   - scalar columns : total_input_tokens / total_output_tokens / total_tokens / total_cost
  *   - `usage` jsonb  : flat aggregate { llm: { apiCalls, processingTimeMs, tokens }, tools, humanInteraction }
  *   - `cost`  jsonb  : { total, currency, llm: { total, currency, byModel[] }, tools } — or NULL when nothing reported cost
- *   - model/provider : the dominant model by total_tokens
+ *   (the `model`/`provider` columns are the topic's PINNED model / config and are
+ *   NOT written by this roll-up; the measured per-model breakdown is `cost.llm.byModel`.)
  *   `total_cost` / `cost.total` include tool cost on top of LLM cost.
  *
  * Idempotent and non-cumulative: when neither source has measurable usage, the
@@ -261,6 +263,7 @@ export const recomputeTopicUsage = async (
       AND ${rowOwnership}
       AND role = 'assistant'
       AND (usage IS NOT NULL OR metadata ? 'usage')
+      AND ${sql.raw(NOT_COPIED_TRANSCRIPT_SQL)}
     GROUP BY provider, model
   `);
 
@@ -269,15 +272,15 @@ export const recomputeTopicUsage = async (
   const ops = await aggregateOperationUsage(trx, rowOwnership, topicId);
 
   // No measurable usage left in either source → reset to NULL so the columns
-  // reflect reality.
+  // reflect reality. NOTE: `model`/`provider` are intentionally NOT touched here —
+  // those columns hold the topic's PINNED model (config), not the measured
+  // dominant model. The measured per-model breakdown lives in `cost.llm.byModel`.
   if (groups.length === 0 && !ops.hasData) {
     await trx
       .update(topics)
       .set({
         accessedAt: topics.accessedAt,
         cost: null,
-        model: null,
-        provider: null,
         totalCost: null,
         totalInputTokens: null,
         totalOutputTokens: null,
@@ -297,7 +300,6 @@ export const recomputeTopicUsage = async (
   let apiCalls = 0;
   let processingTimeMs = 0;
   const byModel: Array<Record<string, unknown>> = [];
-  let primary: { model: string | null; provider: string | null; tokens: number } | null = null;
 
   for (const g of groups) {
     const rowTotalTokens = num(g.totalTokens);
@@ -311,15 +313,6 @@ export const recomputeTopicUsage = async (
     if (rowCost != null) {
       totalCost += rowCost;
       hasCost = true;
-    }
-
-    // Dominant model = largest token volume.
-    if (!primary || rowTotalTokens > primary.tokens) {
-      primary = {
-        model: (g.model as string) ?? null,
-        provider: (g.provider as string) ?? null,
-        tokens: rowTotalTokens,
-      };
     }
 
     // cost.llm.byModel mirrors the operation shape: cost-bearing models only,
@@ -367,13 +360,14 @@ export const recomputeTopicUsage = async (
   // tokens are "not measured" (NULL), even when operations contributed tool stats.
   const hasLlmGroups = groups.length > 0;
 
+  // `model`/`provider` columns are the topic's PINNED model (config) and are NOT
+  // written here — the roll-up only owns usage/cost aggregates. The measured
+  // per-model breakdown is preserved in `cost.llm.byModel` above.
   await trx
     .update(topics)
     .set({
       accessedAt: topics.accessedAt,
       cost,
-      model: primary?.model ?? null,
-      provider: primary?.provider ?? null,
       totalCost: hasAnyCost ? totalCost + toolCostTotal : null,
       totalInputTokens: hasLlmGroups ? totalInputTokens : null,
       totalOutputTokens: hasLlmGroups ? totalOutputTokens : null,

@@ -114,7 +114,7 @@ describe('WorkModel · linear', () => {
       data: {
         description: 'Track Linear issue as Work',
         id: 'issue-uuid-10966',
-        identifier: 'LOBE-10966',
+        identifier: 'LINEAR-10966',
         labels: ['claude code'],
         priority: { name: 'High', value: 2 },
         state: { name: 'Backlog' },
@@ -122,7 +122,7 @@ describe('WorkModel · linear', () => {
         team: 'Engineering',
         teamId: 'team-1',
         title: 'Linear Work issue',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966/linear-work-issue',
       },
       rootOperationId: 'op-linear-issue-create',
       toolCallId: 'tool-call-linear-issue-create',
@@ -175,10 +175,10 @@ describe('WorkModel · linear', () => {
       changeType: 'updated',
       content: 'Track Linear issue as Work',
       description: 'Track Linear issue as Work',
-      identifier: 'LOBE-10966',
+      identifier: 'LINEAR-10966',
       status: 'In Progress',
       title: 'Linear Work issue',
-      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
+      url: 'https://linear.app/lobehub/issue/LINEAR-10966/linear-work-issue',
     });
     expect(versions[1]).toMatchObject({
       status: 'Backlog',
@@ -191,7 +191,7 @@ describe('WorkModel · linear', () => {
     expect(byOperation['op-linear-issue-create']).toEqual([]);
     const issueSummary = expectExternalSummaryItem(byOperation['op-linear-issue-edit']?.[0]);
     expect(issueSummary).toMatchObject({
-      identifier: 'LOBE-10966',
+      identifier: 'LINEAR-10966',
       status: 'In Progress',
       title: 'Linear Work issue',
     });
@@ -199,7 +199,7 @@ describe('WorkModel · linear', () => {
     const byConversation = await workModel.listByConversation({ topicId });
     expect(byConversation).toHaveLength(1);
     expect(byConversation[0]).toMatchObject({
-      identifier: 'LOBE-10966',
+      identifier: 'LINEAR-10966',
       resourceType: 'linear_issue',
       type: 'external',
     });
@@ -278,11 +278,11 @@ describe('WorkModel · linear', () => {
     // mutation must neither create its own work nor touch the parent issue.
     const comment = await workModel.handleSkillToolResult({
       provider: 'linear',
-      args: { body: 'Looks good', issueId: 'LOBE-10966' },
+      args: { body: 'Looks good', issueId: 'LINEAR-10966' },
       data: {
         body: 'Looks good',
         id: 'comment-1',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966#comment-1',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966#comment-1',
       },
       rootOperationId: 'op-linear-comment-create',
       toolCallId: 'tool-call-linear-comment-create',
@@ -340,9 +340,9 @@ describe('WorkModel · linear', () => {
       args: { team: 'Engineering', title: 'Owner issue title' },
       data: {
         id: 'shared-issue-uuid',
-        identifier: 'LOBE-10966',
+        identifier: 'LINEAR-10966',
         title: 'Owner issue title',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966/shared-issue',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966/shared-issue',
       },
       toolCallId: 'tool-call-linear-owner-issue',
       toolName: 'save_issue',
@@ -353,9 +353,9 @@ describe('WorkModel · linear', () => {
       args: { id: 'shared-issue-uuid', title: 'Other user issue title' },
       data: {
         id: 'shared-issue-uuid',
-        identifier: 'LOBE-10966',
+        identifier: 'LINEAR-10966',
         title: 'Other user issue title',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966/shared-issue',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966/shared-issue',
       },
       toolCallId: 'tool-call-linear-other-issue',
       toolName: 'save_issue',
@@ -389,7 +389,7 @@ describe('WorkModel · linear', () => {
 describe('normalizeLinearToolResult (url scheme allowlist)', () => {
   const registerIssueWithUrl = (url: string) =>
     normalizeLinearToolResult({
-      data: { id: 'issue-uuid', identifier: 'LOBE-1', title: 'T', url },
+      data: { id: 'issue-uuid', identifier: 'TODO-LINEAR-1', title: 'T', url },
       toolName: 'save_issue',
     });
 
@@ -399,20 +399,20 @@ describe('normalizeLinearToolResult (url scheme allowlist)', () => {
       const operation = registerIssueWithUrl(url);
 
       // Identity is still resolved from the payload; only the unsafe url is dropped.
-      expect(operation?.params.identifier).toBe('LOBE-1');
+      expect(operation?.params.identifier).toBe('TODO-LINEAR-1');
       expect(operation?.params.url).toBeUndefined();
     },
   );
 
   it('keeps a whitespace-padded https url after trimming', () => {
-    const operation = registerIssueWithUrl('  https://linear.app/lobehub/issue/LOBE-1  ');
+    const operation = registerIssueWithUrl('  https://linear.app/lobehub/issue/TODO-LINEAR-1  ');
 
-    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/LOBE-1');
+    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/TODO-LINEAR-1');
   });
 
   it('keeps a plain https url', () => {
-    const operation = registerIssueWithUrl('https://linear.app/lobehub/issue/LOBE-1');
+    const operation = registerIssueWithUrl('https://linear.app/lobehub/issue/TODO-LINEAR-1');
 
-    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/LOBE-1');
+    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/TODO-LINEAR-1');
   });
 });

@@ -31,7 +31,7 @@ Execution outputs remain in the round directory's `assets/`. See
 `scripts/fixture.mjs` and the skill's fixture workflow.
 
 **`result.json` is the report — `report.md` is just its tail.** The published
-verify page (`/verify/<id>`) renders itself from `result.json`: one line of
+acceptance page renders itself from `result.json`: one line of
 provenance (PR / branch / commit / date / surfaces), the overall conclusion from
 `summary.conclusion` directly under the title, and the check list from `plan[]`
 paired with `cases[]`. So `report.md` must NOT repeat the scope block or a case
@@ -95,10 +95,18 @@ table — those double up on the page. It carries only the non-duplicate narrati
      ]
      ```
 
-     The verify page renders a complete pair with each screenshot under its own
+     `comparison` is a nested **object** on each half. Writing it flat —
+     `{ "path": "…", "comparison": "topic-row", "role": "before" }` — is the
+     usual slip, and it does not pair: `role` is read from inside `comparison`,
+     never from the evidence item itself.
+
+     The acceptance page renders a complete pair with each screenshot under its own
      tinted band — red for `before`, green for `after`. A group contains exactly one
      `before` and one `after`, and **both halves need the same string `id`**; a half
      without an `id` can never pair. Incomplete groups render as ordinary evidence.
+     `acceptance run ingest` warns on every malformed `comparison` it drops —
+     treat that warning as a failed publish and re-ingest a corrected round,
+     exactly as with a skipped evidence upload.
 
      Two fields are worth setting on every pair:
 
@@ -112,9 +120,79 @@ table — those double up on the page. It carries only the non-duplicate narrati
        on each side, so the two captions read as a comparison rather than repeating
        the case title.
 
-   - CLI: exact command + trimmed output (`<cli> <command> | tee "$DIR/assets/x.txt"`).
+   - Audio (a deliverable the user **hears** — TTS output, a voice reply, an
+     alert tone): attach the clip itself as `audio` evidence. The acceptance page
+     renders a player, so the reviewer can listen; prose about a sound, or a
+     screenshot of a waveform, proves nothing. `mp3` / `wav` / `m4a` / `aac` /
+     `flac` / `ogg` / `opus` are typed as `audio` from the extension.
+
+     Verify the clip before citing it — confirm it is non-silent and carries the
+     expected content (duration plus a transcription or spectral check); an empty
+     or truncated file is indistinguishable from a good one in a file listing.
+     Pair it with a short text artifact when the claim is about _what was said_
+     (input text, voice/model, measured duration): the player proves it plays,
+     the text makes it auditable.
+
+     A screen recording with system audio is the fallback for "the UI plays it at
+     the right moment"; for "the output is correct", attach the file the feature
+     produced.
+
+   - CLI: use the dual-text evidence format below. Preserve the exact command +
+     trimmed output (`<cli> <command> | tee "$DIR/assets/x-execution.txt"`) in
+     the execution artifact, and attach a separate reasoning artifact.
 
    - Network: `agent-browser network requests` dumps or HAR files.
+
+### Dual text evidence for non-visual behavior
+
+For CLI, API, backend, policy, security, migration, and other non-visual
+behavioral checks, one text file rarely serves both audiences well. A reviewer
+needs to understand why the check is meaningful; an auditor needs the concrete
+observations. Attach **two separate text artifacts** to the same case, in this
+order:
+
+1. **Reasoning evidence** (`<check>-reasoning.md`) — concise, reviewer-facing:
+   - claim / behavior being verified;
+   - setup or threat model;
+   - action or attempted bypass;
+   - explicit pass/fail criteria;
+   - why the chosen observations support the verdict;
+   - limitations and what remains unproven.
+2. **Execution evidence** (`<check>-execution.txt` or `.md`) — audit-facing:
+   - exact command, request, or probe;
+   - relevant raw stdout/stderr, response body/status, exit code, filesystem or
+     server-side observations;
+   - a short annotation mapping each observed value to the pass/fail criteria.
+
+The split is semantic, not cosmetic. Do not duplicate the same prose into both
+files, and do not turn the execution artifact into a second high-level summary.
+Trim unrelated noise, but retain values that make the outcome independently
+auditable (for example exit codes, error text, file existence, response status,
+or server receive counts).
+
+```json
+{
+  "evidence": ["assets/write-boundary-reasoning.md", "assets/write-boundary-execution.txt"],
+  "id": "write-boundary",
+  "name": "approved writes succeed and escape attempts are denied",
+  "observation": "control exit=0; four escape attempts exit non-zero and created no files",
+  "status": "pass"
+}
+```
+
+This is a hard default for non-visual behavioral claims, with two narrow
+exceptions:
+
+- a text artifact is only ancillary metadata for primary visual evidence (for
+  example a screenshot plus a small DOM dump);
+- the evidence is intrinsically self-explanatory and contains no behavioral
+  inference (for example a generated schema file whose exact contents are the
+  claim).
+
+If a follow-up round corrects either half, publish both halves again in that
+round. Every immutable round must be a self-contained decision snapshot; never
+ask the reviewer to combine reasoning from an older round with execution logs
+from the current one.
 
 3. **Write `plan[]` BEFORE you run anything.** The approved plan from Step 1 is part
    of the report, not scaffolding you throw away: each item is
@@ -127,6 +205,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
    never produces a case renders as **未执行** rather than vanishing, so cut coverage
    in the open.
 
+   **HARD RULE: no programmatic gates in the plan.** Tests / type-check / lint /
+   build are never plan items — ingest drops them and a gates-only round fails
+   to publish. See
+   [what is NOT an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
+
 4. **Fill `result.json` as you go** — it is the report. Each tested behavior is one
    entry in `cases[]` (`{ id, name, result, observation, evidence }`), where
    `evidence` is a path under `assets/`. Set the scope fields (`scenario`, `branch`,
@@ -134,12 +217,16 @@ table — those double up on the page. It carries only the non-duplicate narrati
    `summary.conclusion`. The page pairs each check with its evidence inline, so you
    don't hand-build a table. `report.md` holds only the narrative tail.
 
+   **`scenario` is a closed enum, not a description** — see the table below. The
+   scaffold pre-fills `coding`; a one-line summary of what the run covers belongs in
+   `context`, never in `scenario`.
+
 5. **Set the verdict** in both `report.md` and `result.json`. Describe key visual
-   outcomes in prose; the published verify URL is the only visual pointer in the
-   final chat reply.
+   outcomes in prose; the published acceptance URL is the only visual pointer in
+   the final chat reply.
 
 6. **Publish** (SKILL.md Step 6) — upload the finished session so it's viewable on
-   the verify platform, not just on disk. **Publish to PRODUCTION defaults with the
+   LobeHub Acceptance, not just on disk. **Publish to PRODUCTION defaults with the
    user's real login, NOT a local-dev CLI override** — strip the local dev overrides
    so `lh` uses its production defaults. Clearing an override profile looks like:
 
@@ -150,8 +237,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    This creates a new immutable verification run, attaches it to the required
    subject acceptance, uploads the cases, evidence, and report body, then prints
-   both `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>`. Include that full
-   production link in the final reply alongside the local report dir. See SKILL.md →
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` round-snapshot form.
+   Include only the full production acceptance link in the final reply. Never
+   expose local paths, local file links, or internal run-page paths. Leave
+   whitespace after the URL, so
+   an autolinker can't swallow adjacent CJK punctuation into the href. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the
    atomic commands (`acceptance run …` (plus `… result`, `… evidence`, `… report`)).
@@ -205,10 +295,59 @@ REQUIRED on every ingest:**
       "status": "pass",
       "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
+    },
+    {
+      "category": "Tab responsiveness",
+      "id": "2",
+      "name": "conversation tab switching avoids duplicate parsing",
+      "surface": "desktop",
+      "status": "pass",
+      "observation": "The switch-time parsing hotspot disappeared and GC time fell.",
+      "evidence": ["assets/benchmark.json", "assets/cpu-profile.json"],
+      "datasets": [
+        {
+          "id": "switch-metrics",
+          "fields": [
+            { "key": "name", "type": "string" },
+            { "key": "before", "type": "number", "unit": "ms" },
+            { "key": "after", "type": "number", "unit": "ms" },
+            { "key": "direction", "type": "category" },
+            { "key": "target", "type": "number", "unit": "ms" }
+          ],
+          "rows": [
+            {
+              "name": "GC self-time",
+              "before": 257,
+              "after": 24.8,
+              "direction": "lower",
+              "target": 50
+            }
+          ]
+        }
+      ],
+      "visualizations": [
+        {
+          "id": "switch-comparison",
+          "type": "metric-comparison",
+          "version": 1,
+          "dataset": "switch-metrics",
+          "title": "Performance comparison",
+          "context": "Electron 40, warm cache, identical tool-heavy topic fixture",
+          "encoding": {
+            "label": "name",
+            "before": "before",
+            "after": "after",
+            "direction": "direction",
+            "target": "target"
+          }
+        }
+      ]
     }
   ],
   "commit": "abc1234",
+  "context": "Nested task tree API behind the new repository method",
   "createdAt": "2026-06-11T15:30:00+08:00",
+  "entry": "<cli> task list --tree",
   "interactionCost": {
     "model": "goms-klm@lobe-v1",
     "scope": "user-equivalent",
@@ -227,6 +366,16 @@ REQUIRED on every ingest:**
       "method": "<cli> task list --tree against a 3-level fixture",
       "expected": "root shows 3 nested children at depth 2",
       "requiredEvidence": ["text"]
+    },
+    {
+      "id": "2",
+      "title": "conversation tab switching avoids duplicate parsing",
+      "category": "Tab responsiveness",
+      "surface": "desktop",
+      "verifier": "program",
+      "method": "Run the same warm-cache CDP switch profile before and after the change",
+      "expected": "GC self-time is at or below 50 ms",
+      "requiredEvidence": ["text"]
     }
   ],
   "pullRequest": {
@@ -234,9 +383,10 @@ REQUIRED on every ingest:**
     "title": "feat(task): nested task tree",
     "url": "https://github.com/<org>/<repo>/pull/17152"
   },
+  "scenario": "coding",
   "summary": {
-    "total": 1,
-    "passed": 1,
+    "total": 2,
+    "passed": 2,
     "failed": 0,
     "blocked": 0,
     "score": 100,
@@ -259,10 +409,10 @@ you cut it is not.
 Two of its fields are a **closed vocabulary**, because the pipeline acts on them —
 they are not labels:
 
-| field              | values                                                                       | what it does                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| field              | values                                                                                                | what it does                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
 
 An out-of-vocabulary value in either fails the ingest — an unrecognized medium
 would silently gate on nothing, which is worse than no gate at all.
@@ -270,6 +420,38 @@ would silently gate on nothing, which is worse than no gate at all.
 `method` (how you would exercise it) and `expected` (what would make it pass) stay
 **free prose** — they carry intent no enum can, and both render under the check on
 the page next to the outcome.
+
+### HARD RULE — what is NOT an acceptance check
+
+A check is something a **person decides about the delivery**. The repo's own
+automated gates are not that, and on the page they are actively harmful: twenty
+green "unit tests pass" rows bury the two checks that actually needed someone to
+look.
+
+**These MUST NOT appear in `plan[]` / `cases[]`, under any phrasing:**
+
+| Not a check                                                | Where it belongs                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
+| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
+| "the suite is green", "CI passes"                          | same                                                 |
+
+This is enforced, not advisory. `acceptance run ingest` **drops every matching
+item** — matched on title, category, AND `method`, so "run `bun run test`"
+inside `method` under a product-sounding title still matches — warns with the
+dropped ids, and recounts `summary` from the checks that remain. A round
+consisting **only** of such checks **fails to publish**. Apply the rule at plan
+time (Phase 1 case selection gate), before any case runs: a gate written as a
+check is a round spent proving something nobody accepts. Run the gates as your
+own diligence — report them as one line of narrative.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a good acceptance item (`verifier: "program"`);
+"`bun run test` is green" is not.
+
+**What IS a check:** what the user sees, hears, reads, or receives — a rendered
+screen, a produced file, a response shape a client depends on, an audio clip that
+actually plays, a failure state that recovers.
 
 A plan item may also carry a per-item `surface` (same closed set as the run-level
 `surfaces`; `electron` normalizes to `desktop`). It says which product surface THIS
@@ -287,6 +469,49 @@ to `desktop`. Anything else fails the ingest:
 `entry` is the command or URL exercised (`<cli> task list --tree`, `/chat/settings`)
 — **not** a PR title and not a description of the change.
 
+`scenario` is a **closed set** — `coding` | `writing` | `research` | `generic` —
+naming what KIND of delivery was verified, because the page renders a different
+scope header for each. It defaults to `coding` when omitted, and an out-of-set value
+**fails the ingest** rather than being stored:
+
+| value      | the delivery under verification                            |
+| ---------- | ---------------------------------------------------------- |
+| `coding`   | a software change (branch / commit / surfaces under test)  |
+| `writing`  | a written deliverable (manuscript / chapters / documents)  |
+| `research` | a research deliverable (question / sources / claims)       |
+| `generic`  | anything else — no modeled scope; `context` is an open bag |
+
+It is **not** a free-text summary of the run. Writing the sentence you would say
+out loud ("verify the memory tool renders…") is the easy mistake — the scaffold
+pre-fills `coding`, so overwriting it with prose turns a working file into a hard
+ingest failure at the very last step. That sentence belongs in `context`, which is
+the scenario's own scope bag and is rendered next to `scenario` in the page's scope
+header; for a non-`coding` scenario it also carries that scenario's modeled fields.
+
+### Structured visualizations
+
+A case may provide `datasets[]` plus `visualizations[]`. The ingest stores the
+versioned manifest on the check result and the Acceptance page renders each view.
+The first supported renderers are `metric-comparison`, `line-chart`, `bar-chart`,
+`scatter-plot`, `heatmap`, and `table` (all `version: 1`). Each view references one dataset by id
+and maps its fields through `encoding`.
+
+Use `line-chart.encoding.series[].style` (`muted` | `primary` | `accent`) to keep a
+baseline visually quiet and emphasize the compared run. Tables can mark best-in-column
+values with `encoding.highlights[]` (`{ field, mode: "min" | "max" }`); ties are all
+marked SOTA. `bar-chart` is the default for grouped model or benchmark score comparisons.
+
+Inline datasets use declared `fields[]` and object `rows[]`; undeclared cells,
+unsupported renderers, missing dataset references, and more than 10,000 total
+rows fail ingest. Use inline data only for a review-sized summary. Keep raw
+benchmark output, traces, vectors, or profiles in `evidence`; visualization is a
+decision aid, not a replacement for evidence.
+
+For comparable metrics, only publish before/after values produced by the same
+harness, fixture, environment, warm-up policy, statistic, and sample window. If
+those differ, use separate series or mark the case uncertain instead of presenting
+a misleading delta.
+
 `pullRequest` is optional: when absent, the ingest asks `gh` for the PR of `branch`
 and fills it in. Write it explicitly only when the report verifies a PR that isn't
 the branch's own.
@@ -298,10 +523,27 @@ reads first: `pass`, `fail`, or `partial`.
 `subject` identifies the business subject whose **acceptance aggregate** owns this
 immutable run: either `"subject": "task:<id>"` (`task` | `topic` | `document`) or
 `{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
-The `--subject` flag overrides this field. Inside a LobeHub conversation, both may
-be omitted because `acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a
-topic, an explicit subject is mandatory. Every ingest creates a new immutable run;
-never update a prior run after a fix, publish the re-verification as the next round.
+The `--subject` flag overrides this field.
+
+An Operation ID is not part of report identity and is not required for external
+agent-testing. `acceptance run ingest` creates a standalone Verify Run. Use
+`--operation` only to link the report to a real, existing LobeHub Agent Run under
+test. For atomic publication, carry the `verifyRunId` returned by
+`acceptance run create` and pass it through `--run`; never ask an external-project
+user to supply an Operation ID or fabricate one.
+
+Choose by continuity: use the current Topic for work discussed and iterated in
+that conversation; use a Task only when it already owns the deliverable or the
+work intentionally needs independent, durable, cross-topic tracking; use a
+Document only when the document itself is under acceptance. Create a Task only
+when no relevant subject exists. A terminal Acceptance may require a new
+Acceptance, but it does not by itself justify changing the subject from Topic to
+Task.
+
+Inside a relevant LobeHub conversation, both subject fields may be omitted because
+`acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a topic, an
+explicit subject is mandatory. Every ingest creates a new immutable run; never
+update a prior run after a fix, publish the re-verification as the next round.
 
 `interactionCost` is optional and run-level. For UI runs driven through
 `agent-browser`, create `interaction-trace.jsonl` with `scripts/agent-browser-klm.mjs`,
@@ -317,7 +559,8 @@ report body.
 
 - **No evidence, no claim** — every `pass`/`fail` in `cases[]` must link at least
   one asset. UI cases must attach their primary screenshot/GIF as evidence;
-  non-visual CLI/network cases may link transcripts, HAR files, or logs.
+  non-visual behavioral cases must attach both reasoning and execution text;
+  transcripts, HAR files, and logs belong in the execution half.
 - **Screenshots must be visually verified** with the Read tool before being cited.
 - **Report failures faithfully** — a failing case with clear evidence is a good
   report; a vague green one is not.

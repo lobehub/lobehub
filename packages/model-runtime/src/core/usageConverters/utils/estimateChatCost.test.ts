@@ -15,9 +15,15 @@ describe('estimateChatCost', () => {
       expect(estimateChatOutputTokens(1000)).toBe(500);
     });
 
-    it('caps output tokens for large inputs', () => {
+    it('uses 8192 as the fallback cap for large inputs', () => {
       expect(estimateChatOutputTokens(20_000)).toBe(8192);
       expect(estimateChatOutputTokens(1_000_000)).toBe(8192);
+    });
+
+    it('uses the effective request or model cap when provided', () => {
+      expect(estimateChatOutputTokens(40_000, 32_000)).toBe(20_000);
+      expect(estimateChatOutputTokens(40_000, 12_000)).toBe(12_000);
+      expect(estimateChatOutputTokens(40_000, 4096)).toBe(4096);
     });
   });
 
@@ -85,6 +91,53 @@ describe('estimateChatCost', () => {
       expect(estimate.videoTokens).toBe(1200);
     });
 
+    it('counts audio by duration with an explicit conservative fallback source', () => {
+      const estimate = estimateOpenAIChatInputTokens(
+        [
+          {
+            content: [
+              {
+                audio_url: {
+                  durationMs: 2500,
+                  url: 'https://example.com/known-duration.mp3',
+                },
+                type: 'audio_url',
+              },
+              {
+                audio_url: { url: 'https://example.com/unknown-duration.mp3' },
+                type: 'audio_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        { audioTokenEstimate: 1200, audioTokensPerSecond: 32 },
+      );
+
+      expect(estimate.audioTokens).toBe(1200 + 1200);
+      expect(estimate.audioDurationItemCount).toBe(1);
+      expect(estimate.audioFallbackItemCount).toBe(1);
+      expect(estimate.audioTokenEstimateSource).toBe('mixed');
+      expect(estimate.totalTokens).toBe(estimate.textTokens + estimate.audioTokens);
+    });
+
+    it('never serializes an audio URL into the text token bucket', () => {
+      const estimate = (url: string) =>
+        estimateOpenAIChatInputTokens(
+          [
+            {
+              content: [{ audio_url: { durationMs: 1000, url }, type: 'audio_url' }],
+              role: 'user',
+            },
+          ],
+          { audioTokensPerSecond: 32 },
+        );
+
+      expect(estimate('a').textTokens).toBe(
+        estimate(`https://example.com/${'very-long-path/'.repeat(100)}audio.mp3`).textTokens,
+      );
+    });
+
     it('handles assistant tool-call messages with null content', () => {
       const estimate = estimateOpenAIChatInputTokens([
         {
@@ -145,6 +198,19 @@ describe('estimateChatCost', () => {
 
     it('returns undefined when pricing is missing', () => {
       expect(estimateChatCostFromTokens(undefined, { textTokens: 1000 })).toBeUndefined();
+    });
+
+    it('forwards the effective output cap into the estimated usage', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromTokens(pricing, {
+        maxOutputTokens: 12_000,
+        textTokens: 40_000,
+      });
+
+      expect(estimate?.estimatedOutputTokens).toBe(12_000);
     });
 
     it('falls multimodal input back to text pricing when dedicated modality units are missing', () => {
@@ -215,6 +281,20 @@ describe('estimateChatCost', () => {
       );
     });
 
+    it('forwards the effective output cap into the message estimate', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(
+        pricing,
+        [{ content: 'hello world', role: 'user' }],
+        { maxOutputTokens: 1 },
+      );
+
+      expect(estimate?.estimatedOutputTokens).toBe(1);
+    });
+
     it('forwards video inputs to video pricing units', () => {
       const pricing: Pricing = {
         units: [{ name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' }],
@@ -235,6 +315,32 @@ describe('estimateChatCost', () => {
       expect(estimate?.inputVideoTokens).toBe(2000);
       expect(estimate?.totalInputTokens).toBeGreaterThan(2000);
       expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['videoInput']);
+    });
+
+    it('uses the model pricing audio rate and exposes the estimate source', () => {
+      const pricing: Pricing = {
+        audioTokensPerSecond: 32,
+        units: [{ name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(pricing, [
+        {
+          content: [
+            {
+              audio_url: { durationMs: 2500, url: 'https://example.com/audio.mp3' },
+              type: 'audio_url',
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+
+      expect(estimate?.inputAudioTokens).toBe(1000);
+      expect(estimate?.audioDurationItemCount).toBe(1);
+      expect(estimate?.audioFallbackItemCount).toBe(0);
+      expect(estimate?.audioTokenEstimateSource).toBe('duration');
+      expect(estimate?.estimatedCost).toBe(0.002);
+      expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['audioInput']);
     });
 
     it('bills estimated image inputs through text pricing when image pricing is unavailable', () => {

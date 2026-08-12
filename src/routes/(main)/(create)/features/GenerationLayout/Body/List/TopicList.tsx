@@ -54,7 +54,7 @@ const TopicsList = memo<TopicListProps>(({ viewMode = 'auto', visibility }) => {
       {isList ? (
         content
       ) : (
-        <TooltipGroup layoutAnimation>
+        <TooltipGroup>
           <Grid gap={4} maxItemWidth={64} padding={6} rows={6} width={'100%'}>
             {content}
           </Grid>

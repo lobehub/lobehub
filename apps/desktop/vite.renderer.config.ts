@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
@@ -7,10 +8,11 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
+  createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
 import {
   applyDesktopViteConfigExtension,
@@ -19,9 +21,31 @@ import {
   DEV_VITE_PORT,
   isCloudDesktopBuild,
   loadDesktopEnv,
+  reactDevtoolsPlugin,
   RENDERER_CHROME_TARGET,
   ROOT_DIR,
 } from './vite.shared';
+
+const RENDERER_OUT_DIR = path.resolve(__dirname, 'dist/renderer');
+const WEB_SPA_BUILD_DIRECTORIES = ['_spa', '_spa-auth'];
+
+/**
+ * The repository public directory can contain ignored web build outputs after
+ * local SPA builds. Vite copies the whole directory by default, so remove only
+ * those generated web outputs from the generated desktop renderer directory.
+ */
+function excludeWebSpaBuildArtifactsPlugin(): PluginOption {
+  return {
+    async closeBundle() {
+      await Promise.all(
+        WEB_SPA_BUILD_DIRECTORIES.map((directory) =>
+          rm(path.join(RENDERER_OUT_DIR, directory), { force: true, recursive: true }),
+        ),
+      );
+    },
+    name: 'exclude-web-spa-build-artifacts',
+  };
+}
 
 /**
  * Rewrite SPA routes to their corresponding HTML entry so the Vite
@@ -197,9 +221,9 @@ export default defineConfig(async (env) => {
     // regardless of URL depth.
     base: '/',
     build: {
-      minify: false,
-      modulePreload: { polyfill: false },
-      outDir: path.resolve(__dirname, 'dist/renderer'),
+      minify: true,
+      modulePreload: { ...sharedModulePreload, polyfill: false },
+      outDir: RENDERER_OUT_DIR,
       reportCompressedSize: false,
       rolldownOptions: {
         input: {
@@ -207,8 +231,9 @@ export default defineConfig(async (env) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
-        output: sharedRollupOutput,
+        output: createSharedRolldownOutput({ strictExecutionOrder: true }),
       },
+      sourcemap: false,
       target: RENDERER_CHROME_TARGET,
     },
     define: {
@@ -222,6 +247,8 @@ export default defineConfig(async (env) => {
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      reactDevtoolsPlugin(),
+      excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],

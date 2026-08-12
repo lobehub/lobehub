@@ -2,9 +2,8 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { Segmented, Switch } from '@lobehub/ui/base-ui';
+import { Segmented, Switch, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { App } from 'antd';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,7 +34,7 @@ interface ShareToggleProps {
  */
 const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
   const { t } = useTranslation('setting');
-  const { message } = App.useApp();
+
   // A personal credential can only be linked to one organization at a time,
   // so `organizationAccountId != null` alone can't tell "shared to *this*
   // workspace" apart from "shared to some other workspace previously" — the
@@ -64,7 +63,7 @@ const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
       await lambdaClient.market.creds.share.mutate({ id: cred.id, visibility });
     },
     onError: () => {
-      message.error(t('creds.share.error'));
+      toast.error(t('creds.share.error'));
     },
     // Awaited by react-query before onSettled fires, so the optimistic
     // override below only lifts once the refetched `cred` prop already
@@ -80,7 +79,7 @@ const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
       await lambdaClient.market.creds.unshare.mutate({ id: cred.id });
     },
     onError: () => {
-      message.error(t('creds.share.error'));
+      toast.error(t('creds.share.error'));
     },
     onSuccess: async () => {
       await onChange();

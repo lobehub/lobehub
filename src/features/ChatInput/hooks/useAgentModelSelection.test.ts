@@ -4,9 +4,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentModelSelection } from './useAgentModelSelection';
 
 const testState = vi.hoisted(() => ({
+  access: {
+    canManageAgent: true,
+    isAccessLoading: false,
+  },
+  permission: {
+    allowed: true,
+  },
+  resource: {
+    canConfigureResource: true,
+    canUseResource: true,
+    isAccessLoading: false,
+  },
   agent: {
     agencyConfig: undefined as { modelSelectionPolicy?: 'fixed' | 'member' } | undefined,
-    isWorkspaceAgent: false,
+    agentMap: {
+      'agent-1': {} as {
+        slug?: string;
+        virtual?: boolean;
+        visibility?: 'private' | 'public';
+        workspaceId?: string;
+      },
+    },
     model: 'shared-model',
     provider: 'shared-provider',
     updateAgentConfigById: vi.fn(),
@@ -34,6 +53,14 @@ vi.mock('@/business/client/hooks/useBusinessAgentMode', () => ({
   useBusinessModelModeConfig: () => (config: unknown) => config,
 }));
 
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => testState.access,
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => testState.permission,
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
@@ -41,9 +68,9 @@ vi.mock('@/store/agent', () => ({
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig,
+    getAgentById: () => (s: typeof testState.agent) => s.agentMap['agent-1'],
     getAgentModelById: () => (s: typeof testState.agent) => s.model,
     getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
-    isWorkspaceAgentById: () => (s: typeof testState.agent) => s.isWorkspaceAgent,
   },
 }));
 
@@ -51,10 +78,20 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: typeof testState.user) => unknown) => selector(testState.user),
 }));
 
+vi.mock('./useChatInputResourceAccess', () => ({
+  useChatInputResourceAccess: () => testState.resource,
+}));
+
 describe('useAgentModelSelection', () => {
   beforeEach(() => {
+    testState.access.canManageAgent = true;
+    testState.access.isAccessLoading = false;
+    testState.permission.allowed = true;
+    testState.resource.canConfigureResource = true;
+    testState.resource.canUseResource = true;
+    testState.resource.isAccessLoading = false;
     testState.agent.agencyConfig = undefined;
-    testState.agent.isWorkspaceAgent = false;
+    testState.agent.agentMap['agent-1'] = {};
     testState.agent.model = 'shared-model';
     testState.agent.provider = 'shared-provider';
     testState.agent.updateAgentConfigById = vi.fn();
@@ -70,9 +107,11 @@ describe('useAgentModelSelection', () => {
     await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
 
     expect(result.current).toMatchObject({
-      isWorkspaceAgent: false,
+      canDisplayModel: true,
+      canSelectModel: true,
       model: 'shared-model',
       provider: 'shared-provider',
+      usesWorkspaceMemberSelection: false,
     });
     expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
       model: 'next-model',
@@ -81,8 +120,13 @@ describe('useAgentModelSelection', () => {
     expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
   });
 
-  it('defaults a workspace Agent to fixed and ignores a retained personal choice', async () => {
-    testState.agent.isWorkspaceAgent = true;
+  it('defaults a legacy public Workspace Agent to member selection', async () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
     testState.user.workspaceUserPreference = {
       agentModelOverrides: {
         'agent-1': { model: 'member-model', provider: 'member-provider' },
@@ -93,6 +137,77 @@ describe('useAgentModelSelection', () => {
     await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
 
     expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      model: 'member-model',
+      provider: 'member-provider',
+      selectionPolicy: 'member',
+      usesWorkspaceMemberSelection: true,
+    });
+    expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      agentModelOverrides: {
+        'agent-1': { model: 'next-model', provider: 'next-provider' },
+      },
+    });
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the model personal on a collaborative builtin Agent even for an admin', async () => {
+    // Admin of the workspace: canManage is true, yet the Agent Builder row is
+    // shared infrastructure, so the pick must stay this member's own.
+    testState.access.canManageAgent = true;
+    testState.resource.canConfigureResource = true;
+    testState.agent.agentMap['agent-1'] = {
+      slug: 'group-agent-builder',
+      virtual: true,
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.workspaceUserPreference = {
+      agentModelOverrides: {
+        'agent-1': { model: 'member-model', provider: 'member-provider' },
+      },
+    };
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      model: 'member-model',
+      provider: 'member-provider',
+      selectionPolicy: 'member',
+      usesWorkspaceMemberSelection: true,
+    });
+    expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      agentModelOverrides: {
+        'agent-1': { model: 'next-model', provider: 'next-provider' },
+      },
+    });
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit fixed policy locked for a public Workspace Agent', async () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
+    testState.agent.agencyConfig = { modelSelectionPolicy: 'fixed' };
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.workspaceUserPreference = {
+      agentModelOverrides: {
+        'agent-1': { model: 'member-model', provider: 'member-provider' },
+      },
+    };
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: false,
       model: 'shared-model',
       provider: 'shared-provider',
       selectionPolicy: 'fixed',
@@ -102,8 +217,13 @@ describe('useAgentModelSelection', () => {
   });
 
   it('shows and updates the caller override when member selection is enabled', async () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
     testState.agent.agencyConfig = { modelSelectionPolicy: 'member' };
-    testState.agent.isWorkspaceAgent = true;
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
     testState.user.fetchedPreference = {
       agentModelOverrides: {
         'agent-1': { model: 'member-model', provider: 'member-provider' },
@@ -115,6 +235,8 @@ describe('useAgentModelSelection', () => {
     await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
 
     expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
       model: 'member-model',
       provider: 'member-provider',
       selectionPolicy: 'member',
@@ -129,14 +251,135 @@ describe('useAgentModelSelection', () => {
   });
 
   it('does not overwrite preferences before the workspace bucket settles', async () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
     testState.agent.agencyConfig = { modelSelectionPolicy: 'member' };
-    testState.agent.isWorkspaceAgent = true;
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
     testState.user.isLoading = true;
     const { result } = renderHook(() => useAgentModelSelection('agent-1'));
 
     await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
 
     expect(result.current.isPreferenceLoading).toBe(true);
+    expect(result.current.canDisplayModel).toBe(false);
+    expect(result.current.canSelectModel).toBe(false);
     expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('updates the shared config for a private workspace Agent regardless of member policy', async () => {
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'private',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.isLoading = true;
+    testState.user.workspaceUserPreference = {
+      agentModelOverrides: {
+        'agent-1': { model: 'member-model', provider: 'member-provider' },
+      },
+    };
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      isPreferenceLoading: false,
+      model: 'shared-model',
+      provider: 'shared-provider',
+      selectionPolicy: 'fixed',
+      usesWorkspaceMemberSelection: false,
+    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      model: 'next-model',
+      provider: 'next-provider',
+    });
+    expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('lets the author or Workspace admin update the shared model regardless of member policy', async () => {
+    testState.agent.agencyConfig = { modelSelectionPolicy: 'fixed' };
+    testState.agent.agentMap['agent-1'] = {
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.workspaceUserPreference = {
+      agentModelOverrides: {
+        'agent-1': { model: 'stale-member-model', provider: 'stale-member-provider' },
+      },
+    };
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await result.current.selectModel({ model: 'next-model', provider: 'next-provider' });
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      model: 'shared-model',
+      provider: 'shared-provider',
+      selectionPolicy: 'fixed',
+      usesWorkspaceMemberSelection: false,
+    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      model: 'next-model',
+      provider: 'next-provider',
+    });
+    expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('hides the model summary when the caller cannot use the Agent', () => {
+    testState.resource.canConfigureResource = false;
+    testState.resource.canUseResource = false;
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: false,
+      canSelectModel: false,
+    });
+    expect(result.current.selectionLockReason).toBeUndefined();
+  });
+
+  it('reports no lock reason while the model is switchable', () => {
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(true);
+    expect(result.current.selectionLockReason).toBeUndefined();
+  });
+
+  it('reports an author-fixed lock on a fixed-policy public Workspace Agent', () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
+    testState.agent.agencyConfig = { modelSelectionPolicy: 'fixed' };
+    testState.agent.agentMap['agent-1'] = { visibility: 'public', workspaceId: 'workspace-1' };
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(false);
+    expect(result.current.selectionLockReason).toBe('fixedByAgent');
+  });
+
+  it('reports a use-only lock when the caller may use but not configure the Agent', () => {
+    // Not a member-selection agent (the caller manages nothing here) — the lock
+    // comes from General access, so the tooltip must cite the permission.
+    testState.resource.canConfigureResource = false;
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(false);
+    expect(result.current.selectionLockReason).toBe('useOnly');
+  });
+
+  it('does not report a lock reason while access is still loading', () => {
+    testState.resource.canConfigureResource = false;
+    testState.resource.isAccessLoading = true;
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canDisplayModel).toBe(false);
+    expect(result.current.selectionLockReason).toBeUndefined();
   });
 });

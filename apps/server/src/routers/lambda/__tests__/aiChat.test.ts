@@ -33,6 +33,7 @@ describe('aiChatRouter', () => {
     // spine head returned by the server-authoritative parentId resolution;
     // undefined keeps the client-provided parentId unchanged
     latestSpineMessageId?: string,
+    resolvedHeadDescendsFromClient = true,
   ) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
@@ -62,6 +63,7 @@ describe('aiChatRouter', () => {
           createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
           // server-authoritative parentId resolution for existing-topic appends
           getLatestSpineMessageId: vi.fn().mockResolvedValue(latestSpineMessageId),
+          isMessageDescendantOf: vi.fn().mockResolvedValue(resolvedHeadDescendsFromClient),
         }) as any,
     );
 
@@ -95,11 +97,14 @@ describe('aiChatRouter', () => {
 
     const res = await caller.sendMessageInServer(input);
 
-    expect(mockCreateTopic).toHaveBeenCalledWith({
-      messages: ['a', 'b'],
-      sessionId: 's1',
-      title: 'T',
-    });
+    expect(mockCreateTopic).toHaveBeenCalledWith(
+      {
+        messages: ['a', 'b'],
+        sessionId: 's1',
+        title: 'T',
+      },
+      undefined,
+    );
 
     expect(mockCreateMessage).toHaveBeenNthCalledWith(
       1,
@@ -144,6 +149,63 @@ describe('aiChatRouter', () => {
     expect(res.messages?.length).toBe(2);
     expect(res.topics?.items.length).toBe(1);
     expect(res.topics?.total).toBe(1);
+  });
+
+  it('should forward client-minted ids to the topic and message models', async () => {
+    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 'tpc_clientMinted1' });
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'msg_clientUser01' })
+      .mockResolvedValueOnce({ id: 'msg_clientAsst01' });
+    const mockGet = vi.fn().mockResolvedValue({
+      messages: [],
+      topics: { items: [{}], total: 1 },
+    });
+
+    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { id: 'msg_clientAsst01', provider: 'openai' },
+      newTopic: { id: 'tpc_clientMinted1', title: 'T' },
+      newUserMessage: { content: 'hi', id: 'msg_clientUser01' },
+      sessionId: 's1',
+    } as any);
+
+    // The ids the client already rendered under must reach the database
+    // unchanged — that is what makes the optimistic rows final.
+    expect(mockCreateTopic).toHaveBeenCalledWith(expect.any(Object), 'tpc_clientMinted1');
+    expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        ids: { assistantMessageId: 'msg_clientAsst01', userMessageId: 'msg_clientUser01' },
+      }),
+    );
+  });
+
+  it('should reject a malformed client-minted id before it reaches the database', async () => {
+    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
+    const mockCreateMessage = vi.fn().mockResolvedValue({ id: 'm-user' });
+
+    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    mockMessageModel(mockCreateMessage);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await expect(
+      caller.sendMessageInServer({
+        newAssistantMessage: { provider: 'openai' },
+        // Right shape, wrong namespace — a client must not be able to name a
+        // row in another table's id space.
+        newUserMessage: { content: 'hi', id: 'tpc_aBc123XyZ890' },
+        sessionId: 's1',
+      } as any),
+    ).rejects.toThrow();
+
+    expect(mockCreateMessage).not.toHaveBeenCalled();
   });
 
   it('should reuse existing topic when topicId provided', async () => {
@@ -207,6 +269,34 @@ describe('aiChatRouter', () => {
       expect.objectContaining({
         content: 'hi',
         parentId: 'server-head',
+        role: 'user',
+      }),
+    );
+  });
+
+  it('should keep the client branch when the newest spine row belongs to a callback sibling', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    mockMessageModel(mockCreateMessage, 'callback-branch-head', false);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi', parentId: 'active-main-head' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        parentId: 'active-main-head',
         role: 'user',
       }),
     );
@@ -486,11 +576,14 @@ describe('aiChatRouter', () => {
     } as any);
 
     // Topic created first
-    expect(mockCreateTopic).toHaveBeenCalledWith({
-      messages: undefined,
-      sessionId: 's1',
-      title: 'New Topic',
-    });
+    expect(mockCreateTopic).toHaveBeenCalledWith(
+      {
+        messages: undefined,
+        sessionId: 's1',
+        title: 'New Topic',
+      },
+      undefined,
+    );
 
     // Thread created with newly created topicId
     expect(mockCreateThread).toHaveBeenCalledWith({
@@ -570,6 +663,7 @@ describe('aiChatRouter', () => {
           sessionId: 's1',
           title: 'New Topic',
         }),
+        undefined,
       );
     });
 
@@ -602,6 +696,7 @@ describe('aiChatRouter', () => {
           sessionId: 's1',
           title: 'New Topic',
         }),
+        undefined,
       );
     });
 
@@ -823,6 +918,7 @@ describe('aiChatRouter', () => {
           sessionId: 's1',
           title: 'New Topic',
         }),
+        undefined,
       );
     });
 

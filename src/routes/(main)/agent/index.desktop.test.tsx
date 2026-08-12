@@ -62,7 +62,7 @@ vi.mock('./features/Conversation', () => ({
   default: () => <div data-testid="conversation" />,
 }));
 
-vi.mock('./features/Conversation/WorkingSidebar', () => ({
+vi.mock('@/features/Conversation/WorkingSidebar', () => ({
   default: () => <div data-testid="working-sidebar" />,
 }));
 

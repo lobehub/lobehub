@@ -1,8 +1,9 @@
 ---
 title: Customize LobeHub Deployment with Environment Variables
 description: >-
-  Learn about the common environment variables used to customize LobeHub deployment, including access code, OAuth SSO, base path, and default agent configuration.
-
+  Learn about the common environment variables used to customize LobeHub
+  deployment, including access code, OAuth SSO, base path, and default agent
+  configuration.
 tags:
   - LobeHub
   - environment variables
@@ -216,30 +217,32 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Default: -
 - Example: `https://cdn.example.com`
 
-## Visual Understanding
+## Multimodal Understanding
 
-### `VISUAL_UNDERSTANDING_PROVIDER`
+### `MULTIMODAL_UNDERSTANDING_PROVIDER`
 
 - Type: Optional
-- Description: Provider ID of the fallback visual understanding model. Configure this together with `VISUAL_UNDERSTANDING_MODEL` to let models without native image or video understanding inspect uploaded visual media through the built-in visual understanding tool.
+- Description: Provider ID of the fallback multimodal understanding model. Configure this together with `MULTIMODAL_UNDERSTANDING_MODEL` to let models without native audio, image, or video understanding inspect uploaded media through the built-in multimodal understanding tool.
 - Default: -
 - Example: `openai`, `google`, or `ollama`
 
-### `VISUAL_UNDERSTANDING_MODEL`
+### `MULTIMODAL_UNDERSTANDING_MODEL`
 
 - Type: Optional
-- Description: Model ID used by the fallback visual understanding tool. This model should support the visual media types you want to analyze. The feature is enabled only when both `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` are configured.
+- Description: Model ID used by the fallback multimodal understanding tool. This model should support the media types you want to analyze. The feature is enabled only when both `MULTIMODAL_UNDERSTANDING_PROVIDER` and `MULTIMODAL_UNDERSTANDING_MODEL` are configured.
 - Default: -
-- Example: `gpt-4o`, `gemini-2.5-flash`, or your local visual model ID
+- Example: `gemini-2.5-flash` or your local multimodal model ID
 
 Configuration example:
 
 ```bash
-VISUAL_UNDERSTANDING_PROVIDER=google
-VISUAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_PROVIDER=google
+MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
 ```
 
-When this feature is enabled, users can upload images or videos while using a model that does not have native visual capabilities, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
+For migration compatibility, `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` remain supported as legacy aliases. When both old and new variables are set, `MULTIMODAL_UNDERSTANDING_*` takes precedence.
+
+When this feature is enabled, users can upload audio, images, or videos while using a model that does not have the corresponding native multimodal capability, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
 
 ## AI Image
 
@@ -254,6 +257,14 @@ When this feature is enabled, users can upload images or videos while using a mo
 This environment variable allows administrators to customize the default image generation count for their deployment. The value must be between 1 and 20. If not set, it defaults to 2. Users can still adjust this value in their personal settings.
 
 ## Plugin Service
+
+### `TOOL_NAME_MAX_LENGTH`
+
+- Type: Optional
+- Description: The length at which a function-call tool name is compressed into an opaque `MD5HASH_…` name. OpenAI caps function names at 64 characters, but providers without that limit only pay the readability cost, so the threshold is configurable. Set it to `0` to disable length-based compression entirely and keep full, readable tool names. Names containing characters providers reject (non-ASCII, dots, spaces…) are still hashed regardless of this setting.
+- Default: `64`
+- Example: `0`
+- Note: an unset, invalid, or negative value falls back to the default.
 
 ### `PLUGINS_INDEX_URL`
 

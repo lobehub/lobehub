@@ -1,9 +1,13 @@
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+
 import { execa } from 'execa';
 
 import { createLogger } from '../../logger';
 import type { ToolDetector } from '../../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
+import { filterGitIgnoredMatches, toAbsoluteMatchLine } from '../gitIgnore';
 
 const logger = createLogger('contentSearch:unix');
 
@@ -75,6 +79,23 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     return 'nodejs';
   }
 
+  /**
+   * Persist a downgrade only when the tool is genuinely gone from the system.
+   *
+   * A single failing call (an unreadable directory, a pattern the tool rejects)
+   * used to overwrite `this.currentTool`, and since the desktop keeps one
+   * instance for the whole app session every later search silently ran on the
+   * Node fallback — no ignore-file support, different path shape, far slower.
+   * Fall back for *this* call, but only make it stick if `rg`/`ag`/`grep`
+   * really is unavailable.
+   */
+  private async demoteIfToolMissing(tool: UnixContentSearchTool): Promise<void> {
+    if (tool === 'nodejs') return;
+    if (await this.checkToolAvailable(tool)) return;
+    this.currentTool = await this.fallbackToNextTool(tool);
+    logger.info(`${tool} is unavailable; downgrading future searches to ${this.currentTool}`);
+  }
+
   async grep(params: GrepContentParams): Promise<GrepContentResult> {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
@@ -143,12 +164,19 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:${tool}]`;
 
+    // A `scope` pointing at a single file is a normal, documented call — but
+    // it used to be fatal here, because execa's `cwd` must be a directory. The
+    // resulting throw dropped the call to the Node fallback *and* poisoned the
+    // cached engine for every later search. Search the file from its parent
+    // directory instead.
+    const searchRoot = (await this.isFile(searchPath)) ? path.dirname(searchPath) : searchPath;
+
     try {
-      const args = this.buildGrepArgs(tool, params);
+      const args = this.buildGrepArgs(tool, params, this.searchTarget(searchPath, searchRoot));
       logger.debug(`${logPrefix} Executing: ${tool} ${args.join(' ')}`);
 
       const { stdout, stderr, exitCode } = await execa(tool, args, {
-        cwd: searchPath,
+        cwd: searchRoot,
         reject: false,
         stdin: 'ignore',
       });
@@ -157,7 +185,13 @@ export abstract class UnixContentSearch extends BaseContentSearch {
         logger.warn(`${logPrefix} Tool exited with code ${exitCode}: ${stderr}`);
       }
 
-      const lines = stdout.trim().split('\n').filter(Boolean);
+      // Normalise to absolute before anything else looks at these lines, so the
+      // caller gets the same path shape the Node fallback produces.
+      const lines = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => toAbsoluteMatchLine(searchRoot, line));
       let matches: string[] = [];
       let totalMatches = 0;
 
@@ -171,7 +205,12 @@ export abstract class UnixContentSearch extends BaseContentSearch {
           matches = lines;
           const hasContext = params['-A'] || params['-B'] || params['-C'];
           if (hasContext) {
-            totalMatches = await this.getActualMatchCount(tool, params);
+            totalMatches = await this.getActualMatchCount(
+              tool,
+              params,
+              searchRoot,
+              this.searchTarget(searchPath, searchRoot),
+            );
           } else {
             totalMatches = lines.length;
           }
@@ -187,6 +226,13 @@ export abstract class UnixContentSearch extends BaseContentSearch {
           matches = lines;
           break;
         }
+      }
+
+      // `rg`/`ag` already honour ignore files; `grep` has no such notion, so
+      // filter its output through git to match what the other engines return.
+      if (tool === 'grep') {
+        matches = await filterGitIgnoredMatches(searchRoot, matches);
+        totalMatches = Math.min(totalMatches, matches.length);
       }
 
       if (params.head_limit && matches.length > params.head_limit) {
@@ -206,25 +252,52 @@ export abstract class UnixContentSearch extends BaseContentSearch {
       };
     } catch (error) {
       logger.warn(`${logPrefix} External tool failed, falling back to next tool:`, error);
-      this.currentTool = await this.fallbackToNextTool(tool as UnixContentSearchTool);
-      logger.info(`Falling back to: ${this.currentTool}`);
-      return this.grepWithTool(this.currentTool, params);
+      await this.demoteIfToolMissing(tool as UnixContentSearchTool);
+      const next = await this.fallbackToNextTool(tool as UnixContentSearchTool);
+      logger.info(`Falling back to: ${next} (for this call)`);
+      return this.grepWithTool(next, params);
     }
   }
 
+  private async isFile(target: string): Promise<boolean> {
+    try {
+      return (await stat(target)).isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  /** `.` for a directory search; the file's own name when `scope` names a file. */
+  private searchTarget(searchPath: string, searchRoot: string): string {
+    return searchPath === searchRoot ? '.' : `./${path.basename(searchPath)}`;
+  }
+
+  /**
+   * `searchRoot`/`target` must be the same pair the main search ran with: a
+   * file-valued `scope` is legal, but execa's `cwd` must be a directory, so
+   * running the count from the raw scope used to throw and silently return 0 —
+   * the summary then said "Found 0 matches" above output that plainly contained
+   * the match lines.
+   */
   protected async getActualMatchCount(
     tool: 'ag' | 'grep' | 'rg',
     params: GrepContentParams,
+    searchRoot: string,
+    target: string,
   ): Promise<number> {
     const countParams = { ...params, '-A': undefined, '-B': undefined, '-C': undefined };
-    const args = this.buildGrepArgs(tool, {
-      ...countParams,
-      output_mode: 'count',
-    } as GrepContentParams);
+    const args = this.buildGrepArgs(
+      tool,
+      {
+        ...countParams,
+        output_mode: 'count',
+      } as GrepContentParams,
+      target,
+    );
 
     try {
       const { stdout } = await execa(tool, args, {
-        cwd: this.resolveSearchPath(params),
+        cwd: searchRoot,
         reject: false,
         stdin: 'ignore',
       });

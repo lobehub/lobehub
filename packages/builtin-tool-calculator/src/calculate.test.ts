@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import nerdamer from 'nerdamer-prime/all';
+import { describe, expect, it, vi } from 'vitest';
 
 import { calculatorExecutor } from '../src/executor';
 
@@ -1323,6 +1324,28 @@ describe('Calculator Equation Solver', () => {
       expect(parsed.y).toBe('1');
     });
 
+    it('should report an unsolvable system instead of dereferencing an empty result', async () => {
+      // Newer nerdamer returns nothing for an unsolvable system rather than
+      // throwing. Assert the guard's own message: the surrounding catch turns
+      // *any* failure — including a dereference TypeError — into the same
+      // `success: false` / `SolveError` pair, so those two alone cannot tell
+      // the guarded path from the unguarded one.
+      const spy = vi.spyOn(nerdamer, 'solveEquations').mockReturnValue(null);
+
+      try {
+        const result = await calculatorExecutor.solve({
+          equation: ['x+y=1', 'x+y=2'],
+          variable: ['x', 'y'],
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error?.type).toBe('SolveError');
+        expect(result.content).toBe('No solution found for the given system of equations');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('should solve system of two equations with default variables', async () => {
       const result = await calculatorExecutor.solve({
         equation: ['3*x+2*y=7', 'x-y=1'],
@@ -1355,7 +1378,9 @@ describe('Calculator Equation Solver', () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.type).toBe('SolveError');
-      expect(result.content).toContain('distinct solution');
+      // Older nerdamer throws ("does not have a distinct solution"); newer
+      // versions return nothing and the no-solution guard answers instead.
+      expect(result.content).toMatch(/distinct solution|No solution found/);
     });
 
     it('should handle single equation with extra variables in array', async () => {

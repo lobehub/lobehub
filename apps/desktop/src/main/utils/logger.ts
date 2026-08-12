@@ -1,4 +1,4 @@
-import { setLoggerFactory } from '@lobechat/local-file-shell';
+import { setLoggerFactory } from '@lobechat/local-file-shell/logger';
 import debug from 'debug';
 import { app } from 'electron';
 import electronLog from 'electron-log';

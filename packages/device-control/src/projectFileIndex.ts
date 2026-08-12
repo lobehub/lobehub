@@ -23,9 +23,11 @@ const createProjectFileEntry = (
   root: string,
   absolutePath: string,
   isDirectory: boolean,
+  gitIgnored?: boolean,
 ): ProjectFileIndexEntry => {
   const relativePath = toPosixRelativePath(path.relative(root, absolutePath));
   return {
+    ...(gitIgnored ? { gitIgnored: true } : {}),
     isDirectory,
     name: path.basename(absolutePath),
     path: absolutePath,
@@ -52,7 +54,11 @@ const collectProjectDirectories = (files: string[], root: string): ProjectFileIn
  * so nested files attach to explicit parent directory entries instead of
  * flattening to the root.
  */
-const buildEntries = (files: string[], root: string): ProjectFileIndexEntry[] => {
+const buildEntries = (
+  files: string[],
+  root: string,
+  ignoredPaths: string[] = [],
+): ProjectFileIndexEntry[] => {
   const seen = new Set<string>();
   const fileEntries = files
     .filter((filePath) => {
@@ -62,7 +68,25 @@ const buildEntries = (files: string[], root: string): ProjectFileIndexEntry[] =>
     })
     .map((filePath) => createProjectFileEntry(root, filePath, false));
 
-  return [...collectProjectDirectories(files, root), ...fileEntries];
+  // `git ls-files --directory` keeps individual ignored files visible while
+  // collapsing fully ignored directories (for example node_modules/) into one
+  // bounded entry. The trailing slash is therefore meaningful and must be
+  // preserved as directory metadata before resolving the absolute path.
+  const ignoredEntries = ignoredPaths
+    .map((relativePath) => {
+      const isDirectory = relativePath.endsWith('/');
+      const normalizedPath = isDirectory ? relativePath.slice(0, -1) : relativePath;
+      return createProjectFileEntry(root, path.resolve(root, normalizedPath), isDirectory, true);
+    })
+    .filter((entry) => {
+      if (seen.has(entry.path)) return false;
+      seen.add(entry.path);
+      return true;
+    });
+
+  const indexedPaths = [...fileEntries, ...ignoredEntries].map((entry) => entry.path);
+
+  return [...collectProjectDirectories(indexedPaths, root), ...fileEntries, ...ignoredEntries];
 };
 
 const collectGlobFilePaths = async (scope: string): Promise<string[]> => {
@@ -84,9 +108,10 @@ const collectGlobFilePaths = async (scope: string): Promise<string[]> => {
 
 /**
  * Portable project file index for the CLI (and any non-desktop device). Prefers
- * `git ls-files` (tracked + untracked, submodule-aware) to enumerate the repo,
- * falling back to a `fast-glob` walk when the scope is not a git repo. Mirrors
- * the desktop `LocalFileCtr.getProjectFileIndex` output shape.
+ * `git ls-files` (tracked + untracked + collapsed ignored entries,
+ * submodule-aware) to enumerate the repo, falling back to a `fast-glob` walk
+ * when the scope is not a git repo. Mirrors the desktop
+ * `LocalFileCtr.getProjectFileIndex` output shape.
  */
 export const defaultGetProjectFileIndex = async (
   params: ProjectFileIndexParams = {},
@@ -104,7 +129,7 @@ export const defaultGetProjectFileIndex = async (
       rootResult?.stdout && !exitCode ? rootResult.stdout.trim() || requestedScope : requestedScope;
 
     if (rootResult?.stdout && !exitCode) {
-      const [trackedResult, untrackedResult] = await Promise.all([
+      const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
         execFileAsync(
           'git',
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
@@ -115,6 +140,21 @@ export const defaultGetProjectFileIndex = async (
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'],
           { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
         ).catch(() => ({ stdout: '' })),
+        execFileAsync(
+          'git',
+          [
+            '-C',
+            root,
+            '-c',
+            'core.quotepath=false',
+            'ls-files',
+            '--others',
+            '--ignored',
+            '--exclude-standard',
+            '--directory',
+          ],
+          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+        ).catch(() => ({ stdout: '' })),
       ]);
 
       const files = [...trackedResult.stdout.split('\n'), ...untrackedResult.stdout.split('\n')]
@@ -122,7 +162,11 @@ export const defaultGetProjectFileIndex = async (
         .filter(Boolean)
         .map((relativePath) => path.resolve(root, relativePath));
 
-      const entries = buildEntries(files, root);
+      const ignoredPaths = ignoredResult.stdout
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const entries = buildEntries(files, root, ignoredPaths);
 
       return {
         entries,
@@ -166,7 +210,7 @@ export const defaultSearchProjectFiles = async (
       rootResult?.stdout && !exitCode ? rootResult.stdout.trim() || requestedScope : requestedScope;
 
     if (rootResult?.stdout && !exitCode) {
-      const [trackedResult, untrackedResult] = await Promise.all([
+      const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
         execFileAsync(
           'git',
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
@@ -177,13 +221,32 @@ export const defaultSearchProjectFiles = async (
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'],
           { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
         ).catch(() => ({ stdout: '' })),
+        execFileAsync(
+          'git',
+          [
+            '-C',
+            root,
+            '-c',
+            'core.quotepath=false',
+            'ls-files',
+            '--others',
+            '--ignored',
+            '--exclude-standard',
+            '--directory',
+          ],
+          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+        ).catch(() => ({ stdout: '' })),
       ]);
 
       const files = [...trackedResult.stdout.split('\n'), ...untrackedResult.stdout.split('\n')]
         .map((item) => item.trim())
         .filter(Boolean)
         .map((relativePath) => path.resolve(root, relativePath));
-      const entries = buildEntries(files, root);
+      const ignoredPaths = ignoredResult.stdout
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const entries = buildEntries(files, root, ignoredPaths);
 
       return {
         entries: projectFileSearchManager.selectEntries(entries, params.query, limit),

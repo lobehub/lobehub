@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
@@ -239,6 +241,40 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('topic comments', () => {
+    it('stacks thread detail on the topic comments list so Back returns to the filter', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicComments('topic-1', 'message-1');
+        result.current.openTopicCommentThread('topic-1', 'comment-1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        {
+          messageId: 'message-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicComments,
+        },
+        {
+          rootCommentId: 'comment-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicCommentThread,
+        },
+      ]);
+
+      act(() => result.current.goBack());
+
+      expect(result.current.portalStack).toEqual([
+        {
+          messageId: 'message-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicComments,
+        },
+      ]);
+    });
+  });
+
   describe('openArtifact', () => {
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());
@@ -447,6 +483,97 @@ describe('chatDockSlice', () => {
         },
       ]);
       expect(result.current.activeLocalFilePath).toBe('/tmp/worktree-switcher-demo.html');
+    });
+
+    // Regression: sandbox tabs are visible in the current topic's cwd scope
+    // (the selector exempts them from the cwd match), so their activation must
+    // land in that scope — previously it landed in the empty-cwd scope and the
+    // portal kept showing the topic's previously active local file.
+    it('activates a sandbox tab within the current topic cwd scope', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-a',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'agent-1' })]: {
+              currentPage: 1,
+              hasMore: false,
+              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/project-a/a.ts',
+          workingDirectory: '/project-a',
+        });
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      expect(
+        result.current.activeLocalFileIdsByScope?.[createLocalFileScopeKey('/project-a')],
+      ).toBe(
+        createLocalFileTabId({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
+    });
+
+    it('keeps per-topic sandbox activation when topics have no cwd', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent-1', activeTopicId: 'topic-a' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/a.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-b' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/b.md',
+          sandboxTopicId: 'topic-b',
+          workingDirectory: '',
+        });
+      });
+
+      // Back in topic-a, its own sandbox tab must stay active even though the
+      // legacy global active id now points at topic-b's tab.
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-a' } as never);
+      });
+
+      expect(chatPortalSelectors.activeLocalFileId(useChatStore.getState())).toBe(
+        createLocalFileTabId({
+          filePath: '/work/a.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
     });
 
     it('should keep same file path from different device context as separate tabs', () => {
@@ -938,6 +1065,57 @@ describe('chatDockSlice', () => {
         '/project-a/b.ts',
       ]);
     });
+
+    it('groups sandbox tabs by serving topic when closing others in a cwd scope', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-a',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'agent-1' })]: {
+              currentPage: 1,
+              hasMore: false,
+              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/project-a/a.ts',
+          workingDirectory: '/project-a',
+        });
+        result.current.openLocalFile({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+        // Hidden in topic-a: served by another topic's sandbox.
+        result.current.openLocalFile({
+          filePath: '/work/other.md',
+          sandboxTopicId: 'topic-b',
+          workingDirectory: '',
+        });
+      });
+
+      act(() => {
+        result.current.closeOtherLocalFileTabs(
+          localFileTabId({ filePath: '/project-a/a.ts', workingDirectory: '/project-a' }),
+        );
+      });
+
+      // The visible sandbox tab (topic-a) closes with the scope; the hidden
+      // topic-b sandbox tab survives.
+      expect(result.current.openLocalFiles.map((f) => f.filePath)).toEqual([
+        '/project-a/a.ts',
+        '/work/other.md',
+      ]);
+    });
   });
 
   describe('setActiveLocalFile', () => {
@@ -997,6 +1175,52 @@ describe('chatDockSlice', () => {
         identifier: 'identifier-2',
       });
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('openTopicInPortal', () => {
+    it('opens a topic as a side-by-side portal view and exposes its id', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+
+      expect(result.current.portalStack.at(-1)).toEqual({
+        type: PortalViewType.Topic,
+        topicId: 'tpc-1',
+      });
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBe('tpc-1');
+      expect(chatPortalSelectors.showTopicChat(result.current)).toBe(true);
+    });
+
+    it('replaces the topic view when a different topic is dragged in', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+      act(() => {
+        result.current.openTopicInPortal('tpc-2');
+      });
+
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBe('tpc-2');
+    });
+
+    it('closeTopicPortal pops only when a topic view is on top', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+      act(() => {
+        result.current.closeTopicPortal();
+      });
+
+      expect(result.current.showPortal).toBe(false);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBeUndefined();
     });
   });
 });

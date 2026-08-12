@@ -3,6 +3,9 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { AgentDocumentsApiName, AgentDocumentsIdentifier } from './types';
 
+const AGENT_DOCUMENT_ID_DESCRIPTION =
+  'Target agent document ID. Use the "id" field returned by listDocuments, not "documentId".';
+
 export const AgentDocumentsManifest: BuiltinToolManifest = {
   api: [
     {
@@ -55,7 +58,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
@@ -74,7 +77,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
@@ -93,7 +96,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           operations: {
@@ -159,7 +162,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
@@ -178,7 +181,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           newTitle: {
@@ -253,7 +256,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           rule: {

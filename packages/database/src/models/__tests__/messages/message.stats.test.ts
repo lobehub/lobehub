@@ -630,6 +630,51 @@ describe('MessageModel Statistics Tests', () => {
       expect(result.length).toBeGreaterThanOrEqual(366);
       expect(result.every((item) => item.count === 0 && item.level === 0)).toBe(true);
     });
+
+    it('counts everything except duplicated transcripts', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
+      const createdAt = today.subtract(2, 'day').toDate();
+
+      await serverDB.insert(messages).values([
+        // no metadata at all — the shape the predicate must not drop
+        { createdAt, id: 'c1', role: 'assistant', usage: { totalTokens: 10 } as any, userId },
+        // metadata without the marker
+        {
+          createdAt,
+          id: 'c2',
+          metadata: { usage: { totalTokens: 20 } },
+          role: 'assistant',
+          userId,
+        },
+        // explicitly not a copy
+        {
+          createdAt,
+          id: 'c3',
+          metadata: { copied: false, usage: { totalTokens: 40 } },
+          role: 'assistant',
+          userId,
+        },
+        // a copy: its tokens were spent in the source scope
+        {
+          createdAt,
+          id: 'c4',
+          metadata: { copied: true, usage: { totalTokens: 8000 } },
+          role: 'assistant',
+          userId,
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+      const day = result.find((item) => item.date === dayKey);
+      expect(day?.count).toBe(70);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('rankModels', () => {
@@ -801,10 +846,12 @@ describe('MessageModel Statistics Tests', () => {
         { id: 's-t3', count: 3 },
         { id: 's-t4', count: 4 },
       ];
-      await serverDB.insert(topics).values([
-        ...topicRows.map((t) => ({ id: t.id, userId, agentId, title: t.id })),
-        { id: 's-other', userId, agentId: otherAgentId, title: 'other' },
-      ]);
+      await serverDB
+        .insert(topics)
+        .values([
+          ...topicRows.map((t) => ({ id: t.id, userId, agentId, title: t.id })),
+          { id: 's-other', userId, agentId: otherAgentId, title: 'other' },
+        ]);
 
       const msgRows = topicRows.flatMap((t) =>
         Array.from({ length: t.count }).map((_, i) => ({
@@ -821,7 +868,14 @@ describe('MessageModel Statistics Tests', () => {
         // assistant messages in agentId topics — excluded by role=user
         { id: 's-t1-a', userId, role: 'assistant', content: 'a', agentId, topicId: 's-t1' },
         // other agent's topic
-        { id: 's-other-u', userId, role: 'user', content: 'x', agentId: otherAgentId, topicId: 's-other' },
+        {
+          id: 's-other-u',
+          userId,
+          role: 'user',
+          content: 'x',
+          agentId: otherAgentId,
+          topicId: 's-other',
+        },
         // other user must not leak
         { id: 's-leak', userId: otherUserId, role: 'user', content: 'leak', topicId: 's-t1' },
       ]);

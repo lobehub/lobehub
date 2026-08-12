@@ -11,6 +11,9 @@ class TaskService {
 
   list = async (params: {
     assigneeAgentId?: string;
+    automated?: boolean;
+    hasGoal?: boolean;
+    orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
     parentIdentifier?: string;
@@ -28,6 +31,7 @@ class TaskService {
       offset?: number;
       statuses: string[];
     }>;
+    hasGoal?: boolean;
     parentTaskId?: string | null;
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
@@ -54,6 +58,7 @@ class TaskService {
     assigneeAgentId?: string;
     assigneeUserId?: string;
     automationMode?: TaskAutomationMode;
+    config?: Record<string, unknown>;
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
@@ -97,6 +102,8 @@ class TaskService {
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
+
+  deleteGoal = async (id: string) => lambdaClient.task.deleteGoal.mutate({ id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 

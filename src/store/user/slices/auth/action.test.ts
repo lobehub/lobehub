@@ -91,6 +91,34 @@ describe('createAuthSlice', () => {
       });
     });
 
+    it('should explain an expired session on the signin page', async () => {
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          ...originalLocation,
+          href: '',
+          pathname: '/chat',
+          toString: () => 'http://localhost/chat',
+        },
+        writable: true,
+      });
+
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.openLogin('sessionExpired');
+      });
+
+      expect(window.location.href).toContain('reason=sessionExpired');
+
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+        writable: true,
+      });
+    });
+
     it('should not redirect when already on signin page', async () => {
       const originalLocation = window.location;
       Object.defineProperty(window, 'location', {

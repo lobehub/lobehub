@@ -31,6 +31,11 @@ export default defineFixtures({
           ],
         },
         label: 'Single question',
+        pluginState: {
+          askUserAnswers: {
+            'Which area should we explore first?': ['Evidence pages', 'Visual direction'],
+          },
+        },
       },
       {
         args: {
@@ -48,6 +53,12 @@ export default defineFixtures({
           ],
         },
         label: 'Multiple questions',
+        pluginState: {
+          askUserAnswers: {
+            'How broad should this pass be?': 'Focused',
+            'Which visual tone should we use?': 'Neutral',
+          },
+        },
       },
     ]),
   },

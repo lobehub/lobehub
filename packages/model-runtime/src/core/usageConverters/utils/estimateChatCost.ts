@@ -1,4 +1,9 @@
 import type { ModelTokensUsage } from '@lobechat/types';
+import {
+  type AudioTokenEstimateSource,
+  estimateAudioInputTokens,
+  normalizeAudioTokensPerSecond,
+} from '@lobechat/utils/audio';
 import type { Pricing, PricingUnitName } from 'model-bank';
 import { estimateTokenCount } from 'tokenx';
 
@@ -12,6 +17,10 @@ const OUTPUT_INPUT_RATIO = 0.5;
 const OUTPUT_TOKEN_CAP = 8192;
 
 export interface ChatInputTokenEstimate {
+  audioDurationItemCount: number;
+  audioFallbackItemCount: number;
+  audioTokenEstimateSource: AudioTokenEstimateSource;
+  audioTokens: number;
   imageTokens: number;
   textTokens: number;
   totalTokens: number;
@@ -19,6 +28,14 @@ export interface ChatInputTokenEstimate {
 }
 
 export interface EstimateOpenAIChatInputTokensOptions {
+  /**
+   * Conservative per-audio fallback used when duration or the model rate is unavailable.
+   */
+  audioTokenEstimate?: number;
+  /**
+   * Positive model-specific audio input token rate for duration-based estimates.
+   */
+  audioTokensPerSecond?: number;
   /**
    * Conservative token estimate for each image input when exact image accounting is unavailable.
    */
@@ -43,6 +60,11 @@ export interface EstimateChatCostFromTokensInput {
   audioTokens?: number;
   imageTokens?: number;
   /**
+   * Maximum output tokens from the request or model card. When omitted, the estimator uses the
+   * default fallback cap.
+   */
+  maxOutputTokens?: number;
+  /**
    * Optional expected output tokens. When omitted, the estimator uses a heuristic based on input
    * tokens.
    */
@@ -56,6 +78,9 @@ export interface EstimateChatCostFromTokensInput {
  * not be treated as the authoritative charged amount.
  */
 export interface ChatCostEstimate extends PricingComputationResult {
+  audioDurationItemCount?: number;
+  audioFallbackItemCount?: number;
+  audioTokenEstimateSource?: AudioTokenEstimateSource;
   estimatedCost: number;
   estimatedOutputTokens: number;
   inputAudioTokens: number;
@@ -67,7 +92,13 @@ export interface ChatCostEstimate extends PricingComputationResult {
 }
 
 export interface EstimateChatCostFromMessagesOptions
-  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {}
+  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {
+  /**
+   * Maximum output tokens from the request or model card. When omitted, the estimator uses the
+   * default fallback cap.
+   */
+  maxOutputTokens?: number;
+}
 
 const estimateSerializableTokens = (value: unknown): number => {
   if (value === undefined || value === null) return 0;
@@ -82,10 +113,14 @@ const hasPricingUnit = (pricing: Pricing | undefined, unitName: PricingUnitName)
 /**
  * Estimates output tokens for budget pre-checks and UI hints.
  *
- * The default heuristic assumes output is half of total input tokens, capped at 8192 tokens.
+ * The default heuristic assumes output is half of total input tokens. A request/model limit caps
+ * the estimate when provided; otherwise 8192 tokens is used as a fallback cap.
  */
-export function estimateChatOutputTokens(totalInputTokens: number): number {
-  return Math.min(totalInputTokens * OUTPUT_INPUT_RATIO, OUTPUT_TOKEN_CAP);
+export function estimateChatOutputTokens(
+  totalInputTokens: number,
+  maxOutputTokens = OUTPUT_TOKEN_CAP,
+): number {
+  return Math.min(totalInputTokens * OUTPUT_INPUT_RATIO, maxOutputTokens);
 }
 
 /**
@@ -100,6 +135,7 @@ export function estimateOpenAIChatInputTokens(
 ): ChatInputTokenEstimate {
   const imageTokenEstimate = options.imageTokenEstimate ?? DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE;
   const videoTokenEstimate = options.videoTokenEstimate ?? DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE;
+  const audioParts: Array<{ durationMs?: unknown }> = [];
   let textTokens = 0;
   let imageTokens = 0;
   let videoTokens = 0;
@@ -137,16 +173,29 @@ export function estimateOpenAIChatInputTokens(
         continue;
       }
 
+      if (part.type === 'audio_url') {
+        audioParts.push(part.audio_url);
+        continue;
+      }
+
       textTokens += estimateSerializableTokens(part);
     }
   }
 
   textTokens += estimateSerializableTokens(options.tools);
+  const audioEstimate = estimateAudioInputTokens(audioParts, {
+    fallbackTokensPerItem: options.audioTokenEstimate,
+    tokensPerSecond: options.audioTokensPerSecond,
+  });
 
   return {
+    audioDurationItemCount: audioEstimate.durationItemCount,
+    audioFallbackItemCount: audioEstimate.fallbackItemCount,
+    audioTokenEstimateSource: audioEstimate.source,
+    audioTokens: audioEstimate.tokens,
     imageTokens,
     textTokens,
-    totalTokens: textTokens + imageTokens + videoTokens,
+    totalTokens: textTokens + imageTokens + audioEstimate.tokens + videoTokens,
     videoTokens,
   };
 }
@@ -154,8 +203,8 @@ export function estimateOpenAIChatInputTokens(
 /**
  * Estimates chat cost from known input token buckets.
  *
- * `outputTextTokens` defaults to `estimateChatOutputTokens(totalInputTokens)`. Pricing lookup
- * options are forwarded to `computeChatCost`.
+ * `outputTextTokens` defaults to `estimateChatOutputTokens(totalInputTokens, maxOutputTokens)`.
+ * Pricing lookup options are forwarded to `computeChatCost`.
  */
 export function estimateChatCostFromTokens(
   pricing: Pricing | undefined,
@@ -168,7 +217,7 @@ export function estimateChatCostFromTokens(
   const inputVideoTokens = input.videoTokens ?? 0;
   const totalInputTokens = inputTextTokens + inputImageTokens + inputAudioTokens + inputVideoTokens;
   const estimatedOutputTokens =
-    input.outputTextTokens ?? estimateChatOutputTokens(totalInputTokens);
+    input.outputTextTokens ?? estimateChatOutputTokens(totalInputTokens, input.maxOutputTokens);
   const hasAudioInputUnit = hasPricingUnit(pricing, 'audioInput');
   const hasImageInputUnit = hasPricingUnit(pricing, 'imageInput');
   const hasVideoInputUnit = hasPricingUnit(pricing, 'videoInput');
@@ -217,20 +266,45 @@ export function estimateChatCostFromMessages(
   messages: OpenAIChatMessage[],
   options: EstimateChatCostFromMessagesOptions = {},
 ): ChatCostEstimate | undefined {
-  const { tools, imageTokenEstimate, lookupParams, usdToCnyRate, videoTokenEstimate } = options;
+  const {
+    audioTokenEstimate,
+    audioTokensPerSecond,
+    tools,
+    imageTokenEstimate,
+    lookupParams,
+    maxOutputTokens,
+    usdToCnyRate,
+    videoTokenEstimate,
+  } = options;
+  const effectiveAudioTokensPerSecond =
+    normalizeAudioTokensPerSecond(audioTokensPerSecond) ??
+    normalizeAudioTokensPerSecond(pricing?.audioTokensPerSecond);
   const inputTokens = estimateOpenAIChatInputTokens(messages, {
+    audioTokenEstimate,
+    audioTokensPerSecond: effectiveAudioTokensPerSecond,
     imageTokenEstimate,
     tools,
     videoTokenEstimate,
   });
 
-  return estimateChatCostFromTokens(
+  const estimate = estimateChatCostFromTokens(
     pricing,
     {
+      audioTokens: inputTokens.audioTokens,
       imageTokens: inputTokens.imageTokens,
+      maxOutputTokens,
       textTokens: inputTokens.textTokens,
       videoTokens: inputTokens.videoTokens,
     },
     { lookupParams, usdToCnyRate },
   );
+
+  if (!estimate) return undefined;
+
+  return {
+    ...estimate,
+    audioDurationItemCount: inputTokens.audioDurationItemCount,
+    audioFallbackItemCount: inputTokens.audioFallbackItemCount,
+    audioTokenEstimateSource: inputTokens.audioTokenEstimateSource,
+  };
 }

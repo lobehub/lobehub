@@ -66,6 +66,8 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-new' }),
     findById: vi.fn().mockResolvedValue(undefined),
     updateMetadata: vi.fn().mockResolvedValue(undefined),

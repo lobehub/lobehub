@@ -20,8 +20,10 @@ import {
   users,
   workspaces,
 } from '../../schemas';
+import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { AGENT_TRANSFER_IN_PROGRESS } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -64,6 +66,10 @@ const fileList2 = [
 
 beforeEach(async () => {
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so `delete(users)` leaves them
+  // behind. On the shared server DB (`singleFork`) a stray pending job would
+  // outlive this file and trip the delete guard in the next one.
+  await serverDB.delete(agentHistoryJobs);
   await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
   await serverDB.insert(knowledgeBases).values([knowledgeBase, knowledgeBase2]);
   await serverDB.insert(files).values([...fileList, ...fileList2]);
@@ -71,6 +77,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('AgentModel', () => {
@@ -845,6 +852,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -853,6 +861,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -946,6 +955,44 @@ describe('AgentModel', () => {
   });
 
   describe('delete', () => {
+    it('refuses to delete an agent a pending history job still maps', async () => {
+      // A group copy's drain writes the TARGET agent id into `messages.agent_id`.
+      // Deleting that agent leaves the queue rows behind, so the drain hits a
+      // missing-agent FK and retries forever, stranding the copy as pending.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Copied Member', userId })
+        .returning();
+      // A DIFFERENT source agent, so only the target-side junction guard can
+      // catch this — the source-side guard must not be what fires.
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Copy Source', userId })
+        .returning();
+
+      const [job] = await serverDB
+        .insert(agentHistoryJobs)
+        .values({
+          agentIds: [agent.id],
+          payload: { agents: [{ newAgentId: agent.id, sourceAgentId: sourceAgent.id }] },
+          sessionIds: [],
+          sourceUserId: userId,
+          status: 'pending',
+          targetUserId: userId,
+          totalTopics: 1,
+          type: 'copy',
+        })
+        .returning({ id: agentHistoryJobs.id });
+      await serverDB.insert(agentHistoryJobAgents).values({ agentId: agent.id, jobId: job.id });
+
+      await expect(agentModel.delete(agent.id)).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
+
+      const stillAlive = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(stillAlive).toBeDefined();
+    });
+
     it('should delete an agent and its associated session', async () => {
       // Create agent and session
       const [agent] = await serverDB
@@ -1241,6 +1288,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -1249,6 +1297,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -1344,6 +1393,77 @@ describe('AgentModel', () => {
   });
 
   describe('create', () => {
+    it('should persist explicit selection policy defaults only for workspace agents', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'selection-defaults', primaryOwnerId: userId, slug: 'selection-defaults' })
+        .returning();
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspace.id);
+
+      const workspaceAgent = await workspaceAgentModel.create({ title: 'Workspace Agent' });
+      const personalAgent = await agentModel.create({ title: 'Personal Agent' });
+
+      expect(workspaceAgent.agencyConfig).toEqual({
+        executionTargetSelectionPolicy: 'member',
+        modelSelectionPolicy: 'member',
+      });
+      expect(personalAgent.agencyConfig).toBeNull();
+    });
+
+    // builtin slugs decide both `getBuiltinAgent` resolution and, for
+    // the collaborative ones, workspace-level permissions — a caller-supplied slug
+    // must never be able to claim one (group member batch-create, imports, market
+    // installs all pass `slug` through).
+    it('should drop a reserved builtin slug supplied by a caller', async () => {
+      const agent = await agentModel.create({ slug: 'agent-builder', title: 'Squatter' });
+
+      expect(agent.slug).not.toBe('agent-builder');
+      expect(agent.slug).toBeTruthy();
+    });
+
+    it('should keep an ordinary caller-supplied slug', async () => {
+      const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
+
+      expect(agent.slug).toBe('my-own-slug');
+    });
+
+    // Identity / scope / provisioning fields feed authorization, so no update may
+    // carry them — otherwise the edit access granted on a collaborative builtin
+    // could declassify, orphan or rehome it.
+    it('should drop immutable identity fields on update and updateConfig', async () => {
+      const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
+
+      await agentModel.update(agent.id, {
+        slug: 'agent-builder',
+        title: 'Renamed',
+        userId: userId2,
+        virtual: true,
+      } as Partial<NewAgent>);
+      const afterUpdate = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdate?.slug).toBe('ordinary-slug');
+      expect(afterUpdate?.userId).toBe(userId);
+      expect(afterUpdate?.virtual).toBe(false);
+      // the mutable field in the same patch still lands
+      expect(afterUpdate?.title).toBe('Renamed');
+
+      await agentModel.updateConfig(agent.id, {
+        slug: 'inbox',
+        virtual: true,
+        visibility: 'private',
+        workspaceId: null,
+      } as Partial<NewAgent>);
+      const afterUpdateConfig = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
+      expect(afterUpdateConfig?.virtual).toBe(false);
+      // `visibility` has its own creator/owner-gated endpoints — a config patch
+      // must not be able to hide a shared row from everyone else.
+      expect(afterUpdateConfig?.visibility).toBe('public');
+    });
+
     it('should create a virtual agent without session', async () => {
       const config = {
         title: 'Virtual Agent',
@@ -1440,6 +1560,45 @@ describe('AgentModel', () => {
   });
 
   describe('batchCreate', () => {
+    it('should drop reserved builtin slugs in a batch', async () => {
+      const created = await agentModel.batchCreate([
+        { slug: 'inbox', title: 'Squatter A' },
+        { slug: 'fine-slug', title: 'Legit B' },
+      ]);
+
+      expect(created.find((a) => a.title === 'Squatter A')?.slug).not.toBe('inbox');
+      expect(created.find((a) => a.title === 'Legit B')?.slug).toBe('fine-slug');
+    });
+
+    it('should preserve explicit workspace selection policies over the defaults', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'selection-overrides',
+          primaryOwnerId: userId,
+          slug: 'selection-overrides',
+        })
+        .returning();
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspace.id);
+
+      const [result] = await workspaceAgentModel.batchCreate([
+        {
+          agencyConfig: {
+            executionTarget: 'none',
+            executionTargetSelectionPolicy: 'fixed',
+            modelSelectionPolicy: 'member',
+          },
+          title: 'Custom Policies',
+        },
+      ]);
+
+      expect(result.agencyConfig).toEqual({
+        executionTarget: 'none',
+        executionTargetSelectionPolicy: 'fixed',
+        modelSelectionPolicy: 'member',
+      });
+    });
+
     it('should batch create multiple virtual agents', async () => {
       const configs = [
         { title: 'Agent 1', model: 'gpt-4', virtual: true },
@@ -1665,6 +1824,10 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe(INBOX_SESSION_ID);
         expect(result?.workspaceId).toBe(workspace.id);
         expect(result?.userId).toBe(userId);
+        expect(result?.agencyConfig).toEqual({
+          executionTargetSelectionPolicy: 'member',
+          modelSelectionPolicy: 'member',
+        });
       });
 
       it('should allow workspace inbox to coexist with personal inbox for the same user', async () => {
@@ -1899,6 +2062,28 @@ describe('AgentModel', () => {
       // Verify these are NOT copied from source
       expect(duplicatedAgent?.id).not.toBe(sourceAgent.id);
       expect(duplicatedAgent?.slug).not.toBe(sourceAgent.slug);
+    });
+
+    it('should preserve agencyConfig when duplicating', async () => {
+      const agencyConfig = {
+        heterogeneousProvider: {
+          type: 'claude-code',
+          command: 'claude',
+        } as const,
+        executionTarget: 'local',
+      };
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Hetero Agent', agencyConfig } as NewAgent)
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.agencyConfig).toEqual(agencyConfig);
     });
 
     it('should use provided title when duplicating', async () => {
@@ -2315,7 +2500,7 @@ describe('AgentModel', () => {
     });
 
     it('should return the most recently updated agent when multiple match', async () => {
-      const [older] = await serverDB
+      const [_older] = await serverDB
         .insert(agents)
         .values({ userId, title: 'Older', marketIdentifier: 'dup-market' })
         .returning();
@@ -2375,6 +2560,29 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('duplicate visibility', () => {
+    it('keeps a private agent private when duplicated', async () => {
+      // The column defaults to `public`, so an omitted copy publishes the
+      // duplicate of a private agent to the whole workspace — and, now that
+      // folder placement is shared, strands it in Ungrouped as well, since a
+      // public item resolves only against public folders.
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ name: 'Private folder', userId, visibility: 'private' })
+        .returning();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ sessionGroupId: group.id, title: 'Secret', userId, visibility: 'private' })
+        .returning();
+
+      const result = await agentModel.duplicate(agent.id);
+
+      const [copy] = await serverDB.select().from(agents).where(eq(agents.id, result!.agentId));
+      expect(copy.visibility).toBe('private');
+      expect(copy.sessionGroupId).toBe(group.id);
+    });
+  });
+
   describe('updateSessionGroupId', () => {
     it('should update agent sessionGroupId', async () => {
       const [group] = await serverDB
@@ -2403,6 +2611,26 @@ describe('AgentModel', () => {
 
       const result = await agentModel.updateSessionGroupId(agent.id, null);
       expect(result.sessionGroupId).toBeNull();
+    });
+
+    it('should reject a folder the caller cannot see', async () => {
+      // The column is workspace-shared, so an unvalidated target corrupts the
+      // sidebar for every member: the foreign key accepts another user's
+      // folder, and everyone who cannot see it then finds the agent in
+      // Ungrouped.
+      const [foreignGroup] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId: userId2, name: 'Someone else' })
+        .returning();
+
+      const [agent] = await serverDB.insert(agents).values({ userId, title: 'Agent' }).returning();
+
+      await expect(agentModel.updateSessionGroupId(agent.id, foreignGroup.id)).rejects.toThrow(
+        /not found in current scope/,
+      );
+
+      const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+      expect(row.sessionGroupId).toBeNull();
     });
 
     it('should not update agents from other users', async () => {
@@ -2596,6 +2824,39 @@ describe('AgentModel', () => {
         enableReasoning: true,
         historyCount: 10,
       });
+    });
+
+    it('should replace an explicitly supplied reasoning graph', async () => {
+      const oldGraph = {
+        edges: [],
+        entry: 'legacy',
+        fields: {},
+        name: 'legacy-graph',
+        nodes: {},
+        states: { legacy: {} },
+        terminal: 'legacy',
+      };
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+        fields: {},
+        name: 'compiled-graph',
+        nodes: { work: { type: 'agent' } },
+        terminal: 'work',
+      };
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableGraphMode: true, graph: oldGraph },
+          title: 'Graph Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, { chatConfig: { graph } } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.chatConfig).toEqual({ enableGraphMode: true, graph });
     });
 
     it('should delete params field when value is undefined', async () => {

@@ -351,6 +351,7 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  command?: string;
   /**
    * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
    * turn count, session id, …). Persisted verbatim into the error body so the

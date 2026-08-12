@@ -273,6 +273,30 @@ describe('LocalFileCtr', () => {
       });
     });
 
+    it('should request a workspace-scoped resource session for HTML preview', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(
+        'localfile://preview-session/pages/index.html',
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/workspace/pages/index.html',
+        resourceScope: 'workspace',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.createPreviewUrl).toHaveBeenCalledWith({
+        accept: undefined,
+        allowExternalFile: undefined,
+        filePath: '/workspace/pages/index.html',
+        resourceScope: 'workspace',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        success: true,
+        url: 'localfile://preview-session/pages/index.html',
+      });
+    });
+
     it('should forward user-approved external preview URL access', async () => {
       mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(
         'localfile://file/tmp/worktree-switcher-demo.html?token=abc',
@@ -364,6 +388,70 @@ describe('LocalFileCtr', () => {
           base64: Buffer.from('image-bytes').toString('base64'),
           contentType: 'image/png',
           type: 'image',
+        },
+        success: true,
+      });
+    });
+
+    it('should return binary document previews as base64', async () => {
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.from('docx-bytes'),
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        realPath: '/workspace/report.docx',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        path: '/workspace/report.docx',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        preview: {
+          base64: Buffer.from('docx-bytes').toString('base64'),
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          type: 'document',
+        },
+        success: true,
+      });
+    });
+
+    it('should fall back to the content-less pdf variant for oversized documents', async () => {
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.alloc(20 * 1024 * 1024 + 1),
+        contentType: 'application/pdf',
+        realPath: '/workspace/huge.pdf',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        path: '/workspace/huge.pdf',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        preview: { contentType: 'application/pdf', type: 'pdf' },
+        success: true,
+      });
+    });
+
+    it('should serialize short-circuited oversized reads as content-less fallbacks', async () => {
+      // The protocol manager returns an empty buffer with `oversized` when it
+      // skipped the read; the serializer must NOT treat it as a real document.
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.alloc(0),
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        oversized: true,
+        realPath: '/workspace/huge.docx',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        path: '/workspace/huge.docx',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        preview: {
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          type: 'binary',
         },
         success: true,
       });
@@ -710,7 +798,8 @@ describe('LocalFileCtr', () => {
           exitCode: 0,
           stdout: 'src/index.ts\nsrc/components/Button.tsx',
         })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' });
+        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' })
+        .mockResolvedValueOnce({ exitCode: 0, stdout: '.env.local\ncache/' });
 
       const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
 
@@ -732,6 +821,18 @@ describe('LocalFileCtr', () => {
             isDirectory: false,
             path: '/workspace/project/tmp/local.ts',
             relativePath: 'tmp/local.ts',
+          }),
+          expect.objectContaining({
+            gitIgnored: true,
+            isDirectory: false,
+            path: '/workspace/project/.env.local',
+            relativePath: '.env.local',
+          }),
+          expect.objectContaining({
+            gitIgnored: true,
+            isDirectory: true,
+            path: '/workspace/project/cache',
+            relativePath: 'cache/',
           }),
         ]),
       );

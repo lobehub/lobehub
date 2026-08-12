@@ -10,6 +10,10 @@ class RemoteServerService {
     return ensureElectronIpc().remoteServer.getRemoteServerConfig();
   };
 
+  isRemoteServerConfigured = async () => {
+    return ensureElectronIpc().remoteServer.isRemoteServerConfigured();
+  };
+
   /**
    * Set remote server configuration
    */

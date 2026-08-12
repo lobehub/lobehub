@@ -42,6 +42,10 @@ const getFileType = (filePath: string): SupportedFileType | undefined => {
   // Handle specific non-text or complex types
   log(`Checking specific types for extension: '${extension}'`);
   switch (extension) {
+    case 'ipynb': {
+      log('File type identified as ipynb');
+      return 'ipynb';
+    }
     case 'pdf': {
       log('File type identified as pdf');
       return 'pdf';

@@ -10,13 +10,16 @@ import {
   Image,
   Tag,
   Text,
+  TextArea,
   Tooltip,
 } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  AudioLines,
   BadgeCheck,
+  Ban,
   Check,
   CheckCheck,
   ChevronRight,
@@ -31,17 +34,30 @@ import {
   MessageSquareX,
   PartyPopper,
   Repeat,
+  Route,
   XCircle,
 } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AudioPlayer from '@/features/AudioPlayer';
 import type { AcceptanceBundle } from '@/services/verify';
 
 import {
   EvidenceComparisonCard,
+  meaningfulEvidenceCaption,
   readEvidenceComparison,
 } from '../components/EvidenceComparisonCard';
+import {
+  CollapsibleMarkdownEvidence,
+  EvidenceFileCard,
+  markdownTextEvidenceTypes,
+} from '../components/MarkdownEvidence';
+import { hasRenderableEvidence, readVisualizationManifest } from '../components/visualization';
+import {
+  VisualizationDeltaBadge,
+  VisualizationRenderer,
+} from '../components/VisualizationRenderer';
 import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
@@ -52,9 +68,14 @@ export type AcceptanceCheckState = AcceptanceCheck['state'];
 type AcceptanceEvidence = AcceptanceCheck['evidence'][number];
 type AcceptanceCheckReviewEntry = AcceptanceCheck['reviews'][number];
 
+export const CHECK_GROUPING_THRESHOLD = 10;
+
+/** Small checklists stay flat; grouping only earns its hierarchy once the list grows beyond 10. */
+export const shouldGroupChecks = (checkCount: number) => checkCount > CHECK_GROUPING_THRESHOLD;
+
 /** What the user asked the page to record — the page owns the service call. */
 export interface CheckReviewInput {
-  action: 'accept' | 'reject';
+  action: 'accept' | 'ignore' | 'reject';
   annotations?: AcceptanceReviewAnnotation[];
   checkItemIds: string[];
   comment?: string;
@@ -62,14 +83,23 @@ export interface CheckReviewInput {
 }
 
 /** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
-export type UserReviewState = 'accepted' | 'pending' | 'rejected';
+export type UserReviewState = 'accepted' | 'ignored' | 'pending' | 'rejected';
 
 export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
   const review = check.userReview;
   if (!review) return 'pending';
   if (review.action === 'accept') return 'accepted';
+  if (review.action === 'ignore') return 'ignored';
   return review.stale ? 'pending' : 'rejected';
 };
+
+/** Accepted and ignored checks are terminal — there is no remaining work to send back. */
+export const isCheckWorkActionable = (check: AcceptanceCheck): boolean =>
+  ['pending', 'rejected'].includes(userReviewState(check));
+
+/** A successful review decision moves the reviewer forward by folding the finished row. */
+export const shouldCollapseAfterReview = (succeeded: boolean, expanded: boolean): boolean =>
+  succeeded && expanded;
 
 /** Every reviewable check in the group is user-accepted — settled business. */
 export const isGroupFullyAccepted = (checks: AcceptanceCheck[]): boolean => {
@@ -99,15 +129,42 @@ const STATE_META: Record<AcceptanceCheckState, { color: string; icon: typeof Che
   uncertain: { color: cssVar.colorWarning, icon: HelpCircle },
 };
 
+/** Canonical verdict glyph for every surface that presents an Acceptance check. */
+export const checkHeadMeta = (check: AcceptanceCheck) => {
+  const meta = STATE_META[check.state];
+  const reviewState = userReviewState(check);
+
+  if (reviewState === 'rejected') {
+    return { color: cssVar.colorError, icon: MessageSquareX };
+  }
+
+  if (check.state === 'passed' && reviewState === 'accepted') {
+    return { color: cssVar.colorSuccess, icon: CheckCheck };
+  }
+
+  return meta;
+};
+
 export const isException = (check: AcceptanceCheck) =>
   check.state === 'failed' || check.state === 'uncertain';
 
-const VISUAL_EVIDENCE = new Set(['gif', 'screenshot', 'video']);
+const IMAGE_EVIDENCE = new Set(['gif', 'screenshot']);
+/** Rendered by a `<video>` / `<audio>` element rather than an image box. */
+const PLAYER_EVIDENCE = new Set(['audio', 'video']);
+/** Everything that shows or plays inline — the deliverable itself, not a log about it. */
+const MEDIA_EVIDENCE = new Set([...IMAGE_EVIDENCE, ...PLAYER_EVIDENCE]);
+const ANNOTATABLE_EVIDENCE = IMAGE_EVIDENCE;
 
 const isVisual = (item: AcceptanceEvidence) =>
-  Boolean(item.fileUrl) && VISUAL_EVIDENCE.has(item.type);
+  Boolean(item.fileUrl) && MEDIA_EVIDENCE.has(item.type);
 
 export const hasVisualEvidence = (check: AcceptanceCheck) => check.evidence.some(isVisual);
+
+const isAnnotatable = (item: AcceptanceEvidence) =>
+  Boolean(item.fileUrl) && ANNOTATABLE_EVIDENCE.has(item.type);
+
+export const hasAnnotatableEvidence = (check: AcceptanceCheck) =>
+  check.evidence.some(isAnnotatable);
 
 const styles = createStaticStyles(({ css }) => ({
   caption: css`
@@ -133,12 +190,6 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
     }
-  `,
-  descClamp: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
   `,
   evidenceImage: css`
     overflow: hidden;
@@ -232,6 +283,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    /* The card already draws the outer border — a first row's separator would
+       stack on it and read as a 2px top edge. Grouped lists are unaffected:
+       their first child is the group header, so rows are never first. */
+    &:first-child {
+      border-block-start: none;
+    }
   `,
   /** Stable check label ("C3") — referenced by feedback and annotations. */
   seqChip: css`
@@ -239,6 +297,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
+    line-height: 22px;
     color: ${cssVar.colorTextSecondary};
     letter-spacing: 0.02em;
   `,
@@ -253,13 +312,27 @@ const styles = createStaticStyles(({ css }) => ({
     opacity: 0;
     transition: opacity 0.2s;
   `,
+  rowMeta: css`
+    transition: opacity 0.2s;
+
+    @media (hover: hover) and (pointer: fine) {
+      pointer-events: none;
+      opacity: 0;
+    }
+  `,
   rowHeader: css`
     cursor: pointer;
     padding-block: 12px;
     padding-inline: 16px;
 
-    &:hover {
+    &:hover,
+    &:focus-within {
       .acceptance-row-actions {
+        opacity: 1;
+      }
+
+      .acceptance-row-meta {
+        pointer-events: auto;
         opacity: 1;
       }
     }
@@ -297,9 +370,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Evidence media counts for the collapsed row's right-side badges. */
 const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
-  const counts = { file: 0, image: 0, video: 0 };
+  const counts = { audio: 0, file: 0, image: 0, video: 0 };
   for (const item of evidence) {
     if (item.type === 'video' && item.fileUrl) counts.video += 1;
+    else if (item.type === 'audio' && item.fileUrl) counts.audio += 1;
     else if (isVisual(item)) counts.image += 1;
     else counts.file += 1;
   }
@@ -309,12 +383,9 @@ const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
 const EVIDENCE_BADGES = [
   { icon: Images, key: 'image', labelKey: 'acceptance.evidence.image' },
   { icon: Film, key: 'video', labelKey: 'acceptance.evidence.video' },
+  { icon: AudioLines, key: 'audio', labelKey: 'acceptance.evidence.audio' },
   { icon: FileText, key: 'file', labelKey: 'acceptance.evidence.file' },
 ] as const;
-
-/** A filename is not a caption — only descriptive text renders under the artifact. */
-const isFilename = (value: string | null | undefined) =>
-  !value || /^[\w.-]+\.(?:gif|jpe?g|mp4|png|webm|webp)$/i.test(value);
 
 /**
  * Reserve the image's box before it loads — with the stored intrinsic size the
@@ -327,6 +398,13 @@ const imageRatio = (item: AcceptanceEvidence): string | undefined =>
 const comparisonContent = (item: AcceptanceEvidence) =>
   item.type === 'video' ? (
     <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />
+  ) : item.type === 'audio' ? (
+    <AudioPlayer
+      fullWidth
+      alt={item.description ?? item.fileName ?? item.type}
+      downloadFileName={item.fileName ?? 'audio'}
+      url={item.fileUrl!}
+    />
   ) : (
     <Image
       preview
@@ -363,7 +441,8 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
   const comparisonSide = (item: AcceptanceEvidence) => ({
     caption:
       readEvidenceComparison(item.metadata)?.label ??
-      (isFilename(item.description) ? undefined : (item.description ?? undefined)),
+      meaningfulEvidenceCaption(item.description) ??
+      undefined,
     content: comparisonContent(item),
   });
 
@@ -385,9 +464,8 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
           );
         }
 
-        const caption = !isFilename(item.description) && (
-          <span className={styles.caption}>{item.description}</span>
-        );
+        const description = meaningfulEvidenceCaption(item.description);
+        const caption = description && <span className={styles.caption}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
@@ -399,7 +477,21 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
               {caption}
             </Flexbox>
           );
-        if (item.fileUrl && VISUAL_EVIDENCE.has(item.type))
+        if (item.fileUrl && item.type === 'audio')
+          return (
+            <Flexbox gap={4} key={item.id} width={'100%'}>
+              {/* The conversation's own waveform player — one audio dialect across
+                  the product, with the download the reviewer needs to keep the clip. */}
+              <AudioPlayer
+                fullWidth
+                alt={item.description ?? item.fileName ?? item.type}
+                downloadFileName={item.fileName ?? 'audio'}
+                url={item.fileUrl}
+              />
+              {caption}
+            </Flexbox>
+          );
+        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type))
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
               {/* The frame owns the border — the inner Image must not draw its
@@ -431,12 +523,29 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
               {caption}
             </Flexbox>
           );
+        if (item.content && markdownTextEvidenceTypes.has(item.type))
+          return (
+            <Flexbox gap={4} key={item.id}>
+              <CollapsibleMarkdownEvidence>{item.content}</CollapsibleMarkdownEvidence>
+              {caption}
+            </Flexbox>
+          );
         if (item.content)
           return (
             <Flexbox gap={4} key={item.id}>
               <div className={styles.evidenceText}>{item.content}</div>
               {caption}
             </Flexbox>
+          );
+        if (item.fileUrl && markdownTextEvidenceTypes.has(item.type))
+          return (
+            <EvidenceFileCard
+              markdown
+              description={item.description}
+              fileName={item.fileName}
+              key={item.id}
+              url={item.fileUrl}
+            />
           );
         return null;
       })}
@@ -462,6 +571,20 @@ const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) =
   );
 });
 
+const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
+  const { t } = useTranslation('verify');
+  return (
+    <Flexbox horizontal align={'center'} gap={6}>
+      <Icon color={cssVar.colorTextQuaternary} icon={Ban} size={13} />
+      <Text fontSize={12} type={'secondary'}>
+        {t('acceptance.review.ignoredNote', {
+          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+        })}
+      </Text>
+    </Flexbox>
+  );
+});
+
 /**
  * One reject-feedback event: a small red marker line, then the note and the
  * circled regions as plain content — no background wash. Used both as the
@@ -473,6 +596,7 @@ const FeedbackCard = memo<{
 }>(({ evidenceById, review }) => {
   const { t } = useTranslation('verify');
   if (review.action === 'accept') return <AcceptedNote review={review} />;
+  if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
   const groups = new Map<
     string,
@@ -550,7 +674,7 @@ const IterationTimeline = memo<{
   check: AcceptanceCheck;
   evidenceById: Map<string, AcceptanceEvidence>;
   historyReviews: AcceptanceCheckReviewEntry[];
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
 }>(({ check, evidenceById, historyReviews, onRound }) => {
   const { t } = useTranslation('verify');
 
@@ -593,7 +717,11 @@ const IterationTimeline = memo<{
                   className={styles.stepDot}
                   style={{
                     borderColor:
-                      entry.review.action === 'accept' ? cssVar.colorSuccess : cssVar.colorError,
+                      entry.review.action === 'accept'
+                        ? cssVar.colorSuccess
+                        : entry.review.action === 'ignore'
+                          ? cssVar.colorTextQuaternary
+                          : cssVar.colorError,
                   }}
                 />
                 {!isLast && <div className={styles.stepRail} />}
@@ -625,20 +753,26 @@ const IterationTimeline = memo<{
               {!isLast && <div className={styles.stepRail} />}
             </Flexbox>
             <Flexbox flex={1} gap={6} style={{ minWidth: 0, paddingBlockEnd: isLast ? 0 : 20 }}>
-              <Tooltip title={t('acceptance.history.jump', { round: step.roundIndex })}>
-                <Text
-                  strong
-                  style={{ cursor: 'pointer', fontSize: 12, lineHeight: '19px' }}
-                  onClick={() => onRound(step.roundIndex)}
-                >
+              {onRound ? (
+                <Tooltip title={t('acceptance.history.jump', { round: step.roundIndex })}>
+                  <Text
+                    strong
+                    style={{ cursor: 'pointer', fontSize: 12, lineHeight: '19px' }}
+                    onClick={() => onRound(step.roundIndex)}
+                  >
+                    {t('acceptance.round', { round: step.roundIndex })}
+                  </Text>
+                </Tooltip>
+              ) : (
+                <Text strong style={{ fontSize: 12, lineHeight: '19px' }}>
                   {t('acceptance.round', { round: step.roundIndex })}
                 </Text>
-              </Tooltip>
+              )}
               <Text style={{ fontSize: 12 }}>{step.title}</Text>
               {step.evidence.length > 0 && (
                 <Flexbox horizontal gap={8} wrap={'wrap'}>
                   {step.evidence.map((item) =>
-                    item.fileUrl && VISUAL_EVIDENCE.has(item.type) ? (
+                    item.fileUrl && IMAGE_EVIDENCE.has(item.type) ? (
                       <Flexbox className={styles.evidenceImage} key={item.id}>
                         <Image
                           alt={item.description ?? item.type}
@@ -648,6 +782,24 @@ const IterationTimeline = memo<{
                           variant={'borderless'}
                         />
                       </Flexbox>
+                    ) : item.fileUrl && item.type === 'video' ? (
+                      // A player, never an <Image>: pointing an image box at an
+                      // mp4 renders a broken thumbnail, not the clip.
+                      <video
+                        controls
+                        key={item.id}
+                        src={item.fileUrl}
+                        style={{ borderRadius: 8, maxHeight: 160, maxWidth: 280 }}
+                      />
+                    ) : item.fileUrl && item.type === 'audio' ? (
+                      <div key={item.id} style={{ width: '100%' }}>
+                        <AudioPlayer
+                          fullWidth
+                          alt={item.description ?? item.type}
+                          downloadFileName={item.fileName ?? 'audio'}
+                          url={item.fileUrl}
+                        />
+                      </div>
                     ) : item.content ? (
                       <div
                         className={styles.evidenceText}
@@ -681,265 +833,561 @@ const IterationTimeline = memo<{
 const CheckRow = memo<{
   canReview: boolean;
   check: AcceptanceCheck;
+  detailMode?: boolean;
   expanded: boolean;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
+  /** Open an agent judge's verification run (its trace IS the argument). */
+  onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   onToggle: () => void;
   reviewPending: boolean;
-}>(({ canReview, check, expanded, onReview, onRound, onToggle, reviewPending }) => {
-  const { t } = useTranslation('verify');
-  // The judging narrative stays collapsed: level one is title + evidence.
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [seqCopied, setSeqCopied] = useState(false);
-  const [accepting, setAccepting] = useState(false);
-  const meta = STATE_META[check.state];
-  const counts = evidenceCounts(check.evidence);
+}>(
+  ({
+    canReview,
+    check,
+    detailMode,
+    expanded,
+    onOpenTrace,
+    onReview,
+    onRound,
+    onToggle,
+    reviewPending,
+  }) => {
+    const { t } = useTranslation('verify');
+    // The judging narrative stays collapsed: level one is title + evidence.
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [seqCopied, setSeqCopied] = useState(false);
+    const [accepting, setAccepting] = useState(false);
+    const [ignoring, setIgnoring] = useState(false);
+    const [rejecting, setRejecting] = useState(false);
+    const [reviewComment, setReviewComment] = useState('');
+    const meta = STATE_META[check.state];
+    const counts = evidenceCounts(check.evidence);
+    const visualization = readVisualizationManifest(check.result?.metadata);
 
-  const reviewState = userReviewState(check);
-  // The decision is stamped on the check's result row — a never-executed
-  // check has no evidence to judge, so it exposes no review actions.
-  const reviewable = canReview && Boolean(check.result);
-  const activeReview =
-    check.userReview && !check.userReview.stale
-      ? check.reviews.at(-1) // the standing verdict is always the newest entry
-      : undefined;
-  const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
-  const evidenceById = collectEvidenceById(check);
-  const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+    const reviewState = userReviewState(check);
+    // The decision is stamped on the check's result row — a never-executed
+    // check has no evidence to judge, so it exposes no review actions.
+    const reviewable = canReview && Boolean(check.result);
+    const activeReview =
+      check.userReview && !check.userReview.stale
+        ? check.reviews.at(-1) // the standing verdict is always the newest entry
+        : undefined;
+    const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
+    const evidenceById = collectEvidenceById(check);
+    const hasHistory = check.revisions > 1 || historyReviews.length > 0;
 
-  const openReject = () =>
-    openCheckRejectModal({
-      checkTitle: `C${check.seq} · ${check.title}`,
-      draftKey: check.id,
-      evidence: check.evidence
-        .filter((item) => isVisual(item))
-        .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
-      onConfirm: ({ annotations, comment, fileIds }) =>
-        onReview({
-          action: 'reject',
-          annotations: annotations.length > 0 ? annotations : undefined,
-          checkItemIds: [check.id],
-          comment: comment || undefined,
-          fileIds: fileIds.length > 0 ? fileIds : undefined,
-        }),
-    });
+    const openReject = () =>
+      openCheckRejectModal({
+        checkDescription: check.planItem?.description,
+        checkTitle: `C${check.seq} · ${check.title}`,
+        draftKey: check.id,
+        evidence: check.evidence
+          .filter((item) => isAnnotatable(item))
+          .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
+        initialComment: reviewComment,
+        onConfirm: async ({ annotations, comment, fileIds }) => {
+          const ok = await onReview({
+            action: 'reject',
+            annotations: annotations.length > 0 ? annotations : undefined,
+            checkItemIds: [check.id],
+            comment: comment || undefined,
+            fileIds: fileIds.length > 0 ? fileIds : undefined,
+          });
+          if (ok) {
+            setReviewComment('');
+            if (shouldCollapseAfterReview(ok, expanded)) onToggle();
+          }
+          return ok;
+        },
+      });
 
-  // Accepting settles the check — the row folds itself away once the write
-  // lands, so the reviewer's eye moves on to what still needs judgment.
-  const handleAccept = async (event: { stopPropagation: () => void }) => {
-    event.stopPropagation();
-    setAccepting(true);
-    const ok = await onReview({ action: 'accept', checkItemIds: [check.id] });
-    setAccepting(false);
-    if (ok && expanded) onToggle();
-  };
+    // Accepting settles the check — the row folds itself away once the write
+    // lands, so the reviewer's eye moves on to what still needs judgment.
+    const handleAccept = async (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      setAccepting(true);
+      const comment = reviewComment.trim();
+      const ok = await onReview({
+        action: 'accept',
+        checkItemIds: [check.id],
+        comment: comment || undefined,
+      });
+      setAccepting(false);
+      if (ok) setReviewComment('');
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
+    };
 
-  // The user's standing verdict owns the head slot: a reject replaces the
-  // verifier's mark outright (that check IS sent back, whatever the verifier
-  // said); passed + user-accepted merges into the double-check receipt.
-  const headIcon =
-    reviewState === 'rejected'
-      ? MessageSquareX
-      : check.state === 'passed' && reviewState === 'accepted'
-        ? CheckCheck
-        : meta.icon;
-  const headColor = reviewState === 'rejected' ? cssVar.colorError : meta.color;
+    const handleReject = async (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      const comment = reviewComment.trim();
+      if (!comment) return;
+      setRejecting(true);
+      const ok = await onReview({ action: 'reject', checkItemIds: [check.id], comment });
+      setRejecting(false);
+      if (ok) setReviewComment('');
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
+    };
 
-  const headIconNode = (
-    <Icon color={headColor} icon={headIcon} size={16} style={{ flex: 'none' }} />
-  );
+    const handleIgnore = async (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      setIgnoring(true);
+      const ok = await onReview({ action: 'ignore', checkItemIds: [check.id] });
+      setIgnoring(false);
+      if (shouldCollapseAfterReview(ok, expanded)) onToggle();
+    };
 
-  return (
-    <Flexbox className={styles.row} data-check-row={check.id}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.rowHeader}
-        data-expanded={expanded ? '' : undefined}
-        gap={10}
-        onClick={onToggle}
-      >
-        {reviewState === 'rejected' ? (
-          <Tooltip title={t('acceptance.review.rejectedHint')}>{headIconNode}</Tooltip>
-        ) : (
-          headIconNode
-        )}
-        <Tooltip title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}>
-          <span
-            className={cx(styles.seqChip, styles.seqChipClickable)}
-            onClick={(event) => {
-              event.stopPropagation();
-              void copyToClipboard(`C${check.seq}`);
-              setSeqCopied(true);
-              setTimeout(() => setSeqCopied(false), 1500);
-            }}
+    // The user's standing verdict owns the head slot: a reject replaces the
+    // verifier's mark outright (that check IS sent back, whatever the verifier
+    // said); passed + user-accepted merges into the double-check receipt.
+    const headIcon =
+      reviewState === 'rejected'
+        ? MessageSquareX
+        : reviewState === 'ignored'
+          ? Ban
+          : check.state === 'passed' && reviewState === 'accepted'
+            ? CheckCheck
+            : meta.icon;
+    const headColor =
+      reviewState === 'rejected'
+        ? cssVar.colorError
+        : reviewState === 'ignored'
+          ? cssVar.colorTextQuaternary
+          : meta.color;
+
+    const headIconNode = (
+      <Icon
+        color={headColor}
+        icon={headIcon}
+        size={16}
+        style={{ alignSelf: 'flex-start', flex: 'none', marginBlockStart: 3 }}
+      />
+    );
+
+    return (
+      <Flexbox className={detailMode ? undefined : styles.row} data-check-row={check.id}>
+        {!detailMode && (
+          <Flexbox
+            horizontal
+            align={'flex-start'}
+            className={styles.rowHeader}
+            data-expanded={expanded ? '' : undefined}
+            gap={10}
+            onClick={onToggle}
           >
-            C{check.seq}
-          </span>
-        </Tooltip>
-        <Flexbox
-          horizontal
-          align={'center'}
-          flex={1}
-          gap={8}
-          style={{ minWidth: 0 }}
-          wrap={expanded ? 'wrap' : 'nowrap'}
-        >
-          <Text
-            className={expanded ? undefined : styles.titleEllipsis}
-            style={{ fontSize: 13, minWidth: 0 }}
-          >
-            {check.title}
-          </Text>
-          {!check.required && (
-            <Tooltip title={t('acceptance.checks.notRequiredHint')}>
-              <Tag size={'small'}>{t('acceptance.checks.notRequired')}</Tag>
-            </Tooltip>
-          )}
-        </Flexbox>
-        <Flexbox horizontal align={'center'} gap={6}>
-          {/* An accept on a NON-passed verdict can't merge into the head icon
-              (the failed/uncertain mark must stay visible) — mark it here. */}
-          {reviewState === 'accepted' && check.state !== 'passed' && (
+            {reviewState === 'rejected' ? (
+              <Tooltip title={t('acceptance.review.rejectedHint')}>{headIconNode}</Tooltip>
+            ) : (
+              headIconNode
+            )}
             <Tooltip
-              title={t('acceptance.review.acceptedNote', {
-                time: dayjs(check.userReview!.createdAt).format('MM-DD HH:mm'),
-              })}
+              title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}
             >
-              <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
+              <span
+                className={cx(styles.seqChip, styles.seqChipClickable)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void copyToClipboard(`C${check.seq}`);
+                  setSeqCopied(true);
+                  setTimeout(() => setSeqCopied(false), 1500);
+                }}
+              >
+                C{check.seq}
+              </span>
             </Tooltip>
-          )}
-          {reviewable && reviewState === 'pending' && (
             <Flexbox
               horizontal
               align={'center'}
-              className={cx(styles.rowActions, 'acceptance-row-actions')}
-              gap={2}
-              // The accept spinner must stay visible after the pointer leaves.
-              style={accepting ? { opacity: 1 } : undefined}
+              flex={1}
+              gap={8}
+              style={{ minWidth: 0 }}
+              wrap={expanded ? 'wrap' : 'nowrap'}
             >
-              <ActionIcon
-                disabled={reviewPending && !accepting}
-                icon={Check}
-                loading={accepting}
-                size={'small'}
-                title={t('acceptance.review.accept')}
-                onClick={handleAccept}
-              />
-              <ActionIcon
-                disabled={reviewPending}
-                icon={MessageSquareX}
-                size={'small'}
-                title={t('acceptance.review.reject')}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openReject();
-                }}
-              />
-            </Flexbox>
-          )}
-          {EVIDENCE_BADGES.map(({ icon, key, labelKey }) =>
-            counts[key] ? (
-              <Tooltip key={key} title={t(labelKey, { count: counts[key] })}>
+              <Text
+                className={expanded ? undefined : styles.titleEllipsis}
+                style={{ fontSize: 13, minWidth: 0 }}
+              >
+                {check.title}
+              </Text>
+              {!check.required && (
+                <Tooltip title={t('acceptance.checks.notRequiredHint')}>
+                  <Tag size={'small'}>{t('acceptance.checks.notRequired')}</Tag>
+                </Tooltip>
+              )}
+              {/* The verdict pair travels WITH the title, not adrift at the row's
+              far right: the claim you judge and the judgement you give land in
+              one glance, so a long checklist needs no eye round-trip across the
+              row (and no mis-click onto a neighbour's buttons). */}
+              {reviewable && reviewState === 'pending' && (
                 <Flexbox
                   horizontal
                   align={'center'}
-                  gap={3}
-                  style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}
+                  className={cx(styles.rowActions, 'acceptance-row-actions')}
+                  gap={2}
+                  style={{
+                    // The accept spinner must stay visible after the pointer leaves.
+                    ...(accepting ? { opacity: 1 } : undefined),
+                    flex: 'none',
+                  }}
                 >
-                  <Icon icon={icon} size={13} />
-                  {counts[key] > 1 ? counts[key] : null}
+                  <ActionIcon
+                    disabled={reviewPending && !accepting}
+                    icon={Check}
+                    loading={accepting}
+                    size={'small'}
+                    title={t('acceptance.review.accept')}
+                    onClick={handleAccept}
+                  />
+                  <ActionIcon
+                    disabled={reviewPending && !ignoring}
+                    icon={Ban}
+                    loading={ignoring}
+                    size={'small'}
+                    title={t('acceptance.review.ignore')}
+                    onClick={handleIgnore}
+                  />
+                  <ActionIcon
+                    disabled={reviewPending}
+                    icon={MessageSquareX}
+                    size={'small'}
+                    title={t('acceptance.review.reject')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openReject();
+                    }}
+                  />
                 </Flexbox>
-              </Tooltip>
-            ) : null,
-          )}
-          {/* The iteration mark stays compact — [↻ N]; the words (verified N
+              )}
+            </Flexbox>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={cx(styles.rowMeta, 'acceptance-row-meta')}
+              gap={6}
+            >
+              {/* An accept on a NON-passed verdict can't merge into the head icon
+              (the failed/uncertain mark must stay visible) — mark it here. */}
+              {reviewState === 'accepted' && check.state !== 'passed' && (
+                <Tooltip
+                  title={t('acceptance.review.acceptedNote', {
+                    time: dayjs(check.userReview!.createdAt).format('MM-DD HH:mm'),
+                  })}
+                >
+                  <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
+                </Tooltip>
+              )}
+              {visualization && <VisualizationDeltaBadge manifest={visualization} />}
+              {EVIDENCE_BADGES.map(({ icon, key, labelKey }) =>
+                counts[key] ? (
+                  <Tooltip key={key} title={t(labelKey, { count: counts[key] })}>
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      gap={3}
+                      style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}
+                    >
+                      <Icon icon={icon} size={13} />
+                      {counts[key] > 1 ? counts[key] : null}
+                    </Flexbox>
+                  </Tooltip>
+                ) : null,
+              )}
+              {/* The iteration mark stays compact — [↻ N]; the words (verified N
               rounds · introduced in round X) live in its tooltip. Clicking
               jumps to the round the concern first appeared in. */}
-          {check.revisions > 1 && (
-            <Tooltip
-              title={[
-                check.titleChanged
-                  ? t('acceptance.checks.iterated', { count: check.revisions })
-                  : t('acceptance.checks.rerun', { count: check.revisions }),
-                check.resultRound !== undefined &&
-                check.resultRound !== null &&
-                check.introducedAtRound !== check.resultRound
-                  ? t('acceptance.checks.introduced', { round: check.introducedAtRound })
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            >
-              <span
-                className={cx(styles.chip, styles.chipClickable)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRound(check.introducedAtRound);
-                }}
-              >
-                <Icon icon={Repeat} size={10} /> {check.revisions}
-              </span>
-            </Tooltip>
-          )}
-          {check.resultRound !== undefined && check.resultRound !== null && (
-            <Tooltip title={t('acceptance.checks.finalRoundHint')}>
-              <span
-                className={cx(styles.chip, styles.chipClickable)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRound(check.resultRound!);
-                }}
-              >
-                {t('acceptance.round', { round: check.resultRound })}
-              </span>
-            </Tooltip>
-          )}
-          <Icon
-            color={cssVar.colorTextQuaternary}
-            icon={ChevronRight}
-            size={14}
-            style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
-          />
-        </Flexbox>
-      </Flexbox>
-
-      {expanded && (
-        <Flexbox gap={10} paddingBlock={'0 14px'} paddingInline={16}>
-          {check.result?.toulmin?.evidence && (
-            <Text className={styles.descClamp} fontSize={12} type={'secondary'}>
-              {check.result.toulmin.evidence}
-            </Text>
-          )}
-          <EvidenceList evidence={check.evidence} />
-
-          {/* An executed check with zero artifacts must SAY so — a silent blank
-              under the verdict reads as a rendering bug, not as a fact. Filled
-              so it reads as a status, never as more description text. */}
-          {check.result && check.evidence.length === 0 && (
-            <Flexbox
-              paddingBlock={6}
-              paddingInline={10}
-              style={{
-                background: cssVar.colorFillQuaternary,
-                borderRadius: cssVar.borderRadius,
-                width: '100%',
-              }}
-            >
-              <Text fontSize={12} type={'secondary'}>
-                {t('acceptance.evidence.empty')}
-              </Text>
+              {onRound && check.revisions > 1 && (
+                <Tooltip
+                  title={[
+                    check.titleChanged
+                      ? t('acceptance.checks.iterated', { count: check.revisions })
+                      : t('acceptance.checks.rerun', { count: check.revisions }),
+                    check.resultRound !== undefined &&
+                    check.resultRound !== null &&
+                    check.introducedAtRound !== check.resultRound
+                      ? t('acceptance.checks.introduced', { round: check.introducedAtRound })
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                >
+                  <span
+                    className={cx(styles.chip, styles.chipClickable)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRound(check.introducedAtRound);
+                    }}
+                  >
+                    <Icon icon={Repeat} size={10} /> {check.revisions}
+                  </span>
+                </Tooltip>
+              )}
+              {onRound && check.resultRound !== undefined && check.resultRound !== null && (
+                <Tooltip title={t('acceptance.checks.finalRoundHint')}>
+                  <span
+                    className={cx(styles.chip, styles.chipClickable)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRound(check.resultRound!);
+                    }}
+                  >
+                    {t('acceptance.round', { round: check.resultRound })}
+                  </span>
+                </Tooltip>
+              )}
             </Flexbox>
-          )}
+            <Flexbox align={'center'} height={22}>
+              <Icon
+                color={cssVar.colorTextQuaternary}
+                icon={ChevronRight}
+                size={14}
+                style={{
+                  transform: expanded ? 'rotate(90deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </Flexbox>
+          </Flexbox>
+        )}
 
-          {/* The user's standing feedback hangs right under the evidence it
-              judges. An accept keeps an undo path — the signature line gains a
-              quiet "change to reject" escape, feedback then flows as usual. */}
-          {activeReview &&
-            (activeReview.action === 'accept' ? (
-              <Flexbox horizontal align={'center'} gap={8}>
-                <AcceptedNote review={activeReview} />
-                {reviewable && (
+        {expanded && (
+          <Flexbox
+            gap={10}
+            paddingBlock={detailMode ? 0 : '0 14px'}
+            paddingInline={detailMode ? 0 : 16}
+          >
+            {/* The verifier's account of what it saw. Clamping it to two lines
+              hid the middle of the argument behind an ellipsis with no way to
+              open it — in a detail view there is nothing to preview. */}
+            {check.result?.toulmin?.evidence && (
+              <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }} type={'secondary'}>
+                {check.result.toulmin.evidence}
+              </Text>
+            )}
+            {/* An agent judge's argument is its run, not a paragraph — link the
+              trace instead of trying to summarize it inline. `onOpenTrace`
+              gates the render, not just the click: a caller that forgets to
+              pass it would otherwise get a button whose optional call silently
+              does nothing — exactly how this shipped dead in the portal. */}
+            {check.planItem?.verifierType === 'agent' &&
+              check.result?.verifierOperationId &&
+              onOpenTrace && (
+                <Flexbox horizontal>
+                  <Button
+                    icon={<Icon icon={Route} />}
+                    size={'small'}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onOpenTrace(check.result!.verifierOperationId!);
+                    }}
+                  >
+                    {t('acceptance.checks.viewTrace')}
+                  </Button>
+                </Flexbox>
+              )}
+            {visualization && <VisualizationRenderer manifest={visualization} />}
+            <EvidenceList evidence={check.evidence} />
+
+            {check.state === 'not_executed' && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={8}
+                paddingBlock={8}
+                paddingInline={10}
+                style={{
+                  background: cssVar.colorFillQuaternary,
+                  borderRadius: cssVar.borderRadius,
+                  width: '100%',
+                }}
+              >
+                <Icon
+                  color={cssVar.colorTextQuaternary}
+                  icon={CircleDashed}
+                  size={15}
+                  style={{ flex: 'none' }}
+                />
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.focus.verifierDescription.notExecuted')}
+                </Text>
+              </Flexbox>
+            )}
+
+            {/* The verifier's record slot. An LLM judge's whole product IS its
+              reasoning, so when it exists it IS the record shown here — in the
+              same slot the empty-evidence note otherwise occupies (the two are
+              the same statement: "here is what the verifier left behind"). An
+              executed check with neither still SAYS so — a silent blank under
+              the verdict reads as a rendering bug, not as a fact. */}
+            {check.state !== 'not_executed' &&
+              check.result &&
+              (check.result.toulmin?.reasoning ? (
+                <Flexbox
+                  gap={4}
+                  paddingBlock={8}
+                  paddingInline={10}
+                  style={{
+                    background: cssVar.colorFillQuaternary,
+                    borderRadius: cssVar.borderRadius,
+                    width: '100%',
+                  }}
+                >
+                  <Text fontSize={11} type={'secondary'}>
+                    {t('acceptance.checks.judgeReason')}
+                  </Text>
+                  <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>
+                    {check.result.toulmin.reasoning}
+                  </Text>
+                </Flexbox>
+              ) : !hasRenderableEvidence(check.evidence.length, visualization) ? (
+                <Flexbox
+                  paddingBlock={6}
+                  paddingInline={10}
+                  style={{
+                    background: cssVar.colorFillQuaternary,
+                    borderRadius: cssVar.borderRadius,
+                    width: '100%',
+                  }}
+                >
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('acceptance.evidence.empty')}
+                  </Text>
+                </Flexbox>
+              ) : null)}
+
+            {/* The user's standing feedback hangs right under the evidence it
+              judges. BOTH verdicts keep an undo path — a mis-click is the most
+              likely way either happens, and a send-back the user didn't mean
+              otherwise costs a whole repair round to walk back. */}
+            {activeReview &&
+              (activeReview.action === 'accept' ? (
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <AcceptedNote review={activeReview} />
+                  {reviewable && (
+                    <Button
+                      disabled={reviewPending}
+                      size={'small'}
+                      type={'text'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openReject();
+                      }}
+                    >
+                      {t('acceptance.review.revertToReject')}
+                    </Button>
+                  )}
+                </Flexbox>
+              ) : activeReview.action === 'ignore' ? (
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <IgnoredNote review={activeReview} />
+                  {reviewable && (
+                    <>
+                      <Button
+                        disabled={reviewPending}
+                        size={'small'}
+                        type={'text'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openReject();
+                        }}
+                      >
+                        {t('acceptance.review.revertToReject')}
+                      </Button>
+                      <Button
+                        disabled={reviewPending && !accepting}
+                        loading={accepting}
+                        size={'small'}
+                        type={'text'}
+                        onClick={handleAccept}
+                      >
+                        {t('acceptance.review.revertToAccept')}
+                      </Button>
+                    </>
+                  )}
+                </Flexbox>
+              ) : (
+                <Flexbox gap={6}>
+                  <FeedbackCard evidenceById={evidenceById} review={activeReview} />
+                  {/* The mirror of the accept escape: take the send-back back.
+                    A fresh accept supersedes the reject, so the check leaves
+                    待修复 and the feedback drops out of the next round's input. */}
+                  {reviewable && (
+                    <Flexbox horizontal>
+                      <Button
+                        disabled={reviewPending && !accepting}
+                        loading={accepting}
+                        size={'small'}
+                        type={'text'}
+                        onClick={handleAccept}
+                      >
+                        {t('acceptance.review.revertToAccept')}
+                      </Button>
+                    </Flexbox>
+                  )}
+                </Flexbox>
+              ))}
+
+            {/* Confirm (plain filled) anchors the right edge; reject is the
+              quiet text escape next to it. */}
+            {reviewable &&
+              !activeReview &&
+              (detailMode ? (
+                <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
+                  {hasAnnotatableEvidence(check) && (
+                    <Button
+                      icon={<Icon icon={Images} />}
+                      style={{ alignSelf: 'flex-start' }}
+                      type={'text'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openReject();
+                      }}
+                    >
+                      {t('acceptance.review.annotate')}
+                    </Button>
+                  )}
+                  <TextArea
+                    autoSize={{ maxRows: 8, minRows: 3 }}
+                    placeholder={t('acceptance.review.detailPlaceholder')}
+                    value={reviewComment}
+                    onChange={(event) => setReviewComment(event.target.value)}
+                  />
+                  <Flexbox horizontal gap={8}>
+                    <Button
+                      block
+                      disabled={reviewPending || !reviewComment.trim()}
+                      loading={rejecting}
+                      size={'large'}
+                      style={{ flex: 1 }}
+                      onClick={handleReject}
+                    >
+                      {t('acceptance.review.reject')}
+                    </Button>
+                    <Button
+                      block
+                      disabled={reviewPending && !accepting}
+                      icon={<Icon icon={Check} />}
+                      loading={accepting}
+                      size={'large'}
+                      style={{ flex: 1 }}
+                      type={'fill'}
+                      onClick={handleAccept}
+                    >
+                      {t('acceptance.review.accept')}
+                    </Button>
+                  </Flexbox>
+                </Flexbox>
+              ) : (
+                <Flexbox horizontal gap={4} justify={'flex-end'}>
+                  <Button
+                    disabled={reviewPending && !ignoring}
+                    loading={ignoring}
+                    size={'small'}
+                    type={'text'}
+                    onClick={handleIgnore}
+                  >
+                    {t('acceptance.review.ignore')}
+                  </Button>
                   <Button
                     disabled={reviewPending}
                     size={'small'}
@@ -949,68 +1397,80 @@ const CheckRow = memo<{
                       openReject();
                     }}
                   >
-                    {t('acceptance.review.revertToReject')}
+                    {t('acceptance.review.reject')}
                   </Button>
-                )}
-              </Flexbox>
-            ) : (
-              <FeedbackCard evidenceById={evidenceById} review={activeReview} />
-            ))}
+                  <Button
+                    disabled={reviewPending && !accepting}
+                    icon={<Icon icon={Check} />}
+                    loading={accepting}
+                    size={'small'}
+                    type={'fill'}
+                    onClick={handleAccept}
+                  >
+                    {t('acceptance.review.accept')}
+                  </Button>
+                </Flexbox>
+              ))}
 
-          {/* Confirm (plain filled) anchors the right edge; reject is the
-              quiet text escape next to it. */}
-          {reviewable && !activeReview && (
-            <Flexbox horizontal gap={4} justify={'flex-end'}>
-              <Button
-                disabled={reviewPending}
-                size={'small'}
-                type={'text'}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openReject();
-                }}
+            {hasHistory && (
+              <span
+                className={styles.historyToggle}
+                onClick={() => setHistoryOpen((open) => !open)}
               >
-                {t('acceptance.review.reject')}
-              </Button>
-              <Button
-                disabled={reviewPending && !accepting}
-                icon={<Icon icon={Check} />}
-                loading={accepting}
-                size={'small'}
-                type={'fill'}
-                onClick={handleAccept}
-              >
-                {t('acceptance.review.accept')}
-              </Button>
-            </Flexbox>
-          )}
-
-          {hasHistory && (
-            <span className={styles.historyToggle} onClick={() => setHistoryOpen((open) => !open)}>
-              <Icon
-                icon={ChevronRight}
-                size={12}
-                style={{
-                  transform: historyOpen ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.2s',
-                }}
+                <Icon
+                  icon={ChevronRight}
+                  size={12}
+                  style={{
+                    transform: historyOpen ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.2s',
+                  }}
+                />
+                {t('acceptance.checks.iterationHistory', { count: check.revisions })}
+              </span>
+            )}
+            {historyOpen && hasHistory && (
+              <IterationTimeline
+                check={check}
+                evidenceById={evidenceById}
+                historyReviews={historyReviews}
+                onRound={onRound}
               />
-              {t('acceptance.checks.iterationHistory', { count: check.revisions })}
-            </span>
-          )}
-          {historyOpen && hasHistory && (
-            <IterationTimeline
-              check={check}
-              evidenceById={evidenceById}
-              historyReviews={historyReviews}
-              onRound={onRound}
-            />
-          )}
-        </Flexbox>
-      )}
-    </Flexbox>
-  );
-});
+            )}
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+interface FocusedCheckDetailsProps {
+  canReview: boolean;
+  check: AcceptanceCheck;
+  /** Open an agent judge's verification run (its trace IS the argument). */
+  onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
+  onReview: (input: CheckReviewInput) => Promise<boolean>;
+  onRound?: (round: number) => void;
+  reviewPending: boolean;
+}
+
+/** Full check content for the dedicated second-level acceptance workspace. */
+export const FocusedCheckDetails = memo<FocusedCheckDetailsProps>(
+  ({ canReview, check, onOpenTrace, onReview, onRound, reviewPending }) => (
+    <CheckRow
+      detailMode
+      expanded
+      canReview={canReview}
+      check={check}
+      reviewPending={reviewPending}
+      onOpenTrace={onOpenTrace}
+      onReview={onReview}
+      onRound={onRound}
+      onToggle={() => {}}
+    />
+  ),
+);
+
+FocusedCheckDetails.displayName = 'FocusedCheckDetails';
 
 /**
  * The filter maps the reviewer's WORKFLOW, not the verifier's taxonomy — each
@@ -1028,14 +1488,22 @@ const CheckRow = memo<{
  * still 未验收: the verifier is unsure or the run is red, so it needs your eyes
  * — not an automatic "needs fix" label you never asked for.
  */
-export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted';
+export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted' | 'ignored';
 
 export const checkFilterState = (check: AcceptanceCheck): Exclude<CheckFilter, 'all'> => {
   const review = userReviewState(check);
   if (review === 'accepted') return 'accepted';
+  if (review === 'ignored') return 'ignored';
   if (review === 'rejected') return 'needsFix';
   return 'pending';
 };
+
+/** Keep the verifier's result separate from the user's acceptance workflow state. */
+export const focusedCheckStates = (check: AcceptanceCheck) => ({
+  review: checkFilterState(check),
+  verifier: check.state,
+  verifierLabel: check.state === 'not_executed' ? ('notExecuted' as const) : check.state,
+});
 
 interface CheckGroup {
   checks: AcceptanceCheck[];
@@ -1074,9 +1542,11 @@ interface CheckListProps {
   groupFeedback: AcceptanceGroupFeedback[];
   /** Record group-scoped feedback; resolves true when the write landed. */
   onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
+  /** Open an agent judge's verification run (its trace IS the argument). */
+  onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   /** Record the user's verdict; resolves true when the write landed. */
   onReview: (input: CheckReviewInput) => Promise<boolean>;
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
   onToggleGroup: (key: string) => void;
   onToggleGroupItems: (ids: string[], open: boolean) => void;
   onToggleItem: (id: string) => void;
@@ -1097,6 +1567,7 @@ const CheckList = memo<CheckListProps>(
     groupFeedback,
     onGroupFeedback,
     onReview,
+    onOpenTrace,
     onRound,
     onToggleGroup,
     onToggleGroupItems,
@@ -1113,6 +1584,14 @@ const CheckList = memo<CheckListProps>(
         round === undefined ||
         check.timeline.some((step) => step.roundIndex === round));
 
+    const visibleRows = checks
+      .filter(visible)
+      .sort(
+        (a, b) =>
+          SEVERITY[a.state] - SEVERITY[b.state] ||
+          (hasVisualEvidence(b) ? 1 : 0) - (hasVisualEvidence(a) ? 1 : 0) ||
+          a.introducedAtRound - b.introducedAtRound,
+      );
     const groups = groupChecks(checks, t('acceptance.group.uncategorized'))
       .map((group) => ({
         ...group,
@@ -1131,7 +1610,7 @@ const CheckList = memo<CheckListProps>(
     // a blank bordered card — each filter gets its own reassuring line. But an
     // EMPTY pending bucket where every check is signed off isn't "nothing here"
     // — it's the finish line, so it earns a celebration instead of a flat line.
-    if (groups.length === 0) {
+    if (visibleRows.length === 0) {
       const allAccepted = filter === 'pending' && isGroupFullyAccepted(checks);
       return (
         <Flexbox align={'center'} className={styles.emptyCard} gap={12} justify={'center'}>
@@ -1166,6 +1645,26 @@ const CheckList = memo<CheckListProps>(
       );
     }
 
+    if (!shouldGroupChecks(checks.length)) {
+      return (
+        <Flexbox className={styles.groupCard}>
+          {visibleRows.map((check) => (
+            <CheckRow
+              canReview={canReview}
+              check={check}
+              expanded={expanded.has(check.id)}
+              key={check.id}
+              reviewPending={reviewPending}
+              onOpenTrace={onOpenTrace}
+              onReview={onReview}
+              onRound={onRound}
+              onToggle={() => onToggleItem(check.id)}
+            />
+          ))}
+        </Flexbox>
+      );
+    }
+
     return (
       <Flexbox className={styles.groupCard}>
         {groups.map(({ checks: groupChecks_, key, label, rows }, groupIndex) => {
@@ -1175,7 +1674,7 @@ const CheckList = memo<CheckListProps>(
           // Only executed checks can be stamped — see the row-level gating.
           const reviewableChecks = groupChecks_.filter((check) => check.result);
           const unaccepted = reviewableChecks.filter(
-            (check) => userReviewState(check) !== 'accepted',
+            (check) => !['accepted', 'ignored'].includes(userReviewState(check)),
           );
           // The header counts what the REVIEWER cares about: how many they
           // signed off, how many the verifier flagged, how many they sent
@@ -1185,6 +1684,9 @@ const CheckList = memo<CheckListProps>(
           ).length;
           const rejectedCount = reviewableChecks.filter(
             (check) => userReviewState(check) === 'rejected',
+          ).length;
+          const ignoredCount = reviewableChecks.filter(
+            (check) => userReviewState(check) === 'ignored',
           ).length;
           const exceptionCount = groupChecks_.filter((check) => isException(check)).length;
           // Everything passed AND the user signed all of it off — the ratio
@@ -1238,6 +1740,11 @@ const CheckList = memo<CheckListProps>(
                         {t('acceptance.group.rejectedCount', { count: rejectedCount })}
                       </Text>
                     )}
+                    {ignoredCount > 0 && (
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('acceptance.group.ignoredCount', { count: ignoredCount })}
+                      </Text>
+                    )}
                   </Flexbox>
                 )}
                 {/* Bulk accept sits by the ratio it settles, hover-revealed —
@@ -1268,7 +1775,7 @@ const CheckList = memo<CheckListProps>(
                     >
                       {t('acceptance.review.acceptAll')}
                     </Button>
-                  ) : allVerified ? null : (
+                  ) : allVerified || ignoredCount > 0 ? null : (
                     // Fully signed off but not all green — the mixed-verdict
                     // receipt that can't fold into the ratio text.
                     <Flexbox
@@ -1386,32 +1893,12 @@ const CheckList = memo<CheckListProps>(
                     expanded={expanded.has(check.id)}
                     key={check.id}
                     reviewPending={reviewPending}
+                    onOpenTrace={onOpenTrace}
                     onReview={onReview}
                     onRound={onRound}
                     onToggle={() => onToggleItem(check.id)}
                   />
                 ))}
-              {/* Bottom escape hatch — after scrolling through the group's rows,
-                  collapse it without travelling back to the header. Labeled:
-                  a bare icon at this distance from the header reads as noise. */}
-              {!collapsed && (
-                <Flexbox
-                  align={'center'}
-                  paddingBlock={4}
-                  style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
-                >
-                  <Button
-                    icon={<Icon icon={ChevronsDownUp} />}
-                    size={'small'}
-                    // Quiet escape hatch — tertiary text, not a competing action.
-                    style={{ color: cssVar.colorTextTertiary }}
-                    type={'text'}
-                    onClick={() => onToggleGroup(key)}
-                  >
-                    {t('acceptance.group.collapse', { label })}
-                  </Button>
-                </Flexbox>
-              )}
             </Fragment>
           );
         })}

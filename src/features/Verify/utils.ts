@@ -145,6 +145,35 @@ export const renderableSurfaces = (surfaces: VerifyCodingScope['surfaces']): Ver
   return seen;
 };
 
+const LEADING_UUID_RE = /^[\dA-F]{8}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{12}/i;
+
+/**
+ * Salvage the leading UUID from a route param. Chat autolinkers glue trailing
+ * CJK punctuation onto shared links (`/acceptance/<uuid>（本轮…`), so the raw
+ * param would 404 (and used to 500) even though the link plainly names a real
+ * aggregate — extract the id and let the visit succeed. A param with no
+ * leading UUID passes through unchanged so genuine not-found stays visible.
+ */
+export const extractUuid = (raw: string | undefined): string | undefined => {
+  if (!raw) return raw;
+  return LEADING_UUID_RE.exec(raw)?.[0] ?? raw;
+};
+
+/**
+ * Resolve the acceptance page's `?r=` deep-link to the round it names. Only a
+ * plain non-negative integer that matches an existing round counts — anything
+ * else (absent, garbage, an index the chain never reached) resolves to null and
+ * the page just shows its default state.
+ */
+export const resolveRoundParam = <T extends { run: { roundIndex: number | null } }>(
+  rounds: T[],
+  raw: string | null | undefined,
+): T | null => {
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const index = Number(raw);
+  return rounds.find((round) => round.run.roundIndex === index) ?? null;
+};
+
 export interface CheckCounts {
   failed: number;
   passed: number;

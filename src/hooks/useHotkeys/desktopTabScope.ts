@@ -3,7 +3,6 @@
 import { useCallback } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useElectronStore } from '@/store/electron';
 
 /**
@@ -15,19 +14,13 @@ import { useElectronStore } from '@/store/electron';
  * (e.g. TabBar) — no `isDesktop` guard needed.
  */
 export const useRegisterDesktopTabHotkeys = () => {
-  const navigate = useWorkspaceAwareNavigate();
+  const switchToTabByIndex = useCallback((index: number) => {
+    const { tabs, switchTab } = useElectronStore.getState();
+    if (index < 0 || index >= tabs.length) return;
 
-  const switchToTabByIndex = useCallback(
-    (index: number) => {
-      const { tabs, activateTab } = useElectronStore.getState();
-      if (index < 0 || index >= tabs.length) return;
-
-      const target = tabs[index];
-      activateTab(target.id);
-      navigate(target.url);
-    },
-    [navigate],
-  );
+    const target = tabs[index];
+    switchTab(target.id);
+  }, []);
 
   // Mod+1 through Mod+9
   useHotkeys(
@@ -50,15 +43,14 @@ export const useRegisterDesktopTabHotkeys = () => {
     'ctrl+tab',
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const nextIndex = (currentIndex + 1) % tabs.length;
       const target = tabs[nextIndex];
 
-      activateTab(target.id);
-      navigate(target.url);
+      switchTab(target.id);
     },
     {
       enableOnFormTags: true,
@@ -71,15 +63,14 @@ export const useRegisterDesktopTabHotkeys = () => {
     'ctrl+shift+tab',
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
       const target = tabs[prevIndex];
 
-      activateTab(target.id);
-      navigate(target.url);
+      switchTab(target.id);
     },
     {
       enableOnFormTags: true,

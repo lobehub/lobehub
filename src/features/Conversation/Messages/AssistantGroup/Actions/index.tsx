@@ -1,5 +1,4 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { ReactionPicker } from '../../../components/Reaction';
@@ -16,6 +15,8 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
+  'comments',
   'branching',
   'collapse',
   'divider',
@@ -32,7 +33,15 @@ const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // shared and multi-selected/forwarded as one aggregated assistant reply. The
 // forward serializer keeps child text while excluding child tool payloads.
 const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
-const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['share', 'select', 'divider', 'del'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
+  'comments',
+  'share',
+  'select',
+  'divider',
+  'del',
+  'divider',
+  'copyOperationId',
+];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
@@ -67,14 +76,12 @@ export const GroupActionsBar = memo<GroupActionsProps>(
     const defaultBar = data.tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
 
     return (
-      <Flexbox horizontal align={'center'} gap={8}>
-        <ReactionPicker messageId={id} />
-        <MessageActionBar
-          bar={actionsConfig?.bar ?? defaultBar}
-          ctx={ctx}
-          menu={actionsConfig?.menu ?? DEFAULT_MENU}
-        />
-      </Flexbox>
+      <MessageActionBar
+        bar={actionsConfig?.bar ?? defaultBar}
+        ctx={ctx}
+        leading={<ReactionPicker messageId={id} />}
+        menu={actionsConfig?.menu ?? DEFAULT_MENU}
+      />
     );
   },
 );

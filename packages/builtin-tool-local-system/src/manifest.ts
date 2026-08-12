@@ -86,7 +86,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. Limits the search to this directory. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
+              "Working directory scope. Limits the search to this directory. Omit to default to the user's workspace directory. Use a specific path when the user names one explicitly.",
             type: 'string',
           },
           limit: {
@@ -390,7 +390,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. When `pattern` is relative, it is joined with this scope. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
+              "Working directory scope. When `pattern` is relative, it is joined with this scope. Omit to default to the user's workspace directory. Use a specific path when the user names one explicitly.",
             type: 'string',
           },
         },

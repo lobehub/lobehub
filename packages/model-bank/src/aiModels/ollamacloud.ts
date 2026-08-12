@@ -120,19 +120,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      "Qwen3-Coder-Next is a coding-focused language model from Alibaba's Qwen team, optimized for agentic coding workflows and local development. Built on top of Qwen3-Next-80B-A3B-Base with hybrid attention and MoE architecture, trained on large-scale executable tasks with environment interaction and reinforcement learning.",
-    displayName: 'Qwen3 Coder Next',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen3-coder-next',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 204_800,
@@ -148,20 +135,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
-    displayName: 'GLM-5',
-    family: 'glm',
-    generation: 'glm-5',
-    id: 'glm-5',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -171,75 +144,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k2.5',
     id: 'kimi-k2.5',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Devstral 2 123B excels at using tools to explore codebases, edit multiple files, and support software engineering agents.',
-    displayName: 'Devstral 2',
-    family: 'devstral',
-    id: 'devstral-2:123b',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576,
-    description:
-      'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
-    displayName: 'Gemini 3 Flash Preview',
-    family: 'gemini',
-    generation: 'gemini-3',
-    id: 'gemini-3-flash-preview',
-    knowledgeCutoff: '2025-01',
-    releasedAt: '2025-12-17',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 204_800,
-    displayName: 'MiniMax M2.1',
-    family: 'minimax',
-    generation: 'minimax-m2.1',
-    id: 'minimax-m2.1',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are improved with more concise and natural responses and more immersive writing. For complex agent tasks, instruction following during tool calls is stronger, and the frontend aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further enhanced.",
-    displayName: 'GLM-4.7',
-    family: 'glm',
-    generation: 'glm-4.7',
-    id: 'glm-4.7',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek V3.1 is a next-generation reasoning model with improved complex reasoning and chain-of-thought, suited for tasks requiring deep analysis.',
-    displayName: 'DeepSeek V3.1',
-    family: 'deepseek',
-    generation: 'deepseek-v3.1',
-    id: 'deepseek-v3.1:671b',
     type: 'chat',
   },
   {
@@ -272,63 +176,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     id: 'gpt-oss:120b',
     knowledgeCutoff: '2024-06',
     releasedAt: '2025-08-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 262_144,
-    description: "Alibaba's high-performance long-context model for agent and coding tasks.",
-    displayName: 'Qwen3 Coder 480B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen3-coder:480b',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Ministral 3 3B is the smallest and most efficient model in the Ministral 3 series, offering strong language and vision capabilities in a compact package. Designed for edge deployment, it delivers high performance on various hardware including local setups.',
-    displayName: 'Ministral 3 3B',
-    family: 'ministral',
-    id: 'ministral-3:3b',
-    knowledgeCutoff: '2023-10',
-    releasedAt: '2025-12-02',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Ministral 3 8B is a powerful and efficient model in the Ministral 3 series, delivering top-tier text and vision capabilities. Built for edge deployment, it delivers high performance on various hardware including local setups.',
-    displayName: 'Ministral 3 8B',
-    family: 'ministral',
-    id: 'ministral-3:8b',
-    knowledgeCutoff: '2023-10',
-    releasedAt: '2025-12-02',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Ministral 3 14B is the largest model in the Ministral 3 series, delivering state-of-the-art performance comparable to the larger Mistral Small 3.2 24B counterpart. Optimized for local deployment, it delivers high performance on various hardware including local setups.',
-    displayName: 'Ministral 3 14B',
-    family: 'ministral',
-    id: 'ministral-3:14b',
-    knowledgeCutoff: '2023-10',
-    releasedAt: '2025-12-02',
     type: 'chat',
   },
   {
