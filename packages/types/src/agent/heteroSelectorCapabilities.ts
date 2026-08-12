@@ -21,13 +21,7 @@ export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFA
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--effort <level>` flag.
  */
-export const CLAUDE_CODE_REASONING_EFFORT_LEVELS = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const;
+const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
@@ -35,9 +29,9 @@ export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEV
  * Codex reasoning-effort levels, mirrored to the CLI config key
  * `model_reasoning_effort`.
  */
-export const CODEX_COMMON_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
+const CODEX_COMMON_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
 
-export const CODEX_REASONING_EFFORT_LEVELS = [
+const CODEX_REASONING_EFFORT_LEVELS = [
   ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
   'max',
   'ultra',
@@ -59,7 +53,7 @@ const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
  * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--reasoning-effort <level>` flag.
  */
-export const QODER_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const QODER_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number];
 
@@ -79,7 +73,7 @@ export type HeterogeneousReasoningEffort =
  * sign-in; the Codex CLI silently omits the tier for unsupported models, so
  * passing it is always safe.
  */
-export const CODEX_SPEED_MODES = ['fast'] as const;
+const CODEX_SPEED_MODES = ['fast'] as const;
 
 export type CodexSpeedMode = (typeof CODEX_SPEED_MODES)[number];
 
@@ -91,7 +85,7 @@ export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
  * Codex models whose catalog exposes the Fast (`priority`) service tier.
  * Sourced from the model catalog embedded in codex-cli.
  */
-export const CODEX_FAST_SPEED_MODELS = [
+const CODEX_FAST_SPEED_MODELS = [
   'gpt-5.6',
   'gpt-5.6-sol',
   'gpt-5.6-terra',
@@ -139,11 +133,6 @@ export const getCodexReasoningEffortLevels = (model: string): readonly CodexReas
 
   return CODEX_COMMON_REASONING_EFFORT_LEVELS;
 };
-
-export const codexModelSupportsReasoningEffort = (
-  model: string,
-  effort: CodexReasoningEffort,
-): boolean => getCodexReasoningEffortLevels(model).includes(effort);
 
 /**
  * Whether the Fast speed toggle applies to a selector model value. `default`
@@ -211,7 +200,7 @@ export const resolveCodexSpeedMode = (
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
-export const resolveQoderReasoningEffort = (
+const resolveQoderReasoningEffort = (
   source: HeteroSelectionSource | null | undefined,
 ): QoderReasoningEffort | HeterogeneousAgentDefaultSelection => {
   const effort = (

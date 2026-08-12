@@ -6,7 +6,7 @@
  * them. Provider knowledge lives in `heteroSelectorCapabilities`.
  */
 
-export const CLI_CONFIG_FLAGS = ['-c', '--config'] as const;
+const CLI_CONFIG_FLAGS = ['-c', '--config'] as const;
 
 export const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));

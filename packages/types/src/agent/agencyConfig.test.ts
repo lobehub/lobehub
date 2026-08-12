@@ -11,7 +11,6 @@ import {
 } from './agencyConfig';
 import {
   codexModelSupportsFastSpeed,
-  codexModelSupportsReasoningEffort,
   getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
@@ -461,14 +460,6 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-sol')).toEqual(ultraLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.6-terra')).toEqual(ultraLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
-  });
-
-  it('reports model-specific Max and Ultra support', () => {
-    expect(codexModelSupportsReasoningEffort('gpt-5.6', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-sol', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-terra', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'max')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'ultra')).toBe(false);
   });
 
   it('uses conservative common levels for old, unknown, and default models', () => {
