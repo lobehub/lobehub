@@ -813,19 +813,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
-        element: dynamicElement(
-          () => import('@/routes/(main)/project/[projectId]'),
-          'Desktop > Project Workspace',
-          { preloadId: 'project' },
-        ),
+        element: redirectElement('tasks'),
         index: true,
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/project/[projectId]/library/[id]'),
-          'Desktop > Project Library',
-        ),
-        path: 'library/:id',
       },
       {
         element: dynamicElement(
@@ -849,20 +838,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
           'Desktop > Project Acceptance',
         ),
         path: 'acceptance',
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/project/[projectId]/conversation'),
-          'Desktop > Project Conversation',
-        ),
-        path: 'conversation',
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/project/[projectId]/conversation'),
-          'Desktop > Project Conversation Topic',
-        ),
-        path: 'conversation/:topicId',
       },
     ],
     element: dynamicLayout(
