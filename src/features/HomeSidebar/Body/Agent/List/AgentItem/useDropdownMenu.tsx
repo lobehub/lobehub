@@ -42,7 +42,7 @@ import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors, homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
@@ -534,13 +534,7 @@ export const useAgentDropdownMenu = ({
                               await removeAgent(id);
                               toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
-                              toast.error(
-                                isOwnerOnlyForbiddenError(error)
-                                  ? t('deleteSharedOwnerOnly', { ns: 'common' })
-                                  : isForbiddenError(error)
-                                    ? t('manageOnlyCreator', { ns: 'common' })
-                                    : t('operationFailed', { ns: 'common' }),
-                              );
+                              toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                             }
                           },
                           title: t('delete', { ns: 'common' }),

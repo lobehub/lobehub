@@ -174,14 +174,31 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 const slowProcedures = new Set(['market.getAssistantList']);
 const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedures]);
 
+// Queries whose input can exceed the GET URL budget (`maxURLLength` 2083):
+// the transfer-job status poll sends the visible-topic candidate set (up to
+// 1000 ids), which httpBatchLink would reject client-side with "Input is too
+// big for a single dispatch". Route them over POST instead (the lambda route
+// handler enables `allowMethodOverride`).
+const LARGE_INPUT_QUERY_PROCEDURES = new Set([
+  'agent.getTransferJobStatus',
+  'group.getTransferJobStatus',
+]);
+
 // 3. splitLink to conditionally disable batching
+const buildHttpLinks = (options: typeof linkOptions) =>
+  splitLink({
+    condition: (op) => LARGE_INPUT_QUERY_PROCEDURES.has(op.path),
+    false: splitLink({
+      condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+      false: httpBatchLink({ ...options, maxURLLength: 2083 }),
+      true: httpLink(options),
+    }),
+    true: httpLink({ ...options, methodOverride: 'POST' }),
+  });
+
 const customSplitLink = splitLink({
   condition: (op) => op.type === 'subscription',
-  false: splitLink({
-    condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-    false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
-    true: httpLink(linkOptions),
-  }),
+  false: buildHttpLinks(linkOptions),
   // EventSource sends the same-origin session cookie. Subscription event payloads are progress
   // hints only; all durable onboarding state is still read via the authenticated polling calls.
   true: httpSubscriptionLink({ transformer: superjson, url: linkOptions.url }),
@@ -217,11 +234,7 @@ export const createWorkspaceLambdaClient = (workspaceId: string) => {
       errorHandlingLink,
       splitLink({
         condition: (op) => op.type === 'subscription',
-        false: splitLink({
-          condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-          false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
-          true: httpLink(scopedLinkOptions),
-        }),
+        false: buildHttpLinks(scopedLinkOptions),
         true: httpSubscriptionLink({ transformer: superjson, url: scopedLinkOptions.url }),
       }),
     ],

@@ -2701,6 +2701,7 @@ When I am ___, I need ___
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
   'workspace.waitlistPage.badge': 'Workspace · Private Beta',
+  'workspace.waitlistPage.createWorkspaceCta': 'Create workspace',
   'workspace.waitlistPage.enabledSubtitle': 'Workspace is already enabled for your account.',
   'workspace.waitlistPage.enabledTitle': 'Workspace is ready for you',
   'workspace.waitlistPage.entryCta': 'Join Workspace Beta',
@@ -2711,6 +2712,10 @@ When I am ___, I need ___
     "We're opening access in batches and will notify you by email as soon as your access is ready.",
   'workspace.waitlistPage.pendingTitle': "You're on the list",
   'workspace.waitlistPage.requiredField': 'This field is required',
+  'workspace.waitlistPage.rewardApprovedHint':
+    'After you create a workspace, your $5 beta credits will arrive automatically within a few minutes (valid for 3 months).',
+  'workspace.waitlistPage.rewardBanner':
+    'Get approved and create a workspace to receive $5 in free trial credits (valid for 3 months).',
   'workspace.waitlistPage.roleLabel': 'Your role (optional)',
   'workspace.waitlistPage.rolePlaceholder': 'e.g. Team lead, teacher, parent',
   'workspace.waitlistPage.signIn': 'Sign in to join',
