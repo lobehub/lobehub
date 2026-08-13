@@ -39,7 +39,7 @@ interface BriefActionLinkProps {
  * `RENDERER_HANDLED_LINK_ATTR` tells the desktop preload interceptor this
  * click is already claimed.
  */
-const BriefActionLink = memo<BriefActionLinkProps>(
+export const BriefActionLink = memo<BriefActionLinkProps>(
   ({ agentId, children, className, primary, taskId, url }) => {
     const navigate = useWorkspaceAwareNavigate();
     const workspaces = useWorkspaces();
@@ -51,11 +51,16 @@ const BriefActionLink = memo<BriefActionLinkProps>(
       typeof window === 'undefined' ? undefined : window.location.origin,
       workspaces.map((workspace) => workspace.slug),
     );
+    const isTasklessDesktopAcceptance = isDesktop && reference?.type === 'acceptance' && !taskId;
+    const isRendererHandled = !!reference && !isTasklessDesktopAcceptance;
 
     const handleClick = useCallback(
       (event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
         // External destinations (billing, docs) stay plain anchors.
         if (!reference) return;
+        // Electron has no standalone acceptance route. Without a task there is
+        // no panel destination either, so leave the link to the preload layer.
+        if (isTasklessDesktopAcceptance) return;
         if (event.button !== 0) return;
 
         // On the web a modifier-click means "open in a new tab", so let the
@@ -81,12 +86,20 @@ const BriefActionLink = memo<BriefActionLinkProps>(
           'workspaceSlug' in reference && reference.workspaceSlug ? { escape: true } : undefined,
         );
       },
-      [agentId, navigate, openAcceptance, reference, taskId, toggleTaskAgentPanel],
+      [
+        agentId,
+        isTasklessDesktopAcceptance,
+        navigate,
+        openAcceptance,
+        reference,
+        taskId,
+        toggleTaskAgentPanel,
+      ],
     );
 
     return (
       <Button
-        {...(reference ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+        {...(isRendererHandled ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
         className={className}
         href={url}
         shape={'round'}
@@ -100,5 +113,3 @@ const BriefActionLink = memo<BriefActionLinkProps>(
 );
 
 BriefActionLink.displayName = 'BriefActionLink';
-
-export default BriefActionLink;
