@@ -7,12 +7,10 @@ import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import LibIcon from '@/components/LibIcon';
 import LockedLibIcon from '@/components/LibIcon/Locked';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
-import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -21,17 +19,15 @@ import SectionTitle from './SectionTitle';
 
 /**
  * Chip icon with the shared restricted-library lock badge for managers.
- * Same SWR key as the sidebar item's permission fetch — no extra request.
+ * The flag rides the `getKnowledgeBases` list payload — no per-row request.
  */
-const ChipIcon = memo<{ id: string; visibility?: 'private' | 'public' | null }>(
-  ({ id, visibility }) => {
-    const activeWorkspaceId = useActiveWorkspaceId();
-    const { data } = useResourcePermission(
-      'knowledgeBase',
-      activeWorkspaceId && visibility === 'public' ? id : undefined,
+const ChipIcon = memo<{ memberRestricted?: boolean; visibility?: 'private' | 'public' | null }>(
+  ({ memberRestricted, visibility }) => {
+    return visibility === 'public' && memberRestricted ? (
+      <LockedLibIcon size={18} />
+    ) : (
+      <LibIcon size={18} />
     );
-
-    return data?.accessLevel === 'use' ? <LockedLibIcon size={18} /> : <LibIcon size={18} />;
   },
 );
 
@@ -162,7 +158,10 @@ const Libraries = memo(() => {
                 navigate(`/resource/library/${item.id}`);
               }}
             >
-              <ChipIcon id={item.id} visibility={item.visibility} />
+              <ChipIcon
+                memberRestricted={(item as { memberRestricted?: boolean }).memberRestricted}
+                visibility={item.visibility}
+              />
               <span className={styles.name}>{item.name}</span>
             </button>
           ))}

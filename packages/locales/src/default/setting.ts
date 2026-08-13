@@ -265,7 +265,7 @@ export default {
   'permission.page.documentAccessLevelPrivateHint':
     'Members get this level once the page is published to the workspace. It can be changed after publishing.',
   'permission.page.documentGeneralAccessDesc':
-    'What every workspace member can do with this page. The creator and workspace admins always keep full access.',
+    'What every workspace member can do with this page. The creator and workspace owners always keep full access; admins can manage these permissions.',
   'permission.page.documentPrivateNotice':
     'This page is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.entry': 'Permissions',
@@ -274,7 +274,7 @@ export default {
   'permission.page.libraryAccessLevelPrivateHint':
     'Members get this level once the knowledge base is published to the workspace. It can be changed after publishing.',
   'permission.page.libraryGeneralAccessDesc':
-    'What every workspace member can do with this knowledge base. The creator and workspace admins always keep full access.',
+    'What every workspace member can do with this knowledge base. The creator and workspace owners always keep full access; admins can manage these permissions.',
   'permission.page.libraryPrivateNotice':
     'This knowledge base is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.generalAccessDesc':

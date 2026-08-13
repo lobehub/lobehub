@@ -4,12 +4,10 @@ import { Loader2Icon, LockIcon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepoIcon from '@/components/LibIcon';
 import LockedLibIcon from '@/components/LibIcon/Locked';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
-import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -23,14 +21,27 @@ interface KnowledgeBaseItemProps {
   className?: string;
   description?: string | null;
   id: string;
+  memberRestricted?: boolean;
   name: string;
+  permissionManageable?: boolean;
   style?: CSSProperties;
   userId?: string;
   visibility?: 'private' | 'public';
 }
 
 const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
-  ({ id, name, description, active, style, className, userId, visibility }) => {
+  ({
+    id,
+    name,
+    description,
+    active,
+    style,
+    className,
+    userId,
+    visibility,
+    memberRestricted,
+    permissionManageable,
+  }) => {
     const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -69,14 +80,9 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
 
     // Restricted (No-access) KBs are invisible to plain members, so this row
     // only renders for managers — the lock tells them at a glance which shared
-    // KBs members cannot open. Same SWR key as the dropdown's permission
-    // fetch, so it costs no extra request.
-    const activeWorkspaceId = useActiveWorkspaceId();
-    const { data: permissionData } = useResourcePermission(
-      'knowledgeBase',
-      activeWorkspaceId && visibility === 'public' ? id : undefined,
-    );
-    const isMemberRestricted = permissionData?.accessLevel === 'use';
+    // KBs members cannot open. The flag rides on the list query, so it costs
+    // no per-row permission request.
+    const isMemberRestricted = visibility === 'public' && !!memberRestricted;
 
     // Icon: loader while pending; a plain lock for private KBs ("only you can
     // see this", the private-agent / private-task visual); the folder with a
@@ -99,6 +105,7 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
       description,
       id,
       name,
+      permissionManageable,
       toggleEditing,
       userId,
       visibility,

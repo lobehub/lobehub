@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
 import { useCreateNewModal } from '@/features/LibraryModal';
-import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -22,6 +21,8 @@ interface ActionProps {
   description?: string | null;
   id: string;
   name: string;
+  /** Server-computed on the list payload: creator or KNOWLEDGE_BASE_UPDATE:all. */
+  permissionManageable?: boolean;
   toggleEditing: (visible?: boolean) => void;
   userId?: string;
   visibility?: 'private' | 'public';
@@ -31,6 +32,7 @@ export const useDropdownMenu = ({
   id,
   name,
   description,
+  permissionManageable,
   toggleEditing,
   userId,
   visibility,
@@ -57,18 +59,14 @@ export const useDropdownMenu = ({
 
   // Member Permissions entry: navigates to the standalone permission page,
   // same as Agent. Private KBs are included — the creator configures what
-  // members get the moment the KB is published. The server decides
-  // `canManage`, so the entry renders for the creator and
-  // `KNOWLEDGE_BASE_UPDATE:all` curators (owner/admin) only.
+  // members get the moment the KB is published. The manage flag rides the
+  // list payload (creator or `KNOWLEDGE_BASE_UPDATE:all` curators), so no
+  // per-row permission request is issued while rendering the sidebar.
   const activeWorkspaceId = useActiveWorkspaceId();
   const wsNavigate = useWorkspaceAwareNavigate();
-  const { data: permissionData } = useResourcePermission(
-    'knowledgeBase',
-    activeWorkspaceId ? id : undefined,
-  );
   const memberPermissionMenuItem = useMemo(
     () =>
-      activeWorkspaceId && permissionData?.canManage
+      activeWorkspaceId && permissionManageable
         ? {
             icon: <Icon icon={UsersIcon} />,
             key: 'member-permissions',
@@ -79,7 +77,7 @@ export const useDropdownMenu = ({
             },
           }
         : null,
-    [activeWorkspaceId, permissionData?.canManage, id, t, wsNavigate],
+    [activeWorkspaceId, permissionManageable, id, t, wsNavigate],
   );
 
   // Row-level ownership: only the creator or a workspace owner may edit or
