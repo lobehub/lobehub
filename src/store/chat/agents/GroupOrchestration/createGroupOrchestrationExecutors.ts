@@ -116,6 +116,7 @@ export const createGroupOrchestrationExecutors = (
 
   // Pre-compute the chat key for message fetching
   const chatKey = messageMapKey(messageContext);
+  let initialSupervisorParentMessageId = parentMessageId;
 
   /**
    * Helper to get current messages for the group conversation
@@ -141,12 +142,15 @@ export const createGroupOrchestrationExecutors = (
       log(`[${sessionLogId}] Starting supervisor agent: ${agentId}`);
 
       const allMessages = getMessages();
-      const parentMessageIndex = parentMessageId
-        ? allMessages.findIndex((message) => message.id === parentMessageId)
+      const parentMessageIndex = initialSupervisorParentMessageId
+        ? allMessages.findIndex((message) => message.id === initialSupervisorParentMessageId)
         : -1;
       const messages =
         parentMessageIndex >= 0 ? allMessages.slice(0, parentMessageIndex + 1) : allMessages;
-      const lastMessage = parentMessageId ? allMessages[parentMessageIndex] : messages.at(-1);
+      const lastMessage = initialSupervisorParentMessageId
+        ? allMessages[parentMessageIndex]
+        : messages.at(-1);
+      initialSupervisorParentMessageId = undefined;
 
       if (!lastMessage) {
         log(`[${sessionLogId}] No messages found, cannot execute supervisor`);
