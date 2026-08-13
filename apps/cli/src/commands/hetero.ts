@@ -906,7 +906,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
-  if (code !== null) process.exit(result.ingestError ? 1 : code);
+  if (code !== null) {
+    const hasRunError = result.ingestError || (!result.cancelled && result.sawTerminalError);
+    process.exit(hasRunError ? 1 : code);
+  }
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);

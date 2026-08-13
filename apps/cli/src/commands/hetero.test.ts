@@ -584,6 +584,32 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(7);
   });
 
+  it('exits non-zero when a terminal protocol error is emitted despite a clean child exit', async () => {
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: {
+              agentType: 'amp',
+              code: 'protocol_error',
+              message: 'Amp stream ended without the required terminal `result` event.',
+            },
+            operationId: 'op-amp',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'error',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd(['hetero', 'exec', '--type', 'amp', '--prompt', 'hi']);
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining('"code":"protocol_error"'));
+  });
+
   it('maps SIGINT (code === null) to POSIX exit code 130', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: null, signal: 'SIGINT' }));
 
