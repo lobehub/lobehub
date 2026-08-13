@@ -23,6 +23,7 @@ export default {
     'At the current pace, {{remaining}} more practices reach 90% (run {{n90}}).',
   'detail.domainFilter': 'Domain filter: ',
   'detail.headline': 'Practised {{runs}} times, learned {{lessons}} rules.',
+  'detail.learningSummary': '{{lessons}} reusable rules distilled from practice.',
   'detail.metric.cannot': 'needs more practice',
   'detail.metric.maturity': 'Maturity',
   'detail.metric.maturitySub': '{{learned}} of an estimated {{ceiling}}',
@@ -36,6 +37,7 @@ export default {
   'detail.notPractisedDesc':
     'The direction is set. It starts building rules the next time a conversation matches the filter below — nothing to chart until then.',
   'detail.outOfScope': 'Out of scope: ',
+  'detail.practiceSummary': 'From {{runs}} practices · {{hits}} recorded validation hits',
   'detail.shapeClause.growing': 'and the curve is still climbing',
   'detail.shapeClause.noisy': 'though the curve is too noisy to read',
   'detail.shapeClause.saturated': 'and the curve has flattened',
@@ -92,6 +94,7 @@ export default {
   'rules.viewAll': 'View all {{count}} rules',
   'rules.allTitle': 'All rules',
   'rules.detail.examples': 'Where it was tested',
+  'rules.detail.eyebrow': 'Rule {{code}}',
   'rules.detail.meta': '{{hits}} uses across {{runs}} practices',
   'rules.detail.domainUnavailable': 'Domain context could not be loaded',
   'rules.detail.noExamples': 'No recorded examples yet',

@@ -127,16 +127,6 @@ const DomainDetail = memo(() => {
           >
             {data && (
               <Flexbox gap={24} paddingBlock={'26px 64px'}>
-                <Flexbox horizontal align={'baseline'} justify={'flex-end'} wrap={'wrap'}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('detail.totals', {
-                      hits: data.lessonStats.hits,
-                      lessons: data.lessonStats.total,
-                      runs: data.runCount,
-                    })}
-                  </Text>
-                </Flexbox>
-
                 {data.runCount === 0 ? (
                   /* 刚定完方向、一次还没练过：画不出曲线，坐标轴会退化成一排「1 条」。
                      这时候该说的是下一步做什么，而不是摆一张空图。 */
@@ -155,19 +145,25 @@ const DomainDetail = memo(() => {
                 ) : (
                   <>
                     <Text className={styles.sentence}>
-                      {t('detail.headline', {
+                      {t('detail.learningSummary', {
                         lessons: data.lessonStats.total,
-                        runs: data.runCount,
                       })}
                       <br />
                       <Text className={styles.sentence} type={'secondary'}>
-                        {maturity?.usable
-                          ? t('detail.subheadOk', {
-                              ceiling: Math.round(maturity.pInf ?? 0),
-                              shape: t(SHAPE_CLAUSE[maturity.plateauKind ?? 'growing']),
-                            })
-                          : t('detail.subheadUnusable')}
+                        {t('detail.practiceSummary', {
+                          hits: data.lessonStats.hits,
+                          runs: data.runCount,
+                        })}
                       </Text>
+                    </Text>
+
+                    <Text fontSize={13} type={'secondary'}>
+                      {maturity?.usable
+                        ? t('detail.subheadOk', {
+                            ceiling: Math.round(maturity.pInf ?? 0),
+                            shape: t(SHAPE_CLAUSE[maturity.plateauKind ?? 'growing']),
+                          })
+                        : t('detail.subheadUnusable')}
                     </Text>
 
                     <Block gap={10} padding={16} variant={'outlined'}>

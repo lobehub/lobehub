@@ -30,6 +30,10 @@ const styles = createStaticStyles(({ css }) => ({
       grid-template-columns: 1fr;
     }
   `,
+  title: css`
+    max-width: 880px;
+    text-wrap: balance;
+  `,
 }));
 
 const SECTION_LABELS = {
@@ -56,6 +60,11 @@ const LessonDetail = memo(() => {
       ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
       : undefined;
   const rulesPath = domainPath ? urlJoin(domainPath, 'rules') : undefined;
+  const sections = data?.lesson.sections.filter(
+    (section) =>
+      section.key !== 'rule' ||
+      section.body.trim().toLocaleLowerCase() !== data.lesson.title.trim().toLocaleLowerCase(),
+  );
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
@@ -93,20 +102,22 @@ const LessonDetail = memo(() => {
           >
             {data && (
               <Flexbox gap={24} paddingBlock={'26px 64px'}>
-                <Flexbox gap={8}>
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Tag>{data.lesson.code}</Tag>
-                    {data.lesson.layer && <Tag>{data.lesson.layer}</Tag>}
-                  </Flexbox>
-                  <Text fontSize={26} lineHeight={1.35} weight={700}>
+                <Flexbox gap={10}>
+                  <Text fontSize={12} type={'secondary'} weight={600}>
+                    {t('rules.detail.eyebrow', { code: data.lesson.code })}
+                  </Text>
+                  <Text className={styles.title} fontSize={26} lineHeight={1.35} weight={700}>
                     {data.lesson.title}
                   </Text>
-                  <Text fontSize={12.5} type={'secondary'}>
-                    {t('rules.detail.meta', {
-                      hits: data.lesson.hitCount,
-                      runs: data.lesson.hitRunCount,
-                    })}
-                  </Text>
+                  <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                    <Text fontSize={12.5} type={'secondary'}>
+                      {t('rules.detail.meta', {
+                        hits: data.lesson.hitCount,
+                        runs: data.lesson.hitRunCount,
+                      })}
+                    </Text>
+                    {data.lesson.layer && <Tag>{data.lesson.layer}</Tag>}
+                  </Flexbox>
                   {domainError && (
                     <Text fontSize={12.5} type={'danger'}>
                       {t('rules.detail.domainUnavailable')} ·{' '}
@@ -118,7 +129,7 @@ const LessonDetail = memo(() => {
                 </Flexbox>
 
                 <div className={styles.sections}>
-                  {data.lesson.sections.map((section) => (
+                  {sections?.map((section) => (
                     <Block gap={7} key={section.key} padding={16} variant={'outlined'}>
                       <Text fontSize={12} type={'secondary'} weight={600}>
                         {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
