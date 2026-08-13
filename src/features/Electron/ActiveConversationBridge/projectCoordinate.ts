@@ -8,6 +8,35 @@ export const projectActiveConversationCoordinate = (
 ): void => {
   const currentAgentId = useChatStore.getState().activeAgentId;
 
+  if (coordinate.groupId) {
+    const chatState = useChatStore.getState();
+    if (useAgentStore.getState().activeAgentId !== undefined) {
+      useAgentStore.setState(
+        { activeAgentId: undefined },
+        false,
+        'ActiveConversationBridge/enterGroupConversation',
+      );
+    }
+    if (
+      chatState.activeAgentId !== undefined ||
+      chatState.activeGroupId !== coordinate.groupId ||
+      chatState.activeTopicId !== coordinate.topicId ||
+      chatState.activeThreadId !== coordinate.threadId
+    ) {
+      useChatStore.setState(
+        {
+          activeAgentId: undefined,
+          activeGroupId: coordinate.groupId,
+          activeThreadId: coordinate.threadId!,
+          activeTopicId: coordinate.topicId!,
+        },
+        false,
+        'ActiveConversationBridge/syncGroupConversation',
+      );
+    }
+    return;
+  }
+
   if (!coordinate.routeAgentId) {
     if (useAgentStore.getState().activeAgentId !== undefined) {
       useAgentStore.setState(

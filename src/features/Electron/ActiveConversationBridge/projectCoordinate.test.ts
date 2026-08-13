@@ -38,6 +38,23 @@ describe('active conversation projection', () => {
     });
   });
 
+  it('projects a group route without clearing it as a non-conversation page', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-new', topicId: 'topic-new' },
+      url: '/group/group-new/topic-new?thread=thread-new',
+    });
+
+    projectActiveConversationCoordinate(coordinate);
+
+    expect(useChatStore.getState()).toMatchObject({
+      activeAgentId: undefined,
+      activeGroupId: 'group-new',
+      activeThreadId: 'thread-new',
+      activeTopicId: 'topic-new',
+    });
+    expect(useAgentStore.getState().activeAgentId).toBeUndefined();
+  });
+
   it('preserves topic state on a subpage of the same agent', () => {
     useAgentStore.setState({ activeAgentId: 'agent-old' }, false);
     const coordinate = resolveActiveConversationCoordinate({

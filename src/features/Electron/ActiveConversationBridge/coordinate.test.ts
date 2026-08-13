@@ -35,6 +35,24 @@ describe('active conversation coordinate', () => {
     expect(coordinate.threadId).toBeNull();
   });
 
+  it('resolves group routes and keeps subsequent topic navigation in the group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a', topicId: 'topic-a' },
+      url: '/team/group/group-a/topic-a?thread=thread-a',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupBasePath: '/team/group/group-a',
+      groupId: 'group-a',
+      isConversation: true,
+      threadId: 'thread-a',
+      topicId: 'topic-a',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe(
+      '/team/group/group-a/topic-b',
+    );
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},
