@@ -1386,6 +1386,36 @@ describe('Generation Actions', () => {
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
+    it('restarts orchestration when retrying a user message after its Orchestrator reply was deleted', async () => {
+      const context: ConversationContext = {
+        agentId: 'orchestrator-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [{ content: 'Hello', id: 'user-1', role: 'user' }],
+          displayMessages: [{ content: 'Hello', id: 'user-1', role: 'user' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('user-1');
+      });
+
+      expect(mockInternalExecGroupOrchestration).toHaveBeenCalledWith({
+        groupId: 'group-1',
+        initialResult: { payload: { groupId: 'group-1' }, type: 'init' },
+        supervisorAgentId: 'orchestrator-agent',
+        topicId: 'topic-1',
+      });
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+    });
+
     it('preserves a member assistant identity through gateway regeneration', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({

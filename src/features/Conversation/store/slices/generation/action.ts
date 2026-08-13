@@ -452,7 +452,10 @@ const regenerateUserMessageFromSource = async (
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-    if (context.groupId && context.orchestrationRole === 'supervisor') {
+    if (
+      context.groupId &&
+      (context.orchestrationRole === 'supervisor' || !retrySourceMessage)
+    ) {
       await chatStore.internal_execGroupOrchestration({
         groupId: context.groupId,
         initialResult: { payload: { groupId: context.groupId }, type: 'init' },
