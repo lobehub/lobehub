@@ -279,8 +279,8 @@ export interface StartOnboardingUnderstandingInput extends OnboardingUnderstandi
  * Adds direct feedback and newly selected providers to an active Understanding session.
  */
 export interface ReviseOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
-  /** Feedback revision observed by the caller; prevents duplicate or stale appends. */
-  expectedFeedbackRevision: number;
+  /** Feedback revision observed by the caller; required when `feedback` is provided. */
+  expectedFeedbackRevision?: number;
   /** Optional direct guidance appended to the cumulative writer prompt. */
   feedback?: string;
   /** Additive provider identifiers; existing sources are never removed. */

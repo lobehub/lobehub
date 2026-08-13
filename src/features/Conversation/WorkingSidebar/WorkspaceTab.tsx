@@ -115,7 +115,6 @@ interface WorkspaceTabProps {
   active: boolean;
   closeLabel?: string;
   contextMenuItems?: ContextMenuItem[];
-  fixed?: boolean;
   icon: IconProps['icon'];
   iconNode?: ReactNode;
   label: ReactNode;
@@ -131,7 +130,6 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     active,
     closeLabel,
     contextMenuItems,
-    fixed,
     icon,
     iconNode,
     label,
@@ -148,7 +146,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
       >
         <button
           aria-pressed={active}
-          className={`${styles.tab} ${!fixed && (onClose || pinned) ? styles.tabClosable : ''}`}
+          className={`${styles.tab} ${onClose || pinned ? styles.tabClosable : ''}`}
           data-tab-key={tabKey}
           type="button"
           onClick={onSelect}
@@ -158,11 +156,11 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
             <span className={styles.label}>{label}</span>
           </span>
         </button>
-        {!fixed && pinned ? (
+        {pinned ? (
           <span aria-label={pinnedLabel} className={styles.pinned} role="img">
             <Icon icon={PinIcon} size={12} />
           </span>
-        ) : !fixed && onClose ? (
+        ) : onClose ? (
           <button
             data-tab-close
             aria-label={closeLabel}

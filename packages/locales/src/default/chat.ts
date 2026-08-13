@@ -1540,9 +1540,10 @@ export default {
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
-  'createGoal.describeTitle': 'What outcome do you want?',
+  'createGoal.describeTitle': 'What goal do you expect to achieve?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
-  'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
+  'createGoal.generateFailed':
+    'Could not draft acceptance criteria, so your goal was used as the criterion.',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
   'createGoal.next': 'Next',
@@ -2297,6 +2298,7 @@ export default {
   'workingPanel.tabs.close': 'Close tab',
   'workingPanel.tabs.closeLeft': 'Close tabs to the left',
   'workingPanel.tabs.closeOthers': 'Close other tabs',
+  'workingPanel.tabs.closePanel': 'Close panel',
   'workingPanel.tabs.closeRight': 'Close tabs to the right',
   'workingPanel.tabs.pin': 'Pin tab',
   'workingPanel.tabs.pinned': 'Pinned tab',

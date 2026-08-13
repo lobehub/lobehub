@@ -31,6 +31,26 @@ describe('copySpaBuild', () => {
     }
   });
 
+  // `new Worker` only accepts a same-origin script, so these are requested from the
+  // page's own origin rather than the asset host — which means they have to reach
+  // `public/`, and at its root, because that is the path the build emits.
+  it('publishes workers to the public root, outside the per-variant directories', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-workers-'));
+    testRoots.push(root);
+
+    for (const variant of ['desktop', 'workbench']) {
+      const sourceDir = path.join(root, `dist/${variant}/app-workers`);
+      mkdirSync(sourceDir, { recursive: true });
+      writeFileSync(path.join(sourceDir, 'worker-abc.js'), 'self.onmessage = () => {};');
+    }
+
+    copySpaBuild(root);
+
+    expect(existsSync(path.join(root, 'public/app-workers/worker-abc.js'))).toBe(true);
+    expect(existsSync(path.join(root, 'public/_spa/app-workers'))).toBe(false);
+    expect(existsSync(path.join(root, 'public/_spa-workbench/app-workers'))).toBe(false);
+  });
+
   it('runs through the production Node entrypoint', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-entry-'));
     testRoots.push(root);

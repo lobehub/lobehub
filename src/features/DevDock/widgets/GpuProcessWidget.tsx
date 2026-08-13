@@ -20,26 +20,26 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const CpuUsageWidget = memo(() => {
-  const metrics = useAppProcessMetrics();
+const GpuProcessWidget = memo(() => {
+  const gpu = useAppProcessMetrics()?.gpu;
 
-  if (!metrics) return null;
-
-  const percent = metrics.cpuPercent;
+  if (!gpu) return null;
 
   return (
     <span
-      title={'App CPU usage (sum across processes, 100% = one core)'}
       className={cx(
         styles.text,
-        percent >= 200 ? styles.high : percent >= 100 ? styles.mid : undefined,
+        gpu.cpuPercent >= 100 ? styles.high : gpu.cpuPercent >= 50 ? styles.mid : undefined,
       )}
+      title={
+        'GPU process CPU usage and resident memory — Chromium exposes no GPU utilisation figure'
+      }
     >
-      CPU {percent.toFixed(1)}%
+      GPU proc {gpu.cpuPercent.toFixed(1)}% · {Math.round(gpu.memoryMB)} MB
     </span>
   );
 });
 
-CpuUsageWidget.displayName = 'DevDockCpuUsageWidget';
+GpuProcessWidget.displayName = 'DevDockGpuProcessWidget';
 
-export default CpuUsageWidget;
+export default GpuProcessWidget;
