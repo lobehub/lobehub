@@ -1540,9 +1540,10 @@ export default {
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
-  'createGoal.describeTitle': 'What outcome do you want?',
+  'createGoal.describeTitle': 'What goal do you expect to achieve?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
-  'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
+  'createGoal.generateFailed':
+    'Could not draft acceptance criteria, so your goal was used as the criterion.',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
   'createGoal.next': 'Next',
