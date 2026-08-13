@@ -393,6 +393,8 @@ export class SearchRepo {
     // Run searches in parallel for better performance
     const searchPromises: Promise<SearchResult[]>[] = [];
 
+    const excludeKbIds = options.excludeKnowledgeBaseIds ?? [];
+
     if ((!type || type === 'agent') && limits.agent > 0) {
       searchPromises.push(this.searchAgents(trimmedQuery, limits.agent));
     }
@@ -406,13 +408,13 @@ export class SearchRepo {
       searchPromises.push(this.searchMessages(trimmedQuery, limits.message, agentId));
     }
     if ((!type || type === 'file') && limits.file > 0) {
-      searchPromises.push(this.searchFiles(trimmedQuery, limits.file));
+      searchPromises.push(this.searchFiles(trimmedQuery, limits.file, excludeKbIds));
     }
     if ((!type || type === 'folder') && limits.folder > 0) {
-      searchPromises.push(this.searchFolders(trimmedQuery, limits.folder));
+      searchPromises.push(this.searchFolders(trimmedQuery, limits.folder, excludeKbIds));
     }
     if ((!type || type === 'page') && limits.page > 0) {
-      searchPromises.push(this.searchPages(trimmedQuery, limits.page));
+      searchPromises.push(this.searchPages(trimmedQuery, limits.page, excludeKbIds));
     }
     if ((!type || type === 'memory') && limits.memory > 0) {
       searchPromises.push(this.searchMemories(trimmedQuery, limits.memory));
@@ -842,7 +844,11 @@ export class SearchRepo {
    * Note: ICU tokenizer treats hyphenated/dotted names (e.g. "react-component.jsx") as single tokens,
    * so partial searches like "component" won't match. Full words or prefixes work fine.
    */
-  private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
+  private async searchFiles(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<FileSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
@@ -889,7 +895,23 @@ export class SearchRepo {
       .from(hits)
       .leftJoin(documents, eq(hits.id, documents.fileId))
       .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          // A file linked to ANY restricted KB is fully hidden (over-hiding
+          // beats leaking through a shared membership) — subquery instead of
+          // the joined column so multi-KB rows cannot slip through.
+          excludeKbIds && excludeKbIds.length > 0
+            ? notInArray(
+                hits.id,
+                this.db
+                  .select({ fileId: knowledgeBaseFiles.fileId })
+                  .from(knowledgeBaseFiles)
+                  .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 
@@ -912,7 +934,11 @@ export class SearchRepo {
   /**
    * Search folders (documents with file_type=DOCUMENT_FOLDER_TYPE) (BM25)
    */
-  private async searchFolders(query: string, limit: number): Promise<FolderSearchResult[]> {
+  private async searchFolders(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<FolderSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
@@ -953,7 +979,14 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          excludeKbIds && excludeKbIds.length > 0
+            ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 
@@ -976,7 +1009,11 @@ export class SearchRepo {
   /**
    * Search pages (documents with file_type='custom/document') (BM25)
    */
-  private async searchPages(query: string, limit: number): Promise<PageSearchResult[]> {
+  private async searchPages(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<PageSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
@@ -984,6 +1021,7 @@ export class SearchRepo {
         createdAt: documents.createdAt,
         filename: documents.filename,
         id: documents.id,
+        knowledgeBaseId: documents.knowledgeBaseId,
         score: sql<number>`paradedb.score(${documents.id})`.as('score'),
         title: documents.title,
         updatedAt: documents.updatedAt,
@@ -1011,7 +1049,14 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          excludeKbIds && excludeKbIds.length > 0
+            ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 

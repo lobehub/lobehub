@@ -206,6 +206,14 @@ export const fileRouter = router({
         if (!knowledgeBase) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
         }
+        // Writing into a library requires the same browse-level access as
+        // reading its file list — a No-access member must not seed content
+        // into a hidden KB that attached agents may later retrieve.
+        await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+          userId: knowledgeBase.userId,
+          visibility: knowledgeBase.visibility ?? null,
+          workspaceId: knowledgeBase.workspaceId ?? null,
+        });
         knowledgeBaseVisibility = knowledgeBase.visibility;
       }
 

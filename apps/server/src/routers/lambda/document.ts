@@ -25,7 +25,11 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
-import { assertContentsNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
+  getRestrictedKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
@@ -110,6 +114,9 @@ export const documentRouter = router({
       }
 
       await assertCanCreateUnderParent(ctx, resolvedParentId);
+      // Writing into a library requires the same browse-level access as
+      // reading its file list.
+      if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
 
       // Parse editorData from JSON string to object
       const editorData = input.editorData ? JSON.parse(input.editorData) : undefined;
@@ -178,6 +185,14 @@ export const documentRouter = router({
       ] as string[];
       for (const parentId of parentIds) {
         await assertCanCreateUnderParent(ctx, parentId);
+      }
+
+      // Same restricted-library write guard as `createDocument`, deduped.
+      const knowledgeBaseIds = [
+        ...new Set(processedDocuments.map((doc) => doc.knowledgeBaseId).filter(Boolean)),
+      ] as string[];
+      for (const knowledgeBaseId of knowledgeBaseIds) {
+        await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
       }
 
       const createdDocuments = await ctx.documentService.createDocuments(processedDocuments);
@@ -396,7 +411,18 @@ export const documentRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      return ctx.documentService.queryDocuments(input);
+      const result = await ctx.documentService.queryDocuments(input);
+      if (!ctx.workspaceId) return result;
+
+      // KB pages are ordinary workspace-public documents, so listings must
+      // drop rows from restricted (member No-access) libraries.
+      const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+      if (restricted.length === 0) return result;
+      const restrictedSet = new Set(restricted);
+      const items = result.items.filter(
+        (doc) => !doc.knowledgeBaseId || !restrictedSet.has(doc.knowledgeBaseId),
+      );
+      return { ...result, items, total: result.total - (result.items.length - items.length) };
     }),
 
   acquireDocumentLock: documentProcedure

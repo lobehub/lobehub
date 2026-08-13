@@ -123,10 +123,10 @@ export const searchRouter = router({
           'knowledgeBase',
         ].includes(type)
       ) {
-        // Restricted (member No-access) KBs must not be discoverable through
-        // unified search either — mirror the library-list filter.
-        const excludeKnowledgeBaseIds =
-          !type || type === 'knowledgeBase' ? await getRestrictedKnowledgeBaseIds(ctx) : [];
+        // Restricted (member No-access) KBs and their linked files/folders/
+        // pages must not be discoverable through unified search either —
+        // mirror the library-list filter.
+        const excludeKnowledgeBaseIds = await getRestrictedKnowledgeBaseIds(ctx);
         searchPromises.push(ctx.searchRepo.search({ ...input, excludeKnowledgeBaseIds }));
       }
 
