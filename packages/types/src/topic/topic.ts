@@ -214,6 +214,13 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    childOperations?: Array<{
+      assistantMessageId: string;
+      hooks?: SerializedAgentHook[];
+      operationId: string;
+      scope?: string;
+      threadId?: string | null;
+    }>;
     /** Device selected for a notify-based platform task. */
     deviceId?: string;
     /** Personal-device owner used to route dispatch and cancellation through the same principal. */
@@ -476,6 +483,17 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      childOperations: z
+        .array(
+          z.object({
+            assistantMessageId: z.string(),
+            hooks: z.array(serializedAgentHookSchema).optional(),
+            operationId: z.string(),
+            scope: z.string().optional(),
+            threadId: z.string().nullish(),
+          }),
+        )
+        .optional(),
       deviceId: z.string().optional(),
       deviceUserId: z.string().optional(),
       deviceWorkspaceId: z.string().optional(),

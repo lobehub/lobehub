@@ -509,13 +509,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * chatConfig AND workspace member-mode overrides.
    */
   toolModeOverride?: 'agent' | 'chat';
+  /** Running operation that owns the topic for an internally spawned child run. */
+  topicStartOwnerOperationId?: string;
   /**
    * Re-enter a topic-start reservation already acquired by an upstream caller,
    * such as TaskResultBridgeService.
    */
   topicStartReservationId?: string;
-  /** Running operation that owns the topic for an internally spawned child run. */
-  topicStartOwnerOperationId?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
@@ -795,7 +795,19 @@ export class AiAgentService {
     // 3. The operation never started — drop the running marker so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
     try {
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      const marker = (await this.topicModel.findById(topicId))?.metadata?.runningOperation;
+      if (marker?.operationId === operationId) {
+        await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      } else if (marker?.childOperations) {
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: {
+            ...marker,
+            childOperations: marker.childOperations.filter(
+              (child) => child.operationId !== operationId,
+            ),
+          },
+        });
+      }
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
     }
@@ -2439,24 +2451,22 @@ export class AiAgentService {
       // operation, and so every terminal site (heteroFinish, agentNotify done,
       // dispatch failure) can re-fire the serialized hooks across a process
       // boundary in queue mode.
-      await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          hooks: serializedHooks,
-          // Store deviceId + heteroType so interruptTask can cancel remote processes
-          ...(isRemoteHetero && remoteDeviceId
-            ? {
-                deviceId: remoteDeviceId,
-                deviceUserId: remoteDeviceUserId,
-                deviceWorkspaceId: remoteDeviceWorkspaceId,
-                heteroType,
-              }
-            : undefined),
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      });
+      const childOperation = {
+        assistantMessageId: assistantMessageRecord.id,
+        hooks: serializedHooks,
+        operationId,
+        scope: appContext?.scope ?? undefined,
+        threadId: appContext?.threadId ?? undefined,
+      };
+      if (params.topicStartOwnerOperationId) {
+        await this.topicModel.appendRunningOperationChild(
+          topicId,
+          params.topicStartOwnerOperationId,
+          childOperation,
+        );
+      } else {
+        await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+      }
 
       // Notify-based platform agents (openclaw / hermes) communicate back via
       // agentNotify.notify. A local run uses the requesting desktop's device ID;
@@ -4983,7 +4993,6 @@ export class AiAgentService {
       parentOperationId,
       prompt: speakerInstruction,
       suppressUserMessage: true,
-      topicStartOwnerOperationId: parentOperationId,
       trigger: inheritedTrigger,
       userInterventionConfig: { approvalMode: 'headless' },
     });
@@ -5005,6 +5014,7 @@ export class AiAgentService {
     params: ExecSubAgentParams | ExecVirtualSubAgentParams,
     options: {
       /**
+      topicStartOwnerOperationId: parentOperationId,
        * Override the default sub-agent completion bridge with a custom hook
        * (e.g. the group-action member bridge for isolated executeAgentTask(s)).
        * Receives the freshly-created isolation thread id. Only used when

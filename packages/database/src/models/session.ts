@@ -624,8 +624,11 @@ export class SessionModel {
       return (
         results
           .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
-          // @ts-expect-error
-          .map((item) => item.agentsToSessions[0].session)
+          .map(
+            (item) =>
+              (item.agentsToSessions as Array<{ session: SessionItem | null | undefined }>)[0]
+                ?.session,
+          )
           .filter((session) => session !== null && session !== undefined)
       );
     } catch (e) {

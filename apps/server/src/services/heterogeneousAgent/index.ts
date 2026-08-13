@@ -319,8 +319,13 @@ export class HeterogeneousAgentService {
     let isolationThreadId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
-      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
+      const marker = topic?.metadata?.runningOperation;
+      const running =
+        marker?.operationId === operationId
+          ? marker
+          : marker?.childOperations?.find((child) => child.operationId === operationId);
+      serializedHooks = running?.hooks as SerializedHook[] | undefined;
+      isolationThreadId = running?.threadId ?? undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
@@ -330,13 +335,26 @@ export class HeterogeneousAgentService {
       assistantMessageId =
         currentMsgRef?.operationId === operationId
           ? currentMsgRef.msgId
-          : topic?.metadata?.runningOperation?.assistantMessageId;
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-      // topic off `running`. Guarded in the model: an attached client's own
-      // terminal write ('active'/'unread') is never clobbered.
-      await this.topicModel.settleRunningStatus(topicId);
+          : running?.assistantMessageId;
+      if (marker?.operationId === operationId) {
+        await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      } else if (marker?.childOperations) {
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: {
+            ...marker,
+            childOperations: marker.childOperations.filter(
+              (child) => child.operationId !== operationId,
+            ),
+          },
+        });
+      }
+      if (marker?.operationId === operationId) {
+        // Settle `status: 'running'` for runs with no renderer attached (e.g. a
+        // cron-dispatched scheduled resume) — otherwise nothing ever moves the
+        // topic off `running`. Guarded in the model: an attached client's own
+        // terminal write ('active'/'unread') is never clobbered.
+        await this.topicModel.settleRunningStatus(topicId);
+      }
     } catch (err) {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }

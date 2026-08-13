@@ -769,6 +769,35 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         .map((call) => call[1])
         .find((patch: any) => patch?.runningOperation?.operationId);
 
+    it('keeps the supervisor marker when an in-group hetero child is dispatched', async () => {
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'supervisor-assistant',
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          isolationThread: false,
+          orchestrationRole: 'member',
+          topicId: 'topic-1',
+        },
+        parentOperationId: 'parent-operation',
+        prompt: 'speak as member',
+        topicStartOwnerOperationId: 'parent-operation',
+      } as any);
+
+      const seed = findRunningOpSeed();
+      expect(seed.runningOperation.operationId).toBe('parent-operation');
+      expect(seed.runningOperation.childOperations).toEqual([
+        expect.objectContaining({ operationId: expect.stringContaining('op_') }),
+      ]);
+    });
+
     it('serializes the onComplete webhook hook onto runningOperation (sandbox dispatch)', async () => {
       await service.execAgent({
         agentId: 'agent-1',

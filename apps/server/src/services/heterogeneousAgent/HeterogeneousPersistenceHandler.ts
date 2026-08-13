@@ -414,7 +414,11 @@ export class HeterogeneousPersistenceHandler {
     }
 
     const topic = await this.deps.topicModel.findById(topicId);
-    const running = topic?.metadata?.runningOperation;
+    const marker = topic?.metadata?.runningOperation;
+    const running =
+      marker?.operationId === operationId
+        ? marker
+        : marker?.childOperations?.find((child) => child.operationId === operationId);
 
     if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
       throw new StaleHeteroOperationError(
@@ -422,9 +426,9 @@ export class HeterogeneousPersistenceHandler {
       );
     }
 
-    if (running && running.operationId !== operationId) {
+    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
       throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
+        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
       );
     }
 

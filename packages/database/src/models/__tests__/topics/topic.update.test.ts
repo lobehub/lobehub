@@ -223,6 +223,31 @@ describe('TopicModel - Update', () => {
       expect(topic?.metadata?.runningOperation?.operationId).toBe('operation-parent');
     });
 
+    it('atomically appends children to the parent running operation', async () => {
+      const topicId = 'task-callback-parent-operation-children';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { runningOperation: { assistantMessageId: 'assistant-parent', operationId: 'parent-operation' } },
+      });
+
+      await Promise.all([
+        topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
+          assistantMessageId: 'assistant-child-1', operationId: 'child-operation-1',
+        }),
+        topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
+          assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2',
+        }),
+      ]);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ operationId: 'child-operation-1' }),
+          expect.objectContaining({ operationId: 'child-operation-2' }),
+        ]),
+      );
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
       await serverDB.insert(topics).values({
