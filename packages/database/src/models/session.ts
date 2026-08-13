@@ -700,7 +700,9 @@ export class SessionModel {
 
       // Filter and map results, ensuring valid session associations
       return results.flatMap((item) => {
-        const linkedSession = item.agentsToSessions?.[0]?.session;
+        const linkedSession =
+          (item.agentsToSessions as Array<{ session?: SessionItem | null }> | undefined)?.[0]
+            ?.session;
         if (linkedSession) return [linkedSession];
         if (item.virtual) return [];
         return [this.buildVirtualSessionForAgent(item as AgentItem)];
