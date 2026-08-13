@@ -53,6 +53,20 @@ describe('active conversation coordinate', () => {
     );
   });
 
+  it('keeps the resolved agent id on an agent subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'friendly-name' },
+      resolvedAgentId: 'agt_persisted',
+      url: '/agent/friendly-name/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      agentId: 'agt_persisted',
+      isConversation: false,
+      routeAgentId: 'friendly-name',
+    });
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},
