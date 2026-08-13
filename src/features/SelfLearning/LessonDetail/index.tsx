@@ -49,7 +49,7 @@ const LessonDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
   const { domainId, lessonId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { data: domain } = useExpertiseDomain(domainId);
+  const { data: domain, error: domainError, mutate: mutateDomain } = useExpertiseDomain(domainId);
   const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
   const domainPath =
     activeAgentId && domainId
@@ -107,6 +107,14 @@ const LessonDetail = memo(() => {
                       runs: data.lesson.hitRunCount,
                     })}
                   </Text>
+                  {domainError && (
+                    <Text fontSize={12.5} type={'danger'}>
+                      {t('rules.detail.domainUnavailable')} ·{' '}
+                      <Text as={'button'} type={'info'} onClick={() => void mutateDomain()}>
+                        {t('rules.detail.retry')}
+                      </Text>
+                    </Text>
+                  )}
                 </Flexbox>
 
                 <div className={styles.sections}>
@@ -127,7 +135,10 @@ const LessonDetail = memo(() => {
                     {t('rules.detail.examples')}
                   </Text>
                   {data.hits.length === 0 ? (
-                    <Empty description={t('rules.detail.noExamples')} />
+                    <Empty
+                      description={t('rules.detail.noExamplesDesc')}
+                      title={t('rules.detail.noExamples')}
+                    />
                   ) : (
                     data.hits.map((hit, index) => (
                       <Block
@@ -140,9 +151,19 @@ const LessonDetail = memo(() => {
                           <Tag color={hit.outcome === 'pass' ? 'green' : 'red'}>
                             {t(`rules.detail.outcome.${hit.outcome}`)}
                           </Tag>
-                          <Text fontSize={11} type={'secondary'}>
-                            {hit.runTitle ?? `#${hit.runIndex}`}
-                          </Text>
+                          {hit.subjectType === 'topic' && activeAgentId ? (
+                            <Link to={urlJoin('/agent', activeAgentId, hit.subjectId)}>
+                              <Text fontSize={11} type={'info'}>
+                                {t('rules.detail.openSource', {
+                                  title: hit.runTitle ?? `#${hit.runIndex}`,
+                                })}
+                              </Text>
+                            </Link>
+                          ) : (
+                            <Text fontSize={11} type={'secondary'}>
+                              {hit.runTitle ?? `#${hit.runIndex}`}
+                            </Text>
+                          )}
                         </Flexbox>
                         <Text fontSize={13} lineHeight={1.65}>
                           {hit.example}

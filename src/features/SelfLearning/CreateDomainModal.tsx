@@ -4,7 +4,7 @@ import { parseExpertiseDomainBrief } from '@lobechat/types';
 import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { t as translate } from 'i18next';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { expertiseService } from '@/services/expertise';
@@ -26,9 +26,24 @@ interface CreateDomainContentProps {
 const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated }) => {
   const { t } = useTranslation('selfLearning');
   const { close } = useModalContext();
-  const [brief, setBrief] = useState('');
+  const storageKey = `self-learning:create:${agentId}`;
+  const [brief, setBrief] = useState(() => localStorage.getItem(storageKey) ?? '');
   const [draft, setDraft] = useState<ReturnType<typeof parseExpertiseDomainBrief>>();
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (brief.trim()) localStorage.setItem(storageKey, brief);
+    else localStorage.removeItem(storageKey);
+  }, [brief, storageKey]);
+
+  useEffect(() => {
+    const preventLoss = (event: BeforeUnloadEvent) => {
+      if (!brief.trim()) return;
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', preventLoss);
+    return () => window.removeEventListener('beforeunload', preventLoss);
+  }, [brief]);
 
   const submit = async () => {
     if (!brief.trim()) return;
@@ -36,6 +51,7 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
     try {
       if (!draft) return;
       await expertiseService.createDomain({ agentId, brief, ...draft });
+      localStorage.removeItem(storageKey);
       onCreated();
       close();
     } catch {
@@ -78,7 +94,11 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
         />
       )}
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-        <Button onClick={close}>{t('create.cancel')}</Button>
+        {draft ? (
+          <Button onClick={() => setDraft(undefined)}>{t('create.back')}</Button>
+        ) : (
+          <Button onClick={close}>{t('create.cancel')}</Button>
+        )}
         <Button
           disabled={draft ? !draft.title.trim() || !draft.domainFilter.trim() : !brief.trim()}
           loading={loading}
@@ -98,7 +118,7 @@ export const openCreateDomainModal = (props: CreateDomainContentProps) =>
   createModal({
     content: <CreateDomainContent {...props} />,
     footer: null,
-    maskClosable: true,
+    maskClosable: false,
     styles: { content: { padding: 0 } },
     title: translate('create.modalTitle', { ns: 'selfLearning' }),
     width: 'min(88vw, 560px)',

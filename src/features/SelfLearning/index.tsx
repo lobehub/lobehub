@@ -4,7 +4,7 @@ import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { ChevronRightIcon, GraduationCapIcon, PlusIcon, SparklesIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -38,6 +38,11 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorBorder};
       background: ${cssVar.colorFillQuaternary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
   `,
   row: css`
     cursor: pointer;
@@ -51,6 +56,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
     }
   `,
   sentence: css`
@@ -91,13 +101,6 @@ const SelfLearning = memo(() => {
   const domains = useMemo(() => data?.domains ?? [], [data]);
   /** 全都还没练过的时候，坐标轴会退化成一排「第 1 次」—— 那张空网格不如不画。 */
   const hasCurves = domains.some((d) => d.series.length > 1);
-
-  // A single expertise is an inspection job, not a comparison job. Skip the redundant list shell.
-  useEffect(() => {
-    if (!isLoading && domains.length === 1 && activeAgentId) {
-      navigate(urlJoin('/agent', activeAgentId, 'self-learning', domains[0].id), { replace: true });
-    }
-  }, [activeAgentId, domains, isLoading, navigate]);
 
   const openDomain = (domainId: string) => {
     if (!activeAgentId) return;
@@ -148,6 +151,18 @@ const SelfLearning = memo(() => {
       <NavHeader
         left={activeAgentId ? <AgentBreadcrumb agentId={activeAgentId} title={t('title')} /> : null}
         styles={{ left: { paddingInlineStart: 24 } }}
+        right={
+          activeAgentId ? (
+            <Button
+              icon={PlusIcon}
+              onClick={() =>
+                openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() })
+              }
+            >
+              {t('create.entry')}
+            </Button>
+          ) : null
+        }
       />
       <Flexbox className={styles.body} flex={1} width={'100%'}>
         <WideScreenContainer>
@@ -201,29 +216,6 @@ const SelfLearning = memo(() => {
                 </Text>
               )}
 
-              {hasCurves && (
-                <Block gap={10} padding={16} variant={'outlined'}>
-                  <Curves
-                    colors={colors}
-                    domains={domains}
-                    focusIds={focusIds}
-                    hoverId={hoverId}
-                    onHover={setHoverId}
-                    onOpen={openDomain}
-                  />
-                  <Flexbox horizontal align={'center'} gap={14} wrap={'wrap'}>
-                    {(['flat', 'rising', 'declining', 'stuck'] as ExpertiseShape[]).map((key) => (
-                      <Flexbox horizontal align={'center'} gap={6} key={key}>
-                        <div className={styles.swatch} style={{ background: shapes[key].color }} />
-                        <Text fontSize={11.5} type={'secondary'}>
-                          {shapes[key].label}
-                        </Text>
-                      </Flexbox>
-                    ))}
-                  </Flexbox>
-                </Block>
-              )}
-
               {!!data?.insights.length && (
                 <Flexbox gap={10}>
                   <Flexbox horizontal align={'center'} justify={'space-between'}>
@@ -242,9 +234,12 @@ const SelfLearning = memo(() => {
                   </Flexbox>
                   {data.insights.map((it) => (
                     <Flexbox
+                      as={'button'}
                       className={styles.insight}
                       gap={7}
                       key={it.id}
+                      style={{ background: 'transparent', color: 'inherit', textAlign: 'start' }}
+                      type={'button'}
                       onClick={() => it.domainId && openDomain(it.domainId)}
                     >
                       <Text fontSize={11.5} type={'secondary'}>
@@ -281,6 +276,29 @@ const SelfLearning = memo(() => {
                   ))}
                 </Block>
               </Flexbox>
+
+              {hasCurves && (
+                <Block gap={10} padding={16} variant={'outlined'}>
+                  <Curves
+                    colors={colors}
+                    domains={domains}
+                    focusIds={focusIds}
+                    hoverId={hoverId}
+                    onHover={setHoverId}
+                    onOpen={openDomain}
+                  />
+                  <Flexbox horizontal align={'center'} gap={14} wrap={'wrap'}>
+                    {(['flat', 'rising', 'declining', 'stuck'] as ExpertiseShape[]).map((key) => (
+                      <Flexbox horizontal align={'center'} gap={6} key={key}>
+                        <div className={styles.swatch} style={{ background: shapes[key].color }} />
+                        <Text fontSize={11.5} type={'secondary'}>
+                          {shapes[key].label}
+                        </Text>
+                      </Flexbox>
+                    ))}
+                  </Flexbox>
+                </Block>
+              )}
             </Flexbox>
           </AsyncBoundary>
         </WideScreenContainer>
@@ -314,8 +332,11 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
     <Flexbox
       horizontal
       align={'center'}
+      as={'button'}
       className={styles.row}
       gap={12}
+      style={{ background: 'transparent', color: 'inherit', textAlign: 'start', width: '100%' }}
+      type={'button'}
       onClick={() => onOpen(domain.id)}
       onMouseEnter={() => onHover(domain.id)}
       onMouseLeave={() => onHover(undefined)}

@@ -75,7 +75,12 @@ const DomainDetail = memo(() => {
   const domainId = params.domainId;
 
   const { data, error, isLoading, mutate } = useExpertiseDomain(domainId);
-  const { data: lessons } = useExpertiseLessons(domainId);
+  const {
+    data: lessons,
+    error: lessonsError,
+    isLoading: lessonsLoading,
+    mutate: mutateLessons,
+  } = useExpertiseLessons(domainId);
 
   const maturity = data?.maturity;
   const selfLearningPath = activeAgentId
@@ -221,13 +226,23 @@ const DomainDetail = memo(() => {
 
                     <div className={styles.learningGrid}>
                       <CoverageCloud detail={data} />
-                      <RuleList
-                        compact
-                        lessonHref={(lessonId) => urlJoin(rulesPath, lessonId)}
-                        lessons={lessons ?? []}
-                        stats={data.lessonStats}
-                        viewAllHref={rulesPath}
-                      />
+                      <AsyncBoundary
+                        data={lessons}
+                        error={lessonsError}
+                        isLoading={lessonsLoading}
+                        loading={<Loading debugId={'SelfLearningDomainRules'} />}
+                        onRetry={() => mutateLessons()}
+                      >
+                        {lessons && (
+                          <RuleList
+                            compact
+                            lessonHref={(lessonId) => urlJoin(rulesPath, lessonId)}
+                            lessons={lessons}
+                            stats={data.lessonStats}
+                            viewAllHref={rulesPath}
+                          />
+                        )}
+                      </AsyncBoundary>
                     </div>
 
                     <Block gap={7} padding={16} variant={'outlined'}>

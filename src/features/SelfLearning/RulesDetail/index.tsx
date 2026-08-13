@@ -1,8 +1,9 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Input, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect } from 'react';
+import { SearchIcon } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 import urlJoin from 'url-join';
@@ -30,7 +31,13 @@ const RulesDetail = memo(() => {
   const { domainId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { data, error, isLoading, mutate } = useExpertiseDomain(domainId);
-  const { data: lessons } = useExpertiseLessons(domainId);
+  const [search, setSearch] = useState('');
+  const {
+    data: lessons,
+    error: lessonsError,
+    isLoading: lessonsLoading,
+    mutate: mutateLessons,
+  } = useExpertiseLessons(domainId, undefined, search.trim() || undefined);
   const domainPath =
     activeAgentId && domainId
       ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
@@ -80,11 +87,28 @@ const RulesDetail = memo(() => {
                 <Text fontSize={26} weight={700}>
                   {t('rules.allTitle')}
                 </Text>
-                <RuleList
-                  lessonHref={(lessonId) => urlJoin(domainPath ?? '', 'rules', lessonId)}
-                  lessons={lessons ?? []}
-                  stats={data.lessonStats}
+                <Input
+                  allowClear
+                  placeholder={t('rules.searchPlaceholder')}
+                  prefix={<SearchIcon size={14} />}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                 />
+                <AsyncBoundary
+                  data={lessons}
+                  error={lessonsError}
+                  isLoading={lessonsLoading}
+                  loading={<Loading debugId={'SelfLearningRulesList'} />}
+                  onRetry={() => mutateLessons()}
+                >
+                  {lessons && (
+                    <RuleList
+                      lessonHref={(lessonId) => urlJoin(domainPath ?? '', 'rules', lessonId)}
+                      lessons={lessons}
+                      stats={data.lessonStats}
+                    />
+                  )}
+                </AsyncBoundary>
               </Flexbox>
             )}
           </AsyncBoundary>

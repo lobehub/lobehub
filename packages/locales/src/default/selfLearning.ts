@@ -49,7 +49,7 @@ export default {
   'empty.title': 'Turn real work into expertise',
   'headline.alsoDeclining': ' {{name}} has turned back down.',
   'headline.alsoRising': ' {{name}} is still climbing steeply.',
-  'headline.flat': '{{name}} has flattened out — it has learned what can be taught.',
+  'headline.flat': '{{name}} is approaching its current estimated ceiling.',
   'headline.none': 'None of them has flattened yet.',
   'headline.rising': '{{name}} is still climbing steeply.',
 
@@ -93,7 +93,12 @@ export default {
   'rules.allTitle': 'All rules',
   'rules.detail.examples': 'Where it was tested',
   'rules.detail.meta': '{{hits}} uses across {{runs}} practices',
+  'rules.detail.domainUnavailable': 'Domain context could not be loaded',
   'rules.detail.noExamples': 'No recorded examples yet',
+  'rules.detail.noExamplesDesc':
+    'This rule has not matched a later practice yet, so there is not enough evidence to judge whether it works.',
+  'rules.detail.openSource': 'Open source · {{title}}',
+  'rules.detail.retry': 'Retry',
   'rules.detail.notFound': 'This rule no longer exists',
   'rules.detail.outcome.pass': 'Worked',
   'rules.detail.outcome.violation': 'Missed',
@@ -109,12 +114,12 @@ export default {
   'rules.section.wrong': 'Wrong approach',
 
   'shape.declining': 'turning down = losing ability',
-  'shape.flat': 'flat = learned it all',
+  'shape.flat': 'flat = near the estimated ceiling',
   'shape.rising': 'still steep = still growing',
   'shape.stuck': 'hugging the floor = practising without learning',
   'shape.fresh': 'not practised yet',
   'shape.tag.declining': 'losing ability',
-  'shape.tag.flat': 'learned it all',
+  'shape.tag.flat': 'near estimated ceiling',
   'shape.tag.fresh': 'not practised yet',
   'shape.tag.rising': 'growing',
   'shape.tag.stuck': 'not learning',
@@ -130,6 +135,7 @@ export default {
   'anchor.traceHelp':
     'These are two valid ways to define the same body of work, not a system recommendation. Pick the boundary you want this expertise to learn within.',
   'create.cancel': 'Cancel',
+  'create.back': 'Back',
   'create.entry': 'Create an expertise',
   'create.failed': 'Could not create it. Try again.',
   'create.filterHelp':
@@ -169,6 +175,7 @@ export default {
   'rules.filter.core': 'Backbone',
   'rules.filter.niche': 'Situational',
   'rules.filter.unused': 'Never used',
+  'rules.searchPlaceholder': 'Search by rule title',
   'rules.neverUsedShort': 'never used',
   'overview.soloNext':
     'Open it to see what counts as practice — the rules start coming the next time a conversation matches.',
