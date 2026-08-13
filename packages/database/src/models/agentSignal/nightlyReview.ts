@@ -98,7 +98,7 @@ export interface AgentSignalNightlyReviewTarget {
  * - Nightly review needs active agent targets for a local-day window
  *
  * Expects:
- * - User-level AgentSignal lab preference is stored on `users.preference.lab`
+ * - Global feature gates are checked by the service layer
  * - Agent-level opt-in is stored on `agents.chatConfig.selfIteration.enabled`
  *
  * Returns:
@@ -112,7 +112,7 @@ export class AgentSignalNightlyReviewModel {
   }
 
   /**
-   * Lists users who opted into AgentSignal self-iteration and have a timezone.
+   * Lists candidate users with a timezone for nightly review scheduling.
    *
    * Use when:
    * - The nightly scheduler needs a stable cursor over possible users
@@ -138,10 +138,6 @@ export class AgentSignalNightlyReviewModel {
         ? inArray(users.id, options.whitelist)
         : undefined;
 
-    const selfIterationEnabledCondition = sql`
-      COALESCE((${users.preference}->'lab'->>'enableAgentSelfIteration')::boolean, false) = true
-    `;
-
     const query = this.db
       .select({
         createdAt: users.createdAt,
@@ -150,7 +146,7 @@ export class AgentSignalNightlyReviewModel {
       })
       .from(users)
       .leftJoin(userSettings, eq(users.id, userSettings.id))
-      .where(and(cursorCondition, whitelistCondition, selfIterationEnabledCondition))
+      .where(and(cursorCondition, whitelistCondition))
       .orderBy(asc(users.createdAt), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;

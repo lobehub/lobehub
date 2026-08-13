@@ -158,10 +158,6 @@ export const UserLabSchema = z.object({
    */
   enableAgentGraphConfig: z.boolean().optional(),
   /**
-   * enable agent self-iteration feedback capture and policy execution
-   */
-  enableAgentSelfIteration: z.boolean().optional(),
-  /**
    * enable artifact deployment features (publish artifacts to a hosted URL)
    */
   enableArtifactDeployment: z.boolean().optional(),

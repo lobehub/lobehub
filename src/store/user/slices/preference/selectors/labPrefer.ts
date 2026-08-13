@@ -7,8 +7,6 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentGraphConfig ??
     DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??
     false,
-  enableAgentSelfIteration: (s: UserState): boolean =>
-    s.preference.lab?.enableAgentSelfIteration ?? false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
