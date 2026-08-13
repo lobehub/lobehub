@@ -42,9 +42,11 @@ const parseCodeBuddyModelCatalogResult = (
   if (modelsEnd < 0) return;
 
   const supportedModels = output.slice(modelsStart + 1, modelsEnd);
+  const modelIds = supportedModels.split(',').map((model) => model.trim());
+  if (modelIds.some((id) => !id)) return;
 
-  return [...new Set(supportedModels.split(',').map((model) => model.trim()))]
-    .filter((id) => id && id !== 'default-model')
+  return [...new Set(modelIds)]
+    .filter((id) => id !== 'default-model')
     .map((id) => ({ id, modelId: id, providerId: 'codebuddy' }));
 };
 

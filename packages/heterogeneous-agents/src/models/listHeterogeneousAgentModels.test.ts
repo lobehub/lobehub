@@ -173,6 +173,23 @@ describe('heterogeneous agent model discovery', () => {
     ).resolves.toMatchObject({ models: [], status: 'success' });
   });
 
+  it.each([
+    ['an empty body', '()'],
+    ['comma-only entries', '(, ,)'],
+  ])('rejects a CodeBuddy catalog containing %s', async (_, catalog) => {
+    resolveExecFile(
+      `  --model <model>  Model for the current session. Currently supported: ${catalog}`,
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/codebuddy', type: 'codebuddy' }),
+    ).resolves.toMatchObject({
+      error: { code: 'command_failed' },
+      status: 'error',
+    });
+  });
+
   it('parses adversarial CodeBuddy help output without polynomial backtracking', async () => {
     const stdout = `${'--model <model>'.repeat(1000)}${'Currently supported:(('.repeat(1000)}`;
     const { parseCodeBuddyModelCatalog } = await importModule();
