@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  CodexAppServerConnectionError,
+  CodexAppServerRpcError,
+  isCodexAppServerCompatibilityError,
+} from './CodexAppServerClient';
 import { CodexThreadSession } from './CodexThreadSession';
 
 const turn = (id: string, status: 'completed' | 'inProgress' | 'interrupted') => ({
@@ -17,6 +22,8 @@ interface ClientHarness {
   client: any;
   disconnect: () => void;
   notify: (method: string, params: unknown) => Promise<void> | void;
+  registeredResumeParams: () => unknown;
+  releaseConsumer: ReturnType<typeof vi.fn>;
   requests: Array<{ method: string; params: unknown }>;
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
@@ -28,8 +35,12 @@ const createClientHarness = (
     autoComplete?: boolean;
     delayThreadStart?: boolean;
     delayTurnStart?: boolean;
+    disconnectOnInterrupt?: boolean;
+    connectError?: Error;
     failResume?: boolean;
     initialThreadId?: string;
+    interruptError?: Error;
+    malformedThreadStart?: boolean;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
@@ -40,7 +51,9 @@ const createClientHarness = (
         onResumeError: (error: Error) => Promise<void> | void;
       }
     | undefined;
+  let resumeParams: unknown;
   let turnSequence = 0;
+  const releaseConsumer = vi.fn();
   const requests: Array<{ method: string; params: unknown }> = [];
   const notify = (method: string, params: unknown) => notificationHandler?.(method, params);
   let resolveThreadStart = () => {};
@@ -57,14 +70,18 @@ const createClientHarness = (
     : Promise.resolve();
 
   const client = {
-    connect: vi.fn().mockResolvedValue({ userAgent: 'codex-test' }),
+    acquireConsumer: vi.fn(() => releaseConsumer),
+    connect: options.connectError
+      ? vi.fn().mockRejectedValue(options.connectError)
+      : vi.fn().mockResolvedValue({ userAgent: 'codex-test' }),
     onDisconnect: vi.fn((handler: () => void) => {
       disconnectHandler = handler;
       return vi.fn();
     }),
     onRawMessage: vi.fn(() => vi.fn()),
     onStderr: vi.fn(() => vi.fn()),
-    registerThread: vi.fn((_threadId: string, value: typeof registration) => {
+    registerThread: vi.fn((_threadId: string, params: unknown, value: typeof registration) => {
+      resumeParams = params;
       registration = value;
       return vi.fn();
     }),
@@ -72,6 +89,7 @@ const createClientHarness = (
       requests.push({ method, params });
       if (method === 'thread/start') {
         await threadStartGate;
+        if (options.malformedThreadStart) return { thread: {} };
         return { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } };
       }
       if (method === 'thread/resume') {
@@ -105,6 +123,8 @@ const createClientHarness = (
         return { turn: turn(turnId, 'inProgress') };
       }
       if (method === 'turn/interrupt') {
+        if (options.disconnectOnInterrupt) disconnectHandler?.();
+        if (options.interruptError) throw options.interruptError;
         const { threadId, turnId } = params as { threadId: string; turnId: string };
         setTimeout(() => {
           void notify('turn/completed', {
@@ -126,6 +146,8 @@ const createClientHarness = (
     client,
     disconnect: () => disconnectHandler?.(),
     notify,
+    registeredResumeParams: () => resumeParams,
+    releaseConsumer,
     requests,
     resolveThreadStart,
     resolveTurnStart,
@@ -134,7 +156,10 @@ const createClientHarness = (
   };
 };
 
-const createSession = (harness: ClientHarness, options: { initialThreadId?: string } = {}) => {
+const createSession = (
+  harness: ClientHarness,
+  options: { initialThreadId?: string; onEventsError?: Error } = {},
+) => {
   const events: any[] = [];
   const statuses: string[] = [];
   const onSessionId = vi.fn();
@@ -142,6 +167,7 @@ const createSession = (harness: ClientHarness, options: { initialThreadId?: stri
     client: harness.client,
     initialThreadId: options.initialThreadId,
     onEvents: (batch) => {
+      if (options.onEventsError) throw options.onEventsError;
       events.push(...batch);
     },
     onRuntimeStatus: ({ state }) => statuses.push(state),
@@ -225,6 +251,28 @@ describe('CodexThreadSession', () => {
       },
     ]);
     expect(onSessionId).not.toHaveBeenCalled();
+    expect(harness.registeredResumeParams()).toEqual({
+      approvalPolicy: 'never',
+      cwd: '/workspace',
+      sandbox: 'danger-full-access',
+      threadId: 'thread-existing',
+    });
+  });
+
+  it('never allows exec fallback for an existing thread, including initialize failures', async () => {
+    const initializeError = new CodexAppServerConnectionError('Initialize failed', {
+      phase: 'initialize',
+    });
+    const harness = createClientHarness({
+      connectError: initializeError,
+      initialThreadId: 'thread-existing',
+    });
+    const { run, session } = createSession(harness, { initialThreadId: 'thread-existing' });
+
+    await expect(run('operation-1', 'continue')).rejects.toBe(initializeError);
+
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
   });
 
   it('does not allow exec fallback after initialize succeeds for an existing thread', async () => {
@@ -237,6 +285,18 @@ describe('CodexThreadSession', () => {
     await expect(run('operation-1', 'continue')).rejects.toThrow('Thread not found');
 
     expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  it('classifies a malformed initial thread/start response for safe exec fallback', async () => {
+    const harness = createClientHarness({ malformedThreadStart: true });
+    const { run, session } = createSession(harness);
+
+    const error = await run('operation-1', 'start').catch((cause) => cause);
+
+    expect(error).toBeInstanceOf(CodexAppServerConnectionError);
+    expect(isCodexAppServerCompatibilityError(error)).toBe(true);
+    expect(session.canFallbackToExec).toBe(true);
     session.close();
   });
 
@@ -253,6 +313,7 @@ describe('CodexThreadSession', () => {
     await running;
 
     expect(harness.client.registerThread).not.toHaveBeenCalled();
+    expect(harness.releaseConsumer).toHaveBeenCalledOnce();
     expect(statuses).toEqual(['starting', 'closed']);
   });
 
@@ -278,6 +339,53 @@ describe('CodexThreadSession', () => {
         type: 'agent_runtime_end',
       }),
     );
+  });
+
+  it('keeps the thread reusable when interrupt loses a race with transport disconnect', async () => {
+    const harness = createClientHarness({
+      autoComplete: false,
+      disconnectOnInterrupt: true,
+      interruptError: new CodexAppServerConnectionError('Transport disconnected'),
+    });
+    const { run, session } = createSession(harness);
+    const interrupted = run('operation-1', 'wait');
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    await expect(session.interrupt()).resolves.toBeUndefined();
+    await interrupted;
+
+    const nextTurn = run('operation-2', 'continue');
+    await vi.waitFor(() =>
+      expect(harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(2),
+    );
+    harness.disconnect();
+    await nextTurn;
+    session.close();
+  });
+
+  it('does not suppress a genuine interrupt RPC error when transport also disconnects', async () => {
+    const rpcError = new CodexAppServerRpcError(
+      'Turn cannot be interrupted',
+      -32_602,
+      undefined,
+      'turn/interrupt',
+    );
+    const harness = createClientHarness({
+      autoComplete: false,
+      disconnectOnInterrupt: true,
+      interruptError: rpcError,
+    });
+    const { run, session } = createSession(harness);
+    const interrupted = run('operation-1', 'wait');
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    await expect(session.interrupt()).rejects.toBe(rpcError);
+    await interrupted;
+    session.close();
   });
 
   it('remembers an interrupt requested before turn/start returns its turn id', async () => {
@@ -321,7 +429,7 @@ describe('CodexThreadSession', () => {
     expect(terminalEvents[0].data).toEqual({});
   });
 
-  it('marks a crashed turn interrupted, waits for thread reattachment, then continues', async () => {
+  it('settles a crashed turn immediately as interrupted, then resumes on the next turn', async () => {
     const harness = createClientHarness({ autoComplete: false });
     const { events, run, session } = createSession(harness);
     let settled = false;
@@ -333,11 +441,8 @@ describe('CodexThreadSession', () => {
       expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
     );
     harness.disconnect();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
-
-    await harness.resume();
     await crashedTurn;
+    expect(settled).toBe(true);
     expect(events).toContainEqual(
       expect.objectContaining({
         data: { reason: 'interrupted' },
@@ -350,8 +455,19 @@ describe('CodexThreadSession', () => {
     await vi.waitFor(() =>
       expect(harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(2),
     );
-    await session.interrupt();
+    harness.disconnect();
     await nextTurn;
+    session.close();
+  });
+
+  it('surfaces notification emission failures instead of completing a partial turn', async () => {
+    const emissionError = new Error('Renderer event delivery failed');
+    const harness = createClientHarness();
+    const { run, session, statuses } = createSession(harness, { onEventsError: emissionError });
+
+    await expect(run('operation-1', 'fail delivery')).rejects.toBe(emissionError);
+
+    expect(statuses).toEqual(['starting', 'running', 'error']);
     session.close();
   });
 });

@@ -79,6 +79,85 @@ describe('CodexAppServerAdapter', () => {
     expect(adapter.adapt('future/notification', { threadId: 'thread-1' })).toEqual([]);
   });
 
+  it('keeps unfinished plan state when a turn is interrupted', () => {
+    const adapter = new CodexAppServerAdapter();
+    const planEvents = adapter.adapt('turn/plan/updated', {
+      explanation: null,
+      plan: [
+        { status: 'completed', step: 'Inspect' },
+        { status: 'inProgress', step: 'Implement' },
+        { status: 'pending', step: 'Verify' },
+      ],
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+
+    const terminalEvents = adapter.interruptForTransportFailure();
+
+    expect(
+      planEvents.find(({ data }) => data.chunkType === 'tool_state')?.data.pluginState.todos.items,
+    ).toEqual([
+      { status: 'completed', text: 'Inspect' },
+      { status: 'processing', text: 'Implement' },
+      { status: 'todo', text: 'Verify' },
+    ]);
+    expect(
+      terminalEvents.find(
+        ({ data, type }) => type === 'tool_end' && data.toolCallId === 'turn-plan-turn-1',
+      ),
+    ).toMatchObject({ data: { isSuccess: false } });
+    expect(
+      terminalEvents.some(
+        ({ data, type }) => type === 'tool_result' && data.toolCallId === 'turn-plan-turn-1',
+      ),
+    ).toBe(false);
+  });
+
+  it('truncates oversized completed command output before persisting the result', () => {
+    const adapter = new CodexAppServerAdapter();
+    const item = {
+      aggregatedOutput: 'x'.repeat(25_010),
+      command: 'print-output',
+      durationMs: 1,
+      exitCode: 0,
+      id: 'command-large',
+      status: 'completed',
+      type: 'commandExecution',
+    };
+    adapter.adapt('item/started', {
+      item: {
+        ...item,
+        aggregatedOutput: null,
+        durationMs: null,
+        exitCode: null,
+        status: 'inProgress',
+      },
+      startedAtMs: 1,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+
+    const events = adapter.adapt('item/completed', {
+      completedAtMs: 2,
+      item,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const result = events.find(({ type }) => type === 'tool_result')?.data;
+
+    expect(result.content).toContain(
+      '[Output truncated: 10 characters omitted. Original length: 25010 characters]',
+    );
+    expect(result.pluginState).toMatchObject({
+      omittedOutputCharacters: 10,
+      originalOutputLength: 25_010,
+      outputTruncated: true,
+    });
+    expect(result.content).toHaveLength(25_078);
+    expect(result.pluginState.output).toBe(result.content);
+    expect(result.pluginState.stdout).toBe(result.content);
+  });
+
   it.each([
     {
       code: 'rate_limit',

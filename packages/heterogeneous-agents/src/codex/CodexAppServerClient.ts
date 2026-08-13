@@ -9,18 +9,21 @@ import type {
   InitializeParams,
   InitializeResponse,
   RequestId,
+  ThreadResumeParams,
   ThreadResumeResponse,
 } from './protocol';
 
 const APP_SERVER_RPC_TIMEOUT_MS = 30_000;
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 250;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 4000;
+const DEFAULT_RECONNECT_MAX_ATTEMPTS = 5;
 const APPROVAL_REQUEST_METHODS = new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
 ]);
 
 interface PendingRequest {
+  generation: number;
   method: string;
   reject: (error: Error) => void;
   resolve: (result: unknown) => void;
@@ -30,6 +33,22 @@ interface PendingRequest {
 interface ThreadRegistration {
   onResume: (response: ThreadResumeResponse) => Promise<void> | void;
   onResumeError: (error: Error) => Promise<void> | void;
+}
+
+interface ThreadRegistrationGroup {
+  params: ThreadResumeParams;
+  registrations: Set<ThreadRegistration>;
+}
+
+interface ProcessGeneration {
+  child: ChildProcess;
+  generation: number;
+  stdoutBuffer: string;
+}
+
+interface ConnectionState {
+  generation: number;
+  promise: Promise<InitializeResponse>;
 }
 
 type NotificationHandler = (method: string, params: unknown) => Promise<void> | void;
@@ -43,6 +62,7 @@ export interface CodexAppServerClientOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
   reconnectBaseDelayMs?: number;
+  reconnectMaxAttempts?: number;
   reconnectMaxDelayMs?: number;
 }
 
@@ -59,9 +79,9 @@ export class CodexAppServerRpcError extends Error {
 }
 
 export class CodexAppServerConnectionError extends Error {
-  readonly phase?: 'initialize';
+  readonly phase?: 'initialize' | 'thread-start';
 
-  constructor(message: string, options?: ErrorOptions & { phase?: 'initialize' }) {
+  constructor(message: string, options?: ErrorOptions & { phase?: 'initialize' | 'thread-start' }) {
     super(message, options);
     this.name = 'CodexAppServerConnectionError';
     this.phase = options?.phase;
@@ -69,7 +89,8 @@ export class CodexAppServerConnectionError extends Error {
 }
 
 export const isCodexAppServerCompatibilityError = (error: unknown): boolean =>
-  (error instanceof CodexAppServerConnectionError && error.phase === 'initialize') ||
+  (error instanceof CodexAppServerConnectionError &&
+    (error.phase === 'initialize' || error.phase === 'thread-start')) ||
   (error instanceof CodexAppServerRpcError &&
     (error.method === 'initialize' || error.code === -32_601));
 
@@ -81,11 +102,13 @@ export const isCodexAppServerCompatibilityError = (error: unknown): boolean =>
  * server-initiated requests back to that thread.
  */
 export class CodexAppServerClient {
-  private child?: ChildProcess;
+  private activeGeneration = 0;
   private closedByHost = false;
-  private connectPromise?: Promise<InitializeResponse>;
+  private connectionState?: ConnectionState;
   private connectionError?: Error;
   private connected = false;
+  private consumerCount = 0;
+  private generationSequence = 0;
   private hasConnected = false;
   private nextRequestId = 0;
   private readonly pendingRequests = new Map<string, PendingRequest>();
@@ -94,15 +117,34 @@ export class CodexAppServerClient {
   private readonly disconnectHandlers = new Set<(error: Error) => void>();
   private readonly rawMessageHandlers = new Set<TextHandler>();
   private readonly stderrHandlers = new Set<TextHandler>();
-  private readonly threadRegistrations = new Map<string, Set<ThreadRegistration>>();
+  private readonly threadRegistrations = new Map<string, ThreadRegistrationGroup>();
+  private processGeneration?: ProcessGeneration;
   private reconnectAttempt = 0;
+  private reconnectEpoch = 0;
+  private reconnectExhaustedEpoch?: number;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
-  private stdoutBuffer = '';
 
   constructor(private readonly options: CodexAppServerClientOptions) {}
 
   get isConnected(): boolean {
     return this.connected && !this.connectionError;
+  }
+
+  get hasConsumers(): boolean {
+    return this.consumerCount > 0;
+  }
+
+  acquireConsumer(): () => void {
+    if (this.closedByHost) {
+      throw new CodexAppServerConnectionError('Codex app-server client closed by host');
+    }
+    this.consumerCount += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.consumerCount -= 1;
+    };
   }
 
   /** Process-global options must stay identical while this long-lived client is reused. */
@@ -131,40 +173,19 @@ export class CodexAppServerClient {
         new CodexAppServerConnectionError('Codex app-server client closed by host'),
       );
     }
-    if (!this.connectPromise) this.connectPromise = this.initialize();
-    return this.connectPromise;
+    if (this.connectionState && !this.connectionError) return this.connectionState.promise;
+    this.startUserRecoveryEpoch();
+    return this.startConnection();
   }
 
   async request<T>(method: string, params?: unknown): Promise<T> {
-    if (!this.connected && method !== 'initialize') await this.connect();
+    if (!this.connected) await this.connect();
     if (this.connectionError) throw this.connectionError;
-    if (!this.child?.stdin) {
-      throw new CodexAppServerConnectionError('Codex app-server stdin is unavailable');
-    }
-
-    const id = ++this.nextRequestId;
-    return new Promise<T>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(String(id));
-        const error = new CodexAppServerConnectionError(
-          `Codex app-server request timed out: ${method}`,
-        );
-        reject(error);
-        this.fail(error);
-      }, APP_SERVER_RPC_TIMEOUT_MS);
-      timeout.unref?.();
-      this.pendingRequests.set(String(id), {
-        method,
-        reject,
-        resolve: (result) => resolve(result as T),
-        timeout,
-      });
-      this.write({ id, method, params });
-    });
+    return this.requestForGeneration<T>(this.activeGeneration, method, params);
   }
 
   notify(notification: ClientNotification): void {
-    this.write({ ...notification });
+    this.writeForGeneration(this.activeGeneration, { ...notification });
   }
 
   subscribe(threadId: string, handler: NotificationHandler): () => void {
@@ -181,15 +202,26 @@ export class CodexAppServerClient {
     return () => this.removeHandler(this.serverRequestHandlers, threadId, handler);
   }
 
-  registerThread(threadId: string, registration: ThreadRegistration): () => void {
-    const registrations = this.threadRegistrations.get(threadId) ?? new Set();
-    registrations.add(registration);
-    this.threadRegistrations.set(threadId, registrations);
+  registerThread(
+    threadId: string,
+    params: ThreadResumeParams,
+    registration: ThreadRegistration,
+  ): () => void {
+    if (params.threadId !== threadId) {
+      throw new Error(`Codex resume params do not match registered thread: ${threadId}`);
+    }
+    const existing = this.threadRegistrations.get(threadId);
+    if (existing && JSON.stringify(existing.params) !== JSON.stringify(params)) {
+      throw new Error(`Conflicting Codex resume params for thread: ${threadId}`);
+    }
+    const group = existing ?? { params, registrations: new Set() };
+    group.registrations.add(registration);
+    this.threadRegistrations.set(threadId, group);
 
     if (!this.connected && this.connectionError) this.scheduleReconnect();
     return () => {
-      registrations.delete(registration);
-      if (registrations.size === 0) this.threadRegistrations.delete(threadId);
+      group.registrations.delete(registration);
+      if (group.registrations.size === 0) this.threadRegistrations.delete(threadId);
       if (this.threadRegistrations.size === 0 && this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = undefined;
@@ -215,22 +247,43 @@ export class CodexAppServerClient {
   close(): void {
     if (this.closedByHost) return;
     this.closedByHost = true;
+    this.reconnectEpoch += 1;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
     }
     const error = new CodexAppServerConnectionError('Codex app-server client closed by host');
-    this.fail(error, false);
-    const child = this.child;
-    this.child = undefined;
-    this.terminateChild(child);
+    const generation = this.activeGeneration;
+    this.activeGeneration = ++this.generationSequence;
+    this.connected = false;
+    this.connectionError = error;
+    this.connectionState = undefined;
+    const processGeneration = this.processGeneration;
+    this.processGeneration = undefined;
+    this.rejectPendingRequests(generation, error);
+    this.emitDisconnect(error);
+    this.terminateChild(processGeneration?.child);
   }
 
-  private async initialize(): Promise<InitializeResponse> {
+  private startConnection(): Promise<InitializeResponse> {
+    if (this.closedByHost) {
+      return Promise.reject(
+        new CodexAppServerConnectionError('Codex app-server client closed by host'),
+      );
+    }
+    const generation = ++this.generationSequence;
     const isReconnect = this.hasConnected;
+    this.activeGeneration = generation;
+    this.connected = false;
     this.connectionError = undefined;
+    const promise = this.initialize(generation, isReconnect);
+    this.connectionState = { generation, promise };
+    return promise;
+  }
+
+  private async initialize(generation: number, isReconnect: boolean): Promise<InitializeResponse> {
     try {
-      await this.startProcess();
+      await this.startProcess(generation);
       const params: InitializeParams = {
         capabilities: {
           experimentalApi: false,
@@ -242,13 +295,20 @@ export class CodexAppServerClient {
           version: this.options.clientVersion,
         },
       };
-      const response = await this.request<InitializeResponse>('initialize', params);
-      this.notify({ method: 'initialized' });
+      const response = await this.requestForGeneration<InitializeResponse>(
+        generation,
+        'initialize',
+        params,
+      );
+      this.writeForGeneration(generation, { method: 'initialized' });
+      if (!this.isCurrentGeneration(generation)) {
+        throw new CodexAppServerConnectionError('Codex app-server connection was replaced');
+      }
       this.connected = true;
       this.hasConnected = true;
       if (isReconnect) {
-        await this.resumeRegisteredThreads();
-        if (!this.connected || this.connectionError) {
+        await this.resumeRegisteredThreads(generation);
+        if (!this.isCurrentGeneration(generation) || !this.connected || this.connectionError) {
           throw (
             this.connectionError ??
             new CodexAppServerConnectionError(
@@ -258,14 +318,11 @@ export class CodexAppServerClient {
         }
       }
       this.reconnectAttempt = 0;
+      this.reconnectExhaustedEpoch = undefined;
       return response;
     } catch (error) {
-      const failure =
-        error instanceof CodexAppServerRpcError || error instanceof CodexAppServerConnectionError
-          ? error
-          : new CodexAppServerConnectionError('Codex app-server handshake failed', {
-              cause: error,
-            });
+      const failure = this.toConnectionError(error, 'Codex app-server handshake failed');
+      if (!this.isCurrentGeneration(generation)) throw failure;
       const connectionError =
         !isReconnect && failure instanceof CodexAppServerConnectionError
           ? new CodexAppServerConnectionError(failure.message, {
@@ -273,78 +330,153 @@ export class CodexAppServerClient {
               phase: 'initialize',
             })
           : failure;
-      this.fail(connectionError);
+      this.fail(connectionError, generation);
       throw connectionError;
     }
   }
 
-  private async startProcess(): Promise<void> {
+  private async startProcess(generation: number): Promise<void> {
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, [
       ...(this.options.args ?? []),
       'app-server',
     ]);
+    if (!this.isCurrentGeneration(generation)) {
+      throw new CodexAppServerConnectionError(
+        this.closedByHost
+          ? 'Codex app-server client closed by host'
+          : 'Codex app-server connection was replaced',
+      );
+    }
+
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    this.child = child;
+    const processGeneration = { child, generation, stdoutBuffer: '' };
+    if (!this.isCurrentGeneration(generation)) {
+      this.terminateChild(child);
+      throw new CodexAppServerConnectionError('Codex app-server connection was replaced');
+    }
+    this.processGeneration = processGeneration;
     child.stdin?.on('error', () => {
       // The process error/exit listener owns the actionable failure. Ignore a racing EPIPE.
     });
-    child.stdout?.on('data', (chunk: Buffer) => this.consumeStdout(chunk));
-    child.stderr?.on('data', (chunk: Buffer) =>
-      this.emitText(this.stderrHandlers, chunk.toString()),
-    );
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (!this.ownsProcess(processGeneration)) return;
+      this.consumeStdout(processGeneration, chunk);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (!this.ownsProcess(processGeneration)) return;
+      this.emitText(this.stderrHandlers, chunk.toString());
+    });
     child.once('error', (error) => {
-      if (this.child !== child) return;
+      if (!this.ownsProcess(processGeneration)) return;
       this.fail(
         new CodexAppServerConnectionError(`Failed to start Codex app-server: ${error.message}`, {
           cause: error,
         }),
+        generation,
       );
     });
     child.once('exit', (code, signal) => {
-      if (this.child !== child) return;
+      if (!this.ownsProcess(processGeneration)) return;
       this.fail(
         new CodexAppServerConnectionError(
           `Codex app-server exited (code ${code ?? 'null'}, signal ${signal ?? 'null'})`,
         ),
+        generation,
       );
     });
   }
 
-  private consumeStdout(chunk: Buffer): void {
-    this.stdoutBuffer += chunk.toString('utf8');
+  private requestForGeneration<T>(
+    generation: number,
+    method: string,
+    params?: unknown,
+  ): Promise<T> {
+    const processGeneration = this.processGeneration;
+    if (
+      !processGeneration ||
+      !this.ownsProcess(processGeneration) ||
+      generation !== this.activeGeneration
+    ) {
+      return Promise.reject(
+        new CodexAppServerConnectionError('Codex app-server stdin is unavailable'),
+      );
+    }
+
+    const id = ++this.nextRequestId;
+    const key = String(id);
+    return new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const current = this.pendingRequests.get(key);
+        if (!current || current.generation !== generation) return;
+        this.pendingRequests.delete(key);
+        const error = new CodexAppServerConnectionError(
+          `Codex app-server request timed out: ${method}`,
+        );
+        reject(error);
+        this.fail(error, generation);
+      }, APP_SERVER_RPC_TIMEOUT_MS);
+      timeout.unref?.();
+      const pending: PendingRequest = {
+        generation,
+        method,
+        reject,
+        resolve: (result) => resolve(result as T),
+        timeout,
+      };
+      this.pendingRequests.set(key, pending);
+      try {
+        this.writeToProcess(processGeneration, { id, method, params });
+      } catch (error) {
+        if (this.pendingRequests.get(key) === pending) this.pendingRequests.delete(key);
+        clearTimeout(timeout);
+        const connectionError = this.toConnectionError(
+          error,
+          `Failed to write Codex app-server request: ${method}`,
+        );
+        reject(connectionError);
+        this.fail(connectionError, generation);
+      }
+    });
+  }
+
+  private consumeStdout(processGeneration: ProcessGeneration, chunk: Buffer): void {
+    processGeneration.stdoutBuffer += chunk.toString('utf8');
     let newlineIndex: number;
 
-    while ((newlineIndex = this.stdoutBuffer.indexOf('\n')) >= 0) {
-      const line = this.stdoutBuffer.slice(0, newlineIndex).trim();
-      this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
+    while ((newlineIndex = processGeneration.stdoutBuffer.indexOf('\n')) >= 0) {
+      const line = processGeneration.stdoutBuffer.slice(0, newlineIndex).trim();
+      processGeneration.stdoutBuffer = processGeneration.stdoutBuffer.slice(newlineIndex + 1);
       if (!line) continue;
 
       this.emitText(this.rawMessageHandlers, `${line}\n`);
       try {
-        this.routeMessage(JSON.parse(line));
+        this.routeMessage(processGeneration.generation, JSON.parse(line));
       } catch (error) {
         this.fail(
           new CodexAppServerConnectionError('Codex app-server emitted invalid NDJSON', {
             cause: error,
           }),
+          processGeneration.generation,
         );
+        return;
       }
     }
   }
 
-  private routeMessage(message: unknown): void {
+  private routeMessage(generation: number, message: unknown): void {
+    if (!this.isCurrentGeneration(generation)) return;
     if (!isRecord(message)) throw new TypeError('Expected an app-server RPC object');
     const method = pickString(message.method);
     const id = message.id as RequestId | undefined;
 
     if (method) {
       if (id !== undefined) {
-        void this.routeServerRequest(id, method, message.params);
+        void this.routeServerRequest(generation, id, method, message.params);
       } else {
         this.routeNotification(method, message.params);
       }
@@ -352,10 +484,11 @@ export class CodexAppServerClient {
     }
 
     if (id === undefined) return;
-    const pending = this.pendingRequests.get(String(id));
-    if (!pending) return;
+    const key = String(id);
+    const pending = this.pendingRequests.get(key);
+    if (!pending || pending.generation !== generation) return;
 
-    this.pendingRequests.delete(String(id));
+    this.pendingRequests.delete(key);
     clearTimeout(pending.timeout);
     if (isRecord(message.error)) {
       pending.reject(
@@ -379,38 +512,65 @@ export class CodexAppServerClient {
     }
   }
 
-  private async routeServerRequest(id: RequestId, method: string, params: unknown): Promise<void> {
+  private async routeServerRequest(
+    generation: number,
+    id: RequestId,
+    method: string,
+    params: unknown,
+  ): Promise<void> {
     const threadId = isRecord(params) ? pickString(params.threadId) : undefined;
     const handlers = threadId ? this.serverRequestHandlers.get(threadId) : undefined;
     const handler = handlers?.values().next().value as ServerRequestHandler | undefined;
+    let response: Record<string, unknown>;
 
     try {
       if (handler) {
-        this.write({ id, result: await handler(method, params) });
+        response = { id, result: await handler(method, params) };
       } else if (APPROVAL_REQUEST_METHODS.has(method)) {
-        this.write({ id, result: { decision: 'cancel' } });
+        response = { id, result: { decision: 'cancel' } };
       } else {
-        this.write({
+        response = {
           error: { code: -32_601, message: `Unsupported Codex app-server request: ${method}` },
           id,
-        });
+        };
       }
     } catch (error) {
-      this.write({
+      response = {
         error: {
           code: -32_603,
           message: error instanceof Error ? error.message : 'Codex server request failed',
         },
         id,
-      });
+      };
+    }
+
+    if (!this.isCurrentGeneration(generation)) return;
+    try {
+      this.writeForGeneration(generation, response);
+    } catch (error) {
+      this.fail(
+        this.toConnectionError(error, 'Failed to write Codex app-server response'),
+        generation,
+      );
     }
   }
 
-  private write(message: Record<string, unknown>): void {
-    if (!this.child?.stdin) {
+  private writeForGeneration(generation: number, message: Record<string, unknown>): void {
+    const processGeneration = this.processGeneration;
+    if (!processGeneration || processGeneration.generation !== generation) {
       throw new CodexAppServerConnectionError('Codex app-server stdin is unavailable');
     }
-    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    this.writeToProcess(processGeneration, message);
+  }
+
+  private writeToProcess(
+    processGeneration: ProcessGeneration,
+    message: Record<string, unknown>,
+  ): void {
+    if (!this.ownsProcess(processGeneration) || !processGeneration.child.stdin) {
+      throw new CodexAppServerConnectionError('Codex app-server stdin is unavailable');
+    }
+    processGeneration.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
   private emitText(handlers: Set<TextHandler>, data: string): void {
@@ -423,26 +583,38 @@ export class CodexAppServerClient {
     if (handlers?.size === 0) map.delete(key);
   }
 
-  private fail(error: Error, reconnect = true): void {
-    if (this.connectionError) return;
+  private fail(error: Error, generation: number, reconnect = true): void {
+    if (!this.isCurrentGeneration(generation) || this.connectionError) return;
     this.connectionError = error;
     this.connected = false;
-    this.connectPromise = undefined;
-    this.stdoutBuffer = '';
-    const child = this.child;
-    this.child = undefined;
-    this.terminateChild(child);
-    for (const pending of this.pendingRequests.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(error);
+    if (this.connectionState?.generation === generation) this.connectionState = undefined;
+    const processGeneration = this.processGeneration;
+    if (processGeneration?.generation === generation) {
+      this.processGeneration = undefined;
+      this.terminateChild(processGeneration.child);
     }
-    this.pendingRequests.clear();
-    for (const handler of this.disconnectHandlers) handler(error);
+    this.rejectPendingRequests(generation, error);
+    this.emitDisconnect(error);
     if (reconnect) this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
     if (this.closedByHost || this.reconnectTimer || this.threadRegistrations.size === 0) {
+      return;
+    }
+
+    const maxAttempts = Math.max(
+      0,
+      Math.floor(this.options.reconnectMaxAttempts ?? DEFAULT_RECONNECT_MAX_ATTEMPTS),
+    );
+    const epoch = this.reconnectEpoch;
+    if (this.reconnectAttempt >= maxAttempts) {
+      if (this.reconnectExhaustedEpoch === epoch) return;
+      this.reconnectExhaustedEpoch = epoch;
+      const error = new CodexAppServerConnectionError(
+        `Codex app-server reconnect exhausted after ${maxAttempts} attempts`,
+      );
+      this.notifyResumeErrors(error);
       return;
     }
 
@@ -452,30 +624,91 @@ export class CodexAppServerClient {
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      void this.connect().catch(() => {
+      if (epoch !== this.reconnectEpoch || this.closedByHost) return;
+      void this.startConnection().catch(() => {
         // initialize() records the failure and schedules the next backoff attempt.
       });
     }, delay);
     this.reconnectTimer.unref?.();
   }
 
-  private async resumeRegisteredThreads(): Promise<void> {
+  private async resumeRegisteredThreads(generation: number): Promise<void> {
     await Promise.all(
-      [...this.threadRegistrations].map(async ([threadId, registrations]) => {
+      [...this.threadRegistrations.values()].map(async ({ params, registrations }) => {
         try {
-          const response = await this.request<ThreadResumeResponse>('thread/resume', { threadId });
-          await Promise.all([...registrations].map(({ onResume }) => onResume(response)));
+          const response = await this.requestForGeneration<ThreadResumeResponse>(
+            generation,
+            'thread/resume',
+            params,
+          );
+          if (!this.isCurrentGeneration(generation) || !this.connected) return;
+          await Promise.allSettled([...registrations].map(({ onResume }) => onResume(response)));
         } catch (error) {
           // A second transport failure schedules another reconnect attempt; keep
           // sessions waiting instead of treating the thread itself as invalid.
-          if (!this.connected) return;
+          if (!this.isCurrentGeneration(generation) || !this.connected) return;
           const resumeError = error instanceof Error ? error : new Error(String(error));
-          await Promise.all(
+          await Promise.allSettled(
             [...registrations].map(({ onResumeError }) => onResumeError(resumeError)),
           );
         }
       }),
     );
+  }
+
+  private startUserRecoveryEpoch(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    this.reconnectAttempt = 0;
+    this.reconnectEpoch += 1;
+    this.reconnectExhaustedEpoch = undefined;
+  }
+
+  private notifyResumeErrors(error: Error): void {
+    void Promise.allSettled(
+      [...this.threadRegistrations.values()].flatMap(({ registrations }) =>
+        [...registrations].map(({ onResumeError }) => onResumeError(error)),
+      ),
+    );
+  }
+
+  private rejectPendingRequests(generation: number, error: Error): void {
+    for (const [key, pending] of this.pendingRequests) {
+      if (pending.generation !== generation) continue;
+      this.pendingRequests.delete(key);
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+  }
+
+  private emitDisconnect(error: Error): void {
+    for (const handler of this.disconnectHandlers) {
+      try {
+        handler(error);
+      } catch (handlerError) {
+        console.error('Codex app-server disconnect handler failed:', handlerError);
+      }
+    }
+  }
+
+  private isCurrentGeneration(generation: number): boolean {
+    return !this.closedByHost && this.activeGeneration === generation;
+  }
+
+  private ownsProcess(processGeneration: ProcessGeneration): boolean {
+    return (
+      this.isCurrentGeneration(processGeneration.generation) &&
+      this.processGeneration === processGeneration
+    );
+  }
+
+  private toConnectionError(error: unknown, message: string): Error {
+    if (error instanceof CodexAppServerRpcError || error instanceof CodexAppServerConnectionError) {
+      return error;
+    }
+    return new CodexAppServerConnectionError(message, { cause: error });
   }
 
   private terminateChild(child?: ChildProcess): void {

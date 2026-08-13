@@ -35,12 +35,10 @@ interface ActiveTurn {
   completion: Promise<void>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
+  notificationError?: Error;
   notificationQueue: Promise<void>;
   operationId: string;
-  recovery?: Promise<void>;
-  rejectRecovery?: (error: Error) => void;
   resolve: () => void;
-  resolveRecovery?: () => void;
   terminalNotificationReceived: boolean;
   transportInterrupted: boolean;
   turnId?: string;
@@ -70,7 +68,7 @@ export interface CodexThreadSessionOptions {
 export class CodexThreadSession {
   private activeTurn?: ActiveTurn;
   private attached = false;
-  private canFallback = true;
+  private canFallback: boolean;
   private closedByHost = false;
   private cumulativeUsage?: UsageData;
   private interruptRequested = false;
@@ -82,10 +80,14 @@ export class CodexThreadSession {
   private readonly threadUnsubscribers: Array<() => void> = [];
 
   constructor(private readonly options: CodexThreadSessionOptions) {
+    this.canFallback = !options.initialThreadId;
     this.cumulativeUsage = options.initialCumulativeUsage;
     this.model = options.initialModel;
     this.threadId = options.initialThreadId;
-    this.sessionUnsubscribers.push(options.client.onDisconnect(() => this.handleDisconnect()));
+    this.sessionUnsubscribers.push(
+      options.client.acquireConsumer(),
+      options.client.onDisconnect(() => this.handleDisconnect()),
+    );
   }
 
   get canFallbackToExec(): boolean {
@@ -129,8 +131,6 @@ export class CodexThreadSession {
       };
       this.activeTurn = activeTurn;
 
-      if (this.model)
-        await this.emitEvents(adapter.configureModel(this.model), options.operationId);
       const threadId = this.threadId;
       if (!threadId) throw new Error('Codex thread is not attached');
 
@@ -147,7 +147,12 @@ export class CodexThreadSession {
       await activeTurn.completion;
       await activeTurn.notificationQueue;
       if (this.closedByHost) return;
-      if (activeTurn.recovery && !this.closedByHost) await activeTurn.recovery;
+      if (activeTurn.notificationError) throw activeTurn.notificationError;
+      if (activeTurn.transportInterrupted) {
+        this.cumulativeUsage = adapter.cumulativeUsage;
+        this.emitStatus('idle', options.operationId);
+        return;
+      }
       await this.emitEvents(adapter.flush(), options.operationId);
       this.cumulativeUsage = adapter.cumulativeUsage;
       this.emitStatus('idle', options.operationId);
@@ -155,7 +160,10 @@ export class CodexThreadSession {
       if (this.closedByHost) return;
       if (this.activeTurn?.transportInterrupted) {
         await this.activeTurn.notificationQueue;
-        if (this.activeTurn.recovery && !this.closedByHost) await this.activeTurn.recovery;
+        if (this.activeTurn.notificationError) {
+          this.emitStatus('error', options.operationId);
+          throw this.activeTurn.notificationError;
+        }
         this.cumulativeUsage = this.activeTurn.adapter.cumulativeUsage;
         this.emitStatus('idle', options.operationId);
         return;
@@ -177,7 +185,19 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
-    if (activeTurn.turnId) await this.requestInterrupt(activeTurn);
+    if (!activeTurn.turnId) return;
+    try {
+      await this.requestInterrupt(activeTurn);
+    } catch (error) {
+      if (
+        this.activeTurn === activeTurn &&
+        activeTurn.transportInterrupted &&
+        error instanceof CodexAppServerConnectionError
+      ) {
+        return;
+      }
+      throw error;
+    }
   }
 
   close(): void {
@@ -192,7 +212,6 @@ export class CodexThreadSession {
         });
       }
       this.interruptActiveTurn();
-      this.activeTurn.resolveRecovery?.();
     }
     this.unsubscribeAll(this.threadUnsubscribers);
     this.unsubscribeAll(this.sessionUnsubscribers);
@@ -225,6 +244,7 @@ export class CodexThreadSession {
     if (!threadId) {
       throw new CodexAppServerConnectionError(
         'Codex app-server returned an incompatible thread/start response',
+        { phase: 'thread-start' },
       );
     }
 
@@ -252,13 +272,16 @@ export class CodexThreadSession {
         }
         throw new Error(`Unsupported Codex app-server request: ${method}`);
       }),
-      this.options.client.registerThread(threadId, {
-        onResume: (response) => this.handleReconnect(response),
-        onResumeError: (error) => {
-          this.attached = false;
-          this.activeTurn?.rejectRecovery?.(error);
+      this.options.client.registerThread(
+        threadId,
+        toThreadResumeParams(threadId, this.options.threadParams),
+        {
+          onResume: (response) => this.handleReconnect(response),
+          onResumeError: () => {
+            this.attached = false;
+          },
         },
-      }),
+      ),
     );
   }
 
@@ -266,7 +289,6 @@ export class CodexThreadSession {
     if (this.closedByHost) return;
     this.attached = true;
     if (response.model) this.updateModel(response.model);
-    this.activeTurn?.resolveRecovery?.();
   }
 
   private handleDisconnect(): void {
@@ -292,14 +314,11 @@ export class CodexThreadSession {
     const activeTurn = this.activeTurn;
     if (!activeTurn || activeTurn.transportInterrupted) return;
     activeTurn.transportInterrupted = true;
-    activeTurn.recovery = new Promise<void>((resolve, reject) => {
-      activeTurn.resolveRecovery = resolve;
-      activeTurn.rejectRecovery = reject;
-    });
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(() =>
         this.emitEvents(activeTurn.adapter.interruptForTransportFailure(), activeTurn.operationId),
       )
+      .catch((error) => this.recordNotificationError(activeTurn, error))
       .finally(activeTurn.resolve);
   }
 
@@ -317,13 +336,17 @@ export class CodexThreadSession {
 
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(async () => {
+        if (activeTurn.notificationError) return;
         await this.emitEvents(activeTurn.adapter.adapt(method, params), activeTurn.operationId);
         if (method !== 'turn/completed') return;
         const notification = params as TurnCompletedNotification;
         if (activeTurn.turnId && notification.turn.id !== activeTurn.turnId) return;
         if (notification.turn.status !== 'inProgress') activeTurn.resolve();
       })
-      .catch(() => activeTurn.resolve());
+      .catch((error) => {
+        this.recordNotificationError(activeTurn, error);
+        activeTurn.resolve();
+      });
     return activeTurn.notificationQueue;
   }
 
@@ -356,6 +379,11 @@ export class CodexThreadSession {
   private updateModel(model: string): void {
     this.model = model;
     this.options.onModel?.(model);
+  }
+
+  private recordNotificationError(activeTurn: ActiveTurn, error: unknown): void {
+    if (activeTurn.notificationError) return;
+    activeTurn.notificationError = error instanceof Error ? error : new Error(String(error));
   }
 
   private emitStatus(state: HeterogeneousAgentRuntimeStatus['state'], operationId: string): void {

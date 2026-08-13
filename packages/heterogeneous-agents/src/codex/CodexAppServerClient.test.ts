@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CodexAppServerClient,
@@ -10,12 +10,17 @@ import {
   isCodexAppServerCompatibilityError,
 } from './CodexAppServerClient';
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const { resolveCliSpawnPlanMock, spawnMock } = vi.hoisted(() => ({
+  resolveCliSpawnPlanMock: vi.fn(),
+  spawnMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, spawn: spawnMock };
 });
+
+vi.mock('../spawn/cliSpawn', () => ({ resolveCliSpawnPlan: resolveCliSpawnPlanMock }));
 
 interface RpcMessage {
   id?: number | string;
@@ -24,7 +29,14 @@ interface RpcMessage {
   result?: unknown;
 }
 
-const createProcess = (options: { exitOnResume?: boolean; rejectInitializeCode?: number } = {}) => {
+const createProcess = (
+  options: {
+    exitAfterResume?: boolean;
+    exitOnResume?: boolean;
+    rejectInitializeCode?: number;
+    throwOnMethod?: string;
+  } = {},
+) => {
   const child = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -40,6 +52,9 @@ const createProcess = (options: { exitOnResume?: boolean; rejectInitializeCode?:
     on: vi.fn(),
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as RpcMessage;
+      if (options.throwOnMethod && message.method === options.throwOnMethod) {
+        throw new Error('stdin write failed');
+      }
       messages.push(message);
       queueMicrotask(() => {
         if (message.method === 'initialize') {
@@ -83,16 +98,23 @@ const createProcess = (options: { exitOnResume?: boolean; rejectInitializeCode?:
             id: message.id,
             result: { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } },
           });
+          if (options.exitAfterResume) child.emit('exit', 1, null);
         }
       });
       return true;
     }),
   };
 
-  return { child, messages };
+  return { child, messages, send, stderr, stdout };
 };
 
-const createClient = (options: { reconnectBaseDelayMs?: number } = {}) =>
+const createClient = (
+  options: {
+    reconnectBaseDelayMs?: number;
+    reconnectMaxAttempts?: number;
+    reconnectMaxDelayMs?: number;
+  } = {},
+) =>
   new CodexAppServerClient({
     clientVersion: '1.0.0',
     commandPath: 'codex',
@@ -101,9 +123,17 @@ const createClient = (options: { reconnectBaseDelayMs?: number } = {}) =>
     ...options,
   });
 
+beforeEach(() => {
+  resolveCliSpawnPlanMock.mockImplementation(async (command: string, args: string[]) => ({
+    args,
+    command,
+  }));
+});
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  resolveCliSpawnPlanMock.mockReset();
   spawnMock.mockReset();
 });
 
@@ -133,6 +163,35 @@ describe('CodexAppServerClient', () => {
     ).toBe(false);
   });
 
+  it('tracks client consumers independently from attached thread registrations', () => {
+    const client = createClient();
+    const release = client.acquireConsumer();
+
+    expect(client.hasConsumers).toBe(true);
+    release();
+    release();
+
+    expect(client.hasConsumers).toBe(false);
+    client.close();
+  });
+
+  it('does not spawn a process after close wins a delayed spawn-plan race', async () => {
+    let resolveSpawnPlan!: (plan: { args: string[]; command: string }) => void;
+    resolveCliSpawnPlanMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSpawnPlan = resolve;
+      }),
+    );
+    const client = createClient();
+    const connecting = client.connect();
+
+    client.close();
+    resolveSpawnPlan({ args: ['app-server'], command: 'codex' });
+
+    await expect(connecting).rejects.toThrow('closed by host');
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
   it('frames NDJSON once and routes responses, notifications, and server requests', async () => {
     const { child, messages } = createProcess();
     spawnMock.mockReturnValue(child);
@@ -150,7 +209,9 @@ describe('CodexAppServerClient', () => {
 
     await client.connect();
     const response = await client.request<{ thread: { id: string } }>('thread/start', {});
-    await vi.waitFor(() => expect(serverRequests).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({ id: 'approval-1', result: { decision: 'cancel' } }),
+    );
 
     expect(response.thread.id).toBe('thread-1');
     expect(messages.map(({ method }) => method).filter(Boolean)).toEqual([
@@ -160,7 +221,6 @@ describe('CodexAppServerClient', () => {
     ]);
     expect(notifications).toEqual(['turn/started']);
     expect(serverRequests).toEqual(['item/commandExecution/requestApproval']);
-    expect(messages).toContainEqual({ id: 'approval-1', result: { decision: 'cancel' } });
     expect(spawnMock).toHaveBeenCalledWith(
       'codex',
       ['app-server'],
@@ -226,14 +286,22 @@ describe('CodexAppServerClient', () => {
     };
 
     await client.connect();
-    client.registerThread('thread-1', {
-      onResume,
-      onResumeError: vi.fn(),
-    });
-    client.registerThread('thread-2', {
-      onResume,
-      onResumeError: vi.fn(),
-    });
+    client.registerThread(
+      'thread-1',
+      { approvalPolicy: 'never', sandbox: 'danger-full-access', threadId: 'thread-1' },
+      {
+        onResume,
+        onResumeError: vi.fn(),
+      },
+    );
+    client.registerThread(
+      'thread-2',
+      { cwd: '/workspace/two', threadId: 'thread-2' },
+      {
+        onResume,
+        onResumeError: vi.fn(),
+      },
+    );
     first.child.emit('exit', 1, null);
 
     await vi.advanceTimersByTimeAsync(10);
@@ -248,7 +316,39 @@ describe('CodexAppServerClient', () => {
       recovered.messages
         .filter(({ method }) => method === 'thread/resume')
         .map(({ params }) => params),
-    ).toEqual([{ threadId: 'thread-1' }, { threadId: 'thread-2' }]);
+    ).toEqual([
+      { approvalPolicy: 'never', sandbox: 'danger-full-access', threadId: 'thread-1' },
+      { cwd: '/workspace/two', threadId: 'thread-2' },
+    ]);
+    client.close();
+  });
+
+  it('ignores late stdout from an exited process after the replacement starts', async () => {
+    vi.useFakeTimers();
+    const first = createProcess();
+    const recovered = createProcess();
+    spawnMock.mockReturnValueOnce(first.child).mockReturnValueOnce(recovered.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = createClient({ reconnectBaseDelayMs: 10 });
+    let resolveResumed!: () => void;
+    const resumed = new Promise<void>((resolve) => {
+      resolveResumed = resolve;
+    });
+
+    await client.connect();
+    client.registerThread(
+      'thread-1',
+      { approvalPolicy: 'never', threadId: 'thread-1' },
+      { onResume: resolveResumed, onResumeError: vi.fn() },
+    );
+    first.child.emit('exit', 1, null);
+    first.stdout.write('{"stale":');
+
+    await vi.advanceTimersByTimeAsync(10);
+    await resumed;
+
+    expect(client.isConnected).toBe(true);
+    expect(spawnMock).toHaveBeenCalledTimes(2);
     client.close();
   });
 
@@ -271,7 +371,7 @@ describe('CodexAppServerClient', () => {
     const onResumeError = vi.fn();
 
     await client.connect();
-    client.registerThread('thread-1', { onResume, onResumeError });
+    client.registerThread('thread-1', { threadId: 'thread-1' }, { onResume, onResumeError });
     first.child.emit('exit', 1, null);
 
     await vi.advanceTimersByTimeAsync(10);
@@ -284,6 +384,131 @@ describe('CodexAppServerClient', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(3);
     expect(onResume).toHaveBeenCalledOnce();
+    client.close();
+  });
+
+  it('does not publish a stale resume after its process exits', async () => {
+    vi.useFakeTimers();
+    const first = createProcess();
+    const staleReconnect = createProcess({ exitAfterResume: true });
+    const recovered = createProcess();
+    spawnMock
+      .mockReturnValueOnce(first.child)
+      .mockReturnValueOnce(staleReconnect.child)
+      .mockReturnValueOnce(recovered.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = createClient({ reconnectBaseDelayMs: 10 });
+    let resolveResumed!: () => void;
+    const resumed = new Promise<void>((resolve) => {
+      resolveResumed = resolve;
+    });
+    const onResume = vi.fn(resolveResumed);
+
+    await client.connect();
+    client.registerThread(
+      'thread-1',
+      { threadId: 'thread-1' },
+      { onResume, onResumeError: vi.fn() },
+    );
+    first.child.emit('exit', 1, null);
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(onResume).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(20);
+    await resumed;
+
+    expect(onResume).toHaveBeenCalledOnce();
+    expect(client.isConnected).toBe(true);
+    client.close();
+  });
+
+  it('stops automatic reconnect at the attempt budget and retries on explicit demand', async () => {
+    vi.useFakeTimers();
+    const first = createProcess();
+    const failedOne = createProcess({ rejectInitializeCode: -32_601 });
+    const failedTwo = createProcess({ rejectInitializeCode: -32_601 });
+    const recovered = createProcess();
+    spawnMock
+      .mockReturnValueOnce(first.child)
+      .mockReturnValueOnce(failedOne.child)
+      .mockReturnValueOnce(failedTwo.child)
+      .mockReturnValueOnce(recovered.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = createClient({ reconnectBaseDelayMs: 10, reconnectMaxAttempts: 2 });
+    const onResume = vi.fn();
+    const onResumeError = vi.fn();
+
+    await client.connect();
+    client.registerThread('thread-1', { threadId: 'thread-1' }, { onResume, onResumeError });
+    first.child.emit('exit', 1, null);
+
+    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(20);
+    await Promise.resolve();
+
+    expect(spawnMock).toHaveBeenCalledTimes(3);
+    expect(onResumeError).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(spawnMock).toHaveBeenCalledTimes(3);
+
+    await client.connect();
+
+    expect(spawnMock).toHaveBeenCalledTimes(4);
+    expect(onResume).toHaveBeenCalledOnce();
+    expect(client.isConnected).toBe(true);
+    client.close();
+  });
+
+  it('drops a server-request response when its process disconnects while the handler waits', async () => {
+    const process = createProcess();
+    spawnMock.mockReturnValue(process.child);
+    vi.spyOn(globalThis.process, 'kill').mockImplementation(() => true);
+    const client = createClient();
+    let resolveApproval!: () => void;
+    const approval = new Promise<void>((resolve) => {
+      resolveApproval = resolve;
+    });
+    const handler = vi.fn(async () => {
+      await approval;
+      return { decision: 'accept' };
+    });
+    client.subscribeServerRequests('thread-1', handler);
+    await client.connect();
+    const writesBeforeRequest = process.messages.length;
+
+    process.send({
+      id: 'approval-late',
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: 'thread-1' },
+    });
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+    process.child.emit('exit', 1, null);
+    resolveApproval();
+    await approval;
+    await Promise.resolve();
+
+    expect(process.messages).toHaveLength(writesBeforeRequest);
+    client.close();
+  });
+
+  it('clears a pending request when stdin.write throws synchronously', async () => {
+    vi.useFakeTimers();
+    const process = createProcess({ throwOnMethod: 'thread/start' });
+    spawnMock.mockReturnValue(process.child);
+    vi.spyOn(globalThis.process, 'kill').mockImplementation(() => true);
+    const client = createClient();
+    const onDisconnect = vi.fn();
+    client.onDisconnect(onDisconnect);
+    await client.connect();
+
+    await expect(client.request('thread/start', {})).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: 'stdin write failed' }),
+      message: 'Failed to write Codex app-server request: thread/start',
+    });
+    expect(onDisconnect).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(onDisconnect).toHaveBeenCalledOnce();
     client.close();
   });
 });

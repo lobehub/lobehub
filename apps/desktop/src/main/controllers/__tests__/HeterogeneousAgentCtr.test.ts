@@ -103,6 +103,7 @@ const {
   codexAppServerClientCloseMock,
   codexAppServerClientConstructMock,
   codexAppServerCloseMock,
+  codexAppServerConsumerCount,
   codexAppServerConstructMock,
   codexAppServerInterruptMock,
   codexAppServerRunMock,
@@ -116,6 +117,7 @@ const {
   codexAppServerClientCloseMock: vi.fn(),
   codexAppServerClientConstructMock: vi.fn(),
   codexAppServerCloseMock: vi.fn(),
+  codexAppServerConsumerCount: { value: 0 },
   codexAppServerConstructMock: vi.fn(),
   codexAppServerInterruptMock: vi.fn(),
   codexAppServerRunMock: vi.fn(),
@@ -181,6 +183,10 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
       return codexAppServerCanReuse.value;
     }
 
+    get hasConsumers() {
+      return codexAppServerConsumerCount.value > 0;
+    }
+
     close() {
       codexAppServerClientCloseMock();
     }
@@ -188,17 +194,23 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
 
   class MockCodexThreadSession {
     canFallbackToExec = true;
+    private closed = false;
 
     constructor(private readonly options: any) {
+      codexAppServerConsumerCount.value += 1;
       codexAppServerConstructMock(options);
     }
 
     close() {
+      if (!this.closed) {
+        this.closed = true;
+        codexAppServerConsumerCount.value -= 1;
+      }
       codexAppServerCloseMock();
     }
 
     async interrupt() {
-      codexAppServerInterruptMock();
+      return codexAppServerInterruptMock();
     }
 
     async run(runOptions: any) {
@@ -359,6 +371,7 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerClientCloseMock.mockReset();
     codexAppServerClientConstructMock.mockReset();
     codexAppServerCloseMock.mockReset();
+    codexAppServerConsumerCount.value = 0;
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
     codexAppServerRunMock.mockReset();
@@ -1461,6 +1474,37 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('replaces an incompatible shared client after its last thread session closes', async () => {
+      codexAppServerShouldFailAfterThread.value = true;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const first = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-1', prompt: 'fail', sessionId: first.sessionId }),
+      ).rejects.toThrow('Codex app-server disconnected');
+      expect(codexAppServerConsumerCount.value).toBe(0);
+
+      codexAppServerShouldFailAfterThread.value = false;
+      codexAppServerCanReuse.value = false;
+      const second = await ctr.startSession({
+        agentType: 'codex',
+        args: ['--profile', 'other'],
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'retry', sessionId: second.sessionId });
+
+      expect(codexAppServerClientCloseMock).toHaveBeenCalledOnce();
+      expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(2);
+      expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
+    });
+
     it('keeps Labs sessions on the native transport while CLI args migration is pending', async () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
@@ -1534,7 +1578,33 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Codex app-server disconnected');
 
       expect(codexAppServerClientCloseMock).not.toHaveBeenCalled();
+      expect(codexAppServerCloseMock).toHaveBeenCalledOnce();
       expect(spawnCalls).toHaveLength(0);
+
+      codexAppServerShouldFailAfterThread.value = false;
+      await ctr.sendPrompt({ operationId: 'op-retry', prompt: 'resume natively', sessionId });
+      expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears a closed native thread session after a genuine interrupt failure', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId });
+      codexAppServerInterruptMock.mockRejectedValueOnce(new Error('Interrupt rejected'));
+
+      await ctr.cancelSession({ sessionId });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'continue', sessionId });
+
+      expect(codexAppServerCloseMock).toHaveBeenCalledOnce();
+      expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
+      expect(codexAppServerClientConstructMock).toHaveBeenCalledOnce();
     });
 
     it('resumes existing Codex threads through native app-server', async () => {

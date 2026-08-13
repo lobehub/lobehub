@@ -1406,22 +1406,28 @@ export default class HeterogeneousAgentCtr {
       cwd,
       env: spawnEnv,
     };
-    if (this.codexAppServerClient && !this.codexAppServerClient.canReuseFor(clientOptions)) {
-      const message =
-        'The running Codex app-server uses a different binary, global configuration, or environment';
-      logger.error('Cannot reuse the native Codex app-server client:', {
-        sessionId: session.sessionId,
-      });
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message,
-        transport: 'codex-app-server',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionError', {
-        error: message,
-        sessionId: session.sessionId,
-      });
-      throw new Error(message);
+    const existingClient = this.codexAppServerClient;
+    if (existingClient && !existingClient.canReuseFor(clientOptions)) {
+      if (!existingClient.hasConsumers) {
+        existingClient.close();
+        if (this.codexAppServerClient === existingClient) this.codexAppServerClient = undefined;
+      } else {
+        const message =
+          'The running Codex app-server uses a different binary, global configuration, or environment';
+        logger.error('Cannot reuse the native Codex app-server client:', {
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'process-error.json', {
+          message,
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentSessionError', {
+          error: message,
+          sessionId: session.sessionId,
+        });
+        throw new Error(message);
+      }
     }
 
     const client =
@@ -1503,12 +1509,16 @@ export default class HeterogeneousAgentCtr {
         });
         appServerSession.close();
         if (session.appServerSession === appServerSession) session.appServerSession = undefined;
-        client.close();
-        if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+        if (!client.hasConsumers) {
+          client.close();
+          if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+        }
         return false;
       }
 
       logger.error('Codex app-server session error:', error);
+      appServerSession.close();
+      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
       void this.writeCliTraceJson(traceSession, 'process-error.json', {
         message: error instanceof Error ? error.message : String(error),
         name: error instanceof Error ? error.name : 'Error',
@@ -1961,11 +1971,13 @@ export default class HeterogeneousAgentCtr {
 
     session.cancelledByUs = true;
     if (session.appServerSession) {
+      const appServerSession = session.appServerSession;
       try {
-        await session.appServerSession.interrupt();
+        await appServerSession.interrupt();
       } catch (error) {
         logger.warn('Codex app-server interrupt failed; closing session:', error);
-        session.appServerSession.close();
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
       }
       return;
     }

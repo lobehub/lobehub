@@ -29,10 +29,13 @@ import type {
   ToolStateChunkData,
   UsageData,
 } from '../types';
+import {
+  CODEX_COMMAND_OUTPUT_MAX_LENGTH,
+  truncateCodexCommandOutput,
+} from '../utils/codexCommandOutput';
 import { toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
-const COMMAND_OUTPUT_MAX_LENGTH = 25_000;
 
 type CommandItem = Extract<ThreadItem, { type: 'commandExecution' }>;
 type AgentMessageItem = Extract<ThreadItem, { type: 'agentMessage' }>;
@@ -173,15 +176,22 @@ const toToolResult = (item: ToolItem): ToolResultData => {
 
   switch (item.type) {
     case 'commandExecution': {
-      const output = item.aggregatedOutput ?? '';
+      const output = truncateCodexCommandOutput(item.aggregatedOutput ?? '');
       return {
-        content: output,
+        content: output.output,
         isError: !success,
         pluginState: {
           ...(item.exitCode === null ? {} : { exitCode: item.exitCode }),
           isBackground: false,
-          output,
-          stdout: output,
+          ...(output.truncated
+            ? {
+                omittedOutputCharacters: output.omittedCharacters,
+                originalOutputLength: output.originalLength,
+                outputTruncated: true,
+              }
+            : {}),
+          output: output.output,
+          stdout: output.output,
           success,
         },
         toolCallId: item.id,
@@ -505,7 +515,7 @@ export class CodexAppServerAdapter {
       totalLength: 0,
       truncated: false,
     };
-    const remaining = Math.max(0, COMMAND_OUTPUT_MAX_LENGTH - previous.prefix.length);
+    const remaining = Math.max(0, CODEX_COMMAND_OUTPUT_MAX_LENGTH - previous.prefix.length);
     const prefix = previous.prefix + params.delta.slice(0, remaining);
     const totalLength = previous.totalLength + params.delta.length;
     const truncated = totalLength > prefix.length;
@@ -604,7 +614,10 @@ export class CodexAppServerAdapter {
   private completeTurn(status: 'completed' | 'interrupted'): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
-    const events = [...this.completePlan(), ...this.drainPendingTools()];
+    const events = [
+      ...(status === 'completed' ? this.completePlan() : []),
+      ...this.drainPendingTools(),
+    ];
     const usage = toTurnUsageFromCumulative(this.latestCumulativeUsage, this.lastCumulativeUsage);
     if (usage || this.currentModel) {
       events.push(this.makeEvent('step_complete', this.turnMetadata(usage)));
