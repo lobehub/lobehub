@@ -199,10 +199,29 @@ describe('GrokBuildAdapter', () => {
     expect(durableCompletion).toEqual([]);
     expect(completed.map(({ type }) => type)).toEqual([
       'step_complete',
+      'step_complete',
       'stream_end',
       'visible_output_end',
       'agent_runtime_end',
     ]);
+    expect(completed[0]).toMatchObject({
+      data: {
+        model: 'grok-build',
+        phase: 'turn_metadata',
+        provider: 'grok-build',
+        usage: { outputReasoningTokens: 2, totalTokens: 15 },
+      },
+      type: 'step_complete',
+    });
+    expect(completed[1]).toMatchObject({
+      data: {
+        phase: 'result_usage',
+        provider: 'grok-build',
+        usage: { totalTokens: 16 },
+      },
+      type: 'step_complete',
+    });
+    expect(completed[1]?.data).not.toHaveProperty('model');
     expect(completed.at(-1)?.data).toEqual({ reason: 'complete', transport: 'acp-stdio' });
   });
 

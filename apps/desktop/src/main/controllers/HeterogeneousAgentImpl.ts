@@ -65,8 +65,8 @@ import type {
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
 import { app as electronApp, BrowserWindow } from 'electron';
+import { isPlainObject } from 'es-toolkit';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import type { App } from '@/core/App';
@@ -535,7 +535,7 @@ export default class HeterogeneousAgentCtr {
       !session.resumeSessionId ||
       !(error instanceof AcpRpcResponseError) ||
       error.method !== 'session/load' ||
-      !isRecord(error.rpcError.data) ||
+      !isPlainObject(error.rpcError.data) ||
       error.rpcError.data.code !== 'FS_NOT_FOUND'
     ) {
       return;

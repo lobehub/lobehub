@@ -1026,6 +1026,67 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalWrite![1].provider).toBe('claude-code');
     });
 
+    it('persists the Grok prompt-result model with per-turn rather than aggregate usage', async () => {
+      await runWithEvents(
+        [
+          {
+            jsonrpc: '2.0',
+            method: 'session/update',
+            params: {
+              sessionId: 'grok-session',
+              update: {
+                content: { text: 'Grok answer', type: 'text' },
+                sessionUpdate: 'agent_message_chunk',
+              },
+            },
+          },
+          {
+            jsonrpc: '2.0',
+            method: 'x.ai/session_notification',
+            params: {
+              _meta: { eventId: 'grok-response-completed' },
+              sessionId: 'grok-session',
+              update: {
+                sessionUpdate: 'response_completed',
+                stop_reason: 'end_turn',
+                usage: { input_tokens: 10, output_tokens: 5 },
+              },
+            },
+          },
+          {
+            id: 5,
+            jsonrpc: '2.0',
+            result: {
+              _meta: {
+                modelId: 'grok-build',
+                usage: { inputTokens: 12, outputTokens: 4 },
+              },
+              stopReason: 'end_turn',
+            },
+          },
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'grok', type: 'grok-build' },
+          },
+        },
+      );
+
+      const modelWrite = mockUpdateMessage.mock.calls.find(
+        ([id, value]: any) => id === 'ast-initial' && value.model === 'grok-build' && value.usage,
+      );
+      expect(modelWrite).toBeDefined();
+      expect(modelWrite![1]).toMatchObject({
+        model: 'grok-build',
+        provider: 'grok-build',
+        usage: {
+          totalInputTokens: 10,
+          totalOutputTokens: 5,
+          totalTokens: 15,
+        },
+      });
+    });
+
     // The run's first assistant already exists in `dbMessagesMap` before the
     // executor starts, so the gateway handler's stream_start seed-insert (its
     // only model/provider → store path) is skipped for it. The executor must

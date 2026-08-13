@@ -131,6 +131,7 @@ export class GrokBuildAdapter implements AgentEventAdapter {
   private pendingStepBoundary = false;
   private seenEventIds = new Set<string>();
   private settled = false;
+  private lastTurnUsage?: { stepIndex: number; usage: UsageData };
   private started = false;
   private stepIndex = 0;
   private stepToolCalls: ToolCallPayload[] = [];
@@ -309,6 +310,7 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     // next model round exists even when it emitted no text/thought chunks.
     const events = this.ensureStream(true);
     const usage = toUsageData(update.usage);
+    this.lastTurnUsage = usage ? { stepIndex: this.stepIndex, usage } : undefined;
     const data: StepCompleteData = {
       phase: 'turn_metadata',
       provider: GROK_BUILD_IDENTIFIER,
@@ -325,8 +327,9 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     const meta = isRecord(result._meta) ? result._meta : undefined;
     const usage = toUsageData(meta?.usage ?? meta);
     const model = typeof meta?.modelId === 'string' ? meta.modelId : undefined;
-    const data: StepCompleteData = {
-      ...(model ? { model } : {}),
+    const turnUsage =
+      this.lastTurnUsage?.stepIndex === this.stepIndex ? this.lastTurnUsage.usage : undefined;
+    const resultUsage: StepCompleteData = {
       phase: 'result_usage',
       provider: GROK_BUILD_IDENTIFIER,
       ...(usage ? { usage } : {}),
@@ -334,7 +337,17 @@ export class GrokBuildAdapter implements AgentEventAdapter {
 
     return [
       ...this.ensureStream(false),
-      this.makeEvent('step_complete', data),
+      ...(model
+        ? [
+            this.makeEvent('step_complete', {
+              model,
+              phase: 'turn_metadata',
+              provider: GROK_BUILD_IDENTIFIER,
+              ...(turnUsage ? { usage: turnUsage } : {}),
+            } satisfies StepCompleteData),
+          ]
+        : []),
+      this.makeEvent('step_complete', resultUsage),
       ...this.closeStream(),
       this.makeEvent('visible_output_end', {}),
       this.makeEvent('agent_runtime_end', {
