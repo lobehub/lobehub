@@ -64,6 +64,21 @@ HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 
 ## Project-specific recipes
 
+### Structured generation through the local OpenAI-compatible stub
+
+**Situation:** a real product path uses non-streaming `chat/completions` for
+`generateObject`, while ordinary agent turns use streaming completions against the
+same local provider stub.
+
+**Doesn't work:** returning SSE chunks for every `chat/completions` request. The
+model runtime expects a normal `choices[0].message.content` response when
+`stream: false`, so the request reaches the stub but structured generation crashes
+before schema parsing.
+
+**Works:** branch on the request's `stream` field. Keep SSE for streaming turns and
+return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
+schema-valid JSON required by the check.
+
 ### Task CLI polling with seeded API-key auth
 
 **Situation:** A local acceptance run is driven through `lh task run` with the
