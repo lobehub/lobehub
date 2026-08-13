@@ -308,7 +308,9 @@ const findRetrySourceMessage = (
 ): UIChatMessage | undefined => {
   if (message.role !== 'user') return message;
 
-  const children = dbMessages.filter((candidate) => candidate.parentId === message.id);
+  const children = dbMessages.filter(
+    (candidate) => candidate.parentId === message.id && candidate.role !== 'tool',
+  );
   if (children.length === 0) return undefined;
 
   const branchIndex =
@@ -400,7 +402,7 @@ const regenerateUserMessageFromSource = async (
   const dbMessages = readDbMessages();
   const retrySourceMessage = findRetrySourceMessage(item, dbMessages);
   const context =
-    item.role === 'user' && sourceContext.groupId
+    !retryExecutionContext && sourceContext.groupId && sourceContext.scope === 'group'
       ? {
           ...sourceContext,
           agentId: getGroupSupervisorAgentId(sourceContext),
@@ -457,10 +459,15 @@ const regenerateUserMessageFromSource = async (
     // ConversationStore has switched context, the source falls back to the old
     // context's ChatStore bucket instead of observing the new topic.
     const shouldRestartGroupOrchestration =
-      !!context.groupId && (item.role === 'user' || context.orchestrationRole === 'supervisor');
+      !!context.groupId &&
+      context.scope === 'group' &&
+      (context.orchestrationRole === 'supervisor' ||
+        (!retryExecutionContext && item.role === 'user'));
 
     if (shouldRestartGroupOrchestration) {
-      const nextBranchIndex = dbMessages.filter((message) => message.parentId === messageId).length;
+      const nextBranchIndex = dbMessages.filter(
+        (message) => message.parentId === messageId && message.role !== 'tool',
+      ).length;
 
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, { operationId });
 
@@ -478,7 +485,9 @@ const regenerateUserMessageFromSource = async (
       return;
     }
 
-    const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
+    const childrenCount = dbMessages.filter(
+      (message) => message.parentId === messageId && message.role !== 'tool',
+    ).length;
     const nextBranchIndex = childrenCount;
 
     // Switch to the new branch so the UI shows the incoming response immediately
