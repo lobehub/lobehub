@@ -80,7 +80,11 @@ const RulesDetail = memo(() => {
                 <Text fontSize={26} weight={700}>
                   {t('rules.allTitle')}
                 </Text>
-                <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
+                <RuleList
+                  lessonHref={(lessonId) => urlJoin(domainPath ?? '', 'rules', lessonId)}
+                  lessons={lessons ?? []}
+                  stats={data.lessonStats}
+                />
               </Flexbox>
             )}
           </AsyncBoundary>

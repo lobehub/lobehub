@@ -223,6 +223,7 @@ const DomainDetail = memo(() => {
                       <CoverageCloud detail={data} />
                       <RuleList
                         compact
+                        lessonHref={(lessonId) => urlJoin(rulesPath, lessonId)}
                         lessons={lessons ?? []}
                         stats={data.lessonStats}
                         viewAllHref={rulesPath}

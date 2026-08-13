@@ -6,6 +6,7 @@ import { createStaticStyles } from 'antd-style';
 import { ArrowRightIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import type { ExpertiseDomainDetail, ExpertiseLessonItem } from '@/services/expertise';
 
@@ -28,6 +29,15 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 7px;
+    padding-inline: 8px;
+    border-radius: 8px;
+
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      background: var(--ant-color-fill-quaternary);
+    }
   `,
   usage: css`
     overflow: hidden;
@@ -39,6 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface RuleListProps {
   compact?: boolean;
+  lessonHref?: (lessonId: string) => string;
   lessons: ExpertiseLessonItem[];
   stats: ExpertiseDomainDetail['lessonStats'];
   viewAllHref?: string;
@@ -50,7 +61,7 @@ interface RuleListProps {
  * 排序按命中而不是时间：流水账才按时间排，判断系统按「实际用上过多少次」排。
  * 「一次都没用上」单独成组且不折叠 —— 它是让人做减法的信号，藏起来就没人做减法了。
  */
-const RuleList = memo<RuleListProps>(({ compact, lessons, stats, viewAllHref }) => {
+const RuleList = memo<RuleListProps>(({ compact, lessonHref, lessons, stats, viewAllHref }) => {
   const { t } = useTranslation('selfLearning');
   const [tierFilter, setTierFilter] = useState<ExpertiseTier | 'all'>('all');
 
@@ -75,7 +86,12 @@ const RuleList = memo<RuleListProps>(({ compact, lessons, stats, viewAllHref }) 
             {t('rules.stats', { hits: stats.hits, total: stats.total, unused: stats.unused })}
           </Text>
         </Flexbox>
-        {!compact && (
+        {compact && lessons.length > 5 && viewAllHref ? (
+          <Button href={viewAllHref} type={'text'}>
+            {t('rules.viewAll', { count: lessons.length })}
+            <ArrowRightIcon size={14} />
+          </Button>
+        ) : !compact ? (
           <Select
             size={'small'}
             style={{ width: 112 }}
@@ -89,13 +105,13 @@ const RuleList = memo<RuleListProps>(({ compact, lessons, stats, viewAllHref }) 
             ]}
             onChange={(value) => value && setTierFilter(value as ExpertiseTier | 'all')}
           />
-        )}
+        ) : null}
       </Flexbox>
 
       {visibleGroups.map(({ tier, items }) => (
         <Flexbox gap={4} key={tier}>
           {items.map((lesson) => (
-            <div className={styles.row} key={lesson.id}>
+            <Link className={styles.row} key={lesson.id} to={lessonHref?.(lesson.id) ?? '#'}>
               <Text className={styles.code} fontSize={10.5} type={'secondary'}>
                 {lesson.code}
               </Text>
@@ -121,16 +137,10 @@ const RuleList = memo<RuleListProps>(({ compact, lessons, stats, viewAllHref }) 
                   />
                 </div>
               </Tooltip>
-            </div>
+            </Link>
           ))}
         </Flexbox>
       ))}
-
-      {compact && lessons.length > 5 && viewAllHref && (
-        <Button href={viewAllHref} icon={ArrowRightIcon}>
-          {t('rules.viewAll', { count: lessons.length })}
-        </Button>
-      )}
     </Block>
   );
 });

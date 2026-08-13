@@ -17,6 +17,11 @@ export const useExpertiseLessons = (domainId?: string, layer?: string, search?: 
     expertiseService.listLessons({ domainId: domainId!, layer, search }),
   );
 
+export const useExpertiseLesson = (lessonId?: string) =>
+  useClientDataSWR(lessonId ? swrKeys.expertise.lesson(lessonId) : null, () =>
+    expertiseService.getLesson(lessonId!),
+  );
+
 /** 到达渐近线某个比例所需的实践次数：P(n)=P∞(1−e^(−n/τ)) ⇒ n = −τ·ln(1−r)。 */
 export const runsToRatio = (tau: number, ratio: number) => Math.ceil(-tau * Math.log(1 - ratio));
 
