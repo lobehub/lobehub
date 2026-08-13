@@ -1,4 +1,4 @@
-import { PythonInterpreter } from '@lobechat/python-interpreter';
+import { getPythonInterpreter } from '@lobechat/python-interpreter';
 import { type CodeInterpreterResponse } from '@lobechat/types';
 
 import { pythonEnv } from '@/envs/python';
@@ -9,8 +9,10 @@ class PythonService {
     packages: string[],
     files: File[],
   ): Promise<CodeInterpreterResponse | undefined> {
-    if (typeof Worker === 'undefined') return;
-    const interpreter = await new PythonInterpreter!({
+    const PythonInterpreter = getPythonInterpreter();
+    if (!PythonInterpreter) return;
+
+    const interpreter = await new PythonInterpreter({
       pyodideIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_INDEX_URL!,
       pypiIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_PIP_INDEX_URL!,
     });
