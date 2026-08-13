@@ -33,6 +33,7 @@ export interface GroupOrchestrationParams {
    * This is the first ExecutorResult that will be passed to Supervisor.decide()
    */
   initialResult: ExecutorResult;
+  parentMessageId?: string;
   supervisorAgentId: string;
   topicId?: string;
 }
@@ -255,7 +256,7 @@ export class GroupOrchestrationActionImpl {
   internal_execGroupOrchestration = async (
     params: GroupOrchestrationParams,
   ): Promise<AgentState> => {
-    const { groupId, topicId, initialResult, supervisorAgentId } = params;
+    const { groupId, topicId, initialResult, parentMessageId, supervisorAgentId } = params;
 
     log(
       '[internal_execGroupOrchestration] Starting orchestration for group: %s, supervisorAgentId: %s, initialResult: %s',
@@ -292,6 +293,7 @@ export class GroupOrchestrationActionImpl {
       get: this.#get,
       messageContext: { agentId: supervisorAgentId, groupId, scope: 'group', topicId },
       orchestrationOperationId: operationId,
+      parentMessageId,
       supervisorAgentId: groupConfig.supervisorAgentId,
     });
 

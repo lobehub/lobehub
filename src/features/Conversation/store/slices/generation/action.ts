@@ -23,6 +23,7 @@ import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
@@ -330,32 +331,6 @@ const findUserMessageId = (
   }
 };
 
-const findDescendantMessageIds = (parentId: string, messages: UIChatMessage[]): string[] => {
-  const childrenByParent = new Map<string, UIChatMessage[]>();
-
-  for (const message of messages) {
-    if (!message.parentId) continue;
-    const children = childrenByParent.get(message.parentId) ?? [];
-    children.push(message);
-    childrenByParent.set(message.parentId, children);
-  }
-
-  const descendantIds: string[] = [];
-  const pendingIds = [parentId];
-
-  while (pendingIds.length > 0) {
-    const currentId = pendingIds.shift()!;
-    const children = childrenByParent.get(currentId) ?? [];
-
-    for (const child of children) {
-      descendantIds.push(child.id);
-      pendingIds.push(child.id);
-    }
-  }
-
-  return descendantIds;
-};
-
 const getRetryExecutionAgentId = (context: ConversationContext) =>
   context.groupId && context.orchestrationRole === 'member'
     ? context.subAgentId || context.agentId
@@ -366,6 +341,15 @@ const getRetryGatewayExecutionContext = (context: ConversationContext): Conversa
   if (agentId === context.agentId) return context;
 
   return { ...context, agentId, subAgentId: undefined };
+};
+
+const getGroupSupervisorAgentId = (context: ConversationContext) => {
+  if (!context.groupId) return context.agentId;
+
+  return (
+    agentGroupByIdSelectors.groupById(context.groupId)(getChatGroupStoreState())
+      ?.supervisorAgentId ?? context.agentId
+  );
 };
 
 const captureRegenerateUserMessageSource = (
@@ -415,9 +399,18 @@ const regenerateUserMessageFromSource = async (
   if (!item) return;
   const dbMessages = readDbMessages();
   const retrySourceMessage = findRetrySourceMessage(item, dbMessages);
-  const context = retryExecutionContext
-    ? { ...sourceContext, ...retryExecutionContext }
-    : getRetryExecutionContext(retrySourceMessage, sourceContext);
+  const context =
+    item.role === 'user' && sourceContext.groupId
+      ? {
+          ...sourceContext,
+          agentId: getGroupSupervisorAgentId(sourceContext),
+          isSupervisor: true,
+          orchestrationRole: 'supervisor' as const,
+          subAgentId: undefined,
+        }
+      : retryExecutionContext
+        ? { ...sourceContext, ...retryExecutionContext }
+        : getRetryExecutionContext(retrySourceMessage, sourceContext);
   // Start the interim regenerate op BEFORE the async preflight below
   // (document-context resolve + onBeforeRegenerate hook). In page / bound-
   // document contexts those reads are real round trips, so creating the op
@@ -464,16 +457,20 @@ const regenerateUserMessageFromSource = async (
     // ConversationStore has switched context, the source falls back to the old
     // context's ChatStore bucket instead of observing the new topic.
     const shouldRestartGroupOrchestration =
-      !!context.groupId &&
-      (context.orchestrationRole === 'supervisor' || !retrySourceMessage);
+      !!context.groupId && (item.role === 'user' || context.orchestrationRole === 'supervisor');
 
     if (shouldRestartGroupOrchestration) {
-      const descendantIds = findDescendantMessageIds(messageId, dbMessages);
-      if (descendantIds.length > 0) await chatStore.deleteMessages(descendantIds);
+      const nextBranchIndex = dbMessages.filter((message) => message.parentId === messageId).length;
+
+      await chatStore.switchMessageBranch(messageId, nextBranchIndex, { operationId });
+
+      const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+      if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
       await chatStore.internal_execGroupOrchestration({
         groupId: context.groupId!,
         initialResult: { payload: { groupId: context.groupId }, type: 'init' },
+        parentMessageId: messageId,
         supervisorAgentId: context.agentId,
         topicId: context.topicId ?? undefined,
       });

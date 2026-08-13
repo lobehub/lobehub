@@ -66,6 +66,7 @@ export interface GroupOrchestrationExecutorsContext {
    */
   messageContext: ConversationContext;
   orchestrationOperationId: string;
+  parentMessageId?: string;
   supervisorAgentId: string;
 }
 
@@ -110,7 +111,8 @@ export interface GroupOrchestrationExecutorsContext {
 export const createGroupOrchestrationExecutors = (
   context: GroupOrchestrationExecutorsContext,
 ): Partial<Record<SupervisorInstruction['type'], GroupOrchestrationExecutor>> => {
-  const { get, messageContext, orchestrationOperationId, supervisorAgentId } = context;
+  const { get, messageContext, orchestrationOperationId, parentMessageId, supervisorAgentId } =
+    context;
 
   // Pre-compute the chat key for message fetching
   const chatKey = messageMapKey(messageContext);
@@ -138,8 +140,13 @@ export const createGroupOrchestrationExecutors = (
       const sessionLogId = `${state.operationId}:call_supervisor`;
       log(`[${sessionLogId}] Starting supervisor agent: ${agentId}`);
 
-      const messages = getMessages();
-      const lastMessage = messages.at(-1);
+      const allMessages = getMessages();
+      const parentMessageIndex = parentMessageId
+        ? allMessages.findIndex((message) => message.id === parentMessageId)
+        : -1;
+      const messages =
+        parentMessageIndex >= 0 ? allMessages.slice(0, parentMessageIndex + 1) : allMessages;
+      const lastMessage = parentMessageId ? allMessages[parentMessageIndex] : messages.at(-1);
 
       if (!lastMessage) {
         log(`[${sessionLogId}] No messages found, cannot execute supervisor`);

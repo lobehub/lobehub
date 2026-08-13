@@ -80,6 +80,65 @@ const createInitialState = (overrides: Partial<AgentState> = {}): AgentState => 
 
 describe('createGroupOrchestrationExecutors', () => {
   describe('call_supervisor executor', () => {
+    it('starts a retried supervisor turn from the requested User branch', async () => {
+      const previousAssistantId = 'previous-assistant-id';
+      const mockStore = createMockStore({
+        dbMessagesMap: {
+          [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
+            {
+              content: 'Hello',
+              createdAt: Date.now(),
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            {
+              content: 'Old response',
+              createdAt: Date.now(),
+              id: previousAssistantId,
+              parentId: TEST_IDS.USER_MESSAGE_ID,
+              role: 'assistant',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+          ],
+        },
+      });
+
+      const executors = createGroupOrchestrationExecutors({
+        get: () => mockStore,
+        messageContext: {
+          agentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          groupId: TEST_IDS.GROUP_ID,
+          scope: 'group',
+          topicId: TEST_IDS.TOPIC_ID,
+        },
+        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
+        parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+      });
+
+      await executors.call_supervisor!(
+        {
+          payload: { round: 1, supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID },
+          type: 'call_supervisor',
+        },
+        createInitialState(),
+      );
+
+      expect(mockStore.executeClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ id: TEST_IDS.USER_MESSAGE_ID }),
+          ]),
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        }),
+      );
+      expect(mockStore.executeClientAgent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ parentMessageId: previousAssistantId }),
+      );
+    });
+
     it('should NOT pass operationId to executeClientAgent (creates new child operation)', async () => {
       const mockStore = createMockStore({
         dbMessagesMap: {

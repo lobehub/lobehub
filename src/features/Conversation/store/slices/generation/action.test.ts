@@ -21,7 +21,6 @@ const mockRegenerateUserMessage = vi.fn();
 const mockRegenerateAssistantMessage = vi.fn();
 const mockContinueGenerationMessage = vi.fn();
 const mockDeleteMessage = vi.fn();
-const mockDeleteMessages = vi.fn();
 const mockSwitchMessageBranch = vi.fn();
 const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
@@ -51,7 +50,6 @@ vi.mock('@/store/chat', () => ({
       regenerateAssistantMessage: mockRegenerateAssistantMessage,
       continueGenerationMessage: mockContinueGenerationMessage,
       deleteMessage: mockDeleteMessage,
-      deleteMessages: mockDeleteMessages,
       switchMessageBranch: mockSwitchMessageBranch,
       startOperation: mockStartOperation,
       associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -1381,11 +1379,14 @@ describe('Generation Actions', () => {
         expect.objectContaining({
           groupId: 'group-1',
           initialResult: { payload: { groupId: 'group-1' }, type: 'init' },
+          parentMessageId: 'user-1',
           supervisorAgentId: 'orchestrator-agent',
           topicId: 'topic-1',
         }),
       );
-      expect(mockDeleteMessages).toHaveBeenCalledWith(['assistant-1']);
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-1', 1, {
+        operationId: 'test-op-id',
+      });
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
@@ -1410,17 +1411,20 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('user-1');
       });
 
-      expect(mockDeleteMessages).not.toHaveBeenCalled();
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-1', 0, {
+        operationId: 'test-op-id',
+      });
       expect(mockInternalExecGroupOrchestration).toHaveBeenCalledWith({
         groupId: 'group-1',
         initialResult: { payload: { groupId: 'group-1' }, type: 'init' },
+        parentMessageId: 'user-1',
         supervisorAgentId: 'orchestrator-agent',
         topicId: 'topic-1',
       });
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
-    it('deletes the Orchestrator and member descendants before retrying the group turn', async () => {
+    it('keeps the existing group turn and opens a new User branch before retrying', async () => {
       const context: ConversationContext = {
         agentId: 'orchestrator-agent',
         groupId: 'group-1',
@@ -1445,7 +1449,9 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('user-1');
       });
 
-      expect(mockDeleteMessages).toHaveBeenCalledWith(['orchestrator-1', 'member-1']);
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-1', 1, {
+        operationId: 'test-op-id',
+      });
       expect(mockInternalExecGroupOrchestration).toHaveBeenCalled();
     });
 
