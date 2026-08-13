@@ -1172,9 +1172,13 @@ export default class HeterogeneousAgentCtr {
         resumeSessionId: session.agentSessionId,
       });
 
+      const spawnArgs =
+        spawnPlan.argvPayload === undefined
+          ? spawnPlan.args
+          : [...spawnPlan.args, spawnPlan.argvPayload];
       resolvedCliSpawnPlan = await resolveCliSpawnPlan(
         session.resolvedCommandPath ?? session.command,
-        spawnPlan.args,
+        spawnArgs,
       );
 
       // Fall back to the user's Desktop so the process never inherits
@@ -1222,7 +1226,10 @@ export default class HeterogeneousAgentCtr {
     logger.info(
       'Spawning agent:',
       resolvedCliSpawnPlan.command,
-      redactPromptArgs(resolvedCliSpawnPlan.args, session.agentType).join(' '),
+      [
+        ...redactPromptArgs(spawnPlan.args, session.agentType),
+        ...(spawnPlan.argvPayload === undefined ? [] : ['<argv payload redacted>']),
+      ].join(' '),
       `(cwd: ${cwd})`,
     );
 

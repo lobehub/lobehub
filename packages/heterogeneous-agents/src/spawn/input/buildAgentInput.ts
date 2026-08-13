@@ -46,6 +46,13 @@ const collectText = (blocks: AgentContentBlock[]): string =>
     .filter((t) => t.length > 0)
     .join('\n\n');
 
+const buildCursorInput = (blocks: AgentContentBlock[]): AgentInputPlan => {
+  if (blocks.some(isImageBlock)) {
+    throw new Error('Cursor CLI does not support image input.');
+  }
+  return { args: [], stdin: collectText(blocks) };
+};
+
 const buildClaudeCompatibleStdin = async (
   blocks: AgentContentBlock[],
   options: BuildAgentInputOptions,
@@ -177,6 +184,7 @@ const buildQoderInput = async (
  *
  * - `amp` / `claude-code` / `codebuddy`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
+ * - `cursor`: raw text passed as a positional argument; images are unsupported
  * - `opencode`: raw text on stdin + repeatable `--file <path>` flags
  * - `pi`: raw text on stdin + repeatable `@<path>` arguments
  * - `qoder`: stream-json text on stdin + repeatable `--attachment <path>` flags
@@ -199,6 +207,9 @@ export const buildAgentInput = async (
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
+    }
+    case 'cursor': {
+      return buildCursorInput(blocks);
     }
     case 'kimi-code': {
       return buildKimiCodeInput(blocks);

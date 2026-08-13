@@ -1280,3 +1280,19 @@ ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已
 / `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
 `http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
 server-auth 200、`isUserStateInit` true。
+
+### 服务端读取本地 S3 证据会被 SSRF 拦下 — 需显式放行私有 IP
+
+**Situation:** 验证任何「服务端把已上传的证据 / 文件再读回来」的能力时（多模态判图、
+缩略图处理、把截图喂给模型），本地环境下服务端读文件必然走 `s3rver`
+（`http://127.0.0.1:29000/...` 的预签名 URL）。表现是功能整体静默失败：接口正常返回、
+业务计数是 0，日志里既没有模型报错也没有鉴权报错，很像模型判定为「无需处理」。
+
+**Doesn't work:** 排查模型侧、检查 provider key、确认证据行和 fileId 都在。这些都会正常，
+因为请求根本没发出去 —— 失败点在服务端 fetch 图片那一步。
+
+**Works:** 在 dev server 环境里加 `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`。判据是日志里的
+`SSRF protection blocked request: ... DNS lookup 127.0.0.1 ... is not allowed. Because,
+It is private IP address.` 与紧随其后的 `Error converting image to base64`。
+生产用真实对象存储域名，不受影响，所以这纯粹是本地验证环境的门槛，不是产品缺陷 ——
+不要把它当 bug 报上去，也不要为了绕开它改用 inline base64 从而验证了一条产品不会走的路径。

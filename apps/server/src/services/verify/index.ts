@@ -10,6 +10,7 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
 export {
@@ -37,6 +38,12 @@ export {
   VerifyRepairService,
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
+export {
+  type PredictReviewParams,
+  REVIEW_PREDICT_CONCURRENCY,
+  shouldSurfaceProposal,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';

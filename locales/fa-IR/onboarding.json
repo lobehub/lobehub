@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "تلاش مجدد",
   "flow.steps.learnYourWorld.sectionHint": "اطلاعات متصل شما را تحلیل کنید تا بفهمید چه چیزی برای شما مهم است…",
   "flow.steps.learnYourWorld.skipAhead": "رد کردن",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 می‌توانید فعلاً این مرحله را رد کنید — ما زمانی که پروفایل شما آماده باشد به شما اطلاع خواهیم داد.",
   "flow.steps.learnYourWorld.title": "دنیای شما را بشناسید",
   "flow.steps.messenger.connect": "اتصال",
   "flow.steps.messenger.connected": "متصل شد",

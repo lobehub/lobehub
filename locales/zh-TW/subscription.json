@@ -480,6 +480,8 @@
   "plansModal.default.title": "升級您的方案",
   "plansModal.fileStorageLimit.desc": "您的檔案存儲已滿。升級以繼續上傳和管理檔案。",
   "plansModal.fileStorageLimit.title": "存儲限制已達",
+  "plansModal.messengerWechat.desc": "微信系統機器人僅適用於付費個人方案。升級以連接並使用。",
+  "plansModal.messengerWechat.title": "升級後連接微信",
   "plansModal.modelAccess.desc": "此模型僅適用於付費方案。升級以使用完整的模型陣容。",
   "plansModal.modelAccess.title": "解鎖所有模型",
   "qa.desc": "若您的問題未被解答，請參閱 <1>產品文件</1> 以獲得更多常見問題，或與我們聯繫。",

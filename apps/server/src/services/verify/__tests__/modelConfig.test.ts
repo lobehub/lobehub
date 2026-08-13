@@ -28,6 +28,7 @@ describe('resolveVerifyModelConfig', () => {
   it('recognizes heterogeneous providers that cannot run Verify LLM calls', () => {
     expect(isHeterogeneousVerifyProvider('claude-code')).toBe(true);
     expect(isHeterogeneousVerifyProvider('codex')).toBe(true);
+    expect(isHeterogeneousVerifyProvider('cursor')).toBe(true);
     expect(isHeterogeneousVerifyProvider('openai')).toBe(false);
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });

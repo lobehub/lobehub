@@ -171,6 +171,41 @@ describe('spawnAgent', () => {
     expect(spawnCalls).toHaveLength(0);
   });
 
+  it('spawns Cursor with positional prompt, resume, native args, and no stdin payload', async () => {
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'cursor',
+      extraArgs: ['--model', 'sonnet', '--mode', 'plan'],
+      operationId: 'op-cursor',
+      prompt: 'do a thing',
+      resumeSessionId: 'cursor-session',
+    });
+
+    expect(spawnCalls[0]).toMatchObject({
+      args: [
+        '-p',
+        '--force',
+        '--trust',
+        '--output-format',
+        'stream-json',
+        '--stream-partial-output',
+        '--resume',
+        'cursor-session',
+        '--model',
+        'sonnet',
+        '--mode',
+        'plan',
+        '--',
+        'do a thing',
+      ],
+      command: 'agent',
+    });
+    expect(fake.stdinWrites).toEqual([]);
+    expect(fake.proc.stdin.end).toHaveBeenCalledOnce();
+  });
+
   it('passes --include-partial-messages only when includePartialMessages=true', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');

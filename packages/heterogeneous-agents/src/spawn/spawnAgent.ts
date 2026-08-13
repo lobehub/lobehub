@@ -197,6 +197,15 @@ export const AMP_BASE_ARGS = [
   '--no-archive-after-execute',
 ] as const;
 
+export const CURSOR_BASE_ARGS = [
+  '-p',
+  '--force',
+  '--trust',
+  '--output-format',
+  'stream-json',
+  '--stream-partial-output',
+] as const;
+
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
 export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
@@ -222,6 +231,8 @@ interface BuildSpawnArgsParams {
   includePartialMessages: boolean;
   /** Per-agent input args produced by `buildAgentInput` (e.g. Codex `--image`). */
   inputArgs: string[];
+  /** Text payload produced by `buildAgentInput`; Cursor passes it positionally. */
+  inputText: string;
   /** Native session id for resume; undefined for fresh runs. */
   resumeSessionId: string | undefined;
 }
@@ -274,6 +285,20 @@ const buildAmpArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsP
     : executionArgs;
 };
 
+const buildCursorArgs = ({
+  extraArgs,
+  inputArgs,
+  inputText,
+  resumeSessionId,
+}: BuildSpawnArgsParams) => [
+  ...CURSOR_BASE_ARGS,
+  ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+  ...extraArgs,
+  ...inputArgs,
+  '--',
+  inputText,
+];
+
 const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...OPENCODE_BASE_ARGS,
   ...(resumeSessionId ? ['--session', resumeSessionId] : []),
@@ -325,6 +350,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'codex': {
       return buildCodexArgs(params);
+    }
+    case 'cursor': {
+      return buildCursorArgs(params);
     }
     case 'kimi-code': {
       return buildKimiCodeArgs(params);
@@ -394,6 +422,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     extraArgs: options.extraArgs ?? [],
     includePartialMessages: options.includePartialMessages ?? false,
     inputArgs: inputPlan.args,
+    inputText: inputPlan.stdin,
     resumeSessionId: options.resumeSessionId,
   });
   const cwd = options.cwd || process.cwd();
@@ -471,9 +500,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   );
 
   if (proc.stdin) {
-    proc.stdin.write(inputPlan.stdin, () => {
-      proc.stdin?.end();
-    });
+    if (options.agentType === 'cursor') proc.stdin.end();
+    else {
+      proc.stdin.write(inputPlan.stdin, () => {
+        proc.stdin?.end();
+      });
+    }
   }
 
   // ALL pipeline work — push / flush — runs through this single chain so:

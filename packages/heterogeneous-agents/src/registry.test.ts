@@ -5,6 +5,7 @@ import {
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CursorAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
   PiAdapter,
@@ -36,6 +37,10 @@ describe('registry', () => {
 
     it('creates a KimiCodeAdapter for "kimi-code"', () => {
       expect(createAdapter('kimi-code')).toBeInstanceOf(KimiCodeAdapter);
+    });
+
+    it('creates a CursorAdapter for "cursor"', () => {
+      expect(createAdapter('cursor')).toBeInstanceOf(CursorAdapter);
     });
 
     it('creates an OpenCodeAdapter for "opencode"', () => {

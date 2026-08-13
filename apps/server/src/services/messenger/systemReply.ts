@@ -19,6 +19,11 @@ interface MessengerSystemStrings {
   currentMarker: string;
   genericError: string;
   help: string;
+  modeAgentLabel: string;
+  modeChangedToast: (label: string) => string;
+  modeChatLabel: string;
+  modeDirectMessageOnly: string;
+  modePicker: string;
   needLink: string;
   newDirectMessageOnly: string;
   newStarted: string;
@@ -71,9 +76,15 @@ const EN_US: MessengerSystemStrings = {
     '• /switch — switch the active scope (personal or a workspace)',
     '• /agents — list your agents and switch the active one',
     '• /new — start a new conversation',
+    '• /mode — show or switch the conversation mode (agent | chat)',
     '• /stop — stop the current execution',
     '• /feedback <message> — send feedback to the LobeHub team (no AI reply)',
   ].join('\n'),
+  modeAgentLabel: 'Agent Mode',
+  modeChangedToast: (label) => `Switched to ${label}.`,
+  modeChatLabel: 'Chat Mode',
+  modeDirectMessageOnly: 'Open your direct message with the LobeHub bot and send `/mode` there.',
+  modePicker: 'Pick the conversation mode:',
   needLink: 'You need to /start to bind your account first.',
   newDirectMessageOnly: 'Open your direct message with the LobeHub bot and send `/new` there.',
   newStarted: 'Started a new conversation. Your next message begins a fresh topic.',
@@ -130,9 +141,15 @@ const ZH_CN: MessengerSystemStrings = {
     '• /switch — 切换当前空间（个人账号或工作区）',
     '• /agents — 查看 Agent 并切换当前 Agent',
     '• /new — 开启新对话',
+    '• /mode — 查看或切换会话模式（agent | chat）',
     '• /stop — 停止当前执行',
     '• /feedback <内容> — 向 LobeHub 团队发送反馈（不会触发 AI 回复）',
   ].join('\n'),
+  modeAgentLabel: 'Agent 模式',
+  modeChangedToast: (label) => `已切换到${label}。`,
+  modeChatLabel: 'Chat 模式',
+  modeDirectMessageOnly: '请在与 LobeHub 机器人的私聊中发送 `/mode`。',
+  modePicker: '请选择会话模式：',
   needLink: '请先发送 /start 绑定你的 LobeHub 账号。',
   newDirectMessageOnly: '请在与 LobeHub 机器人的私聊中发送 `/new`。',
   newStarted: '已开启新对话，下一条消息会创建一个新话题。',
@@ -169,6 +186,7 @@ const WECHAT_ZH_CN: MessengerSystemStrings = {
     '• /switch — 切换当前空间（个人账号或工作区）',
     '• /agents — 查看 Agent 并切换当前 Agent',
     '• /new — 开启新对话',
+    '• /mode — 查看或切换会话模式（agent | chat）',
     '• /stop — 停止当前执行',
     '• /feedback <内容> — 向 LobeHub 团队发送反馈（不会触发 AI 回复）',
   ].join('\n'),

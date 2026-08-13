@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "Опитайте отново",
   "flow.steps.learnYourWorld.sectionHint": "Анализирайте свързаните си данни, за да разберете какво е важно за вас…",
   "flow.steps.learnYourWorld.skipAhead": "Пропуснете напред",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 Можете да пропуснете тази стъпка засега — ще ви уведомим, когато профилът ви е готов.",
   "flow.steps.learnYourWorld.title": "Опознайте вашия свят",
   "flow.steps.messenger.connect": "Свържете",
   "flow.steps.messenger.connected": "Свързано",

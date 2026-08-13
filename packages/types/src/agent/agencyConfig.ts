@@ -75,7 +75,7 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
+ *   `cursor` | `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -224,6 +224,7 @@ const modelFlagsOf = (type: 'codex' | 'opencode' | 'pi' | 'qoder'): readonly str
   );
 
 const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
+const CURSOR_MODEL_FLAGS = ['--model'] as const;
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
@@ -295,6 +296,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -345,12 +347,12 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--model')
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
     ) {
       extraArgs.push('--model', model);
     }
@@ -405,6 +407,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -464,12 +467,12 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--model')
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
     }

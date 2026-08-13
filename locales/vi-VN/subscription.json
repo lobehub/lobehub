@@ -480,6 +480,8 @@
   "plansModal.default.title": "Nâng cấp gói của bạn",
   "plansModal.fileStorageLimit.desc": "Dung lượng lưu trữ tệp của bạn đã đầy. Nâng cấp để tiếp tục tải lên và quản lý tệp.",
   "plansModal.fileStorageLimit.title": "Đã đạt giới hạn lưu trữ",
+  "plansModal.messengerWechat.desc": "Bot Hệ Thống WeChat có sẵn trên các gói cá nhân trả phí. Nâng cấp để kết nối và sử dụng.",
+  "plansModal.messengerWechat.title": "Kết nối WeChat sau khi nâng cấp",
   "plansModal.modelAccess.desc": "Mô hình này có sẵn trong các gói trả phí. Nâng cấp để sử dụng toàn bộ danh mục mô hình.",
   "plansModal.modelAccess.title": "Mở khóa tất cả các mô hình",
   "qa.desc": "Nếu câu hỏi của bạn chưa được giải đáp, hãy xem <1>Tài liệu sản phẩm</1> để biết thêm câu hỏi thường gặp, hoặc liên hệ với chúng tôi.",

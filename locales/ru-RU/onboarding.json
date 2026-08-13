@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "Повторить",
   "flow.steps.learnYourWorld.sectionHint": "Анализируйте свои подключенные данные, чтобы понять, что для вас важно…",
   "flow.steps.learnYourWorld.skipAhead": "Пропустить вперед",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 Вы можете пропустить этот шаг сейчас — мы уведомим вас, когда ваш профиль будет готов.",
   "flow.steps.learnYourWorld.title": "Изучите ваш мир",
   "flow.steps.messenger.connect": "Подключить",
   "flow.steps.messenger.connected": "Подключено",

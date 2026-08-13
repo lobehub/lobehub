@@ -113,6 +113,34 @@ describe('buildHeteroSpawnArgs', () => {
     expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
   });
 
+  it('forwards Cursor native args and configured model without duplicating --model', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--mode', 'plan'],
+      model: 'sonnet-4-thinking',
+      type: 'cursor',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--mode',
+      'plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--mode',
+      '--agent-arg=plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'gpt-5'],
+        model: 'sonnet-4-thinking',
+        type: 'cursor',
+      }),
+    ).toEqual(['--model', 'gpt-5']);
+  });
+
   it('forwards Qoder native args, model, and reasoning effort', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--verbose'],

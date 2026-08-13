@@ -137,7 +137,10 @@ const buildExtraArgs = (
               ...(options.model ? ['--model', options.model] : []),
               ...(options.effort ? ['--effort', options.effort] : []),
             ]
-          : options.type === 'kimi-code' || options.type === 'opencode' || options.type === 'pi'
+          : options.type === 'cursor' ||
+              options.type === 'kimi-code' ||
+              options.type === 'opencode' ||
+              options.type === 'pi'
             ? [...(options.model ? ['--model', options.model] : [])]
             : options.type === 'qoder'
               ? [

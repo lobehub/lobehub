@@ -980,6 +980,13 @@
       "when": 1786316226126,
       "tag": "0139_projects_add_coordinator_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786545606298,
+      "tag": "0140_productive_madripoor",
+      "breakpoints": true
     }
   ],
   "version": "6"

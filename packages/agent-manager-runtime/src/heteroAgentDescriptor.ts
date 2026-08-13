@@ -69,6 +69,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Codex',
     kind: 'cli',
   },
+  'cursor': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Cursor',
+    kind: 'cli',
+  },
   'hermes': {
     capabilities: CODING_CAPABILITIES,
     description:
