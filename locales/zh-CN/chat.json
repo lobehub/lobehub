@@ -2128,6 +2128,7 @@
   "workingPanel.tabs.close": "关闭标签页",
   "workingPanel.tabs.closeLeft": "关闭左侧标签页",
   "workingPanel.tabs.closeOthers": "关闭其他标签页",
+  "workingPanel.tabs.closePanel": "关闭面板",
   "workingPanel.tabs.closeRight": "关闭右侧标签页",
   "workingPanel.tabs.pin": "固定标签页",
   "workingPanel.tabs.pinned": "已固定标签页",

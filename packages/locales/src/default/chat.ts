@@ -2297,6 +2297,7 @@ export default {
   'workingPanel.tabs.close': 'Close tab',
   'workingPanel.tabs.closeLeft': 'Close tabs to the left',
   'workingPanel.tabs.closeOthers': 'Close other tabs',
+  'workingPanel.tabs.closePanel': 'Close panel',
   'workingPanel.tabs.closeRight': 'Close tabs to the right',
   'workingPanel.tabs.pin': 'Pin tab',
   'workingPanel.tabs.pinned': 'Pinned tab',
