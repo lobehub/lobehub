@@ -1732,6 +1732,7 @@ export default class HeterogeneousAgentCtr {
           }
 
           if (code === 0) {
+            broadcastStreamEvents(pipeline.validateCompletion());
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
           } else {

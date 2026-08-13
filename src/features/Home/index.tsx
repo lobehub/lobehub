@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { lazy, memo, Suspense, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
@@ -23,6 +23,27 @@ import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
+
+export const DEFAULT_HOME_MODE: HomeMode = 'chat';
+export const ONBOARDING_HOME_MODE_PARAM = 'onboarding';
+export const ONBOARDING_HOME_MODE_TASK_VALUE = 'task';
+
+export const resolveInitialHomeMode = (search: string): HomeMode => {
+  const params = new URLSearchParams(search);
+  return params.get(ONBOARDING_HOME_MODE_PARAM) === ONBOARDING_HOME_MODE_TASK_VALUE
+    ? 'task'
+    : DEFAULT_HOME_MODE;
+};
+
+const clearOnboardingHomeModeParam = () => {
+  if (typeof window === 'undefined') return;
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(ONBOARDING_HOME_MODE_PARAM) !== ONBOARDING_HOME_MODE_TASK_VALUE) return;
+
+  url.searchParams.delete(ONBOARDING_HOME_MODE_PARAM);
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+};
 
 // The "View run" button on brief cards only writes drawer state to the task
 // store — some component must mount the drawer shell that reacts to it.
@@ -277,7 +298,9 @@ const Home = memo(() => {
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const minimal = isHomeMinimalLayout({ hiddenWidgets, showPortrait: showHomePortrait });
-  const [mode, setMode] = useState<HomeMode>('chat');
+  const [mode, setMode] = useState<HomeMode>(() =>
+    resolveInitialHomeMode(typeof window === 'undefined' ? '' : window.location.search),
+  );
   const [inputValue, setInputValue] = useState('');
 
   const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
@@ -292,6 +315,10 @@ const Home = memo(() => {
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
+
+  useEffect(() => {
+    clearOnboardingHomeModeParam();
+  }, []);
 
   const handleInputValueChange = useCallback((value: string) => {
     setInputValue(value);

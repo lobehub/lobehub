@@ -471,6 +471,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   // wakeup promise — keeps backpressure simple and avoids a third-party
   // dependency.
   const queue: AgentStreamEvent[] = [];
+  let killedByUs = false;
   let streamEnded = false;
   let streamError: Error | undefined;
   let wakeup: (() => void) | undefined;
@@ -538,6 +539,10 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       try {
         const events = await pipeline.flush();
         for (const event of events) queue.push(event);
+        const { code } = await exit;
+        if (code === 0 && !killedByUs) {
+          for (const event of pipeline.validateCompletion()) queue.push(event);
+        }
       } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
       } finally {
@@ -594,7 +599,10 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   return {
     events,
     exit,
-    kill: (signal: NodeJS.Signals = 'SIGINT') => killProcessTree(proc, signal),
+    kill: (signal: NodeJS.Signals = 'SIGINT') => {
+      killedByUs = true;
+      killProcessTree(proc, signal);
+    },
     pid: proc.pid,
     get sessionId() {
       return pipeline.sessionId;

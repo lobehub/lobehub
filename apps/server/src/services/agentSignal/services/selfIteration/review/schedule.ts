@@ -195,56 +195,77 @@ export const createSelfReviewScheduleService = (
         async (span) => {
           try {
             const now = adapters.now?.() ?? new Date();
-            const users = await adapters.listEligibleUsers({
-              cursor: options.cursor,
-              limit: options.limit,
-              whitelist: options.whitelist,
-            });
             let enqueued = 0;
             let skipped = 0;
             let targetCount = 0;
+            let userCount = 0;
 
-            for (const user of users) {
-              const localWindow = getLocalNightWindow(now, user.timezone);
-
-              if (!localWindow.withinWindow) {
-                skipped += 1;
-                continue;
-              }
-
-              const targets = await adapters.listActiveAgentTargets({
-                limit: options.targetLimit,
-                userId: user.id,
-                windowEnd: localWindow.reviewWindowEnd,
-                windowStart: localWindow.reviewWindowStart,
+            // Traverse every page of eligible users. `listEligibleUsers` is
+            // keyset-paginated (createdAt, id); without a cursor the caller
+            // would repeatedly scan the same oldest `limit` users and never
+            // reach users beyond row `limit` (e.g. when the lab filter was
+            // removed and all users are candidates).
+            let cursor = options.cursor;
+            while (true) {
+              const users = await adapters.listEligibleUsers({
+                cursor,
+                limit: options.limit,
+                whitelist: options.whitelist,
               });
 
-              targetCount += targets.length;
+              if (users.length === 0) break;
+              userCount += users.length;
 
-              for (const target of targets) {
-                await adapters.enqueueSource({
-                  payload: {
-                    agentId: target.agentId,
-                    localDate: localWindow.localDate,
-                    requestedAt: now.toISOString(),
-                    reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
-                    reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
-                    timezone: localWindow.timezone,
-                    userId: user.id,
-                  },
-                  sourceId: buildNightlyReviewSourceId({
-                    agentId: target.agentId,
-                    localDate: localWindow.localDate,
-                    userId: user.id,
-                  }),
-                  sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
-                  timestamp: now.getTime(),
+              for (const user of users) {
+                const localWindow = getLocalNightWindow(now, user.timezone);
+
+                if (!localWindow.withinWindow) {
+                  skipped += 1;
+                  continue;
+                }
+
+                const targets = await adapters.listActiveAgentTargets({
+                  limit: options.targetLimit,
+                  userId: user.id,
+                  windowEnd: localWindow.reviewWindowEnd,
+                  windowStart: localWindow.reviewWindowStart,
                 });
-                enqueued += 1;
+
+                targetCount += targets.length;
+
+                for (const target of targets) {
+                  await adapters.enqueueSource({
+                    payload: {
+                      agentId: target.agentId,
+                      localDate: localWindow.localDate,
+                      requestedAt: now.toISOString(),
+                      reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
+                      reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
+                      timezone: localWindow.timezone,
+                      userId: user.id,
+                    },
+                    sourceId: buildNightlyReviewSourceId({
+                      agentId: target.agentId,
+                      localDate: localWindow.localDate,
+                      userId: user.id,
+                    }),
+                    sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+                    timestamp: now.getTime(),
+                  });
+                  enqueued += 1;
+                }
               }
+
+              // Stop when the last page returned fewer rows than the page
+              // size (or when no limit is set and the query is unbounded).
+              if (options.limit === undefined || users.length < options.limit) break;
+
+              const lastUser = users[users.length - 1];
+              if (!lastUser.createdAt) break;
+              cursor = { createdAt: lastUser.createdAt, id: lastUser.id };
             }
 
-            span.setAttribute('agent.signal.nightly.user_count', users.length);
+            span.setAttribute('agent.signal.nightly.user_count', userCount);
             span.setAttribute('agent.signal.nightly.target_count', targetCount);
             span.setAttribute('agent.signal.nightly.enqueued', enqueued);
             span.setAttribute('agent.signal.nightly.skipped', skipped);

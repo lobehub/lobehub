@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -588,6 +589,38 @@ describe('AgentDocumentsService', () => {
         id: agentDocumentId,
         litexml: '<p id="node-1">content</p>',
         title: 'Doc',
+      });
+    });
+
+    it('should return raw text documents without Markdown projection', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      const content = `<knowledge_base_files totalCount="1">
+<file id="file-1" name="raw.txt">
+lossless tool result
+</file>
+</knowledge_base_files>`;
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content,
+        editorData: null,
+        fileType: 'text/plain',
+        filename: 'topic_call.txt',
+        id: agentDocumentId,
+        title: 'topic_call.txt',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+
+      expect(createHeadlessEditor).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        agentId: 'agent-1',
+        content,
+        editorData: null,
+        fileType: 'text/plain',
+        filename: 'topic_call.txt',
+        id: agentDocumentId,
+        title: 'topic_call.txt',
       });
     });
 

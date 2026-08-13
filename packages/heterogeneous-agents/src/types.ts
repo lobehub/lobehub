@@ -392,6 +392,12 @@ export interface AgentEventAdapter {
 
   /** The session ID extracted from the agent's init event (for multi-turn resume). */
   sessionId?: string;
+
+  /**
+   * Validate provider-specific terminal contracts after stdout has drained and
+   * the upstream process has reported a successful exit.
+   */
+  validateCompletion?: () => HeterogeneousAgentEvent[];
 }
 
 // ─── Agent Process Config ───

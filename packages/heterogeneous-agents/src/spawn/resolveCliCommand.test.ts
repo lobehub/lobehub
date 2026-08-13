@@ -217,7 +217,7 @@ describe('resolveCliCommand', () => {
       });
     });
 
-    it("rejects an unrelated `agent` binary and falls back to Cursor's user-local install", async () => {
+    it("falls back to Cursor's unambiguous alias when another CLI owns `agent`", async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       process.env.PATH = '/usr/bin:/bin';
@@ -226,6 +226,7 @@ describe('resolveCliCommand', () => {
       try {
         callExecFile('/Users/x/.grok/bin/agent\n');
         callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFile('Usage: agent [flags]\nGrok CLI agent');
         callExecFile('Usage: agent [options] [command] [prompt...]\nStart the Cursor Agent');
 
         const { detectHeterogeneousCliCommand } = await importModule();
@@ -233,11 +234,12 @@ describe('resolveCliCommand', () => {
 
         expect(status).toMatchObject({
           available: true,
-          path: path.join(os.homedir(), '.local', 'bin', 'agent'),
+          path: path.join(os.homedir(), '.local', 'bin', 'cursor-agent'),
           version: undefined,
         });
         expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
         expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
+        expect(execFileMock.mock.calls[3]![1]).toEqual(['--help']);
       } finally {
         process.env.PATH = originalPath;
         if (originalShell === undefined) delete process.env.SHELL;

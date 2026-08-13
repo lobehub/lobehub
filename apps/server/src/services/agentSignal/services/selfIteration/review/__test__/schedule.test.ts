@@ -104,6 +104,67 @@ describe('nightlyReviewScheduleService', () => {
       expect(deps.enqueueSource).not.toHaveBeenCalled();
     });
 
+    it('traverses every page of eligible users with a keyset cursor', async () => {
+      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
+      deps.listEligibleUsers
+        .mockResolvedValueOnce([
+          {
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            id: 'user-1',
+            timezone: 'Asia/Shanghai',
+          },
+          {
+            createdAt: new Date('2026-02-01T00:00:00.000Z'),
+            id: 'user-2',
+            timezone: 'Asia/Shanghai',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            createdAt: new Date('2026-03-01T00:00:00.000Z'),
+            id: 'user-3',
+            timezone: 'Asia/Shanghai',
+          },
+          {
+            createdAt: new Date('2026-04-01T00:00:00.000Z'),
+            id: 'user-4',
+            timezone: 'Asia/Shanghai',
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      const service = createSelfReviewScheduleService(deps);
+
+      const summary = await service.dispatchNightlyReviewRequests({ limit: 2 });
+
+      expect(summary).toEqual({ enqueued: 4, skipped: 0 });
+      expect(deps.listEligibleUsers).toHaveBeenCalledTimes(3);
+      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(1, {
+        cursor: undefined,
+        limit: 2,
+        whitelist: undefined,
+      });
+      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(2, {
+        cursor: { createdAt: new Date('2026-02-01T00:00:00.000Z'), id: 'user-2' },
+        limit: 2,
+        whitelist: undefined,
+      });
+      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(3, {
+        cursor: { createdAt: new Date('2026-04-01T00:00:00.000Z'), id: 'user-4' },
+        limit: 2,
+        whitelist: undefined,
+      });
+      expect(deps.enqueueSource).toHaveBeenCalledTimes(4);
+    });
+
+    it('stops paginating after the first page when no limit is provided', async () => {
+      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
+      const service = createSelfReviewScheduleService(deps);
+
+      await service.dispatchNightlyReviewRequests();
+
+      expect(deps.listEligibleUsers).toHaveBeenCalledTimes(1);
+    });
+
     it('falls back to UTC for invalid timezone values without throwing', async () => {
       const deps = createDeps(new Date('2026-05-04T02:30:00.000Z'));
       deps.listEligibleUsers.mockResolvedValue([

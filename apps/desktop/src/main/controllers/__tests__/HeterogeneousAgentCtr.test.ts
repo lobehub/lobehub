@@ -1947,6 +1947,48 @@ describe('HeterogeneousAgentCtr', () => {
       expect(toolEnds.length).toBeGreaterThan(0);
     });
 
+    it('broadcasts an Amp protocol error before completion when exit zero has no result', async () => {
+      const initLine = `${JSON.stringify({
+        session_id: 'T-amp-missing-result',
+        subtype: 'init',
+        type: 'system',
+      })}\n`;
+      const assistantLine = `${JSON.stringify({
+        message: {
+          content: [{ text: 'Incomplete answer', type: 'text' }],
+          role: 'assistant',
+        },
+        type: 'assistant',
+      })}\n`;
+      nextFakeProc = createFakeProc({ stdoutLines: [initLine, assistantLine] }).proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'amp', command: 'amp' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      const errorIdx = broadcasts.findIndex(
+        (broadcast) =>
+          broadcast.channel === 'heteroAgentEvent' &&
+          (broadcast.data as any)?.event?.type === 'error' &&
+          (broadcast.data as any)?.event?.data?.code === 'protocol_error',
+      );
+      const completeIdx = broadcasts.findIndex(
+        (broadcast) => broadcast.channel === 'heteroAgentSessionComplete',
+      );
+      const runtimeEnd = broadcasts.find(
+        (broadcast) =>
+          broadcast.channel === 'heteroAgentEvent' &&
+          (broadcast.data as any)?.event?.type === 'agent_runtime_end',
+      );
+
+      expect(errorIdx).toBeGreaterThan(-1);
+      expect(errorIdx).toBeLessThan(completeIdx);
+      expect(runtimeEnd).toBeUndefined();
+    });
+
     it('delivers late final Codex stdout chunks BEFORE heteroAgentSessionComplete', async () => {
       const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
       const turnStarted = `${JSON.stringify({ type: 'turn.started' })}\n`;

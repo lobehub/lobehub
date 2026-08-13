@@ -54,11 +54,17 @@ const formatDuration = (ms: number): string => {
 // the shared collapse clamps it with a fade and offers "show more", while the
 // run drawer remains available from the explicit overflow action. The preview
 // itself is reading content, not an unlabeled navigation target.
+//
+// It also stays interactive. While the whole card was one big button to the run
+// drawer, the body carried `pointer-events: none` so clicks fell through to it;
+// the card stopped being that button, and the rule was left behind killing every
+// link, code-copy and text selection in the output with nothing to fall through
+// to. Anything added here that swallows clicks has to earn it again.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
 const RunContent = memo<{ content: string }>(({ content }) => (
   <CollapsibleContent key={content} maxHeight={RUN_CONTENT_MAX_HEIGHT}>
-    <Markdown style={{ overflow: 'unset', pointerEvents: 'none' }} variant={'chat'}>
+    <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
       {content}
     </Markdown>
   </CollapsibleContent>
