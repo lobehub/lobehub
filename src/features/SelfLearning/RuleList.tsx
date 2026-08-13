@@ -21,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     display: grid;
-    grid-template-columns: 40px 72px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr) 72px;
     column-gap: 8px;
     align-items: center;
 
@@ -100,6 +100,16 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
               <Text className={styles.code} fontSize={10.5} type={'secondary'}>
                 {lesson.code}
               </Text>
+              <Flexbox horizontal align={'center'} className={styles.content} gap={8}>
+                <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
+                  {lesson.title}
+                </Text>
+                {!lesson.canonAnchor && (
+                  <Tag size={'small'} style={{ flex: 'none' }}>
+                    {t('rules.unanchored')}
+                  </Tag>
+                )}
+              </Flexbox>
               <Tooltip title={t('rules.hitCount', { count: lesson.hitCount })}>
                 <div className={styles.usage}>
                   <div
@@ -112,16 +122,6 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
                   />
                 </div>
               </Tooltip>
-              <Flexbox horizontal align={'center'} className={styles.content} gap={8}>
-                <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
-                  {lesson.title}
-                </Text>
-                {!lesson.canonAnchor && (
-                  <Tag size={'small'} style={{ flex: 'none' }}>
-                    {t('rules.unanchored')}
-                  </Tag>
-                )}
-              </Flexbox>
             </div>
           ))}
         </Flexbox>

@@ -29,6 +29,16 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 700;
     line-height: 1.5;
   `,
+  learningGrid: css`
+    display: grid;
+    grid-template-columns: minmax(280px, 0.72fr) minmax(420px, 1.28fr);
+    gap: 16px;
+    align-items: start;
+
+    @media (width <= 960px) {
+      grid-template-columns: 1fr;
+    }
+  `,
 }));
 
 /** plateauKind 是 DB 的开放字符串，映射成受控的 i18n key 再翻译。 */
@@ -207,9 +217,10 @@ const DomainDetail = memo(() => {
 
                     <FitMetrics detail={data} />
 
-                    <CoverageCloud detail={data} />
-
-                    <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
+                    <div className={styles.learningGrid}>
+                      <CoverageCloud detail={data} />
+                      <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
+                    </div>
 
                     <Block gap={7} padding={16} variant={'outlined'}>
                       <Text fontSize={13} weight={600}>
