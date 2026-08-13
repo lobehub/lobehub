@@ -2454,6 +2454,14 @@ export class AiAgentService {
       const childOperation = {
         assistantMessageId: assistantMessageRecord.id,
         hooks: serializedHooks,
+        ...(isRemoteHetero && remoteDeviceId
+          ? {
+              deviceId: remoteDeviceId,
+              deviceUserId: remoteDeviceUserId,
+              deviceWorkspaceId: remoteDeviceWorkspaceId,
+              heteroType,
+            }
+          : {}),
         ...(isRemoteHetero && remoteDeviceId ? { deviceId: remoteDeviceId, deviceUserId: remoteDeviceUserId, deviceWorkspaceId: remoteDeviceWorkspaceId, heteroType } : {}),
         operationId,
         scope: appContext?.scope ?? undefined,

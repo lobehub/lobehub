@@ -216,6 +216,10 @@ export interface ChatTopicMetadata {
     assistantMessageId: string;
     childOperations?: Array<{
       assistantMessageId: string;
+      deviceId?: string;
+      deviceUserId?: string;
+      deviceWorkspaceId?: string;
+      heteroType?: string;
       hooks?: SerializedAgentHook[];
       operationId: string;
       scope?: string;
@@ -487,6 +491,10 @@ export const chatTopicMetadataUpdateSchema = z.object({
         .array(
           z.object({
             assistantMessageId: z.string(),
+            deviceId: z.string().optional(),
+            deviceUserId: z.string().optional(),
+            deviceWorkspaceId: z.string().optional(),
+            heteroType: z.string().optional(),
             hooks: z.array(serializedAgentHookSchema).optional(),
             operationId: z.string(),
             scope: z.string().optional(),
