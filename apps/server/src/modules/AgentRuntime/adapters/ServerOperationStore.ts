@@ -33,15 +33,10 @@ export class ServerOperationStore implements OperationStore {
    * (`AbandonOperationService`).
    */
   async clearRunningMark(): Promise<void> {
-    if (!this.topicId || !this.userId) return;
+    if (!this.topicId || !this.userId || !this.operationId) return;
     try {
       const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId);
-      const topic = await topicModel.findById(this.topicId);
-      const markedOperationId = topic?.metadata?.runningOperation?.operationId;
-      // No mark (already cleared) or someone else's mark — nothing of ours to drop.
-      if (!markedOperationId || markedOperationId !== this.operationId) return;
-
-      await topicModel.updateMetadata(this.topicId, { runningOperation: null });
+      await topicModel.clearRunningOperationIfMatches(this.topicId, this.operationId);
     } catch {
       // best-effort — swallow
     }

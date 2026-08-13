@@ -177,6 +177,8 @@ export interface ChatTopicMetadata {
    * readers; this map lets the UI restore the right id when switching back.
    */
   heteroSessionIdByWorkingDirectory?: Record<string, string>;
+  /** Operation generation that owns the topic-level heterogeneous session pointer. */
+  heteroSessionOperationId?: string;
   /**
    * For topics imported from local CLI transcripts: the source transcript's
    * last message timestamp at import time. The import picker compares it with
@@ -438,6 +440,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroSessionOperationId: z.string().optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({

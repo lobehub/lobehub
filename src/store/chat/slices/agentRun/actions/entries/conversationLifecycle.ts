@@ -8,7 +8,6 @@ import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
   ChatImageItem,
-  ChatThreadType,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -21,6 +20,7 @@ import {
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
+  ThreadType,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
@@ -335,13 +335,17 @@ export class ConversationLifecycleActionImpl {
     // Use context from params (required)
     // If creating new thread (isNew + scope='thread'), threadId will be created by server
     const isCreatingNewThread = context.isNew && context.scope === 'thread';
+    const newThreadType =
+      context.threadType === ThreadType.Continuation || context.threadType === ThreadType.Standalone
+        ? context.threadType
+        : undefined;
     // Build newThread params for server from new context format
     // Only create newThread if we have both sourceMessageId and threadType
     const newThread =
-      isCreatingNewThread && context.sourceMessageId && context.threadType
+      isCreatingNewThread && context.sourceMessageId && newThreadType
         ? {
             sourceMessageId: context.sourceMessageId,
-            type: context.threadType as ChatThreadType,
+            type: newThreadType,
           }
         : undefined;
 
@@ -1506,6 +1510,7 @@ export class ConversationLifecycleActionImpl {
           fileIds: fileIdList,
           message,
           metadata: requestMetadata,
+          newThread,
           onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
           optimisticTopic,
@@ -1529,6 +1534,19 @@ export class ConversationLifecycleActionImpl {
         });
         const cancelledAfterPersistence = abortController.signal.aborted;
 
+        if (result.createdThreadId) {
+          this.#get().updateOperationMetadata(operationId, {
+            createdThreadId: result.createdThreadId,
+          });
+          const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
+          if (currentPortalViewType === PortalViewType.Thread) {
+            this.#get().openThreadInPortal(result.createdThreadId, context.sourceMessageId);
+          } else {
+            this.#get().syncThreadInPortal(result.createdThreadId, context.sourceMessageId);
+          }
+          void this.#get().refreshThreads();
+        }
+
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
         // the new topic, so the shared hook reads the persisted conversation from
@@ -1545,7 +1563,12 @@ export class ConversationLifecycleActionImpl {
             void sendRunLifecycle
               .afterUserMessagePersisted({
                 assistantMessageId: result.assistantMessageId,
-                context: { ...operationContext, topicId: result.topicId },
+                context: {
+                  ...operationContext,
+                  isNew: result.createdThreadId ? false : operationContext.isNew,
+                  threadId: result.createdThreadId ?? operationContext.threadId,
+                  topicId: result.topicId,
+                },
                 isCreateNewTopic: willCreateNewTopic,
                 operationId,
                 runId: operationId,
@@ -1563,6 +1586,8 @@ export class ConversationLifecycleActionImpl {
 
         return {
           assistantMessageId: result.assistantMessageId,
+          createdThreadId: result.createdThreadId,
+          createdTopicId: willCreateNewTopic ? result.topicId : undefined,
           userMessageId: result.userMessageId,
         };
       } catch (e) {

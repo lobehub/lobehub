@@ -193,6 +193,22 @@ class AiAgentService {
     return await lambdaClient.aiAgent.execAgent.mutate(params, options);
   }
 
+  async recoverExecAgent(params: {
+    assistantMessageId: string;
+    newThreadSourceMessageId?: string;
+    userMessageId: string;
+  }): Promise<ExecAgentResult | null> {
+    return await lambdaClient.aiAgent.recoverExecAgent.query(params);
+  }
+
+  async clearRunningOperation(params: {
+    operationId: string;
+    settledStatus?: 'active' | 'unread';
+    topicId: string;
+  }) {
+    return await lambdaClient.aiAgent.clearRunningOperation.mutate(params);
+  }
+
   /**
    * Defer an agent run to a future time. Creates an empty `scheduled` topic that
    * the backend cron fires once `runAt` passes; nothing runs now.

@@ -79,6 +79,8 @@ const NotifySchema = z.object({
    * in-place, keeping a single bubble in the UI.
    */
   messageId: z.string().optional(),
+  /** Operation generation assigned by execAgent for remote heterogeneous callbacks. */
+  operationId: z.string().optional(),
   /**
    * Role of the message to write:
    * - 'user' (default): write as user message and trigger the agent to reply
@@ -111,6 +113,7 @@ export const agentNotifyRouter = router({
       done = false,
       error: terminalError,
       messageId,
+      operationId: inputOperationId,
     } = input;
 
     // An error is itself a terminal signal — finalize the run even if the
@@ -139,8 +142,24 @@ export const agentNotifyRouter = router({
 
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
-    const remoteOperationId = (topic.metadata as any)?.runningOperation?.operationId as
-      string | undefined;
+    const runningOperation = topic.metadata?.runningOperation;
+    const remoteOperationId = runningOperation?.operationId;
+
+    // Remote assistant callbacks must echo the generation assigned at dispatch.
+    // Topic-only identity is insufficient: a delayed callback from operation A
+    // could otherwise overwrite/finalize operation B after B claims the topic.
+    if (inputOperationId && inputOperationId !== remoteOperationId) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'Notification belongs to a stale agent operation',
+      });
+    }
+    if (role === 'assistant' && runningOperation && !inputOperationId) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'operationId is required for assistant notifications during an active run',
+      });
+    }
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -190,8 +209,7 @@ export const agentNotifyRouter = router({
           // (Previously this fired the stripped-down dispatchTerminalHooks, which
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
           // Hooks were serialized onto runningOperation at dispatch time.
-          const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
-            SerializedHook[] | undefined;
+          const serializedHooks = runningOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
@@ -264,7 +282,11 @@ export const agentNotifyRouter = router({
 
           // The operation is finished — drop the running marker so a duplicate
           // terminal signal / reconnect doesn't re-fire the hooks.
-          await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
+          await ctx.topicModel
+            .clearRunningOperationIfMatches(topicId, remoteOperationId)
+            .catch((err) =>
+              log('notify: failed to clear running operation op=%s: %O', remoteOperationId, err),
+            );
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -289,8 +311,7 @@ export const agentNotifyRouter = router({
         // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
         // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
         // Using the placeholder avoids creating a second empty bubble in the UI.
-        const placeholderMessageId = (topic.metadata as any)?.runningOperation
-          ?.assistantMessageId as string | undefined;
+        const placeholderMessageId = runningOperation?.assistantMessageId;
         const resolvedMessageId = messageId ?? placeholderMessageId;
 
         // Update existing message if we have a resolved target

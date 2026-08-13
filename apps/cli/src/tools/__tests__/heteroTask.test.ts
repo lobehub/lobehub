@@ -126,6 +126,7 @@ describe('runHeteroTask (openclaw)', () => {
 
     expect(messageArg).toContain('what time is it');
     expect(messageArg).toContain('lh notify');
+    expect(messageArg).toContain('--operation-id op-1');
     expect(messageArg).toContain('MSG_ID');
   });
 
@@ -377,6 +378,9 @@ describe('runHeteroTask (openclaw)', () => {
     for (const call of getTrpcClientMock.mock.calls) {
       expect(call[0]).toBe('ws-99');
     }
+    for (const call of notifyMutateMock.mock.calls) {
+      expect(call[0]).toEqual(expect.objectContaining({ operationId: 'op-ws-2' }));
+    }
   });
 });
 
@@ -419,6 +423,7 @@ describe('runHeteroTask (hermes)', () => {
     expect(notifyMutateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'session_id: part of the final answer\nHello from Hermes',
+        operationId: 'op-hermes-1',
         topicId: 'topic-hermes',
       }),
     );

@@ -76,15 +76,33 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: {
+    messageModel?: any;
+    persistenceHandler?: HeterogeneousPersistenceHandler;
+    streamEventManager?: IStreamEventManager;
+    topicModel?: any;
+  } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
-  const persistenceHandler = createFakePersistenceHandler();
+  const persistenceHandler = overrides.persistenceHandler ?? createFakePersistenceHandler();
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
+    messageModel: overrides.messageModel,
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
+    topicModel: overrides.topicModel,
   });
   return { manager, persistenceHandler, published, service };
 };
+
+const createOwnedTopicModel = (operationId: string) =>
+  ({
+    clearRunningOperationIfMatches: vi.fn(async () => true),
+    findById: vi.fn(async () => ({
+      metadata: { runningOperation: { operationId } },
+    })),
+    settleRunningStatus: vi.fn(async () => []),
+  }) as any;
 
 describe('HeterogeneousAgentService', () => {
   describe('normalizeHeterogeneousFinishError', () => {
@@ -384,7 +402,9 @@ describe('HeterogeneousAgentService', () => {
 
   describe('heteroFinish', () => {
     it('publishes a terminal agent_runtime_end with the high-level result', async () => {
-      const { manager, published, service } = createService();
+      const { manager, published, service } = createService({
+        topicModel: createOwnedTopicModel('op-1'),
+      });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -406,7 +426,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('forwards classified error details when the run failed', async () => {
-      const { published, service } = createService();
+      const { published, service } = createService({
+        topicModel: createOwnedTopicModel('op-2'),
+      });
 
       await service.heteroFinish({
         agentType: 'codex',
@@ -425,7 +447,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('persists and publishes a structured auth_required error from a flattened finish', async () => {
-      const { persistenceHandler, published, service } = createService();
+      const { persistenceHandler, published, service } = createService({
+        topicModel: createOwnedTopicModel('op-auth'),
+      });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -451,7 +475,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('handles cancelled runs and runs without sessionId', async () => {
-      const { published, service } = createService();
+      const { published, service } = createService({
+        topicModel: createOwnedTopicModel('op-3'),
+      });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -464,6 +490,22 @@ describe('HeterogeneousAgentService', () => {
         operationId: 'op-3',
         reason: 'cancelled',
       });
+    });
+
+    it('rejects an unbound stale legacy finish before persistence or terminal publication', async () => {
+      const { manager, persistenceHandler, service } = createService({
+        topicModel: createOwnedTopicModel('op-new'),
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-shared',
+      });
+
+      expect(persistenceHandler.finish).not.toHaveBeenCalled();
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
     });
 
     // The unified terminal funnel: heteroFinish must drive the run's lifecycle
@@ -483,7 +525,9 @@ describe('HeterogeneousAgentService', () => {
     };
 
     it('fires onComplete (reason=done) hooks on a successful run', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-hook-success'),
+      });
       const { onComplete, onError } = registerHook('op-hook-success');
 
       await service.heteroFinish({
@@ -504,7 +548,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-hook-error'),
+      });
       const { onComplete, onError } = registerHook('op-hook-error');
 
       await service.heteroFinish({
@@ -525,13 +571,161 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
+    it('does not consume hooks or clear metadata for a stale operation', async () => {
+      const topicModel = createOwnedTopicModel('op-new');
+      const { manager, persistenceHandler, service } = createService({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            id: 'asst-old',
+            metadata: { heteroOperation: { operationId: 'op-old' } },
+            threadId: 'thread-old',
+            topicId: 'topic-shared',
+          })),
+        },
+        topicModel,
+      });
+      const { onComplete, onError } = registerHook('op-old');
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-old',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-shared',
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      expect(persistenceHandler.finish).not.toHaveBeenCalled();
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+      expect(topicModel.clearRunningOperationIfMatches).not.toHaveBeenCalled();
+      expect(topicModel.settleRunningStatus).not.toHaveBeenCalled();
+      expect(hookDispatcher.hasHooks('op-old')).toBe(true);
+      hookDispatcher.unregister('op-old');
+    });
+
+    it.each([
+      ['Topic', 'topic-other', 'thread-current'],
+      ['Thread', 'topic-shared', 'thread-other'],
+    ])(
+      'rejects a seeded assistant from a different %s before persistence or publication',
+      async (_scope, assistantTopicId, assistantThreadId) => {
+        const topicModel = {
+          clearRunningOperationIfMatches: vi.fn(async () => true),
+          findById: vi.fn(async () => ({
+            id: 'topic-shared',
+            metadata: {
+              runningOperation: {
+                assistantMessageId: 'asst-current',
+                operationId: 'op-current',
+                threadId: 'thread-current',
+              },
+            },
+          })),
+        } as any;
+        const { manager, persistenceHandler, service } = createService({
+          messageModel: {
+            findById: vi.fn(async () => ({
+              id: 'asst-current',
+              metadata: { heteroOperation: { operationId: 'op-current' } },
+              threadId: assistantThreadId,
+              topicId: assistantTopicId,
+            })),
+          },
+          topicModel,
+        });
+
+        await service.heteroFinish({
+          agentType: 'claude-code',
+          assistantMessageId: 'asst-current',
+          operationId: 'op-current',
+          result: 'success',
+          topicId: 'topic-shared',
+        });
+
+        expect(persistenceHandler.finish).not.toHaveBeenCalled();
+        expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+        expect(topicModel.clearRunningOperationIfMatches).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts an exact internal-isolation seed alongside the parent Topic operation', async () => {
+      const { manager, persistenceHandler, service } = createService({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            id: 'asst-child',
+            metadata: {
+              heteroOperation: { internalIsolation: true, operationId: 'op-child' },
+            },
+            threadId: 'thread-child',
+            topicId: 'topic-parent',
+          })),
+        },
+        topicModel: createOwnedTopicModel('op-parent'),
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-child',
+        operationId: 'op-child',
+        result: 'cancelled',
+        topicId: 'topic-parent',
+      });
+
+      expect(persistenceHandler.finish).toHaveBeenCalledTimes(1);
+      expect(manager.publishStreamEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not publish a terminal event when cold persistence rejects a stale finish', async () => {
+      const persistenceHandler = createFakePersistenceHandler();
+      persistenceHandler.finish.mockRejectedValue(
+        new StaleHeteroOperationError('operation was replaced'),
+      );
+      const topicModel = createOwnedTopicModel('op-old');
+      topicModel.findById.mockResolvedValue({
+        id: 'topic-shared',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'asst-old',
+            operationId: 'op-old',
+            threadId: 'thread-old',
+          },
+        },
+      });
+      const { manager, service } = createService({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            id: 'asst-old',
+            metadata: { heteroOperation: { operationId: 'op-old' } },
+            threadId: 'thread-old',
+            topicId: 'topic-shared',
+          })),
+        },
+        persistenceHandler,
+        topicModel,
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-old',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-shared',
+      });
+
+      expect(persistenceHandler.finish).toHaveBeenCalledTimes(1);
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+    });
+
     // Verify-lifecycle alignment: heteroFinish must route the terminal transition
     // through CompletionLifecycle (the SAME owner the in-process runtime uses), not
     // a stripped-down funnel. That single funnel is what runs the delivery-checker
     // gate on success — and the gate bails unless op.model/provider are set, so the
     // synthetic state MUST carry the model/provider backfilled from the CLI stream.
     it('routes the terminal transition through CompletionLifecycle with backfilled model/provider', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-verify-align'),
+      });
 
       const finalizeSpy = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue({
         llmCalls: 3,
@@ -582,7 +776,9 @@ describe('HeterogeneousAgentService', () => {
     // must therefore re-run the idempotent durable instantiation and AWAIT it
     // before dispatching the gate.
     it('awaits durable verify-plan instantiation before the completion gate for a task-bound run', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-race-guard'),
+      });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -619,7 +815,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('skips verify-plan instantiation for a non-task hetero run', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-no-task'),
+      });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -648,7 +846,9 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('does NOT fire hooks on a cancelled run (the real result fires them)', async () => {
-      const { service } = createService();
+      const { service } = createService({
+        topicModel: createOwnedTopicModel('op-hook-cancelled'),
+      });
       const { onComplete, onError } = registerHook('op-hook-cancelled');
 
       await service.heteroFinish({
@@ -693,12 +893,14 @@ describe('HeterogeneousAgentService', () => {
 
     const makeService = (hooks: SerializedHook[] | undefined) => {
       const topicModel = {
+        clearRunningOperationIfMatches: vi.fn(async () => true),
         // Mirror what execAgent persisted at dispatch: the serialized hooks live
         // under runningOperation. heteroFinish must read them from here.
         findById: vi.fn(async () => ({
           id: 'topic-q',
           metadata: { runningOperation: { hooks, operationId: 'op-q' } },
         })),
+        settleRunningStatus: vi.fn(async () => []),
         updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
@@ -794,7 +996,13 @@ describe('HeterogeneousAgentService', () => {
     const makeStore = () => {
       let meta: Record<string, any> = {};
       const topicModel = {
+        clearRunningOperationIfMatches: vi.fn(async (_id: string, operationId: string) => {
+          if (meta.runningOperation?.operationId !== operationId) return false;
+          meta = { ...meta, runningOperation: null };
+          return true;
+        }),
         findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
+        settleRunningStatus: vi.fn(async () => []),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };
         }),

@@ -4,9 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 // Use vi.hoisted to ensure mock functions are available before vi.mock runs
-const { mockMessageCreate, mockTopicUpdateMetadata } = vi.hoisted(() => ({
+const {
+  mockCreateMessagePair,
+  mockMessageCreate,
+  mockMessageFindById,
+  mockThreadCreate,
+  mockTopicUpdateMetadata,
+  mockTryReserveTaskCallback,
+} = vi.hoisted(() => ({
+  mockCreateMessagePair: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockMessageFindById: vi.fn(),
+  mockThreadCreate: vi.fn(),
   mockTopicUpdateMetadata: vi.fn(),
+  mockTryReserveTaskCallback: vi.fn(),
 }));
 
 // Mock trusted client to avoid server-side env access
@@ -19,6 +30,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    createUserAndAssistantMessages: mockCreateMessagePair,
+    findById: mockMessageFindById,
     getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
     getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
@@ -70,7 +83,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+    tryReserveTaskCallback: mockTryReserveTaskCallback,
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
     findById: vi.fn().mockResolvedValue(undefined),
     updateMetadata: mockTopicUpdateMetadata,
@@ -80,7 +93,7 @@ vi.mock('@/database/models/topic', () => ({
 // Mock ThreadModel
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
+    create: mockThreadCreate,
     findById: vi.fn(),
     update: vi.fn(),
   })),
@@ -167,7 +180,10 @@ vi.mock('model-bank', async (importOriginal) => {
 
 describe('AiAgentService.execAgent - threadId handling', () => {
   let service: AiAgentService;
-  const mockDb = {} as any;
+  const transaction = vi.fn(async (callback: (trx: unknown) => Promise<unknown>) =>
+    callback({ transaction: 'trx' }),
+  );
+  const mockDb = { transaction } as any;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -175,6 +191,12 @@ describe('AiAgentService.execAgent - threadId handling', () => {
     // Explicitly clear the shared mock to prevent state pollution between tests
     mockMessageCreate.mockClear();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageFindById.mockReset();
+    mockThreadCreate.mockReset();
+    mockCreateMessagePair.mockReset();
+    mockTryReserveTaskCallback.mockReset();
+    mockTryReserveTaskCallback.mockResolvedValue(true);
+    transaction.mockClear();
     mockTopicUpdateMetadata.mockClear();
     mockTopicUpdateMetadata.mockResolvedValue(undefined);
 
@@ -187,6 +209,26 @@ describe('AiAgentService.execAgent - threadId handling', () => {
   });
 
   describe('when threadId is provided in appContext', () => {
+    it('serializes ordinary user-thread starts at topic scope', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { threadId: 'thread-123', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(mockTryReserveTaskCallback).toHaveBeenCalled();
+    });
+
+    it('keeps internal isolation-thread guests outside the topic reservation', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, threadId: 'thread-123', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(mockTryReserveTaskCallback).not.toHaveBeenCalled();
+    });
+
     it('should pass threadId when creating user message', async () => {
       await service.execAgent({
         agentId: 'agent-1',
@@ -230,6 +272,107 @@ describe('AiAgentService.execAgent - threadId handling', () => {
         threadId: 'thread-123',
         topicId: 'topic-1',
       });
+    });
+  });
+
+  describe('when a new user thread is requested', () => {
+    it('rejects creation without an existing topic', async () => {
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: {
+            newThread: { sourceMessageId: 'source-1', type: 'continuation' },
+          },
+          prompt: 'Start a branch',
+        }),
+      ).rejects.toThrow('newThread requires an existing topic');
+
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects the internal isolation type on the user creation path', async () => {
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: {
+            newThread: { sourceMessageId: 'source-1', type: 'isolation' } as any,
+            topicId: 'topic-1',
+          },
+          prompt: 'Start a task thread',
+        }),
+      ).rejects.toThrow('User-created isolation threads are not supported');
+
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('creates the thread and first message pair in one transaction', async () => {
+      mockMessageFindById.mockResolvedValue({
+        id: 'source-1',
+        threadId: null,
+        topicId: 'topic-1',
+      });
+      mockThreadCreate.mockResolvedValue({ id: 'thread-created' });
+      mockCreateMessagePair.mockResolvedValue({
+        assistantMessage: { id: 'assistant-created' },
+        userMessage: { id: 'user-created' },
+      });
+
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          newThread: { sourceMessageId: 'source-1', type: 'continuation' },
+          topicId: 'topic-1',
+        },
+        clientIds: {
+          assistantMessageId: 'assistant-created',
+          userMessageId: 'user-created',
+        },
+        prompt: 'Start a branch',
+      });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(mockThreadCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceMessageId: 'source-1', topicId: 'topic-1' }),
+        { transaction: 'trx' },
+      );
+      expect(mockCreateMessagePair).toHaveBeenCalledWith(
+        {
+          assistantMessage: expect.objectContaining({ threadId: 'thread-created' }),
+          userMessage: expect.objectContaining({
+            parentId: 'source-1',
+            threadId: 'thread-created',
+          }),
+        },
+        expect.objectContaining({
+          ids: {
+            assistantMessageId: 'assistant-created',
+            userMessageId: 'user-created',
+          },
+          trx: { transaction: 'trx' },
+        }),
+      );
+      expect(result.createdThreadId).toBe('thread-created');
+    });
+
+    it('rejects a source message that already belongs to a thread', async () => {
+      mockMessageFindById.mockResolvedValue({
+        id: 'nested-source',
+        threadId: 'existing-thread',
+        topicId: 'topic-1',
+      });
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: {
+            newThread: { sourceMessageId: 'nested-source', type: 'standalone' },
+            topicId: 'topic-1',
+          },
+          prompt: 'Nested branch',
+        }),
+      ).rejects.toThrow('Nested user threads are not supported');
+
+      expect(transaction).not.toHaveBeenCalled();
     });
   });
 

@@ -16,7 +16,7 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 }));
 
 const mockTopicFindById = vi.fn();
-const mockTopicUpdateMetadata = vi.fn();
+const mockClearRunningOperationIfMatches = vi.fn();
 const mockMessageFindById = vi.fn();
 const mockMessageUpdate = vi.fn();
 const mockMessageCreate = vi.fn();
@@ -36,8 +36,8 @@ vi.mock('@/server/services/verify', async (orig) => ({
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
+    clearRunningOperationIfMatches: mockClearRunningOperationIfMatches,
     findById: mockTopicFindById,
-    updateMetadata: mockTopicUpdateMetadata,
   })),
 }));
 vi.mock('@/database/models/message', () => ({
@@ -92,6 +92,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       metadata: {
         runningOperation: {
           assistantMessageId: FINAL_MSG_ID,
+          heteroType: 'openclaw',
           hooks: [{ id: 'task-on-complete', type: 'onComplete', webhook: { url: '/wh' } }],
           operationId: OP,
         },
@@ -100,7 +101,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // The placeholder message holds the agent's final reply (written in-place
     // by earlier `lh notify` calls).
     mockMessageFindById.mockResolvedValue({ content: 'the final reply', topicId: TOPIC });
-    mockTopicUpdateMetadata.mockResolvedValue(undefined);
+    mockClearRunningOperationIfMatches.mockResolvedValue(true);
     // Default: a non-task op so the plan-instantiation guard no-ops unless a
     // test opts into a task-bound op.
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
@@ -114,7 +115,13 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
   it('empty done signal finalizes success AND carries the final reply into the hooks', async () => {
     const { onComplete, onError } = registerHooks();
 
-    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
 
     // Stream closed as success.
     expect(mockPublishAgentRuntimeEnd).toHaveBeenCalledWith(
@@ -135,7 +142,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
 
     // Running marker dropped so a duplicate done can't re-fire.
     await vi.waitFor(() =>
-      expect(mockTopicUpdateMetadata).toHaveBeenCalledWith(TOPIC, { runningOperation: null }),
+      expect(mockClearRunningOperationIfMatches).toHaveBeenCalledWith(TOPIC, OP),
     );
   });
 
@@ -148,7 +155,13 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     const { onComplete } = registerHooks();
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: 'task-9' });
 
-    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
 
     await vi.waitFor(() => expect(mockInstantiateVerifyPlan).toHaveBeenCalledTimes(1));
     // Ensured with the run's own operationId + taskId (3rd arg is the params object).
@@ -170,10 +183,16 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // path, not the start-side instantiation.
     mockOpFindById.mockResolvedValue({ parentOperationId: 'parent-op', taskId: 'task-9' });
 
-    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
 
     await vi.waitFor(() =>
-      expect(mockTopicUpdateMetadata).toHaveBeenCalledWith(TOPIC, { runningOperation: null }),
+      expect(mockClearRunningOperationIfMatches).toHaveBeenCalledWith(TOPIC, OP),
     );
     expect(mockInstantiateVerifyPlan).not.toHaveBeenCalled();
   });
@@ -184,6 +203,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     await createCaller().notify({
       content: '',
       error: { message: 'remote crashed', type: 'HeteroProcessError' },
+      operationId: OP,
       role: 'assistant',
       topicId: TOPIC,
     });
@@ -199,5 +219,32 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       reason: 'error',
     });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a stale operation before it can overwrite the current placeholder', async () => {
+    await expect(
+      createCaller().notify({
+        content: 'late output',
+        operationId: 'op-stale',
+        role: 'assistant',
+        topicId: TOPIC,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    expect(mockMessageUpdate).not.toHaveBeenCalled();
+    expect(mockPublishStreamEvent).not.toHaveBeenCalled();
+    expect(mockClearRunningOperationIfMatches).not.toHaveBeenCalled();
+  });
+
+  it('requires an operation generation for remote assistant callbacks', async () => {
+    await expect(
+      createCaller().notify({
+        content: 'unscoped output',
+        role: 'assistant',
+        topicId: TOPIC,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockMessageUpdate).not.toHaveBeenCalled();
   });
 });

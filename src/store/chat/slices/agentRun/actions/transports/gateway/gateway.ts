@@ -8,6 +8,7 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatTopicMetadata,
   ConversationContext,
+  ExecAgentAppContext,
   ExecAgentResult,
   MessageMetadata,
   RuntimeMentionedAgent,
@@ -23,7 +24,6 @@ import {
 } from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
-import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
@@ -426,6 +426,8 @@ export class GatewayActionImpl {
     messageContext?: ConversationContext;
     /** Request metadata carried from the originating user message. */
     metadata?: Pick<MessageMetadata, 'trigger'>;
+    /** Create the persisted user thread that owns this fresh turn. */
+    newThread?: ExecAgentAppContext['newThread'];
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
     /** Called when the gateway session completes (agent finished running) */
@@ -495,6 +497,7 @@ export class GatewayActionImpl {
       message,
       messageContext = executionContext,
       metadata,
+      newThread,
       onComplete,
       onMessageAccepted,
       optimisticTopic,
@@ -570,66 +573,87 @@ export class GatewayActionImpl {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
-    const result = await aiAgentService.execAgentTask(
-      {
-        agentId: executionContext.agentId,
-        // Fresh sends only — resume flows never pass this, and the server drops
-        // it defensively on resume-like params anyway.
-        clientIds,
-        appContext: {
-          agentDocumentId: executionContext.agentDocumentId,
-          ...(messageContext.agentId !== executionContext.agentId && {
-            conversationAgentId: messageContext.agentId,
-          }),
-          defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
-          documentId: executionContext.documentId,
-          // When AgentBuilder runs, context.agentId is the builtin builder agent.
-          // The actual editing target is chatStore.activeAgentId (kept in sync by
-          // AgentBuilderProvider). Pass it so the server can route tool calls to
-          // the correct agent rather than the builder itself.
-          ...(executionContext.scope === 'agent_builder' && {
-            editingAgentId: this.#get().activeAgentId ?? undefined,
-          }),
-          // Same shape as `editingAgentId`, for the Group Agent Builder panel on
-          // the group Profile page. The builder conversation is keyed by the
-          // builtin builder agent (no groupId in its ConversationContext, so the
-          // message map key and the group's own chat stay separate), which left
-          // the server runtime with no idea which group it was editing.
-          // The context value wins, and every surface that opens this scope sets
-          // it from its own route/group: it is fixed for the run, so a mid-run
-          // navigation cannot make the server stamp a different group than the
-          // panel is reading from. The `activeGroupId` fallback is a last resort
-          // for a caller that forgot — it is sampled here, AFTER the async
-          // preflight above, so it can already be stale by this point.
-          ...(executionContext.scope === 'group_agent_builder' && {
-            editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
-          }),
-          groupId: executionContext.groupId,
-          ...(initialTopicMetadata && { initialTopicMetadata }),
-          // Forward the group orchestration role so the server can stamp it onto
-          // the assistant message metadata. Without this the gateway-created
-          // supervisor turn loses its role on the step_start snapshot / refetch
-          // and renders as a generic assistant.
-          orchestrationRole: executionContext.orchestrationRole,
-          scope: executionContext.scope,
-          taskId,
-          threadId: executionContext.threadId,
-          topicId: executionContext.topicId,
+    let result: ExecAgentResult;
+    try {
+      result = await aiAgentService.execAgentTask(
+        {
+          agentId: executionContext.agentId,
+          // Fresh sends only — resume flows never pass this, and the server drops
+          // it defensively on resume-like params anyway.
+          clientIds,
+          appContext: {
+            agentDocumentId: executionContext.agentDocumentId,
+            ...(messageContext.agentId !== executionContext.agentId && {
+              conversationAgentId: messageContext.agentId,
+            }),
+            defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
+            documentId: executionContext.documentId,
+            // When AgentBuilder runs, context.agentId is the builtin builder agent.
+            // The actual editing target is chatStore.activeAgentId (kept in sync by
+            // AgentBuilderProvider). Pass it so the server can route tool calls to
+            // the correct agent rather than the builder itself.
+            ...(executionContext.scope === 'agent_builder' && {
+              editingAgentId: this.#get().activeAgentId ?? undefined,
+            }),
+            // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+            // the group Profile page. The builder conversation is keyed by the
+            // builtin builder agent (no groupId in its ConversationContext, so the
+            // message map key and the group's own chat stay separate), which left
+            // the server runtime with no idea which group it was editing.
+            // The context value wins, and every surface that opens this scope sets
+            // it from its own route/group: it is fixed for the run, so a mid-run
+            // navigation cannot make the server stamp a different group than the
+            // panel is reading from. The `activeGroupId` fallback is a last resort
+            // for a caller that forgot — it is sampled here, AFTER the async
+            // preflight above, so it can already be stale by this point.
+            ...(executionContext.scope === 'group_agent_builder' && {
+              editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
+            }),
+            groupId: executionContext.groupId,
+            ...(initialTopicMetadata && { initialTopicMetadata }),
+            newThread,
+            // Forward the group orchestration role so the server can stamp it onto
+            // the assistant message metadata. Without this the gateway-created
+            // supervisor turn loses its role on the step_start snapshot / refetch
+            // and renders as a generic assistant.
+            orchestrationRole: executionContext.orchestrationRole,
+            scope: executionContext.scope,
+            taskId,
+            threadId: executionContext.threadId,
+            topicId: executionContext.topicId,
+          },
+          ...desktopDeviceHints,
+          fileIds,
+          mentionedAgents,
+          parentMessageId,
+          prompt: message,
+          resumeApproval,
+          resumeApprovals,
+          resumeToolResult,
+          selectedToolIds,
+          trigger: metadata?.trigger,
+          userInterventionConfig,
         },
-        ...desktopDeviceHints,
-        fileIds,
-        mentionedAgents,
-        parentMessageId,
-        prompt: message,
-        resumeApproval,
-        resumeApprovals,
-        resumeToolResult,
-        selectedToolIds,
-        trigger: metadata?.trigger,
-        userInterventionConfig,
-      },
-      { signal: abortSignal },
-    );
+        { signal: abortSignal },
+      );
+    } catch (error) {
+      const assistantMessageId = clientIds?.assistantMessageId;
+      const userMessageId = clientIds?.userMessageId;
+      if (!assistantMessageId || !userMessageId) throw error;
+
+      let recovered: ExecAgentResult | null = null;
+      try {
+        recovered = await aiAgentService.recoverExecAgent({
+          assistantMessageId,
+          newThreadSourceMessageId: newThread?.sourceMessageId,
+          userMessageId,
+        });
+      } catch (recoveryError) {
+        console.error('[Gateway] persisted-message acceptance probe failed:', recoveryError);
+      }
+      if (!recovered) throw error;
+      result = recovered;
+    }
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.
@@ -658,11 +682,32 @@ export class GatewayActionImpl {
 
     // Keep execution identity separate from the conversation bucket that owns
     // the streamed messages. They differ for callAgent/sub-agent runs.
-    const resolvedExecutionContext = { ...executionContext, topicId: result.topicId };
-    const resolvedMessageContext = { ...messageContext, topicId: result.topicId };
+    const resolvedExecutionContext = {
+      ...executionContext,
+      isNew: result.createdThreadId ? false : executionContext.isNew,
+      threadId: result.createdThreadId ?? executionContext.threadId,
+      topicId: result.topicId,
+    };
+    const resolvedMessageContext = {
+      ...messageContext,
+      isNew: result.createdThreadId ? false : messageContext.isNew,
+      threadId: result.createdThreadId ?? messageContext.threadId,
+      topicId: result.topicId,
+    };
     this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
+    const previousMessageKey = messageMapKey(messageContext);
+    const resolvedMessageKey = messageMapKey(resolvedMessageContext);
+    if (previousMessageKey !== resolvedMessageKey) {
+      getFileStoreState().moveChatContextSelections(previousMessageKey, resolvedMessageKey);
+    }
 
-    if (!isCreateNewTopic && cancelledAfterPersistence) {
+    if (
+      !isCreateNewTopic &&
+      (cancelledAfterPersistence ||
+        result.createdThreadId ||
+        !result.success ||
+        !result.autoStarted)
+    ) {
       try {
         const messages = await messageService.getMessages(resolvedMessageContext);
         this.#get().replaceMessages(messages, { context: resolvedMessageContext });
@@ -713,20 +758,17 @@ export class GatewayActionImpl {
         .catch((err) => console.error('[Gateway] refreshTopic after topic creation failed:', err));
     }
 
-    this.#get().moveQueuedMessages(
-      messageMapKey(messageContext),
-      messageMapKey(resolvedMessageContext),
-    );
+    this.#get().moveQueuedMessages(previousMessageKey, resolvedMessageKey);
     // Legacy queue location: follow-ups enqueued behind an op still registered
     // under the pre-mint `_new` key.
     if (isCreateNewTopic)
       this.#get().moveQueuedMessages(
         messageMapKey({ ...messageContext, topicId: null }),
-        messageMapKey(resolvedMessageContext),
+        resolvedMessageKey,
       );
     cancelledAfterPersistence = interruptIfCancelledAfterPersistence() || cancelledAfterPersistence;
 
-    if (cancelledAfterPersistence) {
+    if (cancelledAfterPersistence || !result.success || !result.autoStarted) {
       if (parentOperationId) this.#get().completeOperation(parentOperationId);
       return result;
     }
@@ -861,9 +903,9 @@ export class GatewayActionImpl {
           }
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
-          topicService
-            .updateTopicMetadata(result.topicId, { runningOperation: null })
-            .catch(() => {});
+          aiAgentService
+            .clearRunningOperation({ operationId: result.operationId, topicId: result.topicId })
+            .catch((error) => console.error('[Gateway] failed to clear running operation:', error));
           // Also clear the local store copy — the server clear above does NOT touch
           // the Zustand topic map that useGatewayReconnect reads.
           this.clearLocalRunningOperation({
@@ -1059,7 +1101,11 @@ export class GatewayActionImpl {
         }
         // Clear the persisted marker useGatewayReconnect keys off so a dead op
         // doesn't get reconnected on every reload / task-drawer open.
-        topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
+        aiAgentService
+          .clearRunningOperation({ operationId, topicId })
+          .catch((error) =>
+            console.error('[Gateway] failed to clear reconnected running operation:', error),
+          );
         // Mirror the clear into the local store — the server clear above leaves the
         // Zustand topic map stale, which useGatewayReconnect keys off.
         this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
@@ -1109,7 +1155,7 @@ export class GatewayActionImpl {
   /**
    * Clear the client-store copy of `topic.metadata.runningOperation`.
    *
-   * The server-side clear (`topicService.updateTopicMetadata(topicId, { runningOperation: null })`)
+   * The server-side compare-and-clear does not update the local Zustand topic map.
    * alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
    * copy, so after an error run (e.g. insufficient credits) the stale marker keeps
    * firing `aiAgentService.refreshGatewayToken(topicId)`, which the server now answers

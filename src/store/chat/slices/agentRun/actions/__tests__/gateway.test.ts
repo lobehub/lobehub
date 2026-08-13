@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
-import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
@@ -13,8 +12,10 @@ import { GatewayActionImpl } from '../transports/gateway/gateway';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
+    clearRunningOperation: vi.fn().mockResolvedValue({ cleared: true }),
     execAgentTask: vi.fn(),
     interruptTask: vi.fn(),
+    recoverExecAgent: vi.fn().mockResolvedValue(null),
     refreshGatewayToken: vi.fn(),
   },
 }));
@@ -22,12 +23,6 @@ vi.mock('@/services/aiAgent', () => ({
 vi.mock('@/services/message', () => ({
   messageService: {
     getMessages: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-vi.mock('@/services/topic', () => ({
-  topicService: {
-    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -667,6 +662,191 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    it('forwards newThread and pivots the gateway operation to the persisted thread', async () => {
+      const { action, moveQueuedMessages, startOperation } = createExecuteTestAction();
+      const stagedContext = {
+        agentId: 'agent-1',
+        isNew: true,
+        scope: 'thread' as const,
+        sourceMessageId: 'source-1',
+        topicId: 'topic-1',
+      };
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-thread',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        createdThreadId: 'thread-created',
+        message: 'ok',
+        operationId: 'server-op-thread',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-thread',
+      });
+
+      const result = await action.executeGatewayAgent({
+        context: stagedContext,
+        message: 'Start a branch',
+        newThread: { sourceMessageId: 'source-1', type: 'continuation' },
+      });
+
+      const persistedContext = {
+        ...stagedContext,
+        isNew: false,
+        threadId: 'thread-created',
+      };
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({
+            newThread: { sourceMessageId: 'source-1', type: 'continuation' },
+          }),
+        }),
+        expect.anything(),
+      );
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ context: persistedContext }),
+      );
+      expect(moveQueuedMessages).toHaveBeenCalledWith(
+        messageMapKey(stagedContext),
+        messageMapKey(persistedContext),
+      );
+      expect(result.createdThreadId).toBe('thread-created');
+    });
+
+    it('reconciles a created thread without opening a gateway when startup failed', async () => {
+      const { action, connectToGateway, replaceMessages, startOperation } =
+        createExecuteTestAction();
+      const stagedContext = {
+        agentId: 'agent-1',
+        isNew: true,
+        scope: 'thread' as const,
+        sourceMessageId: 'source-1',
+        topicId: 'topic-1',
+      };
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-thread',
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        createdThreadId: 'thread-created',
+        error: 'Device unavailable',
+        message: 'Agent operation failed to start',
+        operationId: 'server-op-thread',
+        status: 'error',
+        success: false,
+        timestamp: new Date().toISOString(),
+        topicId: 'topic-1',
+        userMessageId: 'usr-thread',
+      });
+
+      const result = await action.executeGatewayAgent({
+        context: stagedContext,
+        message: 'Start a branch',
+        newThread: { sourceMessageId: 'source-1', type: 'standalone' },
+      });
+
+      expect(replaceMessages).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({
+          context: expect.objectContaining({ isNew: false, threadId: 'thread-created' }),
+        }),
+      );
+      expect(startOperation).not.toHaveBeenCalled();
+      expect(connectToGateway).not.toHaveBeenCalled();
+      expect(result.createdThreadId).toBe('thread-created');
+    });
+
+    it('recovers a persisted thread when the execAgent response is lost', async () => {
+      const { action, moveQueuedMessages, startOperation } = createExecuteTestAction();
+      const onMessageAccepted = vi.fn();
+      const stagedContext = {
+        agentId: 'agent-1',
+        isNew: true,
+        scope: 'thread' as const,
+        sourceMessageId: 'source-1',
+        topicId: 'topic-1',
+      };
+      vi.mocked(aiAgentService.execAgentTask).mockRejectedValue(new Error('response lost'));
+      vi.mocked(aiAgentService.recoverExecAgent).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-thread',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        createdThreadId: 'thread-created',
+        message: 'recovered',
+        operationId: 'server-op-thread',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-thread',
+      });
+
+      const result = await action.executeGatewayAgent({
+        clientIds: { assistantMessageId: 'ast-thread', userMessageId: 'usr-thread' },
+        context: stagedContext,
+        message: 'Start a branch',
+        newThread: { sourceMessageId: 'source-1', type: 'continuation' },
+        onMessageAccepted,
+      });
+
+      expect(aiAgentService.recoverExecAgent).toHaveBeenCalledWith({
+        assistantMessageId: 'ast-thread',
+        newThreadSourceMessageId: 'source-1',
+        userMessageId: 'usr-thread',
+      });
+      expect(onMessageAccepted).toHaveBeenCalledOnce();
+      expect(moveQueuedMessages).toHaveBeenCalledWith(
+        messageMapKey(stagedContext),
+        messageMapKey({ ...stagedContext, isNew: false, threadId: 'thread-created' }),
+      );
+      expect(startOperation).toHaveBeenCalled();
+      expect(result.createdThreadId).toBe('thread-created');
+    });
+
+    it('refetches an existing topic when startup returns a structured failure', async () => {
+      const { action, connectToGateway, replaceMessages, startOperation } =
+        createExecuteTestAction();
+      vi.mocked(messageService.getMessages).mockResolvedValue([
+        { content: '', error: { type: 'ServerAgentRuntimeError' }, id: 'ast-1', role: 'assistant' },
+      ] as any);
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        error: 'Fixed device unavailable',
+        message: 'Fixed agent device unavailable',
+        operationId: 'server-op-failed',
+        status: 'error',
+        success: false,
+        timestamp: new Date().toISOString(),
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        message: 'Run on the fixed device',
+      });
+
+      expect(messageService.getMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 'topic-1' }),
+      );
+      expect(replaceMessages).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 'ast-1' })]),
+        expect.objectContaining({ context: expect.objectContaining({ topicId: 'topic-1' }) }),
+      );
+      expect(startOperation).not.toHaveBeenCalled();
+      expect(connectToGateway).not.toHaveBeenCalled();
+    });
+
     it('should execute as the target agent while routing messages to the parent conversation', async () => {
       const { action, moveQueuedMessages, startOperation, updateTopicStatus } =
         createExecuteTestAction();
@@ -1241,7 +1421,7 @@ describe('GatewayActionImpl', () => {
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       // Ignore any dispatches from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: true });
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
@@ -1328,7 +1508,7 @@ describe('GatewayActionImpl', () => {
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: true });
 
       // The user switched away before the run finished in the background.
       state.activeAgentId = 'agent-2';
@@ -1420,7 +1600,7 @@ describe('GatewayActionImpl', () => {
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       // Ignore any dispatches from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: true });
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
@@ -1795,13 +1975,13 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
+      vi.mocked(aiAgentService.clearRunningOperation)
         .mockClear()
-        .mockResolvedValue(undefined as never);
+        .mockResolvedValue({ cleared: true });
       captured.onSessionComplete!({ authFailed: false, succeeded: false, terminalReceived: false });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(aiAgentService.clearRunningOperation).not.toHaveBeenCalled();
       expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 
@@ -1816,16 +1996,17 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
+      vi.mocked(aiAgentService.clearRunningOperation)
         .mockClear()
-        .mockResolvedValue(undefined as never);
+        .mockResolvedValue({ cleared: true });
       captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: true });
 
       // The run lifecycle owns completion when a terminal event arrives, so the
       // reconnect path must not double-complete its local op here.
       expect(completeOperation).not.toHaveBeenCalled();
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
+      expect(aiAgentService.clearRunningOperation).toHaveBeenCalledWith({
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
       });
     });
 
@@ -1842,14 +2023,15 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
+      vi.mocked(aiAgentService.clearRunningOperation)
         .mockClear()
-        .mockResolvedValue(undefined as never);
+        .mockResolvedValue({ cleared: true });
       captured.onSessionComplete!({ authFailed: true, succeeded: false, terminalReceived: false });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
+      expect(aiAgentService.clearRunningOperation).toHaveBeenCalledWith({
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
       });
     });
 
@@ -1972,7 +2154,7 @@ describe('GatewayActionImpl', () => {
       });
 
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: true });
       captured.onSessionComplete!({ authFailed: false, succeeded: false, terminalReceived: true });
 
       expect(internalDispatchTopic).toHaveBeenCalledWith({

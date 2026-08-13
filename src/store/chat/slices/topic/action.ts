@@ -12,6 +12,7 @@ import useSWR from 'swr';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
+import { aiAgentService } from '@/services/aiAgent';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
@@ -615,21 +616,53 @@ export class ChatTopicActionImpl {
   #clearStaleRunningOperationMetadata = async (
     topic: RunningTopicForWatchdog,
     patchScope: TopicPatchScope,
-  ): Promise<void> => {
-    if (!topic.metadata?.runningOperation) return;
+  ): Promise<boolean> => {
+    const operationId = topic.metadata?.runningOperation?.operationId;
+    if (!operationId) return false;
 
+    const { cleared } = await aiAgentService.clearRunningOperation({
+      operationId,
+      settledStatus: 'active',
+      topicId: topic.id,
+    });
+    if (!cleared) return false;
+
+    // The server CAS is authoritative, but a new operation can start while its
+    // response is in flight. Re-check the post-await local generation before
+    // folding A's cleanup into Zustand so it cannot hide a newly-started B.
+    if (this.#hasAliveOperationForTopic(topic.id)) return false;
     const key = topicMapKey(patchScope);
-    const currentTopic = this.#get().topicDataMap[key]?.items.find((item) => item.id === topic.id);
-    const metadata = currentTopic?.metadata ?? topic.metadata;
+    const currentState = this.#get();
+    const currentTopic = currentState.topicDataMap[key]?.items.find((item) => item.id === topic.id);
+    const currentViewTopic = currentState.agentTopicsViewMap[key]?.items.find(
+      (item) => item.id === topic.id,
+    );
+    const loadedTopics = [currentTopic, currentViewTopic].filter(
+      (item): item is ChatTopic => !!item,
+    );
+    if (
+      loadedTopics.some((item) => {
+        const currentOperationId =
+          item.metadata?.runningOperation?.operationId ?? item.metadata?.heteroSessionOperationId;
 
-    await topicService.updateTopicMetadata(topic.id, { runningOperation: null });
+        return currentOperationId && currentOperationId !== operationId;
+      })
+    )
+      return false;
+    if (
+      loadedTopics.length > 0 &&
+      loadedTopics.every((item) => !item.metadata?.runningOperation && item.status !== 'running')
+    )
+      return true;
 
+    const metadata = currentTopic?.metadata ?? currentViewTopic?.metadata ?? topic.metadata;
     this.#get().internal_dispatchTopic({
       ...patchScope,
       id: topic.id,
       type: 'updateTopic',
-      value: { metadata: { ...metadata, runningOperation: null } },
+      value: { metadata: { ...metadata, runningOperation: null }, status: 'active' },
     });
+    return true;
   };
 
   cleanupStaleRunningTopics = async (): Promise<number> => {
@@ -657,13 +690,8 @@ export class ChatTopicActionImpl {
           try {
             const patchScope = this.#getStaleRunningTopicPatchScope(topic);
 
-            await this.#clearStaleRunningOperationMetadata(topic, patchScope);
-
-            await this.updateTopicStatus({
-              ...patchScope,
-              status: 'active',
-              topicId: topic.id,
-            });
+            const cleared = await this.#clearStaleRunningOperationMetadata(topic, patchScope);
+            if (!cleared) return false;
 
             return true;
           } catch (err) {

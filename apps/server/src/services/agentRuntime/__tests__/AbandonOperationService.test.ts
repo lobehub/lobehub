@@ -52,11 +52,11 @@ vi.mock('@/database/models/thread', () => ({
 }));
 
 const topicFindByIdMock = vi.fn().mockResolvedValue(null);
-const topicUpdateMetadataMock = vi.fn().mockResolvedValue(undefined);
+const topicClearRunningOperationIfMatchesMock = vi.fn().mockResolvedValue(true);
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    clearRunningOperationIfMatches: topicClearRunningOperationIfMatchesMock,
     findById: topicFindByIdMock,
-    updateMetadata: topicUpdateMetadataMock,
   })),
 }));
 
@@ -94,7 +94,7 @@ describe('AbandonOperationService', () => {
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
     topicFindByIdMock.mockReset().mockResolvedValue(null);
-    topicUpdateMetadataMock.mockReset().mockResolvedValue(undefined);
+    topicClearRunningOperationIfMatchesMock.mockReset().mockResolvedValue(true);
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -162,7 +162,7 @@ describe('AbandonOperationService', () => {
         toolCalls: 0,
       }),
     );
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicClearRunningOperationIfMatchesMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
       content: '',
       error: expect.objectContaining({
@@ -228,7 +228,42 @@ describe('AbandonOperationService', () => {
 
     expect(result.abandoned).toBe(true);
     expect(recordCompletionMock).toHaveBeenCalled();
-    expect(topicUpdateMetadataMock).not.toHaveBeenCalled();
+    expect(topicClearRunningOperationIfMatchesMock).not.toHaveBeenCalled();
+    expect(messageUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not update a no-state placeholder when ownership changes before the atomic clear', async () => {
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const store = buildStore();
+    const db = buildDb({
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_old',
+        provider: 'claude-code',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+      },
+    });
+    topicFindByIdMock.mockResolvedValue({
+      metadata: {
+        runningOperation: {
+          assistantMessageId: 'msg_old_placeholder',
+          operationId: 'op_old',
+        },
+      },
+    });
+    topicClearRunningOperationIfMatchesMock.mockResolvedValue(false);
+
+    const svc = new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+    const result = await svc.finalizeAbandoned('op_old', 'inactivity_watchdog');
+
+    expect(result.abandoned).toBe(true);
+    expect(topicClearRunningOperationIfMatchesMock).toHaveBeenCalledWith('tpc_x', 'op_old');
     expect(messageUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -289,7 +324,7 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicClearRunningOperationIfMatchesMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
       expect.objectContaining({
@@ -332,7 +367,7 @@ describe('AbandonOperationService', () => {
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
       expect(result.found).toBe(true);
-      expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+      expect(topicClearRunningOperationIfMatchesMock).toHaveBeenCalledWith('tpc_x', 'op_x');
       expect(dispatchHooksMock).not.toHaveBeenCalled();
     },
   );

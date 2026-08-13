@@ -44,7 +44,7 @@ function parseHermesSessionId(stderr: string): string | undefined {
  * Tells the agent binary how to push results back to the LobeHub chat UI via `lh notify`.
  * Ported directly from apps/cli/src/tools/heteroTask.ts so desktop and CLI stay in sync.
  */
-function buildNotifyProtocol(lhPath: string, topicId: string): string {
+function buildNotifyProtocol(lhPath: string, topicId: string, operationId: string): string {
   return (
     `## Context: This task was dispatched by LobeHub\n\n` +
     `This conversation / task was sent to you by the **LobeHub platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the LobeHub chat interface.\n\n` +
@@ -54,15 +54,15 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
     `Use the \`${lhPath} notify\` command. All your updates appear as a **single message bubble** in the UI — create it once and update it in place.\n\n` +
     `**Step 1 — Open the bubble on your first meaningful update** (captures the messageId):\n` +
     `\`\`\`\n` +
-    `MSG_ID=$(${lhPath} notify --topic ${topicId} --role assistant --content "Starting..." --json | grep -o '"messageId":"[^"]*"' | cut -d'"' -f4)\n` +
+    `MSG_ID=$(${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --content "Starting..." --json | grep -o '"messageId":"[^"]*"' | cut -d'"' -f4)\n` +
     `\`\`\`\n\n` +
     `**Step 2 — Update the same bubble as you make progress**:\n` +
     `\`\`\`\n` +
-    `${lhPath} notify --topic ${topicId} --role assistant --message-id "$MSG_ID" --content "Still working..."\n` +
+    `${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --message-id "$MSG_ID" --content "Still working..."\n` +
     `\`\`\`\n\n` +
     `**Step 3 — Replace with your complete, final response when done**:\n` +
     `\`\`\`\n` +
-    `${lhPath} notify --topic ${topicId} --role assistant --message-id "$MSG_ID" --content "<your full response here>"\n` +
+    `${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --message-id "$MSG_ID" --content "<your full response here>"\n` +
     `\`\`\`\n\n` +
     `Rules:\n` +
     `- Always use \`--json\` on the first call and capture \`messageId\` from the output.\n` +
@@ -723,7 +723,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // Always inject the notify protocol so openclaw knows how to report results
       // back to the LobeHub UI — even if the previous turn failed and the session
       // history was not cleanly committed.
-      const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
+      const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId, operationId)}`;
 
       // Kill any existing openclaw process for this topicId before spawning a new one.
       // openclaw serialises session writes; a concurrent process holding the session
@@ -788,6 +788,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           void this.sendNotify({
             agentId,
             content: text,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -796,6 +797,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               agentId,
               content: '',
               done: true,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -806,6 +808,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentId,
             content: '',
             done: true,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -892,6 +895,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           void this.sendNotify({
             agentId,
             content: text,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -900,6 +904,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               agentId,
               content: '',
               done: true,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -919,6 +924,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           void this.sendNotify({
             agentId,
             content: response,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -927,6 +933,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               agentId,
               content: '',
               done: true,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -937,6 +944,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentId,
             content: '',
             done: true,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -1035,6 +1043,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     agentId?: string;
     content: string;
     done?: boolean;
+    operationId: string;
     role: string;
     topicId: string;
     /**

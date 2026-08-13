@@ -820,6 +820,54 @@ describe('MessageModel thread query', () => {
       expect(result[1].id).toBe('msg2');
     });
 
+    it('should exclude non-source siblings that share the source timestamp', async () => {
+      const boundary = new Date('2023-01-02T00:00:00.000Z');
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+        await trx.insert(messages).values([
+          {
+            content: 'before',
+            createdAt: new Date('2023-01-01'),
+            id: 'msg-before',
+            role: 'user',
+            sessionId: 'session1',
+            threadId: null,
+            topicId: 'topic1',
+            userId,
+          },
+          {
+            content: 'source',
+            createdAt: boundary,
+            id: 'msg-source',
+            role: 'assistant',
+            sessionId: 'session1',
+            threadId: null,
+            topicId: 'topic1',
+            userId,
+          },
+          {
+            content: 'concurrent later sibling',
+            createdAt: boundary,
+            id: 'msg-sibling',
+            role: 'user',
+            sessionId: 'session1',
+            threadId: null,
+            topicId: 'topic1',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg-source',
+        topicId: 'topic1',
+        threadType: 'continuation' as any,
+      });
+
+      expect(result.map((message) => message.id)).toEqual(['msg-before', 'msg-source']);
+    });
+
     it('should exclude messages from other threads in Continuation mode', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'session1', userId }]);
@@ -937,6 +985,59 @@ describe('MessageModel thread query', () => {
       // This tests the fix for microsecond precision issue
       expect(result).toHaveLength(2);
       expect(result.map((m) => m.id)).toEqual(['msg1', 'msg2']);
+    });
+  });
+
+  describe('findLatestHeterogeneousSessionId', () => {
+    it('does not fall back to an older token after a newer failed assistant placeholder', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+        await trx.insert(threads).values({
+          id: 'thread-session',
+          sourceMessageId: 'source-session',
+          topicId: 'topic1',
+          type: 'continuation',
+          userId,
+        });
+        await trx.insert(messages).values([
+          {
+            content: 'previous success',
+            createdAt: new Date('2023-01-01'),
+            id: 'asst-old-session',
+            metadata: { heteroSessionId: 'stale-session' },
+            role: 'assistant',
+            sessionId: 'session1',
+            threadId: 'thread-session',
+            topicId: 'topic1',
+            userId,
+          },
+          {
+            content: '',
+            createdAt: new Date('2023-01-02'),
+            id: 'asst-failed-placeholder',
+            role: 'assistant',
+            sessionId: 'session1',
+            threadId: 'thread-session',
+            topicId: 'topic1',
+            userId,
+          },
+        ]);
+      });
+
+      await expect(
+        messageModel.findLatestHeterogeneousSessionId({
+          threadId: 'thread-session',
+          topicId: 'topic1',
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        messageModel.findLatestHeterogeneousSessionId({
+          excludeMessageId: 'asst-failed-placeholder',
+          threadId: 'thread-session',
+          topicId: 'topic1',
+        }),
+      ).resolves.toBe('stale-session');
     });
   });
 });

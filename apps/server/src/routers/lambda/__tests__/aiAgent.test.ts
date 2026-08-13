@@ -29,6 +29,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
+vi.mock('@/libs/trpc/utils/internalJwt', () => ({
+  signUserJWT: vi.fn(async () => 'test-gateway-token'),
+}));
+
 // Mock AgentRuntimeService since we only want to test the router's business logic
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
@@ -446,6 +450,161 @@ describe('AI Agent Router Integration Tests', () => {
       // Should have 1 assistant message with parentId pointing to the user message
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0].parentId).toBe(userMsg.id);
+    });
+  });
+
+  describe('recoverExecAgent', () => {
+    it('recovers only the exact persisted user/assistant pair for the active operation', async () => {
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          agentId: testAgentId,
+          sessionId: testSessionId,
+          title: 'Recovery Topic',
+          userId,
+        })
+        .returning();
+      const [userMessage, unrelatedUserMessage] = (await serverDB
+        .insert(messages)
+        .values([
+          {
+            agentId: testAgentId,
+            content: 'Recover me',
+            role: 'user',
+            topicId: topic.id,
+            userId,
+          },
+          {
+            agentId: testAgentId,
+            content: 'Different turn',
+            role: 'user',
+            topicId: topic.id,
+            userId,
+          },
+        ])
+        .returning()) as (typeof messages.$inferSelect)[];
+      const [assistantMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: '...',
+          parentId: userMessage.id,
+          role: 'assistant',
+          topicId: topic.id,
+          userId,
+        })
+        .returning()) as (typeof messages.$inferSelect)[];
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: assistantMessage.id,
+              operationId: 'op-recover',
+            },
+          },
+        })
+        .where(eq(topics.id, topic.id));
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      await expect(
+        caller.recoverExecAgent({
+          assistantMessageId: assistantMessage.id,
+          userMessageId: unrelatedUserMessage.id,
+        }),
+      ).resolves.toBeNull();
+
+      const recovered = await caller.recoverExecAgent({
+        assistantMessageId: assistantMessage.id,
+        userMessageId: userMessage.id,
+      });
+
+      expect(recovered).toMatchObject({
+        assistantMessageId: assistantMessage.id,
+        autoStarted: true,
+        operationId: 'op-recover',
+        status: 'created',
+        success: true,
+        topicId: topic.id,
+        userMessageId: userMessage.id,
+      });
+      expect(recovered?.token).toBeTruthy();
+    });
+
+    it('verifies the authoritative user thread and source message before recovery', async () => {
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          agentId: testAgentId,
+          sessionId: testSessionId,
+          title: 'Thread Recovery Topic',
+          userId,
+        })
+        .returning();
+      const [sourceMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Branch here',
+          role: 'assistant',
+          topicId: topic.id,
+          userId,
+        })
+        .returning()) as (typeof messages.$inferSelect)[];
+      const [thread] = (await serverDB
+        .insert(threads)
+        .values({
+          agentId: testAgentId,
+          sourceMessageId: sourceMessage.id,
+          topicId: topic.id,
+          type: 'continuation',
+          userId,
+        })
+        .returning()) as (typeof threads.$inferSelect)[];
+      const [userMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Thread turn',
+          role: 'user',
+          threadId: thread.id,
+          topicId: topic.id,
+          userId,
+        })
+        .returning()) as (typeof messages.$inferSelect)[];
+      const [assistantMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: '...',
+          parentId: userMessage.id,
+          role: 'assistant',
+          threadId: thread.id,
+          topicId: topic.id,
+          userId,
+        })
+        .returning()) as (typeof messages.$inferSelect)[];
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      await expect(
+        caller.recoverExecAgent({
+          assistantMessageId: assistantMessage.id,
+          newThreadSourceMessageId: userMessage.id,
+          userMessageId: userMessage.id,
+        }),
+      ).resolves.toBeNull();
+
+      const recovered = await caller.recoverExecAgent({
+        assistantMessageId: assistantMessage.id,
+        newThreadSourceMessageId: sourceMessage.id,
+        userMessageId: userMessage.id,
+      });
+      expect(recovered).toMatchObject({
+        createdThreadId: thread.id,
+        status: 'error',
+        success: false,
+        topicId: topic.id,
+      });
     });
   });
 

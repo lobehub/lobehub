@@ -4,7 +4,7 @@ import { and, desc, eq, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -87,9 +87,10 @@ export class ThreadModel {
    */
   private mine = () => and(this.ownership(), eq(threads.userId, this.userId));
 
-  create = async (params: CreateThreadParams) => {
+  create = async (params: CreateThreadParams, trx?: Transaction) => {
+    const executor = trx ?? this.db;
     // @ts-ignore
-    const [result] = await this.db
+    const [result] = await executor
       .insert(threads)
       .values(
         buildWorkspacePayload(

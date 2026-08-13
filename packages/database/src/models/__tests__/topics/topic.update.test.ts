@@ -125,6 +125,73 @@ describe('TopicModel - Update', () => {
     });
   });
 
+  describe('operation-scoped metadata', () => {
+    it('clears only the matching running operation', async () => {
+      const topicId = 'running-operation-cas';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'assistant-current', operationId: 'operation-current' },
+          model: 'gpt-4',
+          runningOperation: {
+            assistantMessageId: 'assistant-current',
+            operationId: 'operation-current',
+          },
+        },
+        status: 'running',
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.clearRunningOperationIfMatches(topicId, 'operation-stale'),
+      ).resolves.toBe(false);
+      await expect(
+        topicModel.clearRunningOperationIfMatches(topicId, 'operation-current', 'unread'),
+      ).resolves.toBe(true);
+
+      const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
+      expect(topic?.metadata).toEqual({ model: 'gpt-4', runningOperation: null });
+      expect(topic?.status).toBe('unread');
+    });
+
+    it('rejects a stale heterogeneous session write after a newer generation starts', async () => {
+      const topicId = 'heterogeneous-session-cas';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          heteroSessionId: 'old-session',
+          heteroSessionOperationId: 'operation-new',
+          runningOperation: {
+            assistantMessageId: 'assistant-new',
+            operationId: 'operation-new',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.updateHeterogeneousSessionIfMatches(topicId, 'operation-stale', 'stale-session'),
+      ).resolves.toBe(false);
+      await expect(
+        topicModel.updateHeterogeneousSessionIfMatches(topicId, 'operation-new', 'new-session'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.clearRunningOperationIfMatches(topicId, 'operation-new'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.updateHeterogeneousSessionIfMatches(topicId, 'operation-new', undefined),
+      ).resolves.toBe(true);
+
+      const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
+      expect(topic?.metadata).toEqual({
+        heteroSessionOperationId: 'operation-new',
+        runningOperation: null,
+      });
+    });
+  });
+
   describe('task callback reservation', () => {
     it('reserves only an idle topic and releases only the matching owner', async () => {
       const topicId = 'task-callback-reservation';

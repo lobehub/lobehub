@@ -10,6 +10,8 @@ const {
   mockExecuteToolCall,
   mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
+  mockMessageQuery,
+  mockMessageUpdateMetadata,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
   mockIngestAttachment,
@@ -24,6 +26,8 @@ const {
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockMessageQuery: vi.fn(),
+  mockMessageUpdateMetadata: vi.fn(),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
   mockPublishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   mockResolveAttachmentsByFileIds: vi.fn(),
@@ -75,8 +79,9 @@ vi.mock('@/database/models/message', () => ({
     create: mockMessageCreate,
     getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
     getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
+    query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
+    updateMetadata: mockMessageUpdateMetadata,
   })),
 }));
 
@@ -121,6 +126,8 @@ vi.mock('@/database/models/plugin', () => ({
 const topicMock = {
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
+  releaseTaskCallbackReservation: vi.fn().mockResolvedValue(true),
+  tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock('@/database/models/topic', () => ({
@@ -210,8 +217,12 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     vi.clearAllMocks();
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
     topicMock.findById.mockResolvedValue(undefined);
+    topicMock.releaseTaskCallbackReservation.mockResolvedValue(true);
+    topicMock.tryReserveTaskCallback.mockResolvedValue(true);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageQuery.mockResolvedValue([]);
+    mockMessageUpdateMetadata.mockResolvedValue(undefined);
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
@@ -740,6 +751,33 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         expect.objectContaining({ imageList: undefined }),
       );
     });
+
+    it('loads thread history without a resume token and excludes the fresh turn', async () => {
+      mockMessageQuery.mockResolvedValue([
+        { content: 'Inherited source context', id: 'old-source', role: 'user' },
+        { content: 'Fresh prompt', id: 'msg-1', role: 'user' },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { threadId: 'thread-1', topicId: 'topic-1' },
+        prompt: 'Fresh prompt',
+      });
+
+      expect(mockGetHeterogeneousResumeSessionId).toHaveBeenCalledWith(
+        'topic-1',
+        'thread-1',
+        'msg-1',
+      );
+      expect(mockMessageQuery).toHaveBeenCalledWith({
+        pageSize: 200,
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+      const systemContext = mockSpawnHeteroSandbox.mock.calls.at(-1)?.[0].systemContext;
+      expect(systemContext).toContain('Inherited source context');
+      expect(systemContext).not.toContain('<user>\nFresh prompt\n</user>');
+    });
   });
 
   // The seed side of the hetero terminal-hook funnel. execAgent runs the hetero
@@ -817,6 +855,31 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(seed.runningOperation.hooks?.[0]?.id).toBe('task-on-complete');
       expect(seed.runningOperation.hooks?.[0]?.webhook?.url).toBe(
         '/api/workflows/task/on-topic-complete',
+      );
+    });
+
+    it('stores an internal isolation binding on the assistant without claiming the topic marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          isolationThread: true,
+          threadId: 'thread-internal',
+          topicId: 'topic-1',
+        },
+        hooks: [taskHook],
+        prompt: 'internal hetero task',
+      } as any);
+
+      expect(findRunningOpSeed()).toBeUndefined();
+      expect(mockMessageUpdateMetadata).toHaveBeenCalledWith(
+        'msg-1',
+        expect.objectContaining({
+          heteroOperation: expect.objectContaining({
+            hooks: [expect.objectContaining({ id: 'task-on-complete' })],
+            internalIsolation: true,
+            operationId: expect.any(String),
+          }),
+        }),
       );
     });
 

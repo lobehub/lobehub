@@ -83,7 +83,7 @@ export interface CancelHeteroTaskParams {
 
 async function sendAutoNotify(
   topicId: string,
-  taskId: string,
+  operationId: string,
   text: string,
   agentId?: string,
   workspaceId?: string,
@@ -93,6 +93,7 @@ async function sendAutoNotify(
     await client.agentNotify.notify.mutate({
       agentId,
       content: text,
+      operationId,
       role: 'assistant',
       topicId,
     });
@@ -112,6 +113,7 @@ async function sendAutoNotify(
  */
 async function sendTerminalSignal(
   topicId: string,
+  operationId: string,
   agentId?: string,
   workspaceId?: string,
   error?: { message: string; type?: string },
@@ -123,6 +125,7 @@ async function sendTerminalSignal(
       content: '',
       done: true,
       ...(error ? { error } : {}),
+      operationId,
       role: 'assistant',
       topicId,
     });
@@ -135,7 +138,7 @@ async function sendTerminalSignal(
  * Build the notify protocol injected into the first message of a new hetero-agent session.
  * Tells the agent how to push updates back to the LobeHub user via `lh notify`.
  */
-function buildNotifyProtocol(lhPath: string, topicId: string): string {
+function buildNotifyProtocol(lhPath: string, topicId: string, operationId: string): string {
   return (
     `## Context: This task was dispatched by LobeHub\n\n` +
     `This conversation / task was sent to you by the **LobeHub platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the LobeHub chat interface.\n\n` +
@@ -145,15 +148,15 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
     `Use the \`${lhPath} notify\` command. All your updates appear as a **single message bubble** in the UI — create it once and update it in place.\n\n` +
     `**Step 1 — Open the bubble on your first meaningful update** (captures the messageId):\n` +
     `\`\`\`\n` +
-    `MSG_ID=$(${lhPath} notify --topic ${topicId} --role assistant --content "Starting..." --json | grep -o '"messageId":"[^"]*"' | cut -d'"' -f4)\n` +
+    `MSG_ID=$(${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --content "Starting..." --json | grep -o '"messageId":"[^"]*"' | cut -d'"' -f4)\n` +
     `\`\`\`\n\n` +
     `**Step 2 — Update the same bubble as you make progress**:\n` +
     `\`\`\`\n` +
-    `${lhPath} notify --topic ${topicId} --role assistant --message-id "$MSG_ID" --content "Still working..."\n` +
+    `${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --message-id "$MSG_ID" --content "Still working..."\n` +
     `\`\`\`\n\n` +
     `**Step 3 — Replace with your complete, final response when done**:\n` +
     `\`\`\`\n` +
-    `${lhPath} notify --topic ${topicId} --role assistant --message-id "$MSG_ID" --content "<your full response here>"\n` +
+    `${lhPath} notify --topic ${topicId} --operation-id ${operationId} --role assistant --message-id "$MSG_ID" --content "<your full response here>"\n` +
     `\`\`\`\n\n` +
     `Rules:\n` +
     `- Always use \`--json\` on the first call and capture \`messageId\` from the output.\n` +
@@ -193,7 +196,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     // Always inject the notify protocol so openclaw knows how to report results
     // back to the LobeHub UI — even if the previous turn failed and the session
     // history was not cleanly committed.
-    const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
+    const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId, operationId)}`;
 
     // Kill any existing openclaw process for this topicId before spawning a new one.
     // openclaw serialises session writes; a concurrent process holding the session
@@ -263,9 +266,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
           : `Task failed (exit code: ${code})`;
         // Write the notice bubble first, THEN signal terminal (sequential).
         // Fire-and-forget both, but ensure the terminal signal is always sent.
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, operationId, text, agentId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
+            operationId,
             agentId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
@@ -273,7 +277,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         );
       } else {
         // Clean exit — openclaw already sent its final message; just signal done.
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, operationId, agentId, workspaceId);
       }
     });
 
@@ -342,9 +346,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         const text = cancelled
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, operationId, text, agentId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
+            operationId,
             agentId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
@@ -361,11 +366,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       if (sessionId) saveHermesSessionId(topicId, sessionId);
 
       if (response) {
-        void sendAutoNotify(topicId, taskId, response, agentId, workspaceId).finally(() =>
-          sendTerminalSignal(topicId, agentId, workspaceId),
+        void sendAutoNotify(topicId, operationId, response, agentId, workspaceId).finally(() =>
+          sendTerminalSignal(topicId, operationId, agentId, workspaceId),
         );
       } else {
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, operationId, agentId, workspaceId);
       }
     });
 

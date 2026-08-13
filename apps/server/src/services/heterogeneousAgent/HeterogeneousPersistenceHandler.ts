@@ -117,6 +117,8 @@ interface OperationState {
    * Recovered on a cold replica from the current assistant's stamped metadata.
    */
   heteroSessionId: string | undefined;
+  /** Internal isolation guests use their assistant row, never topic-global runtime metadata. */
+  internalIsolation: boolean;
   /** Last DB-confirmed tool-state seq, scoped to this operation. */
   lastAppliedToolStateSeqByCallId: Map<string, number>;
   lastStepIndex: number;
@@ -230,6 +232,7 @@ export class HeterogeneousPersistenceHandler {
       params.topicId,
       params.assistantMessageId,
     );
+    await this.assertOperationCurrent(state);
     const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
 
     // A different Lambda may have already processed `stream_start { newStep }`
@@ -316,14 +319,11 @@ export class HeterogeneousPersistenceHandler {
   }): Promise<void> {
     let state = operationStates.get(params.operationId);
 
-    // A run that died before producing any stream event has no state — but its
-    // terminal error must still land on the assistant message HERE, before the
-    // caller publishes `agent_runtime_end`. The client refetches messages on
-    // that event, so deferring the write to CompletionLifecycle (which runs
-    // after the publish) races the refetch and the error card doesn't render
-    // live. Bootstrap from topic.metadata.runningOperation like ingest does;
-    // a stale/mismatched operation stays a no-op.
-    if (!state && params.result === 'error' && params.error && params.topicId) {
+    // A terminal callback commonly lands on a cold replica. Bootstrap every
+    // result from the producer-supplied durable assistant anchor so successful
+    // runs persist their native session id too; structured errors additionally
+    // need this state to project their error before the terminal publish.
+    if (!state && params.topicId && params.assistantMessageId) {
       try {
         state = await this.loadOrCreateState(
           params.operationId,
@@ -338,15 +338,17 @@ export class HeterogeneousPersistenceHandler {
           params.topicId,
           error,
         );
+        if (error instanceof StaleHeteroOperationError) throw error;
         return;
       }
     }
     if (!state) return;
 
     try {
+      await this.assertOperationCurrent(state, true);
       await this.flushFinalState(state, params.error, params.result);
       if (params.sessionId) {
-        await this.persistSessionId(state.topicId, params.sessionId);
+        await this.persistSessionId(state, params.sessionId);
       } else if (params.result === 'error') {
         // No new session id was produced and the run failed. The most common
         // cause in cloud sandboxes is `--resume <staleId>` failing because the
@@ -357,7 +359,7 @@ export class HeterogeneousPersistenceHandler {
         // When CC ran (system.init was emitted) but produced an error result,
         // `params.sessionId` is set — so this branch is NOT reached and the
         // valid session id is kept for resume on the next turn.
-        await this.clearSessionId(state.topicId);
+        await this.clearSessionId(state);
       }
     } finally {
       operationStates.delete(params.operationId);
@@ -369,12 +371,27 @@ export class HeterogeneousPersistenceHandler {
    * `TopicModel.updateMetadata` merges into existing JSONB so this does NOT
    * clobber `runningOperation` / `workingDirectory` / other peer fields.
    */
-  private async persistSessionId(topicId: string, sessionId: string): Promise<void> {
+  private async persistSessionId(state: OperationState, sessionId: string): Promise<void> {
     try {
-      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: sessionId });
-      log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
+      if (state.threadId) {
+        await this.deps.messageModel.updateMetadata(state.main.currentAssistantId, {
+          heteroSessionId: sessionId,
+        });
+      } else {
+        await this.deps.topicModel.updateHeterogeneousSessionIfMatches(
+          state.topicId,
+          state.operationId,
+          sessionId,
+        );
+      }
+      log(
+        'persisted sessionId topic=%s thread=%s sessionId=%s',
+        state.topicId,
+        state.threadId ?? 'main',
+        sessionId,
+      );
     } catch (err) {
-      log('persistSessionId failed topic=%s err=%O', topicId, err);
+      log('persistSessionId failed topic=%s thread=%s err=%O', state.topicId, state.threadId, err);
     }
   }
 
@@ -384,16 +401,49 @@ export class HeterogeneousPersistenceHandler {
    * the sandbox was recycled). Prevents the next turn from inheriting a session
    * id that will never succeed.
    */
-  private async clearSessionId(topicId: string): Promise<void> {
+  private async clearSessionId(state: OperationState): Promise<void> {
     try {
-      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: undefined });
-      log('cleared stale sessionId topic=%s', topicId);
+      if (state.threadId) {
+        await this.deps.messageModel.removeMetadataKey(
+          state.main.currentAssistantId,
+          'heteroSessionId',
+        );
+      } else {
+        await this.deps.topicModel.updateHeterogeneousSessionIfMatches(
+          state.topicId,
+          state.operationId,
+          undefined,
+        );
+      }
+      log('cleared stale sessionId topic=%s thread=%s', state.topicId, state.threadId ?? 'main');
     } catch (err) {
-      log('clearSessionId failed topic=%s err=%O', topicId, err);
+      log('clearSessionId failed topic=%s thread=%s err=%O', state.topicId, state.threadId, err);
     }
   }
 
   // ─── State management ────────────────────────────────────────────────────
+
+  private async assertOperationCurrent(
+    state: OperationState,
+    allowClearedRunningOperation = false,
+  ): Promise<void> {
+    if (state.internalIsolation) return;
+
+    const topic = await this.deps.topicModel.findById(state.topicId);
+    const runningOperationId = topic?.metadata?.runningOperation?.operationId;
+    const sessionOperationId = topic?.metadata?.heteroSessionOperationId;
+    const isCurrent = runningOperationId === state.operationId;
+    const isClearedCurrent =
+      allowClearedRunningOperation &&
+      !runningOperationId &&
+      sessionOperationId === state.operationId;
+
+    if (!isCurrent && !isClearedCurrent) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${state.operationId} on topic ${state.topicId}`,
+      );
+    }
+  }
 
   private async loadOrCreateState(
     operationId: string,
@@ -415,18 +465,6 @@ export class HeterogeneousPersistenceHandler {
 
     const topic = await this.deps.topicModel.findById(topicId);
     const running = topic?.metadata?.runningOperation;
-
-    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
-      throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
-      );
-    }
-
-    if (running && running.operationId !== operationId) {
-      throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
-      );
-    }
 
     // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
     // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
@@ -456,17 +494,51 @@ export class HeterogeneousPersistenceHandler {
       }
     }
 
+    const heteroOperation = baseAssistantMessage?.metadata?.heteroOperation as
+      { internalIsolation?: boolean; operationId?: string } | undefined;
+    const hasOperationBinding = heteroOperation?.operationId === operationId;
+    const hasInternalIsolationBinding =
+      hasOperationBinding && heteroOperation?.internalIsolation === true;
+
+    if (
+      !running &&
+      !hasInternalIsolationBinding &&
+      !(allowMissingRunningOperation && hasOperationBinding)
+    ) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
+      );
+    }
+
+    if (running && running.operationId !== operationId && !hasInternalIsolationBinding) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
+      );
+    }
+
     // Prefer the latest step's assistant message id (written by handleStepStart)
     // over the initial placeholder — so a new replica after a step boundary uses
     // the correct message rather than the stale initial one.
     // Guard: only use heteroCurrentMsgId when it belongs to THIS operation.
     // A stale value from a previous run must not override the new operation's
     // seeded assistantMessageId (P1 fix).
-    const stored = topic?.metadata?.heteroCurrentMsgId;
-    const currentAssistantMessageId =
+    const stored = hasInternalIsolationBinding ? undefined : topic?.metadata?.heteroCurrentMsgId;
+    let currentAssistantMessageId =
       stored?.operationId === operationId
         ? (stored.msgId ?? baseAssistantMessageId)
         : baseAssistantMessageId;
+    if (
+      hasInternalIsolationBinding &&
+      baseAssistantMessage?.threadId &&
+      baseAssistantMessage.agentId
+    ) {
+      const latest = await this.deps.messageModel.findLatestAssistantMessageByThread({
+        agentId: baseAssistantMessage.agentId,
+        threadId: baseAssistantMessage.threadId,
+        topicId,
+      });
+      currentAssistantMessageId = latest?.id ?? currentAssistantMessageId;
+    }
 
     state = {
       // A direct @Agent run keeps the topic under the conversation owner while
@@ -481,6 +553,7 @@ export class HeterogeneousPersistenceHandler {
       // topic.metadata.heteroSessionId: that holds the id we ASKED CC to resume,
       // which differs from the actual id when a fork/new session occurred.
       heteroSessionId: undefined,
+      internalIsolation: hasInternalIsolationBinding,
       lastStepIndex: 0,
       lastAppliedToolStateSeqByCallId: new Map(),
       main: createMainAgentRunState(currentAssistantMessageId),
@@ -488,7 +561,12 @@ export class HeterogeneousPersistenceHandler {
       processedKeys: new Set(),
       publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
-      threadId: running?.threadId ?? undefined,
+      // `runningOperation` may already have been cleared by a concurrent
+      // gateway terminal callback before heteroFinish bootstraps this state.
+      // The seeded assistant row remains a durable, exact-scope authority.
+      threadId: hasInternalIsolationBinding
+        ? (baseAssistantMessage?.threadId ?? undefined)
+        : (running?.threadId ?? baseAssistantMessage?.threadId ?? undefined),
       topicId,
     };
     await this.refreshToolMessageIndex(state);
@@ -796,6 +874,29 @@ export class HeterogeneousPersistenceHandler {
   }
 
   private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
+    if (state.internalIsolation && state.threadId && state.agentId) {
+      const latest = await this.deps.messageModel.findLatestAssistantMessageByThread({
+        agentId: state.agentId,
+        threadId: state.threadId,
+        topicId: state.topicId,
+      });
+      if (latest?.id && latest.id !== state.main.currentAssistantId) {
+        state.main = {
+          ...state.main,
+          accContent: '',
+          accReasoning: '',
+          currentAssistantId: latest.id,
+          lastReasoningSnapshotSeq: 0,
+          lastTextSnapshotSeq: 0,
+          toolState: this.createEmptyMainToolState(),
+          turnMetadata: {},
+        };
+        await this.refreshToolMessageIndex(state);
+        await this.refreshMainStateFromDb(state);
+      }
+      return;
+    }
+
     const topic = await this.deps.topicModel.findById(state.topicId);
     const running = topic?.metadata?.runningOperation;
 
@@ -877,7 +978,7 @@ export class HeterogeneousPersistenceHandler {
         // next turn to spawn a fresh CC session and drop all `--resume` history.
         // Writing it here makes resume survive abandon. finish() still overwrites
         // with its own sessionId (or clears a stale one on a resume failure).
-        await this.persistSessionId(state.topicId, sid);
+        await this.persistSessionId(state, sid);
       }
     }
 
@@ -939,9 +1040,11 @@ export class HeterogeneousPersistenceHandler {
           intent.messageId,
         );
 
-        await this.deps.topicModel.updateMetadata(state.topicId, {
-          heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
-        });
+        if (!state.internalIsolation) {
+          await this.deps.topicModel.updateMetadata(state.topicId, {
+            heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
+          });
+        }
         return;
       }
 

@@ -1418,6 +1418,86 @@ export class TopicModel {
   };
 
   /**
+   * Clear only the running-operation marker still owned by the caller. When a
+   * settled status is supplied, move a still-running topic in the same locked
+   * update so a newer operation cannot be clobbered between clear and settle.
+   */
+  clearRunningOperationIfMatches = async (
+    id: string,
+    operationId: string,
+    settledStatus?: TopicItem['status'],
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (existing?.metadata?.runningOperation?.operationId !== operationId) return false;
+
+      const clearsCurrentPointer =
+        existing.metadata.heteroCurrentMsgId?.operationId === operationId;
+      const shouldSettleStatus = settledStatus && existing.status === 'running';
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            ...(clearsCurrentPointer ? { heteroCurrentMsgId: undefined } : undefined),
+            runningOperation: null,
+          },
+          ...(shouldSettleStatus ? { status: settledStatus, updatedAt: new Date() } : undefined),
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return true;
+    });
+
+  /**
+   * Update the main-topic CLI session only while this operation still owns its
+   * generation. The generation survives runningOperation cleanup, preventing a
+   * delayed finish from overwriting a newer run's resume token.
+   */
+  updateHeterogeneousSessionIfMatches = async (
+    id: string,
+    operationId: string,
+    sessionId?: string,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (!existing) return false;
+
+      const runningOperationId = existing.metadata?.runningOperation?.operationId;
+      const sessionOperationId = existing.metadata?.heteroSessionOperationId;
+      if (
+        (runningOperationId && runningOperationId !== operationId) ||
+        (sessionOperationId && sessionOperationId !== operationId) ||
+        (!runningOperationId && !sessionOperationId)
+      ) {
+        return false;
+      }
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            heteroSessionId: sessionId,
+            heteroSessionOperationId: operationId,
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return true;
+    });
+
+  /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
    * The topic row lock closes the check/set race between callback workers:

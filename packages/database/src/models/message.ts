@@ -48,6 +48,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   ne,
   not,
@@ -247,6 +248,8 @@ interface CreateUserAndAssistantMessagesOptions {
     userMessageId?: string;
   };
   timing?: ModelTimingContext;
+  /** Reuse an existing transaction when the pair must be atomic with related rows. */
+  trx?: Transaction;
 }
 
 interface CreateMessageInsertParams {
@@ -1817,6 +1820,35 @@ export class MessageModel {
     });
   };
 
+  /**
+   * Return the CLI resume token on the latest assistant in this exact thread.
+   * Exclude only the current turn's newly-inserted placeholder when requested.
+   * Other token-less assistants remain authoritative: a failed prior placeholder
+   * intentionally invalidates an older stale token after a resume failure.
+   */
+  findLatestHeterogeneousSessionId = async (params: {
+    excludeMessageId?: string;
+    threadId: string;
+    topicId: string;
+  }): Promise<string | undefined> => {
+    const [row] = await this.db
+      .select({ sessionId: sql<string>`${messages.metadata}->>'heteroSessionId'` })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          eq(messages.topicId, params.topicId),
+          eq(messages.threadId, params.threadId),
+          eq(messages.role, 'assistant'),
+          params.excludeMessageId ? ne(messages.id, params.excludeMessageId) : undefined,
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return row?.sessionId ?? undefined;
+  };
+
   findByClientId = async (clientId: string) => {
     return this.db.query.messages.findFirst({
       where: and(eq(messages.clientId, clientId), this.ownership()),
@@ -1886,7 +1918,12 @@ export class MessageModel {
     // For Standalone type, only return the source message
     if (threadType === ThreadType.Standalone) {
       const sourceMessage = await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, sourceMessageId), this.ownership()),
+        where: and(
+          eq(messages.id, sourceMessageId),
+          eq(messages.topicId, topicId),
+          isNull(messages.threadId),
+          this.ownership(),
+        ),
       });
 
       return sourceMessage ? [sourceMessage as DBMessageItem] : [];
@@ -1894,7 +1931,12 @@ export class MessageModel {
 
     // For Continuation type, get the source message first to know its createdAt
     const sourceMessage = await this.db.query.messages.findFirst({
-      where: and(eq(messages.id, sourceMessageId), this.ownership()),
+      where: and(
+        eq(messages.id, sourceMessageId),
+        eq(messages.topicId, topicId),
+        isNull(messages.threadId),
+        this.ownership(),
+      ),
     });
 
     if (!sourceMessage) return [];
@@ -1910,13 +1952,14 @@ export class MessageModel {
           this.ownership(),
           eq(messages.topicId, topicId),
           isNull(messages.threadId), // Only main conversation messages (not in any thread)
-          or(
-            lte(messages.createdAt, sourceMessage.createdAt),
-            eq(messages.id, sourceMessageId), // Ensure source message is always included
-          ),
+          // Use an exclusive timestamp boundary plus the exact source row. A
+          // concurrent message can share the source's timestamp but still be a
+          // later sibling; `lte(createdAt)` would leak that future sibling into
+          // the new Thread's inherited history.
+          or(lt(messages.createdAt, sourceMessage.createdAt), eq(messages.id, sourceMessageId)),
         ),
       )
-      .orderBy(asc(messages.createdAt));
+      .orderBy(asc(messages.createdAt), asc(messages.id));
 
     return result as DBMessageItem[];
   };
@@ -2449,7 +2492,7 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    { ids, timing }: CreateUserAndAssistantMessagesOptions = {},
+    { ids, timing, trx }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
     const userMessageId = ids?.userMessageId ?? this.genId();
     const assistantMessageId = ids?.assistantMessageId ?? this.genId();
@@ -2474,54 +2517,55 @@ export class MessageModel {
       ...new Set([userMessage.topicId, assistantMessage.topicId].filter(Boolean) as string[]),
     ];
 
+    const createPair = async (executor: Transaction) => {
+      const userPayload = this.splitCreateMessageParams(userMessageWithTimestamp);
+      const assistantPayload = this.splitCreateMessageParams(assistantMessageWithParent);
+      const insertedMessages = (await runTimedStage(
+        timing,
+        'db.message.createUserAndAssistant.messages.insert',
+        () =>
+          executor
+            .insert(messages)
+            .values([
+              this.buildMessageInsertValue(userPayload.insert, userMessageId),
+              this.buildMessageInsertValue(assistantPayload.insert, assistantMessageId),
+            ])
+            .returning(),
+        { hasTopicId: topicIds.length > 0, messageCount: 2 },
+      )) as DBMessageItem[];
+      const messageMap = new Map(insertedMessages.map((message) => [message.id, message]));
+
+      await this.insertMessageRelationsInTransaction(
+        executor,
+        userPayload.relations,
+        userPayload.insert.message,
+        userMessageId,
+        timing,
+        'db.message.createUserAndAssistant.user',
+      );
+      await this.insertMessageRelationsInTransaction(
+        executor,
+        assistantPayload.relations,
+        assistantPayload.insert.message,
+        assistantMessageId,
+        timing,
+        'db.message.createUserAndAssistant.assistant',
+      );
+
+      const userMessageItem = messageMap.get(userMessageId);
+      const assistantMessageItem = messageMap.get(assistantMessageId);
+
+      if (!userMessageItem || !assistantMessageItem) {
+        throw new Error('Failed to create user and assistant messages');
+      }
+
+      return { assistantMessage: assistantMessageItem, userMessage: userMessageItem };
+    };
+
     return runTimedStage(
       timing,
       'db.message.createUserAndAssistant.transaction',
-      () =>
-        this.db.transaction(async (trx) => {
-          const userPayload = this.splitCreateMessageParams(userMessageWithTimestamp);
-          const assistantPayload = this.splitCreateMessageParams(assistantMessageWithParent);
-          const insertedMessages = (await runTimedStage(
-            timing,
-            'db.message.createUserAndAssistant.messages.insert',
-            () =>
-              trx
-                .insert(messages)
-                .values([
-                  this.buildMessageInsertValue(userPayload.insert, userMessageId),
-                  this.buildMessageInsertValue(assistantPayload.insert, assistantMessageId),
-                ])
-                .returning(),
-            { hasTopicId: topicIds.length > 0, messageCount: 2 },
-          )) as DBMessageItem[];
-          const messageMap = new Map(insertedMessages.map((message) => [message.id, message]));
-
-          await this.insertMessageRelationsInTransaction(
-            trx,
-            userPayload.relations,
-            userPayload.insert.message,
-            userMessageId,
-            timing,
-            'db.message.createUserAndAssistant.user',
-          );
-          await this.insertMessageRelationsInTransaction(
-            trx,
-            assistantPayload.relations,
-            assistantPayload.insert.message,
-            assistantMessageId,
-            timing,
-            'db.message.createUserAndAssistant.assistant',
-          );
-
-          const userMessageItem = messageMap.get(userMessageId);
-          const assistantMessageItem = messageMap.get(assistantMessageId);
-
-          if (!userMessageItem || !assistantMessageItem) {
-            throw new Error('Failed to create user and assistant messages');
-          }
-
-          return { assistantMessage: assistantMessageItem, userMessage: userMessageItem };
-        }),
+      () => (trx ? createPair(trx) : this.db.transaction(createPair)),
       {
         assistantFileCount: assistantMessage.files?.length ?? 0,
         hasTopicId: topicIds.length > 0,
@@ -2678,6 +2722,13 @@ export class MessageModel {
     return this.db
       .update(messages)
       .set({ metadata: mergedMetadata, ...(usageToWrite && { usage: usageToWrite }) })
+      .where(and(eq(messages.id, id), this.ownership()));
+  };
+
+  removeMetadataKey = async (id: string, key: string) => {
+    return this.db
+      .update(messages)
+      .set({ metadata: sql`COALESCE(${messages.metadata}, '{}'::jsonb) - ${key}` })
       .where(and(eq(messages.id, id), this.ownership()));
   };
 

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
+import { aiAgentService } from '@/services/aiAgent';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -29,6 +30,9 @@ vi.mock('@/libs/swr', async () => {
 });
 
 vi.mock('zustand/traditional');
+vi.mock('@/services/aiAgent', () => ({
+  aiAgentService: { clearRunningOperation: vi.fn() },
+}));
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -74,6 +78,7 @@ vi.mock('i18next', () => ({
 beforeEach(() => {
   // Setup initial state and mocks before each test
   vi.clearAllMocks();
+  vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: true });
   useChatStore.setState(
     {
       activeAgentId: undefined,
@@ -1771,9 +1776,6 @@ describe('topic action', () => {
 
       vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
       const updateTopicMock = vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue([]);
 
       act(() => {
         useChatStore.setState({
@@ -1804,13 +1806,12 @@ describe('topic action', () => {
         pageSize: 500,
         statuses: ['running'],
       });
-      expect(updateTopicMock).toHaveBeenCalledWith(topicId, { status: 'active' });
-      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, {
-        runningOperation: null,
+      expect(aiAgentService.clearRunningOperation).toHaveBeenCalledWith({
+        operationId: 'server-op-1',
+        settledStatus: 'active',
+        topicId,
       });
-      expect(updateTopicMetadataMock.mock.invocationCallOrder[0]).toBeLessThan(
-        updateTopicMock.mock.invocationCallOrder[0],
-      );
+      expect(updateTopicMock).not.toHaveBeenCalled();
       expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
         metadata: { runningOperation: null },
         status: 'active',
@@ -1878,7 +1879,7 @@ describe('topic action', () => {
       expect(useChatStore.getState().topicDataMap[groupAgentKey]).toBeUndefined();
     });
 
-    it('should not mark stale topics active when runningOperation metadata cleanup fails', async () => {
+    it('should not mark a newer operation active when compare-and-clear loses ownership', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'agent-1';
       const topicId = 'topic-1';
@@ -1900,10 +1901,7 @@ describe('topic action', () => {
 
       vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
       const updateTopicMock = vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockRejectedValue(new Error('metadata persist failed'));
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(aiAgentService.clearRunningOperation).mockResolvedValue({ cleared: false });
 
       act(() => {
         useChatStore.setState({
@@ -1930,11 +1928,299 @@ describe('topic action', () => {
       });
 
       expect(cleaned).toBe(0);
-      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, { runningOperation: null });
+      expect(aiAgentService.clearRunningOperation).toHaveBeenCalledWith({
+        operationId: 'server-op-1',
+        settledStatus: 'active',
+        topicId,
+      });
       expect(updateTopicMock).not.toHaveBeenCalled();
       expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
         metadata: { runningOperation },
         status: 'running',
+      });
+    });
+
+    it('should not overwrite a newer local generation while the CAS response is in flight', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const oldOperation = {
+        assistantMessageId: 'assistant-old',
+        operationId: 'operation-old',
+      };
+      const newOperation = {
+        assistantMessageId: 'assistant-new',
+        operationId: 'operation-new',
+      };
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: { runningOperation: oldOperation },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+      let resolveClear: (value: { cleared: boolean }) => void;
+      vi.mocked(aiAgentService.clearRunningOperation).mockReturnValue(
+        new Promise((resolve) => {
+          resolveClear = resolve;
+        }),
+      );
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          operations: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      const cleanupPromise = result.current.cleanupStaleRunningTopics();
+      await waitFor(() => expect(aiAgentService.clearRunningOperation).toHaveBeenCalledTimes(1));
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [{ ...topic, metadata: { runningOperation: newOperation } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+        resolveClear!({ cleared: true });
+      });
+
+      await expect(cleanupPromise).resolves.toBe(0);
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: newOperation },
+        status: 'running',
+      });
+    });
+
+    it('should not overwrite a newer generation loaded only in the Agent Topics view', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const oldOperation = {
+        assistantMessageId: 'assistant-old',
+        operationId: 'operation-old',
+      };
+      const newOperation = {
+        assistantMessageId: 'assistant-new',
+        operationId: 'operation-new',
+      };
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: { runningOperation: oldOperation },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+      let resolveClear: (value: { cleared: boolean }) => void;
+      vi.mocked(aiAgentService.clearRunningOperation).mockReturnValue(
+        new Promise((resolve) => {
+          resolveClear = resolve;
+        }),
+      );
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          operations: {},
+          topicDataMap: {},
+        });
+      });
+
+      const cleanupPromise = result.current.cleanupStaleRunningTopics();
+      await waitFor(() => expect(aiAgentService.clearRunningOperation).toHaveBeenCalledTimes(1));
+      act(() => {
+        useChatStore.setState({
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [{ ...topic, metadata: { runningOperation: newOperation } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+        resolveClear!({ cleared: true });
+      });
+
+      await expect(cleanupPromise).resolves.toBe(0);
+      expect(useChatStore.getState().agentTopicsViewMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: newOperation },
+        status: 'running',
+      });
+    });
+
+    it('should preserve a newer completed generation while the old CAS response is in flight', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const oldOperation = {
+        assistantMessageId: 'assistant-old',
+        operationId: 'operation-old',
+      };
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: { heteroSessionOperationId: 'operation-old', runningOperation: oldOperation },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+      let resolveClear: (value: { cleared: boolean }) => void;
+      vi.mocked(aiAgentService.clearRunningOperation).mockReturnValue(
+        new Promise((resolve) => {
+          resolveClear = resolve;
+        }),
+      );
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          operations: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      const cleanupPromise = result.current.cleanupStaleRunningTopics();
+      await waitFor(() => expect(aiAgentService.clearRunningOperation).toHaveBeenCalledTimes(1));
+      act(() => {
+        useChatStore.setState({
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  ...topic,
+                  metadata: {
+                    heteroSessionOperationId: 'operation-new',
+                    runningOperation: null,
+                  },
+                  status: 'active',
+                },
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+        resolveClear!({ cleared: true });
+      });
+
+      await expect(cleanupPromise).resolves.toBe(0);
+      expect(useChatStore.getState().agentTopicsViewMap[key].items[0]).toMatchObject({
+        metadata: {
+          heteroSessionOperationId: 'operation-new',
+          runningOperation: null,
+        },
+        status: 'active',
+      });
+    });
+
+    it('should settle a locally running row whose matching operation marker is already cleared', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const staleTopic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: {
+          heteroSessionOperationId: 'operation-old',
+          runningOperation: {
+            assistantMessageId: 'assistant-old',
+            operationId: 'operation-old',
+          },
+        },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+      const locallyClearedTopic = {
+        ...staleTopic,
+        metadata: { heteroSessionOperationId: 'operation-old', runningOperation: null },
+      } as ChatTopic & { agentId: string };
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([staleTopic]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          operations: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [locallyClearedTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      await expect(result.current.cleanupStaleRunningTopics()).resolves.toBe(1);
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: {
+          heteroSessionOperationId: 'operation-old',
+          runningOperation: null,
+        },
+        status: 'active',
       });
     });
 

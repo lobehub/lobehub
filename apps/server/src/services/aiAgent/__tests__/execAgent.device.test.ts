@@ -561,7 +561,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       );
     });
 
-    it('fails before operation creation when the shared fixed device is offline', async () => {
+    it('returns authoritative persisted ids without creating an operation when the fixed device is offline', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
       await useAgencyConfig({
@@ -571,11 +571,16 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       });
       service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
 
-      await expect(
-        service.execAgent({ agentId: 'agent-1', prompt: 'Run a command' }),
-      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+      const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Run a command' });
 
       expect(mockCreateOperation).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        assistantMessageId: 'msg-1',
+        status: 'error',
+        success: false,
+        topicId: 'topic-1',
+        userMessageId: 'msg-1',
+      });
       expect(mockMessageUpdate).toHaveBeenCalledWith(
         'msg-1',
         expect.objectContaining({

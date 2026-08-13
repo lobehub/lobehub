@@ -21,6 +21,7 @@ export function registerNotifyCommand(program: Command) {
       '--message-id <messageId>',
       'When --role assistant: update an existing message instead of creating a new one (keeps a single bubble)',
     )
+    .option('--operation-id <operationId>', 'Remote agent operation generation')
     .option(
       '--continue',
       'When --role assistant: trigger a follow-up agent turn after writing the message',
@@ -33,6 +34,7 @@ export function registerNotifyCommand(program: Command) {
         continue?: boolean;
         json?: boolean;
         messageId?: string;
+        operationId?: string;
         role?: 'assistant' | 'user';
         threadId?: string;
         topic: string;
@@ -53,6 +55,7 @@ export function registerNotifyCommand(program: Command) {
             content: options.content,
             continue: options.continue,
             messageId: options.messageId,
+            operationId: options.operationId,
             role: options.role,
             threadId: options.threadId,
             topicId: options.topic,

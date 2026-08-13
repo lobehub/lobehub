@@ -164,12 +164,7 @@ export class AbandonOperationService {
       if (metadata.topicId) {
         try {
           const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
-          const topic = await topicModel.findById(metadata.topicId);
-          const running = topic?.metadata?.runningOperation as
-            { assistantMessageId?: string; operationId?: string } | undefined;
-          if (running?.operationId === operationId) {
-            await topicModel.updateMetadata(metadata.topicId, { runningOperation: null });
-          }
+          await topicModel.clearRunningOperationIfMatches(metadata.topicId, operationId);
         } catch (e) {
           log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
         }
@@ -334,7 +329,10 @@ export class AbandonOperationService {
         if (running?.operationId && running.operationId !== operationId) return undefined;
 
         if (running?.operationId === operationId) {
-          await topicModel.updateMetadata(op.topicId, { runningOperation: null }).catch(() => {});
+          const cleared = await topicModel
+            .clearRunningOperationIfMatches(op.topicId, operationId)
+            .catch(() => false);
+          if (!cleared) return undefined;
           if (running.assistantMessageId) return running.assistantMessageId;
         }
       } catch (e) {

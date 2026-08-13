@@ -4,6 +4,7 @@ import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  CreateThreadWithMessageSchema,
   entityIdPattern,
   RequestTrigger,
   ThreadStatus,
@@ -217,6 +218,9 @@ const ExecAgentSchema = z
             workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
+        newThread: CreateThreadWithMessageSchema.extend({
+          type: z.enum([ThreadType.Continuation, ThreadType.Standalone]),
+        }).optional(),
         /**
          * Group orchestration role of the run, stamped onto the assistant
          * message's `metadata.orchestrationRole` so the supervisor/member
@@ -525,6 +529,12 @@ const InterruptTaskSchema = z
   .refine((data) => data.threadId || data.operationId, {
     message: 'Either threadId or operationId must be provided',
   });
+
+const RecoverExecAgentSchema = z.object({
+  assistantMessageId: z.string().min(1),
+  newThreadSourceMessageId: z.string().min(1).optional(),
+  userMessageId: z.string().min(1),
+});
 
 /**
  * Wire shape of an `AgentStreamEvent` produced by `lh hetero exec`. Mirrors
@@ -1392,6 +1402,12 @@ export const aiAgentRouter = router({
           message: 'Thread not found',
         });
       }
+      if (thread.type !== ThreadType.Isolation) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Thread is not a sub-agent task',
+        });
+      }
 
       // 2. Map Thread status to task status
       const threadStatusToTaskStatus: Record<string, TaskStatusResult['status']> = {
@@ -2026,6 +2042,12 @@ export const aiAgentRouter = router({
             message: 'Thread not found',
           });
         }
+        if (thread.type !== ThreadType.Isolation) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Thread is not a client task',
+          });
+        }
 
         const completedAt = new Date().toISOString();
         const startedAt = thread.metadata?.startedAt;
@@ -2099,6 +2121,89 @@ export const aiAgentRouter = router({
         });
       }
     }),
+
+  /**
+   * Recover an execAgent response whose transport failed after the client-ID
+   * message pair committed. This is an ownership-scoped acceptance probe, not a
+   * retry: callers either receive the exact persisted turn or null.
+   */
+  recoverExecAgent: aiAgentProcedure.input(RecoverExecAgentSchema).query(async ({ input, ctx }) => {
+    const [assistantMessage, userMessage] = await Promise.all([
+      ctx.messageModel.findById(input.assistantMessageId),
+      ctx.messageModel.findById(input.userMessageId),
+    ]);
+
+    if (
+      !assistantMessage ||
+      !userMessage ||
+      assistantMessage.role !== 'assistant' ||
+      userMessage.role !== 'user' ||
+      assistantMessage.parentId !== userMessage.id ||
+      assistantMessage.topicId !== userMessage.topicId ||
+      assistantMessage.threadId !== userMessage.threadId ||
+      !assistantMessage.agentId ||
+      !assistantMessage.topicId
+    ) {
+      return null;
+    }
+
+    let createdThreadId: string | undefined;
+    if (input.newThreadSourceMessageId) {
+      if (!assistantMessage.threadId) return null;
+
+      const thread = await ctx.threadModel.findById(assistantMessage.threadId);
+      if (
+        !thread ||
+        thread.sourceMessageId !== input.newThreadSourceMessageId ||
+        (thread.type !== ThreadType.Continuation && thread.type !== ThreadType.Standalone)
+      ) {
+        return null;
+      }
+      createdThreadId = thread.id;
+    }
+
+    const topic = await ctx.topicModel.findById(assistantMessage.topicId);
+    const runningOperation = topic?.metadata?.runningOperation;
+    const ownsRunningOperation =
+      runningOperation?.assistantMessageId === assistantMessage.id ? runningOperation : undefined;
+    const token = ownsRunningOperation ? await signUserJWT(ctx.userId) : undefined;
+    const timestamp = new Date().toISOString();
+
+    return {
+      agentId: assistantMessage.agentId,
+      assistantMessageId: assistantMessage.id,
+      autoStarted: Boolean(ownsRunningOperation),
+      createdAt: assistantMessage.createdAt?.toISOString() ?? timestamp,
+      createdThreadId,
+      error: ownsRunningOperation ? undefined : 'The run response was lost after persistence',
+      message: ownsRunningOperation
+        ? 'Recovered persisted agent operation'
+        : 'Recovered persisted messages after agent startup failed',
+      operationId: ownsRunningOperation?.operationId ?? `recovered_${assistantMessage.id}`,
+      status: ownsRunningOperation ? ('created' as const) : ('error' as const),
+      success: Boolean(ownsRunningOperation),
+      timestamp,
+      token,
+      topicId: assistantMessage.topicId,
+      userMessageId: userMessage.id,
+    };
+  }),
+
+  clearRunningOperation: aiAgentWriteProcedure
+    .input(
+      z.object({
+        operationId: z.string().min(1),
+        settledStatus: z.enum(['active', 'unread']).optional(),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => ({
+      cleared: await ctx.topicModel.clearRunningOperationIfMatches(
+        input.topicId,
+        input.operationId,
+        input.settledStatus,
+      ),
+    })),
 
   /**
    * Refresh Gateway JWT token for an existing operation.

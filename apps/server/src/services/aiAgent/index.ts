@@ -54,6 +54,8 @@ import type {
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
+  CreateMessageParams,
+  CreateThreadWithMessageParams,
   ErrorType,
   ExecAgentParams,
   ExecAgentResult,
@@ -793,7 +795,7 @@ export class AiAgentService {
     // 3. The operation never started — drop the running marker so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
     try {
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      await this.topicModel.clearRunningOperationIfMatches(topicId, operationId);
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
     }
@@ -1247,11 +1249,11 @@ export class AiAgentService {
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
     const topicId = params.appContext?.topicId;
-    // Thread runs are isolated under an explicit parent message and do not
-    // advance the topic's main spine. They may start while their parent
-    // operation owns `runningOperation` (for example callAgent/callSubAgent),
-    // so making them wait for the topic-start claim deadlocks the child start.
-    if (!topicId || params.appContext?.threadId) return this.execAgentWithReservation(params);
+    // Only internal isolation-thread guests may share a topic while their parent
+    // owns `runningOperation`. Ordinary user threads still serialize starts at
+    // topic scope because they share the topic-level running-operation anchor.
+    if (!topicId || params.appContext?.isolationThread)
+      return this.execAgentWithReservation(params);
 
     const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
     const reserved = await acquireTopicStartReservation({
@@ -1330,6 +1332,28 @@ export class AiAgentService {
     // rather than trusting every caller to omit them.
     const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
     const clientIds = isResumeLike ? undefined : params.clientIds;
+
+    if (appContext?.newThread && isResumeLike) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'newThread is only supported for a fresh user turn',
+      });
+    }
+    if (appContext?.newThread && !appContext.topicId) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'newThread requires an existing topic',
+      });
+    }
+    if (
+      (appContext?.newThread as CreateThreadWithMessageParams | undefined)?.type ===
+      ThreadType.Isolation
+    ) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'User-created isolation threads are not supported',
+      });
+    }
 
     // Validate that either agentId or slug is provided
     if (!agentId && !slug) {
@@ -2034,6 +2058,43 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('topic setup');
 
+    let executionThreadId = appContext?.threadId ?? undefined;
+    let createdThreadId: string | undefined;
+    const requestedNewThread = appContext?.newThread;
+
+    if (requestedNewThread) {
+      if (runFromHistory || executionThreadId || requestedNewThread.parentThreadId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Nested or history-only user thread creation is not supported',
+        });
+      }
+
+      if (!requestedNewThread.sourceMessageId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'newThread.sourceMessageId is required',
+        });
+      }
+
+      const sourceMessage = await this.messageModel.findById(requestedNewThread.sourceMessageId);
+      if (!sourceMessage) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread source message not found' });
+      }
+      if (sourceMessage.topicId !== topicId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Thread source message does not belong to the requested topic',
+        });
+      }
+      if (sourceMessage.threadId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Nested user threads are not supported',
+        });
+      }
+    }
+
     // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
     // hetero dispatch routes the whole run to a user machine, so it must honour
     // the same policy as native device tools. Discord-only flows (no
@@ -2107,7 +2168,9 @@ export class AiAgentService {
       if (runFromHistory) return undefined;
       if (parentMessageId) return parentMessageId;
 
-      const threadId = appContext?.threadId ?? null;
+      if (requestedNewThread?.sourceMessageId) return requestedNewThread.sourceMessageId;
+
+      const threadId = executionThreadId ?? null;
       const spineId = await this.messageModel.getLatestSpineMessageId({ threadId, topicId });
       if (spineId) return spineId;
 
@@ -2122,30 +2185,6 @@ export class AiAgentService {
       return fallbackId;
     };
     const userMessageParentId = await resolveUserMessageParentId();
-    const userMessageRecord = runFromHistory
-      ? undefined
-      : await this.messageModel.create(
-          {
-            agentId: conversationAgentId,
-            content: prompt,
-            files: runAttachments.fileIds,
-            // Group reads filter on messages.groupId (MessageModel.query group
-            // branch), so a group turn must stamp groupId or the message never
-            // shows when the topic is reopened (group topic sidebar + ownership fix).
-            groupId: appContext?.groupId ?? undefined,
-            metadata: requestTriggerMetadata,
-            parentId: userMessageParentId,
-            role: 'user',
-            threadId: appContext?.threadId ?? undefined,
-            topicId,
-          },
-          // The id the client's optimistic user row already renders under.
-          clientIds?.userMessageId,
-        );
-    if (userMessageRecord) {
-      selfMessageIds.add(userMessageRecord.id);
-      log('execAgent: created user message %s', userMessageRecord.id);
-    }
 
     // Snapshot the author's group orchestration role onto the assistant message
     // so the role survives the server round-trip (gateway step_start snapshot /
@@ -2160,34 +2199,88 @@ export class AiAgentService {
         }
       : undefined;
 
-    // Assistant placeholder (shows the spinner in the UI). A hetero run seeds
-    // ONLY the provider — the CLI reports the real model later via `stream_start`
-    // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
-    // seeding the agent's chat model would leak it into the model tag. A normal
-    // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create(
-      {
-        agentId: assistantAgentId,
-        content: LOADING_FLAT,
-        // Stamp groupId so the assistant turn is visible in the group read path
-        // (MessageModel.query filters group chats by messages.groupId).
-        groupId: appContext?.groupId ?? undefined,
-        metadata: orchestrationMetadata,
-        model: isHeteroAgent ? undefined : model,
-        // Chain onto the user turn we just persisted; `parentMessageId` is the
-        // anchor only on a resume, where no user message is created. A batch
-        // approval overrides it with the assistant that emitted the batch — the
-        // previous LLM call — so the spine stays one node per call and never
-        // depends on which of the batch's tool rows the client sent as anchor.
-        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
-        provider: isHeteroAgent ? heteroType : provider,
-        role: 'assistant',
-        threadId: appContext?.threadId ?? undefined,
-        topicId,
-      },
-      // The id the client's assistant placeholder already renders under.
-      clientIds?.assistantMessageId,
-    );
+    const buildUserMessage = (threadId?: string): CreateMessageParams => ({
+      agentId: conversationAgentId,
+      content: prompt,
+      files: runAttachments.fileIds,
+      groupId: appContext?.groupId ?? undefined,
+      metadata: requestTriggerMetadata,
+      parentId: userMessageParentId,
+      role: 'user',
+      threadId,
+      topicId,
+    });
+    const buildAssistantMessage = (
+      threadId?: string,
+      messageParentId = batchApprovalAnchorId ?? parentMessageId,
+    ): CreateMessageParams => ({
+      agentId: assistantAgentId,
+      content: LOADING_FLAT,
+      groupId: appContext?.groupId ?? undefined,
+      metadata: orchestrationMetadata,
+      model: isHeteroAgent ? undefined : model,
+      parentId: messageParentId,
+      provider: isHeteroAgent ? heteroType : provider,
+      role: 'assistant',
+      threadId,
+      topicId,
+    });
+
+    let userMessageRecord: Awaited<ReturnType<MessageModel['create']>> | undefined;
+    let assistantMessageRecord: Awaited<ReturnType<MessageModel['create']>>;
+
+    if (runFromHistory) {
+      assistantMessageRecord = await this.messageModel.create(
+        buildAssistantMessage(executionThreadId),
+        clientIds?.assistantMessageId,
+      );
+    } else if (requestedNewThread) {
+      const persisted = await this.db.transaction(async (trx) => {
+        const thread = await this.threadModel.create(
+          {
+            sourceMessageId: requestedNewThread.sourceMessageId,
+            title: requestedNewThread.title,
+            topicId,
+            type: requestedNewThread.type,
+          },
+          trx,
+        );
+        if (!thread) throw new Error('Failed to create thread');
+
+        const pair = await this.messageModel.createUserAndAssistantMessages(
+          {
+            assistantMessage: buildAssistantMessage(thread.id),
+            userMessage: buildUserMessage(thread.id),
+          },
+          {
+            ids: {
+              assistantMessageId: clientIds?.assistantMessageId,
+              userMessageId: clientIds?.userMessageId,
+            },
+            trx,
+          },
+        );
+        return { pair, threadId: thread.id };
+      });
+      executionThreadId = persisted.threadId;
+      createdThreadId = persisted.threadId;
+      userMessageRecord = persisted.pair.userMessage;
+      assistantMessageRecord = persisted.pair.assistantMessage;
+    } else {
+      userMessageRecord = await this.messageModel.create(
+        buildUserMessage(executionThreadId),
+        clientIds?.userMessageId,
+      );
+      assistantMessageRecord = await this.messageModel.create(
+        buildAssistantMessage(executionThreadId, userMessageRecord.id),
+        clientIds?.assistantMessageId,
+      );
+    }
+
+    if (userMessageRecord) {
+      selfMessageIds.add(userMessageRecord.id);
+      log('execAgent: created user message %s', userMessageRecord.id);
+    }
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
@@ -2207,7 +2300,7 @@ export class AiAgentService {
             agentId: resolvedAgentId,
             message: prompt,
             messageId: userMessageRecord.id,
-            threadId: appContext?.threadId ?? undefined,
+            threadId: executionThreadId,
             topicId,
             trigger,
           },
@@ -2262,7 +2355,7 @@ export class AiAgentService {
           parentOperationId,
           provider: heteroType,
           taskId: operationTaskId ?? null,
-          threadId: appContext?.threadId ?? null,
+          threadId: executionThreadId ?? null,
           topicId,
           trigger,
         });
@@ -2274,7 +2367,11 @@ export class AiAgentService {
       const heteroService = new HeterogeneousAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
+      const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(
+        topicId,
+        executionThreadId,
+        assistantMessageRecord.id,
+      );
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
       let operationJwt: string;
@@ -2314,20 +2411,23 @@ export class AiAgentService {
         log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
-      // When resuming, inject the recent conversation turns as context so CC can
-      // orient itself even if the native session file was cleared (sandbox recycled
-      // or context overflow caused the CLI to start a fresh session).
-      // Only fetch when there IS a stored session id — for first-turn runs CC has
-      // no prior history to inject.
+      // Thread runs always need their inherited/source history on the first
+      // native CLI turn. Existing native sessions also receive recent history as
+      // a fallback when their local transcript was recycled.
       let conversationHistory: ConversationHistoryEntry[] | undefined;
-      if (resumeSessionId) {
+      if (resumeSessionId || executionThreadId) {
         try {
-          const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
+          const recentMsgs = await this.messageModel.query({
+            pageSize: 200,
+            threadId: executionThreadId,
+            topicId,
+          });
           const turns = recentMsgs
             .filter(
               (m) =>
                 (m.role === 'user' || m.role === 'assistant') &&
-                !m.threadId &&
+                (executionThreadId ? true : !m.threadId) &&
+                !selfMessageIds.has(m.id) &&
                 m.content &&
                 m.content !== LOADING_FLAT,
             )
@@ -2431,28 +2531,43 @@ export class AiAgentService {
       if (hooks?.length) hookDispatcher.register(operationId, hooks);
       const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
 
+      // Durable operation-scoped binding for heterogeneous callbacks. Internal
+      // isolation guests must not claim their parent's topic-global
+      // runningOperation anchor, so ingest/finish recover their operation,
+      // hooks, and Thread scope from the seeded assistant row instead.
+      await this.messageModel.updateMetadata(assistantMessageRecord.id, {
+        heteroOperation: {
+          hooks: serializedHooks,
+          internalIsolation: !!appContext?.isolationThread,
+          operationId,
+        },
+      });
+
       // Seed topic.metadata.runningOperation so heteroIngest can validate the
       // operation, and so every terminal site (heteroFinish, agentNotify done,
       // dispatch failure) can re-fire the serialized hooks across a process
       // boundary in queue mode.
-      await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          hooks: serializedHooks,
-          // Store deviceId + heteroType so interruptTask can cancel remote processes
-          ...(isRemoteHetero && remoteDeviceId
-            ? {
-                deviceId: remoteDeviceId,
-                deviceUserId: remoteDeviceUserId,
-                deviceWorkspaceId: remoteDeviceWorkspaceId,
-                heteroType,
-              }
-            : undefined),
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      });
+      if (!appContext?.isolationThread) {
+        await this.topicModel.updateMetadata(topicId, {
+          heteroSessionOperationId: operationId,
+          runningOperation: {
+            assistantMessageId: assistantMessageRecord.id,
+            hooks: serializedHooks,
+            // Store deviceId + heteroType so interruptTask can cancel remote processes
+            ...(isRemoteHetero && remoteDeviceId
+              ? {
+                  deviceId: remoteDeviceId,
+                  deviceUserId: remoteDeviceUserId,
+                  deviceWorkspaceId: remoteDeviceWorkspaceId,
+                  heteroType,
+                }
+              : undefined),
+            operationId,
+            scope: appContext?.scope ?? undefined,
+            threadId: executionThreadId,
+          },
+        });
+      }
 
       // Notify-based platform agents (openclaw / hermes) communicate back via
       // agentNotify.notify. A local run uses the requesting desktop's device ID;
@@ -2481,6 +2596,7 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
+            createdThreadId,
             error: 'Device access denied',
             message: 'Remote hetero agent requires device access',
             operationId,
@@ -2506,6 +2622,7 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
+            createdThreadId,
             error: 'No bound device',
             message: 'Platform agent requires a local or connected device',
             operationId,
@@ -2575,6 +2692,7 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
+            createdThreadId,
             error: result.error,
             message: 'Remote hetero agent dispatch failed',
             operationId,
@@ -2666,6 +2784,7 @@ export class AiAgentService {
               assistantMessageId: assistantMessageRecord.id,
               autoStarted: false,
               createdAt: new Date().toISOString(),
+              createdThreadId,
               error: 'No bound device',
               message: 'Hetero agent requires a bound device',
               operationId,
@@ -2749,6 +2868,7 @@ export class AiAgentService {
               assistantMessageId: assistantMessageRecord.id,
               autoStarted: false,
               createdAt: new Date().toISOString(),
+              createdThreadId,
               error: result.error,
               message: 'Hetero agent device dispatch failed',
               operationId,
@@ -2775,6 +2895,7 @@ export class AiAgentService {
               assistantMessageId: assistantMessageRecord.id,
               autoStarted: false,
               createdAt: new Date().toISOString(),
+              createdThreadId,
               error: message,
               message,
               operationId,
@@ -2844,6 +2965,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: true,
         createdAt: new Date().toISOString(),
+        createdThreadId,
         message: 'Hetero agent dispatched successfully',
         operationId,
         status: 'created',
@@ -2854,6 +2976,11 @@ export class AiAgentService {
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     }
+
+    // 15. Generate the normal-runtime operation id before device preflight. Even
+    // when preflight fails, the persisted turn returns a complete ExecAgentResult
+    // so clients can reconcile authoritative message and Thread ids.
+    const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
     // 4. Fetch user settings (memory config + timezone)
     // Agent-level memory config takes priority; fallback to user-level setting
@@ -2972,11 +3099,11 @@ export class AiAgentService {
     const loadHistoryMessages = async () => {
       if (historyMessagesCache) return historyMessagesCache;
 
-      if (existingMessageIds.length > 0) {
+      if (existingMessageIds.length > 0 && !createdThreadId) {
         const messages = await this.messageModel.query(
           {
             sessionId: appContext?.sessionId,
-            threadId: appContext?.threadId,
+            threadId: executionThreadId,
             topicId: appContext?.topicId ?? undefined,
           },
           { postProcessUrl },
@@ -2991,7 +3118,7 @@ export class AiAgentService {
         const messages = await this.messageModel.query(
           {
             sessionId: appContext?.sessionId,
-            threadId: appContext?.threadId,
+            threadId: executionThreadId,
             topicId: appContext?.topicId,
           },
           { postProcessUrl },
@@ -3029,7 +3156,7 @@ export class AiAgentService {
         appContext?.topicId
       ) {
         const tree = await this.messageModel.queryTopicMessageTree({
-          threadId: appContext.threadId,
+          threadId: executionThreadId,
           topicId: appContext.topicId,
         });
         historyMessagesCache = pruneRegeneratedBranch(historyMessagesCache, tree, parentMessageId);
@@ -3391,8 +3518,11 @@ export class AiAgentService {
         trigger: requestTriggerMetadata?.trigger,
       });
       // A fixed device target must never degrade to the cloud sandbox or a
-      // different device. Persist a visible assistant error and fail the RPC
-      // before tool/runtime preparation so no operation can start elsewhere.
+      // different device. Persist a visible assistant error and return the
+      // authoritative message/thread ids before tool/runtime preparation so no
+      // operation can start elsewhere. Do not reject here: the turn was already
+      // committed above, and a rejected RPC would strand a newly-created thread
+      // under the client's optimistic id with no way to reconcile it.
       if (
         isFixedDeviceTarget &&
         resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
@@ -3411,11 +3541,21 @@ export class AiAgentService {
             type: 'ServerAgentRuntimeError',
           },
         });
-        throw new TRPCError({
-          cause: { data: { code: 'FixedAgentDeviceUnavailable' } },
-          code: 'PRECONDITION_FAILED',
-          message: detail,
-        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          createdThreadId,
+          error: detail,
+          message: 'Fixed agent device unavailable',
+          operationId,
+          status: 'error',
+          success: false,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+        };
       }
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
@@ -4114,10 +4254,6 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('operation preparation');
 
-    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-    const timestamp = Date.now();
-    const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
-
     // 16. Create initial context
     let initialContext: AgentRuntimeContext = {
       payload: {
@@ -4568,7 +4704,7 @@ export class AiAgentService {
           // loop can stream its running totals down the parent's gateway channel.
           subAgentProgress: appContext?.subAgentProgress,
           taskId: operationTaskId,
-          threadId: appContext?.threadId,
+          threadId: executionThreadId,
           topicId,
           trigger,
         },
@@ -4623,7 +4759,7 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             operationId,
             scope: appContext?.scope ?? undefined,
-            threadId: appContext?.threadId ?? undefined,
+            threadId: executionThreadId,
           },
         });
       }
@@ -4643,6 +4779,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: result.autoStarted,
         createdAt: new Date().toISOString(),
+        createdThreadId,
         message: 'Agent operation created successfully',
         messageId: result.messageId,
         operationId,
@@ -4685,6 +4822,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: false,
         createdAt: new Date().toISOString(),
+        createdThreadId,
         error: errorMessage,
         message: 'Agent operation failed to start',
         operationId,
@@ -5714,7 +5852,7 @@ export class AiAgentService {
     }
 
     // 4. Update Thread status to cancel
-    if (thread) {
+    if (thread?.type === ThreadType.Isolation) {
       await this.threadModel.update(thread.id, {
         metadata: {
           ...thread.metadata,

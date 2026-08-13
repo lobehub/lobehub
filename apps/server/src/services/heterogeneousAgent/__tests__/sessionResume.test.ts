@@ -15,9 +15,9 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
   beforeEach(() => __resetOperationStatesForTesting());
   afterEach(() => __resetOperationStatesForTesting());
 
-  describe('heteroFinish persists sessionId via TopicModel.updateMetadata', () => {
+  describe('heteroFinish persists an operation-scoped session id', () => {
     it('writes the CLI session id to topic.metadata.heteroSessionId', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-1',
@@ -38,7 +38,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
 
       // Seed in-memory state by ingesting one event so finish has something to drain
@@ -59,6 +59,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: { findById } as any,
       });
 
       await service.heteroFinish({
@@ -69,13 +70,15 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicId: 'topic-1',
       });
 
-      expect(updateMetadata).toHaveBeenCalledWith('topic-1', {
-        heteroSessionId: 'cc-session-fresh',
-      });
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledWith(
+        'topic-1',
+        'op-1',
+        'cc-session-fresh',
+      );
     });
 
     it('skips the metadata write when no sessionId is provided on success', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-2',
@@ -95,7 +98,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
       await handler.ingest({
         events: [
@@ -114,6 +117,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: { findById } as any,
       });
 
       await service.heteroFinish({
@@ -124,11 +128,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicId: 'topic-2',
       });
 
-      expect(updateMetadata).not.toHaveBeenCalled();
+      expect(updateHeterogeneousSessionIfMatches).not.toHaveBeenCalled();
     });
 
     it('clears stale heteroSessionId when result=error and no sessionId (sandbox recycled)', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-stale',
@@ -146,7 +150,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
 
       await handler.ingest({
@@ -166,6 +170,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: { findById } as any,
       });
 
       // Simulate: sandbox was recycled, CC exited before emitting system.init
@@ -179,11 +184,15 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       });
 
       // Must clear the stale session id so the next turn starts fresh
-      expect(updateMetadata).toHaveBeenCalledWith('topic-stale', { heteroSessionId: undefined });
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledWith(
+        'topic-stale',
+        'op-stale',
+        undefined,
+      );
     });
 
     it('persists sessionId even when result=error (so the next run can still resume context)', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-3',
@@ -203,7 +212,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
       await handler.ingest({
         events: [
@@ -222,6 +231,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: { findById } as any,
       });
 
       await service.heteroFinish({
@@ -233,16 +243,15 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicId: 'topic-3',
       });
 
-      expect(updateMetadata).toHaveBeenCalledWith('topic-3', {
-        heteroSessionId: 'cc-session-partial',
-      });
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledWith(
+        'topic-3',
+        'op-3',
+        'cc-session-partial',
+      );
     });
 
-    it('topic.metadata.runningOperation is preserved (updateMetadata merges, does not replace)', async () => {
-      // This contract is enforced by `TopicModel.updateMetadata` itself
-      // (verified in packages/database tests). We just assert the handler
-      // calls it with a partial — not the full metadata object.
-      const updateMetadata = vi.fn(async () => undefined);
+    it('scopes the session update to the current operation', async () => {
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-4',
@@ -263,7 +272,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
       await handler.ingest({
         events: [
@@ -282,6 +291,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: { findById } as any,
       });
 
       await service.heteroFinish({
@@ -292,19 +302,15 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicId: 'topic-4',
       });
 
-      // Critical: passes only the field we want to update; other peers
-      // (runningOperation, workingDirectory) are untouched in the patch
-      // and TopicModel.updateMetadata's merge semantics preserve them.
-      expect(updateMetadata).toHaveBeenCalledTimes(1);
-      const call = updateMetadata.mock.calls[0] as unknown as [string, Record<string, unknown>];
-      const patch = call[1];
-      expect(patch).toEqual({ heteroSessionId: 'cc-session-resume-target' });
-      expect(patch).not.toHaveProperty('runningOperation');
-      expect(patch).not.toHaveProperty('workingDirectory');
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledWith(
+        'topic-4',
+        'op-4',
+        'cc-session-resume-target',
+      );
     });
 
-    it('updateMetadata failure does not poison heteroFinish (terminal event still publishes)', async () => {
-      const updateMetadata = vi.fn(async () => {
+    it('session persistence failure does not poison heteroFinish (terminal event still publishes)', async () => {
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => {
         throw new Error('connection lost');
       });
       const findById = vi.fn(async () => ({
@@ -326,7 +332,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
       await handler.ingest({
         events: [
@@ -346,6 +352,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: stream,
+        topicModel: { findById } as any,
       });
 
       // Should not throw — sessionId persistence is best-effort
@@ -365,8 +372,282 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
   });
 
   describe('eager session-id persistence on stream_start (survives watchdog abandon)', () => {
+    it('stores a thread session on its assistant anchor without overwriting the main topic', async () => {
+      const updateTopicMetadata = vi.fn(async () => undefined);
+      const updateMessageMetadata = vi.fn(async () => undefined);
+      const findById = vi.fn(async () => ({
+        agentId: 'agent-1',
+        id: 'asst-thread-a',
+        metadata: null,
+        threadId: 'thread-a',
+        topicId: 'topic-shared',
+      }));
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById,
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+          updateMetadata: updateMessageMetadata,
+        } as any,
+        threadModel: {} as any,
+        topicModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            id: 'topic-shared',
+            metadata: {
+              heteroSessionId: 'main-session',
+              runningOperation: {
+                assistantMessageId: 'asst-thread-a',
+                operationId: 'op-thread-a',
+                threadId: 'thread-a',
+              },
+            },
+          })),
+          updateMetadata: updateTopicMetadata,
+        } as any,
+      });
+
+      await handler.ingest({
+        assistantMessageId: 'asst-thread-a',
+        events: [
+          {
+            data: { sessionId: 'thread-a-session' },
+            operationId: 'op-thread-a',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_start',
+          },
+        ],
+        operationId: 'op-thread-a',
+        topicId: 'topic-shared',
+      });
+
+      expect(updateMessageMetadata).toHaveBeenCalledWith('asst-thread-a', {
+        heteroSessionId: 'thread-a-session',
+      });
+      expect(updateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('clears only the failed thread anchor session', async () => {
+      const removeMetadataKey = vi.fn(async () => undefined);
+      const updateTopicMetadata = vi.fn(async () => undefined);
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            id: 'asst-thread-a',
+            metadata: null,
+            threadId: 'thread-a',
+            topicId: 'topic-shared',
+          })),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          removeMetadataKey,
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
+        threadModel: {} as any,
+        topicModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            id: 'topic-shared',
+            metadata: {
+              heteroSessionId: 'main-session',
+              runningOperation: {
+                assistantMessageId: 'asst-thread-a',
+                operationId: 'op-thread-a',
+                threadId: 'thread-a',
+              },
+            },
+          })),
+          updateMetadata: updateTopicMetadata,
+        } as any,
+      });
+      await handler.ingest({
+        assistantMessageId: 'asst-thread-a',
+        events: [
+          {
+            data: { chunkType: 'text', content: '' },
+            operationId: 'op-thread-a',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+        operationId: 'op-thread-a',
+        topicId: 'topic-shared',
+      });
+
+      await handler.finish({
+        operationId: 'op-thread-a',
+        result: 'error',
+        topicId: 'topic-shared',
+      });
+
+      expect(removeMetadataKey).toHaveBeenCalledWith('asst-thread-a', 'heteroSessionId');
+      expect(updateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('recovers thread scope from the seeded assistant after runningOperation was cleared', async () => {
+      const updateMessageMetadata = vi.fn(async () => undefined);
+      const updateTopicMetadata = vi.fn(async () => undefined);
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            content: '',
+            id: 'asst-thread-race',
+            metadata: { heteroOperation: { operationId: 'op-thread-race' } },
+            threadId: 'thread-race',
+            topicId: 'topic-shared',
+          })),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+          updateMetadata: updateMessageMetadata,
+        } as any,
+        threadModel: {} as any,
+        topicModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            id: 'topic-shared',
+            metadata: {
+              heteroSessionId: 'main-session',
+              heteroSessionOperationId: 'op-thread-race',
+              runningOperation: null,
+            },
+          })),
+          updateMetadata: updateTopicMetadata,
+        } as any,
+      });
+
+      await handler.finish({
+        assistantMessageId: 'asst-thread-race',
+        error: { message: 'run failed', type: 'AgentRuntimeError' },
+        operationId: 'op-thread-race',
+        result: 'error',
+        sessionId: 'thread-race-session',
+        topicId: 'topic-shared',
+      });
+
+      expect(updateMessageMetadata).toHaveBeenCalledWith('asst-thread-race', {
+        heteroSessionId: 'thread-race-session',
+      });
+      expect(updateTopicMetadata).not.toHaveBeenCalledWith(
+        'topic-shared',
+        expect.objectContaining({ heteroSessionId: expect.anything() }),
+      );
+    });
+
+    it('persists a successful cold-finish session after runningOperation was cleared', async () => {
+      const updateMessageMetadata = vi.fn(async () => undefined);
+      const updateTopicMetadata = vi.fn(async () => undefined);
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            content: 'done',
+            id: 'asst-thread-success',
+            metadata: { heteroOperation: { operationId: 'op-thread-success' } },
+            threadId: 'thread-success',
+            topicId: 'topic-shared',
+          })),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+          updateMetadata: updateMessageMetadata,
+        } as any,
+        threadModel: {} as any,
+        topicModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'agent-1',
+            id: 'topic-shared',
+            metadata: {
+              heteroSessionOperationId: 'op-thread-success',
+              runningOperation: null,
+            },
+          })),
+          updateMetadata: updateTopicMetadata,
+        } as any,
+      });
+
+      await handler.finish({
+        assistantMessageId: 'asst-thread-success',
+        operationId: 'op-thread-success',
+        result: 'success',
+        sessionId: 'thread-success-session',
+        topicId: 'topic-shared',
+      });
+
+      expect(updateMessageMetadata).toHaveBeenCalledWith('asst-thread-success', {
+        heteroSessionId: 'thread-success-session',
+      });
+      expect(updateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('uses the durable internal binding without touching a parent running operation', async () => {
+      const updateMessageMetadata = vi.fn(async () => undefined);
+      const updateTopicMetadata = vi.fn(async () => undefined);
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'child-agent',
+            content: '',
+            id: 'asst-child',
+            metadata: {
+              heteroOperation: {
+                internalIsolation: true,
+                operationId: 'op-child',
+              },
+            },
+            threadId: 'thread-child',
+            topicId: 'topic-parent',
+          })),
+          findLatestAssistantMessageByThread: vi.fn(async () => ({ id: 'asst-child' })),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+          updateMetadata: updateMessageMetadata,
+        } as any,
+        threadModel: { queryByTopicId: vi.fn(async () => []) } as any,
+        topicModel: {
+          findById: vi.fn(async () => ({
+            agentId: 'parent-agent',
+            id: 'topic-parent',
+            metadata: {
+              runningOperation: {
+                assistantMessageId: 'asst-parent',
+                operationId: 'op-parent',
+              },
+            },
+          })),
+          updateMetadata: updateTopicMetadata,
+        } as any,
+      });
+
+      await handler.ingest({
+        assistantMessageId: 'asst-child',
+        events: [
+          {
+            data: { sessionId: 'child-session' },
+            operationId: 'op-child',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_start',
+          },
+        ],
+        operationId: 'op-child',
+        topicId: 'topic-parent',
+      });
+
+      expect(updateMessageMetadata).toHaveBeenCalledWith('asst-child', {
+        heteroSessionId: 'child-session',
+      });
+      expect(updateTopicMetadata).not.toHaveBeenCalled();
+    });
+
     it('persists heteroSessionId as soon as stream_start reports it, without waiting for heteroFinish', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-abandon',
@@ -383,7 +664,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
 
       // Only a stream_start reporting the CC session id — NO heteroFinish. This
@@ -404,13 +685,15 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       });
 
       // The resume token is already on topic.metadata — the next turn can resume.
-      expect(updateMetadata).toHaveBeenCalledWith('topic-abandon', {
-        heteroSessionId: 'cc-live-session',
-      });
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledWith(
+        'topic-abandon',
+        'op-abandon',
+        'cc-live-session',
+      );
     });
 
     it('does not re-write when stream_start repeats the same session id', async () => {
-      const updateMetadata = vi.fn(async () => undefined);
+      const updateHeterogeneousSessionIfMatches = vi.fn(async () => true);
       const findById = vi.fn(async () => ({
         agentId: null,
         id: 'topic-dedupe',
@@ -425,7 +708,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           update: vi.fn(async () => ({ success: true })),
         } as any,
         threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
+        topicModel: { findById, updateHeterogeneousSessionIfMatches } as any,
       });
 
       await handler.ingest({
@@ -449,7 +732,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicId: 'topic-dedupe',
       });
 
-      expect(updateMetadata).toHaveBeenCalledTimes(1);
+      expect(updateHeterogeneousSessionIfMatches).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -480,6 +763,32 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const sessionId = await service.getHeterogeneousResumeSessionId('topic-resume');
       expect(sessionId).toBe('cc-session-aaaa');
       expect(findById).toHaveBeenCalledWith('topic-resume');
+    });
+
+    it('reads an exact thread session without consulting topic metadata', async () => {
+      const findLatestHeterogeneousSessionId = vi.fn(async () => 'thread-a-session');
+      const findTopicById = vi.fn(async () => ({
+        metadata: { heteroSessionId: 'main-session' },
+      }));
+      const service = new HeterogeneousAgentService({} as any, 'user-1', {
+        messageModel: { findLatestHeterogeneousSessionId } as any,
+        persistenceHandler: {
+          finish: vi.fn(async () => {}),
+          ingest: vi.fn(async () => {}),
+        } as unknown as HeterogeneousPersistenceHandler,
+        streamEventManager: createSilentStreamManager(),
+        topicModel: { findById: findTopicById } as any,
+      });
+
+      await expect(
+        service.getHeterogeneousResumeSessionId('topic-shared', 'thread-a', 'asst-current'),
+      ).resolves.toBe('thread-a-session');
+      expect(findLatestHeterogeneousSessionId).toHaveBeenCalledWith({
+        excludeMessageId: 'asst-current',
+        threadId: 'thread-a',
+        topicId: 'topic-shared',
+      });
+      expect(findTopicById).not.toHaveBeenCalled();
     });
 
     it('returns undefined when no prior run persisted a session id', async () => {

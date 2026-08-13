@@ -6,7 +6,7 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import { ThreadStatus } from '@lobechat/types';
+import { ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -66,6 +66,12 @@ export interface HeterogeneousFinishParams {
   topicId: string;
 }
 
+interface PersistedHeterogeneousOperation {
+  hooks?: SerializedHook[];
+  internalIsolation?: boolean;
+  operationId?: string;
+}
+
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
 
 /**
@@ -100,6 +106,8 @@ export const normalizeHeterogeneousFinishError = (
 };
 
 export interface HeterogeneousAgentServiceOptions {
+  /** Inject a pre-built MessageModel (used by tests for thread-scoped resume). */
+  messageModel?: MessageModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
@@ -146,7 +154,7 @@ export class HeterogeneousAgentService {
     this.userId = userId;
     const workspaceId = options.workspaceId;
     this.workspaceId = workspaceId;
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.messageModel = options.messageModel ?? new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
     this.traceRecorder = new HeteroTraceRecorder(
@@ -265,6 +273,47 @@ export class HeterogeneousAgentService {
       );
     }
 
+    // Validate the callback's durable ownership before persistence or terminal
+    // publication. A producer-supplied assistant id is authority only when the
+    // owned row binds the same operation and exact Topic/Thread scope. Internal
+    // isolation runs intentionally coexist with their parent's Topic marker;
+    // ordinary runs must own that marker, or the surviving session-generation
+    // marker when a gateway callback already cleared it.
+    let seedAssistantMessage: Awaited<ReturnType<MessageModel['findById']>>;
+    let persistedOperation: PersistedHeterogeneousOperation | undefined;
+    let internalIsolation = false;
+    const topicBeforeFinish = await this.topicModel.findById(topicId);
+    const runningBeforeFinish = topicBeforeFinish?.metadata?.runningOperation;
+    if (!topicBeforeFinish) return;
+    if (seedAssistantMessageId) {
+      seedAssistantMessage = await this.messageModel.findById(seedAssistantMessageId);
+      persistedOperation = seedAssistantMessage?.metadata?.heteroOperation as
+        PersistedHeterogeneousOperation | undefined;
+      const matchesSeedBinding =
+        seedAssistantMessage?.topicId === topicId &&
+        persistedOperation?.operationId === operationId;
+      internalIsolation = matchesSeedBinding && persistedOperation?.internalIsolation === true;
+      const ownsRunningOperation = runningBeforeFinish?.operationId === operationId;
+      const matchesRunningThread =
+        (runningBeforeFinish?.threadId ?? undefined) ===
+        (seedAssistantMessage?.threadId ?? undefined);
+      const ownsClearedGeneration =
+        !runningBeforeFinish &&
+        topicBeforeFinish.metadata?.heteroSessionOperationId === operationId;
+      if (
+        !matchesSeedBinding ||
+        (internalIsolation && !seedAssistantMessage?.threadId) ||
+        (!internalIsolation &&
+          !((ownsRunningOperation && matchesRunningThread) || ownsClearedGeneration))
+      ) {
+        log('heteroFinish: stale seeded operation ignored op=%s topic=%s', operationId, topicId);
+        return;
+      }
+    } else if (runningBeforeFinish?.operationId !== operationId) {
+      log('heteroFinish: unbound stale operation ignored op=%s topic=%s', operationId, topicId);
+      return;
+    }
+
     // Drain any pending state in the persistence handler — flushes trailing
     // accumulated content / reasoning that the in-stream `agent_runtime_end`
     // already wrote (no-op when state is clean), persists the CLI's native
@@ -273,14 +322,22 @@ export class HeterogeneousAgentService {
     // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
     // error must be written HERE, before the `agent_runtime_end` publish below
     // triggers the client's message refetch.
-    await this.persistenceHandler.finish({
-      assistantMessageId: seedAssistantMessageId,
-      error,
-      operationId,
-      result,
-      sessionId,
-      topicId,
-    });
+    try {
+      await this.persistenceHandler.finish({
+        assistantMessageId: seedAssistantMessageId,
+        error,
+        operationId,
+        result,
+        sessionId,
+        topicId,
+      });
+    } catch (err) {
+      if (err instanceof StaleHeteroOperationError) {
+        log('heteroFinish: stale operation ignored before terminal publish op=%s', operationId);
+        return;
+      }
+      throw err;
+    }
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,
@@ -316,29 +373,59 @@ export class HeterogeneousAgentService {
 
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
-    let isolationThreadId: string | undefined;
+    let executionThreadId: string | undefined;
+    const matchesPersistedOperation = persistedOperation?.operationId === operationId;
     try {
       const topic = await this.topicModel.findById(topicId);
-      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
+      const runningOperation = topic?.metadata?.runningOperation;
+      const matchesSeedThread =
+        !seedAssistantMessageId ||
+        (runningOperation?.threadId ?? undefined) === (seedAssistantMessage?.threadId ?? undefined);
+      const ownedRunningOperation =
+        runningOperation?.operationId === operationId && matchesSeedThread
+          ? runningOperation
+          : undefined;
+      const acceptsPersistedOperation =
+        matchesPersistedOperation &&
+        (internalIsolation ||
+          (!runningOperation && topic?.metadata?.heteroSessionOperationId === operationId));
+      if (!ownedRunningOperation && !acceptsPersistedOperation) {
+        log('heteroFinish: stale operation ignored op=%s topic=%s', operationId, topicId);
+        return;
+      }
+      serializedHooks = internalIsolation
+        ? persistedOperation?.hooks
+        : ((ownedRunningOperation?.hooks as SerializedHook[] | undefined) ??
+          (acceptsPersistedOperation ? persistedOperation?.hooks : undefined));
+      // The gateway terminal callback can clear runningOperation before the CLI
+      // finish callback arrives. The producer-supplied assistant id points to a
+      // durable row and therefore remains authoritative for Thread scope.
+      executionThreadId = internalIsolation
+        ? (seedAssistantMessage?.threadId ?? undefined)
+        : (ownedRunningOperation?.threadId ??
+          (acceptsPersistedOperation ? seedAssistantMessage?.threadId : undefined) ??
+          undefined);
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
       // recorded in runningOperation if the pointer is absent or belongs to a
       // different operation (shouldn't happen, but defensive).
       const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
-      assistantMessageId =
-        currentMsgRef?.operationId === operationId
+      assistantMessageId = internalIsolation
+        ? seedAssistantMessageId
+        : currentMsgRef?.operationId === operationId
           ? currentMsgRef.msgId
-          : topic?.metadata?.runningOperation?.assistantMessageId;
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-      // topic off `running`. Guarded in the model: an attached client's own
-      // terminal write ('active'/'unread') is never clobbered.
-      await this.topicModel.settleRunningStatus(topicId);
+          : (ownedRunningOperation?.assistantMessageId ??
+            (acceptsPersistedOperation ? seedAssistantMessageId : undefined));
+      if (!internalIsolation) {
+        const clearedRunningOperation = ownedRunningOperation
+          ? await this.topicModel.clearRunningOperationIfMatches(topicId, operationId, 'unread')
+          : false;
+        if (!clearedRunningOperation && ownedRunningOperation) return;
+      }
     } catch (err) {
-      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
+      log('heteroFinish: failed to validate/clear runningOperation: %O', err);
+      return;
     }
 
     // The owning agentId is authoritatively encoded in the operationId
@@ -353,10 +440,26 @@ export class HeterogeneousAgentService {
     // Still read the assistant message for its content so the bot-callback
     // handler has lastAssistantContent to render.
     let lastAssistantContent: string | undefined;
+    if (internalIsolation && executionThreadId && seedAssistantMessage?.agentId) {
+      try {
+        const latest = await this.messageModel.findLatestAssistantMessageByThread({
+          agentId: seedAssistantMessage.agentId,
+          threadId: executionThreadId,
+          topicId,
+        });
+        assistantMessageId = latest?.id ?? assistantMessageId;
+      } catch (err) {
+        log('heteroFinish: failed to resolve final isolation assistant (non-fatal): %O', err);
+      }
+    }
     if (assistantMessageId) {
       try {
-        const msg = await this.messageModel.findById(assistantMessageId);
+        const msg =
+          assistantMessageId === seedAssistantMessageId
+            ? seedAssistantMessage
+            : await this.messageModel.findById(assistantMessageId);
         lastAssistantContent = msg?.content as string | undefined;
+        executionThreadId ??= msg?.threadId ?? undefined;
       } catch (err) {
         log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
@@ -366,11 +469,14 @@ export class HeterogeneousAgentService {
     // from the one that registered the in-memory thread hooks. Finalize the
     // isolation thread durably here as well, and project its terminal answer
     // back onto the source assistant in the main conversation.
-    if (isolationThreadId) {
+    if (internalIsolation && executionThreadId) {
       try {
         const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
-        const thread = await threadModel.findById(isolationThreadId);
-        if (thread) {
+        const thread = await threadModel.findById(executionThreadId);
+        // User-created continuation/standalone Threads remain active
+        // conversations after one run. Only internal isolation Threads model a
+        // single delegated execution and should be terminally finalized here.
+        if (thread?.type === ThreadType.Isolation) {
           if (lastAssistantContent && thread.sourceMessageId) {
             await this.messageModel.update(thread.sourceMessageId, {
               content: lastAssistantContent,
@@ -380,7 +486,7 @@ export class HeterogeneousAgentService {
           const completedAt = new Date().toISOString();
           const startedAt =
             typeof thread.metadata?.startedAt === 'string' ? thread.metadata.startedAt : undefined;
-          await threadModel.update(isolationThreadId, {
+          await threadModel.update(executionThreadId, {
             metadata: {
               ...thread.metadata,
               completedAt,
@@ -507,7 +613,19 @@ export class HeterogeneousAgentService {
    * Reads the same `topic.metadata.heteroSessionId` the desktop renderer
    * writes, so resume state is shared between desktop and cloud paths.
    */
-  async getHeterogeneousResumeSessionId(topicId: string): Promise<string | undefined> {
+  async getHeterogeneousResumeSessionId(
+    topicId: string,
+    threadId?: string,
+    excludeMessageId?: string,
+  ): Promise<string | undefined> {
+    if (threadId) {
+      return this.messageModel.findLatestHeterogeneousSessionId({
+        excludeMessageId,
+        threadId,
+        topicId,
+      });
+    }
+
     const topic = await this.topicModel.findById(topicId);
     return topic?.metadata?.heteroSessionId;
   }
