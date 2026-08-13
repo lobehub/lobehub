@@ -606,10 +606,15 @@ export const documentRouter = router({
 
       const result = await ctx.documentService.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        // A level staged on the permission page while the document was still
+        // private must survive publishing — only fall back to the default
+        // when neither an explicit input nor a staged row exists.
+        const staged = await permissionModel.getAccessLevel('document', input.id);
+        await permissionModel.setAccessLevel(
           'document',
           input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
+          input.accessLevel ?? staged ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
           ctx.userId,
         );
       }
@@ -678,19 +683,21 @@ export const documentRouter = router({
       }
 
       const result = await ctx.documentService.setVisibility(input.id, input.visibility);
+      // A level staged on the permission page while the document was still
+      // private must survive publishing — only fall back to the default when
+      // neither an explicit input nor a staged row exists.
+      const staged =
+        input.visibility === 'public'
+          ? await permissionModel.getAccessLevel('document', input.id)
+          : null;
       const accessLevel =
         input.visibility === 'private'
           ? 'edit'
-          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document);
+          : (input.accessLevel ?? staged ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document);
       if (input.visibility === 'private') {
         await permissionModel.removeAll('document', input.id);
       } else {
-        await permissionModel.setAccessLevel(
-          'document',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
-          ctx.userId,
-        );
+        await permissionModel.setAccessLevel('document', input.id, accessLevel, ctx.userId);
       }
       return {
         ...buildResourcePermissionState({

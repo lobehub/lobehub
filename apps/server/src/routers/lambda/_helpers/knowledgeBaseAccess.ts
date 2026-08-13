@@ -1,7 +1,12 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 
-import { knowledgeBaseFiles, knowledgeBases, resourcePermissions } from '@/database/schemas';
+import {
+  documents,
+  knowledgeBaseFiles,
+  knowledgeBases,
+  resourcePermissions,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   assertCanPerformResourceAction,
@@ -54,11 +59,15 @@ export const getUseLevelKnowledgeBaseIds = async (
   const rows = await db
     .select({ id: resourcePermissions.resourceId })
     .from(resourcePermissions)
+    .innerJoin(knowledgeBases, eq(knowledgeBases.id, resourcePermissions.resourceId))
     .where(
       and(
         eq(resourcePermissions.workspaceId, workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
         eq(resourcePermissions.accessLevel, 'use'),
+        // A permission row staged on a still-private KB is inert until the KB
+        // is published — private KBs are creator-only regardless of the row.
+        eq(knowledgeBases.visibility, 'public'),
       ),
     );
 
@@ -88,6 +97,10 @@ export const getRestrictedKnowledgeBaseIds = async (
         eq(resourcePermissions.workspaceId, ctx.workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
         eq(resourcePermissions.accessLevel, 'use'),
+        // A `use` row staged while the KB is still private must not leak into
+        // member-facing filters: the private KB is already creator-only, and
+        // filtering here would also hide its files from open KBs they share.
+        eq(knowledgeBases.visibility, 'public'),
         // Creators always keep browsing their own knowledge bases.
         ne(knowledgeBases.userId, ctx.userId),
       ),
@@ -133,6 +146,62 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
       code: 'FORBIDDEN',
       message: 'Only knowledge base managers can view this file',
     });
+  }
+};
+
+/**
+ * Assert a full-content batch read (`chunk.getFileContents`) does not leak a
+ * restricted knowledge base's content. Accepts the mixed id list the endpoint
+ * takes: `file_*` ids resolve through `knowledge_base_files`, `docs_*` ids
+ * through `documents.knowledge_base_id`. The member-facing "No access" level
+ * only promises attached agents continued retrieval (semantic search) — full
+ * document dumps stay manager-only, matching the browse restriction.
+ */
+export const assertContentsNotInRestrictedKnowledgeBase = async (
+  ctx: KnowledgeBaseAccessCtx,
+  ids: string[],
+): Promise<void> => {
+  if (!ctx.workspaceId || ids.length === 0) return;
+
+  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  if (restricted.length === 0) return;
+
+  const documentIds = ids.filter((id) => id.startsWith('docs_'));
+  const fileIds = ids.filter((id) => !id.startsWith('docs_'));
+
+  if (fileIds.length > 0) {
+    const rows = await ctx.serverDB
+      .select({ fileId: knowledgeBaseFiles.fileId })
+      .from(knowledgeBaseFiles)
+      .where(
+        and(
+          inArray(knowledgeBaseFiles.fileId, fileIds),
+          inArray(knowledgeBaseFiles.knowledgeBaseId, restricted),
+        ),
+      )
+      .limit(1);
+    if (rows.length > 0) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Only knowledge base managers can view this file',
+      });
+    }
+  }
+
+  if (documentIds.length > 0) {
+    const rows = await ctx.serverDB
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(inArray(documents.id, documentIds), inArray(documents.knowledgeBaseId, restricted)),
+      )
+      .limit(1);
+    if (rows.length > 0) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Only knowledge base managers can view this document',
+      });
+    }
   }
 };
 

@@ -20,7 +20,10 @@ import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
-import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  assertFileNotInRestrictedKnowledgeBase,
+} from './_helpers/knowledgeBaseAccess';
 
 const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -95,6 +98,8 @@ export const chunkRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, input.fileIds);
+
       return ctx.knowledgeBaseSearchService.getFileContents(input.fileIds);
     }),
 

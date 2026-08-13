@@ -5,6 +5,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
   filterRestrictedKnowledgeBases,
   getRestrictedKnowledgeBaseIds,
@@ -23,7 +24,11 @@ const permissionMatchesMock = vi.mocked(getWorkspaceScopedPermissionMatches);
  */
 const dbWithResults = (...results: unknown[][]) => {
   let call = 0;
-  const next = () => Promise.resolve(results[call++] ?? []);
+  const next = () => {
+    const promise = Promise.resolve(results[call++] ?? []);
+    // Support the optional trailing `.limit(n)` some helpers chain on.
+    return Object.assign(promise, { limit: () => promise });
+  };
   return {
     select: () => ({
       from: () => ({
@@ -126,5 +131,69 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
     };
 
     await expect(assertFileNotInRestrictedKnowledgeBase(ctx, 'file-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('assertContentsNotInRestrictedKnowledgeBase', () => {
+  it('passes through in personal mode and for empty id lists', async () => {
+    const personal = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1' };
+    await expect(
+      assertContentsNotInRestrictedKnowledgeBase(personal, ['file-1']),
+    ).resolves.toBeUndefined();
+
+    const ws = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1', workspaceId: 'ws-1' };
+    await expect(assertContentsNotInRestrictedKnowledgeBase(ws, [])).resolves.toBeUndefined();
+  });
+
+  it('passes when no knowledge base is restricted', async () => {
+    const ctx = {
+      // 1st select: restriction rows (empty)
+      serverDB: dbWithResults([]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertContentsNotInRestrictedKnowledgeBase(ctx, ['file-1', 'docs_1']),
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws FORBIDDEN when a file id belongs to a restricted KB', async () => {
+    const ctx = {
+      // 1st select: restriction rows; 2nd select: restricted file membership hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [{ fileId: 'file-1' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(assertContentsNotInRestrictedKnowledgeBase(ctx, ['file-1'])).rejects.toMatchObject(
+      { code: 'FORBIDDEN' },
+    );
+  });
+
+  it('throws FORBIDDEN when a docs_* id belongs to a restricted KB', async () => {
+    const ctx = {
+      // 1st select: restriction rows; 2nd select: restricted document hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [{ id: 'docs_1' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(assertContentsNotInRestrictedKnowledgeBase(ctx, ['docs_1'])).rejects.toMatchObject(
+      { code: 'FORBIDDEN' },
+    );
+  });
+
+  it('passes when neither files nor documents match a restricted KB', async () => {
+    const ctx = {
+      // restriction rows, then empty file hit, then empty document hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], []),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertContentsNotInRestrictedKnowledgeBase(ctx, ['file-open', 'docs_open']),
+    ).resolves.toBeUndefined();
   });
 });
