@@ -197,6 +197,12 @@ export type SearchResult =
 export interface SearchOptions {
   agentId?: string;
   contextType?: 'agent' | 'resource' | 'page';
+  /**
+   * Knowledge-base ids to drop from KB results — restricted (member
+   * No-access) KBs must not be discoverable through unified search either.
+   * Caller-relative, so the router computes it per request.
+   */
+  excludeKnowledgeBaseIds?: string[];
   limitPerType?: number;
   offset?: number;
   query: string;
@@ -412,7 +418,13 @@ export class SearchRepo {
       searchPromises.push(this.searchMemories(trimmedQuery, limits.memory));
     }
     if ((!type || type === 'knowledgeBase') && limits.knowledgeBase > 0) {
-      searchPromises.push(this.searchKnowledgeBases(trimmedQuery, limits.knowledgeBase));
+      searchPromises.push(
+        this.searchKnowledgeBases(
+          trimmedQuery,
+          limits.knowledgeBase,
+          options.excludeKnowledgeBaseIds,
+        ),
+      );
     }
 
     const results = await Promise.all(searchPromises);
@@ -1230,6 +1242,7 @@ export class SearchRepo {
   private async searchKnowledgeBases(
     query: string,
     limit: number,
+    excludeIds?: string[],
   ): Promise<KnowledgeBaseSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
@@ -1266,7 +1279,14 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          // Lifted above the BM25 scan (like the scope predicate) so the scan
+          // keeps its TopN shape; restricted rows only consume candidate slots.
+          excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 

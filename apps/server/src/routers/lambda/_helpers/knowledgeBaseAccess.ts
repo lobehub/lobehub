@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import {
+  agentsKnowledgeBases,
   documents,
   knowledgeBaseFiles,
   knowledgeBases,
@@ -225,6 +226,41 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
       });
     }
   }
+};
+
+/**
+ * Filter caller-supplied knowledge-base ids for retrieval (semantic search /
+ * BM25). A restricted KB stays retrievable only through the attached-agent
+ * carve-out: it must have at least one enabled `agents_knowledge_bases` row.
+ * Restricted KBs without such a row are silently dropped — a member could not
+ * reach their content through any agent either, so returning chunks for a
+ * handcrafted id would widen access beyond the policy.
+ */
+export const filterRetrievableKnowledgeBaseIds = async (
+  ctx: KnowledgeBaseAccessCtx,
+  knowledgeIds: string[],
+): Promise<string[]> => {
+  if (!ctx.workspaceId || knowledgeIds.length === 0) return knowledgeIds;
+
+  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  if (restricted.length === 0) return knowledgeIds;
+
+  const restrictedSet = new Set(restricted);
+  const restrictedRequested = knowledgeIds.filter((id) => restrictedSet.has(id));
+  if (restrictedRequested.length === 0) return knowledgeIds;
+
+  const attachedRows = await ctx.serverDB
+    .select({ id: agentsKnowledgeBases.knowledgeBaseId })
+    .from(agentsKnowledgeBases)
+    .where(
+      and(
+        inArray(agentsKnowledgeBases.knowledgeBaseId, restrictedRequested),
+        eq(agentsKnowledgeBases.enabled, true),
+      ),
+    );
+  const attached = new Set(attachedRows.map((row) => row.id));
+
+  return knowledgeIds.filter((id) => !restrictedSet.has(id) || attached.has(id));
 };
 
 /**

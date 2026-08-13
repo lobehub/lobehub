@@ -9,6 +9,7 @@ import {
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseAttachable,
   filterRestrictedKnowledgeBases,
+  filterRetrievableKnowledgeBaseIds,
   getRestrictedKnowledgeBaseIds,
 } from './knowledgeBaseAccess';
 
@@ -132,6 +133,32 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
     };
 
     await expect(assertFileNotInRestrictedKnowledgeBase(ctx, 'file-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('filterRetrievableKnowledgeBaseIds', () => {
+  it('passes ids through in personal mode and when nothing is restricted', async () => {
+    const personal = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1' };
+    await expect(filterRetrievableKnowledgeBaseIds(personal, ['kb-1'])).resolves.toEqual(['kb-1']);
+
+    const ws = { serverDB: dbWithResults([]), userId: 'member', workspaceId: 'ws-1' };
+    await expect(filterRetrievableKnowledgeBaseIds(ws, ['kb-1'])).resolves.toEqual(['kb-1']);
+  });
+
+  it('keeps a restricted KB only through the attached-agent carve-out', async () => {
+    const ctx = {
+      // 1st select: restriction rows; 2nd select: enabled attachment rows
+      serverDB: dbWithResults(
+        [{ id: 'kb-restricted' }, { id: 'kb-dropped' }],
+        [{ id: 'kb-restricted' }],
+      ),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      filterRetrievableKnowledgeBaseIds(ctx, ['kb-open', 'kb-restricted', 'kb-dropped']),
+    ).resolves.toEqual(['kb-open', 'kb-restricted']);
   });
 });
 

@@ -23,6 +23,7 @@ import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
+  filterRetrievableKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 
 const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -163,12 +164,21 @@ export const chunkRouter = router({
   semanticSearchForChat: chunkProcedure
     .input(SemanticSearchSchema)
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.knowledgeBaseSearchService.semanticSearchForChat(input);
+      // Restricted KBs stay retrievable only through the attached-agent
+      // carve-out; handcrafted ids without an enabled attachment are dropped.
+      const retrievableKnowledgeIds = await filterRetrievableKnowledgeBaseIds(
+        ctx,
+        input.knowledgeIds ?? [],
+      );
+      const result = await ctx.knowledgeBaseSearchService.semanticSearchForChat({
+        ...input,
+        knowledgeIds: retrievableKnowledgeIds,
+      });
 
       // Backward compatibility: if BM25 was not attempted (no KB scope) AND
       // vector failed, surface the original TRPCError so existing chat flows
       // (which only use vector) get the same diagnostics they did before.
-      const knowledgeIds = input.knowledgeIds ?? [];
+      const knowledgeIds = retrievableKnowledgeIds;
       const vectorRejection = result.rejections?.vector as any | undefined;
       if (vectorRejection && knowledgeIds.length === 0 && result.documents.length === 0) {
         const errorType = vectorRejection?.errorType;
