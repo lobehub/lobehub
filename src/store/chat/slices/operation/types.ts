@@ -539,9 +539,11 @@ export const isQueueBlockingOperation = (
   if (!QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type)) return false;
   if (operation.status !== 'running') return false;
 
-  // Stop was pressed. The queue drains on success ONLY, so this run will never
-  // absorb a follow-up — queueing behind it would strand the message forever.
-  if (operation.metadata.isAborting) return false;
+  // Stop was pressed. With no older queue, this run cannot absorb a follow-up,
+  // so let the next send start fresh. When older items already exist, keep the
+  // operation blocking until cancellation completes; the send lifecycle then
+  // restarts that orphaned FIFO as one ordered batch.
+  if (operation.metadata.isAborting && !options?.hasQueuedMessages) return false;
 
   // Visible output is done and the op is only finishing terminal bookkeeping
   // (DB reconciliation, title, drain). The answer is complete on screen and the

@@ -76,6 +76,27 @@ describe('Operation Selectors', () => {
       ).toEqual([]);
     });
 
+    it('keeps an aborting op blocking while older follow-ups are queued', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let opId = '';
+
+      act(() => {
+        opId = result.current.startOperation({ type: 'execAgentRuntime', context }).operationId;
+        result.current.updateOperationMetadata(opId, { isAborting: true });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'queued first',
+          createdAt: Date.now(),
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([opId]);
+    });
+
     it('stops blocking once visible output ends — the composer already shows Send', () => {
       const { result } = renderHook(() => useChatStore());
       const context = { agentId: 'agent1', topicId: 'topic1' };

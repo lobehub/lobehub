@@ -434,6 +434,8 @@ export class GatewayActionImpl {
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
+    /** Server operation whose visible output ended before this fresh turn. */
+    replacesOperationId?: string;
     /**
      * Caller-owned operation that should be completed once the gateway side
      * has finished phase-1 init (network round-trip + child
@@ -500,6 +502,7 @@ export class GatewayActionImpl {
       optimisticTopic,
       parentMessageId,
       parentOperationId,
+      replacesOperationId,
       resumeApproval,
       resumeApprovals,
       resumeToolResult,
@@ -618,6 +621,7 @@ export class GatewayActionImpl {
         },
         ...desktopDeviceHints,
         fileIds,
+        replacesOperationId,
         mentionedAgents,
         parentMessageId,
         prompt: message,

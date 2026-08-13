@@ -78,6 +78,8 @@ export interface ExecAgentTaskParams {
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
+  /** Existing gateway operation this fresh turn atomically supersedes. */
+  replacesOperationId?: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
   /**

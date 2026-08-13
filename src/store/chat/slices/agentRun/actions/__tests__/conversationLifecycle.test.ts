@@ -2443,6 +2443,52 @@ describe('ConversationLifecycle actions', () => {
         expect(enqueueMessageSpy).not.toHaveBeenCalled();
       });
 
+      it('should restart the existing queue in FIFO order when Stop already cancelled its owner', async () => {
+        vi.useFakeTimers();
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-cancelled': {
+                childOperationIds: [],
+                context,
+                id: 'op-cancelled',
+                metadata: { isAborting: true },
+                status: 'cancelled',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: { [contextKey]: ['op-cancelled'] },
+            queuedMessages: {
+              [contextKey]: [
+                {
+                  content: 'queued A',
+                  createdAt: Date.now(),
+                  id: 'queued-1',
+                  interruptMode: 'soft',
+                },
+              ],
+            },
+          });
+        });
+
+        const sendMessageSpy = vi.spyOn(result.current, 'sendMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'new B' });
+          await vi.runAllTimersAsync();
+        });
+
+        expect(sendMessageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ message: expect.stringMatching(/queued A[\s\S]*new B/) }),
+        );
+        expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([]);
+        vi.useRealTimers();
+      });
+
       it('should still enqueue past visible end when follow-ups are already queued', async () => {
         // Order beats latency: those queued items belong to the terminal drain, so a
         // newer send must join the queue instead of jumping it — otherwise the drain

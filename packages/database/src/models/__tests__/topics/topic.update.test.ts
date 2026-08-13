@@ -170,6 +170,32 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(true);
     });
 
+    it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
+      const topicId = 'topic-start-operation-handoff';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'old-operation',
+          },
+        },
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'different-operation'),
+      ).resolves.toBe(false);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'old-operation'),
+      ).resolves.toBe(true);
+
+      const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
+      expect(topic?.metadata?.runningOperation).toBeNull();
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('new-start');
+    });
+
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
       await serverDB.insert(topics).values({

@@ -61,7 +61,11 @@ import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycl
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { QueuedFile } from '@/store/chat/slices/operation/types';
-import { isQueueBlockingOperation } from '@/store/chat/slices/operation/types';
+import {
+  isQueueBlockingOperation,
+  mergeQueuedMessages,
+  reconstructUploadFilesFromQueue,
+} from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -669,6 +673,72 @@ export class ConversationLifecycleActionImpl {
       notifyMessageAccepted();
       return;
     }
+
+    // Stop may already have moved the old operation to `cancelled`, so there is
+    // no live blocker left to drain follow-ups that were queued before Stop.
+    // Fold the new send into that FIFO and immediately restart the whole batch;
+    // otherwise the new message jumps ahead and the older queue drains after it.
+    const orphanedQueueKey = queueCandidateKeys.find((key) => {
+      if ((this.#get().queuedMessages[key]?.length ?? 0) === 0) return false;
+      return (this.#get().operationsByContext[key] || []).some((id) => {
+        const operation = this.#get().operations[id];
+        return operation?.status === 'cancelled' && operation.metadata.isAborting;
+      });
+    });
+    if (orphanedQueueKey && !onlyAddUserMessage) {
+      const filesPreview: QueuedFile[] = (files ?? []).map((file) => ({
+        audioMetadata: file.audioMetadata,
+        id: file.id,
+        mimeType: file.file?.type ?? '',
+        name: file.file?.name ?? file.id,
+        url: file.fileUrl || file.base64Url || file.previewUrl || '',
+      }));
+      this.#get().enqueueMessage(orphanedQueueKey, {
+        content: message,
+        createdAt: Date.now(),
+        editorData: editorData ?? undefined,
+        files: fileIdList,
+        filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+        ...(forceRuntime ? { forceRuntime } : {}),
+        id: nanoid(),
+        interruptMode: 'soft',
+        metadata: userMessageMetadata,
+      });
+      const merged = mergeQueuedMessages(this.#get().drainQueuedMessages(orphanedQueueKey));
+      notifyMessageAccepted();
+
+      setTimeout(() => {
+        this.#get()
+          .sendMessage({
+            context: operationContext,
+            editorData: merged.editorData,
+            files:
+              merged.filesPreview.length > 0
+                ? reconstructUploadFilesFromQueue(merged.filesPreview)
+                : merged.files.length > 0
+                  ? (merged.files.map((id) => ({ id })) as any)
+                  : undefined,
+            ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
+            message: merged.content,
+            metadata: merged.metadata,
+          })
+          .catch((error: unknown) => {
+            console.error('[sendMessage] restarting queued content after Stop failed:', error);
+          });
+      }, 0);
+
+      return;
+    }
+
+    const replaceableGatewayOperationId = queueCandidateKeys
+      .flatMap((key) => this.#get().operationsByContext[key] || [])
+      .map((id) => this.#get().operations[id])
+      .findLast(
+        (operation) =>
+          operation?.type === 'execServerAgentRuntime' &&
+          operation.status === 'running' &&
+          (operation.metadata.isAborting || operation.metadata.visibleLoadingDone),
+      )?.metadata.serverOperationId;
 
     if (onlyAddUserMessage) {
       await this.#get().addUserMessage({
@@ -1509,6 +1579,7 @@ export class ConversationLifecycleActionImpl {
           metadata: requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
+          replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention
