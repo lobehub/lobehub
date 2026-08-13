@@ -327,6 +327,53 @@ describe('spawnAgent', () => {
     });
   });
 
+  it('emits a protocol error when AMP exits zero without a terminal result', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'amp',
+      operationId: 'op-amp',
+      prompt: 'hello',
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(events.some((event) => event.type === 'agent_runtime_end')).toBe(false);
+    expect(events.at(-1)).toMatchObject({
+      data: {
+        agentType: 'amp',
+        code: 'protocol_error',
+        details: { expectedEventType: 'result', sessionId: 'cc-1' },
+      },
+      operationId: 'op-amp',
+      type: 'error',
+    });
+  });
+
+  it('does not classify a user-killed AMP process as a missing-result protocol error', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'amp',
+      operationId: 'op-amp-cancelled',
+      prompt: 'hello',
+    });
+
+    handle.kill();
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(events.some((event) => event.data?.code === 'protocol_error')).toBe(false);
+  });
+
   it('uses `threads continue <id>` before AMP execution flags on resume', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
