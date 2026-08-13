@@ -98,8 +98,9 @@ export class SessionModel {
     // items so the sidebar shows the same set of agents as desktop's
     // `getSidebarAgentList`. The route uses `agentId` (not sessionId) anyway.
     const orphanAgents = await this.findAgentsWithoutSession();
+    const visibleGroupIds = new Set(groups.map((group) => group.id));
     const orphanSessions = orphanAgents.map((agent) =>
-      this.buildVirtualSessionForAgent(agent),
+      this.buildVirtualSessionForAgent(agent, visibleGroupIds),
     );
 
     const allSessions = [...mappedSessions, ...orphanSessions].sort(
@@ -142,12 +143,19 @@ export class SessionModel {
    * agent's id as the virtual session id; the SPA route only relies on
    * `agentId` for navigation, so this stays consistent.
    */
-  private buildVirtualSessionForAgent = (agent: AgentItem): LobeAgentSession => {
+  private buildVirtualSessionForAgent = (
+    agent: AgentItem,
+    visibleGroupIds?: Set<string>,
+  ): LobeAgentSession => {
     return {
       config: agent as any,
       createdAt: agent.createdAt as any,
-      group: agent.sessionGroupId ?? undefined,
+      group:
+        agent.sessionGroupId && (!visibleGroupIds || visibleGroupIds.has(agent.sessionGroupId))
+          ? agent.sessionGroupId
+          : undefined,
       id: agent.id,
+      isVirtualSession: true,
       meta: {
         avatar: agent.avatar ?? undefined,
         backgroundColor: agent.backgroundColor ?? undefined,
@@ -172,7 +180,11 @@ export class SessionModel {
 
     const data = await this.findSessionsByKeywords({ keyword: keywordLowerCase });
 
-    return data.map((item) => this.mapSessionItem(item as any));
+    return data.map((item) =>
+      (item as LobeAgentSession).isVirtualSession
+        ? (item as LobeAgentSession)
+        : this.mapSessionItem(item as any),
+    );
   };
 
   findByIdOrSlug = async (
@@ -687,13 +699,12 @@ export class SessionModel {
       });
 
       // Filter and map results, ensuring valid session associations
-      return (
-        results
-          .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
-          // @ts-expect-error
-          .map((item) => item.agentsToSessions[0].session)
-          .filter((session) => session !== null && session !== undefined)
-      );
+      return results.flatMap((item) => {
+        const linkedSession = item.agentsToSessions?.[0]?.session;
+        if (linkedSession) return [linkedSession];
+        if (item.virtual) return [];
+        return [this.buildVirtualSessionForAgent(item as AgentItem)];
+      });
     } catch (e) {
       console.error('findSessionsByKeywords error:', e, { keyword });
       return [];

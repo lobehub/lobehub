@@ -25,6 +25,8 @@ export interface LobeAgentSession {
   createdAt: Date;
   group?: string;
   id: string;
+  /** True when this entry represents an agent without a persisted session row. */
+  isVirtualSession?: boolean;
   /** Market agent identifier for published agents */
   marketIdentifier?: string;
   meta: MetaData;

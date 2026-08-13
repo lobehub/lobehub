@@ -42,10 +42,11 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
   const sessionCustomGroups = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
-  const [pin, removeSession, pinSession, sessionType, duplicateSession, updateSessionGroup] =
+  const [session, pin, removeSession, pinSession, sessionType, duplicateSession, updateSessionGroup] =
     useSessionStore((s) => {
       const session = sessionSelectors.getSessionById(id)(s);
       return [
+        session,
         sessionHelpers.getSessionPinned(session),
         s.removeSession,
         s.pinSession,
@@ -55,10 +56,17 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
       ];
     });
 
-  const [pinAgentGroup, removeAgentGroup] = useHomeStore((s) => [
-    s.pinAgentGroup,
-    s.removeAgentGroup,
-  ]);
+  const [pinAgentGroup, removeAgentGroup, pinAgent, duplicateAgent, removeAgent, updateAgentGroup] =
+    useHomeStore((s) => [
+      s.pinAgentGroup,
+      s.removeAgentGroup,
+      s.pinAgent,
+      s.duplicateAgent,
+      s.removeAgent,
+      s.updateAgentGroup,
+    ]);
+
+  const isVirtualAgent = sessionType === 'agent' && (session as any)?.isVirtualSession === true;
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -77,7 +85,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
               if (parentType === 'group') {
                 pinAgentGroup(id, !pin);
               } else {
-                pinSession(id, !pin);
+                isVirtualAgent ? pinAgent(id, !pin) : pinSession(id, !pin);
               }
             },
           },
@@ -91,7 +99,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
               domEvent.stopPropagation();
               if (!canCreate) return;
 
-              duplicateSession(id);
+              isVirtualAgent ? duplicateAgent(id) : duplicateSession(id);
             },
           },
           ...(isDesktop
@@ -120,7 +128,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 title: editReason,
                 onClick: () => {
                   if (!canEdit) return;
-                  updateSessionGroup(id, groupId);
+                  isVirtualAgent ? updateAgentGroup(id, groupId) : updateSessionGroup(id, groupId);
                 },
               })),
               {
@@ -131,7 +139,9 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 title: editReason,
                 onClick: () => {
                   if (!canEdit) return;
-                  updateSessionGroup(id, SessionDefaultGroup.Default);
+                  isVirtualAgent
+                    ? updateAgentGroup(id, SessionDefaultGroup.Default)
+                    : updateSessionGroup(id, SessionDefaultGroup.Default);
                 },
               },
               {
@@ -177,7 +187,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                       await removeAgentGroup(id);
                       toast.success(t('confirmRemoveGroupSuccess'));
                     } else {
-                      await removeSession(id);
+                      await (isVirtualAgent ? removeAgent(id) : removeSession(id));
                       toast.success(t('confirmRemoveSessionSuccess'));
                     }
                   } catch (error) {
@@ -220,6 +230,11 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
       sessionType,
       t,
       updateSessionGroup,
+      isVirtualAgent,
+      pinAgent,
+      duplicateAgent,
+      removeAgent,
+      updateAgentGroup,
     ],
   );
 
