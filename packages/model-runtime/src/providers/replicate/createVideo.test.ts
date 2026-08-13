@@ -2,7 +2,12 @@ import type Replicate from 'replicate';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CreateVideoPayload } from '../../types';
-import { createReplicateVideo, extractVideoUrl, pollReplicateVideoStatus } from './createVideo';
+import {
+  buildVideoInput,
+  createReplicateVideo,
+  extractVideoUrl,
+  pollReplicateVideoStatus,
+} from './createVideo';
 
 const buildClient = (overrides: {
   create?: ReturnType<typeof vi.fn>;
@@ -47,6 +52,81 @@ describe('extractVideoUrl', () => {
   });
 });
 
+describe('buildVideoInput', () => {
+  const P_VIDEO = 'prunaai/p-video';
+
+  it('maps standard params onto the model input names', () => {
+    expect(
+      buildVideoInput(P_VIDEO, {
+        aspectRatio: '9:16',
+        duration: 10,
+        prompt: 'a cat surfing',
+        resolution: '1080p',
+        seed: 7,
+      }),
+    ).toEqual({
+      aspect_ratio: '9:16',
+      disable_safety_filter: false,
+      duration: 10,
+      prompt: 'a cat surfing',
+      resolution: '1080p',
+      seed: 7,
+    });
+  });
+
+  it('maps image inputs and drops the aspect ratio the model derives from the image', () => {
+    const input = buildVideoInput(P_VIDEO, {
+      aspectRatio: '16:9',
+      endImageUrl: 'https://end.png',
+      imageUrl: 'https://start.png',
+      prompt: 'a cat surfing',
+    });
+
+    expect(input.image).toBe('https://start.png');
+    expect(input.last_frame_image).toBe('https://end.png');
+    expect(input).not.toHaveProperty('aspect_ratio');
+  });
+
+  it('keeps the safety filter enabled even though Replicate defaults it off', () => {
+    expect(buildVideoInput(P_VIDEO, { prompt: 'x' }).disable_safety_filter).toBe(false);
+  });
+
+  it('omits empty optional params rather than sending nulls', () => {
+    expect(
+      buildVideoInput(P_VIDEO, {
+        imageUrl: null,
+        prompt: 'a cat surfing',
+        resolution: undefined,
+        seed: null,
+      }),
+    ).toEqual({ disable_safety_filter: false, prompt: 'a cat surfing' });
+  });
+
+  it('sends seed 0, which is a valid seed rather than an empty value', () => {
+    expect(buildVideoInput(P_VIDEO, { prompt: 'x', seed: 0 }).seed).toBe(0);
+  });
+
+  it('drops params the model does not declare instead of leaking them as inputs', () => {
+    // p-video has no standard-parameter equivalent for its `save_audio` input
+    const input = buildVideoInput(P_VIDEO, { generateAudio: false, prompt: 'x' });
+
+    expect(input).not.toHaveProperty('generateAudio');
+    expect(input).not.toHaveProperty('save_audio');
+  });
+
+  it('resolves the model contract even when the id pins a version', () => {
+    expect(
+      buildVideoInput(`${P_VIDEO}:abc123`, { endImageUrl: 'https://end.png', prompt: 'x' }),
+    ).toHaveProperty('last_frame_image', 'https://end.png');
+  });
+
+  it('falls back to conventional Replicate input names for an unknown model', () => {
+    expect(
+      buildVideoInput('someone/unknown-video', { aspectRatio: '1:1', prompt: 'x', seed: 3 }),
+    ).toEqual({ aspect_ratio: '1:1', prompt: 'x', seed: 3 });
+  });
+});
+
 describe('createReplicateVideo', () => {
   it('submits a prediction and returns its id without waiting for the result', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'pred-1', status: 'starting' });
@@ -68,69 +148,26 @@ describe('createReplicateVideo', () => {
     expect(create.mock.calls[0][0].input.disable_safety_filter).toBe(false);
   });
 
-  it('maps standard params onto Replicate input names', async () => {
+  it('targets the official-model endpoint for a bare model id', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'pred-1' });
 
-    await createReplicateVideo(
-      buildClient({ create }),
-      payload({
-        aspectRatio: '9:16',
-        duration: 10,
-        generateAudio: false,
-        resolution: '1080p',
-        seed: 7,
-      }),
-    );
+    await createReplicateVideo(buildClient({ create }), payload());
 
-    expect(create.mock.calls[0][0].input).toEqual({
-      aspect_ratio: '9:16',
-      disable_safety_filter: false,
-      duration: 10,
-      prompt: 'a cat surfing',
-      resolution: '1080p',
-      save_audio: false,
-      seed: 7,
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 'prunaai/p-video' });
+    expect(create.mock.calls[0][0]).not.toHaveProperty('version');
+  });
+
+  it('targets the versioned endpoint when the model id pins a version', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'pred-1' });
+
+    await createReplicateVideo(buildClient({ create }), {
+      model: 'prunaai/p-video:abc123',
+      params: { prompt: 'a cat surfing' },
     });
-  });
 
-  it('maps image inputs and drops aspect ratio for image-to-video', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'pred-1' });
-
-    await createReplicateVideo(
-      buildClient({ create }),
-      payload({
-        aspectRatio: '16:9',
-        endImageUrl: 'https://end.png',
-        imageUrl: 'https://start.png',
-      }),
-    );
-
-    const { input } = create.mock.calls[0][0];
-    expect(input.image).toBe('https://start.png');
-    expect(input.last_frame_image).toBe('https://end.png');
-    expect(input).not.toHaveProperty('aspect_ratio');
-  });
-
-  it('omits empty optional params rather than sending nulls', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'pred-1' });
-
-    await createReplicateVideo(
-      buildClient({ create }),
-      payload({ imageUrl: null, resolution: undefined, seed: null }),
-    );
-
-    expect(create.mock.calls[0][0].input).toEqual({
-      disable_safety_filter: false,
-      prompt: 'a cat surfing',
-    });
-  });
-
-  it('sends seed 0, which is a valid seed rather than an empty value', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'pred-1' });
-
-    await createReplicateVideo(buildClient({ create }), payload({ seed: 0 }));
-
-    expect(create.mock.calls[0][0].input.seed).toBe(0);
+    // `POST /models/{owner}/{name}/predictions` cannot carry a `:version` suffix
+    expect(create.mock.calls[0][0]).toMatchObject({ version: 'prunaai/p-video:abc123' });
+    expect(create.mock.calls[0][0]).not.toHaveProperty('model');
   });
 
   it('throws when Replicate returns no prediction id', async () => {

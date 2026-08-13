@@ -1,9 +1,79 @@
 import createDebug from 'debug';
+import type { RuntimeVideoGenParams } from 'model-bank';
 import type Replicate from 'replicate';
 
 import type { CreateVideoPayload, CreateVideoResponse, PollVideoStatusResult } from '../../types';
 
 const log = createDebug('lobe-video:replicate');
+
+type StandardParam = keyof RuntimeVideoGenParams;
+
+interface ReplicateVideoModel {
+  /**
+   * Standard parameter -> Replicate input name. Acts as an allow list: a
+   * parameter with no entry here is not sent, so a card cannot leak an input
+   * name the model does not declare.
+   */
+  aliases: Partial<Record<StandardParam, string>>;
+  /** Inputs always sent, whatever the user selected. */
+  fixedInput?: Record<string, unknown>;
+  /** Parameters the model derives from the input image and ignores alongside it. */
+  ignoredWithImage?: StandardParam[];
+}
+
+/**
+ * Per-model input contracts, transcribed from each model's OpenAPI schema.
+ * Replicate input names are model-specific, so they belong here rather than in
+ * the generic submission path below.
+ */
+const VIDEO_MODELS: Record<string, ReplicateVideoModel> = {
+  'prunaai/p-video': {
+    aliases: {
+      aspectRatio: 'aspect_ratio',
+      duration: 'duration',
+      endImageUrl: 'last_frame_image',
+      imageUrl: 'image',
+      prompt: 'prompt',
+      resolution: 'resolution',
+      seed: 'seed',
+    },
+    // Replicate defaults this to `true`; keep generations filtered.
+    fixedInput: { disable_safety_filter: false },
+    ignoredWithImage: ['aspectRatio'],
+  },
+};
+
+const DEFAULT_MODEL: ReplicateVideoModel = {
+  aliases: {
+    aspectRatio: 'aspect_ratio',
+    duration: 'duration',
+    imageUrl: 'image',
+    prompt: 'prompt',
+    resolution: 'resolution',
+    seed: 'seed',
+  },
+};
+
+const isEmpty = (value: unknown) =>
+  value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length);
+
+export function buildVideoInput(model: string, params: RuntimeVideoGenParams) {
+  // Strip any `:version` suffix so a pinned version still resolves its contract
+  const [modelId] = model.split(':');
+  const config = VIDEO_MODELS[modelId] ?? DEFAULT_MODEL;
+
+  const input: Record<string, unknown> = { ...config.fixedInput };
+
+  for (const [key, value] of Object.entries(params) as [StandardParam, unknown][]) {
+    const alias = config.aliases[key];
+    if (!alias || isEmpty(value)) continue;
+    if (params.imageUrl && config.ignoredWithImage?.includes(key)) continue;
+
+    input[alias] = value;
+  }
+
+  return input;
+}
 
 /**
  * Replicate returns the generated media in a shape that depends on the model:
@@ -36,21 +106,6 @@ export function extractVideoUrl(output: unknown): string | undefined {
 }
 
 /**
- * Replicate types a prediction error as `unknown`: it may be a plain string or
- * an object carrying a `message`.
- */
-function extractErrorMessage(error: unknown): string | undefined {
-  if (typeof error === 'string') return error || undefined;
-
-  if (error && typeof error === 'object') {
-    const { message } = error as { message?: unknown };
-    if (typeof message === 'string' && message) return message;
-  }
-
-  return undefined;
-}
-
-/**
  * Submit a video generation prediction to Replicate.
  *
  * Uses `predictions.create` rather than `client.run` so the request returns as
@@ -63,27 +118,18 @@ export async function createReplicateVideo(
   payload: CreateVideoPayload,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl, aspectRatio, duration, resolution, seed, generateAudio } =
-    params;
 
-  const input: Record<string, unknown> = {
-    prompt,
-    // Replicate defaults this to `true`; generations must stay filtered by default.
-    disable_safety_filter: false,
-  };
-
-  if (imageUrl) input.image = imageUrl;
-  if (endImageUrl) input.last_frame_image = endImageUrl;
-  // `aspect_ratio` is ignored by image-to-video models, which derive it from the input image
-  if (aspectRatio && !imageUrl) input.aspect_ratio = aspectRatio;
-  if (duration !== undefined && duration !== null) input.duration = duration;
-  if (resolution) input.resolution = resolution;
-  if (seed !== undefined && seed !== null) input.seed = seed;
-  if (generateAudio !== undefined) input.save_audio = generateAudio;
+  const input = buildVideoInput(model, params);
 
   log('Creating video prediction - model: %s, input: %O', model, input);
 
-  const prediction = await client.predictions.create({ input, model });
+  // Replicate exposes two prediction endpoints: `POST /predictions`, which takes
+  // a `version` and accepts any model, and `POST /models/{owner}/{name}/predictions`,
+  // which takes a bare model id but only serves official models. A pinned version
+  // cannot go through the latter, since it would land in the URL path.
+  const prediction = model.includes(':')
+    ? await client.predictions.create({ input, version: model })
+    : await client.predictions.create({ input, model });
 
   if (!prediction?.id) {
     throw new Error('Invalid response from Replicate: missing prediction id');
@@ -92,6 +138,21 @@ export async function createReplicateVideo(
   log('Video prediction created: %s (status: %s)', prediction.id, prediction.status);
 
   return { inferenceId: prediction.id };
+}
+
+/**
+ * Replicate types a prediction error as `unknown`: it may be a plain string or
+ * an object carrying a `message`.
+ */
+function extractErrorMessage(error: unknown): string | undefined {
+  if (typeof error === 'string') return error || undefined;
+
+  if (error && typeof error === 'object') {
+    const { message } = error as { message?: unknown };
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return undefined;
 }
 
 /**
