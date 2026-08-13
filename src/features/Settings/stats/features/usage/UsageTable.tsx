@@ -1,10 +1,10 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { type TableColumnType } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderIcon } from '@/components/Branding';
 import InlineTable from '@/components/InlineTable';
 import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';

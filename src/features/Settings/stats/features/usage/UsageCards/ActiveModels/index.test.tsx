@@ -18,6 +18,12 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@lobehub/icons', () => ({
   ModelIcon: ({ model }: { model: string }) => <span>{model}</span>,
+}));
+
+// Stubbed for the same reason as the vendor icons above: the real one reaches
+// the branding logo, and through it `@lobehub/ui/brand`, which this file's
+// deliberately narrow `@lobehub/icons` stub cannot satisfy.
+vi.mock('@/components/Branding', () => ({
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));
 
