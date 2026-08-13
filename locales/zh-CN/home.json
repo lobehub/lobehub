@@ -10,6 +10,7 @@
   "brief.action.feedback": "反馈",
   "brief.action.ignore": "忽略",
   "brief.action.retry": "重试",
+  "brief.action.review": "验收交付",
   "brief.action.upgrade": "升级方案",
   "brief.actionFailed": "操作没有成功，请再试一次。",
   "brief.addFeedback": "分享反馈",

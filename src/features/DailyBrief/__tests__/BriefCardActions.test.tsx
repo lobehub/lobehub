@@ -23,6 +23,7 @@ vi.mock('react-i18next', () => ({
         'brief.commentSubmit': 'Submit feedback',
         'brief.action.confirm': 'Confirm',
         'brief.action.confirmDone': 'Confirm complete',
+        'brief.action.review': 'Review delivery',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
       };
@@ -223,6 +224,29 @@ describe('BriefCardActions', () => {
     renderWithRouter(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
 
     expect(screen.getByText('✅ Confirm')).toBeInTheDocument();
+  });
+
+  it('should localize a review link action instead of showing its persisted label', () => {
+    renderWithRouter(
+      <BriefCardActions
+        briefId="brief-review"
+        briefType="decision"
+        actions={[
+          {
+            key: 'review',
+            label: 'Legacy review label',
+            type: 'link',
+            url: '/acceptance/acceptance-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Review delivery' })).toHaveAttribute(
+      'href',
+      '/acceptance/acceptance-1',
+    );
+    expect(screen.queryByText('Legacy review label')).not.toBeInTheDocument();
   });
 
   it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
