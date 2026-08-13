@@ -166,7 +166,11 @@ export async function pollReplicateVideoStatus(
 
   log('Prediction %s status: %s', inferenceId, prediction?.status);
 
-  switch (prediction?.status) {
+  // `aborted` is missing from the installed SDK's `Status` union but the API
+  // does return it, so widen before matching to keep it reachable.
+  const status: string | undefined = prediction?.status;
+
+  switch (status) {
     case 'succeeded': {
       const videoUrl = extractVideoUrl(prediction.output);
 
@@ -186,6 +190,12 @@ export async function pollReplicateVideoStatus(
 
     case 'canceled': {
       return { error: 'Video generation was canceled', status: 'failed' };
+    }
+
+    // Terminal: the prediction hit its deadline before it ever started running.
+    // Reporting it as pending would burn the caller's full polling budget first.
+    case 'aborted': {
+      return { error: 'Video generation was aborted before it started', status: 'failed' };
     }
 
     default: {
