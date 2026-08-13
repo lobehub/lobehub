@@ -339,26 +339,25 @@ export class UnderstandingService {
     const { OnboardingUnderstandingWorkflow } =
       await import('@/server/workflows/onboardingUnderstanding');
     OnboardingUnderstandingWorkflow.assertAvailable();
-    const current = await this.activeSession(input.topicId, input.sessionId);
+    await this.activeSession(input.topicId, input.sessionId);
     const requestedProviderIds = [...new Set(input.providerIds)].sort();
     if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
       throw new UnderstandingResourceNotFoundError('session');
     }
     const availableProviderIds = new Set(await this.listSourceProviderIds());
-    const providerIds = requestedProviderIds.filter(
-      (providerId) => current.sources[providerId] || availableProviderIds.has(providerId),
+    const providerIds = requestedProviderIds.filter((providerId) =>
+      availableProviderIds.has(providerId),
     );
 
-    const next = await this.dependencies.repository.extend({
-      expectedFeedbackRevision: input.expectedFeedbackRevision,
-      feedback: input.feedback,
-      providerIds,
-      sessionId: input.sessionId,
-      topicId: input.topicId,
-    });
-    const addedProviders = providerIds
-      .filter((providerId) => !current.sources[providerId])
-      .map((id) => ({ id, revision: 1 }));
+    const { attempts: providerAttempts, session: next } = await this.dependencies.repository.extend(
+      {
+        expectedFeedbackRevision: input.expectedFeedbackRevision,
+        feedback: input.feedback,
+        providerIds,
+        sessionId: input.sessionId,
+        topicId: input.topicId,
+      },
+    );
     const completedProviders = Object.entries(next.sources).filter(
       ([, state]) => state.status === 'completed',
     );
@@ -398,23 +397,37 @@ export class UnderstandingService {
         )),
       })),
     );
-    const providerAttempts = [...addedProviders, ...recollectedProviders].sort((left, right) =>
+    const attempts = [...providerAttempts, ...recollectedProviders].sort((left, right) =>
       left.id.localeCompare(right.id),
     );
-    if (providerAttempts.length > 0) {
-      await OnboardingUnderstandingWorkflow.triggerProviders(
-        {
-          providers: providerAttempts,
-          responseLanguage: input.responseLanguage,
-          sessionId: input.sessionId,
-          startedAt: Date.now(),
-          topicId: input.topicId,
-          userId: this.dependencies.userId,
-        },
-        {
-          workflowRunId: `onboarding-understanding-extend-${input.sessionId}-${next.feedback?.revision ?? 0}-${providerAttempts.map(({ id, revision }) => `${id}-${revision}`).join('-')}`,
-        },
-      );
+    if (attempts.length > 0) {
+      try {
+        await OnboardingUnderstandingWorkflow.triggerProviders(
+          {
+            providers: attempts,
+            responseLanguage: input.responseLanguage,
+            sessionId: input.sessionId,
+            startedAt: Date.now(),
+            topicId: input.topicId,
+            userId: this.dependencies.userId,
+          },
+          {
+            workflowRunId: `onboarding-understanding-extend-${input.sessionId}-${next.feedback?.revision ?? 0}-${attempts.map(({ id, revision }) => `${id}-${revision}`).join('-')}`,
+          },
+        );
+      } catch (triggerError) {
+        await Promise.allSettled(
+          attempts.map(({ id, revision }) =>
+            this.failProvider({
+              providerId: id,
+              revision,
+              sessionId: input.sessionId,
+              topicId: input.topicId,
+            }),
+          ),
+        );
+        throw triggerError;
+      }
     }
 
     const sourceFingerprint = getUnderstandingSourceFingerprint(availableSession);
@@ -479,6 +492,7 @@ export class UnderstandingService {
     if (state.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
+    if (!state.errors.some(({ retryable }) => retryable)) return this.get(input.topicId);
     const availableProviderIds = await this.dependencies.connectorData.listAvailableProviderIds([
       input.providerId,
     ]);

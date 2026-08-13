@@ -18,6 +18,13 @@ const GMAIL_PROFILE_SEARCHES = [
 const MAX_CONTEXT_MESSAGES = 32;
 const MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN = 6;
 
+const hasGmailReadPermission = (scopes: readonly string[]) =>
+  scopes.some((scope) =>
+    ['gmail.modify', 'gmail.readonly', 'mail.google.com/'].some((permission) =>
+      scope.endsWith(permission),
+    ),
+  );
+
 const evidencePriority = ({ labels }: GmailMessage) => {
   const normalized = new Set(labels.map((label) => label.toUpperCase()));
   if (normalized.has('CATEGORY_PROMOTIONS')) return 2;
@@ -78,6 +85,28 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
   id: 'gmail',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGmailClient();
+    const account = await client.getAccount();
+    if (!hasGmailReadPermission(account.scopes)) {
+      console.warn('[understanding:gmail] skipped because Gmail read permission is missing');
+      return {
+        context: '',
+        diagnostics: {
+          errors: [
+            {
+              code: 'GMAIL_READ_PERMISSION_REQUIRED',
+              message: 'Gmail read permission is required to collect Understanding evidence',
+              operation: 'permission',
+              provider: 'gmail',
+              retryable: false,
+            },
+          ],
+          evidenceCount: 0,
+          failedCount: 1,
+          succeededCount: 0,
+        },
+        sourceCount: 0,
+      };
+    }
     const settled = await Promise.allSettled(
       GMAIL_PROFILE_SEARCHES.map(({ query }) => client.searchMessages({ query })),
     );
