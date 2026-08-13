@@ -2,8 +2,7 @@ import { Settings2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfigStatus } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { ChatInputAction } from '../components/ChatInputAction';
@@ -11,9 +10,7 @@ import Controls from './Controls';
 
 const Params = memo(() => {
   const agentId = useAgentId();
-  const [isLoading] = useAgentStore((s) => [
-    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
-  ]);
+  const { isLoading } = useAgentConfigStatus(agentId);
   const { t } = useTranslation('setting');
 
   if (isLoading) return <ChatInputAction disabled icon={Settings2Icon} />;

@@ -1,7 +1,8 @@
 import { type ThreadItem, ThreadType, type UIChatMessage } from '@lobechat/types';
 
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { type ChatStoreState } from '@/store/chat';
 import { chatHelpers } from '@/store/chat/helpers';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -153,8 +154,12 @@ const portalAIChats = (s: ChatStoreState) => {
 const portalAIChatsWithHistoryConfig = (s: ChatStoreState) => {
   const messages = portalAIChats(s);
 
-  const enableHistoryCount = agentChatConfigSelectors.enableHistoryCount(useAgentStore.getState());
-  const historyCount = agentChatConfigSelectors.historyCount(useAgentStore.getState());
+  const enableHistoryCount = agentProjectionSelectors.enableHistoryCount(
+    getAgentProjectionById(useAgentStore.getState().activeAgentId),
+  );
+  const historyCount = agentProjectionSelectors.historyCount(
+    getAgentProjectionById(useAgentStore.getState().activeAgentId),
+  );
 
   return chatHelpers.getSlicedMessages(messages, {
     enableHistoryCount,

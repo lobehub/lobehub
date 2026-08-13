@@ -2,8 +2,7 @@ import { Flexbox, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfigStatus } from '@/store/agent/projection';
 
 import ContextWindow from '../ActionBar/Token';
 import { useAgentId } from '../hooks/useAgentId';
@@ -50,7 +49,7 @@ const ControlBar = memo(() => {
     s.rightActions.flat().includes('contextWindow'),
   );
 
-  const isLoading = useAgentStore((s) => agentByIdSelectors.isAgentConfigLoadingById(agentId)(s));
+  const isLoading = useAgentConfigStatus(agentId).isLoading;
   const { isAgentRuntimeMode, isPreferenceLoading } = useEffectiveAgentMode(agentId);
 
   if (!canShowControls || isPreferenceLoading) return null;

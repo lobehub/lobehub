@@ -5,14 +5,10 @@ import isEqual from 'fast-deep-equal';
 import { createContext, memo, type PropsWithChildren, use, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import {
-  dbMessageSelectors,
-  displayMessageSelectors,
-  topicSelectors,
-} from '@/store/chat/selectors';
+import { dbMessageSelectors, displayMessageSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type ChatTopic } from '@/types/topic';
 
@@ -32,7 +28,6 @@ interface ShareDataContextValue {
 
 const EMPTY_MESSAGES: UIChatMessage[] = [];
 const selectEmptyMessages = () => EMPTY_MESSAGES;
-const selectUndefinedTopic = () => undefined;
 
 const ShareDataContext = createContext<ShareDataContextValue | null>(null);
 
@@ -47,8 +42,9 @@ const ShareDataProvider = memo<PropsWithChildren<ShareDataProviderProps>>(
         s.activeTopicId,
         s.useFetchMessages,
       ]);
-    const systemRole = useAgentStore(
-      agentByIdSelectors.getAgentSystemRoleById(context?.agentId ?? activeAgentId ?? ''),
+    const systemRole = useAgentValue(
+      context?.agentId ?? activeAgentId ?? '',
+      agentProjectionSelectors.systemRole,
     );
 
     const resolvedContext = useMemo<ConversationContext>(() => {
@@ -90,12 +86,7 @@ const ShareDataProvider = memo<PropsWithChildren<ShareDataProviderProps>>(
       messageKey ? dbMessageSelectors.getDbMessagesByKey(messageKey) : selectEmptyMessages,
       isEqual,
     );
-    const topic = useChatStore(
-      resolvedContext.topicId
-        ? topicSelectors.getTopicById(resolvedContext.topicId)
-        : selectUndefinedTopic,
-      isEqual,
-    );
+    const topic = useChatTopicById(resolvedContext.topicId ?? undefined);
 
     const value = useMemo<ShareDataContextValue>(
       () => ({

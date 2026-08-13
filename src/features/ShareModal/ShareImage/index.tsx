@@ -9,8 +9,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { useImgToClipboard } from '@/hooks/useImgToClipboard';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreenshot';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
@@ -28,7 +27,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 };
 
 const ShareImage = memo<{ mobile?: boolean }>(() => {
-  const currentAgentTitle = useAgentStore(agentSelectors.currentAgentDisplayName);
+  const currentAgentTitle = useCurrentAgentValue(agentProjectionSelectors.displayName);
   const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
   const { context, dbMessages } = useShareData();

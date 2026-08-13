@@ -8,7 +8,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -39,11 +39,8 @@ export const useKnowledgeMenuItems = ({
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
 
-  const files = useAgentStore((s) => agentByIdSelectors.getAgentFilesById(agentId)(s), isEqual);
-  const knowledgeBases = useAgentStore(
-    (s) => agentByIdSelectors.getAgentKnowledgeBasesById(agentId)(s),
-    isEqual,
-  );
+  const files = useAgentValue(agentId, agentProjectionSelectors.files, isEqual);
+  const knowledgeBases = useAgentValue(agentId, agentProjectionSelectors.knowledgeBases, isEqual);
 
   const [toggleFile, toggleKnowledgeBase] = useAgentStore((s) => [
     s.toggleFile,

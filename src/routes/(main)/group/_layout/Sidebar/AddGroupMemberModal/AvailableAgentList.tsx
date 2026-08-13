@@ -10,8 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 
 import { type AgentItemData } from './AgentItem';
 import AgentItem from './AgentItem';
@@ -51,9 +53,12 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
   // Mirror the CreateGroupModal split: derive private agent ids from the home
   // store so we can bucket the modal's flat list into private/workspace
   // sections without changing the shared `AvailableAgentItem` payload.
-  const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-  const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
+  const privateGroups = useHomeSidebarProjection(homeSidebarSelectors.privateAgentGroups, isEqual);
+  const privatePinned = useHomeSidebarProjection(homeSidebarSelectors.privatePinnedAgents, isEqual);
+  const privateUngrouped = useHomeSidebarProjection(
+    homeSidebarSelectors.privateUngroupedAgents,
+    isEqual,
+  );
   const privateAgentIds = useMemo(() => {
     const ids = new Set<string>();
     for (const g of privateGroups) for (const a of g.items) ids.add(a.id);

@@ -28,16 +28,12 @@ vi.mock('@/store/user/selectors', () => ({
 
 vi.mock('@/store/agent', () => ({
   useAgentStore: {
-    getState: () => ({}),
+    getState: () => ({ activeAgentId: 'agent-1' }),
   },
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentModel: () => 'gpt-4',
-    currentAgentModelProvider: () => 'openai',
-    currentAgentWorkingDirectory: () => () => undefined,
-  },
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: () => ({ id: 'agent-1', model: 'gpt-4', provider: 'openai' }),
 }));
 
 vi.mock('@/store/chat', () => ({

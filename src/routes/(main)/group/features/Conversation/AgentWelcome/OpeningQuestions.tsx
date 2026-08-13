@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -48,8 +48,9 @@ const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => 
 
   // Same per-resource General-access gating as the chat input (see
   // useChatInputResourceAccess): private groups are never gated.
-  const activeGroup = useAgentGroupStore((s) =>
-    s.activeGroupId ? agentGroupSelectors.getGroupById(s.activeGroupId)(s) : undefined,
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const activeGroup = useChatGroupProjection((scope) =>
+    activeGroupId ? chatGroupProjectionSelectors.getGroupById(activeGroupId)(scope) : undefined,
   );
   const gatedResourceId =
     activeGroup && activeGroup.visibility !== 'private' ? activeGroup.id : undefined;

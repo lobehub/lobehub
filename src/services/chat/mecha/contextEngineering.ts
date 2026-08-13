@@ -51,6 +51,9 @@ import debug from 'debug';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
+import { getAgentProjection, getAgentProjectionById, selectAvailableAgents } from '@/projection';
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import {
   agentService,
   AVAILABLE_AGENTS_CONTEXT_LIMIT,
@@ -58,12 +61,11 @@ import {
 } from '@/services/agent';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
-import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { agentProjectionSelectors, getAgentMeta } from '@/store/agent/projection';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
-import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
+import { chatSelectors } from '@/store/chat/selectors';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -180,8 +182,7 @@ export const contextEngineering = async ({
   // Build agent group configuration if groupId is provided
   let agentGroup: AgentGroupConfig | undefined;
   if (groupId) {
-    const groupStoreState = getChatGroupStoreState();
-    const groupDetail = agentGroupSelectors.getGroupById(groupId)(groupStoreState);
+    const groupDetail = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
     if (groupDetail?.agents && groupDetail.agents.length > 0) {
       const agentMap: AgentGroupConfig['agentMap'] = {};
@@ -224,7 +225,9 @@ export const contextEngineering = async ({
   // Example: preset-task calls omit `enableAgentMode`; preserve explicit chat mode
   // from stored config instead of letting MessagesEngine treat `undefined` as agent mode.
   const effectiveEnableAgentMode =
-    enableAgentMode ?? agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode;
+    enableAgentMode ??
+    agentProjectionSelectors.chatConfig(getAgentProjectionById(agentStoreState.activeAgentId))
+      .enableAgentMode;
 
   // Build group agent builder context if Group Agent Builder is enabled
   // Note: Uses activeGroupId from chatStore to get the group being edited
@@ -232,26 +235,27 @@ export const contextEngineering = async ({
   if (isGroupAgentBuilderEnabled) {
     const activeGroupId = getChatStoreState().activeGroupId;
     if (activeGroupId) {
-      const groupStoreState = getChatGroupStoreState();
-      const activeGroupDetail = agentGroupSelectors.getGroupById(activeGroupId)(groupStoreState);
+      const activeGroupDetail = getChatGroupProjection(
+        chatGroupProjectionSelectors.getGroupById(activeGroupId),
+      );
 
       if (activeGroupDetail) {
         // Get supervisor agent config if supervisorAgentId exists
         let supervisorConfig: GroupAgentBuilderContext['supervisorConfig'];
         let enabledPlugins: string[] = [];
         if (activeGroupDetail.supervisorAgentId) {
-          const supervisorAgentConfig = agentSelectors.getAgentConfigById(
-            activeGroupDetail.supervisorAgentId,
-          )(agentStoreState);
-          // Pinned identifiers only — GroupAgentBuilderContext.supervisorConfig.plugins
-          // is a display/prompt-formatting DTO (still `string[]`) that joins
-          // entries as plain text, and a disabled plugin isn't "enabled".
-          enabledPlugins = getActivePluginIds(supervisorAgentConfig.plugins);
-          supervisorConfig = {
-            model: supervisorAgentConfig.model,
-            plugins: enabledPlugins,
-            provider: supervisorAgentConfig.provider,
-          };
+          const supervisorAgentConfig = getAgentProjectionById(activeGroupDetail.supervisorAgentId);
+          if (supervisorAgentConfig) {
+            // Pinned identifiers only — GroupAgentBuilderContext.supervisorConfig.plugins
+            // is a display/prompt-formatting DTO (still `string[]`) that joins
+            // entries as plain text, and a disabled plugin isn't "enabled".
+            enabledPlugins = getActivePluginIds(supervisorAgentConfig.plugins);
+            supervisorConfig = {
+              model: supervisorAgentConfig.model,
+              plugins: enabledPlugins,
+              provider: supervisorAgentConfig.provider,
+            };
+          }
         }
 
         // Build official tools list (builtin tools + Composio tools)
@@ -343,8 +347,12 @@ export const contextEngineering = async ({
   }
 
   // Get enabled agent files with content and knowledge bases from agent store
-  const agentFiles = agentSelectors.currentAgentFiles(agentStoreState);
-  const agentKnowledgeBases = agentSelectors.currentAgentKnowledgeBases(agentStoreState);
+  const agentFiles = agentProjectionSelectors.files(
+    getAgentProjectionById(agentStoreState.activeAgentId),
+  );
+  const agentKnowledgeBases = agentProjectionSelectors.knowledgeBases(
+    getAgentProjectionById(agentStoreState.activeAgentId),
+  );
 
   const fileContents = agentFiles
     .filter((file) => file.enabled && file.content)
@@ -504,13 +512,15 @@ export const contextEngineering = async ({
   let agentManagementContext: AgentManagementContext | undefined;
 
   const isInAutoSkillMode =
-    agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
+    agentProjectionSelectors.skillActivateMode(
+      getAgentProjectionById(agentStoreState.activeAgentId),
+    ) !== 'manual';
   const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
 
   if (shouldInjectAvailableAgents) {
     try {
       const recentAgents =
-        agentStoreState.availableAgents ??
+        getAgentProjection((scope) => selectAvailableAgents(scope)) ??
         (await agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }));
 
       // Exclude current agent from `availableAgents`. The model is the current
@@ -532,7 +542,7 @@ export const contextEngineering = async ({
         ...(agentId && {
           currentAgent: {
             id: agentId,
-            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
+            title: getAgentMeta(agentId)?.title ?? undefined,
           },
         }),
       };
@@ -657,7 +667,7 @@ export const contextEngineering = async ({
     (await resolveTopicReferences(
       messages,
       async (topicId: string) => {
-        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        const topic = getChatTopicById(topicId);
         return topic ?? null;
       },
       async (topicId: string) => {
@@ -800,16 +810,12 @@ export const contextEngineering = async ({
       // search for itself. Read lazily from stores so we only pay the cost
       // when the placeholder actually appears in a rendered message.
       agent_id: () => agentId ?? '',
-      agent_title: () =>
-        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
-      agent_description: () =>
-        agentId
-          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
-          : '',
+      agent_title: () => (agentId ? (getAgentMeta(agentId)?.title ?? '') : ''),
+      agent_description: () => (agentId ? (getAgentMeta(agentId)?.description ?? '') : ''),
       topic_id: () => topicId ?? '',
       topic_title: () => {
         if (!topicId) return '';
-        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        const topic = getChatTopicById(topicId);
         return topic?.title ?? '';
       },
     },

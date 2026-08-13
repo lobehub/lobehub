@@ -24,6 +24,9 @@ const effectiveAgencyConfig = vi.hoisted(() => ({
   agencyConfig: undefined as unknown,
   workspaceScoped: false,
 }));
+const topicProjection = vi.hoisted(() => ({
+  topic: undefined as { metadata?: { workingDirectory?: string } } | undefined,
+}));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => effectiveAgencyConfig,
@@ -31,15 +34,10 @@ vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
 
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
 vi.mock('@/store/chat', () => ({ useChatStore: vi.fn() }));
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    currentTopicMetadata: (s: { topicMetadata?: object }) => s.topicMetadata,
-    currentTopicWorkingDirectory: (s: { topicWorkingDirectory?: string }) =>
-      s.topicWorkingDirectory,
-    getTopicById: () => (s: { topicMetadata?: object }) => ({ metadata: s.topicMetadata }),
-    getTopicWorkingDirectory: (id?: string | null) => (s: { topicWorkingDirectory?: string }) =>
-      id === null ? undefined : s.topicWorkingDirectory,
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  extractChatTopicWorkingDirectory: (topic?: { metadata?: { workingDirectory?: string } }) =>
+    topic?.metadata?.workingDirectory,
+  useChatTopicById: (id?: string) => (id ? topicProjection.topic : undefined),
 }));
 vi.mock('@/store/device', () => ({
   deviceSelectors: {
@@ -77,7 +75,10 @@ const setupStores = ({
       ? { 'agent-1': legacyWorkingDirectory }
       : {},
   };
-  const chatState = { topicMetadata: undefined, topicWorkingDirectory };
+  const chatState = { activeTopicId: 'active-topic' };
+  topicProjection.topic = topicWorkingDirectory
+    ? { metadata: { workingDirectory: topicWorkingDirectory } }
+    : undefined;
   const deviceState = { deviceDefaultCwd, useFetchDevices: vi.fn() };
   const electronState = { gatewayDeviceInfo: { deviceId: 'device-A' } };
   const userState = {};
@@ -94,6 +95,7 @@ describe('useEffectiveWorkingDirectory', () => {
     vi.clearAllMocks();
     effectiveAgencyConfig.agencyConfig = undefined;
     effectiveAgencyConfig.workspaceScoped = false;
+    topicProjection.topic = undefined;
   });
 
   it('falls back to the desktop path when nothing is configured', () => {

@@ -16,7 +16,7 @@ import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem } from '@/types/discover';
@@ -56,10 +56,10 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     isEqual,
   );
 
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
-    s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
-  ]);
+  const togglePlugin = useAgentStore((s) => s.togglePlugin);
+  const isPluginEnabledInAgent = useCurrentAgentValue((agent) =>
+    agentProjectionSelectors.plugins(agent).includes(identifier),
+  );
   const { isAuthenticated, signIn } = useMarketAuth();
 
   const isCloudMcp = !!((plugin as any)?.cloudEndPoint || (plugin as any)?.haveCloudEndpoint);

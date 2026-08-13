@@ -21,13 +21,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from '@/libs/swr/localStorageProvider';
+import { selectAgentProjectionById } from '@/projection/modules/agent/selectors';
 import { homeDailyBriefViewContract } from '@/projection/modules/home/contracts';
 import { selectHomeDailyBrief } from '@/projection/modules/home/selectors';
 import { projectionRepository } from '@/projection/registry';
-import { useProjectionStore } from '@/projection/store';
+import { getProjectionStoreState, useProjectionStore } from '@/projection/store';
 import { useProjectionViewHydration } from '@/projection/views/hook';
 import { setAppPainted, setAppReady } from '@/spa/atoms/app';
-import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 
 import AppBootstrapGate, { isAppBootstrapReady } from './AppBootstrapGate';
@@ -89,10 +89,12 @@ const ProjectionProbe = () => {
   return null;
 };
 
-let legacyAgentTitles: Array<string | null | undefined> = [];
-const LegacyAgentProbe = () => {
-  const title = useAgentStore((state) => state.agentMap['agent-1']?.title);
-  legacyAgentTitles.push(title);
+let projectedAgentTitles: Array<string | null | undefined> = [];
+const AgentProjectionProbe = () => {
+  const title = useProjectionStore(
+    (state) => selectAgentProjectionById(state.scopes[mockScope], 'agent-1')?.title,
+  );
+  projectedAgentTitles.push(title);
   return null;
 };
 
@@ -127,9 +129,8 @@ describe('CacheHydrationGate + provider + consumer', () => {
     mockScope = SCOPE;
     probed = undefined;
     projectionProbed = undefined;
-    legacyAgentTitles = [];
+    projectedAgentTitles = [];
     useProjectionStore.setState({ scopes: {} });
-    useAgentStore.setState({ agentMap: {} });
     useUserStore.setState({
       isLoaded: false,
       isSignedIn: false,
@@ -151,7 +152,6 @@ describe('CacheHydrationGate + provider + consumer', () => {
       user: undefined,
     });
     useProjectionStore.setState({ scopes: {} });
-    useAgentStore.setState({ agentMap: {} });
     await localDataCache.clearScope(SCOPE);
   });
 
@@ -300,17 +300,22 @@ describe('CacheHydrationGate + provider + consumer', () => {
             ProjectionHydrationGate,
             null,
             createElement(ProjectionProbe),
-            createElement(LegacyAgentProbe),
+            createElement(AgentProjectionProbe),
           ),
         ),
       ),
     );
     await waitFor(() => expect(projectionProbed).toEqual(firstSnapshot.data));
     act(() => {
-      useAgentStore.setState({ agentMap: { 'agent-1': { title: 'User one agent' } as never } });
+      getProjectionStoreState().commitAgentConfig(
+        SCOPE,
+        { id: 'agent-1', title: 'User one agent' },
+        'full',
+        'mutation',
+      );
     });
-    expect(legacyAgentTitles.at(-1)).toBe('User one agent');
-    legacyAgentTitles = [];
+    expect(projectedAgentTitles.at(-1)).toBe('User one agent');
+    projectedAgentTitles = [];
 
     act(() => {
       mockScope = SECOND_SCOPE;
@@ -318,7 +323,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
     });
 
     expect(projectionProbed).toBeUndefined();
-    expect(legacyAgentTitles).not.toContain('User one agent');
+    expect(projectedAgentTitles).not.toContain('User one agent');
     expect(hydrate).not.toHaveBeenCalledWith(SECOND_SCOPE, expect.anything());
     expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE, {
       indexes: undefined,
@@ -328,7 +333,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
 
     releaseSecondAccount();
     await waitFor(() => expect(projectionProbed).toEqual(secondSnapshot.data));
-    expect(legacyAgentTitles).not.toContain('User one agent');
+    expect(projectedAgentTitles).not.toContain('User one agent');
   });
 
   it('DECISIVE: an early orphaned subscriber does NOT poison the key for a later one', async () => {

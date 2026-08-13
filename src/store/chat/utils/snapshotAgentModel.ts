@@ -1,5 +1,5 @@
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { getAgentProjectionById } from '@/projection';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 
 /**
  * Snapshot the given agent's current model/provider so a newly created topic
@@ -14,7 +14,7 @@ export const snapshotAgentModel = (
 ): { model?: string; provider?: string } => {
   if (!agentId) return {};
 
-  const agentState = getAgentStoreState();
+  const agent = getAgentProjectionById(agentId);
 
   // Heterogeneous agents (Claude Code, Codex, …) delegate model selection to an
   // external CLI, so neither agent column can be snapshotted: `model` is
@@ -25,8 +25,7 @@ export const snapshotAgentModel = (
   // blank, which would pin `<default provider>/<default model>` onto a topic
   // that never ran either. Pin the runtime type — the one fact we do know — and
   // leave `model` to the per-run backfill.
-  const heterogeneousProvider =
-    agentByIdSelectors.getAgencyConfigById(agentId)(agentState)?.heterogeneousProvider;
+  const heterogeneousProvider = agentProjectionSelectors.agencyConfig(agent)?.heterogeneousProvider;
   if (heterogeneousProvider) {
     return heterogeneousProvider.type ? { provider: heterogeneousProvider.type } : {};
   }
@@ -35,7 +34,7 @@ export const snapshotAgentModel = (
   // so snapshotting the defaulted value is intended — it keeps the topic on the
   // model it started with even after the agent default later changes.
   return {
-    model: agentByIdSelectors.getAgentModelById(agentId)(agentState),
-    provider: agentByIdSelectors.getAgentModelProviderById(agentId)(agentState),
+    model: agentProjectionSelectors.model(agent),
+    provider: agentProjectionSelectors.provider(agent),
   };
 };

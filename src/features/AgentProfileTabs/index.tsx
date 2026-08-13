@@ -7,8 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import {
@@ -57,8 +56,8 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   const { t } = useTranslation(['chat', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
-  const heterogeneousProviderType = useAgentStore(
-    agentSelectors.currentAgentHeterogeneousProviderType,
+  const heterogeneousProviderType = useCurrentAgentValue(
+    agentProjectionSelectors.heterogeneousProviderType,
   );
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);

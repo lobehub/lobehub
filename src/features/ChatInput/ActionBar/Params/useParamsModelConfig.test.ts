@@ -30,14 +30,8 @@ vi.mock('../../hooks/useAgentModelSelection', () => ({
   useAgentModelSelection: () => testState.agentSelection,
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: <T>(selector: (state: typeof testState.chat) => T) => selector(testState.chat),
-}));
-
-vi.mock('@/store/chat/slices/topic/selectors', () => ({
-  topicSelectors: {
-    activeTopicModel: (state: typeof testState.chat) => state.topicModel,
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useActiveChatTopicModel: () => testState.chat.topicModel,
 }));
 
 vi.mock('@/store/aiInfra', () => ({

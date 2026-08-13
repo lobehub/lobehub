@@ -13,13 +13,10 @@ import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  selectAgentProjection,
-} from '@/projection';
-import { agentService } from '@/services/agent';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -38,35 +35,17 @@ import { taskNameFromMessage } from './taskName';
 const stripHintEllipsis = (hint: string): string => hint.replace(/\s*(?:\.{3,}|…)\s*$/, '').trim();
 
 /**
- * Make sure the agent's config is hydrated into `agentMap` before we call
+ * Make sure the agent's config is hydrated into Projection before we call
  * `sendMessage`. Without this, sending to an agent the user just picked from
  * the home AgentSelect (and never opened in this session) silently fails:
  * `sendMessage` reaches `getAgentConfigById(agentId)` which returns `undefined`
- * from `agentMap`, the `{ model, provider }` destructure throws, and the
+ * from Projection, the `{ model, provider }` destructure throws, and the
  * surrounding catch swallows it — so the chat page mounts with optimistic
  * messages but the runtime never starts.
  */
 const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
-  const agentState = useAgentStore.getState();
-  if (agentState.agentMap[agentId]) return;
-  const scope = getCacheScope();
-  const observedAt = nextProjectionObservedAt();
-  const result = await agentService.getAgentConfigByIdWithAccess(agentId);
-  if (result) {
-    getProjectionStoreState().commitAgentConfig(
-      scope,
-      { ...result.data, id: result.data.id ?? agentId },
-      result.access,
-      'network',
-      observedAt,
-    );
-  } else {
-    getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
-  }
-  const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-  const canonical = selectAgentProjection(record);
-  if (!canonical) return;
-  agentState.internal_dispatchAgentMap(agentId, canonical, { commitProjection: false });
+  if (getAgentProjectionById(agentId)) return;
+  await loadAgentConfigProjection(agentId, getCacheScope());
 };
 
 interface PendingTaskRun {
@@ -98,9 +77,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const agentId = selectedAgentId;
   const contextSelectionKey = `home:${mode}:${selectedAgentId ?? 'unresolved'}`;
   const { allowed: canCreateContent } = usePermission('create_content');
-  const agentVisibility = useAgentStore((s) =>
-    selectedAgentId ? s.agentMap[selectedAgentId]?.visibility : undefined,
-  );
+  const agentVisibility = useAgentValue(selectedAgentId, agentProjectionSelectors.visibility);
   const gatedResourceId =
     selectedAgentId && selectedAgentId !== inboxAgentId && agentVisibility !== 'private'
       ? selectedAgentId

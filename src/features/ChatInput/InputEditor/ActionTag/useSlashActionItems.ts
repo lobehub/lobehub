@@ -13,8 +13,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
@@ -65,16 +64,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // device" (`local` + boundDeviceId) coerces to `device` when opened on web —
   // reading the raw stored target would miss that and leave the menu empty even
   // though the sidebar lists the skills.
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
-  const isHetero = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
-  );
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
+  const isHetero = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
-  );
+  const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

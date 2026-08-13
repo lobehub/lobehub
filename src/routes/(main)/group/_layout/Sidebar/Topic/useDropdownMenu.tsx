@@ -12,7 +12,7 @@ import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -45,7 +45,7 @@ export const useTopicActionsDropdownMenu = (
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
-  const topics = useChatStore(topicSelectors.currentTopics);
+  const topics = useCurrentChatTopics()?.items;
   const [
     activeGroupId,
     removeUnstarredTopic,

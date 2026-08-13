@@ -6,7 +6,6 @@ import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +14,12 @@ import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfig,
+  useAgentValue,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -52,10 +56,12 @@ const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
+  const config = useAgentConfig(agentId);
+  const model = useAgentValue(agentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(agentId, agentProjectionSelectors.provider);
+  const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHeterogeneous = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
 
   const updateHeterogeneousCommand = async (command: string) => {
@@ -174,8 +180,8 @@ const ProfileEditor = memo(() => {
                   disabled={!canEdit}
                   popupWidth={400}
                   value={{
-                    model: config?.model,
-                    provider: config?.provider,
+                    model,
+                    provider,
                   }}
                   onChange={(value) => {
                     if (!canEdit) return;

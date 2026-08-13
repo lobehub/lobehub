@@ -4,7 +4,6 @@ import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
   BotMessageSquareIcon,
@@ -34,7 +33,14 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useCurrentAgentConfig,
+  useCurrentAgentMeta,
+  useCurrentAgentValue,
+  useIsBuiltinAgent,
+} from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -103,21 +109,20 @@ const Header = memo(() => {
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  // `currentAgentConfig` is typed non-nullable but reads straight out of
-  // `agentMap`, so it IS undefined until the config lands. Reaching a profile by
+  const meta = useCurrentAgentMeta();
+  // `currentAgentConfig` is typed non-nullable but reads the Projection record,
+  // so it is undefined until the config lands. Reaching a profile by
   // slug adds a resolution hop before that happens, which is long enough for the
   // dependency array below to read `config.model` off nothing and drop the whole
   // page into the error boundary.
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual) as
-    LobeAgentConfig | undefined;
-  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
+  const config = useCurrentAgentConfig() as LobeAgentConfig | undefined;
+  const systemRole = useCurrentAgentValue(agentProjectionSelectors.systemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHeterogeneous = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  const visibility = useAgentStore(agentSelectors.currentAgentVisibility);
-  const authorId = useAgentStore(agentSelectors.currentAgentAuthorId);
-  const createdAt = useAgentStore(agentSelectors.currentAgentCreatedAt);
+  const visibility = useCurrentAgentValue(agentProjectionSelectors.visibility);
+  const authorId = useCurrentAgentValue(agentProjectionSelectors.userId);
+  const createdAt = useCurrentAgentValue(agentProjectionSelectors.createdAt);
   const authorName = useAuthorInfo(authorId)?.fullName;
   const hasActiveWorkspace = useHasActiveWorkspace();
   // Resource permissions apply to every public workspace agent, including the
@@ -148,7 +153,7 @@ const Header = memo(() => {
   // rows (Lobe AI, the builders, the page agent) for any workspace member, but
   // those rows can never be deleted or rehomed — the server rejects it, so the
   // affordance must not be offered at all.
-  const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(activeAgentId));
+  const isBuiltinAgent = useIsBuiltinAgent(activeAgentId);
   const canManage = hasEditPermission && canManageResource && !isBuiltinAgent;
   // Both halves, in the same order `ResourceConfigAccessGate` applies them: a
   // role that cannot edit content is refused even where this agent's General
@@ -356,7 +361,21 @@ const Header = memo(() => {
 
   return (
     <NavHeader
+      // `relative` anchors the absolutely-centered switcher below.
       style={{ position: 'relative' }}
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* No section title — the Segmented beside it names the current tab. */}
+          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
+          <AgentStatusTag />
+          <AgentVersionReviewTag />
+          <AgentForkTag />
+          <AccessLevelTag
+            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
+            resourceType={'agent'}
+          />
+        </Flexbox>
+      }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
           <DropdownMenu items={menuItems}>
@@ -370,20 +389,6 @@ const Header = memo(() => {
               onToggle={() => toggleAgentBuilderPanel()}
             />
           )}
-        </Flexbox>
-      }
-      // `relative` anchors the absolutely-centered switcher below.
-      left={
-        <Flexbox horizontal align={'center'} gap={8}>
-          {/* No section title — the Segmented beside it names the current tab. */}
-          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
-          <AgentStatusTag />
-          <AgentVersionReviewTag />
-          <AgentForkTag />
-          <AccessLevelTag
-            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
-            resourceType={'agent'}
-          />
         </Flexbox>
       }
       styles={{

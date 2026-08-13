@@ -13,7 +13,8 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -54,7 +55,7 @@ interface InboxItemProps {
 const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const inboxRouteAgentId = resolveInboxAgentRouteId(inboxAgentId);
-  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxRouteAgentId));
+  const inboxMeta = useAgentMeta(inboxRouteAgentId);
 
   const isLoading = useChatStore(
     inboxAgentId ? operationSelectors.isAgentVisiblyRunning(inboxAgentId) : () => false,

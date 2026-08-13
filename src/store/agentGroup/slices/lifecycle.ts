@@ -1,6 +1,8 @@
 import { GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { type NewChatGroup } from '@lobechat/types';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { chatGroupService } from '@/services/chatGroup';
 import { useChatStore } from '@/store/chat';
 import { getHomeStoreState } from '@/store/home';
@@ -41,7 +43,7 @@ export class ChatGroupLifecycleAction {
       });
     }
 
-    this.#get().internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
+    getProjectionStoreState().commitChatGroupItem(getCacheScope(), group, 'mutation');
 
     // Fetch full group detail to get supervisorAgentId and agents for tools injection
     await this.#get().internal_fetchGroupDetail(group.id);

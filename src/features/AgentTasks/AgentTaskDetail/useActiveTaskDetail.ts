@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
 import { useAgentStore } from '@/store/agent';
+import { useAgentData } from '@/store/agent/projection';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -37,13 +39,12 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  const hasTaskDetail = useTaskStore((s) => (taskId ? !!s.taskDetailMap[taskId] : false));
+  const taskDetail = useTaskDetailProjection(taskId);
+  const hasTaskDetail = Boolean(taskDetail);
   // The assignee comes from the loaded task detail, so this stays undefined
   // until the first fetch resolves — which is exactly when its hydration kicks in.
-  const assigneeAgentId = useTaskStore((s) =>
-    taskId ? (s.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
-  );
-  const assigneeInMap = useAgentStore((s) => !!(assigneeAgentId && s.agentMap[assigneeAgentId]));
+  const assigneeAgentId = taskDetail?.agentId ?? undefined;
+  const assigneeInMap = Boolean(useAgentData(assigneeAgentId));
 
   useEffect(() => {
     if (!taskId) return;

@@ -24,8 +24,17 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) => selector(mocks.taskState),
 }));
 
+vi.mock('@/projection/modules/task/viewHooks', () => ({
+  useTaskDetailProjection: (taskId?: string) =>
+    taskId ? mocks.taskState.taskDetailMap[taskId] : undefined,
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: any) => selector(mocks.agentState),
+}));
+
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: (agentId?: string) => (agentId ? mocks.agentState.agentMap[agentId] : undefined),
 }));
 
 const buildTaskState = (

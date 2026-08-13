@@ -1,6 +1,6 @@
 import { type ChatStoreState } from '@/store/chat/initialState';
+import { getChatTopicById, getChatTopicsByAgentId } from '@/store/chat/slices/topic/projection';
 import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { type Operation, type OperationType } from './types';
 import {
@@ -791,9 +791,9 @@ const isSendingMessage = (s: ChatStoreState): boolean => {
 // === Unread Completion ===
 //
 // Unread is now a persisted topic status (`topics.status === 'unread'`), so
-// these selectors derive from the loaded topic map. The cross-agent badge on the
+// these selectors derive from the loaded topic Projection. The cross-agent badge on the
 // home sidebar reads the server-computed `SidebarAgentItem.unreadCount` instead,
-// since the home list doesn't load every agent's topics into `topicDataMap`.
+// since the home list does not load every agent's topic index.
 
 /**
  * Number of topics with an unread completed generation for the given agent,
@@ -801,8 +801,8 @@ const isSendingMessage = (s: ChatStoreState): boolean => {
  */
 const agentUnreadCount =
   (agentId: string) =>
-  (s: ChatStoreState): number => {
-    const items = s.topicDataMap[topicMapKey({ agentId })]?.items;
+  (_s: ChatStoreState): number => {
+    const items = getChatTopicsByAgentId(agentId);
     if (!items) return 0;
     let count = 0;
     for (const topic of items) if (topic.status === 'unread') count += 1;
@@ -823,13 +823,8 @@ const isAgentUnreadCompleted =
  */
 const isTopicUnreadCompleted =
   (topicId: string) =>
-  (s: ChatStoreState): boolean => {
-    for (const data of Object.values(s.topicDataMap)) {
-      const topic = data.items?.find((t) => t.id === topicId);
-      if (topic) return topic.status === 'unread';
-    }
-    return false;
-  };
+  (_s: ChatStoreState): boolean =>
+    getChatTopicById(topicId)?.status === 'unread';
 
 /**
  * Number of topics with an unread completed generation among the given topic ids.
@@ -837,17 +832,12 @@ const isTopicUnreadCompleted =
  */
 const unreadCompletedCountForTopics =
   (topicIds: string[]) =>
-  (s: ChatStoreState): number => {
+  (_s: ChatStoreState): number => {
     if (topicIds.length === 0) return 0;
-    const wanted = new Set(topicIds);
-    let count = 0;
-    for (const data of Object.values(s.topicDataMap)) {
-      if (!data.items) continue;
-      for (const topic of data.items) {
-        if (wanted.has(topic.id) && topic.status === 'unread') count += 1;
-      }
-    }
-    return count;
+    return topicIds.reduce(
+      (count, id) => count + Number(getChatTopicById(id)?.status === 'unread'),
+      0,
+    );
   };
 
 // ━━━ Message Queue Selectors ━━━

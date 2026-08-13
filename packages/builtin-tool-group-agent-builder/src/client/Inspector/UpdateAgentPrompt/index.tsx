@@ -6,8 +6,8 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { UpdateAgentPromptParams, UpdateAgentPromptState } from '../../../types';
@@ -46,10 +46,12 @@ export const UpdateAgentPromptInspector = memo<
   const prompt = args?.prompt || partialArgs?.prompt;
 
   // Get agent info from the current group
-  const agent = useAgentGroupStore((s) => {
-    const agents = s.activeGroupId ? agentGroupSelectors.getGroupAgents(s.activeGroupId)(s) : [];
-    return agents.find((a) => a.id === agentId);
-  });
+  const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+  const agent = useChatGroupProjection((scope) =>
+    activeGroupId && agentId
+      ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(scope)
+      : undefined,
+  );
 
   // Calculate length difference
   const lengthDiff = useMemo(() => {

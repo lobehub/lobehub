@@ -10,9 +10,9 @@ import { useParams } from 'react-router';
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { usePermission } from '@/hooks/usePermission';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import AddGroupMemberModal from '@/routes/(main)/group/_layout/Sidebar/AddGroupMemberModal';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -55,8 +55,8 @@ const Header = memo(() => {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const { gid } = useParams<{ gid: string }>();
-  const members = useAgentGroupStore((s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s));
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const members = useChatGroupProjection(chatGroupProjectionSelectors.getGroupAgents(gid ?? ''));
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const createAgentInGroup = useAgentGroupStore((s) => s.createAgentInGroup);
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);

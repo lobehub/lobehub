@@ -60,6 +60,16 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) => selector(mocks.taskState),
 }));
 
+vi.mock('@/projection/modules/task/projectionHooks', () => ({
+  useTaskProjection: (selector: (scope?: unknown) => unknown) => selector(undefined),
+}));
+
+vi.mock('@/projection/modules/task/selectors', () => ({
+  findTaskRecordByIdentity: (_scope: unknown, identifier: string) =>
+    mocks.taskState.taskDetailMap[identifier],
+  selectTaskDetail: (detail: unknown) => detail,
+}));
+
 vi.mock('./style', () => ({
   styles: { breadcrumb: 'breadcrumb' },
 }));

@@ -1,6 +1,8 @@
 import type { TopicQuerySortBy } from '@lobechat/types';
+import { useEffect, useRef } from 'react';
 
-import { useChatTopicsIndex } from '@/projection';
+import { topicKeys } from '@/libs/swr/keys';
+import { useChatTopicsIndex, useChatTopicsProjectionRequest } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -17,37 +19,84 @@ export const useFetchTopics = (options?: {
   sortBy?: TopicQuerySortBy;
 }) => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  const [activeAgentId, activeGroupId, useFetchTopicsHook] = useChatStore((s) => [
-    s.activeAgentId,
-    s.activeGroupId,
-    s.useFetchTopics,
-  ]);
+  const [activeAgentId, activeGroupId, creatingTopicIds, prefetchUnreadTopicMessages] =
+    useChatStore((s) => [
+      s.activeAgentId,
+      s.activeGroupId,
+      s.creatingTopicIds,
+      s.prefetchUnreadTopicMessages,
+    ]);
 
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
 
   // If in group session, use groupId; otherwise use agentId
-  const projectionIndex = useChatTopicsIndex(
-    'sidebar',
+  const containerKey =
     activeGroupId || activeAgentId
       ? topicMapKey({ agentId: activeAgentId, groupId: activeGroupId })
-      : undefined,
+      : undefined;
+  const projectionIndex = useChatTopicsIndex('sidebar', containerKey);
+  const excludeStatuses = options?.excludeStatuses?.length ? options.excludeStatuses : undefined;
+  const excludeTriggers = options?.excludeTriggers?.length ? options.excludeTriggers : undefined;
+  const inbox = activeGroupId ? false : isInbox;
+  const request = useChatTopicsProjectionRequest(
+    containerKey
+      ? topicKeys.list(containerKey, {
+          excludeStatuses,
+          excludeTriggers,
+          isInbox: inbox,
+          pageSize: topicPageSize,
+          sortBy: options?.sortBy,
+        })
+      : null,
+    {
+      containerKey: containerKey ?? '',
+      context: { agentId: activeAgentId ?? null, groupId: activeGroupId ?? null },
+      page: 0,
+      pageSize: topicPageSize,
+      preserveIds: creatingTopicIds,
+      request: {
+        agentId: activeAgentId,
+        current: 0,
+        excludeStatuses,
+        excludeTriggers,
+        groupId: activeGroupId,
+        isInbox: inbox,
+        pageSize: topicPageSize,
+        sortBy: options?.sortBy,
+      },
+      signature: {
+        excludeStatuses,
+        excludeTriggers,
+        isInbox: inbox,
+        sortBy: options?.sortBy,
+      },
+      surface: 'sidebar',
+    },
+    Boolean(containerKey),
   );
-  const { isValidating } = useFetchTopicsHook(true, {
-    agentId: activeAgentId,
-    ...(options?.excludeStatuses && options.excludeStatuses.length > 0
-      ? { excludeStatuses: options.excludeStatuses }
-      : {}),
-    ...(options?.excludeTriggers && options.excludeTriggers.length > 0
-      ? { excludeTriggers: options.excludeTriggers }
-      : {}),
-    groupId: activeGroupId,
-    isInbox: activeGroupId ? false : isInbox,
-    pageSize: topicPageSize,
-    ...(options?.sortBy ? { sortBy: options.sortBy } : {}),
-  });
+  const previousContainerRef = useRef(containerKey);
+  const previousItemsRef = useRef(request.data?.items);
+
+  useEffect(() => {
+    if (previousContainerRef.current !== containerKey) {
+      previousContainerRef.current = containerKey;
+      previousItemsRef.current = undefined;
+    }
+    if (!request.data) return;
+    prefetchUnreadTopicMessages(request.data.items, previousItemsRef.current, {
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+    });
+    previousItemsRef.current = request.data.items;
+  }, [activeAgentId, activeGroupId, containerKey, prefetchUnreadTopicMessages, request.data]);
 
   return {
+    ...request,
+    isExpandingPageSize:
+      request.isValidating &&
+      Boolean(projectionIndex?.refs.length) &&
+      topicPageSize > (projectionIndex?.persistRefLimit ?? topicPageSize),
     // isRevalidating: has cached data, updating in background
-    isRevalidating: isValidating && !!projectionIndex,
+    isRevalidating: request.isValidating && !!projectionIndex,
   };
 };

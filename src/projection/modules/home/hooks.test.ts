@@ -11,8 +11,14 @@ import { taskService } from '@/services/task';
 
 import { useProjectionStore } from '../../store';
 import { selectTaskGroupList } from '../task/selectors';
-import { HOME_GOALS_SIGNATURE, useHomeGoalsRequest, useHomeScheduledTasksRequest } from './hooks';
-import { selectHomeScheduledTasks } from './selectors';
+import {
+  HOME_GOALS_SIGNATURE,
+  HOME_RECENT_TASK_STATUSES,
+  useHomeGoalsRequest,
+  useHomeScheduledTasksRequest,
+  useHomeTasksRequest,
+} from './hooks';
+import { selectHomeScheduledTasks, selectHomeTasks } from './selectors';
 
 const SCOPE = 'user-1:personal';
 const createdAt = new Date('2026-08-01T00:00:00.000Z');
@@ -120,6 +126,24 @@ describe('Home Projection requests', () => {
         schedulePattern: '0 * * * *',
       }),
     ]);
+  });
+
+  it('excludes automated and completed work from the recent-task Projection', async () => {
+    const recent = task('recent-1', 'running');
+    vi.mocked(taskService.list).mockResolvedValue({ data: [recent], total: 1 } as never);
+
+    renderHook(() => useHomeTasksRequest(true));
+    await act(async () => requestFetcher(projectionKeys.tasks.root)());
+
+    const scope = useProjectionStore.getState().scopes[SCOPE];
+    expect(taskService.list).toHaveBeenCalledWith({
+      automated: false,
+      hasGoal: false,
+      orderBy: 'updatedAt',
+      statuses: HOME_RECENT_TASK_STATUSES,
+    });
+    expect(selectHomeTasks(scope)).toEqual([expect.objectContaining({ id: 'recent-1' })]);
+    expect(scope.indexes['home.scheduledTasks']).toBeUndefined();
   });
 
   it('commits the cross-agent goal roll-up to a scoped Task group index', async () => {

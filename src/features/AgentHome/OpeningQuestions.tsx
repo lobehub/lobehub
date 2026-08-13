@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useConversationStore } from '@/features/Conversation';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -41,9 +42,7 @@ const OpeningQuestions = memo<OpeningQuestionsProps>(({ questions }) => {
   // useChatInputResourceAccess): inbox and private agents are never gated.
   const agentId = useAgentStore((s) => s.activeAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentVisibility = useAgentStore((s) =>
-    s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
-  );
+  const agentVisibility = useAgentValue(agentId, agentProjectionSelectors.visibility);
   const gatedResourceId =
     agentId && agentId !== inboxAgentId && agentVisibility !== 'private' ? agentId : undefined;
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);

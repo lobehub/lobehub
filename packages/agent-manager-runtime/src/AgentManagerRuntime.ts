@@ -28,8 +28,8 @@ import {
   upsertPluginMode,
 } from '@lobechat/types';
 
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -151,13 +151,12 @@ export class AgentManagerRuntime {
       // Ensure agent is loaded in store before reading its config
       await this.ensureAgentLoaded(agentId);
 
-      const state = getAgentStoreState();
       const agentStore = getAgentStoreState();
       const resultState: UpdateAgentConfigState = { success: true };
       const contentParts: string[] = [];
 
       // Get current config for merging
-      const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
+      const previousConfig = getAgentProjectionById(agentId);
 
       // Guard against LLM double-encoding: if config/meta is a JSON string, parse it.
       // Use `as any` to bypass TS narrowing — at runtime LLMs can send strings for
@@ -244,7 +243,7 @@ export class AgentManagerRuntime {
 
       // Handle meta update
       if (rawMeta && Object.keys(rawMeta).length > 0) {
-        const previousMeta = agentSelectors.getAgentMetaById(agentId)(state);
+        const previousMeta = previousConfig ?? {};
         const metaUpdatedFields = Object.keys(rawMeta);
         const metaPreviousValues: Record<string, unknown> = {};
 
@@ -569,8 +568,7 @@ export class AgentManagerRuntime {
     try {
       const previousPrompt = await this.enqueuePromptUpdate(agentId, async () => {
         await this.ensureAgentLoaded(agentId);
-        const state = getAgentStoreState();
-        const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
+        const previousConfig = getAgentProjectionById(agentId);
 
         if (params.streaming) {
           await this.performStreamingPromptUpdate(agentId, params.prompt);
@@ -813,18 +811,17 @@ export class AgentManagerRuntime {
   // ==================== Private Helper Methods ====================
 
   /**
-   * Ensure the agent config is loaded into the Zustand store.
+   * Ensure the agent config is loaded into Projection.
    * When operating on agents that aren't currently open/active,
-   * their config won't be in the agentMap. This fetches and dispatches it.
+   * their config may not be projected yet. This fetches and commits it.
    */
   private async ensureAgentLoaded(agentId: string): Promise<void> {
-    const state = getAgentStoreState();
-    const existing = state.agentMap[agentId];
+    const existing = getAgentProjectionById(agentId);
     if (existing) return;
 
     const config = await this.agentService.getAgentConfigById(agentId);
     if (config) {
-      getAgentStoreState().internal_dispatchAgentMap(agentId, config);
+      getAgentStoreState().internal_dispatchAgentProjection(agentId, config);
     }
   }
 
@@ -1094,8 +1091,7 @@ export class AgentManagerRuntime {
 
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
     await this.ensureAgentLoaded(agentId);
-    const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins;
+    const currentPlugins = getAgentProjectionById(agentId)?.plugins;
 
     // upsertPluginMode preserves an already-matching entry as-is and flips a
     // disabled entry back to pinned in place, instead of blindly pushing a

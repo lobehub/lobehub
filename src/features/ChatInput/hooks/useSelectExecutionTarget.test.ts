@@ -61,11 +61,13 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig,
-    isAgentHeterogeneousById: () => (s: typeof testState.agent) => s.isHetero,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    agencyConfig: (agent: typeof testState.agent) => agent.agencyConfig,
+    heterogeneous: (agent: typeof testState.agent) => agent.isHetero,
   },
+  useAgentValue: <T>(agentId: string, selector: (agent: typeof testState.agent) => T) =>
+    selector({ ...testState.agent, ...testState.agent.agentMap[agentId] }),
 }));
 
 vi.mock('@/store/electron', () => ({

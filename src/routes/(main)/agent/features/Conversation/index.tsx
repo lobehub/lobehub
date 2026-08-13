@@ -7,13 +7,11 @@ import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segm
 import { insertLocalPathTags } from '@/features/ChatInput/InputEditor/insertLocalFileTags';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  builtinAgentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import ConversationArea from './ConversationArea';
@@ -27,20 +25,16 @@ const wrapperStyle: React.CSSProperties = {
 
 const ChatConversation = memo(() => {
   const { agentId, topicId } = useAgentContext();
-  const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
-  const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
-  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const isLocalSystemEnabled = useAgentStore(
-    chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
-  );
+  const model = useAgentValue(agentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(agentId, agentProjectionSelectors.provider);
+  const isHeterogeneous = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
+  const isLocalSystemEnabled = useAgentRuntimeMode(agentId) === 'local';
 
   // Drag-drop upload bypasses the (view-only-disabled) input editor, so the
   // drop zone itself follows the same per-resource General-access rules as the
   // chat input: inbox and private agents are never gated.
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentVisibility = useAgentStore((s) =>
-    agentId ? s.agentMap[agentId]?.visibility : undefined,
-  );
+  const agentVisibility = useAgentValue(agentId, agentProjectionSelectors.visibility);
   const gatedResourceId =
     agentId && agentId !== inboxAgentId && agentVisibility !== 'private' ? agentId : undefined;
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);

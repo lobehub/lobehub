@@ -13,10 +13,10 @@ import {
   type ConversationContext,
 } from '@lobechat/types';
 
+import { getAgentProjectionById } from '@/projection';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
-import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/dispatch/nonHeteroSubAgentDispatcher';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
@@ -121,7 +121,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     if (runAsTask) {
       // Dispatch as a legacy async agent invocation.
       // Pre-load target agent config to ensure it exists
-      const targetAgentExists = useAgentStore.getState().agentMap[agentId];
+      const targetAgentExists = getAgentProjectionById(agentId);
       if (!targetAgentExists) {
         try {
           const config = await agentService.getAgentConfigById(agentId);
@@ -131,7 +131,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
               success: false,
             };
           }
-          useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
+          useAgentStore.getState().internal_dispatchAgentProjection(agentId, config);
         } catch (error) {
           console.error('[callAgent] Failed to load agent config:', error);
           return {
@@ -192,7 +192,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     if (ctx.registerAfterCompletion) {
       // Pre-load target agent config if not already loaded (before registerAfterCompletion)
       // This ensures we fail fast with a clear error message if agent doesn't exist
-      const targetAgentExists = useAgentStore.getState().agentMap[agentId];
+      const targetAgentExists = getAgentProjectionById(agentId);
       if (!targetAgentExists) {
         try {
           const config = await agentService.getAgentConfigById(agentId);
@@ -202,7 +202,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
               success: false,
             };
           }
-          useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
+          useAgentStore.getState().internal_dispatchAgentProjection(agentId, config);
         } catch (error) {
           console.error('[callAgent] Failed to load agent config:', error);
           return {
@@ -249,7 +249,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
           : messages;
 
         const parentAgentConfig = conversationContext.agentId
-          ? agentSelectors.getAgentConfigById(conversationContext.agentId)(getAgentStoreState())
+          ? getAgentProjectionById(conversationContext.agentId)
           : undefined;
 
         try {

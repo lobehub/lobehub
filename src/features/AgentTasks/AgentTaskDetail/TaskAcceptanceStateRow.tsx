@@ -19,8 +19,8 @@ import { useTranslation } from 'react-i18next';
 import { useAcceptanceBySubject } from '@/features/Verify';
 import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection } from '@/store/task';
 
 /**
  * The human layer of the task's two-layer state.
@@ -92,7 +92,9 @@ const resolveState = (status: string, latestRunStatus?: string | null): StateKey
 const TaskAcceptanceStateRow = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
-  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const taskDatabaseId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskDatabaseId,
+  );
   const { data: acceptance } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
 
   // No aggregate yet (verify not configured / never ran) — the row simply

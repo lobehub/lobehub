@@ -8,8 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentTopics } from '@/hooks/useFetchAgentTopics';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useChatTopicsByAgentId } from '@/store/chat/slices/topic/projection';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
@@ -36,15 +37,10 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the agent builder
-  const useFetchTopics = useChatStore((s) => s.useFetchTopics);
+  useFetchAgentTopics({ agentId });
 
-  useFetchTopics(true, { agentId });
-
-  const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
-    s.activeTopicId,
-    s.switchTopic,
-    topicSelectors.getTopicsByAgentId(agentId)(s),
-  ]);
+  const [activeTopicId, switchTopic] = useChatStore((s) => [s.activeTopicId, s.switchTopic]);
+  const topics = useChatTopicsByAgentId(agentId)?.items;
 
   // Find active topic from the agent's topics list directly
   const activeTopic = useMemo(
@@ -79,7 +75,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           type: 'checkbox',
         };
       }),
-    [topics, switchTopic, styles, activeTopicId],
+    [activeTopicId, disabled, switchTopic, topics],
   );
   const isEmpty = !topics || topics.length === 0;
 

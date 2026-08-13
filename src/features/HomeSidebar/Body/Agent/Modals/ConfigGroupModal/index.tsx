@@ -9,8 +9,11 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
@@ -36,11 +39,11 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 
   const { t } = useTranslation('chat');
   const { allowed: canEdit } = usePermission('edit_own_content');
   // Map SidebarGroup to SessionGroupItem-like structure for the sortable list
-  const sessionGroupItems = useHomeStore(
-    (s) =>
+  const sessionGroupItems = useHomeSidebarProjection(
+    (sidebar) =>
       (scope === 'private'
-        ? homeAgentListSelectors.privateAgentGroups(s)
-        : homeAgentListSelectors.agentGroups(s)
+        ? homeSidebarSelectors.privateAgentGroups(sidebar)
+        : homeSidebarSelectors.agentGroups(sidebar)
       ).map((g) => ({
         id: g.id,
         name: g.name,

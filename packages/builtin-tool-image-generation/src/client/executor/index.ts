@@ -6,13 +6,12 @@ import type {
 import { BaseExecutor } from '@lobechat/types';
 import type { AiModelForSelect, AiProviderModelListItem } from 'model-bank';
 
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { aiModelService } from '@/services/aiModel';
 import { aiProviderService } from '@/services/aiProvider';
 import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
 import { imageService } from '@/services/image';
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
@@ -177,7 +176,7 @@ class ImageGenerationExecutor extends BaseExecutor<typeof ImageGenerationApiName
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const topicVisibility = ctx?.agentId
-      ? agentByIdSelectors.getAgentById(ctx.agentId)(getAgentStoreState())?.visibility
+      ? getAgentProjectionById(ctx.agentId)?.visibility
       : undefined;
     const runtime = createClientImageGenerationRuntime(topicVisibility);
 

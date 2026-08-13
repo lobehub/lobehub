@@ -34,6 +34,9 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import { getAgentProjectionById } from '@/projection';
+import { getTaskDetailProjection, getTaskProjection } from '@/projection/modules/task/read';
+import { selectTaskListIndex, selectTaskListItem } from '@/projection/modules/task/selectors';
 import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -41,17 +44,20 @@ import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { getAgentWorkingDirectory } from '@/store/agent/projection';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
-import { topicSelectors } from '@/store/chat/selectors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import {
   selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '@/store/chat/slices/message/selectors/dbMessage';
+import {
+  getChatTopicModelById,
+  getChatTopicWorkingDirectory,
+} from '@/store/chat/slices/topic/projection';
 import { type ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -192,7 +198,7 @@ export class StreamingExecutorActionImpl {
     //    the whole model→topic chain (tools, context window, generation) uses it.
     // resolveAgentConfig returns an immer-frozen config, so build a new object
     // rather than mutating in place.
-    const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(this.#get()) : undefined;
+    const topicModel = getChatTopicModelById(topicId ?? undefined);
     const modelResolution = modelOverride ?? topicModel;
     const agentConfig: ResolvedAgentConfig =
       (modelResolution || chatConfigOverride) && resolvedAgentConfig.agentConfig
@@ -334,10 +340,12 @@ export class StreamingExecutorActionImpl {
       provider: agentConfigData.provider!,
     };
 
-    const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(this.#get());
+    const topicWorkingDirectory = getChatTopicWorkingDirectory();
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentWorkingDirectory =
-      agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(getAgentStoreState());
+    const agentWorkingDirectory = getAgentWorkingDirectory(
+      getAgentStoreState().activeAgentId,
+      currentDeviceId,
+    );
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
     // Create initial state or use provided state
@@ -417,13 +425,28 @@ export class StreamingExecutorActionImpl {
         let contextPrompt: string | undefined;
 
         if (viewedTask.type === 'list') {
+          const taskList = getTaskProjection((scope) => {
+            const signature = {
+              agentKey: taskState.listAgentId,
+              visibility: taskState.listQueryVisibility,
+            };
+            const index = selectTaskListIndex(scope, signature);
+            if (!scope || !index) return { items: [], total: 0 };
+            return {
+              items: index.refs.flatMap((ref) => {
+                const item = selectTaskListItem(scope, scope.records.task[ref.id]);
+                return item ? [item] : [];
+              }),
+              total: index.total,
+            };
+          });
           contextPrompt = buildTaskListPrompt({
             defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-            tasks: taskState.tasks,
-            total: taskState.tasksTotal || taskState.tasks.length,
+            tasks: taskList.items,
+            total: taskList.total || taskList.items.length,
           });
         } else {
-          const detail = taskState.taskDetailMap[viewedTask.taskId];
+          const detail = getTaskDetailProjection(viewedTask.taskId);
           if (detail)
             contextPrompt = buildTaskDetailPrompt({
               defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
@@ -1040,9 +1063,8 @@ export class StreamingExecutorActionImpl {
       //    wins, otherwise the sub-agent follows the parent's *effective* model
       //    — topic-pinned model over the agent default, the same precedence
       //    internal_createAgentState applies to the parent run itself.
-      const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-      const parentEffectiveModel =
-        topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
+      const parentAgentConfig = getAgentProjectionById(agentId);
+      const parentEffectiveModel = getChatTopicModelById(topicId) ?? parentAgentConfig;
       const subAgentModel = resolveSubAgentModel(
         parentAgentConfig?.agencyConfig?.subagent,
         parentEffectiveModel,

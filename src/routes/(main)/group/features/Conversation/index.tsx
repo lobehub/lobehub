@@ -3,7 +3,7 @@ import { memo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 import ConversationArea from './ConversationArea';
 import ChatHeader from './Header';
@@ -11,8 +11,8 @@ import ChatHeader from './Header';
 const ChatConversation = memo(() => {
   // Get current agent's model info for vision support check
   const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const model = useAgentStore(agentSelectors.currentAgentModel);
-  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const model = useCurrentAgentValue(agentProjectionSelectors.model);
+  const provider = useCurrentAgentValue(agentProjectionSelectors.provider);
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
 
   return (

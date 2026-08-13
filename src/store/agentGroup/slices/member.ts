@@ -66,7 +66,7 @@ export class ChatGroupMemberAction {
     const agentStore = getAgentStoreState();
     await agentStore.updateAgentConfigById(agentId, config);
 
-    // 2. Refresh group detail to sync the updated agent data to groupMap
+    // 2. Refresh the canonical group Projection with the updated agent data
     await this.#get().refreshGroupDetail(groupId);
   };
 }

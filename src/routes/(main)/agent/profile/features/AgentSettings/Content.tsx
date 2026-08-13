@@ -1,6 +1,5 @@
 'use client';
 
-import isEqual from 'fast-deep-equal';
 import { ActivityIcon, GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,13 @@ import {
 } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useCurrentAgentConfig,
+  useCurrentAgentMeta,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -36,9 +41,9 @@ const Content = memo(() => {
     (s) => [s.activeAgentId, builtinAgentSelectors.isInboxAgent(s)],
     shallow,
   );
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const config = useCurrentAgentConfig();
+  const meta = useCurrentAgentMeta();
+  const isHeterogeneous = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
   const [tab, setTab] = useState(ChatSettingsTabs.Opening);

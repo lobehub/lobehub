@@ -5,7 +5,6 @@ import { useModelSupportAudio } from '@/hooks/useModelSupportAudio';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useModelSupportVideo } from '@/hooks/useModelSupportVideo';
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
-import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -15,15 +14,13 @@ vi.mock('@/hooks/useModelSupportAudio');
 vi.mock('@/hooks/useModelSupportToolUse');
 vi.mock('@/hooks/useModelSupportVideo');
 vi.mock('@/hooks/useModelSupportVision');
-vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: (_id: string) => (s: { heterogeneousType?: string }) =>
-      s.heterogeneousType ? { heterogeneousProvider: { type: s.heterogeneousType } } : undefined,
-    getAgentEnableModeById: (_id: string) => (s: { enableMode?: boolean }) => !!s.enableMode,
-    isAgentHeterogeneousById: (_id: string) => (s: { heterogeneous?: boolean }) =>
-      !!s.heterogeneous,
-  },
+const projection = vi.hoisted(() => ({ agent: undefined as Record<string, unknown> | undefined }));
+vi.mock('@/store/agent/projection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useAgentValue: (
+    _id: string | undefined,
+    selector: (agent?: Record<string, unknown>) => unknown,
+  ) => selector(projection.agent),
 }));
 vi.mock('@/store/aiInfra', () => ({
   aiModelSelectors: {
@@ -55,7 +52,6 @@ const mockedUseModelSupportAudio = vi.mocked(useModelSupportAudio);
 const mockedUseModelSupportToolUse = vi.mocked(useModelSupportToolUse);
 const mockedUseModelSupportVideo = vi.mocked(useModelSupportVideo);
 const mockedUseModelSupportVision = vi.mocked(useModelSupportVision);
-const mockedUseAgentStore = vi.mocked(useAgentStore);
 const mockedUseAiInfraStore = vi.mocked(useAiInfraStore);
 const mockedUseServerConfigStore = vi.mocked(useServerConfigStore);
 
@@ -66,10 +62,7 @@ describe('useMediaUploadAbility', () => {
     mockedUseModelSupportVision.mockReturnValue(false);
     mockedUseModelSupportVideo.mockReturnValue(false);
     mockedUseModelSupportToolUse.mockReturnValue(false);
-    // Default: no agent-mode bypass (plain chat).
-    mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: false, heterogeneous: false } as any),
-    );
+    projection.agent = undefined;
     mockedUseAiInfraStore.mockImplementation((selector) =>
       selector({ enabledAiModels: [] } as any),
     );
@@ -185,9 +178,7 @@ describe('useMediaUploadAbility', () => {
   });
 
   it('should bypass the media gate in agent mode regardless of model abilities', () => {
-    mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: true, heterogeneous: false } as any),
-    );
+    projection.agent = { chatConfig: { enableAgentMode: true } };
 
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
@@ -197,9 +188,10 @@ describe('useMediaUploadAbility', () => {
   });
 
   it('should bypass the media gate for heterogeneous agents', () => {
-    mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: false, heterogeneous: true, heterogeneousType: 'claude-code' } as any),
-    );
+    projection.agent = {
+      agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      chatConfig: { enableAgentMode: false },
+    };
 
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
@@ -209,9 +201,10 @@ describe('useMediaUploadAbility', () => {
   });
 
   it('should reject image uploads for Kimi Code agents', () => {
-    mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: false, heterogeneous: true, heterogeneousType: 'kimi-code' } as any),
-    );
+    projection.agent = {
+      agencyConfig: { heterogeneousProvider: { type: 'kimi-code' } },
+      chatConfig: { enableAgentMode: false },
+    };
 
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
@@ -222,9 +215,7 @@ describe('useMediaUploadAbility', () => {
 
   it('should not bypass the media gate when agent mode is explicitly disabled', () => {
     mockedUseModelSupportAudio.mockReturnValue(false);
-    mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: false, heterogeneous: false } as any),
-    );
+    projection.agent = { chatConfig: { enableAgentMode: false } };
 
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 

@@ -32,10 +32,10 @@ import {
   useProjectSkills,
 } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { standardizeIdentifier } from '@/utils/identifier';
 
@@ -311,9 +311,8 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;
     const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
-    const isLocalEnabled = useAgentStore((s) =>
-      agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
-    );
+    const runtimeMode = useAgentRuntimeMode(agentId ?? '');
+    const isLocalEnabled = Boolean(agentId) && runtimeMode === 'local';
     const [filter, setFilter] = useState<ResourceFilter>(() =>
       isDocumentMode ? 'documents' : 'skills',
     );

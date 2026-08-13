@@ -11,9 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
+import * as projectionModule from '@/projection';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
@@ -135,17 +135,12 @@ beforeEach(async () => {
     isDesktop: false,
   }));
 
-  // Default mock for agentSelectors - resolveAgentConfig needs these
-  vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
-    () => ({ plugins: [], systemRole: '' }) as any,
-  );
-  vi.spyOn(agentSelectors, 'getAgentDocumentsById').mockImplementation(
-    (agentId: string) => (state) => state.agentDocumentsMap[agentId],
-  );
-  vi.spyOn(agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
-  vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-    () => ({ searchMode: 'off' }) as any,
-  );
+  // Resolve every requested agent from the canonical Projection boundary.
+  vi.spyOn(projectionModule, 'getAgentProjectionById').mockReturnValue({
+    chatConfig: { searchMode: 'off' },
+    plugins: [],
+    systemRole: '',
+  } as any);
   useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
   useAiInfraStore.setState({ enabledAiModels: [] });
   useChatStore.setState({ activeAgentId: undefined } as any);
@@ -1400,14 +1395,10 @@ describe('ChatService', () => {
 
         const messages = [{ content: 'Search for something', role: 'user' }] as UIChatMessage[];
 
-        // Mock agent store state with search enabled
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              searchMode: 'auto', // not 'off'
-              useModelBuiltinSearch: false,
-            }) as any,
-        );
+        vi.mocked(projectionModule.getAgentProjectionById).mockReturnValue({
+          chatConfig: { searchMode: 'auto', useModelBuiltinSearch: false },
+          id: 'test-agent',
+        });
 
         // Mock AI infra store state
         vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => undefined);
@@ -1452,14 +1443,10 @@ describe('ChatService', () => {
 
         const messages = [{ content: 'Search for something', role: 'user' }] as UIChatMessage[];
 
-        // Mock agent store state with search enabled and useModelBuiltinSearch enabled
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              searchMode: 'auto', // not 'off'
-              useModelBuiltinSearch: true,
-            }) as any,
-        );
+        vi.mocked(projectionModule.getAgentProjectionById).mockReturnValue({
+          chatConfig: { searchMode: 'auto', useModelBuiltinSearch: true },
+          id: 'test-agent',
+        });
 
         // Mock AI infra store state - model has parameter-based built-in search
         vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');
@@ -1503,14 +1490,10 @@ describe('ChatService', () => {
 
         const messages = [{ content: 'Search for something', role: 'user' }] as UIChatMessage[];
 
-        // Mock agent store state with search disabled
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              searchMode: 'off',
-              useModelBuiltinSearch: true,
-            }) as any,
-        );
+        vi.mocked(projectionModule.getAgentProjectionById).mockReturnValue({
+          chatConfig: { searchMode: 'off', useModelBuiltinSearch: true },
+          id: 'test-agent',
+        });
 
         // Mock AI infra store state
         vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');

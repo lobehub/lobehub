@@ -3,11 +3,14 @@ import debug from 'debug';
 import { createElement, useCallback } from 'react';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { useAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { projectFileService } from '@/services/projectFile';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentValue,
+  useAgentWorkingDirectory,
+} from '@/store/agent/projection';
+import { useChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 import { useElectronStore } from '@/store/electron';
 
 import { useAgentId } from '../hooks/useAgentId';
@@ -24,16 +27,12 @@ export interface UseLocalFileTagResult {
 
 export const useLocalFileTag = (): UseLocalFileTagResult => {
   const agentId = useAgentId();
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
   const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
-  const isLocalSystemEnabled = useAgentStore(
-    chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
-  );
+  const isLocalSystemEnabled = useAgentRuntimeMode(agentId) === 'local';
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s),
-  );
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const agentWorkingDirectory = useAgentWorkingDirectory(agentId, currentDeviceId);
+  const topicWorkingDirectory = useChatTopicWorkingDirectory();
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const searchDeviceId =

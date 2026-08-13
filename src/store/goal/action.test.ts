@@ -31,6 +31,7 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => SCOPE,
   isAnonymousScope: () => false,
   isScopeTrusted: () => false,
+  useCacheScope: () => SCOPE,
 }));
 vi.mock('@/services/task', () => ({ taskService: { deleteGoal: vi.fn(), groupList: vi.fn() } }));
 
@@ -93,7 +94,6 @@ describe('GoalAction', () => {
       })?.[0].tasks,
     ).toEqual([expect.objectContaining({ id: 'project-goal-1' })]);
   });
-
 
   it('refreshes only the requested agent goal cache', async () => {
     await useGoalStore.getState().refreshGoals('agent-1');

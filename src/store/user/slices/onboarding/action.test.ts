@@ -8,12 +8,21 @@ import { useUserStore } from '@/store/user';
 
 import { initialOnboardingState } from './initialState';
 
+const projectionAgents = vi.hoisted(() => ({
+  inbox: { plugins: ['plugin-1'] as any[] },
+}));
+
 vi.mock('zustand/traditional');
 
 vi.mock('@/services/user', () => ({
   userService: {
     updateOnboarding: vi.fn(),
   },
+}));
+
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: (agentId: string) =>
+    agentId === 'inbox-agent-id' ? projectionAgents.inbox : undefined,
 }));
 
 describe('onboarding actions', () => {
@@ -125,8 +134,8 @@ describe('onboarding actions', () => {
     beforeEach(() => {
       updateAgentConfigById.mockClear();
       act(() => {
+        projectionAgents.inbox = { plugins: ['plugin-1'] };
         useAgentStore.setState({
-          agentMap: { 'inbox-agent-id': { plugins: ['plugin-1'] } as any },
           builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent-id' },
           updateAgentConfigById,
         } as any);
@@ -135,13 +144,9 @@ describe('onboarding actions', () => {
 
     it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
       act(() => {
-        useAgentStore.setState({
-          agentMap: {
-            'inbox-agent-id': {
-              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'disabled' }],
-            } as any,
-          },
-        } as any);
+        projectionAgents.inbox = {
+          plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'disabled' }],
+        };
       });
 
       const { result } = renderHook(() => useUserStore());

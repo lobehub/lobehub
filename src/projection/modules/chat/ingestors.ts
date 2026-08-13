@@ -1,5 +1,6 @@
 import type {
   ChatTopic,
+  ChatTopicSearchSignature,
   ChatTopicsIndex,
   ChatTopicsQuerySignature,
   ProjectionCommit,
@@ -7,7 +8,11 @@ import type {
   ProjectionRef,
   TopicProjection,
 } from '@lobechat/types';
-import { chatAgentViewTopicsIndexKey, chatSidebarTopicsIndexKey } from '@lobechat/types';
+import {
+  chatAgentViewTopicsIndexKey,
+  chatSidebarTopicsIndexKey,
+  chatTopicSearchIndexKey,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import type { ProjectionObservation } from '../../core/ingest';
@@ -99,6 +104,7 @@ export interface ChatTopicsPageInput {
   items: ChatTopic[];
   page: number;
   pageSize: number;
+  preserveIds?: string[];
   signature: ChatTopicsQuerySignature;
   surface: 'agentView' | 'sidebar';
   total: number;
@@ -118,13 +124,21 @@ export const ingestChatTopicsPage = (
       : undefined;
 
   let refs = pageRefs;
+  let total = input.total;
   if (existing && input.page > 0) {
     const seen = new Set(existing.refs.map(({ id }) => id));
     refs = [...existing.refs, ...pageRefs.filter(({ id }) => !seen.has(id))];
-  } else if (existing && existing.refs.length > pageRefs.length) {
+  } else if (existing) {
     const pageIds = new Set(pageRefs.map(({ id }) => id));
-    const cap = Math.min(Math.max(pageRefs.length, existing.refs.length), input.total);
-    refs = [...pageRefs, ...existing.refs.filter(({ id }) => !pageIds.has(id))].slice(0, cap);
+    const preserveIds = new Set(input.preserveIds ?? []);
+    const preserved = existing.refs.filter(({ id }) => preserveIds.has(id) && !pageIds.has(id));
+    const retained = existing.refs.filter(({ id }) => !pageIds.has(id) && !preserveIds.has(id));
+    const serverCoverage = Math.min(
+      Math.max(pageRefs.length, existing.refs.length - preserved.length),
+      input.total,
+    );
+    refs = [...preserved, ...pageRefs, ...retained].slice(0, preserved.length + serverCoverage);
+    total += preserved.length;
   }
 
   const key =
@@ -137,10 +151,11 @@ export const ingestChatTopicsPage = (
       {
         key,
         ...observation,
+        page: existing ? Math.max(existing.page ?? 0, input.page) : input.page,
         persistRefLimit: input.pageSize,
         refs,
         signature,
-        total: input.total,
+        total,
       } as ChatTopicsIndex,
     ],
     records: input.items.map((item) =>
@@ -155,7 +170,18 @@ export const ingestChatTopicsPage = (
 
 export const ingestChatTopicSearchResults = (
   items: ChatTopic[],
+  signature: ChatTopicSearchSignature,
   observation: ProjectionObservation,
 ): ProjectionCommit => ({
+  indexes: [
+    {
+      key: chatTopicSearchIndexKey(signature),
+      ...observation,
+      persistRefLimit: Math.max(items.length, 1),
+      refs: items.map(({ id }) => ({ id, kind: 'topic' as const })),
+      signature,
+      total: items.length,
+    },
+  ],
   records: items.map((item) => chatTopicRecord(item, observation)),
 });

@@ -3,8 +3,7 @@ import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 
 export interface UseEffectiveAgencyConfigResult {
@@ -49,12 +48,8 @@ export interface UseEffectiveAgencyConfigResult {
  * personal mode short-circuits without a network call).
  */
 export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyConfigResult => {
-  const sharedAgencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
-  const agent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentById(agentId)(s) : undefined,
-  );
+  const agent = useAgentData(agentId);
+  const sharedAgencyConfig = agent?.agencyConfig;
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   const usesWorkspaceMemberSelection =
     !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;

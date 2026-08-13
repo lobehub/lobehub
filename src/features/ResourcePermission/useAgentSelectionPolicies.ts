@@ -10,7 +10,7 @@ import {
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 
 export interface AgentSelectionPoliciesState {
   /** Members can be assigned a target only if one is actually resolvable. */
@@ -38,7 +38,7 @@ export interface AgentSelectionPoliciesState {
  * sharing. What is edited here is the author's *intent*.
  */
 export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPoliciesState => {
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
+  const agent = useAgentData(agentId);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const { data: devices } = useDeviceList();

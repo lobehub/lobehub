@@ -3,7 +3,6 @@
 import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import { PencilIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,12 @@ import { createAgentIdentityModal } from '@/features/AgentIdentityModal';
 import { AgentProfileArtwork } from '@/features/AgentProfileArtwork';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfig,
+  useAgentMeta,
+  useAgentValue,
+} from '@/store/agent/projection';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
@@ -24,9 +28,9 @@ const AgentHeader = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
-  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
+  const meta = useAgentMeta(agentId);
+  const config = useAgentConfig(agentId);
+  const slug = useAgentValue(agentId, agentProjectionSelectors.slug);
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const { autoName, naming } = useAutoName(agentId);
   // Without edit rights there is nothing to prompt for, so a nameless agent

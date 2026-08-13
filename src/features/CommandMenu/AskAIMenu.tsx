@@ -8,8 +8,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -23,7 +26,7 @@ const AskAIMenu = memo(() => {
   const { search } = useCommandMenuContext();
 
   // Get agent list (limit to first 20 items for simplicity)
-  const allAgents = useHomeStore(homeAgentListSelectors.allAgents);
+  const allAgents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
   const agents = allAgents.filter((item) => item.type === 'agent').slice(0, 20);
 
   const heading = search.trim()

@@ -7,8 +7,7 @@ import { BanIcon, ClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 
 import { useConversationStore } from '../../store';
 
@@ -28,15 +27,15 @@ interface ScheduledRunFooterProps {
 const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
   const { t } = useTranslation('chat');
 
-  const runAt = useChatStore((s) => {
-    const topic = topicSelectors.currentActiveTopic(s);
+  const topic = useCurrentChatTopic();
+  const runAt = (() => {
     if (topic?.status !== 'scheduled') return;
 
     const scheduledRun = topic.metadata?.scheduledRun;
     if (scheduledRun?.kind !== 'delayed_start' || scheduledRun.userMessageId !== id) return;
 
     return scheduledRun.runAt;
-  });
+  })();
 
   const cancelScheduledRun = useConversationStore((s) => s.cancelScheduledRun);
 

@@ -5,8 +5,8 @@ import isEqual from 'fast-deep-equal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
@@ -100,7 +100,7 @@ export const useAgentComposioConnect = ({ agentId, appSlug, identifier, label }:
       });
 
       // Pin the tool for this agent so the runtime actually resolves it.
-      const config = agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState());
+      const config = getAgentProjectionById(agentId);
       await updateAgentConfigById(agentId, {
         plugins: upsertPluginMode(config?.plugins, identifier, 'pinned'),
       });

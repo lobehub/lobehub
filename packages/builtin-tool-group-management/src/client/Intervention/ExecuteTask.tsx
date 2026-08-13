@@ -10,8 +10,8 @@ import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams } from '../../types';
 
@@ -74,23 +74,23 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     const { t } = useTranslation('tool');
 
     // Get agent info from store
-    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-    const agent = useAgentGroupStore((s) =>
+    const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+    const agent = useChatGroupProjection((scope) =>
       args?.agentId && activeGroupId
-        ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, args.agentId)(s)
+        ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, args.agentId)(scope)
         : undefined,
     );
 
     // Local state
     const [instruction, setInstruction] = useState(args?.instruction || '');
-    const [timeout, setTimeout] = useState(args?.timeout ?? DEFAULT_TIMEOUT);
+    const [timeout, setTimeoutMs] = useState(args?.timeout ?? DEFAULT_TIMEOUT);
     const [hasChanges, setHasChanges] = useState(false);
 
     // Sync local state when args change externally
     useEffect(() => {
       if (!hasChanges) {
         setInstruction(args?.instruction || '');
-        setTimeout(args?.timeout ?? DEFAULT_TIMEOUT);
+        setTimeoutMs(args?.timeout ?? DEFAULT_TIMEOUT);
       }
     }, [args?.instruction, args?.timeout, hasChanges]);
 
@@ -103,7 +103,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     // Handle timeout change (minutes to milliseconds)
     const handleTimeoutChange = useCallback((value: number | null) => {
       if (value !== null) {
-        setTimeout(value * 60 * 1000); // Convert minutes to milliseconds
+        setTimeoutMs(value * 60 * 1000); // Convert minutes to milliseconds
         setHasChanges(true);
       }
     }, []);

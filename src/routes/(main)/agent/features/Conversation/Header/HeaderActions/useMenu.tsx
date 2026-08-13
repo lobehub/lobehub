@@ -34,7 +34,10 @@ import type {
 } from '@/server/routers/lambda/_schema/documentHistory';
 import { documentService } from '@/services/document';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  useChatTopicById,
+  useChatTopicWorkingDirectory,
+} from '@/store/chat/slices/topic/projection';
 import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -78,10 +81,8 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
 
   const { agentId: activeAgentId, topicId: routeTopicId } = useAgentContext();
-  const activeTopic = useChatStore((s) =>
-    routeTopicId ? topicSelectors.getTopicById(routeTopicId)(s) : undefined,
-  );
-  const workingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(routeTopicId));
+  const activeTopic = useChatTopicById(routeTopicId ?? undefined);
+  const workingDirectory = useChatTopicWorkingDirectory(routeTopicId);
   const [autoRenameTopicTitle, favoriteTopic, removeTopic, updateTopicTitle] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.favoriteTopic,

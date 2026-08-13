@@ -3,7 +3,6 @@ import { type FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
-import isEqual from 'fast-deep-equal';
 import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo } from 'react';
@@ -16,8 +15,7 @@ import {
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from '@/services/chat/mecha/modelParamsResolver';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
@@ -119,18 +117,13 @@ const ControlsForm = memo<ControlsFormProps>(
     const { t } = useTranslation('chat');
     const agentId = useAgentId();
     const { updateAgentChatConfig } = useUpdateAgentConfig();
-    const [agentModel, agentProvider] = useAgentStore((s) => [
-      agentByIdSelectors.getAgentModelById(agentId)(s),
-      agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-    ]);
+    const agentModel = useAgentValue(agentId, agentProjectionSelectors.model);
+    const agentProvider = useAgentValue(agentId, agentProjectionSelectors.provider);
     const model = modelProp ?? agentModel;
     const provider = providerProp ?? agentProvider;
     const [form] = Form.useForm();
 
-    const storeConfig = useAgentStore(
-      (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
-      isEqual,
-    );
+    const storeConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
     const config = chatConfigProp ?? storeConfig;
 
     const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));

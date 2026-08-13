@@ -24,10 +24,12 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 
 import AgentCard, { cardStyles } from './AgentCard';
@@ -186,14 +188,20 @@ const AgentViewAllPage = memo(() => {
   const useFetchWorkspaceUserPreference = useUserStore((s) => s.useFetchWorkspaceUserPreference);
   useFetchWorkspaceUserPreference();
 
-  const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const privateUngroupedAgents = useHomeStore(
-    homeAgentListSelectors.privateUngroupedAgents,
+  const isInit = useHomeSidebarProjection(homeSidebarSelectors.isAgentListInit);
+  const pinnedAgents = useHomeSidebarProjection(homeSidebarSelectors.pinnedAgents, isEqual);
+  const agentGroups = useHomeSidebarProjection(homeSidebarSelectors.agentGroups, isEqual);
+  const ungroupedAgents = useHomeSidebarProjection(homeSidebarSelectors.ungroupedAgents, isEqual);
+  const privatePinnedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.privatePinnedAgents,
+    isEqual,
+  );
+  const privateAgentGroups = useHomeSidebarProjection(
+    homeSidebarSelectors.privateAgentGroups,
+    isEqual,
+  );
+  const privateUngroupedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.privateUngroupedAgents,
     isEqual,
   );
 

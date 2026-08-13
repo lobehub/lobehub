@@ -3,6 +3,8 @@ import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { INBOX_SESSION_ID } from '@/const/session';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { type ChatStore } from '@/store/chat';
 import { initialState } from '@/store/chat/initialState';
@@ -169,16 +171,17 @@ describe('displayMessageSelectors', () => {
         useAgentStore.setState({
           activeAgentId: 'inbox-agent',
           builtinAgentIdMap: { inbox: 'inbox-agent' },
-          agentMap: {
-            'inbox-agent': {
-              chatConfig: {
-                historyCount: 2,
-                enableHistoryCount: true,
-              },
-              model: 'abc',
-            },
-          },
         });
+        getProjectionStoreState().commitAgentConfig(
+          getCacheScope(),
+          {
+            chatConfig: { enableHistoryCount: true, historyCount: 2 },
+            id: 'inbox-agent',
+            model: 'abc',
+          },
+          'full',
+          'mutation',
+        );
       });
 
       const chats = displayMessageSelectors.mainAIChatsWithHistoryConfig(state);

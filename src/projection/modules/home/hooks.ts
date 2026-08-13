@@ -1,28 +1,21 @@
 'use client';
 
-import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type {
   HomeDailyBriefResponse,
   HomeRecentTopicsView,
   ProjectionRequestMarker,
-  TaskStatus,
 } from '@lobechat/types';
 import type { KeyedMutator } from 'swr';
 
-import { useClientDataSWR } from '@/libs/swr';
 import { homeKeys, projectionKeys, taskKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { briefService } from '@/services/brief';
-import { homeService } from '@/services/home';
-import { recentService } from '@/services/recent';
-import { taskService } from '@/services/task';
-import { topicService } from '@/services/topic';
 
-import { nextProjectionObservedAt } from '../../core/ingest';
 import { buildAccountProjectionScope } from '../../core/scope';
-import { getProjectionStoreState, useProjectionStore } from '../../store';
+import { useProjectionRequest } from '../../query/hook';
+import { useProjectionStore } from '../../store';
 import { useProjectionViewHydration } from '../../views/hook';
 import { taskGroupListViewContract } from '../task/contracts';
+import { taskGroupListProjectionQuery } from '../task/queries';
 import { selectTaskGroupList } from '../task/selectors';
 import {
   homeBriefsViewContract,
@@ -33,6 +26,15 @@ import {
   homeSidebarViewContract,
   homeTasksViewContract,
 } from './contracts';
+import {
+  homeBriefsProjectionQuery,
+  homeDailyBriefProjectionQuery,
+  homeInboxTopicsProjectionQuery,
+  homeRecentTopicsProjectionQuery,
+  homeScheduledTasksProjectionQuery,
+  homeSidebarProjectionQuery,
+  homeTasksProjectionQuery,
+} from './queries';
 import {
   selectHomeBriefs,
   selectHomeDailyBrief,
@@ -55,12 +57,8 @@ export interface HomeSnapshotQuery<T> extends HomeDataRequest {
   data: T | undefined;
 }
 
-const marker = (observedAt: number): ProjectionRequestMarker => ({ observedAt });
-
 export const HOME_GOALS_AGENT_KEY = '__home_goals__';
-export const HOME_RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
-  (status) => status !== 'completed',
-);
+export { HOME_RECENT_TASK_STATUSES } from './queries';
 export const HOME_GOALS_SIGNATURE = {
   agentKey: HOME_GOALS_AGENT_KEY,
   visibility: 'all',
@@ -78,14 +76,10 @@ export const useHomeSidebarRequest = (
     Boolean(selectHomeSidebar(state.scopes[scope])),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.sidebar(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const response = await homeService.getSidebarAgentList();
-      getProjectionStoreState().ingestHomeSidebar(scope, response, observedAt);
-      return marker(observedAt);
-    },
+    homeSidebarProjectionQuery,
+    {},
     { revalidateOnFocus: false },
   );
   return {
@@ -109,17 +103,10 @@ export const useHomeRecentTopicsRequest = (
     Boolean(selectHomeRecentTopics(state.scopes[scope], limit, view)),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.recentTopics(scope, limit, view) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      // Workspace topics are shared, so "mine" must be narrowed server-side —
-      // client-filtering the top N of a team-wide feed could starve out the
-      // viewer's own topics entirely.
-      const items = await recentService.getAll(limit, ['topic'], true, view !== 'team');
-      getProjectionStoreState().ingestHomeRecentTopics(scope, items, limit, view, observedAt);
-      return marker(observedAt);
-    },
+    homeRecentTopicsProjectionQuery,
+    { limit, view },
     { revalidateOnFocus: false },
   );
   return {
@@ -131,8 +118,6 @@ export const useHomeRecentTopicsRequest = (
   };
 };
 
-const HOME_INBOX_STATUSES = ['running', 'unread'];
-
 export const useHomeInboxTopicsRequest = (
   isLogin: boolean | undefined,
 ): HomeDataRequest & { scope: string } => {
@@ -142,17 +127,10 @@ export const useHomeInboxTopicsRequest = (
     Boolean(selectHomeInboxTopics(state.scopes[scope])),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.inboxTopics(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const items = await topicService.queryTopics({
-        statuses: HOME_INBOX_STATUSES,
-        withLastMessage: true,
-      });
-      getProjectionStoreState().ingestHomeInboxTopics(scope, items, observedAt);
-      return marker(observedAt);
-    },
+    homeInboxTopicsProjectionQuery,
+    {},
     { focusThrottleInterval: 1000 },
   );
   return {
@@ -172,19 +150,10 @@ export const useHomeTasksRequest = (isLogin: boolean | undefined): HomeDataReque
     Boolean(selectHomeTasks(state.scopes[scope])),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.tasks(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const result = await taskService.list({
-        automated: false,
-        hasGoal: false,
-        orderBy: 'updatedAt',
-        statuses: HOME_RECENT_TASK_STATUSES,
-      });
-      getProjectionStoreState().ingestHomeTasks(scope, result.data, result.total, observedAt);
-      return marker(observedAt);
-    },
+    homeTasksProjectionQuery,
+    {},
     { revalidateOnFocus: false },
   );
   return {
@@ -203,23 +172,10 @@ export const useHomeScheduledTasksRequest = (isLogin: boolean | undefined): Home
     Boolean(selectHomeScheduledTasks(state.scopes[scope])),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.scheduledTasks(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const result = await taskService.list({
-        automated: true,
-        hasGoal: false,
-        orderBy: 'updatedAt',
-      });
-      getProjectionStoreState().ingestHomeScheduledTasks(
-        scope,
-        result.data,
-        result.total,
-        observedAt,
-      );
-      return marker(observedAt);
-    },
+    homeScheduledTasksProjectionQuery,
+    {},
     { revalidateOnFocus: false },
   );
   return {
@@ -238,22 +194,16 @@ export const useHomeGoalsRequest = (enabled: boolean): HomeDataRequest => {
     Boolean(selectTaskGroupList(state.scopes[scope], HOME_GOALS_SIGNATURE)),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     enabled ? taskKeys.homeGoals(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const result = await taskService.groupList({
+    taskGroupListProjectionQuery,
+    {
+      request: {
         groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }],
         hasGoal: true,
         parentTaskId: null,
-      });
-      getProjectionStoreState().commitTaskGroupList(
-        scope,
-        result.data,
-        HOME_GOALS_SIGNATURE,
-        observedAt,
-      );
-      return marker(observedAt);
+      },
+      signature: HOME_GOALS_SIGNATURE,
     },
     { revalidateOnFocus: true },
   );
@@ -273,14 +223,10 @@ export const useHomeBriefsRequest = (isLogin: boolean | undefined): HomeDataRequ
     Boolean(selectHomeBriefs(state.scopes[scope])),
   );
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin ? projectionKeys.briefs(scope) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const result = await briefService.listUnresolved();
-      getProjectionStoreState().ingestHomeBriefs(scope, result.data, observedAt);
-      return marker(observedAt);
-    },
+    homeBriefsProjectionQuery,
+    {},
     { revalidateOnFocus: false },
   );
   return {
@@ -307,14 +253,11 @@ export const useHomeDailyBriefData = (
   const data = useProjectionStore((state) => selectHomeDailyBrief(state.scopes[accountScope]));
   const isInitialized = data !== undefined;
 
-  const request = useClientDataSWR<ProjectionRequestMarker>(
+  const request = useProjectionRequest(
     isLogin && userId ? homeKeys.dailyBrief(userId) : null,
-    async () => {
-      const observedAt = nextProjectionObservedAt();
-      const response = await homeService.getDailyBrief();
-      getProjectionStoreState().ingestHomeDailyBrief(accountScope, response, observedAt);
-      return marker(observedAt);
-    },
+    homeDailyBriefProjectionQuery,
+    {},
+    { scope: accountScope },
   );
   return {
     data,

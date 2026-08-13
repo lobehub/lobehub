@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slices/composioStore';
@@ -156,7 +156,7 @@ const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComp
         }
       }, 500);
     },
-    [refreshComposioConnectionStatus, startFallbackPolling],
+    [startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
@@ -339,7 +339,7 @@ const ToolAuthAlert = memo(() => {
   const { t } = useTranslation('chat');
 
   const agentId = useConversationStore(contextSelectors.agentId);
-  const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
+  const plugins = useAgentValue(agentId, agentProjectionSelectors.plugins, isEqual);
   const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   // Connections load asynchronously via `useFetchUserComposioConnections` (fired by
   // ChatInput on the same page). Until they arrive, `composioServers` is the empty

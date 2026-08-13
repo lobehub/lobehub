@@ -4,7 +4,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 
 import { TAG_MARGIN_INLINE_END } from '../constants';
 
@@ -15,7 +15,7 @@ export interface ReferTopicViewProps {
 
 export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitle }) => {
   const { t } = useTranslation('topic');
-  const title = useChatStore(topicSelectors.getTopicById(topicId))?.title || fallbackTitle;
+  const title = useChatTopicById(topicId)?.title || fallbackTitle;
   const switchTopic = useChatStore((s) => s.switchTopic);
 
   const handleClick = useCallback(

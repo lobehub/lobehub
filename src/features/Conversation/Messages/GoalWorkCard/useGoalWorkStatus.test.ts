@@ -21,9 +21,13 @@ vi.mock('@/features/Verify', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: unknown) => unknown) =>
     selector({
-      taskDetailMap: mocks.taskDetailMap,
       useFetchTaskDetail: mocks.useFetchTaskDetail,
     }),
+}));
+
+vi.mock('@/projection/modules/task/viewHooks', () => ({
+  useTaskDetailProjection: (identifier?: string) =>
+    identifier ? mocks.taskDetailMap[identifier] : undefined,
 }));
 
 describe('useGoalWorkStatus', () => {

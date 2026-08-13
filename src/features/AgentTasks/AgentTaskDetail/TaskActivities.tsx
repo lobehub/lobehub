@@ -9,8 +9,9 @@ import { useTranslation } from 'react-i18next';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useTaskStore } from '@/store/task';
-import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
+import { taskActivityProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
 import CommentCard from './CommentCard';
@@ -129,7 +130,9 @@ const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
 
 const TaskActivities = memo(() => {
   const { t } = useTranslation('chat');
-  const activities = useTaskStore(taskActivitySelectors.activeTaskActivities);
+  const activities = useActiveTaskDetailProjection(
+    taskActivityProjectionSelectors.activeTaskActivities,
+  );
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const refreshTaskDetail = useTaskStore((s) => s.internal_refreshTaskDetail);
 

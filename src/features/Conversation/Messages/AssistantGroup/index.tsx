@@ -14,10 +14,9 @@ import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import dynamic from '@/libs/next/dynamic';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
@@ -109,9 +108,11 @@ const GroupMessage = memo<GroupMessageProps>(
     // message metadata; see metadata.orchestrationRole.
     const isSupervisor = metadata?.orchestrationRole === 'supervisor' || !!metadata?.isSupervisor;
     const groupId = useConversationStore(contextSelectors.groupId);
-    const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(groupId ?? '')(s));
-    const memberAvatars = useAgentGroupStore(
-      (s) => agentGroupSelectors.getGroupMemberAvatars(groupId ?? '')(s),
+    const groupMeta = useChatGroupProjection(
+      chatGroupProjectionSelectors.getGroupMeta(groupId ?? ''),
+    );
+    const memberAvatars = useChatGroupProjection(
+      chatGroupProjectionSelectors.getGroupMemberAvatars(groupId ?? ''),
       isEqual,
     );
     const { t } = useTranslation('chat');

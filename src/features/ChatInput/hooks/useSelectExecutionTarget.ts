@@ -7,7 +7,7 @@ import { useCallback } from 'react';
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
@@ -67,12 +67,12 @@ export interface SelectExecutionTargetOptions {
  * per-user overrides my choice can't hurt other members.
  */
 export const useSelectExecutionTarget = (agentId: string) => {
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const isPublicWorkspaceAgent = useAgentStore((s) => {
-    const agent = s.agentMap[agentId];
-    return !!agent?.workspaceId && agent.visibility !== 'private';
-  });
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
+  const isHetero = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
+  const isPublicWorkspaceAgent = useAgentValue(
+    agentId,
+    (agent) => Boolean(agent?.workspaceId) && agent?.visibility !== 'private',
+  );
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   const usesWorkspaceMemberSelection = isPublicWorkspaceAgent && !canManageAgent;
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);

@@ -8,8 +8,10 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 
 import SelectCircle from '../SelectCircle';
 import type { ForwardTarget } from '../useForwardMessages';
@@ -70,7 +72,7 @@ export const TopicForwardContent = ({
   const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const agents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
   const forwardTopic = useForwardTopic({ agentId: sourceAgentId, topicId });
 
   useFetchAgentList();

@@ -11,7 +11,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useTaskGroupListProjection } from '@/projection';
+import { useTaskGroupListProjection } from '@/projection/modules/task/viewHooks';
 import { useGoalStore } from '@/store/goal';
 import { useVerifyStore } from '@/store/verify';
 

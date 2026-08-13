@@ -33,8 +33,10 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  useChatTopicById,
+  useChatTopicWorkingDirectory,
+} from '@/store/chat/slices/topic/projection';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
@@ -312,11 +314,10 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const recents = useMemo(() => rawRecents.filter(isValidWorkingDirEntry), [rawRecents]);
   const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(targetDeviceId));
   const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
-  const rawTopicWorkingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
+  const rawTopicWorkingDirectory = useChatTopicWorkingDirectory(topicId);
   const topicWorkingDirectory = getWorkingDirectoryPathString(rawTopicWorkingDirectory);
-  const topicWorkingDirectoryConfig = useChatStore((s) =>
-    topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig : undefined,
-  );
+  const topicWorkingDirectoryConfig = useChatTopicById(topicId ?? undefined)?.metadata
+    ?.workingDirectoryConfig;
   const rawLegacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );

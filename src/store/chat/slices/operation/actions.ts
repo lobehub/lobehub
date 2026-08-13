@@ -2,10 +2,10 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
 
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -721,11 +721,7 @@ export class OperationActionsImpl {
   }): void => {
     if (!topicId) return;
 
-    const key = topicMapKey({
-      agentId: agentId ?? this.#get().activeAgentId,
-      groupId: groupId ?? this.#get().activeGroupId,
-    });
-    const topic = this.#get().topicDataMap[key]?.items?.find((t) => t.id === topicId);
+    const topic = getChatTopicById(topicId);
     if (topic?.status !== 'unread') return;
 
     void this.#get()

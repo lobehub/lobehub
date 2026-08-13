@@ -11,8 +11,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeSidebarItem } from '@/projection';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 
 import { type AgentRowRef, useHomeAgentRows } from './useHomeAgentRows';
 
@@ -66,9 +65,7 @@ interface AgentListItemProps {
 const AgentListItem = memo<AgentListItemProps>(({ active, onSelect, row }) => {
   const { t } = useTranslation('chat');
   const entityItem = useHomeSidebarItem(row.source === 'entity' ? row.ref : undefined);
-  const builtinMeta = useAgentStore(
-    agentSelectors.getAgentMetaById(row.source === 'builtin' ? row.id : ''),
-  );
+  const builtinMeta = useAgentMeta(row.source === 'builtin' ? row.id : '');
 
   if (row.source === 'entity' && !entityItem) return null;
 

@@ -4,19 +4,15 @@ import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { getProjectionStoreState } from '@/projection';
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import { chatGroupService } from '@/services/chatGroup';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { type StoreSetter } from '@/store/types';
 
-import { agentGroupSelectors } from '../selectors';
-
 type Setter = StoreSetter<ChatGroupStore>;
 
 type ChatGroupStoreWithInternal = ChatGroupStore & {
-  internal_dispatchChatGroup: (payload: {
-    payload: { id: string; value: Partial<ChatGroupItem> };
-    type: 'updateGroup';
-  }) => void;
   refreshGroupDetail: (groupId: string) => Promise<void>;
 };
 
@@ -32,10 +28,14 @@ export class ChatGroupCurdAction {
     this.#get = get;
   }
 
-  #commitGroupMutation = (id: string): void => {
-    const group = this.#get().groupMap[id];
+  #commitGroupMutation = (id: string, value: Partial<ChatGroupItem>): void => {
+    const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(id));
     if (!group) return;
-    getProjectionStoreState().commitChatGroupItem(getCacheScope(), group, 'mutation');
+    getProjectionStoreState().commitChatGroupItem(
+      getCacheScope(),
+      { ...group, ...value },
+      'mutation',
+    );
   };
 
   /**
@@ -91,15 +91,14 @@ export class ChatGroupCurdAction {
 
   updateGroup = async (id: string, value: Partial<ChatGroupItem>) => {
     await chatGroupService.updateGroup(id, value);
-    this.#get().internal_dispatchChatGroup({ payload: { id, value }, type: 'updateGroup' });
-    this.#commitGroupMutation(id);
+    this.#commitGroupMutation(id, value);
     await this.#get().refreshGroupDetail(id);
   };
 
   updateGroupConfig = async (config: Partial<LobeChatGroupConfig>) => {
     const s = this.#get();
     const group = s.activeGroupId
-      ? agentGroupSelectors.getGroupById(s.activeGroupId)(s)
+      ? getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(s.activeGroupId))
       : undefined;
     if (!group) return;
 
@@ -112,13 +111,7 @@ export class ChatGroupCurdAction {
     // Update the database first
     await chatGroupService.updateGroup(group.id, { config: mergedConfig });
 
-    // Immediately update the local store to ensure configuration is available
-    // Note: reducer expects payload: { id, value }
-    this.#get().internal_dispatchChatGroup({
-      payload: { id: group.id, value: { config: mergedConfig } },
-      type: 'updateGroup',
-    });
-    this.#commitGroupMutation(group.id);
+    this.#commitGroupMutation(group.id, { config: mergedConfig });
 
     // Refresh groups to ensure consistency
     await this.#get().refreshGroupDetail(group.id);
@@ -127,7 +120,7 @@ export class ChatGroupCurdAction {
   updateGroupMeta = async (meta: Partial<ChatGroupItem>) => {
     const s = this.#get();
     const group = s.activeGroupId
-      ? agentGroupSelectors.getGroupById(s.activeGroupId)(s)
+      ? getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(s.activeGroupId))
       : undefined;
     if (!group) return;
 
@@ -138,9 +131,7 @@ export class ChatGroupCurdAction {
     if (!id) return;
 
     await chatGroupService.updateGroup(id, meta);
-    // Keep local store in sync immediately
-    this.#get().internal_dispatchChatGroup({ payload: { id, value: meta }, type: 'updateGroup' });
-    this.#commitGroupMutation(id);
+    this.#commitGroupMutation(id, meta);
     await this.#get().refreshGroupDetail(id);
   };
 }

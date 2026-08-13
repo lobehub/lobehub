@@ -1,9 +1,9 @@
 import { type AgentPluginMode, getPluginMode, upsertPluginMode } from '@lobechat/types';
 import { produce } from 'immer';
 
+import { getAgentProjectionById } from '@/projection';
 import { type StoreSetter } from '@/store/types';
 
-import { agentSelectors } from '../../selectors';
 import { type AgentStore } from '../../store';
 
 /**
@@ -36,7 +36,7 @@ export class PluginSliceActionImpl {
    * `setPluginMode` directly instead.
    */
   togglePlugin = async (id: string, open?: boolean): Promise<void> => {
-    const originConfig = agentSelectors.currentAgentConfig(this.#get());
+    const originConfig = getAgentProjectionById(this.#get().activeAgentId);
     if (!originConfig) return;
 
     const shouldOpen =
@@ -51,7 +51,7 @@ export class PluginSliceActionImpl {
    * untouched legacy strings, is left exactly as-is (lazy per-item upgrade).
    */
   setPluginMode = async (id: string, mode: AgentPluginMode): Promise<void> => {
-    const originConfig = agentSelectors.currentAgentConfig(this.#get());
+    const originConfig = getAgentProjectionById(this.#get().activeAgentId);
     if (!originConfig) return;
 
     const config = produce(originConfig, (draft) => {

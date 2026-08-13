@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import GroupMember from '../GroupConfig/GroupMember';
 import SortMembersModal from '../GroupConfig/SortMembersModal';
@@ -25,14 +25,14 @@ const Members = memo<MembersProps>(({ itemKey }) => {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
 
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const { canEditResource } = useResourceAccess('agentGroup', activeGroupId);
   const canEdit = hasEditPermission && canEditResource;
-  const membersCount = useAgentGroupStore(
-    agentGroupSelectors.getGroupAgentCount(activeGroupId || ''),
+  const membersCount = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupAgentCount(activeGroupId || ''),
   );
-  const memberCount = useAgentGroupStore(
-    agentGroupSelectors.getGroupMemberCount(activeGroupId || ''),
+  const memberCount = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMemberCount(activeGroupId || ''),
   );
   const { isRevalidating } = useInitGroupConfig();
 

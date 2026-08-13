@@ -3,8 +3,7 @@ import urlJoin from 'url-join';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { lambdaQuery } from '@/libs/trpc/client';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentValue } from '@/store/agent/projection';
 
 // Fixed cred key — must stay in sync with CloudHeterogeneousConfig
 const CLAUDE_TOKEN_CRED_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -17,8 +16,9 @@ interface HeteroAgentCloudConfig {
 export const useHeteroAgentCloudConfig = (agentId: string): HeteroAgentCloudConfig => {
   const router = useQueryRoute();
 
-  const heterogeneousProvider = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
+  const heterogeneousProvider = useAgentValue(
+    agentId,
+    (agent) => agent?.agencyConfig?.heterogeneousProvider,
   );
 
   // Only claude-code agents require a cloud credential — codex and other providers do not use this key

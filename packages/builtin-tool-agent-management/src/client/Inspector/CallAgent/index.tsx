@@ -7,8 +7,7 @@ import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CallAgentParams } from '../../../types';
@@ -36,9 +35,8 @@ export const CallAgentInspector = memo<BuiltinInspectorProps<CallAgentParams>>(
     const runAsTask = args?.runAsTask || partialArgs?.runAsTask;
 
     // Get agent meta from store
-    const agentMeta = useAgentStore((s) =>
-      agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
-    );
+    const projectedAgentMeta = useAgentMeta(agentId);
+    const agentMeta = agentId ? projectedAgentMeta : undefined;
 
     if (isArgumentsStreaming && !agentId) {
       return (

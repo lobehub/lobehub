@@ -46,6 +46,11 @@ vi.mock('@/store/agent', () => ({
     selector(testState.agent),
 }));
 
+vi.mock('@/store/agent/projection', () => ({
+  useAgentConfig: (agentId: string) => testState.agent.agentMap[agentId],
+  useAgentData: (agentId: string) => testState.agent.agentMap[agentId],
+}));
+
 describe('WorkspaceAgentModelPolicy', () => {
   beforeEach(() => {
     testState.agent.agentMap['agent-1'] = {

@@ -1,12 +1,10 @@
-import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
+import { type AgentItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
-import { type PartialDeep } from 'type-fest';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { nextProjectionObservedAt } from '@/projection/core/ingest';
-import { selectAgentProjection } from '@/projection/modules/agent/selectors';
 import { getProjectionStoreState } from '@/projection/store';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
@@ -53,12 +51,6 @@ export class BuiltinAgentSliceActionImpl {
         'network',
         observedAt,
       );
-      const record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
-      const canonical = selectAgentProjection(record);
-      if (!canonical) return;
-      this.#get().internal_dispatchAgentMap(data.id, canonical as PartialDeep<LobeAgentConfig>, {
-        commitProjection: false,
-      });
       // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
       // so callers can rely on this as a real "ensure" path instead of just a
       // post-init refresh.
@@ -98,8 +90,7 @@ export class BuiltinAgentSliceActionImpl {
           if (data?.id) {
             const scope = getCacheScope();
             const projectionStore = getProjectionStoreState();
-            let record = projectionStore.scopes[scope]?.records.agent[data.id];
-            if (!record) {
+            if (!projectionStore.scopes[scope]?.records.agent[data.id]) {
               projectionStore.commitAgentConfig(
                 scope,
                 { ...data, id: data.id },
@@ -107,19 +98,8 @@ export class BuiltinAgentSliceActionImpl {
                 'network',
                 0,
               );
-              record = getProjectionStoreState().scopes[scope]?.records.agent[data.id];
             }
             // Update builtinAgentIdMap with the agent id
-            // Update agentMap with the agent config
-            // AgentItem contains all fields needed for LobeAgentConfig
-            const canonical = selectAgentProjection(record);
-            if (!canonical) return;
-            this.#get().internal_dispatchAgentMap(
-              data.id,
-              canonical as PartialDeep<LobeAgentConfig>,
-              { commitProjection: false },
-            );
-
             this.#set(
               { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
               false,

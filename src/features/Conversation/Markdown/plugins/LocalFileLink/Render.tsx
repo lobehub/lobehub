@@ -9,7 +9,7 @@ import { memo, useCallback } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 
 import type { MarkdownElementProps } from '../type';
 import type { ParsedLocalFileHref } from './parse';
@@ -77,7 +77,7 @@ const formatLocalFileTitle = ({ column, filePath, line }: ParsedLocalFileHref) =
 const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) => {
   const { linkHref, linkLabel } = node?.properties || {};
   const openLocalFile = useChatStore((s) => s.openLocalFile);
-  const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const workingDirectory = useChatTopicWorkingDirectory();
   const parsed = isDesktop ? parseLocalFileHref(linkHref, { workingDirectory }) : null;
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);

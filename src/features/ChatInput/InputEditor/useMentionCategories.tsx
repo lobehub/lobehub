@@ -8,12 +8,17 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SidebarAgentItem } from '@/database/repositories/home';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  displayChatTopicsForSidebar,
+  useCurrentChatTopics,
+} from '@/store/chat/slices/topic/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore } from '../store';
@@ -28,19 +33,21 @@ type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> 
 export const useMentionCategories = (): MentionCategory[] => {
   const { t } = useTranslation('chat');
   const currentAgentId = useAgentId();
-  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-  const workspaceGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-  const workspaceUngrouped = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-  const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-  const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
+  const pinnedAgents = useHomeSidebarProjection(homeSidebarSelectors.pinnedAgents, isEqual);
+  const workspaceGroups = useHomeSidebarProjection(homeSidebarSelectors.agentGroups, isEqual);
+  const workspaceUngrouped = useHomeSidebarProjection(
+    homeSidebarSelectors.ungroupedAgents,
+    isEqual,
+  );
+  const privateGroups = useHomeSidebarProjection(homeSidebarSelectors.privateAgentGroups, isEqual);
+  const privatePinned = useHomeSidebarProjection(homeSidebarSelectors.privatePinnedAgents, isEqual);
+  const privateUngrouped = useHomeSidebarProjection(
+    homeSidebarSelectors.privateUngroupedAgents,
+    isEqual,
+  );
 
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
-  const topicsSelector = useMemo(
-    () => topicSelectors.displayTopicsForSidebar(topicPageSize),
-    [topicPageSize],
-  );
-  const topics = useChatStore(topicsSelector);
+  const topics = displayChatTopicsForSidebar(useCurrentChatTopics()?.items, topicPageSize);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   const externalMentionItems = useChatInputStore((s) => s.mentionItems);

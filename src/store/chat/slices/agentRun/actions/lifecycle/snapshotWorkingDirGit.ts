@@ -3,6 +3,7 @@ import isEqual from 'fast-deep-equal';
 
 import { electronGitService } from '@/services/electron/git';
 import { gitService } from '@/services/git';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import type { ChatStore } from '@/store/chat/store';
 import {
   canReadTopicGitTransport,
@@ -11,8 +12,6 @@ import {
   toWorkingDirGithubState,
 } from '@/store/chat/utils/topicWorkingDirGit';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
-
-import { topicSelectors } from '../../../topic/selectors';
 
 /**
  * Resolve the working directory's repo type the SAME way the ControlBar's
@@ -56,7 +55,7 @@ export const snapshotTopicWorkingDirGit = async (
   get: () => ChatStore,
   { agentId, topicId }: { agentId: string; topicId: string },
 ): Promise<void> => {
-  const topic = topicSelectors.getTopicById(topicId)(get());
+  const topic = getChatTopicById(topicId);
   if (!topic) return;
 
   const currentConfig = topic.metadata?.workingDirectoryConfig;

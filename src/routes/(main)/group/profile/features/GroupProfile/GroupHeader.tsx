@@ -13,9 +13,9 @@ import { useParams } from 'react-router';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import GroupAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -29,8 +29,8 @@ const GroupHeader = memo(() => {
 
   // Get group meta from agentGroup store
   const { gid } = useParams<{ gid: string }>();
-  const groupMeta = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s),
+  const groupMeta = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMeta(gid ?? ''),
     isEqual,
   );
   const updateGroupMetaById = useAgentGroupStore((s) => s.updateGroupMetaById);

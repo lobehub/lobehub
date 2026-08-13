@@ -42,6 +42,25 @@ export const selectAgentProjection = (
   }) as AgentProjectionView;
 };
 
+export const selectAgentProjectionById = (
+  scope: ProjectionScopeState | undefined,
+  id: string | undefined,
+): AgentProjectionView | undefined =>
+  id ? selectAgentProjection(scope?.records.agent[id]) : undefined;
+
+export const selectAgentProjectionRecord = (
+  scope: ProjectionScopeState | undefined,
+  id: string | undefined,
+): AgentProjection | undefined => (id ? scope?.records.agent[id] : undefined);
+
+export const selectAgentProjectionNotFound = (
+  scope: ProjectionScopeState | undefined,
+  id: string | undefined,
+): boolean => {
+  const record = selectAgentProjectionRecord(scope, id);
+  return record?.tombstoneAt !== undefined;
+};
+
 export const selectAgentSummary = (
   record: AgentProjection | undefined,
 ): AgentProjectionView | undefined => {
@@ -62,6 +81,18 @@ export const selectAvailableAgentsIndex = (
 ): AgentAvailableIndex | undefined => {
   const index = scope?.indexes['agent.available'];
   return index?.key === 'agent.available' ? index : undefined;
+};
+
+export const selectAvailableAgents = (
+  scope: ProjectionScopeState | undefined,
+): AgentProjectionView[] | undefined => {
+  const index = selectAvailableAgentsIndex(scope);
+  if (!scope || !index) return undefined;
+
+  return index.refs.flatMap((ref) => {
+    const item = selectAgentSummary(scope.records.agent[ref.id]);
+    return item ? [item] : [];
+  });
 };
 
 export const selectAgentDirectoryIndex = (

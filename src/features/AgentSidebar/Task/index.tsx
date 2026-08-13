@@ -7,15 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  useTaskGroupListProjection,
-} from '@/projection';
-import { taskService } from '@/services/task';
+import { useTaskGroupListProjectionRequest } from '@/projection/modules/task/hooks';
 import { useAgentStore } from '@/store/agent';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
@@ -40,27 +33,18 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
     () => ({ agentKey: agentId ? `${agentId}:sidebar` : undefined, visibility: 'all' as const }),
     [agentId],
   );
-  const projectionGroups = useTaskGroupListProjection(projectionSignature);
-
   const enabled = !!agentId;
-  const { isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
-    enabled ? taskKeys.sidebarGroups(agentId) : null,
-    async ([, id]: [string, string]) => {
-      const scope = getCacheScope();
-      const observedAt = nextProjectionObservedAt();
-      const result = await taskService.groupList({
-        assigneeAgentId: id,
+  const { data: projectionGroups, isLoading } = useTaskGroupListProjectionRequest(
+    taskKeys.sidebarGroups(agentId ?? ''),
+    {
+      request: {
+        assigneeAgentId: agentId,
         groups: SIDEBAR_GROUPS,
         hasGoal: false,
-      });
-      getProjectionStoreState().commitTaskGroupList(
-        scope,
-        result.data,
-        { agentKey: `${id}:sidebar`, visibility: 'all' },
-        observedAt,
-      );
-      return result;
+      },
+      signature: projectionSignature,
     },
+    enabled,
     { revalidateOnFocus: false },
   );
   const taskGroups = useMemo(

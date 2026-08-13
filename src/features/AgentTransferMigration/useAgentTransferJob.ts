@@ -4,7 +4,7 @@ import { useClientPollingSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { getCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 
 /**
  * What a migration surface is keyed on. Exactly one side is set: agent
@@ -28,7 +28,7 @@ export interface MigrationTarget {
  */
 const getVisibleTopicIds = (): string[] => {
   const state = useChatStore.getState();
-  const loaded = topicSelectors.currentTopics(state)?.map((topic) => topic.id) ?? [];
+  const loaded = getCurrentChatTopics()?.map((topic) => topic.id) ?? [];
   const active = state.activeTopicId;
   // The active topic goes first so the cap can never trim it away — its
   // pending state gates the conversation surface.

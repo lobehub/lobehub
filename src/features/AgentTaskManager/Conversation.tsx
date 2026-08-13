@@ -21,7 +21,7 @@ import {
 } from '@/features/Conversation';
 import CopilotModelSelect from '@/features/PageEditor/Copilot/CopilotModelSelect';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import AgentSelectorAction from './AgentSelectorAction';
 import { useTaskAgentSelection } from './TaskAgentProvider';
@@ -51,10 +51,8 @@ const Conversation = memo(() => {
 
   useFetchAgentConfig(true, currentAgentId);
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
-  );
+  const model = useAgentValue(currentAgentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(currentAgentId, agentProjectionSelectors.provider);
   const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
   const handleAgentChange = useCallback(

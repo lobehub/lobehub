@@ -5,11 +5,11 @@ import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
+import { getAgentProjectionById } from '@/projection';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { type UploadFileListDispatch } from '@/store/file/reducers/uploadFileList';
 import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
@@ -235,10 +235,9 @@ export class FileActionImpl {
     // whitelist must not apply there. We key off the conversation's own agent id rather
     // than the global current agent, because the chat input can be scoped to a different
     // agent than activeAgentId (e.g. another desktop tab). See lobehub/lobehub#15770.
-    const agentState = getAgentStoreState();
     const enforceFileTypeWhitelist =
-      !agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
-      !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState);
+      !agentProjectionSelectors.enableMode(getAgentProjectionById(agentId)) &&
+      !agentProjectionSelectors.heterogeneous(getAgentProjectionById(agentId));
 
     const { supportedFiles, unsupportedFiles } = enforceFileTypeWhitelist
       ? filterSupportedChatUploadFiles(filteredFiles)

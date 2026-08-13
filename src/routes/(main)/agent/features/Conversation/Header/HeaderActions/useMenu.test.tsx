@@ -60,11 +60,18 @@ vi.mock('react-router', () => ({
   useParams: () => ({}),
 }));
 
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    getTopicById: (id: string) => (state: { topics: Record<string, unknown> }) => state.topics[id],
-    getTopicWorkingDirectory: () => (state: Record<string, unknown>) => state.workingDirectory,
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useChatTopicById: (id?: string) =>
+    id === 'topic-1'
+      ? {
+          favorite: false,
+          id: 'topic-1',
+          title: 'Topic 1',
+          updatedAt: '2026-05-27T00:15:00.000Z',
+          userId: 'user-1',
+        }
+      : undefined,
+  useChatTopicWorkingDirectory: () => '/tmp/workdir',
 }));
 
 vi.mock('@/store/chat', () => ({

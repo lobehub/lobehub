@@ -65,14 +65,25 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig,
-    getAgentById: () => (s: typeof testState.agent) => s.agentMap['agent-1'],
-    getAgentModelById: () => (s: typeof testState.agent) => s.model,
-    getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
-  },
-}));
+vi.mock('@/store/agent/projection', () => {
+  const getAgent = () => ({
+    ...testState.agent.agentMap['agent-1'],
+    agencyConfig: testState.agent.agencyConfig,
+    id: 'agent-1',
+    model: testState.agent.model,
+    provider: testState.agent.provider,
+  });
+  return {
+    agentProjectionSelectors: {
+      agencyConfig: (agent: ReturnType<typeof getAgent>) => agent.agencyConfig,
+      model: (agent: ReturnType<typeof getAgent>) => agent.model,
+      provider: (agent: ReturnType<typeof getAgent>) => agent.provider,
+    },
+    useAgentData: () => getAgent(),
+    useAgentValue: (_id: string, selector: (agent: ReturnType<typeof getAgent>) => unknown) =>
+      selector(getAgent()),
+  };
+});
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: typeof testState.user) => unknown) => selector(testState.user),

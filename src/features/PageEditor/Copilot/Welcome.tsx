@@ -7,13 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_INBOX_AVATAR } from '@/const/index';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import SuggestQuestions from '@/features/SuggestQuestions';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfig } from '@/store/agent/projection';
 
 const AgentBuilderWelcome = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useConversationStore(conversationSelectors.agentId);
-  const agent = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId));
+  const agent = useAgentConfig(agentId);
 
   return (
     <>

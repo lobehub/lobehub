@@ -1,4 +1,5 @@
 import { useAcceptanceBundle, useAcceptanceBySubject } from '@/features/Verify';
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
 import { useTaskStore } from '@/store/task';
 
 import { getGoalWorkProgress } from './goalWorkProgress';
@@ -27,7 +28,7 @@ export const useGoalWorkStatus = ({
 }: GoalWorkStatusInput) => {
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(identifier);
-  const task = useTaskStore((s) => (identifier ? s.taskDetailMap[identifier] : undefined));
+  const task = useTaskDetailProjection(identifier);
   const isGoal = goalKnown || !!task?.goal;
   const { data: acceptance } = useAcceptanceBySubject('task', isGoal ? (taskId ?? null) : null);
   const { data: bundle } = useAcceptanceBundle(acceptance?.id ?? null);

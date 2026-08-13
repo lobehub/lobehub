@@ -16,10 +16,9 @@ import { type ConversationContext, type MessagesChangeMeta } from '@/features/Co
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { styles } from './styles';
@@ -53,17 +52,11 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   );
 
   const operationState = useOperationState(context);
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
+  const meta = useAgentMeta(context.agentId);
 
   // Topic title tells the user *which* conversation this approval belongs to.
   // Read agent-scoped (not active-scoped) so a non-active conversation resolves.
-  const topicTitle = useChatStore((s) =>
-    context.topicId
-      ? topicSelectors
-          .getTopicsByAgentId(context.agentId)(s)
-          ?.find((tp) => tp.id === context.topicId)?.title
-      : undefined,
-  );
+  const topicTitle = useChatTopicById(context.topicId ?? undefined)?.title;
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);

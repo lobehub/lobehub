@@ -16,9 +16,10 @@ import type {
 import { BaseExecutor } from '@lobechat/types';
 import type { z } from 'zod';
 
+import { getAgentProjectionById } from '@/projection';
 import { userMemoryService } from '@/services/userMemory';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 
 import { MemoryExecutionRuntime } from '../ExecutionRuntime';
 import { MemoryIdentifier } from '../manifest';
@@ -40,8 +41,8 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     if (!state) return 'read-write';
 
     const chatConfig = agentId
-      ? chatConfigByIdSelectors.getChatConfigById(agentId)(state)
-      : agentChatConfigSelectors.currentChatConfig(state);
+      ? agentProjectionSelectors.chatConfig(getAgentProjectionById(agentId))
+      : agentProjectionSelectors.chatConfig(getAgentProjectionById(state.activeAgentId));
 
     return chatConfig?.memory?.toolPermission === 'read-only' ? 'read-only' : 'read-write';
   };
@@ -57,8 +58,8 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     if (!state) return undefined;
 
     const chatConfig = agentId
-      ? chatConfigByIdSelectors.getChatConfigById(agentId)(state)
-      : agentChatConfigSelectors.currentChatConfig(state);
+      ? agentProjectionSelectors.chatConfig(getAgentProjectionById(agentId))
+      : agentProjectionSelectors.chatConfig(getAgentProjectionById(state.activeAgentId));
 
     return chatConfig?.memory?.effort;
   };

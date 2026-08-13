@@ -5,8 +5,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { marketApiService } from '@/services/marketApi';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentMeta } from '@/store/agent/projection';
 import { type AgentStatus } from '@/types/discover';
 
 /**
@@ -18,7 +17,7 @@ const AgentStatusTag = memo(() => {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const meta = useCurrentAgentMeta();
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

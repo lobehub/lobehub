@@ -30,8 +30,9 @@ import { useOpenWork } from '@/features/WorkGallery/useOpenWork';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { workKeys } from '@/libs/swr/keys';
+import { useTaskGroupListProjection } from '@/projection/modules/task/viewHooks';
 import { workService } from '@/services/work';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 import type { ProjectDetail } from '@/store/project';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -141,7 +142,11 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const openWork = useOpenWork();
   const workspaceId = useActiveWorkspaceId();
   const goalScope = `project:${projectId}`;
-  const goals = useGoalStore(goalSelectors.goalList(goalScope));
+  const goalGroups = useTaskGroupListProjection({
+    agentKey: `${goalScope}:goals-page`,
+    visibility: 'all',
+  });
+  const goals = useMemo(() => goalGroups?.[0]?.tasks ?? [], [goalGroups]);
   const goalSWR = useGoalStore((s) => s.useFetchGoals)(undefined, projectId);
   const coordinatorAgentId = detail.project.coordinatorAgentId;
   const projectReference = detail.project.slug ?? projectId;

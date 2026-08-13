@@ -8,10 +8,12 @@ import { DicesIcon } from 'lucide-react';
 import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  getHomeSidebarProjection,
+  homeSidebarSelectors,
+} from '@/projection/modules/home/sidebarHooks';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useAgentIdentityForm } from './useAgentIdentityForm';
 
@@ -50,8 +52,8 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
   // the dice never suggests a second "佳宁". Read at click time — the list only
   // matters at the moment of the roll.
   const rollName = useCallback(() => {
-    const takenNames = homeAgentListSelectors
-      .allAgents(useHomeStore.getState())
+    const takenNames = homeSidebarSelectors
+      .allAgents(getHomeSidebarProjection())
       .filter((agent) => agent.id !== agentId)
       .map((agent) => agent.name)
       .filter((name): name is string => !!name);

@@ -6,6 +6,7 @@ import { type EditLockClient, useEditLock } from '@/features/EditLock';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
+import { useAgentValue } from '@/store/agent/projection';
 
 import { useProfileStore } from './store';
 
@@ -31,9 +32,7 @@ const EditLockDriver = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   // Only workspace agents lock — personal (non-workspace) agents stay fully
   // editable with no peek/pending, matching the server's workspace gating.
-  const agentWorkspaceId = useAgentStore((s) =>
-    s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
-  );
+  const agentWorkspaceId = useAgentValue(agentId, (agent) => agent?.workspaceId);
   const hasEdited = useProfileStore((s) => s.hasEdited);
   const setLockState = useProfileStore((s) => s.setLockState);
   const setHasEdited = useProfileStore((s) => s.setHasEdited);

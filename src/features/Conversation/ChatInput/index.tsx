@@ -19,8 +19,7 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
@@ -196,10 +195,8 @@ const ChatInput = memo<ChatInputProps>(
       s.sendMessage,
       s.stopGenerating,
     ]);
-    const [enableHistoryCount, historyCount] = useAgentStore((s) => [
-      chatConfigByIdSelectors.getEnableHistoryCountById(agentId || '')(s),
-      chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
-    ]);
+    const enableHistoryCount = useAgentValue(agentId, agentProjectionSelectors.enableHistoryCount);
+    const historyCount = useAgentValue(agentId, agentProjectionSelectors.historyCount);
     const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
     const contextWindowMessages = useMemo(
       () =>

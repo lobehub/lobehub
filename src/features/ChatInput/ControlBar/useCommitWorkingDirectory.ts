@@ -14,9 +14,9 @@ import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
@@ -87,7 +87,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // `agents.agencyConfig`, so it must never contain this member's per-user
   // device override (spreading the merged config would leak the override's
   // executionTarget/boundDeviceId into the workspace-shared row).
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
   // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
@@ -106,9 +106,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
 
   const globalActiveTopicId = useChatStore((s) => s.activeTopicId);
   const activeTopicId = routeTopicId === undefined ? globalActiveTopicId : routeTopicId;
-  const activeTopic = useChatStore((s) =>
-    activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
-  );
+  const activeTopic = useChatTopicById(activeTopicId ?? undefined);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
@@ -124,7 +122,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // those writes to the per-user legacy slot instead (a `local` pick only
   // exists on desktop, where that slot works). Workspace-pool devices keep the
   // shared per-device map: the path lives on a machine the workspace shares.
-  const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
+  const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
   // A `local` target always denotes the member's own machine — its
   // `boundDeviceId` is that machine's personal gateway id even when viewed
   // from web (`currentDeviceId` undefined there, so an id-equality check alone

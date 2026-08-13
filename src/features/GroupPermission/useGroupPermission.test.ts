@@ -49,9 +49,11 @@ vi.mock('@/features/ResourcePermission/useResourcePermission', () => ({
   },
 }));
 
-vi.mock('@/store/agentGroup', () => ({
-  useAgentGroupStore: (selector: (state: unknown) => unknown) =>
-    selector({ groupMap: mocks.groupMap }),
+vi.mock('@/projection', () => ({
+  chatGroupProjectionSelectors: {
+    getGroupById: (groupId: string) => () => mocks.groupMap[groupId],
+  },
+  useChatGroupProjection: (selector: (scope?: unknown) => unknown) => selector(undefined),
 }));
 
 const workspaceGroup = (overrides: Record<string, unknown> = {}) => ({

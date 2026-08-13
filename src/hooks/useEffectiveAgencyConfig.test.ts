@@ -1,7 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 
 import { useEffectiveAgencyConfig } from './useEffectiveAgencyConfig';
@@ -10,24 +9,14 @@ const managementAccess = vi.hoisted(() => ({
   canManageAgent: false,
   isAccessLoading: false,
 }));
+const projection = vi.hoisted(() => ({ agent: undefined as Record<string, unknown> | undefined }));
 
 vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
   useAgentManagementAccess: () => managementAccess,
 }));
 
-vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById:
-      (id: string) => (s: { agentMap: Record<string, { agencyConfig?: unknown }> }) =>
-        s.agentMap[id]?.agencyConfig,
-    getAgentById:
-      (id: string) =>
-      (s: {
-        agentMap: Record<string, { visibility?: 'private' | 'public'; workspaceId?: string }>;
-      }) =>
-        s.agentMap[id],
-  },
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: (id?: string) => (id === 'agent-1' ? projection.agent : undefined),
 }));
 vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));
 vi.mock('@/store/user/selectors', () => ({
@@ -39,7 +28,6 @@ vi.mock('@/store/user/selectors', () => ({
   },
 }));
 
-const mockedUseAgentStore = vi.mocked(useAgentStore);
 const mockedUseUserStore = vi.mocked(useUserStore);
 
 const sharedConfig = { boundDeviceId: 'creator-device', executionTarget: 'device' as const };
@@ -60,18 +48,18 @@ const setupStores = ({
   visibility?: 'private' | 'public';
   workspaceId?: string;
 } = {}) => {
-  const agentState = { agentMap: { 'agent-1': { agencyConfig, visibility, workspaceId } } };
+  projection.agent = { agencyConfig, id: 'agent-1', visibility, workspaceId };
   const userState = {
     useFetchWorkspaceUserPreference: () => ({ data: fetchedPreference, isLoading }),
     workspaceUserPreference: { agentDeviceOverrides: override ? { 'agent-1': override } : {} },
   };
-  mockedUseAgentStore.mockImplementation((selector: any) => selector(agentState));
   mockedUseUserStore.mockImplementation((selector: any) => selector(userState));
 };
 
 describe('useEffectiveAgencyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    projection.agent = undefined;
     managementAccess.canManageAgent = false;
     managementAccess.isAccessLoading = false;
   });

@@ -3,8 +3,9 @@ import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { fileService } from '@/services/file';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useFileStore as useStore } from '../../store';
 
@@ -18,8 +19,18 @@ const mockAgentMode = ({
   enableAgentMode: boolean;
   heterogeneous: boolean;
 }) => {
-  vi.spyOn(agentByIdSelectors, 'getAgentEnableModeById').mockReturnValue(() => enableAgentMode);
-  vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockReturnValue(() => heterogeneous);
+  getProjectionStoreState().commitAgentConfig(
+    getCacheScope(),
+    {
+      id: AGENT_ID,
+      ...(heterogeneous
+        ? { agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } }
+        : {}),
+      chatConfig: { enableAgentMode },
+    } as any,
+    'full',
+    'mutation',
+  );
 };
 
 vi.mock('zustand/traditional');
@@ -67,6 +78,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  useProjectionStore.setState({ scopes: {} });
 });
 
 describe('useFileStore:chat', () => {

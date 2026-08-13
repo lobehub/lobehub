@@ -4,8 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -41,9 +40,7 @@ const FCSearchModel = memo<FCSearchModelProps>(({ disabled }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const searchFCModel = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSearchFCModelById(agentId)(s),
-  );
+  const searchFCModel = useAgentValue(agentId, agentProjectionSelectors.searchFCModel);
   return (
     <Flexbox horizontal distribution={'space-between'} gap={16} padding={8}>
       <Flexbox horizontal align={'center'} gap={4}>

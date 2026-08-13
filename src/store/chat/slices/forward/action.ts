@@ -1,15 +1,9 @@
 import type { UIChatMessage } from '@lobechat/types';
 
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  selectAgentProjection,
-} from '@/projection';
-import { agentService } from '@/services/agent';
+import { getAgentProjectionById } from '@/projection';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
 import { messageService } from '@/services/message';
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 
@@ -70,27 +64,9 @@ export class ChatForwardActionImpl {
     const settled = await Promise.allSettled(
       targets.map(async (target) => {
         const { id } = target;
-        if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
-          const scope = getCacheScope();
-          const observedAt = nextProjectionObservedAt();
-          const result = await agentService.getAgentConfigByIdWithAccess(id);
-          if (result) {
-            getProjectionStoreState().commitAgentConfig(
-              scope,
-              { ...result.data, id: result.data.id ?? id },
-              result.access,
-              'network',
-              observedAt,
-            );
-          } else {
-            getProjectionStoreState().deleteAgentProjection(scope, id, observedAt);
-          }
-          const record = getProjectionStoreState().scopes[scope]?.records.agent[id];
-          const canonical = selectAgentProjection(record);
+        if (!getAgentProjectionById(id)) {
+          const canonical = await loadAgentConfigProjection(id, getCacheScope());
           if (!canonical) throw new Error(`Forwarding target agent not found: ${id}`);
-          getAgentStoreState().internal_dispatchAgentMap(id, canonical, {
-            commitProjection: false,
-          });
         }
 
         const result = await this.#get().sendMessage({

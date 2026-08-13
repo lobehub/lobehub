@@ -8,7 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { resolveAgentBackground } from '@/features/AgentProfileArtwork/utils';
 import { ArtworkStudioContent, styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 import { useAgentStore } from '@/store/agent';
-import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
+import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
@@ -19,10 +20,8 @@ interface AgentArtworkStudioContentProps {
 
 const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
-  const systemRole = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.systemRole,
-  );
+  const meta = useAgentMeta(agentId);
+  const systemRole = useAgentValue(agentId, agentProjectionSelectors.systemRole);
   const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
   const generateAgentArtwork = useAgentStore((s) => s.generateAgentArtwork);
   const cancelAgentArtworkGeneration = useAgentStore((s) => s.cancelAgentArtworkGeneration);

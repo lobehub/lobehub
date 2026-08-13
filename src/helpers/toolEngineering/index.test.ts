@@ -150,27 +150,29 @@ vi.mock('../isCanUseFC', () => ({
   isCanUseFC: () => mockIsCanUseFC,
 }));
 
+vi.mock('@/helpers/gatewayMode', () => ({
+  getAgentRuntimeMode: () => 'sandbox',
+}));
+
 let mockCurrentAgentPlugins: string[] = [];
 let mockCurrentAgentDisabledPlugins: string[] = [];
 let mockCurrentChatConfig: { enableAgentMode?: boolean; memory?: { enabled?: boolean } } = {};
 let mockImageOutputSupport = false;
 
 vi.mock('@/store/agent', () => ({
-  getAgentStoreState: () => ({}),
+  getAgentStoreState: () => ({ activeAgentId: 'agent-1' }),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
-    currentAgentPlugins: () => mockCurrentAgentPlugins,
-    hasEnabledKnowledgeBases: () => false,
-  },
-  agentChatConfigSelectors: {
-    currentChatConfig: () => mockCurrentChatConfig,
-    isCloudSandboxEnabled: () => false,
-    isLocalSystemEnabled: () => false,
-    isMemoryToolEnabled: () => false,
-  },
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: () => ({
+    chatConfig: mockCurrentChatConfig,
+    id: 'agent-1',
+    knowledgeBases: [],
+    plugins: [
+      ...mockCurrentAgentPlugins,
+      ...mockCurrentAgentDisabledPlugins.map((identifier) => ({ identifier, mode: 'disabled' })),
+    ],
+  }),
 }));
 
 vi.mock('@/store/aiInfra', () => ({

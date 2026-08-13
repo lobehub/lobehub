@@ -16,7 +16,7 @@ import { localFileService } from '@/services/electron/localFileService';
 import type { LocalFilePreview } from '@/services/projectFile';
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 
 import { parseLocalFileHref } from '../../../Conversation/Markdown/plugins/LocalFileLink/parse';
 import { TAG_MARGIN_INLINE_END } from '../constants';
@@ -206,7 +206,7 @@ LocalFileTagTrigger.displayName = 'LocalFileTagTrigger';
 export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, nodeKey }) => {
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
-  const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const workingDirectory = useChatTopicWorkingDirectory();
 
   const parsed = useMemo(
     () => parseLocalFileHref(file.path, { workingDirectory }),

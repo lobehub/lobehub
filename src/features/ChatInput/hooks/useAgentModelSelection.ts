@@ -9,7 +9,7 @@ import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessA
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentData, useAgentValue } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 
 import { useChatInputResourceAccess } from './useChatInputResourceAccess';
@@ -56,10 +56,10 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     canUseResource,
     isAccessLoading: isResourceAccessLoading,
   } = useChatInputResourceAccess();
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
-  const sharedAgencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const sharedModel = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
-  const sharedProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
+  const agent = useAgentData(agentId);
+  const sharedAgencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
+  const sharedModel = useAgentValue(agentId, agentProjectionSelectors.model);
+  const sharedProvider = useAgentValue(agentId, agentProjectionSelectors.provider);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   // Collaborative builtins (the builders, Lobe AI, the Page Copilot) are one

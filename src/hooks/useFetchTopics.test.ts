@@ -9,9 +9,12 @@ const mockUseGlobalStore = vi.hoisted(() => vi.fn());
 const mockUseChatStore = vi.hoisted(() => vi.fn());
 const mockUseAgentStore = vi.hoisted(() => vi.fn());
 const mockUseChatTopicsIndex = vi.hoisted(() => vi.fn());
+const mockUseChatTopicsProjectionRequest = vi.hoisted(() => vi.fn());
+const mockPrefetchUnreadTopicMessages = vi.hoisted(() => vi.fn());
 
 vi.mock('@/projection', () => ({
   useChatTopicsIndex: mockUseChatTopicsIndex,
+  useChatTopicsProjectionRequest: mockUseChatTopicsProjectionRequest,
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -39,12 +42,10 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 describe('useFetchTopics', () => {
-  const mockUseFetchTopicsFn = vi.fn().mockReturnValue({ isValidating: false, data: [] });
-
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseChatTopicsIndex.mockReturnValue(undefined);
-    mockUseFetchTopicsFn.mockReturnValue({ isValidating: false, data: [] });
+    mockUseChatTopicsProjectionRequest.mockReturnValue({ data: undefined, isValidating: false });
     mockUseGlobalStore.mockImplementation((selector) => selector({ topicPageSize: 20 }));
     // Default: not inbox agent
     mockUseAgentStore.mockImplementation((selector) => selector({ isInboxAgent: false }));
@@ -57,18 +58,25 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId,
         activeGroupId: undefined,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
 
     renderHook(() => useFetchTopics());
 
-    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(true, {
-      agentId: activeAgentId,
-      groupId: undefined,
-      isInbox: false,
-      pageSize: 20,
-    });
+    expect(mockUseChatTopicsProjectionRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        request: expect.objectContaining({
+          agentId: activeAgentId,
+          groupId: undefined,
+          isInbox: false,
+          pageSize: 20,
+        }),
+      }),
+      true,
+    );
   });
 
   it('should fetch topics with groupId when group session is active', () => {
@@ -79,18 +87,25 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId,
         activeGroupId,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
 
     renderHook(() => useFetchTopics());
 
-    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(true, {
-      agentId: activeAgentId,
-      groupId: activeGroupId,
-      isInbox: false,
-      pageSize: 20,
-    });
+    expect(mockUseChatTopicsProjectionRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        request: expect.objectContaining({
+          agentId: activeAgentId,
+          groupId: activeGroupId,
+          isInbox: false,
+          pageSize: 20,
+        }),
+      }),
+      true,
+    );
   });
 
   it('should set isInbox to false when groupId is present even if agentId is inbox', () => {
@@ -103,18 +118,25 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId: INBOX_SESSION_ID,
         activeGroupId,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
 
     renderHook(() => useFetchTopics());
 
-    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(true, {
-      agentId: INBOX_SESSION_ID,
-      groupId: activeGroupId,
-      isInbox: false,
-      pageSize: 20,
-    });
+    expect(mockUseChatTopicsProjectionRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        request: expect.objectContaining({
+          agentId: INBOX_SESSION_ID,
+          groupId: activeGroupId,
+          isInbox: false,
+          pageSize: 20,
+        }),
+      }),
+      true,
+    );
   });
 
   it('should pass isInbox true when agentId is inbox and no groupId', () => {
@@ -125,18 +147,25 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId: INBOX_SESSION_ID,
         activeGroupId: undefined,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
 
     renderHook(() => useFetchTopics());
 
-    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(true, {
-      agentId: INBOX_SESSION_ID,
-      groupId: undefined,
-      isInbox: true,
-      pageSize: 20,
-    });
+    expect(mockUseChatTopicsProjectionRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        request: expect.objectContaining({
+          agentId: INBOX_SESSION_ID,
+          groupId: undefined,
+          isInbox: true,
+          pageSize: 20,
+        }),
+      }),
+      true,
+    );
   });
 
   it('should use topicPageSize from global store', () => {
@@ -146,7 +175,8 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId: 'agent-1',
         activeGroupId: undefined,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
     mockUseGlobalStore.mockImplementation((selector) =>
@@ -155,12 +185,18 @@ describe('useFetchTopics', () => {
 
     renderHook(() => useFetchTopics());
 
-    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(true, {
-      agentId: 'agent-1',
-      groupId: undefined,
-      isInbox: false,
-      pageSize: customPageSize,
-    });
+    expect(mockUseChatTopicsProjectionRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        request: expect.objectContaining({
+          agentId: 'agent-1',
+          groupId: undefined,
+          isInbox: false,
+          pageSize: customPageSize,
+        }),
+      }),
+      true,
+    );
   });
 
   it('derives revalidation readiness from the Projection index, not the request DTO', () => {
@@ -168,10 +204,11 @@ describe('useFetchTopics', () => {
       selector({
         activeAgentId: 'agent-1',
         activeGroupId: undefined,
-        useFetchTopics: mockUseFetchTopicsFn,
+        creatingTopicIds: [],
+        prefetchUnreadTopicMessages: mockPrefetchUnreadTopicMessages,
       }),
     );
-    mockUseFetchTopicsFn.mockReturnValue({
+    mockUseChatTopicsProjectionRequest.mockReturnValue({
       data: { items: [{ id: 'stale-topic' }], total: 1 },
       isValidating: true,
     });
@@ -179,7 +216,10 @@ describe('useFetchTopics', () => {
     const missing = renderHook(() => useFetchTopics());
     expect(missing.result.current.isRevalidating).toBe(false);
 
-    mockUseChatTopicsIndex.mockReturnValue({ key: 'chat.sidebarTopics:agent_agent-1' });
+    mockUseChatTopicsIndex.mockReturnValue({
+      key: 'chat.sidebarTopics:agent_agent-1',
+      refs: [{ id: 'stale-topic', kind: 'topic' }],
+    });
     const hydrated = renderHook(() => useFetchTopics());
     expect(hydrated.result.current.isRevalidating).toBe(true);
   });

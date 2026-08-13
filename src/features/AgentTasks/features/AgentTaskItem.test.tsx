@@ -49,9 +49,12 @@ vi.mock('react-router', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
-      taskDetailMap: mocks.taskDetailMap,
       useFetchTaskDetail: mocks.useFetchTaskDetail,
     }),
+}));
+
+vi.mock('@/projection/modules/task/viewHooks', () => ({
+  useTaskDetailProjection: (taskId?: string) => (taskId ? mocks.taskDetailMap[taskId] : undefined),
 }));
 
 vi.mock('./AssigneeAgentSelector', () => ({

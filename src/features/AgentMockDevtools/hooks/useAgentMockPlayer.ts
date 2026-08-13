@@ -2,9 +2,9 @@ import { executeMockStream, type MockCase } from '@lobechat/agent-mock';
 import type { ConversationContext } from '@lobechat/types';
 import { useCallback } from 'react';
 
-import { topicSelectors } from '@/store/chat/selectors';
 import { displayMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import type { ChatStore } from '@/store/chat/store';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -69,7 +69,7 @@ const cancelRunningMessageRuntimeOperations = (chatStore: ChatStore, messageId: 
 const clearLocalTopicRunningOperation = (chatStore: ChatStore, topicId: string | undefined) => {
   if (!topicId) return;
 
-  const topic = topicSelectors.getTopicById(topicId)(chatStore);
+  const topic = getChatTopicById(topicId);
   if (!topic?.metadata?.runningOperation) return;
 
   chatStore.internal_dispatchTopic(

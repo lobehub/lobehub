@@ -12,8 +12,7 @@ import type { AgentToolProps } from '@/features/ProfileEditor/AgentTool';
 import SharedAgentTool from '@/features/ProfileEditor/AgentTool';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { getVisibleProfileToolIds } from '@/features/ProfileEditor/profileToolVisibility';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentConfig } from '@/store/agent/projection';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
@@ -46,7 +45,7 @@ const UserToolsSection = memo<Props>(
   }) => {
     const { t } = useTranslation('setting');
     const userConnectors = useToolStore(connectorSelectors.connectorList, isEqual);
-    const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+    const config = useAgentConfig(agentId);
     const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
     // Agent-owned/linked connector identifiers are shown in the Agent Tools
     // section above (and excluded from this section's chips in `AgentTool`), so

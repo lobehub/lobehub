@@ -204,20 +204,23 @@ vi.mock('@/store/agent', () => ({
     selector(mocks.agentState),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentAuthorId: (state: typeof mocks.agentState) => state.authorId,
-    currentAgentConfig: (state: typeof mocks.agentState) => state.config,
-    currentAgentCreatedAt: (state: typeof mocks.agentState) => state.createdAt,
-    currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
-    currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
-    currentAgentVisibility: (state: typeof mocks.agentState) => state.visibility,
-    isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
-      state.isCurrentAgentHeterogeneous,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    createdAt: (agent: typeof mocks.agentState) => agent.createdAt,
+    heterogeneous: (agent: typeof mocks.agentState) => agent.isCurrentAgentHeterogeneous,
+    systemRole: (agent: typeof mocks.agentState) => agent.systemRole,
+    userId: (agent: typeof mocks.agentState) => agent.authorId,
+    visibility: (agent: typeof mocks.agentState) => agent.visibility,
   },
+  useCurrentAgentConfig: () => mocks.agentState.config,
+  useCurrentAgentMeta: () => mocks.agentState.meta,
+  useCurrentAgentValue: (selector: (agent: typeof mocks.agentState) => unknown) =>
+    selector(mocks.agentState),
+  useIsBuiltinAgent: () => mocks.agentState.isBuiltinAgent,
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
   builtinAgentSelectors: {
-    isBuiltinAgent: (agentId?: string) => (state: typeof mocks.agentState) =>
-      !!agentId && !!state.isBuiltinAgent,
     isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));

@@ -11,15 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  selectAgentProjection,
-  useHomeAgentIdentity,
-} from '@/projection';
-import { agentService } from '@/services/agent';
+import { getAgentProjectionById, useHomeAgentIdentity } from '@/projection';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 
 import AgentList from './AgentList';
@@ -68,9 +64,9 @@ const AgentSelect = memo(() => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
   const displayAgentId = resolvedAgentId ?? '';
-  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
+  const inboxMeta = useAgentMeta(inboxAgentId ?? '');
   const entityIdentity = useHomeAgentIdentity(isInbox ? undefined : displayAgentId);
-  const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
+  const agentMapMeta = useAgentMeta(displayAgentId);
   const showInboxFallback = isInbox || !resolvedAgentId;
   const displayMeta = showInboxFallback ? inboxMeta : (entityIdentity ?? agentMapMeta);
   const displayTitle = agentDisplayName(
@@ -86,33 +82,11 @@ const AgentSelect = memo(() => {
       updateSystemStatus({ homeSelectedAgentId: agentId });
       setOpen(false);
 
-      const agentState = useAgentStore.getState();
-      if (agentState.agentMap[agentId]) return;
+      if (getAgentProjectionById(agentId)) return;
 
-      const scope = getCacheScope();
-      const observedAt = nextProjectionObservedAt();
-      agentService
-        .getAgentConfigByIdWithAccess(agentId)
-        .then((result) => {
-          if (result) {
-            getProjectionStoreState().commitAgentConfig(
-              scope,
-              { ...result.data, id: result.data.id ?? agentId },
-              result.access,
-              'network',
-              observedAt,
-            );
-          } else {
-            getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
-          }
-          const record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-          const canonical = selectAgentProjection(record);
-          if (!canonical) return;
-          agentState.internal_dispatchAgentMap(agentId, canonical, {
-            commitProjection: false,
-          });
-        })
-        .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
+      loadAgentConfigProjection(agentId, getCacheScope()).catch((error) =>
+        console.error('[AgentSelect] failed to prefetch agent config', error),
+      );
     },
     [updateSystemStatus],
   );

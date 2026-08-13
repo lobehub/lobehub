@@ -26,10 +26,10 @@ import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConve
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useScheduledRunWatch } from '@/hooks/useScheduledRunWatch';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
+import { threadSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ExposeMainEditor from './ExposeMainEditor';
@@ -68,10 +68,7 @@ const Conversation = memo(() => {
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
+  const chatKey = useMemo(() => messageMapKey(context), [context]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
@@ -86,8 +83,9 @@ const Conversation = memo(() => {
   // Heterogeneous agents (Claude Code, etc.) use a simplified input — their
   // toolchain/memory/model are managed by the external runtime, so LobeHub's
   // model/tools/memory/KB/MCP/runtime-mode pickers don't apply.
-  const isHeterogeneousAgent = useAgentStore(
-    agentByIdSelectors.isAgentHeterogeneousById(context.agentId),
+  const isHeterogeneousAgent = useAgentValue(
+    context.agentId,
+    agentProjectionSelectors.heterogeneous,
   );
 
   // Subagent threads (spawned by an external agent's subagent tool call) are
@@ -95,11 +93,8 @@ const Conversation = memo(() => {
   const isSubagentThread = useChatStore(threadSelectors.isActiveThreadSubagent);
 
   // Auto-reconnect to running Gateway operation on topic load
-  const runningOperation = useChatStore((s) =>
-    context.topicId
-      ? topicSelectors.getTopicById(context.topicId)(s)?.metadata?.runningOperation
-      : undefined,
-  );
+  const runningOperation = useChatTopicById(context.topicId ?? undefined)?.metadata
+    ?.runningOperation;
   useGatewayReconnect(context.topicId, runningOperation, context.agentId);
 
   // While the topic is parked as `scheduled`, pull the cron dispatch into the
@@ -107,7 +102,7 @@ const Conversation = memo(() => {
   // can't fire until the synced `runningOperation` lands in the topic map.
   useScheduledRunWatch(context.topicId);
 
-  const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(context.agentId));
+  const agentChatConfig = useAgentValue(context.agentId, agentProjectionSelectors.chatConfig);
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
     conversationKey: chatKey,

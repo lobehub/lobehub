@@ -5,8 +5,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { type AgentStatus } from '@/types/discover';
 
 /**
@@ -19,7 +18,7 @@ const GroupStatusTag = memo(() => {
   const [loading, setLoading] = useState(false);
 
   const { gid } = useParams<{ gid: string }>();
-  const meta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
+  const meta = useChatGroupProjection(chatGroupProjectionSelectors.getGroupMeta(gid ?? ''));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

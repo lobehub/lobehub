@@ -20,6 +20,7 @@ import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getTaskDetailProjectionMap } from '@/projection/modules/task/read';
 import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
 import { getChatStoreState } from '@/store/chat';
@@ -116,7 +117,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         // edit/status/etc. need their own detail key revalidated.
         if (DETAIL_MUTATING_APIS.has(apiName)) detailTargets.add(identifier);
 
-        const parentId = findSubtaskParentId(store.taskDetailMap, identifier);
+        const parentId = findSubtaskParentId(getTaskDetailProjectionMap(), identifier);
         if (parentId) detailTargets.add(parentId);
       }
 

@@ -18,6 +18,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import TopicCreatorAvatar, { useTopicCreator } from '@/features/TopicCreatorAvatar';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -80,7 +81,6 @@ const cancelPendingSingleClick = () => {
 
 interface TopicItemProps {
   active?: boolean;
-  fav?: boolean;
   id?: string;
   status?: ChatTopicStatus | null;
   threadId?: string;
@@ -89,7 +89,7 @@ interface TopicItemProps {
   userId?: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, status, userId }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, active, threadId, status, userId }) => {
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   // Same live-running ring as the agent sidebar topic rows (see List/Item there).
@@ -105,8 +105,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   // inside a workspace — its topics all belong to the viewer, so the creator
   // avatar carries no information there. Only workspace-shared (`public`)
   // groups get the avatar treatment.
-  const isSharedGroup = useAgentGroupStore((s) =>
-    s.activeGroupId ? s.groupMap[s.activeGroupId]?.visibility === 'public' : false,
+  const isSharedGroup = useChatGroupProjection((scope) =>
+    activeGroupId
+      ? chatGroupProjectionSelectors.getGroupById(activeGroupId)(scope)?.visibility === 'public'
+      : false,
   );
   // Creator of the topic — resolves only inside an active workspace; drives
   // the identity-first icon layout below.

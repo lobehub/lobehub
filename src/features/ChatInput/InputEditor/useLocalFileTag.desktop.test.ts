@@ -34,28 +34,21 @@ vi.mock('../hooks/useAgentId', () => ({
   useAgentId: () => 'agent-1',
 }));
 
-vi.mock('@/store/agent', () => ({
-  useAgentStore: <T>(selector: (state: typeof agentState) => T) => selector(agentState),
+vi.mock('@/helpers/gatewayMode', () => ({
+  useAgentRuntimeMode: () => (agentState.isLocalSystemEnabled ? 'local' : 'cloud'),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => (state: typeof agentState) => state.agencyConfig,
-    getAgentWorkingDirectoryById: () => (state: typeof agentState) => state.workingDirectory,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    agencyConfig: (agent: typeof agentState) => agent.agencyConfig,
   },
-  chatConfigByIdSelectors: {
-    isLocalSystemEnabledById: () => (state: typeof agentState) => state.isLocalSystemEnabled,
-  },
+  useAgentValue: (_id: string, selector: (agent: typeof agentState) => unknown) =>
+    selector(agentState),
+  useAgentWorkingDirectory: () => agentState.workingDirectory,
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: <T>(selector: (state: typeof chatState) => T) => selector(chatState),
-}));
-
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    currentTopicWorkingDirectory: (state: typeof chatState) => state.topicWorkingDirectory,
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useChatTopicWorkingDirectory: () => chatState.topicWorkingDirectory,
 }));
 
 vi.mock('@/store/electron', () => ({

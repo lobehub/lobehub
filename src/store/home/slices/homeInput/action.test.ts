@@ -75,6 +75,14 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => agentState,
 }));
 
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: (id: string) => ({
+    id,
+    ...agentState.agentConfigMap[id as keyof typeof agentState.agentConfigMap],
+    ...agentState.agentMap[id as keyof typeof agentState.agentMap],
+  }),
+}));
+
 vi.mock('@/store/aiInfra', () => ({
   getAiInfraStoreState: () => enabledModels,
 }));
@@ -90,18 +98,6 @@ vi.mock('@/store/aiInfra/selectors', () => ({
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentById:
-      (id: string) =>
-      (state: typeof agentState): { workspaceId?: string } | undefined =>
-        state.agentMap[id as keyof typeof state.agentMap],
-  },
-  agentSelectors: {
-    getAgentConfigById:
-      (id: string) =>
-      (state: typeof agentState): { model: string; provider: string } | undefined =>
-        state.agentConfigMap[id as keyof typeof state.agentConfigMap],
-  },
   builtinAgentSelectors: {
     inboxAgentId: (state: typeof agentState) => state.inboxAgentId,
   },

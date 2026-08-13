@@ -1,5 +1,6 @@
+import { useChatTopicDetailProjectionRequest } from '@/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 
 /**
  * Fetch the active topic's detail when it is missing from the loaded list
@@ -14,13 +15,10 @@ import { topicSelectors } from '@/store/chat/selectors';
  * request.
  */
 export const useFetchActiveTopicDetail = () => {
-  const [activeTopicId, isMissingFromList, useFetchTopicDetail] = useChatStore((s) => [
-    s.activeTopicId,
-    !!s.activeTopicId &&
-      !!topicSelectors.currentTopicData(s) &&
-      !topicSelectors.currentTopics(s)?.some((topic) => topic.id === s.activeTopicId),
-    s.useFetchTopicDetail,
-  ]);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const topics = useCurrentChatTopics();
+  const isMissingFromList =
+    !!activeTopicId && !!topics && !topics.items.some((topic) => topic.id === activeTopicId);
 
-  useFetchTopicDetail(isMissingFromList ? activeTopicId : undefined);
+  useChatTopicDetailProjectionRequest(activeTopicId, isMissingFromList);
 };

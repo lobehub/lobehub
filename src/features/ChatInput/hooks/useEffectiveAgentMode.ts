@@ -1,7 +1,6 @@
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentData } from '@/store/agent/projection';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 
@@ -45,12 +44,10 @@ export const resolveEffectiveAgentMode = ({
 };
 
 export const useEffectiveAgentMode = (agentId: string) => {
-  const [sharedEnableAgentMode, model, provider, agent] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentEnableModeById(agentId)(s),
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-    agentByIdSelectors.getAgentById(agentId)(s),
-  ]);
+  const agent = useAgentData(agentId);
+  const sharedEnableAgentMode = agentProjectionSelectors.enableMode(agent);
+  const model = agentProjectionSelectors.model(agent);
+  const provider = agentProjectionSelectors.provider(agent);
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   const usesWorkspaceMemberMode =
     !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;

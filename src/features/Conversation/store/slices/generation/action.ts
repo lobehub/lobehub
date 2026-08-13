@@ -19,11 +19,10 @@ import { getEffectiveConversationModel } from '@/features/Conversation/store/uti
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { getAgentProjectionById } from '@/projection';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
@@ -33,6 +32,7 @@ import {
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
@@ -97,9 +97,8 @@ const settleGenerationEntry = (
 };
 
 const getEffectiveAgencyConfig = (agentId: string) => {
-  const agentState = getAgentStoreState();
-  const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const sharedAgencyConfig = getAgentProjectionById(agentId)?.agencyConfig;
+  const agent = getAgentProjectionById(agentId);
   const currentUserId = userProfileSelectors.userId(getUserStoreState());
   const isAuthor = !!currentUserId && agent?.userId === currentUserId;
   const usesWorkspaceMemberSelection =
@@ -140,9 +139,7 @@ const resolveHeteroRunContext = (
   context: ConversationContext,
   agentId: string,
 ) => {
-  const topic = context.topicId
-    ? topicSelectors.getTopicById(context.topicId)(chatStore)
-    : undefined;
+  const topic = context.topicId ? getChatTopicById(context.topicId) : undefined;
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
@@ -638,7 +635,7 @@ export const generationSlice: StateCreator<
     if (!topicId) return;
 
     const chatStore = useChatStore.getState();
-    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const topic = getChatTopicById(topicId);
     const scheduledRun = topic?.metadata?.scheduledRun;
     const userMessageId =
       scheduledRun?.kind === 'delayed_start' ? scheduledRun.userMessageId : undefined;
@@ -924,7 +921,7 @@ export const generationSlice: StateCreator<
     if (!userMessageId) return;
 
     const chatStore = useChatStore.getState();
-    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const topic = getChatTopicById(topicId);
     const nowDate = new Date();
     const now = nowDate.toISOString();
     // The rate-limit reset is the "not before" gate. Absent (some providers don't

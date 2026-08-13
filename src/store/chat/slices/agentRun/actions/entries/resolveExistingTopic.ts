@@ -3,8 +3,8 @@ import type { ChatTopic } from '@/types/topic';
 /**
  * Resolve the topic row a run should read its metadata from.
  *
- * The topic list store is PAGINATED (`topicDataMap[key].items` holds only the
- * loaded pages), so a deep-linked older topic misses `getTopicById` even while
+ * The topic list Projection index is paginated and contains only loaded pages,
+ * so a deep-linked older topic can miss the local lookup even while
  * it is the ACTIVE topic. For heterogeneous CLI runs that miss used to cascade
  * silently: the cwd resolution fell back to the agent/device default directory
  * instead of the topic's bound `workingDirectory`, `resolveHeteroResume` then

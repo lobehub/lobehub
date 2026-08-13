@@ -12,8 +12,9 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
 import { taskService } from '@/services/task';
-import { useTaskStore } from '@/store/task';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
@@ -137,8 +138,8 @@ const TaskSubtasks = memo(() => {
 
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask, reason } = usePermission('create_content');
-  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
+  const agentId = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskAgentId);
+  const subtasks = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskSubtasks);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const runReadySubtasks = useTaskStore((s) => s.runReadySubtasks);
 

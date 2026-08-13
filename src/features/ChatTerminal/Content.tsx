@@ -15,10 +15,9 @@ import { CopyXIcon, PlusIcon, SquareTerminalIcon, XIcon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentWorkingDirectory } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
@@ -85,13 +84,9 @@ const Content = memo(() => {
 
   const topicId = useChatStore((s) => s.activeTopicId);
   const agentId = useChatStore((s) => s.activeAgentId);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicWorkingDirectory = useChatTopicWorkingDirectory();
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s)
-      : undefined,
-  );
+  const agentWorkingDirectory = useAgentWorkingDirectory(agentId, currentDeviceId);
   const toggleTerminalPanel = useGlobalStore((s) => s.toggleTerminalPanel);
 
   // Tabs are bound to the topic: sessions created here only show for this topic.

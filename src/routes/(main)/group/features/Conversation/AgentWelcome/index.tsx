@@ -8,10 +8,15 @@ import { useTranslation } from 'react-i18next';
 import { useConversationStore } from '@/features/Conversation';
 import { contextSelectors } from '@/features/Conversation/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
+import {
+  agentProjectionSelectors,
+  useCurrentAgentMeta,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -23,18 +28,18 @@ const InboxWelcome = memo(() => {
   const mobile = useIsMobile();
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  const meta = useCurrentAgentMeta();
   const groupId = useConversationStore(contextSelectors.groupId);
-  const [groupMeta] = useAgentGroupStore((s) => [
-    agentGroupSelectors.getGroupMeta(groupId ?? '')(s),
-  ]);
+  const groupMeta = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMeta(groupId ?? ''),
+  );
 
   // Use group config for opening message and questions
-  const groupOpeningMessage = useAgentGroupStore((s) =>
-    agentGroupSelectors.getGroupOpeningMessage(groupId ?? '')(s),
+  const groupOpeningMessage = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupOpeningMessage(groupId ?? ''),
   );
-  const groupOpeningQuestions = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupOpeningQuestions(groupId ?? '')(s),
+  const groupOpeningQuestions = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupOpeningQuestions(groupId ?? ''),
     isEqual,
   );
 
@@ -44,8 +49,8 @@ const InboxWelcome = memo(() => {
   });
 
   // Get agent opening message and questions (always call hooks)
-  const agentOpeningMessage = useAgentStore(agentSelectors.openingMessage);
-  const agentOpeningQuestions = useAgentStore(agentSelectors.openingQuestions, isEqual);
+  const agentOpeningMessage = useCurrentAgentValue(agentProjectionSelectors.openingMessage);
+  const agentOpeningQuestions = useCurrentAgentValue(agentProjectionSelectors.openingQuestions);
 
   // Prefer group opening message/questions over agent's
   const openingMessage = groupOpeningMessage || agentOpeningMessage;
@@ -55,7 +60,7 @@ const InboxWelcome = memo(() => {
   const message = useMemo(() => {
     if (openingMessage) return openingMessage;
     return agentSystemRoleMsg;
-  }, [openingMessage, agentSystemRoleMsg, meta.description]);
+  }, [openingMessage, agentSystemRoleMsg]);
 
   const displayTitle = groupMeta.title;
 

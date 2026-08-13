@@ -8,20 +8,25 @@ import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import { SidebarHeaderSelectTrigger } from '@/features/NavPanel/SidebarHeaderSelect';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useCurrentAgentConfigStatus,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 import SwitchPanel from './SwitchPanel';
 
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
-  const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
-    agentSelectors.isAgentConfigLoading(s),
-    builtinAgentSelectors.isInboxAgent(s),
-    agentSelectors.currentAgentDisplayName(s),
-    agentSelectors.currentAgentAvatar(s),
-    agentSelectors.currentAgentBackgroundColor(s),
-  ]);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = activeAgentId === inboxAgentId;
+  const { isLoading } = useCurrentAgentConfigStatus();
+  const title = useCurrentAgentValue(agentProjectionSelectors.displayName);
+  const avatar = useCurrentAgentValue(agentProjectionSelectors.avatar);
+  const backgroundColor = useCurrentAgentValue((agent) => agent?.backgroundColor);
 
   const displayTitle = isInbox
     ? title || 'Lobe AI'

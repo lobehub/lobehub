@@ -8,7 +8,10 @@ import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  extractChatTopicWorkingDirectory,
+  useChatTopicById,
+} from '@/store/chat/slices/topic/projection';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
@@ -55,12 +58,11 @@ export const useEffectiveWorkingDirectory = (
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );
-  const topicWorkingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
-  const topicWorkingDirectoryConfig = useChatStore((s) =>
-    topicId
-      ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig
-      : topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
-  );
+  const activeTopicId = useChatStore((state) => state.activeTopicId);
+  const topic = useChatTopicById(topicId === null ? undefined : (topicId ?? activeTopicId));
+  const topicWorkingDirectory =
+    topicId === null ? undefined : extractChatTopicWorkingDirectory(topic);
+  const topicWorkingDirectoryConfig = topic?.metadata?.workingDirectoryConfig;
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,

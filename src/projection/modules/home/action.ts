@@ -40,6 +40,11 @@ const fragment = <T>(data: T, meta: ProjectionObservation): ProjectionFragment<T
 });
 
 export interface HomeProjectionAction {
+  commitHomeSidebar: (
+    scope: string,
+    response: SidebarAgentListResponse,
+    observedAt?: number,
+  ) => void;
   deleteBriefProjection: (scope: string, id: string, observedAt?: number) => void;
   ingestHomeBriefs: (scope: string, items: HomeBriefInput[], observedAt: number) => void;
   ingestHomeDailyBrief: (scope: string, data: HomeDailyBriefResponse, observedAt: number) => void;
@@ -90,6 +95,17 @@ class HomeProjectionActionImpl implements HomeProjectionAction {
     void _api;
     this.#get = get;
   }
+
+  commitHomeSidebar = (
+    scope: string,
+    response: SidebarAgentListResponse,
+    observedAt: number = nextProjectionObservedAt(),
+  ): void => {
+    this.#get().internal_commitProjection(
+      scope,
+      ingestHomeSidebar(response, observation('mutation', observedAt)),
+    );
+  };
 
   ingestHomeSidebar = (
     scope: string,

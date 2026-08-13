@@ -8,9 +8,8 @@ import {
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
-import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
-import { produce } from 'immer';
+import { useEffect } from 'react';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
@@ -19,18 +18,14 @@ import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { nextProjectionObservedAt } from '@/projection/core/ingest';
-import { activeProjectionRecord } from '@/projection/core/record';
-import { agentAvailableViewContract } from '@/projection/modules/agent/contracts';
-import { type AgentProjectionInput } from '@/projection/modules/agent/ingestors';
 import {
-  selectAgentProjection,
-  selectAgentSummary,
-  selectAvailableAgentsIndex,
-} from '@/projection/modules/agent/selectors';
-import { useAgentProjectionState } from '@/projection/modules/agent/viewHooks';
+  useAgentConfigProjection,
+  useAvailableAgentsProjection,
+} from '@/projection/modules/agent/hooks';
+import { type AgentProjectionInput } from '@/projection/modules/agent/ingestors';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { getProjectionStoreState } from '@/projection/store';
-import { useProjectionViewHydration } from '@/projection/views/hook';
-import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
+import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
   type AgentDocumentListItem,
@@ -266,10 +261,10 @@ export class AgentSliceActionImpl {
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
-    const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
+    const { activeAgentId, updateAgentConfig } = this.#get();
     if (!activeAgentId) return;
 
-    const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
+    const currentPlugins = (getAgentProjectionById(activeAgentId)?.plugins as string[]) || [];
     const hasPlugin = currentPlugins.includes(pluginId);
 
     // Determine new state
@@ -409,120 +404,40 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAgentConfig = (
-    isLogin: boolean | undefined,
-    agentId: string,
-  ): SWRResponse<LobeAgentConfig> => {
+  useFetchAgentConfig = (isLogin: boolean | undefined, agentId: string) => {
     const scope = useCacheScope();
-    const swrKey =
-      isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId, scope)
-        : null;
-
-    const projection = useAgentProjectionState(swrKey ? agentId : undefined);
-    const request = useClientDataSWRWithSync<LobeAgentConfig>(
-      swrKey,
-      async () => {
-        const observedAt = nextProjectionObservedAt();
-        const result = await agentService.getAgentConfigByIdWithAccess(agentId);
-        const data = result?.data;
-        if (result) {
-          getProjectionStoreState().commitAgentConfig(
-            scope,
-            { ...result.data, id: result.data.id ?? agentId },
-            result.access,
-            'network',
-            observedAt,
-          );
-        } else {
-          getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
-        }
-        return data as LobeAgentConfig;
+    const enabledAgentId =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId) ? agentId : undefined;
+    const request = useAgentConfigProjection(enabledAgentId, {
+      onSuccess: () => {
+        if (getCacheScope() !== scope) return;
+        this.#clearAgentConfigError(agentId);
       },
-      {
-        onData: (data) => {
-          if (getCacheScope() !== scope) return;
-          const projectionStore = getProjectionStoreState();
-          let record = projectionStore.scopes[scope]?.records.agent[agentId];
-
-          // A successful fetch that resolves to null means the agent doesn't
-          // exist or the caller lost access (e.g. a workspace agent switched
-          // back to private) — a settled state, not "still loading".
-          if (!data) {
-            if (activeProjectionRecord(record)) {
-              this.#clearAgentNotFound(agentId);
-              return;
-            }
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-
-          // Runtime SWR cache entries from before this migration do not carry
-          // an observation marker. Seed only a missing Projection at epoch 0;
-          // every hydrated record, mutation, or tombstone therefore wins.
-          if (!record) {
-            projectionStore.commitAgentConfig(
-              scope,
-              { ...data, id: data.id ?? agentId },
-              'profile',
-              'network',
-              0,
-            );
-            record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-          }
-          if (!activeProjectionRecord(record)) {
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-
-          const canonical = selectAgentProjection(record) as LobeAgentConfig | undefined;
-          if (!canonical) return;
-          this.#clearAgentNotFound(agentId);
-          // This endpoint returns a complete, authoritative profile snapshot.
-          // Replace the cached entry instead of applying patch semantics: fields
-          // cleared on the server (for example editorData: null) may be omitted
-          // from the response and must not survive from an older local profile.
-          if (!isEqual(this.#get().agentMap[agentId], canonical)) {
-            this.#set(
-              (state) => ({ agentMap: { ...state.agentMap, [agentId]: canonical } }),
-              false,
-              'fetchAgentConfig',
-            );
-          }
-          // Only adopt the fetched agent as the active one when nothing is
-          // active yet. The active agent is owned by the route-level sync
-          // (AgentIdSync on desktop/mobile, the popup pages' own setState).
-          // A background or secondary config fetch — e.g. the inbox config
-          // requested by the home input, a side-panel copilot, or another
-          // open tab — must NOT hijack `activeAgentId` away from the routed
-          // agent, which would otherwise flash the conversation header/welcome
-          // back to the inbox ("Lobe AI") agent.
-          if (!this.#get().activeAgentId) {
-            this.#set({ activeAgentId: canonical.id }, false, 'fetchAgentConfig');
-          }
-          this.#clearAgentConfigError(agentId);
-        },
-        onError: (error) => {
-          if (getCacheScope() !== scope) return;
-          this.#set(
-            (state) => ({
-              agentConfigErrorMap: {
-                ...state.agentConfigErrorMap,
-                [agentId]: error?.message || String(error),
-              },
-            }),
-            false,
-            'fetchAgentConfig/error',
-          );
-        },
-        syncBeforePaint: true,
+      onError: (error) => {
+        if (getCacheScope() !== scope) return;
+        this.#set(
+          (state) => ({
+            agentConfigErrorMap: {
+              ...state.agentConfigErrorMap,
+              [agentId]: error?.message || String(error),
+            },
+          }),
+          false,
+          'fetchAgentConfig/error',
+        );
       },
-    );
+    });
 
-    return {
-      ...request,
-      data: projection.hasRecord ? (projection.data as LobeAgentConfig | undefined) : undefined,
-    } as SWRResponse<LobeAgentConfig>;
+    useEffect(() => {
+      if (!request.data || getCacheScope() !== scope || this.#get().activeAgentId) return;
+
+      // Only adopt a successfully projected agent when nothing is active yet.
+      // The request marker also settles for a not-found response, whereas
+      // canonical projection data only exists for an accessible agent.
+      this.#set({ activeAgentId: agentId }, false, 'fetchAgentConfig');
+    }, [agentId, request.data, scope]);
+
+    return request;
   };
 
   /**
@@ -546,41 +461,6 @@ export class AgentSliceActionImpl {
     );
   };
 
-  #markAgentNotFound = (agentId: string) => {
-    const { agentNotFoundMap, agentMap } = this.#get();
-    if (agentNotFoundMap[agentId] && !agentMap[agentId]) return;
-
-    this.#set(
-      (state) => {
-        // Also drop the previously cached config: surfaces reading `agentMap`
-        // (title/avatar in the sidebar or header) must not keep showing an
-        // agent the viewer lost access to next to the 404 content area.
-        const nextAgentMap = { ...state.agentMap };
-        delete nextAgentMap[agentId];
-        return {
-          agentMap: nextAgentMap,
-          agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true },
-        };
-      },
-      false,
-      'markAgentNotFound',
-    );
-  };
-
-  #clearAgentNotFound = (agentId: string) => {
-    if (!this.#get().agentNotFoundMap[agentId]) return;
-
-    this.#set(
-      (state) => {
-        const next = { ...state.agentNotFoundMap };
-        delete next[agentId];
-        return { agentNotFoundMap: next };
-      },
-      false,
-      'clearAgentNotFound',
-    );
-  };
-
   #clearAgentConfigError = (agentId: string) => {
     if (!this.#get().agentConfigErrorMap[agentId]) return;
 
@@ -595,80 +475,10 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useHydrateAgentConfig = (
-    isLogin: boolean | undefined,
-    agentId: string,
-  ): SWRResponse<LobeAgentConfig> => {
-    const scope = useCacheScope();
-    const swrKey =
-      isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId, scope)
-        : null;
-
-    const projection = useAgentProjectionState(swrKey ? agentId : undefined);
-    const request = useClientDataSWRWithSync<LobeAgentConfig>(
-      swrKey,
-      async () => {
-        const observedAt = nextProjectionObservedAt();
-        const result = await agentService.getAgentConfigByIdWithAccess(agentId);
-        const data = result?.data;
-        if (result) {
-          getProjectionStoreState().commitAgentConfig(
-            scope,
-            { ...result.data, id: result.data.id ?? agentId },
-            result.access,
-            'network',
-            observedAt,
-          );
-        } else {
-          getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
-        }
-        return data as LobeAgentConfig;
-      },
-      {
-        onData: (data) => {
-          if (getCacheScope() !== scope) return;
-          const projectionStore = getProjectionStoreState();
-          let record = projectionStore.scopes[scope]?.records.agent[agentId];
-          if (!data) {
-            if (activeProjectionRecord(record)) {
-              this.#clearAgentNotFound(agentId);
-              return;
-            }
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-          if (!record) {
-            projectionStore.commitAgentConfig(
-              scope,
-              { ...data, id: data.id ?? agentId },
-              'profile',
-              'network',
-              0,
-            );
-            record = getProjectionStoreState().scopes[scope]?.records.agent[agentId];
-          }
-          if (!activeProjectionRecord(record)) {
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-          this.#clearAgentNotFound(agentId);
-          const canonical = selectAgentProjection(record);
-          if (!canonical) return;
-          this.#get().internal_dispatchAgentMap(
-            agentId,
-            canonical as PartialDeep<LobeAgentConfig>,
-            { commitProjection: false },
-          );
-        },
-        syncBeforePaint: true,
-      },
-    );
-
-    return {
-      ...request,
-      data: projection.hasRecord ? (projection.data as LobeAgentConfig | undefined) : undefined,
-    } as SWRResponse<LobeAgentConfig>;
+  useHydrateAgentConfig = (isLogin: boolean | undefined, agentId: string) => {
+    const enabledAgentId =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId) ? agentId : undefined;
+    return useAgentConfigProjection(enabledAgentId);
   };
 
   useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentDocumentListItem[]> => {
@@ -681,63 +491,13 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
-    useProjectionViewHydration(agentAvailableViewContract, {}, enabled);
-    return useClientDataSWRWithSync<AvailableAgentItem[]>(
-      enabled ? agentConfigKeys.available() : null,
-      async () => {
-        const scope = getCacheScope();
-        const observedAt = nextProjectionObservedAt();
-        const data = await agentService.queryAgents({
-          limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
-        });
-        getProjectionStoreState().commitAvailableAgents(
-          scope,
-          data as AgentProjectionInput[],
-          { limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT },
-          observedAt,
-        );
-        return data;
-      },
-      {
-        onData: (data) => {
-          const projectionStore = getProjectionStoreState();
-          const scope = getCacheScope();
-          if (!selectAvailableAgentsIndex(projectionStore.scopes[scope])) {
-            projectionStore.commitAvailableAgents(
-              scope,
-              data as AgentProjectionInput[],
-              { limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT },
-              0,
-            );
-          }
-          const projectionScope = getProjectionStoreState().scopes[scope];
-          const index = selectAvailableAgentsIndex(projectionScope);
-          if (!index) return;
-          const canonical = index.refs.flatMap((ref) => {
-            const item = selectAgentSummary(projectionScope?.records.agent[ref.id]);
-            return item
-              ? [
-                  {
-                    avatar: item.avatar ?? null,
-                    backgroundColor: item.backgroundColor ?? null,
-                    description: item.description ?? null,
-                    id: item.id,
-                    name: item.name ?? null,
-                    title: item.title ?? null,
-                  },
-                ]
-              : [];
-          });
-          this.#set({ availableAgents: canonical }, false, 'useFetchAvailableAgents');
-        },
-        revalidateOnFocus: false,
-      },
-    );
+  useFetchAvailableAgents = (enabled: boolean) => {
+    return useAvailableAgentsProjection(enabled, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT, {
+      revalidateOnFocus: false,
+    });
   };
 
   invalidateAvailableAgents = (): void => {
-    this.#set({ availableAgents: undefined }, false, 'invalidateAvailableAgents');
     void mutate(agentConfigKeys.available());
   };
 
@@ -769,34 +529,23 @@ export class AgentSliceActionImpl {
     return request;
   };
 
-  internal_dispatchAgentMap = (
+  internal_dispatchAgentProjection = (
     id: string,
     config: PartialDeep<LobeAgentConfig>,
     options?: {
-      commitProjection?: boolean;
       observedAt?: number;
       source?: ProjectionSource;
     },
   ): void => {
-    const agentMap = produce(this.#get().agentMap, (draft) => {
-      if (!draft[id]) {
-        draft[id] = config;
-      } else {
-        draft[id] = merge(draft[id], config);
-        // merge() can't drop keys; honor `undefined` as a per-device delete so
-        // clearing a working directory takes effect optimistically.
-        pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);
-      }
-    });
-
-    if (isEqual(this.#get().agentMap, agentMap)) return;
-
-    this.#set({ agentMap }, false, 'dispatchAgentMap');
-    if (options?.commitProjection === false) return;
+    const current = getAgentProjectionById(id);
+    const agent = merge(current ?? {}, config) as PartialDeep<LobeAgentConfig>;
+    // merge() cannot drop keys. Preserve per-device delete markers so clearing
+    // a working directory takes effect in the optimistic Projection commit.
+    pruneWorkingDirByDeviceDeletes(agent.agencyConfig, config.agencyConfig);
 
     getProjectionStoreState().commitAgentConfig(
       getCacheScope(),
-      { ...agentMap[id], id } as unknown as AgentProjectionInput,
+      { ...agent, id } as unknown as AgentProjectionInput,
       'full',
       options?.source ?? 'mutation',
       options?.observedAt,
@@ -810,7 +559,7 @@ export class AgentSliceActionImpl {
     const agencyConfigPatch = data.agencyConfig;
     if (!agencyConfigPatch) return data;
 
-    const currentAgencyConfig = this.#get().agentMap[id]?.agencyConfig;
+    const currentAgencyConfig = getAgentProjectionById(id)?.agencyConfig;
     const agencyConfig = merge(
       currentAgencyConfig ?? {},
       agencyConfigPatch,
@@ -828,11 +577,11 @@ export class AgentSliceActionImpl {
     signal?: AbortSignal,
     options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const { internal_dispatchAgentProjection, updateSaveStatus } = this.#get();
     const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
 
     // 1. Optimistic update (instant UI feedback)
-    internal_dispatchAgentMap(id, mergedData);
+    internal_dispatchAgentProjection(id, mergedData);
     updateSaveStatus('saving');
 
     try {
@@ -841,7 +590,7 @@ export class AgentSliceActionImpl {
 
       // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        internal_dispatchAgentProjection(id, result.agent);
         // Refresh agent:config so cached model A cannot replay after a
         // successful model A -> B update.
         await this.#get().internal_refreshAgentConfig(id);
@@ -877,10 +626,10 @@ export class AgentSliceActionImpl {
     meta: AgentMetaUpdate,
     signal?: AbortSignal,
   ): Promise<void> => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const { internal_dispatchAgentProjection, updateSaveStatus } = this.#get();
 
     // 1. Optimistic update - meta fields are at the top level of agent config
-    internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
+    internal_dispatchAgentProjection(id, meta as PartialDeep<LobeAgentConfig>);
     updateSaveStatus('saving');
 
     try {
@@ -889,7 +638,7 @@ export class AgentSliceActionImpl {
 
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        internal_dispatchAgentProjection(id, result.agent);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');

@@ -9,8 +9,9 @@ import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/over
 import { canConsumePendingOverlayDispatch } from '@/features/Electron/ScreenCapture/overlayDispatch';
 import { useOverlayDispatchStore } from '@/features/Electron/ScreenCapture/overlayDispatchStore';
 import { usePermission } from '@/hooks/usePermission';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentConfigStatus } from '@/store/agent/projection';
 import type { UploadFileItem } from '@/types/files/upload';
 
 /**
@@ -28,7 +29,7 @@ const MessageFromUrl = () => {
   const agentId = context.agentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
-  const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const isAgentConfigLoading = useCurrentAgentConfigStatus().isLoading;
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
   // Per-resource General access: view-only members must not auto-send into a
@@ -143,9 +144,9 @@ const MessageFromUrl = () => {
       try {
         if (canEdit && modelId && provider) {
           const agentState = useAgentStore.getState();
-          const currentModel = agentByIdSelectors.getAgentModelById(agentId!)(agentState);
-          const currentProvider = agentByIdSelectors.getAgentModelProviderById(agentId!)(
-            agentState,
+          const currentModel = agentProjectionSelectors.model(getAgentProjectionById(agentId!));
+          const currentProvider = agentProjectionSelectors.provider(
+            getAgentProjectionById(agentId!),
           );
           if (currentModel !== modelId || currentProvider !== provider) {
             await agentState.updateAgentConfigById(agentId!, { model: modelId, provider });

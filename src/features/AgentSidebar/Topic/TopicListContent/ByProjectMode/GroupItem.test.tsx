@@ -105,6 +105,10 @@ vi.mock('@/helpers/executionTarget', () => ({
   resolveExecutionTarget: () => 'device',
 }));
 
+vi.mock('@/helpers/gatewayMode', () => ({
+  useIsGatewayModeEnabled: () => true,
+}));
+
 vi.mock('@/hooks/useQueryRoute', () => ({
   useQueryRoute: () => ({
     push: routerPushMock,
@@ -121,15 +125,21 @@ vi.mock('@/store/agent', () => ({
     selector(agentStoreStateMock),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => () => ({ boundDeviceId: 'device-1' }),
-    isAgentHeterogeneousById: () => () => true,
-    isWorkspaceAgentById: () => () => false,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    agencyConfig: (agent: { agencyConfig: unknown }) => agent.agencyConfig,
+    heterogeneous: (agent: { heterogeneous: boolean }) => agent.heterogeneous,
+    workspaceScoped: (agent: { workspaceScoped: boolean }) => agent.workspaceScoped,
   },
-  agentSelectors: {
-    getAgentConfigById: () => () => undefined,
-  },
+  useAgentValue: (
+    _agentId: string | undefined,
+    selector: (agent: Record<string, unknown>) => unknown,
+  ) =>
+    selector({
+      agencyConfig: { boundDeviceId: 'device-1' },
+      heterogeneous: true,
+      workspaceScoped: false,
+    }),
 }));
 
 vi.mock('@/store/chat', () => {

@@ -3,16 +3,16 @@ import { pluginPrompts } from '@lobechat/prompts';
 import { debounce } from 'es-toolkit/compat';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 
+import { useAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { useModelContextWindowTokens } from '@/hooks/useModelContextWindowTokens';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentData, useAgentValue } from '@/store/agent/projection';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 import { useToolStore } from '@/store/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
 import { useUserStore } from '@/store/user';
@@ -82,39 +82,21 @@ export interface TokenBreakdown {
 
 export const useTokenBreakdown = (): TokenBreakdown => {
   const { input, messages } = useComposerSource();
-  const historySummary = useChatStore(
-    (s) => topicSelectors.currentActiveTopicSummary(s)?.content || '',
-  );
+  const historySummary = useCurrentChatTopic()?.historySummary || '';
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
-  const [
-    activeAgentId,
-    systemRole,
-    enableAgentMode,
-    searchMode,
-    useModelBuiltinSearch,
-    skillActivateMode,
-    agentMemoryEnabled,
-    runtimeMode,
-    hasEnabledKnowledgeBases,
-  ] = useAgentStore((s) => {
-    const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(s);
-
-    return [
-      s.activeAgentId,
-      agentByIdSelectors.getAgentSystemRoleById(agentId)(s),
-      chatConfig.enableAgentMode,
-      chatConfig.searchMode,
-      chatConfig.useModelBuiltinSearch,
-      chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-      chatConfig.memory?.enabled,
-      chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
-      agentByIdSelectors
-        .getAgentKnowledgeBasesById(agentId)(s)
-        .some((item) => item.enabled),
-    ];
-  });
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const agent = useAgentData(agentId);
+  const chatConfig = agentProjectionSelectors.chatConfig(agent);
+  const systemRole = agentProjectionSelectors.systemRole(agent);
+  const enableAgentMode = chatConfig.enableAgentMode;
+  const searchMode = chatConfig.searchMode;
+  const useModelBuiltinSearch = chatConfig.useModelBuiltinSearch;
+  const skillActivateMode = agentProjectionSelectors.skillActivateMode(agent);
+  const agentMemoryEnabled = chatConfig.memory?.enabled;
+  const runtimeMode = useAgentRuntimeMode(agentId);
+  const hasEnabledKnowledgeBases = agentProjectionSelectors.hasEnabledKnowledgeBases(agent);
   const globalMemoryEnabled = useUserStore(settingsSelectors.memoryEnabled);
   const effectiveMemoryEnabled = agentMemoryEnabled ?? globalMemoryEnabled;
   const [isProviderHasBuiltinSearch, isModelHasBuiltinSearch, isModelBuiltinSearchInternal] =
@@ -140,7 +122,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const maxTokens = useModelContextWindowTokens(model, provider);
 
   const canUseTool = useModelSupportToolUse(model, provider);
-  const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
+  const pluginIds = useAgentValue(agentId, agentProjectionSelectors.plugins);
   const installedPlugins = useToolStore((s) => s.installedPlugins);
 
   const toolsString = useMemo(() => {

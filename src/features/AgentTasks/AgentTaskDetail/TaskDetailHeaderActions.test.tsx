@@ -106,9 +106,16 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/store/task', () => ({
+  useActiveTaskDetailProjection: (selector: (detail: unknown) => unknown) =>
+    selector(
+      mocks.taskState.activeTaskId
+        ? mocks.taskState.taskDetailMap[mocks.taskState.activeTaskId]
+        : undefined,
+    ),
   useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       ...mocks.taskState,
+      taskDetailMap: undefined,
       deleteTask: mocks.deleteTask,
       updateTaskVisibility: mocks.updateTaskVisibility,
     }),

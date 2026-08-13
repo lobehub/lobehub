@@ -1,17 +1,20 @@
 import type * as LobechatConstModule from '@lobechat/const';
+import type { ChatTopic } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
-import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import { getChatTopics } from '@/store/chat/slices/topic/projection';
 import type {
   VoiceMessageSend,
   VoiceMessageSendOptions,
@@ -105,6 +108,58 @@ const createTestContext = (agentId: string = TEST_IDS.SESSION_ID) => ({
   topicId: null,
   threadId: null,
 });
+
+const seedTopicList = (
+  context: { agentId?: string; groupId?: string },
+  items: Array<Partial<ChatTopic> & Pick<ChatTopic, 'id'>>,
+) => {
+  const containerKey = topicMapKey(context);
+  const topics = items.map(
+    (item) =>
+      ({
+        createdAt: 0,
+        title: '',
+        updatedAt: 0,
+        ...item,
+      }) as ChatTopic,
+  );
+  getProjectionStoreState().commitChatTopicsPage(
+    getCacheScope(),
+    {
+      containerKey,
+      context,
+      items: topics,
+      page: 0,
+      pageSize: 20,
+      signature: {},
+      surface: 'sidebar',
+      total: topics.length,
+    },
+    { observedAt: 1, source: 'network' },
+  );
+};
+
+const seedChatGroup = (groupId: string, supervisorAgentId: string) => {
+  getProjectionStoreState().commitChatGroupDetail(
+    getCacheScope(),
+    {
+      agents: [
+        {
+          ...createMockAgentConfig(),
+          id: supervisorAgentId,
+          isSupervisor: true,
+          title: 'Supervisor',
+        },
+      ],
+      config: {},
+      id: groupId,
+      supervisorAgentId,
+      title: 'Test Group',
+    } as any,
+    { group: 'full', members: { [supervisorAgentId]: 'full' } },
+    'mutation',
+  );
+};
 
 describe('ConversationLifecycle actions', () => {
   describe('sendMessage', () => {
@@ -852,17 +907,6 @@ describe('ConversationLifecycle actions', () => {
           useChatStore.setState({
             activeAgentId: agentId,
             activeTopicId: undefined,
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
         const sendMessageInServer = vi
@@ -879,7 +923,7 @@ describe('ConversationLifecycle actions', () => {
         });
         await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
 
-        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
+        const optimisticTopicId = getChatTopics(topicKey)?.[0]?.id;
         expect(optimisticTopicId).toMatch(/^tpc_/);
         expect(
           operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
@@ -910,9 +954,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
-        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toBe(
-          optimisticTopicId,
-        );
+        expect(getChatTopics(topicKey)?.[0]?.id).toBe(optimisticTopicId);
         expect(
           operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
         ).toBe(false);
@@ -1259,17 +1301,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeClientAgent: vi.fn().mockReturnValue(executePromise),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1287,7 +1318,7 @@ describe('ConversationLifecycle actions', () => {
 
         await waitFor(() => expect(sendMessageInServerSpy).toHaveBeenCalled());
 
-        const optimisticTopic = useChatStore.getState().topicDataMap[topicKey]?.items[0];
+        const optimisticTopic = getChatTopics(topicKey)?.[0];
         expect(optimisticTopic).toEqual(
           expect.objectContaining({
             sessionId: agentId,
@@ -1324,10 +1355,8 @@ describe('ConversationLifecycle actions', () => {
           } as any);
         });
 
-        await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toBe(newTopicId),
-        );
-        const finalTopics = useChatStore.getState().topicDataMap[topicKey]?.items ?? [];
+        await waitFor(() => expect(getChatTopics(topicKey)?.[0]?.id).toBe(newTopicId));
+        const finalTopics = getChatTopics(topicKey) ?? [];
         expect(finalTopics).toEqual([expect.objectContaining({ id: newTopicId })]);
         expect(finalTopics.some((topic) => topic.id === optimisticTopic?.id)).toBe(false);
 
@@ -1437,17 +1466,6 @@ describe('ConversationLifecycle actions', () => {
             executeGatewayAgent: executeGatewayAgentSpy,
             isGatewayModeEnabled: () => true,
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1461,7 +1479,7 @@ describe('ConversationLifecycle actions', () => {
 
         await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
 
-        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
+        const optimisticTopicId = getChatTopics(topicKey)?.[0]?.id;
         expect(optimisticTopicId).toMatch(/^tpc_/);
         // The running sendMessage op keeps the spinner on during phase-1 init.
         expect(
@@ -1563,7 +1581,6 @@ describe('ConversationLifecycle actions', () => {
 
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const topicKey = topicMapKey({ agentId });
         const newTopicId = TEST_IDS.NEW_TOPIC_ID;
 
         act(() => {
@@ -1571,17 +1588,6 @@ describe('ConversationLifecycle actions', () => {
             activeAgentId: agentId,
             activeTopicId: undefined,
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1675,17 +1681,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeGatewayAgent: executeGatewayAgentSpy,
             isGatewayModeEnabled: () => true,
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1702,7 +1697,7 @@ describe('ConversationLifecycle actions', () => {
         // A pending repo selected before the first send used to be missing from
         // the tmp topic, so By Project grouped it under "No directory" until
         // the server topic replaced it.
-        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+        expect(getChatTopics(topicKey)?.[0]).toEqual(
           expect.objectContaining({
             // Pinned model is a top-level column, not metadata.
             model: expect.any(String),
@@ -1745,17 +1740,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1776,7 +1760,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(getChatTopics(topicKey) ?? []).toEqual([]);
         expect(operationSelectors.visiblyRunningTopicIds(useChatStore.getState()).size).toBe(0);
       });
 
@@ -1791,14 +1775,7 @@ describe('ConversationLifecycle actions', () => {
           resolveServerSend = resolve;
         });
 
-        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
-          groupMap: {
-            [groupId]: {
-              id: groupId,
-              supervisorAgentId,
-            },
-          },
-        } as any);
+        seedChatGroup(groupId, supervisorAgentId);
 
         act(() => {
           useChatStore.setState({
@@ -1807,17 +1784,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [groupKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1837,17 +1803,15 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(/^tpc_/),
-        );
+        await waitFor(() => expect(getChatTopics(groupKey)?.[0]?.id).toMatch(/^tpc_/));
 
-        const optimisticTopic = useChatStore.getState().topicDataMap[groupKey]?.items[0];
+        const optimisticTopic = getChatTopics(groupKey)?.[0];
         expect(optimisticTopic).toEqual(
           expect.objectContaining({
             title: 'Group first message',
           }),
         );
-        expect(useChatStore.getState().topicDataMap[groupAgentKey]?.items ?? []).toEqual([]);
+        expect(getChatTopics(groupAgentKey) ?? []).toEqual([]);
 
         await act(async () => {
           resolveServerSend({
@@ -1872,10 +1836,10 @@ describe('ConversationLifecycle actions', () => {
           await sendPromise;
         });
 
-        expect(useChatStore.getState().topicDataMap[groupKey]?.items).toEqual([
+        expect(getChatTopics(groupKey)).toEqual([
           expect.objectContaining({ id: TEST_IDS.NEW_TOPIC_ID, title: 'Group Topic' }),
         ]);
-        expect(useChatStore.getState().topicDataMap[groupAgentKey]?.items ?? []).toEqual([]);
+        expect(getChatTopics(groupAgentKey) ?? []).toEqual([]);
       });
 
       it('should clear the active temp topic when rolling back an optimistic topic', async () => {
@@ -1893,17 +1857,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1917,10 +1870,8 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
-        );
-        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
+        await waitFor(() => expect(getChatTopics(topicKey)?.[0]?.id).toMatch(/^tpc_/));
+        const optimisticTopicId = getChatTopics(topicKey)![0].id;
 
         act(() => {
           useChatStore.setState({ activeTopicId: optimisticTopicId });
@@ -1939,7 +1890,7 @@ describe('ConversationLifecycle actions', () => {
           await sendPromise;
         });
 
-        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(getChatTopics(topicKey) ?? []).toEqual([]);
         expect(useChatStore.getState().activeTopicId).not.toBe(optimisticTopicId);
       });
 
@@ -1960,17 +1911,6 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
-            topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
-            },
           });
         });
 
@@ -1984,10 +1924,8 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
-        );
-        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
+        await waitFor(() => expect(getChatTopics(topicKey)?.[0]?.id).toMatch(/^tpc_/));
+        const optimisticTopicId = getChatTopics(topicKey)![0].id;
         const optimisticContextKey = messageMapKey({ agentId, topicId: optimisticTopicId });
         const pendingSelection = {
           content: 'context added before the failed send',
@@ -2017,7 +1955,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(useChatStore.getState().activeTopicId).toBe(otherTopicId);
-        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(getChatTopics(topicKey) ?? []).toEqual([]);
         expect(
           fileChatSelectors.chatContextSelections(newContextKey)(useFileStore.getState()),
         ).toEqual([pendingSelection]);
@@ -2810,15 +2748,7 @@ describe('ConversationLifecycle actions', () => {
       it('should pass isSupervisor metadata when agentId matches supervisorAgentId', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        // Mock agentGroup store to return a group with specific supervisorAgentId
-        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
-          groupMap: {
-            'test-group-id': {
-              id: 'test-group-id',
-              supervisorAgentId: 'supervisor-agent-id',
-            },
-          },
-        } as any);
+        seedChatGroup('test-group-id', 'supervisor-agent-id');
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
@@ -2859,15 +2789,7 @@ describe('ConversationLifecycle actions', () => {
       it('should NOT pass isSupervisor metadata when agentId is a sub-agent (not supervisor)', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        // Mock agentGroup store - sub-agent-id does NOT match supervisorAgentId
-        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
-          groupMap: {
-            'test-group-id': {
-              id: 'test-group-id',
-              supervisorAgentId: 'supervisor-agent-id', // Different from sub-agent-id
-            },
-          },
-        } as any);
+        seedChatGroup('test-group-id', 'supervisor-agent-id');
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
@@ -3106,12 +3028,8 @@ describe('ConversationLifecycle actions', () => {
               heterogeneousProvider: { command: 'codex', type: 'codex' },
             },
           },
+          agentMeta: { visibility: 'public', workspaceId: 'workspace-1' },
         });
-
-        const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
-          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
-        );
         useUserStore.setState({
           workspaceUserPreference: {
             agentDeviceOverrides: {
@@ -3162,12 +3080,8 @@ describe('ConversationLifecycle actions', () => {
               heterogeneousProvider: { command: 'codex', type: 'codex' },
             },
           },
+          agentMeta: { visibility: 'public', workspaceId: 'workspace-1' },
         });
-
-        const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
-          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
-        );
 
         const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
         act(() => {
@@ -3972,6 +3886,19 @@ describe('ConversationLifecycle actions', () => {
         });
 
         const targetAgentId = 'agent-direct-codex';
+        getProjectionStoreState().commitAgentConfig(
+          getCacheScope(),
+          {
+            ...createMockAgentConfig({
+              agencyConfig: {
+                heterogeneousProvider: { command: 'codex', type: 'codex' },
+              },
+            }),
+            id: targetAgentId,
+          },
+          'full',
+          'mutation',
+        );
         const threadId = 'thread-direct-codex';
         const threadAssistantId = 'thread-assistant-codex';
         const message = '@Codex inspect this';
@@ -4044,8 +3971,9 @@ describe('ConversationLifecycle actions', () => {
         expect(createTaskSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             agentId: targetAgentId,
-            assistantMessage: { provider: 'codex' },
+            instruction: message,
             parentMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            title: message,
             topicId: TEST_IDS.TOPIC_ID,
           }),
         );
@@ -4317,15 +4245,7 @@ describe('ConversationLifecycle actions', () => {
       it('should NOT inject mentionedAgents into initialContext when in group chat', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        // Mock group store so groupId resolves
-        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
-          groupMap: {
-            'test-group': {
-              id: 'test-group',
-              supervisorAgentId: 'supervisor-id',
-            },
-          },
-        } as any);
+        seedChatGroup('test-group', 'supervisor-id');
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           messages: [
@@ -4652,7 +4572,7 @@ describe('ConversationLifecycle actions', () => {
 
         const newTopicKey = messageMapKey({ agentId, topicId: newTopicId });
         expect(useChatStore.getState().messagesMap[newTopicKey]).toHaveLength(2);
-        expect(useChatStore.getState().topicDataMap[topicMapKey({ agentId })]?.items[0]).toEqual(
+        expect(getChatTopics(topicMapKey({ agentId }))?.[0]).toEqual(
           expect.objectContaining({ id: newTopicId }),
         );
       });
@@ -4773,16 +4693,9 @@ describe('ConversationLifecycle actions', () => {
 
       // Seed an existing topic whose title is empty — this is the second gate branch.
       // currentTopicData() keys on activeAgentId, which resetTestEnvironment set to SESSION_ID.
+      seedTopicList({ agentId }, [{ id: topicId, title: '' }]);
       act(() => {
-        useChatStore.setState({
-          summaryTopicTitle: summaryTopicTitleSpy,
-          topicDataMap: {
-            [topicMapKey({ agentId })]: {
-              items: [{ id: topicId, title: '' }],
-              total: 1,
-            },
-          } as any,
-        });
+        useChatStore.setState({ summaryTopicTitle: summaryTopicTitleSpy });
       });
 
       const persistedMessages = [
@@ -4828,16 +4741,9 @@ describe('ConversationLifecycle actions', () => {
       const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
 
       // Existing topic WITH a non-empty title → neither gate branch fires.
+      seedTopicList({ agentId }, [{ id: topicId, title: 'Already has a title' }]);
       act(() => {
-        useChatStore.setState({
-          summaryTopicTitle: summaryTopicTitleSpy,
-          topicDataMap: {
-            [topicMapKey({ agentId })]: {
-              items: [{ id: topicId, title: 'Already has a title' }],
-              total: 1,
-            },
-          } as any,
-        });
+        useChatStore.setState({ summaryTopicTitle: summaryTopicTitleSpy });
       });
 
       vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({

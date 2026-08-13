@@ -126,8 +126,31 @@ vi.mock('@/store/agent', () => ({
     selector(mocks.agentState),
 }));
 
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: (agentId: string) =>
+    mocks.agentState.agentMap[agentId as keyof typeof mocks.agentState.agentMap],
+}));
+
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: typeof mocks.homeState) => unknown) => selector(mocks.homeState),
+}));
+
+vi.mock('@/projection/modules/home/sidebarHooks', () => ({
+  homeSidebarSelectors: {
+    agentGroups: (sidebar: typeof mocks.homeState) => sidebar.agentGroups,
+    hasPrivateAgents: (sidebar: typeof mocks.homeState) =>
+      sidebar.privateAgentGroups.length > 0 ||
+      sidebar.privatePinnedAgents.length > 0 ||
+      sidebar.privateUngroupedAgents.length > 0,
+    isAgentListInit: (sidebar: typeof mocks.homeState) => sidebar.isAgentListInit,
+    pinnedAgents: (sidebar: typeof mocks.homeState) => sidebar.pinnedAgents,
+    privateAgentGroups: (sidebar: typeof mocks.homeState) => sidebar.privateAgentGroups,
+    privatePinnedAgents: (sidebar: typeof mocks.homeState) => sidebar.privatePinnedAgents,
+    privateUngroupedAgents: (sidebar: typeof mocks.homeState) => sidebar.privateUngroupedAgents,
+    ungroupedAgents: (sidebar: typeof mocks.homeState) => sidebar.ungroupedAgents,
+  },
+  useHomeSidebarProjection: (selector: (sidebar: typeof mocks.homeState) => unknown) =>
+    selector(mocks.homeState),
 }));
 
 describe('AgentSelectorAction', () => {

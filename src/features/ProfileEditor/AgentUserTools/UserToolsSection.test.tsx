@@ -61,11 +61,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 vi.mock('@/store/tool', () => ({
   useToolStore: (sel: (s: unknown) => unknown) => sel(mocks.toolState),
 }));
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (sel: (s: unknown) => unknown) => sel(undefined),
-}));
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: { getAgentConfigById: () => () => mocks.agentConfig },
+vi.mock('@/store/agent/projection', () => ({
+  useAgentConfig: () => mocks.agentConfig,
 }));
 
 const renderSection = () =>

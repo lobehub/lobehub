@@ -6,8 +6,7 @@ import { debounce } from 'es-toolkit/compat';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -19,10 +18,8 @@ const Controls = () => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
-  const [historyCount, enableHistoryCount] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
-    chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
-  ]);
+  const historyCount = useAgentValue(agentId, agentProjectionSelectors.historyCount);
+  const enableHistoryCount = useAgentValue(agentId, agentProjectionSelectors.enableHistoryCount);
 
   // Sync external store updates to the form without remounting to keep Switch animation
   useEffect(() => {

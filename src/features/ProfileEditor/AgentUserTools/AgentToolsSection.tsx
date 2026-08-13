@@ -13,8 +13,8 @@ import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner
 import { createAgentSkillStoreModal } from '@/features/AgentSkillStore';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { usePermission } from '@/hooks/usePermission';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
@@ -47,7 +47,7 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
       const ok = await confirmModal({ content: t('settingAgent.agentTools.removeOwnedConfirm') });
       if (!ok) return;
       // 1) remove from agents.plugins, 2) delete the agent connector row.
-      const config = agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState());
+      const config = getAgentProjectionById(agentId);
       await updateAgentConfigById(agentId, {
         plugins: upsertPluginMode(config?.plugins, connector.identifier, 'auto'),
       });

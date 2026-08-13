@@ -11,9 +11,8 @@ import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 import { lambdaClient } from '@/libs/trpc/client';
+import { getAgentProjectionById } from '@/projection';
 import { aiAgentService } from '@/services/aiAgent';
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
@@ -67,9 +66,7 @@ export class ConversationControlActionImpl {
    * Gateway backend.
    */
   #shouldUseGatewayResume = (context: ConversationContext): boolean => {
-    const agentConfig = context.agentId
-      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
-      : undefined;
+    const agentConfig = context.agentId ? getAgentProjectionById(context.agentId) : undefined;
     return (
       selectRuntimeType({
         boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,

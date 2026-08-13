@@ -1,10 +1,20 @@
 import type {
   ChatTopicMetadata,
+  ChatTopicSearchIndex,
+  ChatTopicSearchSignature,
   ChatTopicsIndex,
   ChatTopicStatus,
   TopicProjection,
 } from '@lobechat/types';
-import { chatAgentViewTopicsIndexKey, chatSidebarTopicsIndexKey } from '@lobechat/types';
+import {
+  CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX,
+  CHAT_SIDEBAR_TOPICS_INDEX_PREFIX,
+  chatAgentViewTopicsIndexKey,
+  chatSidebarTopicsIndexKey,
+  chatTopicSearchIndexKey,
+} from '@lobechat/types';
+
+import type { ChatTopic } from '@/types/topic';
 
 import type { ProjectionScopeState } from '../../core/initialState';
 import { activeProjectionRecord } from '../../core/record';
@@ -33,6 +43,13 @@ export interface ChatTopicDetailView extends ChatTopicListItemView {
   firstUserMessage: string | null;
   messageCount: number | null;
   trigger?: string | null;
+}
+
+export interface ChatTopicsProjectionView {
+  hasMore: boolean;
+  index: ChatTopicsIndex;
+  items: ChatTopic[];
+  total: number;
 }
 
 const activeRecord = (record: TopicProjection | undefined): TopicProjection | undefined =>
@@ -70,6 +87,11 @@ export const selectChatTopicsIndex = (
       : chatSidebarTopicsIndexKey(containerKey);
   return scope?.indexes[key];
 };
+
+export const selectChatTopicSearchIndex = (
+  scope: ProjectionScopeState | undefined,
+  signature: ChatTopicSearchSignature,
+): ChatTopicSearchIndex | undefined => scope?.indexes[chatTopicSearchIndexKey(signature)];
 
 export const selectChatTopicListItem = (
   scope: ProjectionScopeState,
@@ -131,6 +153,16 @@ export const selectChatTopicDetailItem = (
   return { ...base, ...details, ...triggerInfo };
 };
 
+/** Resolve the richest currently available canonical Topic view. */
+export const selectChatTopicItem = (
+  scope: ProjectionScopeState | undefined,
+  id: string,
+): ChatTopic | undefined => {
+  if (!scope) return undefined;
+  return (selectChatTopicDetailItem(scope, id) ?? selectChatTopicListItem(scope, id)) as
+    ChatTopic | undefined;
+};
+
 /** Resolve one ordered query index into canonical Topic rows. */
 export const selectChatTopicsItems = (
   scope: ProjectionScopeState | undefined,
@@ -148,4 +180,62 @@ export const selectChatTopicsItems = (
     items.push(item);
   }
   return items;
+};
+
+export const selectChatTopicsView = (
+  scope: ProjectionScopeState | undefined,
+  surface: 'agentView' | 'sidebar',
+  containerKey: string,
+): ChatTopicsProjectionView | undefined => {
+  const index = selectChatTopicsIndex(scope, surface, containerKey);
+  const items = selectChatTopicsItems(scope, index);
+  if (!index || !items) return undefined;
+
+  return {
+    hasMore: index.total > items.length,
+    index,
+    items: items as ChatTopic[],
+    total: index.total,
+  };
+};
+
+export const selectChatTopicSearchItems = (
+  scope: ProjectionScopeState | undefined,
+  signature: ChatTopicSearchSignature,
+): ChatTopic[] | undefined => {
+  const index = selectChatTopicSearchIndex(scope, signature);
+  if (!scope || !index) return undefined;
+
+  const items: ChatTopic[] = [];
+  for (const ref of index.refs) {
+    const item = selectChatTopicItem(scope, ref.id);
+    if (!item) return undefined;
+    items.push(item);
+  }
+  return items;
+};
+
+/** Find the loaded list bucket that owns a globally unique Topic id. */
+export const selectChatTopicContainerKeyById = (
+  scope: ProjectionScopeState | undefined,
+  id: string,
+): string | undefined => {
+  if (!scope) return undefined;
+
+  const indexes = Object.values(scope.indexes);
+  const sidebar = indexes.find(
+    (index) =>
+      index?.key.startsWith(CHAT_SIDEBAR_TOPICS_INDEX_PREFIX) &&
+      'refs' in index &&
+      index.refs.some((ref) => ref.kind === 'topic' && ref.id === id),
+  );
+  if (sidebar) return sidebar.key.slice(CHAT_SIDEBAR_TOPICS_INDEX_PREFIX.length);
+
+  const agentView = indexes.find(
+    (index) =>
+      index?.key.startsWith(CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX) &&
+      'refs' in index &&
+      index.refs.some((ref) => ref.kind === 'topic' && ref.id === id),
+  );
+  return agentView?.key.slice(CHAT_AGENT_VIEW_TOPICS_INDEX_PREFIX.length);
 };

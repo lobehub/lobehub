@@ -28,12 +28,13 @@ import { ModelProvider } from 'model-bank/modelProvider';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
+import { getAgentProjectionById } from '@/projection';
 import { getAgentStoreState } from '@/store/agent';
 import {
-  agentByIdSelectors,
-  agentChatConfigSelectors,
-  agentSelectors,
-} from '@/store/agent/selectors';
+  agentProjectionSelectors,
+  getAgentBuilderContext,
+  getAgentMeta,
+} from '@/store/agent/projection';
 import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
@@ -196,7 +197,7 @@ class ChatService {
     const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
     let agentBuilderContext;
     let agentDocuments = documentsAgentId
-      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
+      ? getAgentStoreState().agentDocumentsMap[documentsAgentId]
       : undefined;
 
     if (documentsAgentId && agentDocuments === undefined) {
@@ -210,10 +211,8 @@ class ChatService {
 
     if (isAgentBuilderEnabled) {
       const activeAgentId = getChatStoreState().activeAgentId || '';
-      const baseContext =
-        agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
-      const activeAgentConfig =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
+      const baseContext = getAgentBuilderContext(activeAgentId);
+      const activeAgentConfig = getAgentProjectionById(activeAgentId);
 
       // Build official tools list (builtin tools + Composio tools)
       const toolState = getToolStoreState();
@@ -432,7 +431,9 @@ class ChatService {
       : 'chatCompletion';
 
     // Get the chat config to check streaming preference
-    const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
+    const chatConfig = agentProjectionSelectors.chatConfig(
+      getAgentProjectionById(getAgentStoreState().activeAgentId),
+    );
 
     delete (res as any).scope;
     // Fork flow stores market metadata in agent.params; must not reach OpenAI-compatible / Responses API
@@ -590,7 +591,8 @@ class ChatService {
   };
 
   private mapTrace = (trace?: TracePayload, tag?: TraceTagMap): TracePayload => {
-    const tags = agentSelectors.currentAgentMeta(getAgentStoreState()).tags || [];
+    const tags =
+      getAgentMeta(getAgentProjectionById(getAgentStoreState().activeAgentId)?.id).tags || [];
 
     const enabled = userGeneralSettingsSelectors.telemetry(getUserStoreState());
 

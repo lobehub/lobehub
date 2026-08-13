@@ -6,8 +6,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useChatStore } from '@/store/chat';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import type { MarkdownElementProps } from '../type';
 import Render from './Render';
@@ -65,26 +68,34 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 }));
 
 describe('LocalFileLink Render', () => {
+  const seedTopicWorkingDirectory = () => {
+    getProjectionStoreState().commitChatTopicsPage(
+      getCacheScope(),
+      {
+        containerKey: topicMapKey({ agentId: 'agent-1' }),
+        context: { agentId: 'agent-1' },
+        items: [{ id: 'topic-1', metadata: { workingDirectory: '/Users/me/project' } } as any],
+        page: 0,
+        pageSize: 20,
+        signature: {},
+        surface: 'sidebar',
+        total: 1,
+      },
+      { observedAt: 100, source: 'network' },
+    );
+  };
+
   afterEach(() => {
     useChatStore.setState(useChatStore.getInitialState());
+    useProjectionStore.setState({ scopes: {} });
   });
 
   it('opens local file links in the right-side local file portal', () => {
     useChatStore.setState({
       activeAgentId: 'agent-1',
       activeTopicId: 'topic-1',
-      topicDataMap: {
-        'agent_agent-1': {
-          items: [
-            {
-              id: 'topic-1',
-              metadata: { workingDirectory: '/Users/me/project' },
-            },
-          ],
-          total: 1,
-        },
-      } as any,
     });
+    seedTopicWorkingDirectory();
 
     render(
       <Render
@@ -147,18 +158,8 @@ describe('LocalFileLink Render', () => {
     useChatStore.setState({
       activeAgentId: 'agent-1',
       activeTopicId: 'topic-1',
-      topicDataMap: {
-        'agent_agent-1': {
-          items: [
-            {
-              id: 'topic-1',
-              metadata: { workingDirectory: '/Users/me/project' },
-            },
-          ],
-          total: 1,
-        },
-      } as any,
     });
+    seedTopicWorkingDirectory();
 
     render(
       <Render

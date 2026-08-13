@@ -1,12 +1,20 @@
 import { type AgentGroupDetail } from '@lobechat/types';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import type { ChatGroupItem } from '@/database/schemas/chatGroup';
 import type * as SwrModule from '@/libs/swr';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
+import {
+  chatGroupProjectionSelectors,
+  getChatGroupProjection,
+  getProjectionStoreState,
+  useProjectionStore,
+} from '@/projection';
 import { chatGroupService } from '@/services/chatGroup';
+import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
+import { withSWR } from '~test-utils';
 
 import { useAgentGroupStore } from '../store';
 
@@ -24,9 +32,15 @@ vi.mock('@/libs/swr', async (importOriginal) => {
   return {
     ...actual,
     mutate: vi.fn().mockResolvedValue(undefined),
-    useClientDataSWRWithSync: vi.fn(() => ({ data: undefined, isValidating: false })),
   };
 });
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => 'user-1:personal',
+  isAnonymousScope: () => false,
+  isScopeTrusted: () => false,
+  useCacheScope: () => 'user-1:personal',
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: vi.fn(() => null),
@@ -45,40 +59,20 @@ const createMockGroup = (overrides: Partial<AgentGroupDetail>): AgentGroupDetail
   ...overrides,
 });
 
-const createMockChatGroup = (overrides: Partial<ChatGroupItem> = {}): ChatGroupItem => ({
-  accessedAt: new Date(),
-  avatar: null,
-  backgroundColor: null,
-  clientId: null,
-  config: null,
-  content: null,
-  createdAt: new Date(),
-  description: null,
-  editorData: null,
-  groupId: null,
-  id: 'group-1',
-  marketIdentifier: null,
-  pinned: false,
-  title: 'Test Group',
-  updatedAt: new Date(),
-  userId: 'user-1',
-  visibility: 'public',
-  workspaceId: null,
-  ...overrides,
-});
-
 describe('ChatGroupCurdSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useProjectionStore.setState({ scopes: {} });
+    getProjectionStoreState().commitChatGroupDetail(
+      'user-1:personal',
+      createMockGroup({ id: 'group-1', title: 'Test Group' }),
+      { group: 'full', members: {} },
+      'network',
+    );
     // Reset store state
     act(() => {
       useAgentGroupStore.setState({
         activeGroupId: 'group-1',
-        groupMap: {
-          'group-1': createMockGroup({ id: 'group-1', title: 'Test Group' }),
-        },
-        groups: [createMockChatGroup({ id: 'group-1', title: 'Test Group' })],
-        groupsInit: true,
       });
     });
   });
@@ -128,31 +122,54 @@ describe('ChatGroupCurdSlice', () => {
   });
 
   describe('useFetchGroupDetail', () => {
+    it('syncs the active supervisor from canonical Projection data after the request settles', async () => {
+      const group = createMockGroup({ supervisorAgentId: 'supervisor-1' });
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: group,
+        memberAccess: {},
+      } as any);
+      useAgentStore.setState({ activeAgentId: undefined });
+      useChatStore.setState({ activeAgentId: undefined });
+
+      const { result } = renderHook(
+        () => {
+          const store = useAgentGroupStore();
+          const request = store.useFetchGroupDetail(true, 'group-1');
+          return { request, store };
+        },
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() =>
+        expect(result.current.request.data?.observedAt).toEqual(expect.any(Number)),
+      );
+      await waitFor(() => {
+        expect(useAgentStore.getState().activeAgentId).toBe('supervisor-1');
+        expect(useChatStore.getState().activeAgentId).toBe('supervisor-1');
+      });
+    });
+
     it('should remove stale local group data and mark not-found when detail revalidation reports not found', async () => {
       vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue(null);
 
-      const { result } = renderHook(() => useAgentGroupStore());
+      const { result } = renderHook(
+        () => {
+          const store = useAgentGroupStore();
+          const request = store.useFetchGroupDetail(true, 'group-1');
+          return { request, store };
+        },
+        { wrapper: withSWR },
+      );
 
-      act(() => {
-        result.current.useFetchGroupDetail(true, 'group-1');
-      });
-
-      const swrCall = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1);
-      const fetcher = swrCall?.[1] as (() => Promise<unknown>) | undefined;
-      const swrOptions = swrCall?.[2];
-      const onData = swrOptions?.onData as ((data: unknown) => void) | undefined;
-
-      // "Gone / no access" resolves to null (settled 404 state) instead of throwing.
-      await act(async () => {
-        await expect(fetcher?.()).resolves.toBeNull();
-      });
-      act(() => {
-        onData?.(null);
-      });
-
-      expect(result.current.groupMap['group-1']).toBeUndefined();
-      expect(result.current.groups.some((group) => group.id === 'group-1')).toBe(false);
-      expect(result.current.groupNotFoundMap['group-1']).toBe(true);
+      await waitFor(() =>
+        expect(result.current.request.data?.observedAt).toEqual(expect.any(Number)),
+      );
+      await waitFor(() =>
+        expect(
+          getChatGroupProjection(chatGroupProjectionSelectors.getGroupById('group-1')),
+        ).toBeUndefined(),
+      );
     });
   });
 
@@ -178,7 +195,6 @@ describe('ChatGroupCurdSlice', () => {
       act(() => {
         useAgentGroupStore.setState({
           activeGroupId: undefined,
-          groupMap: {},
         });
       });
 
@@ -224,7 +240,6 @@ describe('ChatGroupCurdSlice', () => {
       act(() => {
         useAgentGroupStore.setState({
           activeGroupId: undefined,
-          groupMap: {},
         });
       });
 
@@ -257,14 +272,20 @@ describe('ChatGroupCurdSlice', () => {
             resolveUpdate = () => resolve({} as any);
           }),
       );
+      getProjectionStoreState().commitChatGroupDetail(
+        'user-1:personal',
+        createMockGroup({ id: 'group-1', title: 'Group One' }),
+        { group: 'full', members: {} },
+        'network',
+      );
+      getProjectionStoreState().commitChatGroupDetail(
+        'user-1:personal',
+        createMockGroup({ id: 'group-2', title: 'Group Two' }),
+        { group: 'full', members: {} },
+        'network',
+      );
       act(() => {
-        useAgentGroupStore.setState({
-          activeGroupId: 'group-1',
-          groupMap: {
-            'group-1': createMockGroup({ id: 'group-1', title: 'Group One' }),
-            'group-2': createMockGroup({ id: 'group-2', title: 'Group Two' }),
-          },
-        });
+        useAgentGroupStore.setState({ activeGroupId: 'group-1' });
       });
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -285,8 +306,12 @@ describe('ChatGroupCurdSlice', () => {
         title: 'Group One Draft',
       });
       expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
-      expect(result.current.groupMap['group-1']?.title).toBe('Group One Draft');
-      expect(result.current.groupMap['group-2']?.title).toBe('Group Two');
+      expect(
+        getChatGroupProjection(chatGroupProjectionSelectors.getGroupById('group-1'))?.title,
+      ).toBe('Group One Draft');
+      expect(
+        getChatGroupProjection(chatGroupProjectionSelectors.getGroupById('group-2'))?.title,
+      ).toBe('Group Two');
     });
   });
 });

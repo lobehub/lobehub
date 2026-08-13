@@ -3,8 +3,7 @@ import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { isLocalSandboxEnabled, resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { getAgentProjectionById } from '@/projection';
 import { useUserStore } from '@/store/user';
 
 export interface ClientLocalSandboxDecision {
@@ -53,9 +52,8 @@ const isFenced = (agencyConfig: LobeAgentAgencyConfig | undefined): boolean =>
 export const resolveClientLocalSandbox = (agentId?: string): ClientLocalSandboxDecision => {
   if (!isDesktop || !agentId) return unfenced;
 
-  const state = useAgentStore.getState();
-  const sharedAgencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(state);
-  const agent = agentByIdSelectors.getAgentById(agentId)(state);
+  const sharedAgencyConfig = getAgentProjectionById(agentId)?.agencyConfig;
+  const agent = getAgentProjectionById(agentId);
   const override = useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId];
 
   const context = { visibility: agent?.visibility, workspaceId: agent?.workspaceId ?? undefined };

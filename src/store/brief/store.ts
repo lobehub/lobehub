@@ -8,17 +8,15 @@ import { isDev } from '@/utils/env';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
-import { type BriefStoreState, initialState } from './initialState';
 import { type BriefListAction, createBriefListSlice } from './slices/list/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
-export interface BriefStore extends BriefListAction, BriefStoreState {}
+export interface BriefStore extends BriefListAction {}
 
 const createStore: StateCreator<BriefStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<BriefStore, [['zustand/devtools', never]]>>
 ) => ({
-  ...initialState,
   ...flattenActions<BriefListAction>([createBriefListSlice(...parameters)]),
 });
 

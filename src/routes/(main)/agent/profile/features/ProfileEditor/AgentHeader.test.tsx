@@ -117,16 +117,27 @@ vi.mock('@/store/agent', async () => {
   };
 });
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId] || {},
-    getAgentConfigById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId] || {},
-    getAgentSlugById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId]?.slug,
-  },
-}));
+vi.mock('@/store/agent/projection', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const useProjectedAgent = <T,>(agentId: string, selector: (agent: Record<string, any>) => T) =>
+    useSyncExternalStore(
+      (listener) => {
+        mocks.agentStoreListeners.add(listener);
+        return () => mocks.agentStoreListeners.delete(listener);
+      },
+      () => selector(mocks.agentStoreState.agentMap[agentId] || {}),
+    );
+
+  return {
+    agentProjectionSelectors: {
+      slug: (agent: { slug?: string }) => agent.slug,
+    },
+    useAgentConfig: (agentId: string) => useProjectedAgent(agentId, (agent) => agent),
+    useAgentMeta: (agentId: string) => useProjectedAgent(agentId, (agent) => agent),
+    useAgentValue: (agentId: string, selector: (agent: Record<string, any>) => unknown) =>
+      useProjectedAgent(agentId, selector),
+  };
+});
 
 vi.mock('@/features/AgentIdentityModal', () => ({
   createAgentIdentityModal: (...args: unknown[]) => mocks.createAgentIdentityModal(...args),
@@ -147,6 +158,13 @@ vi.mock('@/store/home', () => {
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: {
     allAgents: (state: { agents: unknown[] }) => state.agents,
+  },
+}));
+
+vi.mock('@/projection/modules/home/sidebarHooks', () => ({
+  getHomeSidebarProjection: () => mocks.sidebarAgents,
+  homeSidebarSelectors: {
+    allAgents: (agents: typeof mocks.sidebarAgents) => agents,
   },
 }));
 

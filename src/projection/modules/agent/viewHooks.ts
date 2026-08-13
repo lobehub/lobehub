@@ -8,6 +8,7 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useProjectionStore } from '../../store';
 import { useProjectionViewHydration } from '../../views/hook';
 import {
+  agentAvailableViewContract,
   agentConfigViewContract,
   agentDirectoryViewContract,
   agentSearchViewContract,
@@ -17,9 +18,38 @@ import {
   selectAgentDirectory,
   selectAgentDirectoryIndex,
   selectAgentProjection,
+  selectAgentProjectionById,
+  selectAgentProjectionRecord,
   selectAgentSearch,
   selectAgentSearchIndex,
+  selectAgentSummary,
+  selectAvailableAgentsIndex,
 } from './selectors';
+
+type EqualityFn<Selected> = (left: Selected, right: Selected) => boolean;
+
+/** Reactive Agent Projection selection for product consumers. */
+export const useAgentProjection = <Selected>(
+  id: string | undefined,
+  selector: (agent: AgentProjectionView | undefined) => Selected,
+  equalityFn?: EqualityFn<Selected>,
+): Selected => {
+  useProjectionViewHydration(agentConfigViewContract, { id: id ?? '' }, Boolean(id));
+  const scope = useCacheScope();
+
+  return useProjectionStore(
+    (state) => selector(selectAgentProjectionById(state.scopes[scope], id)),
+    equalityFn,
+  );
+};
+
+/** Reactive raw record selection for loading/not-found state. */
+export const useAgentProjectionRecord = (id: string | undefined): AgentProjection | undefined => {
+  useProjectionViewHydration(agentConfigViewContract, { id: id ?? '' }, Boolean(id));
+  const scope = useCacheScope();
+
+  return useProjectionStore((state) => selectAgentProjectionRecord(state.scopes[scope], id));
+};
 
 export interface AgentProjectionState {
   data?: AgentProjectionView;
@@ -52,6 +82,34 @@ export interface AgentDirectoryProjectionState {
   data?: AgentProjectionView[];
   hasIndex: boolean;
 }
+
+export interface AvailableAgentsProjectionState {
+  data?: AgentProjectionView[];
+  hasIndex: boolean;
+}
+
+/** Reactive bounded Agent list used for runtime-context selection. */
+export const useAvailableAgentsProjectionState = (
+  enabled = true,
+): AvailableAgentsProjectionState => {
+  useProjectionViewHydration(agentAvailableViewContract, {}, enabled);
+  const scope = useCacheScope();
+
+  return useProjectionStore((state) => {
+    const projectionScope = state.scopes[scope];
+    const index = selectAvailableAgentsIndex(projectionScope);
+    return {
+      data:
+        projectionScope && index
+          ? index.refs.flatMap((ref) => {
+              const item = selectAgentSummary(projectionScope.records.agent[ref.id]);
+              return item ? [item] : [];
+            })
+          : undefined,
+      hasIndex: Boolean(index),
+    };
+  }, isEqual);
+};
 
 /** Reactive full Agent directory resolved from canonical records. */
 export const useAgentDirectoryProjectionState = (enabled = true): AgentDirectoryProjectionState => {

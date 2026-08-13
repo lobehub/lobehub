@@ -6,8 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { useUploadFiles } from '@/components/DragUploadZone';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfigStatus,
+  useAgentValue,
+} from '@/store/agent/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -41,12 +44,10 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
   // Library submenu doesn't reflect server-side toggles. Pass `agentId`
   // explicitly so AgentSelect switches refetch too.
   useInitAgentConfig(agentId);
-  // Use the "config absent from agentMap" loading shape (same as Memory /
+  // Use the "config absent from Projection" loading shape (same as Memory /
   // Search / History) instead of SWR's `isLoading`, which would flash on
   // every mount-time revalidation even when inbox data is already cached.
-  const isAgentConfigLoading = useAgentStore((s) =>
-    agentByIdSelectors.isAgentConfigLoadingById(agentId ?? '')(s),
-  );
+  const isAgentConfigLoading = useAgentConfigStatus(agentId ?? '').isLoading;
   const isMessengerBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(MESSENGER_BANNER_ID),
   );
@@ -61,10 +62,8 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
   // id while the agent id resolves; the selectors return DEFAULT_MODEL /
   // DEFAULT_PROVIDER for unknown ids.
   const resolvedAgentId = agentId ?? '';
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(resolvedAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
-  );
+  const model = useAgentValue(resolvedAgentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(resolvedAgentId, agentProjectionSelectors.provider);
   const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
 
   // Daily-generated input hint paired with the fixed Home greeting.

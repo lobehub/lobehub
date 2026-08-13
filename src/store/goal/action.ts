@@ -1,7 +1,9 @@
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
+import { taskGroupListProjectionQuery } from '@/projection/modules/task/queries';
+import { useProjectionRequest } from '@/projection/query/hook';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -60,25 +62,18 @@ export class GoalActionImpl {
   useFetchGoals = (agentId?: string, projectId?: string) => {
     const scopeId = projectId ? `project:${projectId}` : agentId;
 
-    return useClientDataSWR(
+    return useProjectionRequest(
       scopeId ? taskKeys.sidebarGroups(`${scopeId}:goals-page`) : null,
-      async () => {
-        const scope = getCacheScope();
-        const observedAt = nextProjectionObservedAt();
-        const result = await taskService.groupList({
+      taskGroupListProjectionQuery,
+      {
+        request: {
           assigneeAgentId: agentId,
           groups: [{ key: 'goals', limit: 100, statuses: GOAL_STATUSES }],
           hasGoal: true,
           parentTaskId: null,
           projectId,
-        });
-        getProjectionStoreState().commitTaskGroupList(
-          scope,
-          result.data,
-          { agentKey: `${scopeId}:goals-page`, visibility: 'all' },
-          observedAt,
-        );
-        return result;
+        },
+        signature: { agentKey: `${scopeId}:goals-page`, visibility: 'all' },
       },
       { revalidateOnFocus: true },
     );

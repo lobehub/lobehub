@@ -11,10 +11,13 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/slices/agentList/selectors';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { resolveOverlayAgentOptions, resolveOverlayDefaultAgentId } from './overlaySnapshot';
@@ -30,14 +33,12 @@ const PANEL_SHADOW_LIGHT = '0 4px 4px color-mix(in srgb, #000 4%, transparent)';
 const OverlaySnapshotPublisher = memo(() => {
   useFetchAgentList();
 
-  const allAgents = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
+  const allAgents = useHomeSidebarProjection(homeSidebarSelectors.allAgents, isEqual);
   const theme = useTheme();
   const enabledChatModels = useEnabledChatModels();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const inboxMeta = useAgentStore((s) =>
-    inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : {},
-  );
+  const inboxMeta = useAgentMeta(inboxAgentId);
   const agents = useMemo(() => allAgents.filter((item) => item.type === 'agent'), [allAgents]);
 
   const agentOptions = useMemo<ScreenCaptureAgentOption[]>(
@@ -72,11 +73,11 @@ const OverlaySnapshotPublisher = memo(() => {
     [enabledChatModels],
   );
 
-  const defaultModel = useAgentStore((s) =>
-    defaultAgentId ? agentByIdSelectors.getAgentModelById(defaultAgentId)(s) : undefined,
+  const defaultModel = useAgentValue(defaultAgentId, (agent) =>
+    defaultAgentId ? agentProjectionSelectors.model(agent) : undefined,
   );
-  const defaultProvider = useAgentStore((s) =>
-    defaultAgentId ? agentByIdSelectors.getAgentModelProviderById(defaultAgentId)(s) : undefined,
+  const defaultProvider = useAgentValue(defaultAgentId, (agent) =>
+    defaultAgentId ? agentProjectionSelectors.provider(agent) : undefined,
   );
 
   const overlayTheme = useMemo<ScreenCaptureOverlayTheme>(

@@ -10,8 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -100,7 +99,7 @@ const Controls = memo(() => {
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const isEnabled = useMemoryEnabled(agentId);
   const { allowed: canCreate } = usePermission('create_content');
-  const effort = useAgentStore((s) => chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s));
+  const effort = useAgentValue(agentId, agentProjectionSelectors.memoryEffort);
 
   const toggleOptions: ToggleOption[] = [
     {

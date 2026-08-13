@@ -2,9 +2,9 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useTaskStore } from '@/store/task';
 import { oneLineEllipsis } from '@/styles';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -25,7 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Title = memo(() => {
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const detail = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId] : undefined));
+  const detail = useTaskDetailProjection(taskId);
   const identifier = detail?.identifier ?? taskId;
   const name = detail?.name;
 

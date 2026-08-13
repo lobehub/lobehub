@@ -9,9 +9,9 @@ import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
+import { useAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useElectronStore } from '@/store/electron';
 
 import HeaderActions from './HeaderActions';
@@ -135,12 +135,9 @@ const Header = memo(() => {
     topicId,
   });
   const splitView = useElectronStore((s) => s.splitView);
-  const agentMeta = useAgentStore((s) =>
-    agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
-  );
-  const isLocalSystemEnabled = useAgentStore((s) =>
-    agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
-  );
+  const projectedAgentMeta = useAgentMeta(agentId);
+  const agentMeta = agentId ? projectedAgentMeta : undefined;
+  const isLocalSystemEnabled = useAgentRuntimeMode(agentId) === 'local';
 
   // History-backfill chip in the center slot; the hook shares one SWR key with
   // the rest of the migration UI, so this adds no extra polling.

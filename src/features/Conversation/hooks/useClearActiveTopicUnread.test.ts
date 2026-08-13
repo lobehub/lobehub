@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
@@ -14,19 +16,28 @@ const seed = (status: 'unread' | 'active', activeTopicId: string | null = TOPIC_
     activeAgentId: AGENT_ID,
     activeGroupId: undefined,
     activeTopicId: activeTopicId as any,
-    topicDataMap: {
-      [topicMapKey({ agentId: AGENT_ID })]: {
-        hasMore: false,
-        items: [{ id: TOPIC_ID, status, title: 't' } as any],
-      } as any,
-    },
   });
+  getProjectionStoreState().commitChatTopicsPage(
+    getCacheScope(),
+    {
+      containerKey: topicMapKey({ agentId: AGENT_ID }),
+      context: { agentId: AGENT_ID },
+      items: [{ id: TOPIC_ID, status, title: 't' } as any],
+      page: 0,
+      pageSize: 20,
+      signature: {},
+      surface: 'sidebar',
+      total: 1,
+    },
+    { observedAt: 100, source: 'network' },
+  );
 };
 
 describe('useClearActiveTopicUnread', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ topicDataMap: {}, activeTopicId: null as any });
+    useChatStore.setState({ activeTopicId: null as any });
+    useProjectionStore.setState({ scopes: {} });
   });
 
   it('marks the active topic read when it hydrates as unread', () => {
@@ -56,7 +67,6 @@ describe('useClearActiveTopicUnread', () => {
       activeAgentId: AGENT_ID,
       activeTopicId: TOPIC_ID as any,
       markTopicRead,
-      topicDataMap: {},
     });
 
     const { rerender } = renderHook(() => useClearActiveTopicUnread());

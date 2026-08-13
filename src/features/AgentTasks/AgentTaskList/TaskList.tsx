@@ -6,8 +6,8 @@ import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useSelectedTaskListProjection } from '@/store/task';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
@@ -31,9 +31,7 @@ import TaskItemSkeleton from './TaskItemSkeleton';
 interface TaskListProps {
   /**
    * Settled signal — truthy once the current scope's list has loaded into the
-   * store, `undefined` while unsettled. Derived from the store's
-   * `isTaskListInit` (not raw SWR `data`) so it resets in lockstep with `tasks`
-   * on a scope/visibility switch and never disagrees with the empty signal.
+   * Projection, `undefined` while unsettled.
    */
   data?: unknown;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
@@ -48,11 +46,7 @@ interface TaskListProps {
 
 const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
 
-const renderTaskRows = (
-  items: ReturnType<typeof taskListSelectors.taskList>,
-  sub?: boolean,
-  routeScope?: TaskItemRouteScope,
-) =>
+const renderTaskRows = (items: TaskListItem[], sub?: boolean, routeScope?: TaskItemRouteScope) =>
   items.map((task, index) => (
     <Fragment key={task.identifier}>
       <AgentTaskItem routeScope={routeScope} task={task} />
@@ -61,7 +55,7 @@ const renderTaskRows = (
   ));
 
 const renderTaskListBlock = (
-  items: ReturnType<typeof taskListSelectors.taskList>,
+  items: TaskListItem[],
   sub?: boolean,
   routeScope?: TaskItemRouteScope,
 ) => (
@@ -141,7 +135,8 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 const TaskList = memo<TaskListProps>((props) => {
   const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
   const { t } = useTranslation('chat');
-  const tasks = useTaskStore(taskListSelectors.taskList);
+  const projectedTaskList = useSelectedTaskListProjection();
+  const tasks = useMemo(() => projectedTaskList?.items ?? [], [projectedTaskList?.items]);
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -304,7 +299,7 @@ const TaskList = memo<TaskListProps>((props) => {
 
   // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
   // Retry block instead of the "no tasks" empty. `data` is the
-  // store-derived settled signal — see the `data` prop doc above.
+  // Projection-derived settled signal — see the `data` prop doc above.
   return (
     <AsyncBoundary
       data={data}

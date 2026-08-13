@@ -21,16 +21,8 @@ vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ allowed: true }),
 }));
 
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: { agentMap: Record<string, unknown> }) => unknown) =>
-    selector({ agentMap: testState.agent ? { 'agent-1': testState.agent } : {} }),
-}));
-
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentById: (agentId: string) => (state: { agentMap: Record<string, unknown> }) =>
-      state.agentMap[agentId],
-  },
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: () => testState.agent,
 }));
 
 describe('useAgentManagementAccess', () => {

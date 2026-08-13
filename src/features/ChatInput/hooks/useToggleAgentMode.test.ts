@@ -28,10 +28,8 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentById: () => (s: typeof testState.agent) => s.current,
-  },
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: () => testState.agent.current,
 }));
 
 vi.mock('@/store/user', () => ({

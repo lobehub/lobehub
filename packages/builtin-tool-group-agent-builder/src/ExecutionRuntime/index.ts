@@ -1,12 +1,13 @@
 import { formatAgentProfile } from '@lobechat/prompts';
 import type { BuiltinToolResult } from '@lobechat/types';
 
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import { agentService } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import type {
@@ -53,8 +54,9 @@ export class GroupAgentBuilderExecutionRuntime {
       };
     }
 
-    const state = getChatGroupStoreState();
-    const agent = agentGroupSelectors.getAgentByIdFromGroup(groupId, args.agentId)(state);
+    const agent = getChatGroupProjection(
+      chatGroupProjectionSelectors.getAgentByIdFromGroup(groupId, args.agentId),
+    );
 
     if (!agent) {
       return {
@@ -138,7 +140,7 @@ export class GroupAgentBuilderExecutionRuntime {
         title: args.title,
       });
 
-      state.internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
+      state.internal_updateGroupMaps([group]);
 
       if (args.supervisor) {
         const {
@@ -203,8 +205,7 @@ export class GroupAgentBuilderExecutionRuntime {
    */
   async createAgent(groupId: string, args: CreateAgentParams): Promise<BuiltinToolResult> {
     try {
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
       if (!group) {
         return {
@@ -237,7 +238,7 @@ export class GroupAgentBuilderExecutionRuntime {
       }
 
       // Refresh the group detail in the store
-      await state.refreshGroupDetail(groupId);
+      await getChatGroupStoreState().refreshGroupDetail(groupId);
 
       return {
         content: `Successfully created agent "${args.title}" and added it to the group.`,
@@ -262,8 +263,7 @@ export class GroupAgentBuilderExecutionRuntime {
     args: BatchCreateAgentsParams,
   ): Promise<BuiltinToolResult> {
     try {
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
       if (!group) {
         return {
@@ -289,7 +289,7 @@ export class GroupAgentBuilderExecutionRuntime {
       );
 
       // Refresh the group detail in the store
-      await state.refreshGroupDetail(groupId);
+      await getChatGroupStoreState().refreshGroupDetail(groupId);
 
       const results = createdAgents.map((agent, index) => ({
         agentId: agent.id,
@@ -318,8 +318,7 @@ export class GroupAgentBuilderExecutionRuntime {
    */
   async inviteAgent(groupId: string, args: InviteAgentParams): Promise<BuiltinToolResult> {
     try {
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
       if (!group) {
         return {
@@ -350,12 +349,14 @@ export class GroupAgentBuilderExecutionRuntime {
       const result = await chatGroupService.addAgentsToGroup(groupId, [args.agentId]);
 
       // Refresh the group detail in the store
-      await state.refreshGroupDetail(groupId);
+      await getChatGroupStoreState().refreshGroupDetail(groupId);
 
       const wasAdded = result.added.length > 0;
 
       // Get the agent info from the updated group
-      const updatedGroup = agentGroupSelectors.getGroupById(groupId)(getChatGroupStoreState());
+      const updatedGroup = getChatGroupProjection(
+        chatGroupProjectionSelectors.getGroupById(groupId),
+      );
       const addedAgent = updatedGroup?.agents?.find((a) => a.id === args.agentId);
       const agentName = addedAgent?.title;
       const agentAvatar = addedAgent?.avatar;
@@ -384,8 +385,7 @@ export class GroupAgentBuilderExecutionRuntime {
    */
   async removeAgent(groupId: string, args: RemoveAgentParams): Promise<BuiltinToolResult> {
     try {
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
       if (!group) {
         return {
@@ -434,7 +434,7 @@ export class GroupAgentBuilderExecutionRuntime {
       await chatGroupService.removeAgentsFromGroup(groupId, [args.agentId]);
 
       // Refresh the group detail in the store
-      await state.refreshGroupDetail(groupId);
+      await getChatGroupStoreState().refreshGroupDetail(groupId);
 
       return {
         content: `Successfully removed agent ${agentDisplay} from the group`,
@@ -464,8 +464,7 @@ export class GroupAgentBuilderExecutionRuntime {
       const { agentId, prompt } = args;
 
       // Get previous prompt for state
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
       const agent = group?.agents?.find((a) => a.id === agentId);
       const previousPrompt = agent?.systemRole ?? undefined;
 
@@ -473,7 +472,7 @@ export class GroupAgentBuilderExecutionRuntime {
       await useAgentStore.getState().updateAgentConfigById(agentId, { systemRole: prompt });
 
       // Refresh the group detail in the store to sync agent data
-      await state.refreshGroupDetail(groupId);
+      await getChatGroupStoreState().refreshGroupDetail(groupId);
 
       // IMPORTANT: Directly update the editor content instead of manipulating store data.
       // This bypasses the priority issue between editorData (JSON) and systemRole (markdown).
@@ -681,7 +680,7 @@ export class GroupAgentBuilderExecutionRuntime {
   private async resolveGroupTarget(groupId?: string) {
     const state = getChatGroupStoreState();
     const currentGroup = state.activeGroupId
-      ? agentGroupSelectors.getGroupById(state.activeGroupId)(state)
+      ? getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(state.activeGroupId))
       : undefined;
     const targetGroupId = groupId ?? currentGroup?.id;
 
@@ -690,7 +689,7 @@ export class GroupAgentBuilderExecutionRuntime {
     }
 
     const group =
-      agentGroupSelectors.getGroupById(targetGroupId)(state) ??
+      getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(targetGroupId)) ??
       (await chatGroupService.getGroup(targetGroupId)) ??
       undefined;
 

@@ -1,6 +1,9 @@
+import type { ChatTopic } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -18,6 +21,35 @@ const localFileTabId = ({
   filePath: string;
   workingDirectory: string;
 }) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
+
+const seedTopicWorkingDirectories = (workingDirectoriesByTopic: Record<string, string>) => {
+  const items = Object.entries(workingDirectoriesByTopic).map(
+    ([id, workingDirectory]) =>
+      ({
+        createdAt: 0,
+        id,
+        metadata: { workingDirectory },
+        title: id,
+        updatedAt: 0,
+      }) as ChatTopic,
+  );
+
+  useProjectionStore.setState({ scopes: {} });
+  getProjectionStoreState().commitChatTopicsPage(
+    getCacheScope(),
+    {
+      containerKey: topicMapKey({ agentId: 'agent-1' }),
+      context: { agentId: 'agent-1' },
+      items,
+      page: 0,
+      pageSize: 20,
+      signature: {},
+      surface: 'sidebar',
+      total: items.length,
+    },
+    { observedAt: 1, source: 'network' },
+  );
+};
 
 vi.mock('zustand/traditional');
 
@@ -493,18 +525,10 @@ describe('chatDockSlice', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
+        seedTopicWorkingDirectories({ 'topic-a': '/project-a' });
         useChatStore.setState({
           activeAgentId: 'agent-1',
           activeTopicId: 'topic-a',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'agent-1' })]: {
-              currentPage: 1,
-              hasMore: false,
-              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
-              pageSize: 20,
-              total: 1,
-            },
-          },
         } as never);
       });
 
@@ -1070,18 +1094,10 @@ describe('chatDockSlice', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
+        seedTopicWorkingDirectories({ 'topic-a': '/project-a' });
         useChatStore.setState({
           activeAgentId: 'agent-1',
           activeTopicId: 'topic-a',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'agent-1' })]: {
-              currentPage: 1,
-              hasMore: false,
-              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
-              pageSize: 20,
-              total: 1,
-            },
-          },
         } as never);
       });
 

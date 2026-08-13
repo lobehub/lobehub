@@ -5,8 +5,7 @@ import { Search } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -42,9 +41,7 @@ const ModelBuiltinSearch = memo<ModelBuiltinSearchProps>(({ disabled }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const { model, provider } = useEffectiveModel(agentId);
-  const checked = useAgentStore((s) =>
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-  );
+  const checked = useAgentValue(agentId, agentProjectionSelectors.useModelBuiltinSearch);
 
   const [isLoading, setLoading] = useState(false);
   const modelCard = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));

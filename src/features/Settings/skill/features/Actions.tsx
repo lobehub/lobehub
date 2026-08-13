@@ -8,7 +8,7 @@ import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsMo
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
@@ -36,10 +36,10 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
-    s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
-  ]);
+  const togglePlugin = useAgentStore((s) => s.togglePlugin);
+  const isPluginEnabledInAgent = useCurrentAgentValue((agent) =>
+    agentProjectionSelectors.plugins(agent).includes(identifier),
+  );
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);

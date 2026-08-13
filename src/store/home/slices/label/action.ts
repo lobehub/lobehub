@@ -10,6 +10,12 @@ import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { agentLabelKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  getHomeSidebarProjection,
+  getProjectionStoreState,
+  homeSidebarSelectors,
+} from '@/projection';
 import { agentLabelService } from '@/services/agentLabel';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
@@ -60,12 +66,10 @@ export class LabelActionImpl {
    * concurrent editor's assignment survives.
    */
   toggleAgentLabel = async (agentId: string, labelId: string, assigned: boolean): Promise<void> => {
-    const state = this.#get();
+    const sidebar = getHomeSidebarProjection();
     const current = new Set(
-      [...state.agentGroups.flatMap((g) => g.items), ...state.pinnedAgents]
-        .concat(state.ungroupedAgents, state.privatePinnedAgents, state.privateUngroupedAgents)
-        .concat(state.privateAgentGroups.flatMap((g) => g.items))
-        .find((item) => item.id === agentId && item.type === 'agent')
+      homeSidebarSelectors
+        .getAgentById(agentId)(sidebar)
         ?.labels?.map((label) => label.id) ?? [],
     );
 
@@ -91,6 +95,8 @@ export class LabelActionImpl {
    */
   #patchAgentLabels = (agentId: string, labelIds: string[]) => {
     const state = this.#get();
+    const sidebar = getHomeSidebarProjection();
+    if (!sidebar) return;
     const nextLabels: SidebarAgentLabel[] = state.agentLabels
       .filter((label) => labelIds.includes(label.id))
       .map(({ color, id, name }) => ({ color, id, name }))
@@ -103,18 +109,14 @@ export class LabelActionImpl {
     const patchGroups = (groups: SidebarGroup[]) =>
       groups.map((group) => ({ ...group, items: patchItems(group.items) }));
 
-    this.#set(
-      {
-        agentGroups: patchGroups(state.agentGroups),
-        pinnedAgents: patchItems(state.pinnedAgents),
-        privateAgentGroups: patchGroups(state.privateAgentGroups),
-        privatePinnedAgents: patchItems(state.privatePinnedAgents),
-        privateUngroupedAgents: patchItems(state.privateUngroupedAgents),
-        ungroupedAgents: patchItems(state.ungroupedAgents),
-      },
-      false,
-      n('patchAgentLabels/optimistic'),
-    );
+    getProjectionStoreState().commitHomeSidebar(getCacheScope(), {
+      groups: patchGroups(sidebar.groups),
+      pinned: patchItems(sidebar.pinned),
+      privateGroups: patchGroups(sidebar.privateGroups),
+      privatePinned: patchItems(sidebar.privatePinned),
+      privateUngrouped: patchItems(sidebar.privateUngrouped),
+      ungrouped: patchItems(sidebar.ungrouped),
+    });
   };
 
   setAgentLabels = async (agentId: string, labelIds: string[]): Promise<void> => {

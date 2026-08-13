@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   createImage: vi.fn(),
   createTopic: vi.fn(),
   enabledImageModelList: vi.fn(),
-  getAgentStoreState: vi.fn(),
+  getAgentProjectionById: vi.fn(),
   getAiProviderModelList: vi.fn(),
   getAiProviderRuntimeState: vi.fn(),
   loadDefaultHiddenBuiltinModels: vi.fn(),
@@ -38,16 +38,8 @@ vi.mock('@/services/image', () => ({
     createImage: mocks.createImage,
   },
 }));
-vi.mock('@/store/agent', () => ({
-  getAgentStoreState: mocks.getAgentStoreState,
-}));
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentById:
-      (agentId: string) =>
-      (state: { agentMap: Record<string, { visibility?: 'private' | 'public' }> }) =>
-        state.agentMap[agentId],
-  },
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: mocks.getAgentProjectionById,
 }));
 vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {
@@ -59,13 +51,9 @@ vi.mock('@/store/aiInfra', () => ({
 describe('ImageGenerationExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getAgentStoreState.mockReturnValue({
-      agentMap: {
-        'agent-public': {
-          visibility: 'public',
-        },
-      },
-    });
+    mocks.getAgentProjectionById.mockImplementation((agentId) =>
+      agentId === 'agent-public' ? { id: agentId, visibility: 'public' } : undefined,
+    );
     mocks.enabledImageModelList.mockReturnValue([
       {
         children: [{ id: 'image-model-1' }],

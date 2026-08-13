@@ -51,11 +51,12 @@ vi.mock('@/store/agent', () => ({
     selector(mocks.agentState),
 }));
 
+vi.mock('@/store/agent/projection', () => ({
+  useAgentMeta: (agentId: string) =>
+    mocks.agentState.agents[agentId as keyof typeof mocks.agentState.agents] ?? {},
+}));
+
 vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (agentId: string) => (state: typeof mocks.agentState) =>
-      state.agents[agentId as keyof typeof state.agents] ?? {},
-  },
   builtinAgentSelectors: {
     inboxAgentId: (state: typeof mocks.agentState) => state.inboxAgentId,
   },

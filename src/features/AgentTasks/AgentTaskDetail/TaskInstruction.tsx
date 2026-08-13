@@ -11,7 +11,8 @@ import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
-import { useTaskStore } from '@/store/task';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { useTaskInstructionAutosave } from './useTaskInstructionAutosave';
@@ -32,12 +33,20 @@ const INSTRUCTION_MAX_HEIGHT = 320;
 const TaskInstruction = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
-  const instruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
+  const instruction = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskInstruction,
+  );
   const instructionRevision = useTaskStore(taskDetailSelectors.activeTaskInstructionRevision);
-  const persistedEditorData = useTaskStore(taskDetailSelectors.activeTaskEditorData);
+  const persistedEditorData = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskEditorData,
+  );
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const taskWorkspaceId = useTaskStore(taskDetailSelectors.activeTaskWorkspaceId);
-  const persistedFiles = useTaskStore(taskDetailSelectors.activeTaskFiles);
+  const taskWorkspaceId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskWorkspaceId,
+  );
+  const persistedFiles = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskFiles,
+  );
   const updateTask = useTaskStore((s) => s.updateTask);
   const editor = useEditor();
 

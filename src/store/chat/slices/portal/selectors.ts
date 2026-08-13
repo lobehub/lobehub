@@ -1,9 +1,9 @@
 import { ARTIFACT_TAG_CLOSED_REGEX, ARTIFACT_TAG_REGEX } from '@/const/plugin';
 import { type ChatStoreState } from '@/store/chat';
+import { getChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
-import { topicSelectors } from '../topic/selectors';
 import {
   createLocalFileScopeKey,
   createSandboxLocalFileScopeKey,
@@ -154,7 +154,7 @@ const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
 
 // Local File selectors
 const currentLocalFileScopeWorkingDirectory = (s: ChatStoreState): string | undefined =>
-  s.topicDataMap ? topicSelectors.currentTopicWorkingDirectory(s) : undefined;
+  getChatTopicWorkingDirectory(s.activeTopicId ?? null);
 
 const currentLocalFileScopeKey = (s: ChatStoreState): string | undefined => {
   const workingDirectory = currentLocalFileScopeWorkingDirectory(s);

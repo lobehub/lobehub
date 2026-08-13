@@ -35,9 +35,12 @@ vi.mock('@/features/ResourcePermission/useResourcePermission', () => ({
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
     selector({
-      agentMap: mocks.agentMap,
       updateAgentConfigById: mocks.updateAgentConfigById,
     }),
+}));
+
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: (agentId: string) => mocks.agentMap[agentId],
 }));
 
 const workspaceAgent = (overrides: Record<string, unknown> = {}) => ({

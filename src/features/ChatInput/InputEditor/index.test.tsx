@@ -76,16 +76,19 @@ const getEditorStyle = async () => {
   return props!.style;
 };
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   isDesktop: false,
   TRACING_SCENARIOS: { InputCompletion: 'input_completion' },
 }));
-vi.mock('@lobechat/const/hotkeys', () => ({
+vi.mock('@lobechat/const/hotkeys', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HotkeyEnum: { AddUserMessage: 'add-user-message' },
   KeyEnum: { Alt: 'alt', Enter: 'enter' },
 }));
 vi.mock('@lobechat/heterogeneous-agents', () => ({ HETEROGENEOUS_TYPE_LABELS: {} }));
-vi.mock('@lobechat/prompts', () => ({
+vi.mock('@lobechat/prompts', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   chainInputCompletion: mocks.chainInputCompletion,
   escapeXmlAttr: (value: string) => value,
   INPUT_COMPLETION_PROMPT_VERSION: 'v1',
@@ -125,7 +128,10 @@ vi.mock('fuse.js', () => ({
     }
   },
 }));
-vi.mock('lexical', () => ({ KEY_ESCAPE_COMMAND: 'escape' }));
+vi.mock('lexical', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  KEY_ESCAPE_COMMAND: 'escape',
+}));
 vi.mock('react-hotkeys-hook', () => ({
   useHotkeysContext: () => ({
     disableScope: vi.fn(),
@@ -162,6 +168,9 @@ vi.mock('@/store/chat', () => ({
     getState: () => ({ activeTopicId: undefined }),
   }),
 }));
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useActiveChatTopicModel: () => undefined,
+}));
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: <T,>(selector: StoreSelector<T>) =>
     selector({ isMobile: platform.isMobile }),
@@ -175,12 +184,12 @@ vi.mock('../hooks/useChatInputResourceAccess', () => ({
 vi.mock('@/store/agent', () => ({
   useAgentStore: <T,>(selector: StoreSelector<T>) => selector({}),
 }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => () => undefined,
-    getAgentModelById: () => () => undefined,
-    getAgentModelProviderById: () => () => undefined,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    model: () => undefined,
+    provider: () => undefined,
   },
+  useAgentValue: () => undefined,
 }));
 vi.mock('@/store/user', () => {
   const useUserStore = Object.assign(<T,>(selector: StoreSelector<T>) => selector({}), {

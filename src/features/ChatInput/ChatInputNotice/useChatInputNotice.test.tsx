@@ -18,8 +18,7 @@ interface TestProviderWithModels {
 const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as
-      | { executionTarget?: string; heterogeneousProvider?: { type: string } }
-      | undefined,
+      { executionTarget?: string; heterogeneousProvider?: { type: string } } | undefined,
     isConfigLoading: false,
     model: 'gpt-4o',
     provider: 'openai',
@@ -82,12 +81,14 @@ vi.mock('@/store/agent', () => ({
     selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    isAgentConfigLoadingById: () => (s: typeof testState.agent) => s.isConfigLoading,
-    isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
-      Boolean(s.agencyConfig?.heterogeneousProvider),
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    heterogeneous: (agent: typeof testState.agent) =>
+      Boolean(agent.agencyConfig?.heterogeneousProvider),
   },
+  useAgentConfigStatus: () => ({ isLoading: testState.agent.isConfigLoading }),
+  useAgentValue: <T,>(_agentId: string, selector: (agent: typeof testState.agent) => T) =>
+    selector(testState.agent),
 }));
 
 vi.mock('@/store/aiInfra', () => ({

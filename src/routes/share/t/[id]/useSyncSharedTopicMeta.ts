@@ -1,22 +1,24 @@
 import { type AgentGroupDetail, type AgentGroupMember } from '@lobechat/types';
 import { useEffect } from 'react';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { type SharedTopicData } from '@/types/topic';
 
 export const useSyncSharedTopicMeta = (data: SharedTopicData | undefined) => {
-  const dispatchAgentMap = useAgentStore((s) => s.internal_dispatchAgentMap);
+  const dispatchAgentProjection = useAgentStore((s) => s.internal_dispatchAgentProjection);
 
   useEffect(() => {
     if (data?.agentId && data.agentMeta) {
-      dispatchAgentMap(data.agentId, {
+      dispatchAgentProjection(data.agentId, {
         avatar: data.agentMeta.avatar ?? undefined,
         backgroundColor: data.agentMeta.backgroundColor ?? undefined,
         title: data.agentMeta.title ?? undefined,
       });
     }
-  }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
+  }, [data?.agentId, data?.agentMeta, dispatchAgentProjection]);
 
   useEffect(() => {
     if (!data?.groupId || !data.groupMeta) return;
@@ -24,7 +26,7 @@ export const useSyncSharedTopicMeta = (data: SharedTopicData | undefined) => {
     const members = data.groupMeta.members || [];
 
     for (const member of members) {
-      dispatchAgentMap(member.id, {
+      dispatchAgentProjection(member.id, {
         avatar: member.avatar ?? undefined,
         backgroundColor: member.backgroundColor ?? undefined,
         title: member.title ?? undefined,
@@ -48,16 +50,15 @@ export const useSyncSharedTopicMeta = (data: SharedTopicData | undefined) => {
       userId: data.groupMeta.userId || '',
     };
 
-    useAgentGroupStore.setState(
-      (state) => ({
-        activeGroupId: data.groupId!,
-        groupMap: {
-          ...state.groupMap,
-          [data.groupId!]: groupDetail,
-        },
-      }),
-      false,
-      'syncSharedGroupMeta',
+    getProjectionStoreState().commitChatGroupDetail(
+      getCacheScope(),
+      groupDetail,
+      {
+        group: 'profile',
+        members: Object.fromEntries(members.map((member) => [member.id, 'profile'])),
+      },
+      'network',
     );
-  }, [data?.groupId, data?.groupMeta, dispatchAgentMap]);
+    useAgentGroupStore.setState({ activeGroupId: data.groupId }, false, 'syncSharedGroupMeta');
+  }, [data?.groupId, data?.groupMeta, dispatchAgentProjection]);
 };

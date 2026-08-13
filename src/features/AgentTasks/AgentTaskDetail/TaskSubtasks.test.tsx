@@ -125,9 +125,12 @@ vi.mock('@/services/task', () => ({
 }));
 
 vi.mock('@/store/task', () => ({
+  useActiveTaskDetailProjection: (selector: (detail: unknown) => unknown) =>
+    selector(mocks.taskState.taskDetailMap[mocks.taskState.activeTaskId]),
   useTaskStore: (selector: any) =>
     selector({
       ...mocks.taskState,
+      taskDetailMap: undefined,
       runReadySubtasks: mocks.runReadySubtasks,
     }),
 }));

@@ -5,8 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -17,8 +16,9 @@ import { useHeteroProviderPatch } from './useHeteroProviderPatch';
 
 const HeteroModel = memo(() => {
   const agentId = useAgentId();
-  const provider = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
+  const provider = useAgentValue(
+    agentId,
+    (agent) => agent?.agencyConfig?.heterogeneousProvider,
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');

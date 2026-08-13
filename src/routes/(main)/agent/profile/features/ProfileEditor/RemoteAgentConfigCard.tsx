@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -257,16 +258,11 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
     const { t } = useTranslation('setting');
 
     const agentId = useAgentStore((s) => s.activeAgentId);
-    const boundDeviceId = useAgentStore((s) =>
-      agentId ? s.agentMap[agentId]?.agencyConfig?.boundDeviceId : undefined,
-    );
+    const boundDeviceId = useAgentValue(agentId, (agent) => agent?.agencyConfig?.boundDeviceId);
     // Workspace-scoped agents are reachable by every workspace member, but a
     // personal device is only reachable by its owner. Hide personal devices
     // from the picker so workspace agents can only bind workspace devices.
-    const agentWorkspaceId = useAgentStore((s) =>
-      agentId ? s.agentMap[agentId]?.workspaceId : undefined,
-    );
-    const isWorkspaceAgent = Boolean(agentWorkspaceId);
+    const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
 
     const [capabilityResult, setCapabilityResult] = useState<
       { available: boolean; reason?: string; version?: string } | undefined

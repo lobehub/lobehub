@@ -6,8 +6,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 
 import { useCommandMenuContext } from '../CommandMenuContext';
 import { styles } from '../styles';
@@ -31,9 +30,8 @@ const CommandInput = memo(() => {
     activeAgentId,
   } = useCommandMenuContext();
 
-  const activeAgentMeta = useAgentStore((s) =>
-    activeAgentId ? agentSelectors.getAgentMetaById(activeAgentId)(s) : undefined,
-  );
+  const projectedActiveAgentMeta = useAgentMeta(activeAgentId);
+  const activeAgentMeta = activeAgentId ? projectedActiveAgentMeta : undefined;
 
   const hasPages = pages.length > 0;
   const hasSelectedAgent = !!selectedAgent;

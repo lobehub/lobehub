@@ -22,6 +22,7 @@ import {
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
+import { useAgentData } from '@/store/agent/projection';
 
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
@@ -165,7 +166,7 @@ interface WorkspaceAgentDevicePolicyProps {
 const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
   ({ agentId, showDevicePicker = true }) => {
     const { t } = useTranslation(['setting', 'chat']);
-    const config = useAgentStore((s) => s.agentMap[agentId]);
+    const config = useAgentData(agentId);
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     const { data: devices, error, isLoading, mutate } = useDeviceList();

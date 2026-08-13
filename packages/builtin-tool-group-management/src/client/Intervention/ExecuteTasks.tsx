@@ -19,8 +19,8 @@ import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams, TaskItem } from '../../types';
 
@@ -79,10 +79,10 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
   const theme = useTheme();
 
   // Get agent info from store
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const agent = useAgentGroupStore((s) =>
+  const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+  const agent = useChatGroupProjection((scope) =>
     task.agentId && activeGroupId
-      ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, task.agentId)(s)
+      ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, task.agentId)(scope)
       : undefined,
   );
 

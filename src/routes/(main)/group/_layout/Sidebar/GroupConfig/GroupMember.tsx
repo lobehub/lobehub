@@ -15,8 +15,8 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -58,7 +58,9 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const removeAgentFromGroup = useAgentGroupStore((s) => s.removeAgentFromGroup);
 
-  const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
+  const groupMembers = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMembers(groupId || ''),
+  );
 
   const activeTab = useMemo(
     () => new URLSearchParams(location.search).get('tab'),

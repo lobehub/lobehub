@@ -7,9 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentTopics } from '@/hooks/useFetchAgentTopics';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useChatTopicsByAgentId } from '@/store/chat/slices/topic/projection';
 
 const styles = createStaticStyles(({ css }) => ({
   // The tag is a flex item of the header's left slot: without these it keeps its
@@ -34,11 +35,11 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the group agent builder
-  useChatStore((s) => s.useFetchTopics)(true, { agentId });
+  useFetchAgentTopics({ agentId });
 
   // Use activeTopicId from chatStore (synced from URL query 'bt' via ProfileHydration)
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const topics = useChatStore((s) => topicSelectors.getTopicsByAgentId(agentId)(s));
+  const topics = useChatTopicsByAgentId(agentId)?.items;
 
   // Directly update URL query 'bt' to switch topic in profile page
   const [, setBuilderTopicId] = useQueryState('bt');
@@ -71,7 +72,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
         },
         type: 'checkbox',
       })),
-    [topics, handleSwitchTopic, activeTopicId],
+    [activeTopicId, disabled, handleSwitchTopic, topics],
   );
   const isEmpty = !topics || topics.length === 0;
 

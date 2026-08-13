@@ -42,14 +42,24 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentById: () => (s: typeof testState.agent) => s.agent,
-    getAgentEnableModeById: () => (s: typeof testState.agent) => s.enableAgentMode,
-    getAgentModelById: () => (s: typeof testState.agent) => s.model,
-    getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
-  },
-}));
+vi.mock('@/store/agent/projection', () => {
+  const getAgent = () => ({
+    ...testState.agent.agent,
+    chatConfig: { enableAgentMode: testState.agent.enableAgentMode },
+    id: 'agent-1',
+    model: testState.agent.model,
+    provider: testState.agent.provider,
+  });
+  return {
+    agentProjectionSelectors: {
+      enableMode: (agent: ReturnType<typeof getAgent>) =>
+        agent.chatConfig.enableAgentMode !== false,
+      model: (agent: ReturnType<typeof getAgent>) => agent.model,
+      provider: (agent: ReturnType<typeof getAgent>) => agent.provider,
+    },
+    useAgentData: () => getAgent(),
+  };
+});
 
 vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {

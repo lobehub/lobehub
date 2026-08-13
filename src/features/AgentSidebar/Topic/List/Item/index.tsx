@@ -30,7 +30,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -180,10 +180,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
-    const [activeAgentId, isSharedAgent] = useAgentStore((s) => [
-      s.activeAgentId,
-      agentSelectors.currentAgentVisibility(s) === 'public',
-    ]);
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const isSharedAgent = useCurrentAgentValue(agentProjectionSelectors.visibility) === 'public';
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // Creator of the topic — resolves only inside an active workspace; drives
     // the identity-first icon layout below.

@@ -2,7 +2,8 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { useAgentGroupStore } from '@/store/agentGroup';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useChatStore } from '@/store/chat/store';
 
 // Keep zustand mock as it's needed globally
@@ -22,6 +23,7 @@ const TEST_IDS = {
 // Helper to reset test environment
 const resetTestEnvironment = () => {
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useChatStore.setState(
     {
       activeAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
@@ -33,6 +35,33 @@ const resetTestEnvironment = () => {
       messageOperationMap: {},
     },
     false,
+  );
+};
+
+const seedGroup = (id: string, supervisorAgentId: string) => {
+  getProjectionStoreState().commitChatGroupDetail(
+    getCacheScope(),
+    {
+      agents: [
+        {
+          chatConfig: {},
+          id: supervisorAgentId,
+          isSupervisor: true,
+          model: 'test-model',
+          params: {},
+          provider: 'test-provider',
+          systemRole: '',
+          title: 'Supervisor',
+          tts: {},
+        },
+      ],
+      config: {},
+      id,
+      supervisorAgentId,
+      title: 'Test Group',
+    } as any,
+    { group: 'full', members: { [supervisorAgentId]: 'full' } },
+    'mutation',
   );
 };
 
@@ -247,26 +276,14 @@ describe('groupOrchestration actions', () => {
 
   describe('#resolveGroupId fallback (chat store has no active group)', () => {
     afterEach(() => {
-      useAgentGroupStore.setState({ activeGroupId: undefined, groupMap: {} }, false);
+      useProjectionStore.setState({ scopes: {} });
     });
 
     it('resolves the group from this run’s supervisor', async () => {
       // Chat store active group is cleared (e.g. left the group route in a popup)…
       useChatStore.setState({ activeGroupId: undefined }, false);
-      // …but the group is still known via its supervisor.
-      useAgentGroupStore.setState(
-        {
-          activeGroupId: undefined,
-          groupMap: {
-            [TEST_IDS.GROUP_ID]: {
-              agents: [],
-              id: TEST_IDS.GROUP_ID,
-              supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-            } as any,
-          },
-        },
-        false,
-      );
+      // …but the canonical Projection still knows the group via its supervisor.
+      seedGroup(TEST_IDS.GROUP_ID, TEST_IDS.SUPERVISOR_AGENT_ID);
 
       const { result } = renderHook(() => useChatStore());
       const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
@@ -292,21 +309,9 @@ describe('groupOrchestration actions', () => {
 
     it('skips instead of running against a stale popup group from a different supervisor', async () => {
       useChatStore.setState({ activeGroupId: undefined }, false);
-      // A stale popup group lingers in the agentGroup store, but it is NOT this
+      // A stale popup group remains projected, but it is NOT this
       // run’s supervisor — the trigger must skip, not run against it.
-      useAgentGroupStore.setState(
-        {
-          activeGroupId: 'stale-popup-group',
-          groupMap: {
-            'stale-popup-group': {
-              agents: [],
-              id: 'stale-popup-group',
-              supervisorAgentId: 'some-other-supervisor',
-            } as any,
-          },
-        },
-        false,
-      );
+      seedGroup('stale-popup-group', 'some-other-supervisor');
 
       const { result } = renderHook(() => useChatStore());
       const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });

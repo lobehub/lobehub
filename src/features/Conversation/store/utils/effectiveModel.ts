@@ -7,10 +7,9 @@ import type {
 } from '@lobechat/types';
 import { resolveAgentModelConfig } from '@lobechat/types';
 
-import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { getAgentProjectionById } from '@/projection';
+import { agentProjectionSelectors, useAgentData } from '@/store/agent/projection';
+import { getChatTopicById, useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors, workspaceUserSettingsSelectors } from '@/store/user/selectors';
 import type { ChatTopic } from '@/types/topic';
@@ -32,20 +31,6 @@ interface EffectiveConversationModelSources {
   sharedConfig?: LobeAgentConfig;
   topic?: Pick<ChatTopic, 'model' | 'provider'>;
 }
-
-const getConversationTopic = (
-  context: EffectiveConversationModelContext,
-  topicDataMap: ReturnType<typeof useChatStore.getState>['topicDataMap'],
-) => {
-  const topicListAgentId =
-    context.groupId && context.scope === 'group' ? undefined : context.agentId;
-
-  return context.topicId
-    ? topicDataMap?.[
-        topicMapKey({ agentId: topicListAgentId, groupId: context.groupId })
-      ]?.items.find((item) => item.id === context.topicId)
-    : undefined;
-};
 
 const resolveEffectiveConversationModelConfig = (
   modelAgentId: string | undefined,
@@ -97,14 +82,10 @@ const resolveEffectiveConversationModelConfig = (
 export const getEffectiveConversationModelConfig = (
   context: EffectiveConversationModelContext,
 ): EffectiveConversationModelConfig => {
-  // Guard on topicDataMap: this runs inside UI actions whose tests build
-  // partially-mocked chat stores, and a capability guard must never throw.
-  const chatState = useChatStore.getState();
-  const topic = getConversationTopic(context, chatState.topicDataMap);
+  const topic = getChatTopicById(context.topicId ?? undefined);
   const modelAgentId = context.subAgentId ?? context.agentId;
-  const agentState = getAgentStoreState();
-  const sharedConfig = agentSelectors.getAgentConfigById(modelAgentId)(agentState);
-  const agent = agentByIdSelectors.getAgentById(modelAgentId)(agentState);
+  const agent = getAgentProjectionById(modelAgentId);
+  const sharedConfig = agentProjectionSelectors.config(agent);
   const userState = useUserStore.getState();
   const currentUserId = userProfileSelectors.userId(userState);
   const memberOverride =
@@ -123,12 +104,10 @@ export const getEffectiveConversationModelConfig = (
 export const useEffectiveConversationModelConfig = (
   context: EffectiveConversationModelContext,
 ): EffectiveConversationModelConfig => {
-  const topic = useChatStore((state) => getConversationTopic(context, state.topicDataMap));
+  const topic = useChatTopicById(context.topicId ?? undefined);
   const modelAgentId = context.subAgentId ?? context.agentId;
-  const [agent, sharedConfig] = useAgentStore((state) => [
-    agentByIdSelectors.getAgentById(modelAgentId)(state),
-    agentSelectors.getAgentConfigById(modelAgentId)(state),
-  ]);
+  const agent = useAgentData(modelAgentId);
+  const sharedConfig = agentProjectionSelectors.config(agent);
   const [currentUserId, memberOverride] = useUserStore((state) => [
     userProfileSelectors.userId(state),
     workspaceUserSettingsSelectors.agentModelOverrideById(modelAgentId)(state),

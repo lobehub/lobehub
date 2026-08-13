@@ -17,7 +17,8 @@ import { useTranslation } from 'react-i18next';
 
 import { openDocumentModal } from '@/features/DocumentModal/loader';
 import Time from '@/features/Home/components/Time';
-import { useTaskStore } from '@/store/task';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
@@ -113,7 +114,9 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
 
 const TaskArtifacts = memo(() => {
   const { t } = useTranslation('chat');
-  const workspace = useTaskStore(taskDetailSelectors.activeTaskWorkspace);
+  const workspace = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskWorkspace,
+  );
   const [isExpanded, setIsExpanded] = useState(true);
 
   const items = useMemo(

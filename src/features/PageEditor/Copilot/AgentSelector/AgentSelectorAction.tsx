@@ -10,9 +10,12 @@ import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useAgentData } from '@/store/agent/projection';
 
 import AgentItem from './AgentItem';
 
@@ -44,10 +47,10 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
   const [open, setOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
-  const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  const agents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
+  const isAgentListInit = useHomeSidebarProjection(homeSidebarSelectors.isAgentListInit);
   const pageAgentId = useAgentStore((s) => s.builtinAgentIdMap['page-agent']);
-  const pageAgentData = useAgentStore((s) => s.agentMap[pageAgentId || '']);
+  const pageAgentData = useAgentData(pageAgentId);
 
   useFetchAgentList();
 

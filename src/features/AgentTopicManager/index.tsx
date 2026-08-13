@@ -11,8 +11,11 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import { useFetchAgentTopics } from '@/hooks/useFetchAgentTopics';
+import { useChatTopicSearchProjection } from '@/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopics } from '@/store/chat/slices/topic/projection';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { shinyTextStyles } from '@/styles/loading';
 import type { ChatTopic } from '@/types/topic';
 
@@ -33,7 +36,7 @@ import {
 } from './utils';
 
 // Start small so users see infinite scroll kick in; each scroll-to-bottom
-// triggers `loadMoreTopics` which appends another page into `topicDataMap`.
+// extends the management-page Projection index with another page.
 const PAGE_SIZE = 30;
 
 const AgentTopicManager = memo(() => {
@@ -43,16 +46,16 @@ const AgentTopicManager = memo(() => {
   // `withDetails` fetch doesn't share a bucket with the sidebar's cheap
   // fetch (the shared bucket let whichever response landed last clobber the
   // other).
-  const useFetchAgentTopicsView = useChatStore((s) => s.useFetchAgentTopicsView);
-  const useSearchTopics = useChatStore((s) => s.useSearchTopics);
   const loadMoreAgentTopicsView = useChatStore((s) => s.loadMoreAgentTopicsView);
-
-  // Read directly from the view's topic map so `loadMore` appends are visible
-  // here without waiting for SWR revalidation.
-  const allTopics = useChatStore(topicSelectors.agentTopicsViewTopics);
-  const hasMore = useChatStore(topicSelectors.agentTopicsViewHasMore);
-  const isLoadingMore = useChatStore(topicSelectors.agentTopicsViewIsLoadingMore);
-  const loadMoreError = useChatStore(topicSelectors.agentTopicsViewLoadMoreError);
+  const containerKey = activeAgentId ? topicMapKey({ agentId: activeAgentId }) : undefined;
+  const topicView = useChatTopics(containerKey, 'agentView');
+  const requestState = useChatStore((state) =>
+    containerKey ? state.agentTopicsLoadMoreStateMap[containerKey] : undefined,
+  );
+  const allTopics = topicView?.items;
+  const hasMore = topicView?.hasMore ?? false;
+  const isLoadingMore = requestState?.isLoadingMore ?? false;
+  const loadMoreError = requestState?.loadMoreError;
 
   const reset = useTopicsViewStore((s) => s.reset);
   const search = useTopicsViewStore((s) => s.search);
@@ -79,9 +82,11 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
-  const { error, isLoading, mutate } = useFetchAgentTopicsView(true, {
+  const { error, isLoading, mutate } = useFetchAgentTopics({
     agentId: activeAgentId,
+    enabled: true,
     pageSize: PAGE_SIZE,
+    surface: 'agentView',
     // Opt into the heavier card-detail columns (firstUserMessage,
     // messageCount, cost, tokenUsage, description, trigger). Sidebar paths
     // omit this so their query stays cheap.
@@ -89,7 +94,7 @@ const AgentTopicManager = memo(() => {
   });
 
   const trimmedSearch = search.trim();
-  const { data: searchResults } = useSearchTopics(
+  const { data: searchResults } = useChatTopicSearchProjection(
     trimmedSearch.length > 0 ? trimmedSearch : undefined,
     { agentId: activeAgentId },
   );

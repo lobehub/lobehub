@@ -60,18 +60,14 @@ vi.mock('@/features/ChatInput/hooks/useUpdateAgentConfig', () => ({
   useUpdateAgentConfig: () => ({ updateAgentChatConfig: testState.updateAgentChatConfig }),
 }));
 
-vi.mock('@/store/agent', () => ({
-  useAgentStore: <T,>(selector: (state: TestAgentState) => T) => selector(testState.agentState),
-}));
-
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentModelById: () => (state: TestAgentState) => state.model,
-    getAgentModelProviderById: () => (state: TestAgentState) => state.provider,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    chatConfig: (agent: TestAgentState) => agent.config,
+    model: (agent: TestAgentState) => agent.model,
+    provider: (agent: TestAgentState) => agent.provider,
   },
-  chatConfigByIdSelectors: {
-    getChatConfigById: () => (state: TestAgentState) => state.config,
-  },
+  useAgentValue: <T,>(_agentId: string, selector: (agent: TestAgentState) => T) =>
+    selector(testState.agentState),
 }));
 
 vi.mock('@/store/aiInfra', () => ({

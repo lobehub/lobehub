@@ -4,8 +4,9 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
 } from '@lobechat/const';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import type { ChatStore } from '@/store/chat/store';
 
 import {
@@ -14,14 +15,14 @@ import {
   resolveNotificationNavigatePath,
   resolveNotificationTitle,
 } from './desktopNotification';
-import { topicMapKey } from './topicMapKey';
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (agentId: string) => () =>
-      agentId === 'agent-named' ? { title: 'My Agent' } : undefined,
-  },
+const SCOPE = 'user-1:personal';
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => SCOPE,
+  isAnonymousScope: () => false,
+  isScopeTrusted: () => true,
+  useCacheScope: () => SCOPE,
 }));
 
 const FALLBACK = 'fallback';
@@ -88,35 +89,43 @@ describe('resolveNotificationNavigatePath', () => {
 });
 
 describe('resolveNotificationTitle', () => {
-  const makeGet =
-    (topicDataMap: unknown): (() => ChatStore) =>
-    () =>
-      ({ topicDataMap }) as unknown as ChatStore;
+  const get = () => ({}) as ChatStore;
+
+  beforeEach(() => {
+    useProjectionStore.setState({ scopes: {} });
+    getProjectionStoreState().commitAgentConfig(
+      SCOPE,
+      { id: 'agent-named', title: 'My Agent' },
+      'full',
+      'network',
+    );
+  });
 
   it('prefers the topic title', () => {
-    const key = topicMapKey({ agentId: 'agent-named' });
-    const get = makeGet({ [key]: { items: [{ id: 't1', title: 'My Topic' }] } });
+    getProjectionStoreState().commitChatTopicRecords(
+      SCOPE,
+      [{ createdAt: 0, id: 't1', title: 'My Topic', updatedAt: 0 } as any],
+      { observedAt: 1, source: 'network' },
+      { agentId: 'agent-named' },
+    );
     expect(resolveNotificationTitle(get, { agentId: 'agent-named', topicId: 't1' }, FALLBACK)).toBe(
       'My Topic',
     );
   });
 
   it('falls back to the agent name when the topic has no title', () => {
-    const get = makeGet({});
     expect(resolveNotificationTitle(get, { agentId: 'agent-named', topicId: 't1' }, FALLBACK)).toBe(
       'My Agent',
     );
   });
 
-  it('does not crash when the topic store slice is missing', () => {
-    const get = makeGet(undefined);
+  it('does not depend on a legacy topic store slice', () => {
     expect(resolveNotificationTitle(get, { agentId: 'agent-named', topicId: 't1' }, FALLBACK)).toBe(
       'My Agent',
     );
   });
 
   it('uses the caller fallback when neither topic nor agent name resolves', () => {
-    const get = makeGet({});
     expect(resolveNotificationTitle(get, { agentId: 'unknown-agent' }, FALLBACK)).toBe(FALLBACK);
   });
 });

@@ -1,14 +1,12 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 import { exportFile } from '@/utils/client';
 
 import { styles } from '../style';
@@ -23,7 +21,7 @@ const ShareText = memo<ShareTextProps>(({ item }) => {
   const { t } = useTranslation(['chat', 'common']);
 
   const messages = [item];
-  const topic = useChatStore(topicSelectors.currentActiveTopic, isEqual);
+  const topic = useCurrentChatTopic();
 
   const title = topic?.title || t('shareModal.exportTitle');
   const content = generateMarkdown({

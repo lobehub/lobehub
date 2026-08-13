@@ -24,8 +24,7 @@ import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { aiChatService } from '@/services/aiChat';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -143,8 +142,9 @@ const InputEditor = memo<{
 
   // Get agent's model info for vision support check and handle paste upload
   const { model, provider } = useEffectiveModel(agentId);
-  const heterogeneousType = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  const heterogeneousType = useAgentValue(
+    agentId,
+    (agent) => agent?.agencyConfig?.heterogeneousProvider?.type,
   );
 
   const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();

@@ -7,16 +7,16 @@ import { useParams } from 'react-router';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { AgentSettings as Settings, SettingsModalLayout } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
 const Content = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { gid } = useParams<{ gid: string }>();
-  const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
+  const groupId = useAgentGroupStore((s) => s.activeGroupId);
+  const currentGroup = useChatGroupProjection(chatGroupProjectionSelectors.getGroupById(gid ?? ''));
 
   const updateGroupConfig = async (config: any) => {
     if (!canEdit) return;

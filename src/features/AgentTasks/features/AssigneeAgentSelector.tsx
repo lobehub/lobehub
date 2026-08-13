@@ -12,10 +12,13 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 interface AssigneeAgentSelectorProps {
@@ -81,22 +84,27 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const listRef = useRef<HTMLDivElement>(null);
 
     const updateTask = useTaskStore((s) => s.updateTask);
-    const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-    const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-    const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-    const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-    const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-    const privateUngroupedAgents = useHomeStore(
-      homeAgentListSelectors.privateUngroupedAgents,
+    const pinnedAgents = useHomeSidebarProjection(homeSidebarSelectors.pinnedAgents, isEqual);
+    const agentGroups = useHomeSidebarProjection(homeSidebarSelectors.agentGroups, isEqual);
+    const ungroupedAgents = useHomeSidebarProjection(homeSidebarSelectors.ungroupedAgents, isEqual);
+    const privateAgentGroups = useHomeSidebarProjection(
+      homeSidebarSelectors.privateAgentGroups,
       isEqual,
     );
-    const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
-    const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+    const privatePinnedAgents = useHomeSidebarProjection(
+      homeSidebarSelectors.privatePinnedAgents,
+      isEqual,
+    );
+    const privateUngroupedAgents = useHomeSidebarProjection(
+      homeSidebarSelectors.privateUngroupedAgents,
+      isEqual,
+    );
+    const hasPrivateAgents = useHomeSidebarProjection(homeSidebarSelectors.hasPrivateAgents);
+    const isAgentListInit = useHomeSidebarProjection(homeSidebarSelectors.isAgentListInit);
 
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-    const inboxMeta = useAgentStore((s) =>
-      inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
-    );
+    const projectedInboxMeta = useAgentMeta(inboxAgentId);
+    const inboxMeta = inboxAgentId ? projectedInboxMeta : undefined;
 
     useFetchAgentList();
 

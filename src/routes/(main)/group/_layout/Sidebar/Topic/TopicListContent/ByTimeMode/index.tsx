@@ -1,16 +1,19 @@
 'use client';
 
 import { Accordion, Flexbox } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  useCurrentChatTopics,
+  useGroupedChatTopicsForSidebar,
+} from '@/store/chat/slices/topic/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -25,24 +28,17 @@ const ByTimeMode = memo(() => {
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
 
-  const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
-    topicSelectors.hasMoreTopicsForSidebar(s),
-    topicSelectors.isExpandingPageSize(s),
-    s.openAllTopicsDrawer,
-  ]);
+  const openAllTopicsDrawer = useChatStore((state) => state.openAllTopicsDrawer);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
-
-  const groupSelector = useMemo(
-    () =>
-      topicSelectors.groupedTopicsForSidebar(
-        topicPageSize,
-        topicSortBy,
-        topicGroupMode,
-        topicIncludeCompleted,
-      ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+  const topicView = useCurrentChatTopics();
+  const hasMore = Boolean(topicView?.hasMore || (topicView?.total ?? 0) > topicPageSize);
+  const { isExpandingPageSize } = useFetchChatTopics();
+  const groupTopics = useGroupedChatTopicsForSidebar(
+    topicPageSize,
+    topicSortBy,
+    topicGroupMode,
+    topicIncludeCompleted,
   );
-  const groupTopics = useChatStore(groupSelector, isEqual);
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);

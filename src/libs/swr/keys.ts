@@ -134,12 +134,16 @@ export const topicKeys = {
     'topic:scheduledRunWatch',
     topicId,
   ]),
-  search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
+  search: def(
     'topic:search',
-    keywords,
-    agentId,
-    groupId,
-  ]),
+    (keywords: string, scope: string, agentId?: string, groupId?: string) => [
+      'topic:search',
+      keywords,
+      scope,
+      agentId,
+      groupId,
+    ],
+  ),
 };
 
 // ---- topic comment ------------------------------------------------------

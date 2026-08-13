@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 
 import type * as ConversationStoreModule from '../store';
@@ -16,6 +18,20 @@ vi.mock('../store', async (importOriginal) => {
     ...actual,
     useConversationStore: vi.fn(),
   };
+});
+
+const seedAgent = (id: string, data: Record<string, unknown>) => {
+  getProjectionStoreState().commitAgentConfig(
+    getCacheScope(),
+    { ...data, id } as any,
+    'full',
+    'mutation',
+  );
+};
+
+beforeEach(() => {
+  useProjectionStore.setState({ scopes: {} });
+  useAgentStore.setState({ builtinAgentIdMap: {} });
 });
 
 describe('useAgentMeta', () => {
@@ -34,12 +50,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
-    // Mock AgentStore state
+    seedAgent(mockAgentId, mockMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [mockAgentId]: mockMeta,
-        },
         builtinAgentIdMap: {
           inbox: 'inbox-agent-id',
           pageAgent: 'page-agent-id',
@@ -67,11 +80,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
+    seedAgent(mockInboxAgentId, mockMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [mockInboxAgentId]: mockMeta,
-        },
         builtinAgentIdMap: {
           inbox: mockInboxAgentId,
           pageAgent: 'page-agent-id',
@@ -98,11 +109,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
+    seedAgent(mockInboxAgentId, mockMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [mockInboxAgentId]: mockMeta,
-        },
         builtinAgentIdMap: {
           inbox: mockInboxAgentId,
           pageAgent: 'page-agent-id',
@@ -128,11 +137,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
+    seedAgent(mockPageAgentId, mockMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [mockPageAgentId]: mockMeta,
-        },
         builtinAgentIdMap: {
           inbox: 'inbox-agent-id',
           pageAgent: mockPageAgentId,
@@ -156,7 +163,6 @@ describe('useAgentMeta', () => {
 
     act(() => {
       useAgentStore.setState({
-        agentMap: {},
         builtinAgentIdMap: {},
       });
     });
@@ -185,13 +191,10 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
-    // Mock AgentStore state with both agents
+    seedAgent(contextAgentId, contextMeta);
+    seedAgent(messageAgentId, messageMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [contextAgentId]: contextMeta,
-          [messageAgentId]: messageMeta,
-        },
         builtinAgentIdMap: {},
       });
     });
@@ -216,11 +219,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
+    seedAgent(contextAgentId, contextMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [contextAgentId]: contextMeta,
-        },
         builtinAgentIdMap: {},
       });
     });
@@ -244,11 +245,9 @@ describe('useAgentMeta', () => {
       return selector(state);
     });
 
+    seedAgent(contextAgentId, contextMeta);
     act(() => {
       useAgentStore.setState({
-        agentMap: {
-          [contextAgentId]: contextMeta,
-        },
         builtinAgentIdMap: {},
       });
     });

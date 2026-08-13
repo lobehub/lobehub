@@ -4,8 +4,7 @@ import { useCallback } from 'react';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useProjectSkills } from './useProjectSkills';
 
@@ -43,16 +42,10 @@ export const useProjectSkillResolver = (
   // Resolve the EFFECTIVE target, then treat it as remote only when it lands on
   // `device` with a bound device — same coercion the slash menu / sidebar use so
   // a hetero "This device" run opened on web still resolves.
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
-  const isHetero = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
-  );
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
+  const isHetero = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
-  );
+  const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

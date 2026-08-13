@@ -21,10 +21,10 @@ import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors, topicSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 /**
@@ -58,19 +58,13 @@ const TopicChat = memo(() => {
 
   const operationState = useOperationState(context);
 
-  const isHeterogeneousAgent = useAgentStore(
-    agentByIdSelectors.isAgentHeterogeneousById(activeAgentId),
-  );
+  const isHeterogeneousAgent = useAgentValue(activeAgentId, agentProjectionSelectors.heterogeneous);
 
   // Live-stream a topic that is already running when it's dragged in.
-  const runningOperation = useChatStore((s) =>
-    portalTopicId
-      ? topicSelectors.getTopicById(portalTopicId)(s)?.metadata?.runningOperation
-      : undefined,
-  );
+  const runningOperation = useChatTopicById(portalTopicId)?.metadata?.runningOperation;
   useGatewayReconnect(portalTopicId, runningOperation);
 
-  const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(activeAgentId));
+  const agentChatConfig = useAgentValue(activeAgentId, agentProjectionSelectors.chatConfig);
   const hooks: ConversationHooks = useChatFollowUp({
     agentChatConfig,
     conversationKey: chatKey,

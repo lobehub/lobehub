@@ -9,8 +9,8 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { ChatItem } from '../../ChatItem';
 import { dataSelectors, useConversationStore } from '../../store';
@@ -75,14 +75,17 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id }) => {
   }, [tasks]);
 
   // Get active group ID
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
 
   // Get agent info (avatars and names) for all unique agents in tasks
-  const taskAgents = useAgentGroupStore((s) => {
+  const taskAgents = useChatGroupProjection((scope) => {
     if (!activeGroupId || taskAgentIds.length === 0) return [];
     return taskAgentIds
       .map((agentId) => {
-        const agent = agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(s);
+        const agent = chatGroupProjectionSelectors.getAgentByIdFromGroup(
+          activeGroupId,
+          agentId,
+        )(scope);
         return agent
           ? { avatar: agent.avatar, background: agent.backgroundColor, title: agent.title }
           : null;

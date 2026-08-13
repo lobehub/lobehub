@@ -18,8 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors } from '@/store/chat/selectors';
 import { useFetchGitAheadBehind, useFetchGitBranch, useReviewPatches } from '@/store/device';
@@ -116,7 +115,7 @@ const OverviewRowLead = ({ children, icon }: { children: ReactNode; icon: IconPr
 const Overview = memo<OverviewProps>(
   ({ active, deviceId, environmentAvailable, onOpenTab, repoType, workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+    const isHetero = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>

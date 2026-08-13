@@ -7,8 +7,8 @@ import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
 import type { SpeakParams } from '../../../types';
@@ -34,10 +34,10 @@ export const SpeakInspector = memo<BuiltinInspectorProps<SpeakParams>>(
     const agentId = args?.agentId || partialArgs?.agentId;
 
     // Get active group ID and agent from store
-    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-    const agent = useAgentGroupStore((s) =>
+    const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+    const agent = useChatGroupProjection((scope) =>
       activeGroupId && agentId
-        ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(s)
+        ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(scope)
         : undefined,
     );
     const theme = useTheme();

@@ -1,12 +1,9 @@
 import { vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
-import {
-  agentByIdSelectors,
-  agentChatConfigSelectors,
-  agentSelectors,
-} from '@/store/agent/selectors';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -17,28 +14,22 @@ import { createMockAgentConfig, createMockChatConfig, TEST_IDS } from './fixture
  */
 export const setupMockSelectors = (
   options: {
+    agentId?: string;
     agentConfig?: Record<string, any>;
     agentMeta?: Record<string, any>;
     chatConfig?: Record<string, any>;
   } = {},
 ) => {
-  vi.spyOn(agentSelectors, 'currentAgentConfig').mockImplementation(() =>
-    createMockAgentConfig(options.agentConfig),
-  );
-
-  // Mock getAgentConfigById to return config for any agentId
-  const getAgentConfig = () => createMockAgentConfig(options.agentConfig);
-  vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(() => getAgentConfig);
-  vi.spyOn(agentByIdSelectors, 'getAgentById').mockImplementation(
-    () => () => options.agentMeta || {},
-  );
-
-  vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockImplementation(() =>
-    createMockChatConfig(options.chatConfig),
-  );
-
-  vi.spyOn(agentSelectors, 'currentAgentMeta').mockImplementation(
-    () => options.agentMeta || { tags: [] },
+  getProjectionStoreState().commitAgentConfig(
+    getCacheScope(),
+    {
+      ...createMockAgentConfig(options.agentConfig),
+      ...(options.agentMeta || { tags: [] }),
+      chatConfig: createMockChatConfig(options.chatConfig),
+      id: options.agentId ?? TEST_IDS.SESSION_ID,
+    },
+    'full',
+    'mutation',
   );
 };
 
@@ -127,6 +118,7 @@ export const spyOnChatService = () => {
  */
 export const resetTestEnvironment = () => {
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useChatStore.setState(
     {
       activeAgentId: TEST_IDS.SESSION_ID,

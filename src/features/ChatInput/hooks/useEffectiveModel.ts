@@ -1,12 +1,10 @@
 'use client';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 // Import from the topic slice directly (not the `@/store/chat/selectors` barrel)
 // to keep this hook's import graph small — it is pulled into many ChatInput
 // controls, and the barrel drags in unrelated slice selectors.
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useActiveChatTopicModel } from '@/store/chat/slices/topic/projection';
 
 interface ModelAndProvider {
   model: string;
@@ -24,12 +22,10 @@ interface ModelAndProvider {
  * against the same topic model (see `useAgentModelSelection` composition there).
  */
 export const useEffectiveModel = (agentId: string): ModelAndProvider => {
-  const [agentModel, agentProvider] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-  ]);
+  const agentModel = useAgentValue(agentId, agentProjectionSelectors.model);
+  const agentProvider = useAgentValue(agentId, agentProjectionSelectors.provider);
 
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useActiveChatTopicModel();
 
   return {
     model: topicModel?.model || agentModel,

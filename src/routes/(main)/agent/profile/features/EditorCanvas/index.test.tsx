@@ -160,6 +160,24 @@ vi.mock('@/store/agent', async () => {
   };
 });
 
+vi.mock('@/store/agent/projection', async () => {
+  const { useSyncExternalStore } = await vi.importActual<{
+    useSyncExternalStore: UseSyncExternalStore;
+  }>('react');
+
+  return {
+    useAgentData: (agentId: string) =>
+      useSyncExternalStore(
+        (listener) => {
+          agentStoreMock.listeners.add(listener);
+          return () => agentStoreMock.listeners.delete(listener);
+        },
+        () => agentStoreState.agentMap[agentId],
+        () => agentStoreState.agentMap[agentId],
+      ),
+  };
+});
+
 vi.mock('../ProfileEditor/MentionList', () => ({
   useMentionOptions: () => undefined,
 }));

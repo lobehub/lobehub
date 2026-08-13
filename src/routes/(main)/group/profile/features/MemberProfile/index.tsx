@@ -14,10 +14,10 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentConfig, useAgentValue } from '@/store/agent/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AutoSaveHint from '../Header/AutoSaveHint';
@@ -36,17 +36,19 @@ const MemberProfile = memo(() => {
   const setAgentBuilderContent = useGroupProfileStore((s) => s.setAgentBuilderContent);
 
   // Get agent config by agentId
-  const config = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId), isEqual);
+  const config = useAgentConfig(agentId);
+  const model = useAgentValue(agentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(agentId, agentProjectionSelectors.provider);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const { gid } = useParams<{ gid: string }>();
-  const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupById(gid ?? '')(s),
+  const groupId = useAgentGroupStore((s) => s.activeGroupId);
+  const currentGroup = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupById(gid ?? ''),
     isEqual,
   );
-  const currentGroupAgents = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s),
+  const currentGroupAgents = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupAgents(gid ?? ''),
     isEqual,
   );
   const router = useQueryRoute();
@@ -148,8 +150,8 @@ const MemberProfile = memo(() => {
             initialWidth
             disabled={!canEdit}
             value={{
-              model: config?.model,
-              provider: config?.provider,
+              model,
+              provider,
             }}
             onChange={updateAgentConfig}
           />

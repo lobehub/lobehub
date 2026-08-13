@@ -16,16 +16,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  findTaskRecordByIdentity,
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  selectAgentProjection,
-  selectTaskDetail,
-} from '@/projection';
-import { agentService } from '@/services/agent';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
+import { loadTaskDetailProjection } from '@/projection/modules/task/queries';
 import { documentService } from '@/services/document';
-import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
 
 import type { InternalLinkReference } from '../internalLink';
@@ -144,23 +137,7 @@ const getPreviewData = async (
     }
     case 'agent': {
       const scope = getCacheScope();
-      const observedAt = nextProjectionObservedAt();
-      const result = await agentService.getAgentConfigByIdWithAccess(reference.agentId);
-      const data = result?.data;
-      if (result) {
-        getProjectionStoreState().commitAgentConfig(
-          scope,
-          { ...result.data, id: result.data.id ?? reference.agentId },
-          result.access,
-          'network',
-          observedAt,
-        );
-      } else {
-        getProjectionStoreState().deleteAgentProjection(scope, reference.agentId, observedAt);
-      }
-      const recordId = data?.id ?? reference.agentId;
-      const record = getProjectionStoreState().scopes[scope]?.records.agent[recordId];
-      return selectAgentProjection(record) ?? null;
+      return (await loadAgentConfigProjection(reference.agentId, scope)) ?? null;
     }
     case 'document': {
       const document = await documentService.getDocumentById(reference.documentId);
@@ -173,17 +150,7 @@ const getPreviewData = async (
     }
     case 'task': {
       const scope = getCacheScope();
-      const observedAt = nextProjectionObservedAt();
-      const result = await taskService.getDetail(reference.taskId);
-      const task = result.data;
-      if (task) {
-        getProjectionStoreState().commitTaskDetail(scope, task, 'network', observedAt);
-      } else {
-        getProjectionStoreState().deleteTaskProjection(scope, reference.taskId, observedAt);
-      }
-      const projectionScope = getProjectionStoreState().scopes[scope];
-      const record = findTaskRecordByIdentity(projectionScope, reference.taskId);
-      const canonical = selectTaskDetail(record);
+      const canonical = await loadTaskDetailProjection(reference.taskId, scope);
       return canonical
         ? {
             description: canonical.description || canonical.instruction,

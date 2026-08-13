@@ -6,6 +6,8 @@ import {
   activeProjectionRecord,
   findTaskRecordByIdentity,
   getProjectionStoreState,
+  selectTaskDetail,
+  selectTaskRow,
 } from '@/projection';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -69,11 +71,8 @@ export class TaskLifecycleSliceActionImpl {
       id,
     );
     const previousStatusCandidate =
-      this.#get().taskDetailMap[id]?.status ??
-      this.#get().tasks.find((task) => task.identifier === id || task.id === id)?.status ??
-      this.#get()
-        .taskGroups.flatMap((group) => group.tasks)
-        .find((task) => task.identifier === id || task.id === id)?.status ??
+      selectTaskDetail(projectionRecord)?.status ??
+      selectTaskRow(projectionRecord)?.status ??
       activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
     const previousStatus = isTaskStatus(previousStatusCandidate)
       ? previousStatusCandidate
@@ -98,7 +97,6 @@ export class TaskLifecycleSliceActionImpl {
             type: 'updateTaskDetail',
             value: { status: previousStatus },
           });
-          this.#patchTaskCollectionsStatus(id, previousStatus);
         }
         getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, previousStatus);
       }
@@ -183,11 +181,8 @@ export class TaskLifecycleSliceActionImpl {
     this.#statusTransitionVersions.set(id, transitionVersion);
 
     const previousStatusCandidate =
-      this.#get().taskDetailMap[id]?.status ??
-      this.#get().tasks.find((task) => task.identifier === id || task.id === id)?.status ??
-      this.#get()
-        .taskGroups.flatMap((group) => group.tasks)
-        .find((task) => task.identifier === id || task.id === id)?.status ??
+      selectTaskDetail(projectionRecord)?.status ??
+      selectTaskRow(projectionRecord)?.status ??
       activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
     const previousStatus = isTaskStatus(previousStatusCandidate)
       ? previousStatusCandidate
@@ -198,7 +193,6 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
-    this.#patchTaskCollectionsStatus(id, status);
     getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, status);
 
     try {
@@ -212,9 +206,6 @@ export class TaskLifecycleSliceActionImpl {
           if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
           if (previousStatus) {
-            if (getCacheScope() === projectionScope) {
-              this.#patchTaskCollectionsStatus(id, previousStatus);
-            }
             getProjectionStoreState().updateTaskProjectionStatus(
               projectionScope,
               id,
@@ -268,40 +259,6 @@ export class TaskLifecycleSliceActionImpl {
         this.#statusTransitionVersions.delete(id);
       }
     }
-  };
-
-  #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
-    const { taskGroups, tasks } = this.#get();
-    const listTask = tasks.find((task) => task.identifier === id);
-    const groupedTask = taskGroups
-      .flatMap((group) => group.tasks)
-      .find((task) => task.identifier === id);
-    if (!listTask && !groupedTask) return;
-
-    const targetGroupKey = taskGroupKeyByStatus[status];
-    const nextTasks = listTask
-      ? tasks.map((item) => (item.identifier === id ? { ...item, status } : item))
-      : tasks;
-    const nextTaskGroups = groupedTask
-      ? taskGroups.map((group) => {
-          const containsTask = group.tasks.some((item) => item.identifier === id);
-          const belongsToTarget = group.key === targetGroupKey;
-          const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
-          const patchedGroupedTask = { ...groupedTask, status };
-
-          return {
-            ...group,
-            tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
-            total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
-          };
-        })
-      : taskGroups;
-
-    this.#set(
-      { taskGroups: nextTaskGroups, tasks: nextTasks },
-      false,
-      'transitionStatus/patchTaskCollections',
-    );
   };
 }
 

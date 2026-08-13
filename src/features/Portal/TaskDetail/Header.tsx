@@ -6,10 +6,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
 import { electronSystemService } from '@/services/electron/system';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useTaskStore } from '@/store/task';
 
 import PortalHeader from '../components/Header';
 import Title from './Title';
@@ -20,9 +20,7 @@ const TaskDetailHeader = memo(() => {
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const agentId = useTaskStore((state) =>
-    taskId ? (state.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
-  );
+  const agentId = useTaskDetailProjection(taskId)?.agentId ?? undefined;
   const pageUrl = getTaskDetailPageUrl({
     agentId,
     appOrigin,

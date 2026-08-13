@@ -2,10 +2,9 @@ import { ListTodoIcon } from 'lucide-react';
 
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
-import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 export const tasksRouteMeta = routeMeta({
   icon: ListTodoIcon,
@@ -14,10 +13,10 @@ export const tasksRouteMeta = routeMeta({
 
 const TaskDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
-  const detail = useTaskStore((s) => {
-    const item = taskDetailSelectors.taskDetailById(params.taskId ?? '')(s);
-    return matchesRouteWorkspace(item?.workspaceId, routeWorkspaceId) ? item : undefined;
-  });
+  const projectedDetail = useTaskDetailProjection(params.taskId);
+  const detail = matchesRouteWorkspace(projectedDetail?.workspaceId, routeWorkspaceId)
+    ? projectedDetail
+    : undefined;
 
   usePublishDynamicRouteMeta(
     {

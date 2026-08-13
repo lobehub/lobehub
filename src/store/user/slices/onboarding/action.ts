@@ -106,6 +106,7 @@ export class OnboardingActionImpl {
     // at action time so the two stores do not re-enter each other during ESM
     // initialization.
     const { getAgentStoreState } = await import('@/store/agent');
+    const { getAgentProjectionById } = await import('@/projection/modules/agent/read');
     const agentStore = getAgentStoreState();
     const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
     if (!inboxAgentId) return;
@@ -113,7 +114,7 @@ export class OnboardingActionImpl {
     // upsertPluginMode preserves an already-matching entry as-is and flips a
     // disabled entry back to pinned in place, instead of blindly pushing a
     // duplicate bare-string identifier.
-    const inboxRawPlugins = agentStore.agentMap[inboxAgentId]?.plugins;
+    const inboxRawPlugins = getAgentProjectionById(inboxAgentId)?.plugins;
     await agentStore.updateAgentConfigById(inboxAgentId, {
       plugins: upsertPluginMode(inboxRawPlugins, id, shouldOpen ? 'pinned' : 'auto'),
     });

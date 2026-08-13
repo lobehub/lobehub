@@ -1,15 +1,16 @@
 # Agent Topic Projection 迁移规范
 
-> 状态：设计定稿，待实施\
-> 前置依赖：[Projection 客户端数据层规范](./projection-store.zh-CN.md)（fix/home-startup-cache）\
-> 交付方式：stacked 分支叠在 fix/home-startup-cache 上，分期 PR
+> 状态：已实施；本文保留迁移前基线与阶段设计作为决策记录\
+> 架构依据：[Projection 客户端数据层规范](./projection-store.zh-CN.md)\
+> 迁移结果：Topic 消费者直接读取 canonical Projection，过渡桥与旧实体镜像均已删除
 
 ## 1. 背景
 
 Home 第一阶段建立了以局部投影、fragment、索引为核心的 Projection 数据层。本规范将 agent
 topic 相关数据面迁入同一数据层，并併入 Home 第一阶段遗留的投影清偿（§2.1）；此后的
 Projection 域与基础设施工作收录于 §10 后续路线图。Projection 不表示完整 topic 实体，
-只保存客户端已观测且被 View Contract 使用的 fragments。当前一个 topic 最多同时存在于 9 个位置：
+只保存客户端已观测且被 View Contract 使用的 fragments。迁移前，一个 topic 最多同时存在于
+以下 9 个位置：
 
 ### 1.1 内存中的可写 DTO 副本
 
@@ -52,8 +53,7 @@ Projection 域与基础设施工作收录于 §10 后续路线图。Projection �
 - 所有写入（fetch ingest 与 mutation）单写 graph commit，无双写；现有 rename/status 的
   两处双写被消除。
 - `topic:` SWR key 退出 `CACHE_TIERS`；启动缓存改由 repository hydration 提供。
-- 迁移期 `topicDataMap` / `agentTopicsViewMap` / `searchTopics` 降级为由 graph 单向再生成
-  的只读投影，`topicSelectors` API 与状态形状不变。
+- 过渡期由 graph 单向生成旧 Topic read model；消费者完成迁移后删除旧 map、selector 与 reducer。
 - 最终形态：1 份内存 Projection + 1 份磁盘 Projection，列表与搜索只持 refs。
 - 併入 Home 第一阶段遗留的投影清偿：
   - HomeStore agent-list projection 的剩余消费者（实测 25 个源文件、10 个 selector 成员，
@@ -144,12 +144,16 @@ Home 来源写入。
 
 ### 4.1 Fetch
 
-三个 fetcher（sidebar / 管理页 / 搜索）统一为 marker 模式：
+三个查询面（sidebar / 管理页 / 搜索）统一通过 `Projection Query Runtime` 执行：
 
-1. 请求发出前记录 `observedAt`。
-2. 响应经 chat ingestor 拆 fragments + index。
-3. 原子 commit（内存 graph + repository batch）。
-4. SWR 只缓存轻量 request marker，不保留 DTO。
+1. SWR 只按 key 调度领域 Query Definition。
+2. Runtime 在请求发出前记录 `observedAt`，并固定当前 scope 与查询参数。
+3. 响应经 chat projector/ingestor 拆 fragments + index。
+4. 原子 commit（内存 graph + repository batch）。
+5. Projection-native Hook 由 selector 返回数据，SWR 只缓存轻量 request marker。
+
+组件与 Chat Store 不得在 SWR fetcher / `onData` 中捕获 scope、生成 `observedAt` 或提交 Graph；
+搜索成员关系由带查询签名的 Projection index 表达，实体字段来自 canonical Topic record。
 
 ### 4.2 Mutation
 
@@ -181,14 +185,17 @@ summarize 流式期间逐 token 更新写 slice 的 UI overlay，不进 graph；
 不是 Projection 数据，留在 chat slice，与 `items` / `total` 结构解耦。`hasMore` 改由 index 的
 `total > coveredCount` 派生。
 
-## 5. 投影桥（Phase 1 兼容层）
+## 5. 过渡投影桥（已删除）
 
-- projection store 的非 React subscription（复刻 agentList projection 模式）：commit 触及
-  Topic record 或 `chat.*` index 时，只再生成受影响 container 的 `TopicData`，`isEqual`
-  守卫防止无效更新。
-- 组装走 §3.4 的 View Contract；投影为只读、单向，chat slice 不得反向写回 graph。
-- scope 切换时投影在浏览器绘制前清空（同 agentList projection 行为）。
-- 对全部现有消费者而言 `topicSelectors` API 与状态形状不变，Phase 1 行为兼容。
+Phase 1 曾使用非 React subscription，把 Graph 单向组装成旧 Store 的 `TopicData` 形状。其唯一
+目的，是在写路径先迁移、读路径尚未全部迁移的窗口内，维持旧 selector 与组件调用契约：
+
+- Graph 始终是唯一可写实体源，旧 Store 只接收只读物化结果，不能反向写回。
+- commit 只重建受影响 container，并使用等值比较避免无效更新。
+- scope 切换时必须在绘制前清空旧物化结果，避免跨 scope 泄漏。
+
+该桥不是长期业务抽象。所有 Topic 消费者改为直接订阅 Projection record/index 后，旧 map、
+selector、reducer 与桥接 subscription 已一并删除。
 
 ## 6. 持久化与启动
 
@@ -199,7 +206,7 @@ summarize 流式期间逐 token 更新写 slice 的 UI overlay，不进 graph；
   sidebar 首帧直接可画 → SWR 后台 revalidate。
 - 空 index 表示已初始化且为空（真空态）；index 缺失表示从未取得 coverage（首载状态）。
 
-## 7. 分期
+## 7. 实施分期（已完成）
 
 | PR  | 内容                                                                                                                                   | 性质                      |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
@@ -259,7 +266,7 @@ ID 订阅自身 record，不通过 props 下发聚合 read model。
 
 ## 9. 验收标准
 
-1. chat 三个数据面的局部记录均从 Projection Graph 读取（Phase B 经兼容投影，Phase C 直读）。
+1. chat 三个数据面的局部记录均从 Projection Graph 直接读取。
 2. `topic:` SWR key 不进入持久化 tier，SWR cache 不保存 topic DTO。
 3. 同一 scope 下每个 topic 只有一个 canonical record；sidebar 与管理页 index 引用同一批
    record。

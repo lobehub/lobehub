@@ -92,8 +92,8 @@ vi.mock('@/store/chat', () => ({
     }),
 }));
 
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { currentTopics: (s: { topics: Array<Record<string, unknown>> }) => s.topics },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useCurrentChatTopics: () => ({ items: chatStoreMock.topics }),
 }));
 
 vi.mock('@/store/global', () => ({

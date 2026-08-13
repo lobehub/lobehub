@@ -32,7 +32,8 @@ import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopics } from '@/store/chat/slices/topic/projection';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { useTopicsViewStore } from './store';
 import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
@@ -213,7 +214,12 @@ const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }
 const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const { t } = useTranslation('topic');
 
-  const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
+  const activeAgentId = useChatStore((state) => state.activeAgentId);
+  const topicView = useChatTopics(
+    activeAgentId ? topicMapKey({ agentId: activeAgentId }) : undefined,
+    'agentView',
+  );
+  const topics = useMemo(() => topicView?.items ?? [], [topicView?.items]);
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
 
   const status = useTopicsViewStore((s) => s.status);

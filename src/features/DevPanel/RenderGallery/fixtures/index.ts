@@ -46,7 +46,7 @@ export const DEVTOOLS_GROUP_ID = 'devtools-preview-group';
 
 /**
  * Identity for the seeded Aggregate-preview conversation. The fixture messages
- * resolve their avatar/name through this agentId, so seeding `agentMap` with
+ * resolve their avatar/name through this agentId, so seeding Projection with
  * this meta makes the preview turn read as "Lobe AI" instead of the
  * unresolved-agent fallback ("Unnamed Assistant").
  */

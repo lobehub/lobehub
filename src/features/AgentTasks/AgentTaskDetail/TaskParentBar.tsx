@@ -1,19 +1,13 @@
-import type { TaskDetailData } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  useTaskDetailProjection,
-} from '@/projection';
-import { taskService } from '@/services/task';
-import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
+import { taskKeys } from '@/libs/swr/keys';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useTaskDetailProjectionRequest } from '@/projection/modules/task/hooks';
+import { useActiveTaskDetailProjection } from '@/store/task';
 
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
@@ -36,31 +30,17 @@ const toTaskStatus = (status?: string): TaskStatus =>
 const TaskParentBar = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
-  const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
-  const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
-  const parentDetail = useTaskDetailProjection(parent?.identifier);
+  const parent = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskParent);
+  const currentIdentifier = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskDetail,
+  )?.identifier;
+  const { data: parentDetail } = useTaskDetailProjectionRequest(
+    taskKeys.detail(parent?.identifier ?? ''),
+    parent?.identifier,
+    { missing: 'null', revalidateOnFocus: false },
+  );
   const parentSubtasks = parentDetail?.subtasks ?? [];
   const parentStatus = toTaskStatus(parentDetail?.status);
-
-  useEffect(() => {
-    if (!parent?.identifier) return;
-
-    const scope = getCacheScope();
-    const observedAt = nextProjectionObservedAt();
-    taskService
-      .getDetail(parent.identifier)
-      .then((res) => {
-        const detail = res.data as TaskDetailData | null;
-        if (detail) {
-          getProjectionStoreState().commitTaskDetail(scope, detail, 'network', observedAt);
-        } else {
-          getProjectionStoreState().deleteTaskProjection(scope, parent.identifier, observedAt);
-        }
-      })
-      .catch((err) => {
-        console.error('[TaskParentBar] Failed to load parent subtasks', err);
-      });
-  }, [parent?.identifier]);
 
   if (!parent) return null;
 

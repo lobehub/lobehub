@@ -2,10 +2,9 @@ import type { UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { getProjectionStoreState, useProjectionStore } from '@/projection';
+import { getAgentProjectionById, getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
-import { useAgentStore } from '@/store/agent';
 
 import { ChatForwardActionImpl } from './action';
 
@@ -14,7 +13,6 @@ const message = (role: UIChatMessage['role'], content: string): UIChatMessage =>
 
 describe('ChatForwardAction', () => {
   beforeEach(() => {
-    useAgentStore.setState({ agentMap: {} });
     useProjectionStore.setState({ scopes: {} });
     vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
       async (id) => ({ id }) as never,
@@ -124,7 +122,7 @@ describe('ChatForwardAction', () => {
 
     await forwarding;
 
-    expect(useAgentStore.getState().agentMap['agent-a']).toMatchObject({
+    expect(getAgentProjectionById('agent-a')).toMatchObject({
       model: 'canonical-model',
       title: 'Edited in DevDock',
     });
@@ -158,7 +156,7 @@ describe('ChatForwardAction', () => {
     const result = await forwarding;
 
     expect(result.succeeded).toEqual([{ agentId: 'agent-a', topicId: 'new-topic' }]);
-    expect(useAgentStore.getState().agentMap['agent-a']).toMatchObject({
+    expect(getAgentProjectionById('agent-a')).toMatchObject({
       model: 'canonical-model',
       title: 'Edited in DevDock',
     });

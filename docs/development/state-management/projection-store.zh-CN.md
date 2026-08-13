@@ -1,8 +1,8 @@
 # Projection 客户端实体数据层规范
 
-> 状态：Agent、ChatGroup、Topic、Task、Brief 与 Home 聚合读取已接入\
+> 状态：Agent、ChatGroup、Topic、Task、Brief 与 Home 聚合消费者已完成迁移\
 > 运行时后端：Web 进程内存 / Desktop typed SQLite Entity Cache\
-> 迁移策略：Projection 为 canonical read source，既有 Zustand Store 由单向兼容桥接维持
+> 迁移结果：Projection 为 canonical read source；业务 Store 仅保留交互、流程与请求状态
 
 ## 1. 背景
 
@@ -71,6 +71,7 @@ flowchart LR
 
   subgraph Request["请求层"]
     SWR["SWR: 调度、去重、重试、重新验证"]
+    Runtime["Projection Query Runtime"]
   end
 
   subgraph Domain["Projection 数据层"]
@@ -89,8 +90,10 @@ flowchart LR
 
   UI["React UI"]
 
-  Query --> SWR
-  SWR --> Ingestor
+  SWR --> Runtime
+  Runtime --> Query
+  Query --> Runtime
+  Runtime --> Ingestor
   Mutation --> Ingestor
   Realtime --> Ingestor
   Ingestor --> Commit
@@ -115,14 +118,15 @@ Home、Chat、Task 并列的业务 Store。代码放在独立的 `src/projection
 ```text
 src/projection/
 ├── core/                 # scope、commit reducer、hydration、通用校验
+├── query/                # 请求事务运行时与 SWR 调度适配器
 ├── records/              # canonical Projection action、selector、validator
 ├── modules/
-│   ├── agent/            # Agent 详情、可用列表与搜索
-│   ├── chat/             # Topic sidebar、agent view、搜索与分页
-│   ├── chatGroup/        # ChatGroup 详情与列表
-│   ├── task/             # Task 详情、平铺列表与分组列表
-│   ├── brief/            # Brief news 列表
-│   └── home/             # Home 聚合 Index、View selector、request hook
+│   ├── agent/            # Agent 详情、可用列表、搜索及其 queries/hooks
+│   ├── chat/             # Topic sidebar、agent view、搜索、分页及其 queries/hooks
+│   ├── chatGroup/        # ChatGroup 详情、列表及其 queries
+│   ├── task/             # Task 详情、平铺列表、分组列表及其 queries/hooks
+│   ├── brief/            # Brief news 列表及其 queries
+│   └── home/             # Home 聚合 Index、View selector、queries/hooks
 ├── persistence/          # persistence port、Web memory、Electron codec/adapter
 ├── registry.ts           # 运行时适配器注册与稳定 forwarding facade
 ├── store.ts              # composition root；组合 core/records/modules
@@ -170,8 +174,8 @@ flowchart LR
   canonical 数据源。
 - 已迁移的 UI 只能从 Projection selector 取实体值；不得在 Projection 缺失时回退到旧 Store、
   SWR response 或 fetcher DTO。缺少 coverage 应显示 loading /empty/error，而不是读取第二份实体值。
-- 迁移中的既有 Hook 可以为兼容旧调用签名返回 DTO，但返回值必须以 Projection selector 覆盖，
-  不能绕过 canonical record。
+- Request Hook 的 `data` 只允许保存 request marker；业务数据必须通过 Projection selector 与 view
+  hook 暴露，不能绕过 canonical record。
 - 列表容器只订阅对应 Index，并向行组件传递 Projection ID/ref 与事件回调等 UI 参数。
 - 行组件按 ID 订阅自己的 ProjectionRecord，并在本地组装对应 `ProjectionView`。
 - 祖先组件不得把实体数组、完整 read model 或 ProjectionStore 实例作为 props 逐层传递。
@@ -181,9 +185,8 @@ flowchart LR
 - Snapshot 的值本身是一个原子计算结果，可以由直接消费它的组件整体订阅；该例外不适用于
   具有稳定实体身份的集合。
 
-该边界保证一个 Agent、ChatGroup、Topic、Task 或 Brief 更新时，Projection-native 组件只重新
-渲染消费该记录的行。尚未迁移的旧组件由 `projectionLegacyBridge` 单向物化到既有 Store；该桥接
-只用于兼容，不允许形成 Store → Projection → Store 的双向循环。
+该边界保证一个 Agent、ChatGroup、Topic、Task 或 Brief 更新时，组件只重新渲染消费该记录的行。
+这些实体的消费者已直接读取 Projection；既有 Zustand Store 不再持有或物化第二份实体副本。
 
 ### 4.3 运行时职责
 
@@ -447,23 +450,33 @@ identity fragment，从而支持冷启动直接打开 `/task/:identifier`。
 ## 12. 请求与 SWR 协议
 
 Projection-native 请求 hook 使用非持久化的 request key。迁移中的既有业务 hook 保持原有 API，
-但其 DTO 只作为瞬时兼容值，最终返回值由 Projection selector 覆盖。Fetcher 流程如下：
+但其 DTO 只作为瞬时兼容值，最终返回值由 Projection selector 覆盖。SWR 只负责决定何时执行；
+`Projection Query Runtime` 负责一次请求从观测、调用到提交的完整事务。流程如下：
 
 ```mermaid
 flowchart TD
-  A["记录 requestStartedAt"] --> B["请求 TRPC"]
-  B --> C["Typed Ingestor 拆分 DTO"]
-  C --> D["生成 ProjectionCommit"]
-  D --> E["Projection Map 原子发布"]
-  D --> F["Repository batch 持久化"]
-  E --> G["SWR 仅缓存轻量完成标记"]
+  A["SWR 触发 Query Definition"] --> B["Runtime 在请求前记录 observedAt"]
+  B --> C["调用 Service / TRPC"]
+  C --> D["领域 Projector / Typed Ingestor"]
+  D --> E["生成 ProjectionCommit"]
+  E --> F["Projection Map 原子发布"]
+  E --> G["Repository batch 持久化"]
+  F --> H["Runtime 返回轻量完成标记"]
+  H --> I["SWR 仅缓存 request marker"]
 ```
 
 约束：
 
+- 组件和既有 Zustand Store 不得在 SWR fetcher、`onSuccess` 或 `onData` 中手写
+  `observedAt -> service -> commit/delete -> entity copy` 流程；每种查询必须在领域模块声明
+  Query Definition，并由 Runtime 执行。
+- Runtime 必须在网络请求发出前捕获 `observedAt`，并将同一 `{ scope, params, observedAt }`
+  context 传给领域 projector；禁止在响应返回后才生成观测时间。
 - Projection-native UI 不读取 SWR response 作为事实数据源，只读取 ProjectionView selector。
-- Projection-native 请求 Hook 在写入 Graph 后只向 SWR 返回轻量 request marker；迁移中的旧 Hook
-  可以保留瞬时 DTO 返回形态，但必须从 canonical Projection 重新解析其实体字段。
+- Projection 请求 Hook 在写入 Graph 后只向 SWR 返回轻量 request marker；不得通过 Hook 暴露
+  server DTO 作为第二数据通道。
+- 不得把 Graph 内容物化到既有 Zustand 实体字段，也不得在每个请求 Hook 中重复编排 Store 写入。
+  尚未建模为 Index 的瞬时查询成员关系，应明确标注为迁移例外。
 - SWR error 表示本次重新验证失败；若 index 已 hydration，UI 保留 stale ProjectionView。
 - `mutate()` 只负责重新触发请求，不负责手工维护实体副本。
 - 已迁移的 Agent、ChatGroup、Topic、Task、Brief 与 Home request key 不加入 durable `CACHE_TIERS`。
@@ -530,19 +543,18 @@ Mutation 不得分别 patch SWR、Zustand list 和组件本地状态。统一流
 ## 15. Projection 与业务 Store 的迁移边界
 
 Projection Graph 已成为 Agent、ChatGroup、Topic、Task、Brief 与 Home 聚合数据的 canonical
-client read source。既有 Store 按以下原则过渡：
+client read source。消费者迁移完成后，边界如下：
 
 - 业务 action 的公开签名、loading/error、编辑状态和流程状态保持不变，业务组件不需要判断 Web
   或 Electron。
-- 网络 DTO 先进入 typed Ingestor，再从 Projection selector 解析为旧 Store 所需的 read model。
-- `projectionLegacyBridge` 订阅 Projection commit，并将可见记录单向物化到 AgentStore、
-  AgentGroupStore、ChatStore、TaskStore、BriefStore；因此 DevDock 编辑可以反映到尚未迁移的 UI。
-- 旧 Store 不向 SWR 或 Projection 执行自动反向镜像。业务 mutation action 是唯一允许同时更新
-  服务端与 Projection 的边界，避免订阅循环。
+- 网络 DTO 先进入 typed Ingestor；组件通过 Projection selector 与 view hook 读取 read model。
+- AgentStore、AgentGroupStore、ChatStore、TaskStore、BriefStore 不再保存这些实体的并行镜像；
+  其中保留的字段只承担交互、loading/error、编辑与流程状态。
+- 业务 Store 不向 SWR 或 Projection 执行自动反向镜像。业务 mutation action 是唯一允许同时更新
+  服务端与 Projection 的边界。
 - SWR/localStorage/IndexedDB 不再持久化这些实体 DTO。Web 只保留当前页面内存；Electron 的
   Projection typed SQLite 是唯一 durable client entity cache。
-- 后续组件迁移到 Projection-native selectors 后，应删除对应的旧 Store read-model 字段与桥接分支；
-  流程状态仍可保留在业务 Store。
+- 已删除旧 Store read-model 字段及兼容桥；流程状态继续保留在业务 Store。
 
 ## 16. 错误、加载与 stale 语义
 

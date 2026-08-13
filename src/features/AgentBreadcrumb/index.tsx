@@ -17,7 +17,8 @@ import {
 } from '@/features/AgentSidebar/utils/agentPathname';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   breadcrumb: css`
@@ -55,9 +56,7 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agentTitle = useAgentStore((s) =>
-    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
-  );
+  const agentTitle = agentDisplayName(useAgentMeta(agentId));
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox

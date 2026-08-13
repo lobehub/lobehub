@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import MemberItem from './MemberItem';
 
@@ -41,7 +41,10 @@ const SortMembersModal = memo<SortMembersModalProps>(({ groupId, open, onCancel 
   const { t } = useTranslation('chat');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const members = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId), isEqual);
+  const members = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMembers(groupId),
+    isEqual,
+  );
   const reorderGroupMembers = useAgentGroupStore((s) => s.reorderGroupMembers);
 
   // Local (optimistic) order so the list doesn't snap back while the reorder

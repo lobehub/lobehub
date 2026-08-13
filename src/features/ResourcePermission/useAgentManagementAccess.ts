@@ -1,7 +1,6 @@
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 
 /**
  * Resolve whether the current caller manages an Agent rather than merely
@@ -12,9 +11,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
  * access grants them edit capability.
  */
 export const useAgentManagementAccess = (agentId?: string) => {
-  const agent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentById(agentId)(s) : undefined,
-  );
+  const agent = useAgentData(agentId);
   const isAgentLoading = !!agentId && !agent;
   const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   const { allowed: canEditContent } = usePermission('edit_own_content');

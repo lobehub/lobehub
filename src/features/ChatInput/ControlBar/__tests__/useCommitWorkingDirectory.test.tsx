@@ -29,16 +29,21 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig },
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    agencyConfig: (agent: { agencyConfig?: Record<string, unknown> }) => agent.agencyConfig,
+    workspaceScoped: (agent: { workspaceId?: string | null }) => Boolean(agent.workspaceId),
+  },
+  useAgentValue: (agentId: string, selector: (agent: Record<string, unknown>) => unknown) =>
+    selector({ agencyConfig: testState.agent.agencyConfig, ...testState.agent.agentMap[agentId] }),
 }));
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: typeof testState.chat) => unknown) => selector(testState.chat),
 }));
 
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useChatTopicById: () => undefined,
 }));
 
 vi.mock('@/store/device', () => ({

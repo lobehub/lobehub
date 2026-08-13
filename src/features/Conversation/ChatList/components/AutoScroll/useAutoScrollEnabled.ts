@@ -1,5 +1,4 @@
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -12,7 +11,7 @@ import { contextSelectors, useConversationStore } from '../../../store';
 export const useAutoScrollEnabled = (): boolean => {
   const agentId = useConversationStore(contextSelectors.agentId);
 
-  const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
+  const agentChatConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
   const agentSetting = agentChatConfig?.enableAutoScrollOnStreaming;
 
   const globalSetting = useUserStore(userGeneralSettingsSelectors.enableAutoScrollOnStreaming);

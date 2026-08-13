@@ -61,21 +61,19 @@ const mockAgentMeta = {
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: vi.fn(() => ({
-    agentMap: { 'agent-id': mockAgentConfig },
     appendStreamingSystemRole: vi.fn(),
     finishStreamingSystemRole: vi.fn(),
-    internal_dispatchAgentMap: vi.fn(),
+    internal_dispatchAgentProjection: vi.fn(),
     optimisticUpdateAgentConfig: vi.fn(),
     optimisticUpdateAgentMeta: vi.fn(),
     startStreamingSystemRole: vi.fn(() => 7),
   })),
 }));
 
-vi.mock('@/store/agent/selectors/selectors', () => ({
-  agentSelectors: {
-    getAgentConfigById: vi.fn(() => () => mockAgentConfig),
-    getAgentMetaById: vi.fn(() => () => mockAgentMeta),
-  },
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: vi.fn((agentId: string) =>
+    agentId === 'agent-id' ? { ...mockAgentConfig, ...mockAgentMeta, id: agentId } : undefined,
+  ),
 }));
 
 vi.mock('@/store/aiInfra', () => ({

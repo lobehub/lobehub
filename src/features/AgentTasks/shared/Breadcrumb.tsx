@@ -1,14 +1,15 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
+import isEqual from 'fast-deep-equal';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import { useShallow } from 'zustand/react/shallow';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useTaskStore } from '@/store/task';
+import { useTaskProjection } from '@/projection/modules/task/projectionHooks';
+import { findTaskRecordByIdentity, selectTaskDetail } from '@/projection/modules/task/selectors';
 
 import { styles } from './style';
 import { taskDetailPath } from './taskDetailPath';
@@ -22,28 +23,27 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { aid } = useParams<{ aid?: string }>();
   const agentMeta = useAgentDisplayMeta(aid);
-  const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
-  const taskIdentifier = useTaskStore((s) =>
-    taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
-  );
-  const ancestors = useTaskStore(
-    useShallow((s) => {
-      if (!taskId) return [];
-      const chain: Array<{ agentId?: string | null; identifier: string }> = [];
-      const visited = new Set<string>([taskId]);
-      let cursor = s.taskDetailMap[taskId]?.parent;
-      while (cursor?.identifier && !visited.has(cursor.identifier)) {
-        const detail = s.taskDetailMap[cursor.identifier];
-        visited.add(cursor.identifier);
-        chain.push({
-          agentId: cursor.agentId === undefined ? detail?.agentId : cursor.agentId,
-          identifier: cursor.identifier,
-        });
-        cursor = detail?.parent;
-      }
-      return chain.reverse();
-    }),
-  );
+  const { ancestors, taskIdentifier, taskTitle } = useTaskProjection((scope) => {
+    if (!taskId) return { ancestors: [], taskIdentifier: undefined, taskTitle: undefined };
+    const current = selectTaskDetail(findTaskRecordByIdentity(scope, taskId));
+    const chain: Array<{ agentId?: string | null; identifier: string }> = [];
+    const visited = new Set<string>([taskId]);
+    let cursor = current?.parent;
+    while (cursor?.identifier && !visited.has(cursor.identifier)) {
+      const detail = selectTaskDetail(findTaskRecordByIdentity(scope, cursor.identifier));
+      visited.add(cursor.identifier);
+      chain.push({
+        agentId: cursor.agentId === undefined ? detail?.agentId : cursor.agentId,
+        identifier: cursor.identifier,
+      });
+      cursor = detail?.parent;
+    }
+    return {
+      ancestors: chain.reverse(),
+      taskIdentifier: current?.identifier,
+      taskTitle: current?.name,
+    };
+  }, isEqual);
 
   const allTasksLabel = (
     <Text color={'inherit'} weight={500}>

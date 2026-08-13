@@ -5,8 +5,8 @@
  * exists yet), the selections are buffered here keyed by agentId. As soon as
  * the server creates a topic for that agent, gateway.ts consumes these repos
  * and writes them into the topic metadata immediately — avoiding the race
- * condition where the store action would drop the update because the topic
- * object hadn't appeared in topicDataMap yet.
+ * condition where the update would be attempted before the created topic had
+ * appeared in the canonical Topic Projection.
  *
  * Desktop builds: CloudRepoSwitcher is never rendered, so these functions are
  * never called and the map stays empty.

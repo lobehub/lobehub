@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
 import { useHomeStore } from '@/store/home';
 
 interface UseAgentIdentityFormOptions {
@@ -25,8 +25,8 @@ const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN
 export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormOptions) => {
   const { t } = useTranslation('setting');
 
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
-  const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
+  const meta = useAgentMeta(agentId);
+  const slug = useAgentValue(agentId, agentProjectionSelectors.slug);
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const refreshAgentConfig = useAgentStore((s) => s.internal_refreshAgentConfig);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);

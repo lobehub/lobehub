@@ -29,19 +29,20 @@ vi.mock('@/services/agent', () => ({
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
     selector({
-      agentMap: mocks.agentMap,
       internal_refreshAgentConfig: mocks.refreshAgentConfig,
       updateAgentMetaById: mocks.updateAgentMetaById,
     }),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (agentId: string) => (state: { agentMap: typeof mocks.agentMap }) =>
-      state.agentMap[agentId] || {},
-    getAgentSlugById: (agentId: string) => (state: { agentMap: typeof mocks.agentMap }) =>
-      state.agentMap[agentId]?.slug,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    slug: (agent?: { slug?: string }) => agent?.slug,
   },
+  useAgentMeta: (agentId: string) => mocks.agentMap[agentId] || {},
+  useAgentValue: (
+    agentId: string,
+    selector: (agent?: { name?: string; slug?: string; title?: string }) => unknown,
+  ) => selector(mocks.agentMap[agentId]),
 }));
 
 const setup = () => {

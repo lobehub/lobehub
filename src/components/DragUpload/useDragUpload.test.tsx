@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 
@@ -29,11 +28,9 @@ describe('useDragUpload', () => {
       canUploadImage: false,
       canUploadVideo: false,
     });
-    (useAgentStore as unknown as Mock).mockImplementation((selector) => {
-      if (selector === agentSelectors.currentAgentModel) return 'test-model';
-      if (selector === agentSelectors.currentAgentModelProvider) return 'test-provider';
-      return null;
-    });
+    (useAgentStore as unknown as Mock).mockImplementation((selector) =>
+      selector({ activeAgentId: 'agent-1' }),
+    );
   });
 
   afterEach(() => {

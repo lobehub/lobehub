@@ -7,8 +7,8 @@ import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { shinyTextStyles } from '@/styles';
 
 import type { BroadcastParams } from '../../../types';
@@ -31,12 +31,15 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
     const { t } = useTranslation('plugin');
 
-    const agentIds = args?.agentIds || partialArgs?.agentIds || [];
+    const agentIds = useMemo(
+      () => args?.agentIds || partialArgs?.agentIds || [],
+      [args?.agentIds, partialArgs?.agentIds],
+    );
 
     // Get active group ID and agents from store
-    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-    const groupAgents = useAgentGroupStore((s) =>
-      activeGroupId ? agentGroupSelectors.getGroupAgents(activeGroupId)(s) : [],
+    const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+    const groupAgents = useChatGroupProjection((scope) =>
+      activeGroupId ? chatGroupProjectionSelectors.getGroupAgents(activeGroupId)(scope) : [],
     );
     const theme = useTheme();
 
@@ -57,7 +60,7 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
           key: agent.id,
           title: agent.title || undefined,
         })),
-      [agents],
+      [agents, theme.colorBgContainer],
     );
 
     if (isArgumentsStreaming && agents.length === 0) {

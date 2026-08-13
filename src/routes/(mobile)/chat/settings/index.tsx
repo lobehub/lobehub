@@ -11,7 +11,7 @@ import Footer from '@/features/Setting/Footer';
 import { usePermission } from '@/hooks/usePermission';
 import MobileHeader from '@/routes/(mobile)/chat/settings/_layout/Header';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentConfig, useCurrentAgentMeta } from '@/store/agent/projection';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { useSessionStore } from '@/store/session';
 
@@ -21,12 +21,12 @@ export default memo(() => {
   const id = useSessionStore((s) => s.activeId);
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const [updateAgentConfig, updateAgentMeta, config, meta] = useAgentStore((s) => [
+  const [updateAgentConfig, updateAgentMeta] = useAgentStore((s) => [
     s.updateAgentConfig,
     s.updateAgentMeta,
-    agentSelectors.currentAgentConfig(s),
-    agentSelectors.currentAgentMeta(s),
   ]);
+  const config = useCurrentAgentConfig();
+  const meta = useCurrentAgentMeta();
 
   const isLoading = false;
 

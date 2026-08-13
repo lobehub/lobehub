@@ -55,7 +55,11 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentValue,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
@@ -260,10 +264,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     viewType: currentPortalView?.type,
     widths: portalWidths,
   });
-  const isChatMode = useAgentStore((s) =>
-    activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
-  );
-  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isChatMode = useAgentValue(activeAgentId, agentProjectionSelectors.toolMode) === 'chat';
+  const isHetero = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   // Unified precedence (topic > per-device choice > legacy > device default), so
   // the sidebar resolves the same directory the runtime bar / git status do.
   // The old `topicCwd || legacy agentCwd` pattern missed `workingDirByDevice`,

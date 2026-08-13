@@ -1,36 +1,15 @@
 import dayjs from 'dayjs';
-import { type SWRResponse } from 'swr';
+import { useEffect, useRef } from 'react';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  activeProjectionRecord,
-  getProjectionStoreState,
-  nextProjectionObservedAt,
-  useBriefNews,
-} from '@/projection';
+import { getProjectionStoreState, nextProjectionObservedAt, useBriefNews } from '@/projection';
+import { briefNewsProjectionQuery } from '@/projection/modules/brief/queries';
+import { useProjectionRequest } from '@/projection/query/hook';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
-import { type BriefItem } from '@/store/brief/types';
 import { type StoreSetter } from '@/store/types';
-import { setNamespace } from '@/utils/storeDebug';
-
-const n = setNamespace('briefList');
-
-export interface NewsDay {
-  /**
-   * The local day (`YYYY-MM-DD`) this payload belongs to. Carried in the data so
-   * consumers rendering with `keepPreviousData` can label/gate from the day
-   * actually shown instead of the day being fetched — otherwise a slow page
-   * flip shows the new day's title over the old day's briefs.
-   */
-  day: string;
-  /** Any news brief older than this day exists — the day pager's "older" arrow. */
-  hasEarlier: boolean;
-  news: BriefItem[];
-}
 
 type Setter = StoreSetter<BriefStore>;
 
@@ -38,44 +17,17 @@ export const createBriefListSlice = (set: Setter, get: () => BriefStore, _api?: 
   new BriefListActionImpl(set, get, _api);
 
 export class BriefListActionImpl {
-  readonly #get: () => BriefStore;
-  readonly #set: Setter;
-
-  constructor(set: Setter, get: () => BriefStore, _api?: unknown) {
+  constructor(_set: Setter, _get: () => BriefStore, _api?: unknown) {
+    void _set;
+    void _get;
     void _api;
-    this.#set = set;
-    this.#get = get;
   }
-
-  internal_updateBrief = (id: string, data: Partial<BriefItem>) => {
-    const briefs = this.#get().briefs;
-    const index = briefs.findIndex((b) => b.id === id);
-    if (index === -1) return;
-
-    const updated = [...briefs];
-    updated[index] = { ...briefs[index], ...data };
-    this.#set({ briefs: updated }, false, n('internal_updateBrief'));
-  };
 
   deleteBrief = async (id: string) => {
     const scope = getCacheScope();
     await briefService.delete(id);
     const observedAt = nextProjectionObservedAt();
     getProjectionStoreState().deleteBriefProjection(scope, id, observedAt);
-    const record = getProjectionStoreState().scopes[scope]?.records.brief[id];
-    // A newer local edit may have crossed this request and defeated its older
-    // tombstone. Projection stays canonical, so do not remove that active row
-    // from the legacy list after the commit has already resolved the conflict.
-    if (activeProjectionRecord(record)) return;
-
-    const previous = this.#get().briefs;
-    const briefs = previous.filter((b) => b.id !== id);
-    // Nothing removed — the brief was already gone, or the list has since been
-    // replaced by another scope's (a workspace switch while the request was in
-    // flight). Either way, writing an identical list only churns subscribers.
-    if (briefs.length === previous.length) return;
-
-    this.#set({ briefs }, false, n('deleteBrief'));
   };
 
   markBriefRead = async (id: string) => {
@@ -83,13 +35,12 @@ export class BriefListActionImpl {
     const result = await briefService.markRead(id);
     const observedAt = nextProjectionObservedAt();
     const readAt = result.data.readAt ?? new Date().toISOString();
-    this.internal_updateBrief(id, { readAt });
     getProjectionStoreState().updateBriefReadState(scope, id, readAt, observedAt);
   };
 
   /**
    * "Mark all read" resolves news briefs with the neutral `read` action and drops
-   * them from both the legacy Zustand projection and the canonical Home index.
+   * them from the canonical Home index.
    */
   resolveBriefsAsRead = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -108,15 +59,6 @@ export class BriefListActionImpl {
       new Date().toISOString(),
       observedAt,
     );
-
-    // The legacy projection is patched only while it still belongs to this
-    // scope: the switch already cleared the bucket, so a mismatch means there
-    // is nothing of ours left to patch.
-    const state = this.#get();
-    if (state.briefsScope !== scope) return;
-
-    const briefs = state.briefs.filter((b) => !resolvedIds.has(b.id));
-    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
@@ -126,11 +68,6 @@ export class BriefListActionImpl {
     const resolvedAction = result.data.resolvedAction ?? action ?? null;
     const resolvedAt = result.data.resolvedAt ?? new Date().toISOString();
     const resolvedComment = result.data.resolvedComment ?? comment ?? null;
-    this.internal_updateBrief(id, {
-      resolvedAction,
-      resolvedAt,
-      resolvedComment,
-    });
     getProjectionStoreState().updateBriefResolution(
       scope,
       id,
@@ -167,30 +104,32 @@ export class BriefListActionImpl {
    * [start, end) instants are computed here so the server stays timezone-agnostic.
    * `keepPreviousData` keeps the section stable while the user pages between days.
    */
-  useFetchNewsByDay = (enabled: boolean, scope: string, day: string): SWRResponse<NewsDay> => {
+  useFetchNewsByDay = (enabled: boolean, scope: string, day: string) => {
     const projection = useBriefNews(day);
-    const request = useClientDataSWRWithSync<NewsDay>(
+    const startAt = dayjs(day).startOf('day');
+    const request = useProjectionRequest(
       enabled ? briefKeys.news(true, scope, day) : null,
-      async () => {
-        const observedAt = nextProjectionObservedAt();
-        const startAt = dayjs(day).startOf('day');
-        const result = await briefService.listNewsByDay({
-          endAt: startAt.add(1, 'day').toDate(),
-          startAt: startAt.toDate(),
-        });
-        const news = result.data as BriefItem[];
-        getProjectionStoreState().commitBriefNews(scope, day, result.hasEarlier, news, observedAt);
-        return { day, hasEarlier: result.hasEarlier, news };
+      briefNewsProjectionQuery,
+      {
+        day,
+        endAt: startAt.add(1, 'day').toDate(),
+        startAt: startAt.toDate(),
       },
       {
         keepPreviousData: true,
-        onData: (data) => {
-          getProjectionStoreState().commitBriefNews(scope, data.day, data.hasEarlier, data.news, 0);
-        },
-        syncBeforePaint: true,
+        scope,
       },
     );
-    const retainedProjection = useBriefNews(request.data?.day ?? day);
+    const retainedProjectionRef = useRef<
+      { data: NonNullable<typeof projection>; scope: string } | undefined
+    >(undefined);
+    useEffect(() => {
+      if (projection) retainedProjectionRef.current = { data: projection, scope };
+    }, [projection, scope]);
+    const retainedProjection =
+      retainedProjectionRef.current?.scope === scope
+        ? retainedProjectionRef.current.data
+        : undefined;
     return { ...request, data: projection ?? retainedProjection };
   };
 }

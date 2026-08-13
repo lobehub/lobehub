@@ -4,7 +4,8 @@ import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   // Anchored below the greeting row rather than above the rail, so the agent
@@ -29,7 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const HomePortrait = memo(() => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
+  const inboxMeta = useAgentMeta(inboxAgentId ?? '');
   const artwork = resolveChiefAgentArtwork(inboxMeta.avatar || DEFAULT_INBOX_AVATAR);
 
   return (

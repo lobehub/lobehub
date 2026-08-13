@@ -20,8 +20,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useSelectedTaskGroupListProjection, useTaskStore } from '@/store/task';
 import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initialState';
 
 import { createTaskModal } from '../CreateTaskModal';
@@ -93,16 +92,13 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, projectId, routeScope }) 
   const { error, isLoading, mutate } = useFetchTaskGroupList(
     projectId ? { projectId } : agentId ? { agentId } : { allAgents: true },
   );
-  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
-  // per-key `data`. On a scope or visibility switch the store resets
-  // `taskGroups` + `isTaskGroupListInit` together (`scopeChangeResetState`)
-  // while SWR still holds cached `data` for the target key — keying `hasSettled`
-  // off SWR `data` flashed the "no tasks" empty board during the refetch.
-  // `isTaskGroupListInit` resets in lockstep with `taskGroups`, so the settled
-  // signal never disagrees with the emptiness signal.
-  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
-
-  const taskGroups = useTaskStore(taskListSelectors.taskGroups);
+  const projectedTaskGroups = useSelectedTaskGroupListProjection();
+  const isTaskGroupListInit = projectedTaskGroups !== undefined;
+  const [optimisticTaskGroups, setOptimisticTaskGroups] = useState<TaskGroupItem[]>();
+  const taskGroups = useMemo(
+    () => optimisticTaskGroups ?? projectedTaskGroups ?? [],
+    [optimisticTaskGroups, projectedTaskGroups],
+  );
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
@@ -142,17 +138,18 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, projectId, routeScope }) 
 
       if (task.status === column.targetStatus) return;
 
-      const prevGroups = useTaskStore.getState().taskGroups;
-      const nextGroups = optimisticMoveTask(prevGroups, task, targetColumnKey);
-      useTaskStore.setState({ taskGroups: nextGroups }, false, 'kanban/optimisticMove');
+      const nextGroups = optimisticMoveTask(taskGroups, task, targetColumnKey);
+      setOptimisticTaskGroups(nextGroups);
 
       try {
         await updateTaskStatus(task.identifier, column.targetStatus);
       } catch {
-        useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/revertMove');
+        // Projection rolls back or refetches server truth in the action.
+      } finally {
+        setOptimisticTaskGroups(undefined);
       }
     },
-    [canEditTask, updateTaskStatus],
+    [canEditTask, taskGroups, updateTaskStatus],
   );
 
   const handleDragCancel = useCallback(() => {

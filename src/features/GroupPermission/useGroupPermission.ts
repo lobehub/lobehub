@@ -5,9 +5,8 @@ import type { AgentModelSelectionPolicy } from '@lobechat/types';
 import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import type { ResourceAccessLevel } from '@/services/resourcePermission';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 export interface GroupPermissionState {
   accessError: unknown;
@@ -47,12 +46,12 @@ export interface GroupPermissionState {
  *   member has no per-member switcher to gate, and writing a `fixed` policy
  *   onto an agent with no execution target is rejected by `AgentModel`.
  *
- * The group store hydrates the supervisor into `agentMap` whenever group detail
- * loads (`agentGroup/action.ts`), so the shared agent hook has its row here.
+ * The group detail Projection includes the supervisor Agent, so the shared
+ * Agent policy hook resolves the canonical row here.
  */
 export const useGroupPermission = (groupId: string): GroupPermissionState => {
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const group = useAgentGroupStore(agentGroupSelectors.getGroupById(groupId));
+  const group = useChatGroupProjection(chatGroupProjectionSelectors.getGroupById(groupId));
 
   const isWorkspaceGroup = !!group?.workspaceId;
   const isPrivate = group?.visibility === 'private';

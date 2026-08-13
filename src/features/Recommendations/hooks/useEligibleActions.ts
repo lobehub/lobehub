@@ -3,8 +3,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateHeteroAgent } from '@/hooks/useCreateHeteroAgent';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 
 import { recommendedActionsRegistry } from '../actions/registry';
 import type { ActionContext, RecommendedAction } from '../actions/types';
@@ -17,7 +19,7 @@ interface EligibleActionsResult {
 
 export const useEligibleActions = (): EligibleActionsResult => {
   const { t } = useTranslation('home');
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const agents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
   const heteroDetections = useHeteroDetections();
   const createHeteroAgent = useCreateHeteroAgent();
 

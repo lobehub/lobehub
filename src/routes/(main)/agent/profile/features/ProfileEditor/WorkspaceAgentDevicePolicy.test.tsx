@@ -56,6 +56,11 @@ vi.mock('@/store/agent', () => ({
     selector(testState.agent),
 }));
 
+vi.mock('@/store/agent/projection', () => ({
+  useAgentData: (agentId: string) =>
+    testState.agent.agentMap[agentId as keyof typeof testState.agent.agentMap],
+}));
+
 describe('WorkspaceAgentDevicePolicy', () => {
   beforeEach(() => {
     testState.agent.agentMap['agent-1'].visibility = 'public';

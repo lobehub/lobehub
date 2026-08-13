@@ -6,6 +6,7 @@ import debug from 'debug';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -18,7 +19,6 @@ import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
 } from '../../../operation/types';
-import { topicSelectors } from '../../../topic/selectors';
 import type {
   AgentRunLifecycle,
   RunCompleteEvent,
@@ -232,7 +232,7 @@ export const buildRunLifecycle = (
         // (gateway.ts), so it may not be in the store yet — and `summaryTopicTitle`
         // bails on a missing topic. Load it first when absent (client / hetero
         // already inserted it synchronously, so this is a no-op for them).
-        if (!topicSelectors.getTopicById(topicId)(get())) {
+        if (!getChatTopicById(topicId)) {
           await get()
             .refreshTopic()
             .catch(() => {});
@@ -243,7 +243,7 @@ export const buildRunLifecycle = (
 
       // Existing topic → title only when it still has none. Read from the store,
       // excluding the just-created assistant placeholder.
-      const topic = topicSelectors.getTopicById(topicId)(get());
+      const topic = getChatTopicById(topicId);
       if (topic && !topic.title) {
         const chats = readStoreChats().filter((item) => item.id !== assistantMessageId);
         await applyTopicTitle(topicId, chats);

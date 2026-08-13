@@ -11,8 +11,7 @@ import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 
 const styles = createStaticStyles(({ css }) => ({
   breadcrumb: css`
@@ -43,8 +42,8 @@ interface GroupBreadcrumbProps {
 const GroupBreadcrumb = memo<GroupBreadcrumbProps>(({ groupId, title }) => {
   const { t } = useTranslation('chat');
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const groupTitle = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupById(groupId)(s)?.title || '',
+  const groupTitle = useChatGroupProjection(
+    (scope) => chatGroupProjectionSelectors.getGroupById(groupId)(scope)?.title || '',
   );
   const displayTitle = groupTitle || t('group.title');
   const groupHomePath = useMemo(

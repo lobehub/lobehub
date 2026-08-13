@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
-import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
@@ -191,7 +190,6 @@ beforeEach(() => {
   serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
-    useAgentStore.setState({ availableAgents: [] });
     // executeClientAgent waits for the aiProvider runtime-state before building
     // tools; mark it ready so that guard is a no-op in these tests.
     useAiInfraStore.setState({ isInitAiProviderRuntimeState: true });
@@ -665,6 +663,7 @@ describe('StreamingExecutor actions', () => {
       const { result } = renderHook(() => useChatStore());
       const contextSessionId = 'context-session';
       const contextTopicId = 'context-topic';
+      setupMockSelectors({ agentId: contextSessionId });
       const userMessage = {
         id: TEST_IDS.USER_MESSAGE_ID,
         role: 'user',

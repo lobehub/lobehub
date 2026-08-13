@@ -6,7 +6,7 @@ import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 
 import type { OperationEditedFile } from './deriveEditedFiles';
@@ -155,7 +155,7 @@ export const planFilesystemOpen = ({
 export const useOpenEditedFile = () => {
   const [openLocalFile, activeTopicId] = useChatStore((s) => [s.openLocalFile, s.activeTopicId]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHetero = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);

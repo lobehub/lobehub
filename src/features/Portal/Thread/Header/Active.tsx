@@ -6,15 +6,14 @@ import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';
 import { oneLineEllipsis } from '@/styles';
 
 const Active = memo(() => {
   const currentThread = useChatStore(portalThreadSelectors.portalCurrentThread, isEqual);
-  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(currentThread?.agentId || ''));
+  const agentMeta = useAgentMeta(currentThread?.agentId || '');
 
   if (!currentThread) return null;
 

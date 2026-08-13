@@ -7,9 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { marketApiService } from '@/services/marketApi';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { type AgentGroupForkSourceResponse } from '@/types/discover';
 
 /**
@@ -23,7 +22,7 @@ const GroupForkTag = memo(() => {
   const [loading, setLoading] = useState(false);
 
   const { gid } = useParams<{ gid: string }>();
-  const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
+  const groupMeta = useChatGroupProjection(chatGroupProjectionSelectors.getGroupMeta(gid ?? ''));
   const marketIdentifier = groupMeta?.marketIdentifier;
 
   useEffect(() => {

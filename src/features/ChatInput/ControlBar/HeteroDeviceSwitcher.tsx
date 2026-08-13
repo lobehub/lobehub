@@ -39,7 +39,7 @@ import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { localFileService } from '@/services/electron/localFileService';
-import { useAgentStore } from '@/store/agent';
+import { useAgentValue } from '@/store/agent/projection';
 import { useElectronStore } from '@/store/electron';
 
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
@@ -372,7 +372,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { canUseResource } = useChatInputResourceAccess();
 
-  const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
+  const agentWorkspaceId = useAgentValue(agentId, (agent) => agent?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
   // Shared config merged with the caller's per-agent override —

@@ -54,7 +54,7 @@ vi.mock('@/features/NavPanel/components/SkeletonList', () => ({
 }));
 
 vi.mock('@/hooks/useFetchChatTopics', () => ({
-  useFetchChatTopics: vi.fn(),
+  useFetchChatTopics: () => ({ isExpandingPageSize: chatStoreStateMock.isExpandingPageSize }),
 }));
 
 // Freeze deferred work at its initial value so the test observes the first
@@ -81,14 +81,17 @@ vi.mock('@/store/chat', () => ({
     selector(chatStoreStateMock),
 }));
 
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    currentTopicLength: (state: { topicLength: number }) => state.topicLength,
-    displayTopicsForSidebar: () => (state: typeof chatStoreStateMock) => state.topics,
-    hasMoreTopicsForSidebar: (state: typeof chatStoreStateMock) => state.hasMore,
-    isExpandingPageSize: (state: typeof chatStoreStateMock) => state.isExpandingPageSize,
-    isUndefinedTopics: (state: { isUndefinedTopics: boolean }) => state.isUndefinedTopics,
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  displayChatTopicsForSidebar: (items: unknown[]) => items,
+  topicsWithoutCron: (items: unknown[]) => items,
+  useCurrentChatTopics: () =>
+    chatStoreStateMock.isUndefinedTopics
+      ? undefined
+      : {
+          hasMore: chatStoreStateMock.hasMore,
+          items: chatStoreStateMock.topics,
+          total: chatStoreStateMock.topicLength,
+        },
 }));
 
 vi.mock('@/store/global', () => ({

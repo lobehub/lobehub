@@ -113,7 +113,7 @@ export interface SendMessageServerParams {
    * Filters applied to the topic list returned alongside the message.
    * Callers pass whatever filter the active sidebar is using so the server
    * doesn't echo back topics the UI was already excluding (e.g. completed
-   * status), which would overwrite the filtered list in `topicDataMap`.
+   * status), which would overwrite the filtered sidebar Projection index.
    */
   topicFilter?: {
     excludeStatuses?: string[];

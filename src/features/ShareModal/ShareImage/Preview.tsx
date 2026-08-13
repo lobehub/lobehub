@@ -8,7 +8,8 @@ import { ProductLogo } from '@/components/Branding';
 import PluginTag from '@/features/PluginTag';
 import { filterToolIds } from '@/helpers/toolFilters';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentData, useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 import pkg from '../../../../package.json';
 import { containerStyles } from '../style';
@@ -38,44 +39,29 @@ const Preview = memo<PreviewProps>(
     withFooter,
     widthMode,
   }) => {
-    const [
-      currentModel,
-      currentPlugins,
-      systemRole,
-      isInbox,
-      currentTitle,
-      currentAvatar,
-      currentBackgroundColor,
-      headerMeta,
-      headerModel,
-      headerPlugins,
-      isHeaderInbox,
-    ] = useAgentStore((s) => {
-      const resolvedHeaderAgentId =
-        headerAgentId && s.agentMap[headerAgentId] ? headerAgentId : undefined;
+    const activeAgentId = useAgentStore((state) => state.activeAgentId);
+    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+    const currentAgent = useAgentData(activeAgentId);
+    const currentMeta = useAgentMeta(activeAgentId);
+    const headerAgent = useAgentData(headerAgentId ?? undefined);
+    const projectedHeaderMeta = useAgentMeta(headerAgentId ?? undefined);
+    const resolvedHeaderAgentId = headerAgent ? (headerAgentId ?? undefined) : undefined;
 
-      return [
-        agentSelectors.currentAgentModel(s),
-        agentSelectors.displayableAgentPlugins(s),
-        agentSelectors.currentAgentSystemRole(s),
-        builtinAgentSelectors.isInboxAgent(s),
-        agentSelectors.currentAgentDisplayName(s),
-        agentSelectors.currentAgentAvatar(s),
-        agentSelectors.currentAgentBackgroundColor(s),
-        resolvedHeaderAgentId
-          ? agentSelectors.getAgentMetaById(resolvedHeaderAgentId)(s)
-          : undefined,
-        resolvedHeaderAgentId
-          ? agentByIdSelectors.getAgentModelById(resolvedHeaderAgentId)(s)
-          : undefined,
-        resolvedHeaderAgentId
-          ? filterToolIds(agentByIdSelectors.getAgentPluginsById(resolvedHeaderAgentId)(s))
-          : undefined,
-        resolvedHeaderAgentId
-          ? builtinAgentSelectors.inboxAgentId(s) === resolvedHeaderAgentId
-          : undefined,
-      ];
-    });
+    const currentModel = agentProjectionSelectors.model(currentAgent);
+    const currentPlugins = agentProjectionSelectors.displayablePlugins(currentAgent);
+    const systemRole = currentAgent?.systemRole;
+    const isInbox = Boolean(inboxAgentId && activeAgentId === inboxAgentId);
+    const currentTitle = agentProjectionSelectors.displayName(currentAgent);
+    const currentAvatar = currentMeta.avatar;
+    const currentBackgroundColor = currentMeta.backgroundColor;
+    const headerMeta = resolvedHeaderAgentId ? projectedHeaderMeta : undefined;
+    const headerModel = resolvedHeaderAgentId ? headerAgent?.model : undefined;
+    const headerPlugins = resolvedHeaderAgentId
+      ? filterToolIds(agentProjectionSelectors.plugins(headerAgent))
+      : undefined;
+    const isHeaderInbox = resolvedHeaderAgentId
+      ? inboxAgentId === resolvedHeaderAgentId
+      : undefined;
 
     const displayTitle =
       (isHeaderInbox ?? isInbox)

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfigStatus } from '@/store/agent/projection';
 
 /**
  * Surfaces an agent-config fetch failure above the chat input with a retry
@@ -16,8 +16,8 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 const AgentConfigError = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useConversationStore(contextSelectors.agentId);
-  const errorMessage = useAgentStore(agentByIdSelectors.getAgentConfigErrorById(agentId));
-  const isConfigMissing = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+  const errorMessage = useAgentConfigStatus(agentId).error;
+  const isConfigMissing = useAgentConfigStatus(agentId).isLoading;
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
 
   if (!errorMessage || !isConfigMissing) return null;

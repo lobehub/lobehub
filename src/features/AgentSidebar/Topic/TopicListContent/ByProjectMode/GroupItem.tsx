@@ -18,7 +18,7 @@ import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -172,13 +172,9 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const currentAgentId = targetAgentId ?? agentId;
   const router = useQueryRoute();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(currentAgentId ?? ''));
-  const isHeterogeneous = useAgentStore((s) =>
-    currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
-  );
-  const isWorkspaceAgent = useAgentStore((s) =>
-    currentAgentId ? agentByIdSelectors.isWorkspaceAgentById(currentAgentId)(s) : false,
-  );
+  const agencyConfig = useAgentValue(currentAgentId ?? '', agentProjectionSelectors.agencyConfig);
+  const isHeterogeneous = useAgentValue(currentAgentId, agentProjectionSelectors.heterogeneous);
+  const isWorkspaceAgent = useAgentValue(currentAgentId, agentProjectionSelectors.workspaceScoped);
   const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
 
   const handleAddTopic = useCallback(async () => {

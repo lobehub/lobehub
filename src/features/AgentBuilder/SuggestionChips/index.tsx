@@ -7,8 +7,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SuggestQuestions, { type SuggestMode } from '@/features/SuggestQuestions';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfig } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 
 import { useBuilderSuggestionFeedbackStore } from './feedbackStore';
@@ -106,9 +105,7 @@ const SuggestionChips = memo<SuggestionChipsProps>(
     const { t: tCommon } = useTranslation('common');
     const { contextSummary, generationMode, locale, targetId } = useBuilderContext(mode);
 
-    const builderConfig = useAgentStore((s) =>
-      agentByIdSelectors.getAgentConfigById(builderAgentId)(s),
-    );
+    const builderConfig = useAgentConfig(builderAgentId);
     const model = builderConfig?.model;
     const provider = builderConfig?.provider;
 

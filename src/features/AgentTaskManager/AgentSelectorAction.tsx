@@ -13,10 +13,13 @@ import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvi
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
+import { useAgentData } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -54,19 +57,25 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
   const [open, setOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
-  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-  const privateUngroupedAgents = useHomeStore(
-    homeAgentListSelectors.privateUngroupedAgents,
+  const pinnedAgents = useHomeSidebarProjection(homeSidebarSelectors.pinnedAgents, isEqual);
+  const agentGroups = useHomeSidebarProjection(homeSidebarSelectors.agentGroups, isEqual);
+  const ungroupedAgents = useHomeSidebarProjection(homeSidebarSelectors.ungroupedAgents, isEqual);
+  const privateAgentGroups = useHomeSidebarProjection(
+    homeSidebarSelectors.privateAgentGroups,
     isEqual,
   );
-  const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
-  const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  const privatePinnedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.privatePinnedAgents,
+    isEqual,
+  );
+  const privateUngroupedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.privateUngroupedAgents,
+    isEqual,
+  );
+  const hasPrivateAgents = useHomeSidebarProjection(homeSidebarSelectors.hasPrivateAgents);
+  const isAgentListInit = useHomeSidebarProjection(homeSidebarSelectors.isAgentListInit);
   const taskAgentId = useAgentStore(builtinAgentSelectors.taskAgentId);
-  const taskAgentData = useAgentStore((s) => s.agentMap[taskAgentId || '']);
+  const taskAgentData = useAgentData(taskAgentId);
 
   useFetchAgentList();
 
