@@ -1,7 +1,9 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, or } from 'drizzle-orm';
 
 import {
+  agents,
+  agentsFiles,
   agentsKnowledgeBases,
   documents,
   knowledgeBaseFiles,
@@ -252,15 +254,63 @@ export const filterRetrievableKnowledgeBaseIds = async (
   const attachedRows = await ctx.serverDB
     .select({ id: agentsKnowledgeBases.knowledgeBaseId })
     .from(agentsKnowledgeBases)
+    .innerJoin(agents, eq(agents.id, agentsKnowledgeBases.agentId))
     .where(
       and(
         inArray(agentsKnowledgeBases.knowledgeBaseId, restrictedRequested),
         eq(agentsKnowledgeBases.enabled, true),
+        // The carve-out only counts attachments the caller can actually reach:
+        // a KB enabled solely on someone else's private agent must not open
+        // retrieval for the whole workspace.
+        or(eq(agents.visibility, 'public'), eq(agents.userId, ctx.userId)),
       ),
     );
   const attached = new Set(attachedRows.map((row) => row.id));
 
   return knowledgeIds.filter((id) => !restrictedSet.has(id) || attached.has(id));
+};
+
+/**
+ * Filter caller-supplied file ids for retrieval (vector search). A file
+ * linked to a restricted KB stays retrievable only when it is also directly
+ * attached (enabled) to an agent the caller can reach — the same carve-out
+ * `filterRetrievableKnowledgeBaseIds` applies at the KB level.
+ */
+export const filterRetrievableFileIds = async (
+  ctx: KnowledgeBaseAccessCtx,
+  fileIds: string[],
+): Promise<string[]> => {
+  if (!ctx.workspaceId || fileIds.length === 0) return fileIds;
+
+  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  if (restricted.length === 0) return fileIds;
+
+  const restrictedMemberships = await ctx.serverDB
+    .select({ fileId: knowledgeBaseFiles.fileId })
+    .from(knowledgeBaseFiles)
+    .where(
+      and(
+        inArray(knowledgeBaseFiles.fileId, fileIds),
+        inArray(knowledgeBaseFiles.knowledgeBaseId, restricted),
+      ),
+    );
+  const restrictedFiles = new Set(restrictedMemberships.map((row) => row.fileId));
+  if (restrictedFiles.size === 0) return fileIds;
+
+  const attachedRows = await ctx.serverDB
+    .select({ fileId: agentsFiles.fileId })
+    .from(agentsFiles)
+    .innerJoin(agents, eq(agents.id, agentsFiles.agentId))
+    .where(
+      and(
+        inArray(agentsFiles.fileId, [...restrictedFiles]),
+        eq(agentsFiles.enabled, true),
+        or(eq(agents.visibility, 'public'), eq(agents.userId, ctx.userId)),
+      ),
+    );
+  const attached = new Set(attachedRows.map((row) => row.fileId));
+
+  return fileIds.filter((id) => !restrictedFiles.has(id) || attached.has(id));
 };
 
 /**

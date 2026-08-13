@@ -23,6 +23,7 @@ import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
+  filterRetrievableFileIds,
   filterRetrievableKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 
@@ -156,7 +157,7 @@ export const chunkRouter = router({
 
       return ctx.chunkModel.semanticSearch({
         embedding: embeddings![0],
-        fileIds: input.fileIds,
+        fileIds: await filterRetrievableFileIds(ctx, input.fileIds ?? []),
         query: input.query,
       });
     }),
@@ -164,14 +165,16 @@ export const chunkRouter = router({
   semanticSearchForChat: chunkProcedure
     .input(SemanticSearchSchema)
     .mutation(async ({ ctx, input }) => {
-      // Restricted KBs stay retrievable only through the attached-agent
-      // carve-out; handcrafted ids without an enabled attachment are dropped.
-      const retrievableKnowledgeIds = await filterRetrievableKnowledgeBaseIds(
-        ctx,
-        input.knowledgeIds ?? [],
-      );
+      // Restricted KBs (and their files) stay retrievable only through the
+      // attached-agent carve-out; handcrafted ids without a reachable enabled
+      // attachment are dropped.
+      const [retrievableKnowledgeIds, retrievableFileIds] = await Promise.all([
+        filterRetrievableKnowledgeBaseIds(ctx, input.knowledgeIds ?? []),
+        filterRetrievableFileIds(ctx, input.fileIds ?? []),
+      ]);
       const result = await ctx.knowledgeBaseSearchService.semanticSearchForChat({
         ...input,
+        fileIds: retrievableFileIds,
         knowledgeIds: retrievableKnowledgeIds,
       });
 

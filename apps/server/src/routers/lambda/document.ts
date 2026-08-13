@@ -25,6 +25,7 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import { assertContentsNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
 import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
@@ -257,6 +258,9 @@ export const documentRouter = router({
   getDocumentById: documentProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      // KB-scoped documents inherit the KB's public visibility, so direct
+      // reads must honor the restricted-KB (member No-access) policy too.
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       const doc = await ctx.documentService.getDocumentById(input.id);
       // `source` is a storage key for file-backed documents; sign it so PDF viewers
       // and downloads receive a usable URL. Absolute URLs (web sources) pass through.
@@ -275,6 +279,7 @@ export const documentRouter = router({
   listDocumentHistory: documentProcedure
     .input(listDocumentHistoryInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.listDocumentHistory(
         {
           ...input,
@@ -289,6 +294,7 @@ export const documentRouter = router({
   getDocumentHistoryItem: documentProcedure
     .input(getDocumentHistoryItemInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.getDocumentHistoryItem(input, {
         historySince: getFreeDocumentHistorySince(),
       });
@@ -297,6 +303,7 @@ export const documentRouter = router({
   compareDocumentHistoryItems: documentProcedure
     .input(compareDocumentHistoryItemsInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.compareDocumentHistoryItems(input, {
         historySince: getFreeDocumentHistorySince(),
       });

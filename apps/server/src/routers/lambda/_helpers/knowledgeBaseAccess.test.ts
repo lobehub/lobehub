@@ -9,6 +9,7 @@ import {
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseAttachable,
   filterRestrictedKnowledgeBases,
+  filterRetrievableFileIds,
   filterRetrievableKnowledgeBaseIds,
   getRestrictedKnowledgeBaseIds,
 } from './knowledgeBaseAccess';
@@ -159,6 +160,33 @@ describe('filterRetrievableKnowledgeBaseIds', () => {
     await expect(
       filterRetrievableKnowledgeBaseIds(ctx, ['kb-open', 'kb-restricted', 'kb-dropped']),
     ).resolves.toEqual(['kb-open', 'kb-restricted']);
+  });
+});
+
+describe('filterRetrievableFileIds', () => {
+  it('passes ids through in personal mode and when nothing is restricted', async () => {
+    const personal = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1' };
+    await expect(filterRetrievableFileIds(personal, ['file-1'])).resolves.toEqual(['file-1']);
+
+    const ws = { serverDB: dbWithResults([]), userId: 'member', workspaceId: 'ws-1' };
+    await expect(filterRetrievableFileIds(ws, ['file-1'])).resolves.toEqual(['file-1']);
+  });
+
+  it('keeps a restricted-KB file only when directly attached to a reachable agent', async () => {
+    const ctx = {
+      // 1st select: restriction rows; 2nd: restricted memberships; 3rd: enabled attachments
+      serverDB: dbWithResults(
+        [{ id: 'kb-restricted' }],
+        [{ fileId: 'file-kept' }, { fileId: 'file-dropped' }],
+        [{ fileId: 'file-kept' }],
+      ),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      filterRetrievableFileIds(ctx, ['file-open', 'file-kept', 'file-dropped']),
+    ).resolves.toEqual(['file-open', 'file-kept']);
   });
 });
 
