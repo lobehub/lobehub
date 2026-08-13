@@ -588,7 +588,7 @@ export const executeHeterogeneousAgent = async (
     );
   };
 
-  let agentSessionId: string | undefined;
+  let ipcRunSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
   let fallbackPromise: Promise<void> | undefined;
@@ -1848,15 +1848,15 @@ export const executeHeterogeneousAgent = async (
           runExternalAccountId = quotaAccountPlan.externalAccountId;
         });
     }
-    agentSessionId = result.sessionId;
-    if (!agentSessionId) throw new Error('Agent session returned no sessionId');
+    ipcRunSessionId = result.sessionId;
+    if (!ipcRunSessionId) throw new Error('Agent session returned no sessionId');
 
     writeTopicStatus('running');
 
     // Register cancel hook on the operation — when the user hits Stop, the op
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
-    const sidForCancel = agentSessionId;
+    const sidForCancel = ipcRunSessionId;
     get().onOperationCancel?.(operationId, () => {
       heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
     });
@@ -2091,7 +2091,7 @@ export const executeHeterogeneousAgent = async (
       }
     };
 
-    unsubscribe = subscribeBroadcasts(agentSessionId, {
+    unsubscribe = subscribeBroadcasts(ipcRunSessionId, {
       onStreamEvent: handleStreamEvent,
 
       onComplete: () => {
@@ -2330,7 +2330,7 @@ export const executeHeterogeneousAgent = async (
       operationId,
       prompt: message,
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
-      sessionId: agentSessionId,
+      sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
     });
@@ -2348,7 +2348,7 @@ export const executeHeterogeneousAgent = async (
     // IPC, which already returns the freshest `agentSessionId` main has
     // mirrored from `pipeline.sessionId`.
     const sessionInfo = await heterogeneousAgentService
-      .getSessionInfo(agentSessionId)
+      .getSessionInfo(ipcRunSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
       // Best-effort: a rejected metadata save must NOT throw past the queue
@@ -2446,8 +2446,18 @@ export const executeHeterogeneousAgent = async (
   } finally {
     await waitForCompletionCallback();
     unsubscribe?.();
-    // Don't stopSession here — keep it alive for multi-turn resume.
-    // Session cleanup happens on topic deletion or Electron quit.
+    // The desktop IPC session only owns this run's config and process handles.
+    // Multi-turn resume uses the native agentSessionId persisted above, so the
+    // IPC session must be released after every run instead of accumulating in
+    // the Electron main-process session map until quit.
+    if (ipcRunSessionId) {
+      try {
+        await heterogeneousAgentService.stopSession(ipcRunSessionId);
+      } catch (err) {
+        // Cleanup is best-effort and must not replace the run's real outcome.
+        console.error('[HeterogeneousAgent] IPC run session cleanup failed:', err);
+      }
+    }
 
     // Backstop: if neither onComplete nor onError ever ran (e.g. the
     // heteroAgentSessionComplete IPC was missed, or its listener was torn down
