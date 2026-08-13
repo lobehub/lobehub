@@ -1105,6 +1105,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('failed to download or process media content', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('Unable to download the file. Please verify the URL and try again.'),
   },
   {
