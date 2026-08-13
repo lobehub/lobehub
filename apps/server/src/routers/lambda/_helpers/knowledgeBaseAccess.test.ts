@@ -7,6 +7,7 @@ import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspace
 import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseAttachable,
   filterRestrictedKnowledgeBases,
   getRestrictedKnowledgeBaseIds,
 } from './knowledgeBaseAccess';
@@ -131,6 +132,36 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
     };
 
     await expect(assertFileNotInRestrictedKnowledgeBase(ctx, 'file-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('assertKnowledgeBaseAttachable', () => {
+  it('passes through in personal mode', async () => {
+    const ctx = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1' };
+
+    await expect(assertKnowledgeBaseAttachable(ctx, 'kb-1')).resolves.toBeUndefined();
+  });
+
+  it('throws FORBIDDEN when attaching a restricted KB', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-1' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(assertKnowledgeBaseAttachable(ctx, 'kb-1')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('passes when the KB is not restricted for the caller', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-other' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(assertKnowledgeBaseAttachable(ctx, 'kb-1')).resolves.toBeUndefined();
   });
 });
 

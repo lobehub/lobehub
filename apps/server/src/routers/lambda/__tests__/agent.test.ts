@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
@@ -78,6 +79,9 @@ vi.mock('@/server/services/agent', () => ({
 }));
 
 vi.mock('@/server/services/workspacePermission', () => ({
+  getWorkspaceScopedPermissionMatches: vi
+    .fn()
+    .mockResolvedValue({ hasAllScope: false, hasOwnerScope: true }),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
@@ -508,6 +512,91 @@ describe('agentRouter', () => {
         mockInput.knowledgeBaseId,
         mockInput.enabled,
       );
+    });
+  });
+
+  describe('restricted KB attach guards', () => {
+    const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
+
+    /** Serves one prepared result per `select()` call, in order. */
+    const dbWithResults = (...results: unknown[][]) => {
+      let call = 0;
+      const next = () => {
+        const promise = Promise.resolve(results[call++] ?? []);
+        return Object.assign(promise, { limit: () => promise });
+      };
+      return {
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({ where: next }),
+            where: next,
+          }),
+        }),
+      } as any;
+    };
+
+    it('blocks attaching a restricted knowledge base by id', async () => {
+      // restriction rows for the caller
+      vi.mocked(getServerDB).mockReturnValueOnce(dbWithResults([{ id: 'kb-restricted' }]));
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await expect(
+        caller.createAgentKnowledgeBase({ agentId: 'agent1', knowledgeBaseId: 'kb-restricted' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.createAgentKnowledgeBase).not.toHaveBeenCalled();
+    });
+
+    it('blocks re-enabling a restricted knowledge base but allows disabling it', async () => {
+      vi.mocked(getServerDB)
+        .mockReturnValueOnce(dbWithResults([{ id: 'kb-restricted' }]))
+        .mockReturnValueOnce(dbWithResults([{ id: 'kb-restricted' }]));
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await expect(
+        caller.toggleKnowledgeBase({
+          agentId: 'agent1',
+          enabled: true,
+          knowledgeBaseId: 'kb-restricted',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.toggleKnowledgeBase).not.toHaveBeenCalled();
+
+      await caller.toggleKnowledgeBase({
+        agentId: 'agent1',
+        enabled: false,
+        knowledgeBaseId: 'kb-restricted',
+      });
+      expect(agentModelMock.toggleKnowledgeBase).toHaveBeenCalledWith(
+        'agent1',
+        'kb-restricted',
+        false,
+      );
+    });
+
+    it('blocks attaching files that live in a restricted knowledge base', async () => {
+      // 1st select: restriction rows; 2nd select: restricted file membership hit
+      vi.mocked(getServerDB).mockReturnValueOnce(
+        dbWithResults([{ id: 'kb-restricted' }], [{ fileId: 'file-1' }]),
+      );
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await expect(
+        caller.createAgentFiles({ agentId: 'agent1', fileIds: ['file-1'] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.createAgentFiles).not.toHaveBeenCalled();
+    });
+
+    it('blocks re-enabling a file from a restricted knowledge base', async () => {
+      // 1st select: file memberships; 2nd select: restriction rows
+      vi.mocked(getServerDB).mockReturnValueOnce(
+        dbWithResults([{ knowledgeBaseId: 'kb-restricted' }], [{ id: 'kb-restricted' }]),
+      );
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await expect(
+        caller.toggleFile({ agentId: 'agent1', enabled: true, fileId: 'file-1' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.toggleFile).not.toHaveBeenCalled();
     });
   });
 

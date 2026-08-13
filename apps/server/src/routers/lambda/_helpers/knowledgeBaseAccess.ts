@@ -150,6 +150,28 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
 };
 
 /**
+ * Assert the caller may attach (or re-enable) a knowledge base on an agent.
+ * A restricted KB is invisible to non-privileged members, so attaching by a
+ * known id must fail the same way — otherwise agent retrieval would resurrect
+ * access the picker already denies. Detaching / disabling an already attached
+ * row stays allowed and is deliberately not gated here.
+ */
+export const assertKnowledgeBaseAttachable = async (
+  ctx: KnowledgeBaseAccessCtx,
+  knowledgeBaseId: string,
+): Promise<void> => {
+  if (!ctx.workspaceId) return;
+
+  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  if (restricted.includes(knowledgeBaseId)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only knowledge base managers can attach this knowledge base',
+    });
+  }
+};
+
+/**
  * Assert a full-content batch read (`chunk.getFileContents`) does not leak a
  * restricted knowledge base's content. Accepts the mixed id list the endpoint
  * takes: `file_*` ids resolve through `knowledge_base_files`, `docs_*` ids

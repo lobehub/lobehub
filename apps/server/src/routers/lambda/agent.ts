@@ -50,6 +50,9 @@ import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  assertFileNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseAttachable,
   getRestrictedKnowledgeBaseIds,
   getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
@@ -379,6 +382,8 @@ export const agentRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
+      // Attaching by id must fail for files inside restricted KBs the picker hides.
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, input.fileIds);
       return ctx.agentModel.createAgentFiles(input.agentId, input.fileIds, input.enabled);
     }),
 
@@ -402,6 +407,8 @@ export const agentRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
+      // Attaching by id must fail for restricted KBs the picker already hides.
+      await assertKnowledgeBaseAttachable(ctx, input.knowledgeBaseId);
       return ctx.agentModel.createAgentKnowledgeBase(
         input.agentId,
         input.knowledgeBaseId,
@@ -803,6 +810,10 @@ export const agentRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
+      // Re-enabling counts as attaching; disabling an attached row stays allowed.
+      if (input.enabled !== false) {
+        await assertFileNotInRestrictedKnowledgeBase(ctx, input.fileId);
+      }
       return ctx.agentModel.toggleFile(input.agentId, input.fileId, input.enabled);
     }),
 
@@ -825,6 +836,10 @@ export const agentRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
+      }
+      // Re-enabling counts as attaching; disabling an attached row stays allowed.
+      if (input.enabled !== false) {
+        await assertKnowledgeBaseAttachable(ctx, input.knowledgeBaseId);
       }
       return ctx.agentModel.toggleKnowledgeBase(
         input.agentId,
