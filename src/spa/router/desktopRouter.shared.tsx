@@ -236,6 +236,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules'),
+              'Desktop > Chat > Self Learning > Domain > Rules',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/:domainId/rules',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/agent/permission'),
               'Desktop > Chat > Permission',
             ),

@@ -81,6 +81,8 @@ const DomainDetail = memo(() => {
   const selfLearningPath = activeAgentId
     ? urlJoin('/agent', activeAgentId, 'self-learning')
     : undefined;
+  const rulesPath =
+    selfLearningPath && domainId ? urlJoin(selfLearningPath, domainId, 'rules') : '';
 
   useEffect(() => {
     if (!isLoading && !error && !data && selfLearningPath) {
@@ -219,7 +221,12 @@ const DomainDetail = memo(() => {
 
                     <div className={styles.learningGrid}>
                       <CoverageCloud detail={data} />
-                      <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
+                      <RuleList
+                        compact
+                        lessons={lessons ?? []}
+                        stats={data.lessonStats}
+                        viewAllHref={rulesPath}
+                      />
                     </div>
 
                     <Block gap={7} padding={16} variant={'outlined'}>

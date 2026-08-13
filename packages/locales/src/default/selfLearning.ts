@@ -89,6 +89,8 @@ export default {
   'rules.tier.unused': 'Never used',
   'rules.title': 'Rules',
   'rules.unanchored': 'no anchor',
+  'rules.viewAll': 'View all {{count}} rules',
+  'rules.allTitle': 'All rules',
 
   'shape.declining': 'turning down = losing ability',
   'shape.flat': 'flat = learned it all',

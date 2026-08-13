@@ -3,7 +3,7 @@
 import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { ChevronRightIcon, PlusIcon, SparklesIcon } from 'lucide-react';
+import { ChevronRightIcon, GraduationCapIcon, PlusIcon, SparklesIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -163,6 +163,7 @@ const SelfLearning = memo(() => {
                 <Empty
                   description={t('empty.desc')}
                   descriptionProps={{ fontSize: 13 }}
+                  icon={GraduationCapIcon}
                   style={{ maxWidth: 420 }}
                   title={t('empty.title')}
                   action={
