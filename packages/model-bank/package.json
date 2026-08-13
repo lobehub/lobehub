@@ -94,6 +94,7 @@
     "./zeroone": "./src/aiModels/zeroone.ts",
     "./zhipu": "./src/aiModels/zhipu.ts",
     "./standardParameters": "./src/standard-parameters/index.ts",
+    "./standardParameters/fromJsonSchema": "./src/standard-parameters/fromJsonSchema.ts",
     "./types": "./src/types/index.ts"
   },
   "scripts": {
