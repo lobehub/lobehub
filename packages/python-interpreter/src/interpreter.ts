@@ -21,10 +21,12 @@ export const getPythonInterpreter = (): Comlink.Remote<PythonWorkerType> | undef
 
     if (typeof Worker !== 'undefined') {
       try {
+        // Classic, not a module worker: `worker.ts` loads Pyodide through
+        // `importScripts`, and that call throws "Module scripts don't support
+        // importScripts()" under `type: 'module'`. The bundler emits this worker as
+        // an IIFE anyway, so the module type was never matched by the output.
         interpreter = Comlink.wrap<PythonWorkerType>(
-          new Worker(new URL('worker.ts', import.meta.url), {
-            type: 'module',
-          }),
+          new Worker(new URL('worker.ts', import.meta.url)),
         );
       } catch (error) {
         constructionError = error;
