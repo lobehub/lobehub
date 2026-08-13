@@ -6,6 +6,7 @@ import {
   CodeBuddyAdapter,
   CodexAdapter,
   CursorAdapter,
+  GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
   PiAdapter,
@@ -41,6 +42,10 @@ describe('registry', () => {
 
     it('creates a CursorAdapter for "cursor"', () => {
       expect(createAdapter('cursor')).toBeInstanceOf(CursorAdapter);
+    });
+
+    it('creates a GrokBuildAdapter for "grok-build"', () => {
+      expect(createAdapter('grok-build')).toBeInstanceOf(GrokBuildAdapter);
     });
 
     it('creates an OpenCodeAdapter for "opencode"', () => {

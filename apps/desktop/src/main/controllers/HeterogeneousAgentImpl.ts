@@ -47,11 +47,14 @@ import {
   buildAgentInput,
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
   ClaudeAgentSdkSession,
   CodexAppServerSession,
   createFileStoreImageUploader,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
+  GrokAcpSession,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -297,6 +300,7 @@ interface AgentSession {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  grokAcpSession?: GrokAcpSession;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -1125,6 +1129,10 @@ export default class HeterogeneousAgentCtr {
       });
     }
 
+    if (session.agentType === 'grok-build') {
+      return this.sendPromptWithGrokAcp(params, session);
+    }
+
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
     // into `--mcp-config`. Other agents skip this entirely.
@@ -1477,6 +1485,108 @@ export default class HeterogeneousAgentCtr {
       });
     } finally {
       if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+    }
+  }
+
+  private async sendPromptWithGrokAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let prompt;
+    try {
+      prompt = await buildGrokAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Grok Build ACP input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Grok Build: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const traceInput = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildGrokAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: traceInput,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
+    const acpSession = new GrokAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.grokAcpSession = acpSession;
+
+    logger.info('Starting Grok Build ACP session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await acpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      logger.error('Grok Build ACP session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.grokAcpSession === acpSession) session.grokAcpSession = undefined;
     }
   }
 
@@ -1907,6 +2017,10 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.grokAcpSession) {
+      session.grokAcpSession.interrupt();
+      return;
+    }
     if (session.appServerSession) {
       try {
         await session.appServerSession.interrupt();
@@ -1939,6 +2053,11 @@ export default class HeterogeneousAgentCtr {
   async stopSession(params: StopSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
+
+    if (session.grokAcpSession) {
+      session.cancelledByUs = true;
+      session.grokAcpSession.close();
+    }
 
     if (session.appServerSession) {
       session.cancelledByUs = true;
@@ -2017,6 +2136,10 @@ export default class HeterogeneousAgentCtr {
     electronApp.on('before-quit', () => {
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
+        if (session.grokAcpSession) {
+          session.cancelledByUs = true;
+          session.grokAcpSession.close();
+        }
         if (session.appServerSession) {
           session.cancelledByUs = true;
           session.appServerSession.close();

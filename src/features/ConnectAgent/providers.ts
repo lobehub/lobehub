@@ -14,6 +14,7 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Grok,
   HermesAgent,
   Kimi,
   OpenClaw,
@@ -37,6 +38,7 @@ export interface ConnectableProvider {
     | typeof CodeBuddy
     | typeof Codex
     | typeof Cursor
+    | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
     | typeof OpenClaw
@@ -69,6 +71,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'codebuddy': CodeBuddy,
   'codex': Codex,
   'cursor': Cursor,
+  'grok-build': Grok,
   'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,

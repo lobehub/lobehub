@@ -102,12 +102,20 @@ const {
   codexAppServerCloseMock,
   codexAppServerConstructMock,
   codexAppServerInterruptMock,
+  grokAcpSessionCloseMock,
+  grokAcpSessionConstructMock,
+  grokAcpSessionInterruptMock,
+  grokAcpSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
   codexAppServerCloseMock: vi.fn(),
   codexAppServerConstructMock: vi.fn(),
   codexAppServerInterruptMock: vi.fn(),
+  grokAcpSessionCloseMock: vi.fn(),
+  grokAcpSessionConstructMock: vi.fn(),
+  grokAcpSessionInterruptMock: vi.fn(),
+  grokAcpSessionRunMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -201,10 +209,29 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockGrokAcpSession {
+    constructor(private readonly options: any) {
+      grokAcpSessionConstructMock(options);
+    }
+
+    close() {
+      grokAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      grokAcpSessionInterruptMock();
+    }
+
+    run() {
+      return grokAcpSessionRunMock(this.options);
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerSession: MockCodexAppServerSession,
+    GrokAcpSession: MockGrokAcpSession,
   };
 });
 
@@ -306,6 +333,39 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerCloseMock.mockReset();
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
+    grokAcpSessionCloseMock.mockReset();
+    grokAcpSessionConstructMock.mockReset();
+    grokAcpSessionInterruptMock.mockReset();
+    grokAcpSessionRunMock.mockReset();
+    grokAcpSessionRunMock.mockImplementation(async (options) => {
+      const now = Date.now();
+      options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: options.operationId,
+        sessionId: options.sessionId,
+        state: 'running',
+        transport: 'acp-stdio',
+      });
+      options.onSessionId('grok-native-session');
+      await options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'acp-stdio' },
+          operationId: options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: options.operationId,
+        sessionId: options.sessionId,
+        state: 'closed',
+        transport: 'acp-stdio',
+      });
+    });
     loggerInfoMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
@@ -961,6 +1021,136 @@ describe('HeterogeneousAgentCtr', () => {
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
       }
+    });
+  });
+
+  describe('sendPrompt (grok-build ACP)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+    });
+
+    it('uses the ACP runtime, persists the native session id, and broadcasts its lifecycle', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        args: ['--model', 'grok-build'],
+        command: 'grok',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-grok',
+        prompt: 'implement this',
+        sessionId,
+        systemContext: 'selected context',
+      });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(grokAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'grok-build'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'grok',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-grok',
+          prompt: [
+            { text: 'selected context', type: 'text' },
+            { text: 'implement this', type: 'text' },
+          ],
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'grok-native-session',
+      });
+
+      const statusPayloads = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentRuntimeStatus')
+        .map(([, payload]) => payload);
+      expect(statusPayloads).toEqual([
+        expect.objectContaining({ state: 'running', transport: 'acp-stdio' }),
+        expect.objectContaining({ state: 'closed', transport: 'acp-stdio' }),
+      ]);
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentEvent',
+        expect.objectContaining({
+          event: expect.objectContaining({ type: 'agent_runtime_end' }),
+          sessionId,
+        }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each([
+      ['cancelSession', grokAcpSessionInterruptMock],
+      ['stopSession', grokAcpSessionCloseMock],
+    ] as const)('%s delegates to the active ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      grokAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+      });
+      const promptRun = ctr.sendPrompt({ operationId: 'op-grok', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(grokAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await promptRun;
+    });
+
+    it('classifies ACP authentication failures for the existing sign-in guide', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      grokAcpSessionRunMock.mockRejectedValue(
+        new Error('Authentication required. Run `grok login`, then retry.'),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-grok', prompt: 'work', sessionId }),
+      ).rejects.toThrow('Grok Build could not authenticate');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'grok-build',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command: 'grok',
+        }),
+        sessionId,
+      });
     });
   });
 

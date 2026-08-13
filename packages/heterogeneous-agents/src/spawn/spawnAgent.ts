@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
@@ -9,6 +10,7 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStrea
 import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
+import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
@@ -399,6 +401,94 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   }
 };
 
+const spawnGrokAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
+  const stderr = new PassThrough();
+  const queue: AgentStreamEvent[] = [];
+  let streamEnded = false;
+  let streamError: Error | undefined;
+  let wakeup: (() => void) | undefined;
+
+  const wake = () => {
+    const resolve = wakeup;
+    wakeup = undefined;
+    resolve?.();
+  };
+
+  const session = new GrokAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    onEvents: (events) => {
+      queue.push(...events);
+      wake();
+    },
+    onRawMessage: (line) => options.onRawStdout?.(Buffer.from(line)),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: (data) => {
+      stderr.write(data);
+    },
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+
+  const exit = session
+    .run()
+    .then(() => ({ code: 0, signal: null }))
+    .catch((error) => {
+      streamError = error instanceof Error ? error : new Error(String(error));
+      return { code: 1, signal: null };
+    })
+    .finally(() => {
+      streamEnded = true;
+      stderr.end();
+      wake();
+    });
+
+  const events: AsyncIterable<AgentStreamEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<AgentStreamEvent>> {
+          while (true) {
+            const event = queue.shift();
+            if (event) return { done: false, value: event };
+            if (streamError) throw streamError;
+            if (streamEnded) return { done: true, value: undefined };
+            await new Promise<void>((resolve) => {
+              wakeup = resolve;
+            });
+          }
+        },
+      };
+    },
+  };
+
+  return {
+    events,
+    exit,
+    kill: (signal = 'SIGINT') => {
+      if (signal === 'SIGINT') session.interrupt();
+      else session.close();
+    },
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return session.sessionId;
+    },
+    stderr,
+  };
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Kimi Code,
  * OpenCode, Pi, or Qoder) and yield its stream as unified `AgentStreamEvent`s.
@@ -416,6 +506,17 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
+  const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
+  if (options.agentType === 'grok-build') {
+    return spawnGrokAcpAgent(options, command, cwd);
+  }
+
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
   const args = buildSpawnArgs({
     agentType: options.agentType,
@@ -425,13 +526,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     inputText: inputPlan.stdin,
     resumeSessionId: options.resumeSessionId,
   });
-  const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
   const childEnv = {
     ...process.env,
     ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),

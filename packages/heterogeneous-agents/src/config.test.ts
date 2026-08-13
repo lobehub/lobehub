@@ -18,6 +18,7 @@ describe('heterogeneous agent config', () => {
       'codebuddy',
       'codex',
       'cursor',
+      'grok-build',
       'kimi-code',
       'opencode',
       'pi',
@@ -55,6 +56,12 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'amp',
       title: 'Amp',
       type: 'amp',
+    });
+    expect(getHeterogeneousAgentConfig('grok-build')).toMatchObject({
+      auth: { signInCommand: 'grok login' },
+      defaultCommand: 'grok',
+      title: 'Grok Build',
+      type: 'grok-build',
     });
     expect(getHeterogeneousAgentConfig('kimi-code')).toMatchObject({
       defaultCommand: 'kimi',
@@ -118,6 +125,7 @@ describe('heterogeneous agent config', () => {
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
       'cursor': 'Cursor',
+      'grok-build': 'Grok Build',
       'hermes': 'Hermes',
       'kimi-code': 'Kimi Code',
       'openclaw': 'OpenClaw',

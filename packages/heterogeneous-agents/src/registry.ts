@@ -12,6 +12,7 @@ import {
   CodeBuddyAdapter,
   CodexAdapter,
   CursorAdapter,
+  GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
   PiAdapter,
@@ -39,6 +40,9 @@ const localAgentRegistry = {
   },
   'cursor': {
     createAdapter: () => new CursorAdapter(),
+  },
+  'grok-build': {
+    createAdapter: () => new GrokBuildAdapter(),
   },
   'kimi-code': {
     createAdapter: () => new KimiCodeAdapter(),
