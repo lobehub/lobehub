@@ -799,14 +799,7 @@ export class AiAgentService {
       if (marker?.operationId === operationId) {
         await this.topicModel.updateMetadata(topicId, { runningOperation: null });
       } else if (marker?.childOperations) {
-        await this.topicModel.updateMetadata(topicId, {
-          runningOperation: {
-            ...marker,
-            childOperations: marker.childOperations.filter(
-              (child) => child.operationId !== operationId,
-            ),
-          },
-        });
+        await this.topicModel.removeRunningOperationChild(topicId, operationId);
       }
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
