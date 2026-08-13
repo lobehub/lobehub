@@ -107,6 +107,19 @@ const videoModels: AIVideoModelCard[] = [
       resolution: { default: '720p', enum: ['720p', '1080p'] },
       seed: { default: null },
     },
+    pricing: {
+      units: [
+        {
+          lookup: {
+            pricingParams: ['resolution'],
+            prices: { '1080p': 0.04, '720p': 0.02 },
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    },
     releasedAt: '2026-08-06',
     type: 'video',
   },
