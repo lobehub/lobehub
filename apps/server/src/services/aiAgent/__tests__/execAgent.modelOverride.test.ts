@@ -279,6 +279,33 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.modelRuntimeConfig).toEqual({ model: 'step-3.7-flash', provider: 'stepfun' });
   });
 
+  it('keeps the target agent model when reusing a topic owned by another agent', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      model: 'deepseek-v4-flash',
+      provider: 'lobehub',
+    });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'supervisor-agent',
+      model: 'gpt-5.6-luna',
+      provider: 'openai',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello from the group supervisor',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('deepseek-v4-flash');
+    expect(callArgs.agentConfig.provider).toBe('lobehub');
+    expect(callArgs.modelRuntimeConfig).toEqual({
+      model: 'deepseek-v4-flash',
+      provider: 'lobehub',
+    });
+  });
+
   it('uses the caller model preference when the workspace Agent allows member selection', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
