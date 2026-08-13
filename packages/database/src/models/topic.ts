@@ -1452,7 +1452,7 @@ export class TopicModel {
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
         allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
-      if (ownedRunningOperation) return true;
+      if (allowRunningOperationId) return ownedRunningOperation;
       const canReplaceRunningOperation =
         !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
       if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;

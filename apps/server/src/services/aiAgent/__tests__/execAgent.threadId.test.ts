@@ -251,6 +251,16 @@ describe('AiAgentService.execAgent - threadId handling', () => {
       });
     });
 
+    it('does not trust a public member role to suppress the marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { orchestrationRole: 'member', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(runningMarkCalls()).toHaveLength(1);
+    });
+
     it('does not claim the mark for an isolation-thread run', async () => {
       // A callAgent / callSubAgent / group-member child executes on the PARENT's
       // topic. Claiming the mark pointed every client reconnect at the child's
