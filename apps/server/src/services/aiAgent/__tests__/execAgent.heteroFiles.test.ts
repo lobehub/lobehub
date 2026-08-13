@@ -30,8 +30,8 @@ const {
   mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Local hetero (claude-code / codebuddy / codex / opencode) seeds publishAgentRuntimeInit so the
-// agent-gateway DO reports `running` on a later reconnect. Stub the factory so
+// Local hetero (claude-code / codebuddy / codex / cursor / opencode / pi / qoder) seeds
+// publishAgentRuntimeInit so the agent-gateway DO reports `running` on a later reconnect. Stub the factory so
 // the assertion below can verify the init, and so the real one (which probes
 // Redis synchronously) doesn't throw a server-env error in the test env.
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
@@ -465,6 +465,33 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  it('dispatches Cursor to a bound device with its model args', async () => {
+    heteroAgentConfig.model = 'cursor';
+    heteroAgentConfig.provider = 'cursor';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        model: 'sonnet-4-thinking',
+        type: 'cursor',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Cursor on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        args: ['--model', 'sonnet-4-thinking'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('never falls back to a cloud sandbox for unbound OpenCode', async () => {
     heteroAgentConfig.model = 'opencode';
     heteroAgentConfig.provider = 'opencode';
@@ -476,6 +503,24 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Do not run OpenCode in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound Cursor', async () => {
+    heteroAgentConfig.model = 'cursor';
+    heteroAgentConfig.provider = 'cursor';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'cursor' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run Cursor in cloud',
     });
 
     expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));

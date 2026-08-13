@@ -190,6 +190,55 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it("rejects an unrelated `agent` binary and falls back to Cursor's user-local install", async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFile('/Users/x/.grok/bin/agent\n');
+        callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFile('Usage: agent [options] [command] [prompt...]\nStart the Cursor Agent');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('cursor', 'agent');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.local', 'bin', 'agent'),
+          version: 'Usage: agent [options] [command] [prompt...]',
+        });
+        expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
+        expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('requires both the Cursor product banner and agent command signature', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFile('/Users/x/bin/cursor-agent-custom\n');
+        callExecFile('Start the Cursor Agent');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('cursor', 'cursor-agent-custom');
+
+        expect(status.available).toBe(false);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
     it('finds OpenCode in its well-known user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -643,6 +692,11 @@ describe('resolveCliCommand', () => {
     it('defines opencode as the default OpenCode command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
+    });
+
+    it('defines agent as the default Cursor command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
     });
 
     it('defines pi as the default Pi command', async () => {

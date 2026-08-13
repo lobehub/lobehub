@@ -857,6 +857,16 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'cursorInstallGuide.actions.openDocs': 'Open Install Guide',
+  'cursorInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'cursorInstallGuide.afterInstall':
+    'After installing, run `agent login`, then retry your message or click Re-detect in System Tools.',
+  'cursorInstallGuide.desc':
+    'Cursor needs the Cursor CLI to run locally. Install it and make sure the `agent` command is available in your PATH.',
+  'cursorInstallGuide.installWithNpm': 'Recommended install',
+  'cursorInstallGuide.menuNotification.title': 'Cursor CLI not found',
+  'cursorInstallGuide.reason': 'LobeHub could not start Cursor: {{message}}',
+  'cursorInstallGuide.title': 'Install Cursor CLI',
   'workingDirectoryGuide.actions.retry': 'Retry',
   'workingDirectoryGuide.desc':
     'The working directory saved for this conversation no longer exists.',
@@ -903,6 +913,7 @@ export default {
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
+  'newCursorAgent': 'Add Cursor',
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
   'newQoderAgent': 'Add Qoder',
@@ -989,6 +1000,7 @@ export default {
   'connectAgent.providerDesc.claude-code': 'Anthropic coding agent CLI',
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
+  'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.opencode': 'Open-source coding agent CLI',
   'connectAgent.providerDesc.pi': 'Minimal coding agent CLI',

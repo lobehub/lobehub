@@ -116,6 +116,7 @@ export interface ResolveExecutionTargetOptions {
 export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
   type !== 'amp' &&
   type !== 'codebuddy' &&
+  type !== 'cursor' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
   type !== 'openclaw' &&

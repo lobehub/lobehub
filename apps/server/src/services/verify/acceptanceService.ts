@@ -2,9 +2,11 @@ import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
   AcceptanceCheckReviewAction,
+  AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  ReviewProposalOutcome,
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
@@ -21,6 +23,7 @@ import { TopicModel } from '@/database/models/topic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
+import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type {
   AcceptanceItem,
@@ -649,6 +652,10 @@ export class AcceptanceService {
       checkItemIds: string[];
       comment?: string;
       fileIds?: string[];
+      /** Recorded when this decision answered a model proposal. */
+      proposal?: Omit<ReviewProposalOutcome, 'respondedAt'>;
+      /** Which of the three jobs a reject is doing; absent means unclassified. */
+      rejectIntent?: AcceptanceRejectIntent;
     },
   ): Promise<{ resultIds: string[] }> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
@@ -705,19 +712,51 @@ export class AcceptanceService {
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
       ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
+      // Only meaningful on a reject — an accept has no intent to classify.
+      ...(input.rejectIntent && input.action === 'reject'
+        ? { rejectIntent: input.rejectIntent }
+        : {}),
+      ...(input.proposal
+        ? { proposal: { ...input.proposal, respondedAt: new Date().toISOString() } }
+        : {}),
     };
 
-    await Promise.all(
-      [...targets.values()].map((result) => {
-        const { isFalsePositive, isFalseNegative } = computeFalseFlags(result.verdict, decision);
-        return this.resultModel.update(result.id, {
-          isFalseNegative,
-          isFalsePositive,
-          userDecision: decision,
-          userDecisionDetail: detail,
+    // One transaction for the decision AND the proposal's answer. Written
+    // separately, a failing second write left the check rejected while its
+    // prediction stayed unanswered — and the decision then HIDES the proposal,
+    // so nothing could ever reconcile the pair again. Agreement analysis reads
+    // those two rows as a matched set; a durable split is worse than failing.
+    await this.db.transaction(async (tx) => {
+      const resultModel = new VerifyCheckResultModel(tx, this.userId, this.workspaceId);
+
+      await Promise.all(
+        [...targets.values()].map((result) => {
+          const { isFalsePositive, isFalseNegative } = computeFalseFlags(result.verdict, decision);
+          return resultModel.update(result.id, {
+            isFalseNegative,
+            isFalsePositive,
+            userDecision: decision,
+            userDecisionDetail: detail,
+          });
+        }),
+      );
+
+      if (input.proposal) {
+        const answered = await new VerifyReviewPredictionModel(
+          tx,
+          this.userId,
+          this.workspaceId,
+        ).adjudicate(input.proposal.predictionId, {
+          adjudication: input.proposal.adjudication,
+          edit: input.proposal.edit,
         });
-      }),
-    );
+        // A zero-row update means the id was wrong or not ours; committing the
+        // decision alone would produce exactly the split this transaction exists
+        // to prevent.
+        if (!answered) throw new Error(`Proposal "${input.proposal.predictionId}" not found`);
+      }
+    });
+
     log('acceptance %s: %d check result(s) marked %s', acceptanceId, targets.size, decision);
     return { resultIds: [...targets.keys()] };
   };

@@ -16,7 +16,9 @@ import { AgentModel } from '@/database/models/agent';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { WorkspaceModel } from '@/database/models/workspace';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import type { LobeChatDatabase } from '@/database/type';
+import { resolveToolMode } from '@/helpers/executionTarget';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -29,7 +31,9 @@ import {
   renderCommandReply,
   renderFeedbackSubmitted,
   renderInlineError,
+  renderModeStatus,
 } from '@/server/services/bot/replyTemplate';
+import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
@@ -329,7 +333,7 @@ export class MessengerRouter {
         try {
           const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
           if (action) {
-            await this.handleCallbackAction(bot.binder, creds, action);
+            await this.handleCallbackAction(bot.binder, creds, action, bot.chatBot);
             return new Response('OK', { status: 200 });
           }
         } catch (error) {
@@ -779,7 +783,7 @@ export class MessengerRouter {
         try {
           const action = binder.extractActionFromEvent!(event, client);
           if (!action) return;
-          await this.handleCallbackAction(binder, creds, action);
+          await this.handleCallbackAction(binder, creds, action, bot);
         } catch (error) {
           log('onAction handler error: %O', error);
         }
@@ -905,15 +909,104 @@ export class MessengerRouter {
             return;
           }
           // Drop the cached topicId so the next message starts a fresh topic.
-          // Mirrors `/new` in the bot router (BotMessageRouter.buildCommands).
+          // Mirrors `/new` in the bot router (BotMessageRouter.buildCommands):
+          // `replace: true` is what reliably clears topicId (a merged
+          // `undefined` is dropped by the JSON round-trip), while the `/mode`
+          // choice is carried over — it's a conversation preference, and
+          // starting a new topic shouldn't silently revert it.
           try {
-            await ctx.thread.setState({ topicId: undefined }, { replace: true });
+            const toolMode = (await ctx.thread.state)?.toolMode;
+            await ctx.thread.setState(
+              toolMode ? { toolMode, topicId: undefined } : { topicId: undefined },
+              { replace: true },
+            );
           } catch (error) {
             log('command /new: setState failed: %O', error);
           }
           await ctx.reply(strings.newStarted);
         },
         name: 'new',
+      },
+      {
+        description: 'Show or switch the conversation mode (agent | chat)',
+        // Declared so Discord/Slack surface a `/mode <mode>` argument in the
+        // slash picker; the no-arg form shows the current mode.
+        options: [
+          {
+            description: "Target mode: 'agent' or 'chat'; omit to show the current mode",
+            name: 'mode',
+            required: false,
+          },
+        ],
+        handler: async (ctx) => {
+          const replyLocale = getBotReplyLocale(ctx.platform);
+          const strings = getMessengerSystemStrings(ctx.platform);
+          if (!ctx.link) {
+            await ctx.reply(strings.needLink);
+            return;
+          }
+          if (!ctx.thread) {
+            // Mode lives in chat-sdk thread state; without a resolved DM
+            // thread there is nothing to read or write. Mirrors `/new`.
+            await ctx.reply(strings.modeDirectMessageOnly);
+            return;
+          }
+          const arg = ctx.args.trim().toLowerCase();
+          if (!arg) {
+            let override: 'agent' | 'chat' | undefined;
+            try {
+              const state = await ctx.thread.state;
+              override =
+                state?.toolMode === 'agent' || state?.toolMode === 'chat'
+                  ? state.toolMode
+                  : undefined;
+            } catch (error) {
+              log('command /mode: read state failed: %O', error);
+            }
+            // No explicit override → surface the EFFECTIVE mode (the active
+            // agent's configured default) so the picker always carries a
+            // current-mode mark instead of showing two unmarked buttons.
+            const current = override ?? (await this.resolveDefaultMode(ctx.serverDB, ctx.link));
+            // Tap-to-switch picker on platforms with button support (mirrors
+            // /agents); buttons emit `messenger:mode:<agent|chat>`. Platforms
+            // without a picker fall back to the text status + usage reply.
+            // Only offered where a tap writes the same thread this invocation
+            // resolved: DMs, and slash dispatches (whose ctx.thread IS the
+            // canonical DM that handleModeCallback writes via openDM). A
+            // channel text mention resolves the CHANNEL thread — picker taps
+            // would write the DM while this channel's next run reads its own
+            // state — so it gets the text status instead.
+            if (ctx.binder.sendAgentPicker && (ctx.isDM || ctx.source === 'slash')) {
+              await ctx.binder.sendAgentPicker(ctx.chatId, {
+                action: 'mode',
+                entries: MessengerRouter.modePickerEntries(current, strings),
+                // Channel invocation → ephemeral so the picker doesn't
+                // broadcast; DMs stay non-ephemeral so it persists in history.
+                ephemeralTo: ctx.isDM ? undefined : ctx.authorUserId,
+                interaction: ctx.interaction,
+                text: strings.modePicker,
+              });
+              return;
+            }
+            await ctx.reply(renderModeStatus(current, replyLocale));
+            return;
+          }
+          if (arg !== 'agent' && arg !== 'chat') {
+            await ctx.reply(renderCommandReply('cmdModeUsage', replyLocale));
+            return;
+          }
+          try {
+            await ctx.thread.setState({ toolMode: arg });
+          } catch (error) {
+            log('command /mode: setState failed: %O', error);
+            await ctx.reply(strings.genericError);
+            return;
+          }
+          await ctx.reply(
+            renderCommandReply(arg === 'agent' ? 'cmdModeSetAgent' : 'cmdModeSetChat', replyLocale),
+          );
+        },
+        name: 'mode',
       },
       {
         description: 'Stop the current execution',
@@ -1486,14 +1579,16 @@ export class MessengerRouter {
    * (Slack/Telegram) or chat-sdk's `onAction` event (Discord). Both paths
    * normalize to the same `InboundCallbackAction` shape and delegate the
    * outbound ack (toast + picker re-render) to `binder.acknowledgeCallback`.
-   * Recognizes `messenger:switch:<agentId>` (agent picker) and
-   * `messenger:scope:<scopeId>` (scope picker); new actions can be added by
-   * extending the dispatch below.
+   * Recognizes `messenger:switch:<agentId>` (agent picker),
+   * `messenger:scope:<scopeId>` (scope picker) and
+   * `messenger:mode:<agent|chat>` (conversation-mode picker); new actions can
+   * be added by extending the dispatch below.
    */
   private async handleCallbackAction(
     binder: MessengerPlatformBinder,
     creds: InstallationCredentials,
     action: InboundCallbackAction,
+    chatBot?: Chat<any>,
   ): Promise<void> {
     if (!binder.acknowledgeCallback) return;
 
@@ -1503,6 +1598,12 @@ export class MessengerRouter {
     const scopeMatch = action.data.match(/^messenger:scope:(.+)$/);
     if (scopeMatch) {
       await this.handleScopeCallback(creds, action, scopeMatch[1], ack);
+      return;
+    }
+
+    const modeMatch = action.data.match(/^messenger:mode:(agent|chat)$/);
+    if (modeMatch) {
+      await this.handleModeCallback(creds, action, modeMatch[1] as 'agent' | 'chat', ack, chatBot);
       return;
     }
 
@@ -1543,6 +1644,169 @@ export class MessengerRouter {
       updatedPicker: {
         entries: this.toPickerEntries(userAgents, targetAgentId, strings),
         text: strings.receiveMessagesPicker,
+      },
+    });
+  }
+
+  /**
+   * Effective mode for a conversation with no explicit `/mode` override: the
+   * active agent's chatConfig default, with the caller's workspace member-mode
+   * override layered on top — the same preference path `execAgent` resolves at
+   * execution time, so the picker mark matches what the next bot turn actually
+   * runs. `custom` keeps tools enabled (a hand-picked set), so the binary
+   * picker surfaces it on the Agent side. Best-effort: any lookup failure
+   * falls back to `agent` (the product default) rather than blocking the
+   * picker.
+   */
+  private async resolveDefaultMode(
+    serverDB: LobeChatDatabase,
+    link: SafeMessengerAccountLink,
+  ): Promise<'agent' | 'chat'> {
+    if (!link.activeAgentId) return 'agent';
+    try {
+      const agent = await new AgentModel(
+        serverDB,
+        link.userId,
+        link.workspaceId ?? undefined,
+      ).getAgentConfigById(link.activeAgentId);
+      const chatConfig = (agent as any)?.chatConfig ?? undefined;
+      const effectiveChatConfig =
+        (await this.resolveMemberModeChatConfig(serverDB, link, agent)) ?? chatConfig;
+      return resolveToolMode(effectiveChatConfig) === 'chat' ? 'chat' : 'agent';
+    } catch (error) {
+      log('resolveDefaultMode: falling back to agent default: %O', error);
+      return 'agent';
+    }
+  }
+
+  /**
+   * Mirror `execAgent`'s workspace member-mode resolution: a non-manager's
+   * `agentModeOverrides` entry patches `enableAgentMode` over the shared
+   * chatConfig (an explicit `chatConfig.toolMode` still wins inside
+   * `resolveToolMode`, exactly as at execution time). Returns undefined when
+   * no override applies — including on lookup failure, where the shared
+   * config is a better fallback than the product default.
+   */
+  private async resolveMemberModeChatConfig(
+    serverDB: LobeChatDatabase,
+    link: SafeMessengerAccountLink,
+    agent: unknown,
+  ): Promise<Record<string, unknown> | undefined> {
+    if (!link.workspaceId || !link.activeAgentId) return undefined;
+    try {
+      const preference = await new WorkspaceUserSettingsModel(
+        serverDB,
+        link.userId,
+        link.workspaceId,
+      ).getPreference();
+      const memberModeOverride = preference.agentModeOverrides?.[link.activeAgentId];
+      if (memberModeOverride === undefined) return undefined;
+
+      const agentRow = agent as
+        | {
+            chatConfig?: Record<string, unknown>;
+            userId?: string;
+            visibility?: string;
+            workspaceId?: string;
+          }
+        | undefined;
+      // Managers run the shared config and ignore their own stale overrides.
+      // Fail-closed like execAgent: a permission-lookup error keeps applying
+      // member policy rather than granting shared-config semantics.
+      let canManage = agentRow?.userId === link.userId;
+      const agentWorkspaceId = agentRow?.workspaceId ?? link.workspaceId;
+      // Unknown author → skip the lookup and stay fail-closed (member policy
+      // applies), matching the catch branch below.
+      if (!canManage && agentRow?.userId && agentRow.visibility !== 'private') {
+        try {
+          canManage = await isResourceAuthorOrAdmin({
+            db: serverDB,
+            meta: {
+              userId: agentRow.userId,
+              visibility: agentRow.visibility ?? 'public',
+              workspaceId: agentWorkspaceId,
+            },
+            resourceType: 'agent',
+            userId: link.userId,
+            workspaceId: agentWorkspaceId,
+          });
+        } catch (error) {
+          log('resolveMemberModeChatConfig: permission lookup failed (fail-closed): %O', error);
+        }
+      }
+      if (canManage) return undefined;
+      return { ...agentRow?.chatConfig, enableAgentMode: memberModeOverride };
+    } catch (error) {
+      log('resolveMemberModeChatConfig: falling back to shared config: %O', error);
+      return undefined;
+    }
+  }
+
+  /** Entries for the `/mode` tap picker — the active mark shows the effective
+   *  mode (explicit override, or the agent's configured default). */
+  private static modePickerEntries(
+    current: 'agent' | 'chat' | undefined,
+    strings: ReturnType<typeof getMessengerSystemStrings>,
+  ): AgentPickerEntry[] {
+    return [
+      { id: 'agent', isActive: current === 'agent', title: strings.modeAgentLabel },
+      { id: 'chat', isActive: current === 'chat', title: strings.modeChatLabel },
+    ];
+  }
+
+  /**
+   * Handle a tap on a `/mode` button (`messenger:mode:<agent|chat>`). The
+   * mode lives in chat-sdk thread state, so the write targets the user's
+   * canonical DM conversation via `openDM` — the same thread the slash-path
+   * `/mode` writes and the runtime reads (openDM is idempotent; see
+   * `handleSlashCommand`). Re-renders the picker with the new active mark.
+   */
+  private async handleModeCallback(
+    creds: InstallationCredentials,
+    action: InboundCallbackAction,
+    mode: 'agent' | 'chat',
+    ack: (ack: CallbackAcknowledgement) => Promise<void>,
+    chatBot?: Chat<any>,
+  ): Promise<void> {
+    const strings = getMessengerSystemStrings(creds.platform);
+    const serverDB = await getServerDB();
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      creds.platform,
+      action.fromUserId,
+      creds.tenantId,
+    );
+    if (!link) {
+      await ack({ toast: strings.notLinked });
+      return;
+    }
+
+    let thread: any | undefined;
+    try {
+      thread = await chatBot?.openDM(action.fromUserId);
+    } catch (error) {
+      log('handleModeCallback: openDM(%s) failed: %O', action.fromUserId, error);
+    }
+    if (!thread) {
+      await ack({ toast: strings.genericError });
+      return;
+    }
+
+    try {
+      await thread.setState({ toolMode: mode });
+    } catch (error) {
+      log('handleModeCallback: setState failed: %O', error);
+      await ack({ toast: strings.genericError });
+      return;
+    }
+
+    const label = mode === 'agent' ? strings.modeAgentLabel : strings.modeChatLabel;
+    await ack({
+      toast: strings.modeChangedToast(label),
+      updatedPicker: {
+        action: 'mode',
+        entries: MessengerRouter.modePickerEntries(mode, strings),
+        text: strings.modePicker,
       },
     });
   }

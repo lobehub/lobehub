@@ -408,13 +408,12 @@ export const detectValidatedCommand = async (
     const matchesKeyword = validateKeywords?.some((keyword) =>
       loweredOutput.includes(keyword.toLowerCase()),
     );
-    // Anchored patterns describe a one-line version banner, so test the first
-    // line — the same line reported as `version` below. `output` also carries
-    // stderr plus whatever the CLI decided to print today (upgrade notices,
-    // auth warnings, Node's own `ExperimentalWarning`), and a `^…$` test
-    // against all of it flips a working CLI to "not installed" the moment any
-    // of that appears.
-    const matchesPattern = validatePattern?.test(firstLine);
+    // Anchored patterns usually describe a one-line version banner, so test the
+    // first line — the same line reported as `version` below. Also test the full
+    // output for CLIs such as Cursor whose product signature spans help lines.
+    // One-line `^…$` patterns remain insulated from stderr notices because they
+    // cannot match multi-line output without the multiline flag.
+    const matchesPattern = validatePattern?.test(firstLine) || validatePattern?.test(output);
 
     if (!matchesKeyword && !matchesPattern) {
       return { available: false };
@@ -493,6 +492,10 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'codex': {
     validateKeywords: ['codex'],
+  },
+  'cursor': {
+    validateFlag: '--help',
+    validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
   },
   'opencode': {
     // OpenCode prints only a bare version (for example `1.18.3`) for
@@ -585,6 +588,10 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
           path.join(homedir(), 'Applications', bundledCli),
         ];
       });
+    }
+    case 'cursor': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'agent')];
     }
     case 'opencode': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];

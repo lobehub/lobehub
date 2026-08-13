@@ -25,8 +25,8 @@ import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
 
-/** Fixed action-column width (sidebar-eye toggle only) so rows stay aligned. */
-export const ACTION_COL_WIDTH = 40;
+/** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
+export const ACTION_COL_WIDTH = 64;
 
 /** Author avatar slot — reserved even when the author is unknown. */
 const AUTHOR_COL_WIDTH = 20;
@@ -218,12 +218,11 @@ const AgentRow = memo<AgentRowProps>(
                 onClick={handleToggleSidebar}
               />
             )}
-            {/* Headless: the row's context menu is the only actions entry. It
-              carries the sidebar toggle too — the eye icon above is a fast
-              single-click path, but right-click is where users look for the
-              row's actions, and the toggle went missing there. */}
+            {/* Visible "…" trigger AND right-click open the same menu — the
+              context menu alone proved undiscoverable (users assumed rows had
+              no actions). The menu carries the sidebar toggle too; the eye
+              icon stays as the fast single-click path. */}
             <ItemActions
-              hideTrigger
               anchor={anchor}
               forceActivated={menuActivated}
               includeSidebarToggle={Boolean(onToggleSidebar)}

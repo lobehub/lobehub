@@ -173,6 +173,75 @@ export interface AcceptanceMetadata {
 export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 
 /**
+ * Why a reviewer rejected a check — see `@lobechat/const/verify` for the reason
+ * this exists at all (one button, three unrelated jobs).
+ *
+ * - unmet:       the delivery does not satisfy THIS check
+ * - new-idea:    the check passes, but the reviewer wants something different
+ * - no-evidence: the evidence does not show enough to judge the check at all
+ */
+export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
+
+/** What an automated reviewer proposes for a check — never `ignore`, which is a
+ *  statement about the reviewer's priorities rather than about the delivery. */
+export type ReviewPredictionAction = 'accept' | 'reject';
+
+/**
+ * How a review attempt ended — see `@lobechat/const/verify` for why this is
+ * separate from the verdict. `skipped` / `errored` carry no `action`.
+ */
+export type ReviewPredictionStatus = 'judged' | 'skipped' | 'errored';
+
+/**
+ * The reviewer's verdict on a model proposal. `misidentified` is separate from
+ * `not-an-issue` on purpose: it carries the OPPOSITE signal on the judgement
+ * (there really is a problem) while still marking the grounding wrong.
+ */
+export type ReviewAdjudication = 'confirmed' | 'not-an-issue' | 'misidentified';
+
+/** How closely a submitted reject matched the proposal it started from. */
+export type ReviewProposalEdit = 'verbatim' | 'comment-edited' | 'region-moved' | 'rewritten';
+
+/**
+ * One automated reviewer's opinion on one check result. Never written to
+ * `verify_check_results.user_decision` — the human decision stays the single
+ * ground truth, and this rides alongside it so the two can be compared per
+ * model version.
+ */
+export interface ReviewPrediction {
+  /** The verdict — absent unless `status` is `judged`. */
+  action?: ReviewPredictionAction | null;
+  /** Regions the model circled, same shape the human's annotations use. */
+  annotations?: AcceptanceReviewAnnotation[];
+  /** The one-line justification shown to the reviewer. */
+  comment?: string;
+  /** Model self-reported 0–1. Treat as unranked until calibrated per model. */
+  confidence?: number;
+  createdAt: string;
+  id: string;
+  /** Pins the opinion to what produced it, e.g. `gemini-3.6-flash`. */
+  model: string;
+  provider: string;
+  /** Full reasoning, kept for training; not surfaced in the collapsed card. */
+  rationale?: string;
+  status: ReviewPredictionStatus;
+}
+
+/**
+ * The reviewer's response to a proposal, recorded on the check's decision
+ * detail. Kept next to the decision rather than on the prediction row so it
+ * survives the prediction being regenerated for a newer model version.
+ */
+export interface ReviewProposalOutcome {
+  adjudication: ReviewAdjudication;
+  /** How much the reviewer changed the proposal before submitting it. */
+  edit?: ReviewProposalEdit;
+  /** The proposal being judged (`verify_review_predictions.id`). */
+  predictionId: string;
+  respondedAt: string;
+}
+
+/**
  * A user-drawn region on one evidence image, in coordinates normalized to the
  * image box (0–1) so the overlay renders at any display size.
  */
@@ -202,6 +271,19 @@ export interface VerifyCheckDecisionDetail {
   decidedBy?: string;
   /** Uploaded/pasted screenshots backing the reject (FKs to files). */
   fileIds?: string[];
+  /**
+   * Set when this decision started from a model proposal. Absent means the
+   * reviewer judged cold — either they were in the blind control slice, or no
+   * proposal existed yet. That distinction is what keeps miss rate measurable.
+   */
+  proposal?: ReviewProposalOutcome;
+  /**
+   * Which of the three jobs this reject is doing. Absent on rows written before
+   * the intent split, which is why every reader must treat "no intent" as
+   * "unknown" rather than defaulting it to `unmet` — backfilling a guess here
+   * would manufacture exactly the label noise the split exists to remove.
+   */
+  rejectIntent?: AcceptanceRejectIntent;
   /**
    * The acceptance round that was CURRENT when the decision was made. A
    * carried-forward check's result row belongs to an older round, so the

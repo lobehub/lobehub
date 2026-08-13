@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "Thử lại",
   "flow.steps.learnYourWorld.sectionHint": "Phân tích dữ liệu đã kết nối của bạn để hiểu điều gì quan trọng với bạn…",
   "flow.steps.learnYourWorld.skipAhead": "Bỏ qua",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 Bạn có thể bỏ qua bước này ngay bây giờ — chúng tôi sẽ thông báo cho bạn khi hồ sơ của bạn sẵn sàng.",
   "flow.steps.learnYourWorld.title": "Tìm hiểu thế giới của bạn",
   "flow.steps.messenger.connect": "Kết nối",
   "flow.steps.messenger.connected": "Đã kết nối",

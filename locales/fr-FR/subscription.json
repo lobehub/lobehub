@@ -480,6 +480,8 @@
   "plansModal.default.title": "Mettez à niveau votre plan",
   "plansModal.fileStorageLimit.desc": "Votre espace de stockage est plein. Mettez à niveau pour continuer à télécharger et gérer vos fichiers.",
   "plansModal.fileStorageLimit.title": "Limite de stockage atteinte",
+  "plansModal.messengerWechat.desc": "Le bot système WeChat est disponible avec les plans personnels payants. Passez à un plan supérieur pour le connecter et l'utiliser.",
+  "plansModal.messengerWechat.title": "Connectez WeChat après la mise à niveau",
   "plansModal.modelAccess.desc": "Ce modèle est disponible avec des plans payants. Mettez à niveau pour accéder à l'ensemble complet des modèles.",
   "plansModal.modelAccess.title": "Débloquez tous les modèles",
   "qa.desc": "Si votre question n’est pas traitée, consultez la <1>documentation produit</1> pour plus de FAQ ou contactez-nous.",

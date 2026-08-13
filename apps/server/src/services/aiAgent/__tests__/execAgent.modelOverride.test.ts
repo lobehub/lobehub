@@ -504,3 +504,106 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('anthropic');
   });
 });
+
+describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
+  let service: AiAgentService;
+  const mockDb = {} as any;
+  const userId = 'test-user-id';
+
+  const defaultAgentConfig = {
+    chatConfig: {},
+    id: 'agent-1',
+    model: 'gpt-4',
+    plugins: [],
+    provider: 'openai',
+    slug: 'my-agent',
+    systemRole: 'You are a helpful assistant.',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockGetPreference.mockResolvedValue({});
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
+    mockTopicFindById.mockResolvedValue(null);
+    service = new AiAgentService(mockDb, userId);
+  });
+
+  it('/mode chat on an agent-mode agent also disables enableAgentMode for context injection', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'chat' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('chat');
+    // The context engine gates agentic-only injectors on enableAgentMode, so
+    // the override must flip it too — not just toolMode.
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
+  it('/mode agent on a chat-default agent enables agent mode and its context', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: false },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('agent');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode agent preserves a custom toolMode (hand-picked toolset stays)', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    // `custom` is agent-side; widening it to `agent` would silently grant
+    // tools the agent deliberately excluded.
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('custom');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode chat still disables tools on a custom-toolMode agent', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'chat' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('chat');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
+  it('wins over the workspace member-mode override', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+      visibility: 'public',
+    });
+    mockGetPreference.mockResolvedValue({ agentModeOverrides: { 'agent-1': false } });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('agent');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+});

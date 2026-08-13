@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "Tekrar Dene",
   "flow.steps.learnYourWorld.sectionHint": "Sizin için önemli olanları anlamak için bağlı verilerinizi analiz edin…",
   "flow.steps.learnYourWorld.skipAhead": "İleriye Atla",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 Bu adımı şimdilik atlayabilirsiniz — profiliniz hazır olduğunda sizi bilgilendireceğiz.",
   "flow.steps.learnYourWorld.title": "Dünyanızı Öğrenin",
   "flow.steps.messenger.connect": "Bağlan",
   "flow.steps.messenger.connected": "Bağlandı",

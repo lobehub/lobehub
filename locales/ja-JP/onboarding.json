@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "再試行",
   "flow.steps.learnYourWorld.sectionHint": "接続されたデータを分析して、あなたにとって重要なことを理解します…",
   "flow.steps.learnYourWorld.skipAhead": "先に進む",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 このステップは今はスキップできます。プロフィールが準備できたら通知します。",
   "flow.steps.learnYourWorld.title": "あなたの世界を学ぶ",
   "flow.steps.messenger.connect": "接続",
   "flow.steps.messenger.connected": "接続済み",

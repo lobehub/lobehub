@@ -157,6 +157,27 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://cursor.com/docs/cli/installation',
+      errorMessage: 'Cursor could not authenticate. Run `agent login`, then retry.',
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'authentication required', 'not logged in'],
+      signInCommand: 'agent login',
+    },
+    defaultCommand: 'agent',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Cursor',
+    install: {
+      commands: ['curl https://cursor.com/install -fsS | bash'],
+      docsUrl: 'https://cursor.com/docs/cli/installation',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCursorAgent',
+    menuLabelKey: 'newCursorAgent',
+    resume: { supported: true },
+    title: 'Cursor',
+    type: 'cursor',
+  },
+  {
+    auth: {
       docsUrl: 'https://opencode.ai/docs',
       errorMessage:
         'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',

@@ -7,6 +7,12 @@ export interface HeterogeneousAgentImageAttachment {
 
 export interface HeterogeneousAgentBuildPlan {
   args: string[];
+  /**
+   * Sensitive positional payload appended to `args` only at the spawn boundary.
+   * Keeping it separate prevents generic argv logging and trace metadata from
+   * persisting conversation content for CLIs that cannot read prompts on stdin.
+   */
+  argvPayload?: string;
   stdinPayload?: string;
 }
 

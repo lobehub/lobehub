@@ -32,6 +32,10 @@ const { mockGetAllWindows } = vi.hoisted(() => ({
   mockGetAllWindows: vi.fn<() => any[]>(() => []),
 }));
 
+const { loggerInfoMock } = vi.hoisted(() => ({
+  loggerInfoMock: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
@@ -48,7 +52,7 @@ vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
-    info: vi.fn(),
+    info: loggerInfoMock,
     verbose: vi.fn(),
     warn: vi.fn(),
   }),
@@ -264,6 +268,7 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerCloseMock.mockReset();
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
+    loggerInfoMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
@@ -862,6 +867,62 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
         agentSessionId: 'sess_cc_123',
       });
+    });
+  });
+
+  describe('sendPrompt (cursor)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+    });
+
+    it('spawns with the positional prompt without writing it to argv logs or trace metadata', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      try {
+        const prompt = 'private user request';
+        const systemContext = 'private selected workspace context';
+        const payload = `${systemContext}\n\n${prompt}`;
+        const { proc, writes } = createFakeProc();
+        nextFakeProc = proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'cursor',
+          command: 'agent',
+          cwd: appStoragePath,
+        });
+
+        await ctr.sendPrompt({
+          operationId: 'op-cursor-private',
+          prompt,
+          sessionId,
+          systemContext,
+        });
+
+        const { args: cliArgs } = spawnCalls[0];
+        expect(cliArgs.at(-2)).toBe('--');
+        expect(cliArgs.at(-1)).toBe(payload);
+        expect(writes).toEqual([]);
+
+        const logged = JSON.stringify(loggerInfoMock.mock.calls);
+        expect(logged).toContain('<argv payload redacted>');
+        expect(logged).not.toContain(prompt);
+        expect(logged).not.toContain(systemContext);
+
+        const traceRoot = path.join(appStoragePath, '.heerogeneous-tracing', 'cursor');
+        const traceDirs = await readdir(traceRoot);
+        const metaText = await readFile(path.join(traceRoot, traceDirs[0], 'meta.json'), 'utf8');
+        const meta = JSON.parse(metaText);
+        expect(meta.args).toEqual(cliArgs.slice(0, -1));
+        expect(metaText).not.toContain(prompt);
+        expect(metaText).not.toContain(systemContext);
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
     });
   });
 

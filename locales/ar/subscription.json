@@ -480,6 +480,8 @@
   "plansModal.default.title": "قم بترقية خطتك",
   "plansModal.fileStorageLimit.desc": "مساحة تخزين الملفات ممتلئة. قم بالترقية لمواصلة تحميل وإدارة الملفات.",
   "plansModal.fileStorageLimit.title": "تم الوصول إلى حد التخزين",
+  "plansModal.messengerWechat.desc": "يتوفر روبوت نظام WeChat في الخطط الشخصية المدفوعة. قم بالترقية للاتصال واستخدامه.",
+  "plansModal.messengerWechat.title": "قم بتوصيل WeChat بعد الترقية",
   "plansModal.modelAccess.desc": "هذا النموذج متاح في الخطط المدفوعة. قم بالترقية لاستخدام مجموعة النماذج الكاملة.",
   "plansModal.modelAccess.title": "افتح جميع النماذج",
   "qa.desc": "إذا لم تجد إجابتك، تحقق من <1>وثائق المنتج</1> لمزيد من الأسئلة الشائعة، أو تواصل معنا.",

@@ -17,6 +17,7 @@ describe('heterogeneous agent config', () => {
       'claude-code',
       'codebuddy',
       'codex',
+      'cursor',
       'opencode',
       'pi',
       'qoder',
@@ -42,6 +43,12 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'codebuddy',
       title: 'CodeBuddy',
       type: 'codebuddy',
+    });
+    expect(getHeterogeneousAgentConfig('cursor')).toMatchObject({
+      defaultCommand: 'agent',
+      install: { commands: ['curl https://cursor.com/install -fsS | bash'] },
+      title: 'Cursor',
+      type: 'cursor',
     });
     expect(getHeterogeneousAgentConfig('amp')).toMatchObject({
       defaultCommand: 'amp',
@@ -83,6 +90,12 @@ describe('heterogeneous agent config', () => {
       docsUrl: 'https://ampcode.com/manual',
       message: 'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
     });
+    expect(isHeterogeneousAgentAuthRequired('cursor', 'Authentication required')).toBe(true);
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'cursor' })).toMatchObject({
+      command: 'agent',
+      docsUrl: 'https://cursor.com/docs/cli/installation',
+      message: 'Cursor could not authenticate. Run `agent login`, then retry.',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -91,6 +104,7 @@ describe('heterogeneous agent config', () => {
       'claude-code': 'Claude Code',
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
+      'cursor': 'Cursor',
       'hermes': 'Hermes',
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',

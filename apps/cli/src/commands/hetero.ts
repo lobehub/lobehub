@@ -134,7 +134,7 @@ const buildExtraArgs = (
               ...(options.model ? ['--model', options.model] : []),
               ...(options.effort ? ['--effort', options.effort] : []),
             ]
-          : options.type === 'opencode'
+          : options.type === 'cursor' || options.type === 'opencode'
             ? [...(options.model ? ['--model', options.model] : [])]
             : options.type === 'pi'
               ? [...(options.model ? ['--model', options.model] : [])]
@@ -947,7 +947,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codebuddy`, `codex`, `opencode`, `pi`, or `qodercli`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codebuddy`, `codex`, `agent`, `opencode`, `pi`, or `qodercli`)',
     )
     .option(
       '--operation-id <id>',

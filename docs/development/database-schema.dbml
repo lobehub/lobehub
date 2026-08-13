@@ -3105,6 +3105,39 @@ table verify_reports {
   }
 }
 
+table verify_review_predictions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  check_result_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  model text [not null]
+  prompt_version text [not null]
+  status text [not null]
+  action text
+  status_reason text
+  confidence "numeric(3, 2)"
+  comment text
+  rationale text
+  annotations jsonb
+  adjudication text
+  adjudication_edit text
+  adjudicated_at "timestamp with time zone"
+  latency_ms integer
+  prompt_tokens integer
+  completion_tokens integer
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    check_result_id [name: 'verify_review_predictions_check_result_id_idx']
+    user_id [name: 'verify_review_predictions_user_id_idx']
+    workspace_id [name: 'verify_review_predictions_workspace_id_idx']
+    (provider, model) [name: 'verify_review_predictions_model_idx']
+    (check_result_id, provider, model, prompt_version) [name: 'verify_review_predictions_result_model_prompt_unique', unique]
+    
+  }
+}
+
 table verify_rubric_criteria {
   rubric_id uuid [not null]
   criterion_id uuid [not null]

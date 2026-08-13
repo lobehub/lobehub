@@ -12,6 +12,11 @@ describe('isHeterogeneousAgentModelId', () => {
     expect(isHeterogeneousAgentModelId('qoder')).toBe(true);
   });
 
+  it('includes cursor so bare model: "cursor" routes as a heterogeneous agent', () => {
+    expect(HETEROGENEOUS_AGENT_MODEL_IDS).toContain('cursor');
+    expect(isHeterogeneousAgentModelId('cursor')).toBe(true);
+  });
+
   it('rejects normal cloud model ids and empty values', () => {
     expect(isHeterogeneousAgentModelId('gpt-4o')).toBe(false);
     expect(isHeterogeneousAgentModelId('')).toBe(false);

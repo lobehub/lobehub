@@ -1,6 +1,13 @@
 'use client';
 
-import type { AcceptanceGroupFeedback, AcceptanceReviewAnnotation } from '@lobechat/types';
+import { acceptanceRejectIntents } from '@lobechat/const/verify';
+import type {
+  AcceptanceGroupFeedback,
+  AcceptanceRejectIntent,
+  AcceptanceReviewAnnotation,
+  ReviewAdjudication,
+  ReviewProposalEdit,
+} from '@lobechat/types';
 import {
   ActionIcon,
   copyToClipboard,
@@ -37,7 +44,7 @@ import {
   Route,
   XCircle,
 } from 'lucide-react';
-import { Fragment, memo, useState } from 'react';
+import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AudioPlayer from '@/features/AudioPlayer';
@@ -62,6 +69,9 @@ import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
 import { openGroupFeedbackModal } from './modals';
+import type { CheckProposal } from './proposal';
+import { classifyProposalEdit } from './proposal';
+import ProposalCard from './ProposalCard';
 
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
@@ -80,6 +90,17 @@ export interface CheckReviewInput {
   checkItemIds: string[];
   comment?: string;
   fileIds?: string[];
+  /** Present when this decision answered a model proposal. */
+  proposal?: { adjudication: ReviewAdjudication; edit?: ReviewProposalEdit; predictionId: string };
+  /** Which of the three jobs a reject is doing. */
+  rejectIntent?: AcceptanceRejectIntent;
+}
+
+/** Answering a model proposal without ruling on the check. */
+export interface ProposalDismissInput {
+  adjudication: 'misidentified' | 'not-an-issue';
+  checkItemId: string;
+  predictionId: string;
 }
 
 /** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
@@ -242,16 +263,15 @@ const styles = createStaticStyles(({ css }) => ({
 
     animation: acceptance-celebrate-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   `,
+  /* No card chrome: the row separators alone carry the list's structure. A
+     border plus inline padding stole horizontal room from every row and made a
+     long checklist read as a boxed-in panel rather than a dense inventory. */
   groupCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
   groupHeader: css`
     cursor: pointer;
     padding-block: 10px;
-    padding-inline: 16px;
     background: ${cssVar.colorFillQuaternary};
 
     .acceptance-group-actions {
@@ -284,9 +304,9 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    /* The card already draws the outer border — a first row's separator would
-       stack on it and read as a 2px top edge. Grouped lists are unaffected:
-       their first child is the group header, so rows are never first. */
+    /* The list opens flush with the content above it. Grouped lists are
+       unaffected: their first child is the group header, so rows are never
+       first. */
     &:first-child {
       border-block-start: none;
     }
@@ -323,7 +343,6 @@ const styles = createStaticStyles(({ css }) => ({
   rowHeader: css`
     cursor: pointer;
     padding-block: 12px;
-    padding-inline: 16px;
 
     &:hover,
     &:focus-within {
@@ -416,7 +435,19 @@ const comparisonContent = (item: AcceptanceEvidence) =>
     />
   );
 
-const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => {
+const EvidenceList = memo<{
+  evidence: AcceptanceEvidence[];
+  /**
+   * Regions to draw over an evidence image, keyed by evidence id. Used by the
+   * AI proposal: rather than the card rendering its own copy of the screenshot
+   * (which showed the same image twice in one row), the boxes land on the image
+   * that is already here.
+   */
+  overlays?: Map<
+    string,
+    { comment?: string; label?: number; rect: AcceptanceReviewAnnotation['rect'] }[]
+  >;
+}>(({ evidence, overlays }) => {
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
 
@@ -487,6 +518,25 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
                 alt={item.description ?? item.fileName ?? item.type}
                 downloadFileName={item.fileName ?? 'audio'}
                 url={item.fileUrl}
+              />
+              {caption}
+            </Flexbox>
+          );
+        const overlay = overlays?.get(item.id);
+        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type) && overlay?.length)
+          return (
+            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
+              {/* Comments stay off here — the proposal card already lists them
+                  against the same badge numbers. */}
+              <AnnotatedImage
+                annotations={overlay}
+                showComments={false}
+                src={item.fileUrl}
+                imageStyle={
+                  item.fileWidth && item.fileHeight
+                    ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
+                    : undefined
+                }
               />
               {caption}
             </Flexbox>
@@ -835,6 +885,8 @@ const CheckRow = memo<{
   check: AcceptanceCheck;
   detailMode?: boolean;
   expanded: boolean;
+  /** Answer a model proposal WITHOUT ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound?: (round: number) => void;
   /** Open an agent judge's verification run (its trace IS the argument). */
@@ -847,6 +899,7 @@ const CheckRow = memo<{
     check,
     detailMode,
     expanded,
+    onDismissProposal,
     onOpenTrace,
     onReview,
     onRound,
@@ -861,6 +914,14 @@ const CheckRow = memo<{
     const [ignoring, setIgnoring] = useState(false);
     const [rejecting, setRejecting] = useState(false);
     const [reviewComment, setReviewComment] = useState('');
+    // The focused surface rejects straight from its text area, bypassing the
+    // annotation modal — so it needs its own intent selector. Without one, every
+    // reject typed here landed unclassified, which is exactly the conflation
+    // this feature exists to undo.
+    const [rejectIntent, setRejectIntent] = useState<AcceptanceRejectIntent>('unmet');
+    // The proposal starts folded: it is a suggestion, and an open panel on every
+    // unreviewed check would push the evidence the reviewer came for below the fold.
+    const [proposalOpen, setProposalOpen] = useState(false);
     const meta = STATE_META[check.state];
     const counts = evidenceCounts(check.evidence);
     const visualization = readVisualizationManifest(check.result?.metadata);
@@ -875,9 +936,32 @@ const CheckRow = memo<{
         : undefined;
     const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
     const evidenceById = collectEvidenceById(check);
+
+    // Regions the proposal wants drawn on the evidence images already in this
+    // row. Numbered across the whole proposal (not per image), so "区域 2" in
+    // the card means the same box wherever it lives. Only while the card is
+    // open — boxes with no visible explanation read as a defect of the evidence.
+    const proposalOverlays = useMemo(() => {
+      if (!proposalOpen || !check.prediction) return undefined;
+      const map = new Map<
+        string,
+        { comment?: string; label?: number; rect: AcceptanceReviewAnnotation['rect'] }[]
+      >();
+      (check.prediction.annotations ?? []).forEach((annotation, index) => {
+        const bucket = map.get(annotation.evidenceId) ?? [];
+        bucket.push({ comment: annotation.comment, label: index + 1, rect: annotation.rect });
+        map.set(annotation.evidenceId, bucket);
+      });
+      return map.size > 0 ? map : undefined;
+    }, [proposalOpen, check.prediction]);
     const hasHistory = check.revisions > 1 || historyReviews.length > 0;
 
-    const openReject = () =>
+    /**
+     * @param fromProposal - when set, the modal opens prefilled with the
+     *   model's note and regions, and the submitted result is diffed against it
+     *   so the signal records WHICH part of the proposal was wrong.
+     */
+    const openReject = (fromProposal?: CheckProposal) =>
       openCheckRejectModal({
         checkDescription: check.planItem?.description,
         checkTitle: `C${check.seq} · ${check.title}`,
@@ -885,14 +969,25 @@ const CheckRow = memo<{
         evidence: check.evidence
           .filter((item) => isAnnotatable(item))
           .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
-        initialComment: reviewComment,
-        onConfirm: async ({ annotations, comment, fileIds }) => {
+        initialAnnotations: fromProposal?.annotations ?? undefined,
+        initialComment: fromProposal?.comment ?? reviewComment,
+        onConfirm: async ({ annotations, comment, fileIds, rejectIntent }) => {
           const ok = await onReview({
             action: 'reject',
             annotations: annotations.length > 0 ? annotations : undefined,
             checkItemIds: [check.id],
             comment: comment || undefined,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
+            ...(fromProposal
+              ? {
+                  proposal: {
+                    adjudication: 'confirmed' as const,
+                    edit: classifyProposalEdit(fromProposal, { annotations, comment }),
+                    predictionId: fromProposal.id,
+                  },
+                }
+              : {}),
+            rejectIntent,
           });
           if (ok) {
             setReviewComment('');
@@ -901,6 +996,21 @@ const CheckRow = memo<{
           return ok;
         },
       });
+
+    /**
+     * Dismissing a proposal is NOT a review of the check — the check stays
+     * pending and the reviewer still has to judge it. Only the model's opinion
+     * is being answered, so this writes the outcome without touching
+     * `user_decision`.
+     */
+    const handleAdjudicate = async (adjudication: 'not-an-issue' | 'misidentified') => {
+      if (!check.prediction) return;
+      await onDismissProposal?.({
+        adjudication,
+        checkItemId: check.id,
+        predictionId: check.prediction.id,
+      });
+    };
 
     // Accepting settles the check — the row folds itself away once the write
     // lands, so the reviewer's eye moves on to what still needs judgment.
@@ -923,7 +1033,12 @@ const CheckRow = memo<{
       const comment = reviewComment.trim();
       if (!comment) return;
       setRejecting(true);
-      const ok = await onReview({ action: 'reject', checkItemIds: [check.id], comment });
+      const ok = await onReview({
+        action: 'reject',
+        checkItemIds: [check.id],
+        comment,
+        rejectIntent,
+      });
       setRejecting(false);
       if (ok) setReviewComment('');
       if (shouldCollapseAfterReview(ok, expanded)) onToggle();
@@ -1150,11 +1265,22 @@ const CheckRow = memo<{
         )}
 
         {expanded && (
-          <Flexbox
-            gap={10}
-            paddingBlock={detailMode ? 0 : '0 14px'}
-            paddingInline={detailMode ? 0 : 16}
-          >
+          <Flexbox gap={10} paddingBlock={detailMode ? 0 : '0 14px'} paddingInline={0}>
+            {/* The model's proposal leads the detail: it is a claim about this
+              check that the reviewer is being asked to rule on, so it belongs
+              above the verifier's narrative rather than buried under it.
+              Suppressed once a verdict exists — see the bundle read, which
+              already drops it; this guard covers the optimistic window. */}
+            {check.prediction && reviewable && !activeReview && (
+              <ProposalCard
+                open={proposalOpen}
+                pending={reviewPending}
+                proposal={check.prediction}
+                onAdjudicate={handleAdjudicate}
+                onConfirm={() => openReject(check.prediction ?? undefined)}
+                onToggle={setProposalOpen}
+              />
+            )}
             {/* The verifier's account of what it saw. Clamping it to two lines
               hid the middle of the argument behind an ellipsis with no way to
               open it — in a detail view there is nothing to preview. */}
@@ -1186,7 +1312,7 @@ const CheckRow = memo<{
                 </Flexbox>
               )}
             {visualization && <VisualizationRenderer manifest={visualization} />}
-            <EvidenceList evidence={check.evidence} />
+            <EvidenceList evidence={check.evidence} overlays={proposalOverlays} />
 
             {check.state === 'not_executed' && (
               <Flexbox
@@ -1352,6 +1478,29 @@ const CheckRow = memo<{
                     value={reviewComment}
                     onChange={(event) => setReviewComment(event.target.value)}
                   />
+                  {/* Only meaningful once there is something to reject with —
+                      an intent picker above an empty box is noise. */}
+                  {Boolean(reviewComment.trim()) && (
+                    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('acceptance.review.intentLabel')}
+                      </Text>
+                      {acceptanceRejectIntents.map((value) => (
+                        <Button
+                          disabled={reviewPending}
+                          key={value}
+                          size={'small'}
+                          type={rejectIntent === value ? 'primary' : 'default'}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRejectIntent(value);
+                          }}
+                        >
+                          {t(`acceptance.review.intent.${value}` as never)}
+                        </Button>
+                      ))}
+                    </Flexbox>
+                  )}
                   <Flexbox horizontal gap={8}>
                     <Button
                       block
@@ -1446,6 +1595,8 @@ const CheckRow = memo<{
 interface FocusedCheckDetailsProps {
   canReview: boolean;
   check: AcceptanceCheck;
+  /** Answer a model proposal without ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   /** Open an agent judge's verification run (its trace IS the argument). */
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
@@ -1455,13 +1606,14 @@ interface FocusedCheckDetailsProps {
 
 /** Full check content for the dedicated second-level acceptance workspace. */
 export const FocusedCheckDetails = memo<FocusedCheckDetailsProps>(
-  ({ canReview, check, onOpenTrace, onReview, onRound, reviewPending }) => (
+  ({ canReview, check, onDismissProposal, onOpenTrace, onReview, onRound, reviewPending }) => (
     <CheckRow
       detailMode
       expanded
       canReview={canReview}
       check={check}
       reviewPending={reviewPending}
+      onDismissProposal={onDismissProposal}
       onOpenTrace={onOpenTrace}
       onReview={onReview}
       onRound={onRound}
@@ -1540,6 +1692,8 @@ interface CheckListProps {
   filter: CheckFilter;
   /** Group-scoped feedback entries recorded on the aggregate. */
   groupFeedback: AcceptanceGroupFeedback[];
+  /** Answer a model proposal without ruling on the check itself. */
+  onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   /** Record group-scoped feedback; resolves true when the write landed. */
   onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
   /** Open an agent judge's verification run (its trace IS the argument). */
@@ -1565,6 +1719,7 @@ const CheckList = memo<CheckListProps>(
     expanded,
     filter,
     groupFeedback,
+    onDismissProposal,
     onGroupFeedback,
     onReview,
     onOpenTrace,
@@ -1655,6 +1810,7 @@ const CheckList = memo<CheckListProps>(
               expanded={expanded.has(check.id)}
               key={check.id}
               reviewPending={reviewPending}
+              onDismissProposal={onDismissProposal}
               onOpenTrace={onOpenTrace}
               onReview={onReview}
               onRound={onRound}
@@ -1893,6 +2049,7 @@ const CheckList = memo<CheckListProps>(
                     expanded={expanded.has(check.id)}
                     key={check.id}
                     reviewPending={reviewPending}
+                    onDismissProposal={onDismissProposal}
                     onOpenTrace={onOpenTrace}
                     onReview={onReview}
                     onRound={onRound}

@@ -53,6 +53,7 @@
   "flow.steps.learnYourWorld.retry": "다시 시도하기",
   "flow.steps.learnYourWorld.sectionHint": "연결된 데이터를 분석하여 당신에게 중요한 것을 이해합니다…",
   "flow.steps.learnYourWorld.skipAhead": "앞으로 건너뛰기",
+  "flow.steps.learnYourWorld.skipNotificationHint": "💡 지금은 이 단계를 건너뛸 수 있습니다. 프로필이 준비되면 알려드리겠습니다.",
   "flow.steps.learnYourWorld.title": "당신의 세계를 배우기",
   "flow.steps.messenger.connect": "연결하기",
   "flow.steps.messenger.connected": "연결됨",

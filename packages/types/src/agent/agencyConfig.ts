@@ -74,7 +74,7 @@ export type HeterogeneousAgentModelCatalog =
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` | `cursor` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -223,6 +223,7 @@ const modelFlagsOf = (type: 'codex' | 'opencode' | 'pi' | 'qoder'): readonly str
   );
 
 const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
+const CURSOR_MODEL_FLAGS = ['--model'] as const;
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
@@ -294,6 +295,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -338,6 +340,17 @@ export const buildHeteroSpawnArgs = (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
     ) {
       extraArgs.push('--model', model);
     }
@@ -392,6 +405,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -445,6 +459,17 @@ export const buildHeteroExecArgs = (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
     }

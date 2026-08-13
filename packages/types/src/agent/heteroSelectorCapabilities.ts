@@ -312,6 +312,7 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       supported: codexModelSupportsFastSpeed,
     },
   },
+  'cursor': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

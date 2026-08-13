@@ -39,6 +39,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   X,
   XCircle,
 } from 'lucide-react';
@@ -75,6 +76,7 @@ import CheckList, {
   isCheckWorkActionable,
   isException,
   isGroupFullyAccepted,
+  type ProposalDismissInput,
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
@@ -299,6 +301,11 @@ interface AcceptancePageProps {
   onDraftToComposer?: (text: string) => boolean;
 }
 
+/** How long to wait between bundle re-fetches while the batch runs. */
+const PREDICT_POLL_INTERVAL_MS = 4000;
+/** ~2 minutes: a bounded batch of 4-concurrent generations settles well inside this. */
+const PREDICT_POLL_ATTEMPTS = 30;
+
 const AcceptancePage = memo<AcceptancePageProps>(
   ({ acceptanceId: explicitAcceptanceId, onDraftToComposer }) => {
     const params = useParams<{ acceptanceId: string; checkId: string }>();
@@ -471,6 +478,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const [rerunPending, setRerunPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
     const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const [predicting, setPredicting] = useState(false);
 
     const status = data?.acceptance.status;
 
@@ -556,6 +564,24 @@ const AcceptancePage = memo<AcceptancePageProps>(
       };
     }, [data]);
 
+    /**
+     * Checks the predictor could actually act on: executed (so there is a
+     * result to judge), not yet ruled on, and carrying a frame to look at.
+     *
+     * Deliberately NOT `counts.pending`, which counts any check without a
+     * standing review — including ones that never ran. That gate showed the
+     * button on acceptances where the server would consider zero checks, and
+     * the reverse case reads even worse: a page whose remaining "pending" item
+     * is un-executed loses the button with no visible reason.
+     */
+    const predictableCount = useMemo(
+      () =>
+        (data?.checks ?? []).filter(
+          (check) => check.result && !check.result.userDecision && hasVisualEvidence(check),
+        ).length,
+      [data],
+    );
+
     const acceptanceRecordId = data?.acceptance.id;
     const runAction = useCallback(
       async (action: () => Promise<unknown>) => {
@@ -587,6 +613,57 @@ const AcceptancePage = memo<AcceptancePageProps>(
       },
       [runAction, acceptanceRecordId],
     );
+
+    // Answering a model proposal is NOT a verdict on the check — the check
+    // stays pending and still needs the reviewer's own call. It goes through
+    // its own endpoint so a dismissal can never stamp a `user_decision`.
+    const handleDismissProposal = useCallback(
+      async (input: ProposalDismissInput) => {
+        if (!acceptanceRecordId) return;
+        await runAction(() =>
+          verifyService.adjudicateProposal({
+            adjudication: input.adjudication,
+            id: acceptanceRecordId,
+            predictionId: input.predictionId,
+          }),
+        );
+      },
+      [runAction, acceptanceRecordId],
+    );
+
+    /**
+     * Ask for proposals on whatever is still awaiting a verdict. Explicit, so
+     * opening a report never spends model budget on its own.
+     *
+     * The server dispatches the batch AFTER responding, so the mutation returns
+     * in milliseconds with nothing to show. Poll the bundle until the cards
+     * land, keeping the button in its loading state meanwhile — otherwise the
+     * click reads as a no-op for the ~15s the first generation takes.
+     */
+    const handlePredictReviews = useCallback(async () => {
+      if (!acceptanceRecordId) return;
+      setPredicting(true);
+      try {
+        const { queued } = await verifyService.predictReviews(acceptanceRecordId);
+        if (queued === 0) return;
+
+        for (let attempt = 0; attempt < PREDICT_POLL_ATTEMPTS; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, PREDICT_POLL_INTERVAL_MS));
+          const next = await mutate();
+          // Stop as soon as every queued check has been answered one way or the
+          // other — a check the model passes writes no row, so waiting for
+          // `queued` cards would always run to the timeout.
+          const settled = (next?.checks ?? []).filter(
+            (check) => check.prediction || check.result?.userDecision,
+          ).length;
+          if (settled >= queued) break;
+        }
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setPredicting(false);
+      }
+    }, [mutate, acceptanceRecordId]);
 
     // Group-scoped feedback — for concerns that belong to no single check (the
     // checks themselves may be accepted) yet must reach the next round.
@@ -1674,6 +1751,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       canReview={isOwner}
                       check={focusedCheck}
                       reviewPending={pending}
+                      onDismissProposal={handleDismissProposal}
                       onReview={handleReview}
                       onRound={historyNavigation}
                     />
@@ -1698,6 +1776,18 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     {counts.total + unverifiedStandingChecks.length}
                   </span>
                   <Flexbox flex={1} />
+                  {/* Explicit, and only while something is still unreviewed —
+                    asking for proposals on a fully-judged acceptance would
+                    spend budget to produce cards nobody can act on. */}
+                  {isOwner && predictableCount > 0 && (
+                    <ActionIcon
+                      icon={Sparkles}
+                      loading={predicting}
+                      size={'small'}
+                      title={t('acceptance.proposal.request')}
+                      onClick={handlePredictReviews}
+                    />
+                  )}
                   {isOwner && (
                     <ActionIcon
                       icon={Plus}
@@ -1816,6 +1906,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   groupFeedback={groupFeedbackEntries}
                   reviewPending={pending}
                   round={roundFilter}
+                  onDismissProposal={handleDismissProposal}
                   onGroupFeedback={handleGroupFeedback}
                   onOpenTrace={openVerifierTrace}
                   onReview={handleReview}

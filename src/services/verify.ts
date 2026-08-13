@@ -1,8 +1,11 @@
 import type {
   AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
+  AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
   AcceptanceSubjectType,
+  ReviewAdjudication,
+  ReviewProposalEdit,
   VerifierType,
   VerifyCheckItem,
   VerifyEvidence,
@@ -195,7 +198,34 @@ export class VerifyService {
     comment?: string;
     fileIds?: string[];
     id: string;
+    /** Set when this decision answered a model proposal. */
+    proposal?: {
+      adjudication: ReviewAdjudication;
+      edit?: ReviewProposalEdit;
+      predictionId: string;
+    };
+    /** Which of the three jobs a reject is doing. */
+    rejectIntent?: AcceptanceRejectIntent;
   }) => lambdaClient.acceptance.reviewChecks.mutate(input);
+
+  /**
+   * Queue proposals for the checks still awaiting a verdict. Explicit rather
+   * than folded into the bundle read, so opening a report never spends model
+   * budget. Returns as soon as the batch is dispatched (`queued`), NOT when it
+   * finishes — the caller polls the bundle for the cards to appear.
+   */
+  predictReviews = (id: string) => lambdaClient.acceptance.predictReviews.mutate({ id });
+
+  /**
+   * Answer a proposal without ruling on the check. The `confirmed` case does
+   * NOT come here — it rides along with the reject in `reviewChecks`, where the
+   * edit diff is known.
+   */
+  adjudicateProposal = (input: {
+    adjudication: 'misidentified' | 'not-an-issue';
+    id: string;
+    predictionId: string;
+  }) => lambdaClient.acceptance.adjudicateProposal.mutate(input);
 
   /**
    * Feedback addressed to a check group (business category) — for concerns
