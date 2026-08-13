@@ -6,6 +6,7 @@ import type {
   ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
+  UIChatMessage,
 } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
@@ -253,6 +254,94 @@ interface RegenerateUserMessageSource {
   readDbMessages: () => ConversationStore['dbMessages'];
 }
 
+type RetryExecutionContext = Pick<
+  ConversationContext,
+  'agentId' | 'groupId' | 'scope' | 'subAgentId' | 'isSupervisor' | 'orchestrationRole'
+>;
+
+const getRetryExecutionContext = (
+  message: UIChatMessage | undefined,
+  fallback: ConversationContext,
+): ConversationContext => {
+  if (
+    !message?.agentId &&
+    !message?.metadata?.orchestrationRole &&
+    !message?.metadata?.isSupervisor
+  ) {
+    return fallback;
+  }
+
+  const orchestrationRole = message.metadata?.orchestrationRole;
+  const isSupervisor =
+    orchestrationRole === 'supervisor' || message.metadata?.isSupervisor === true;
+  const isGroupMember = !!fallback.groupId && orchestrationRole === 'member';
+  const memberAgentId = message.metadata?.subAgentId || message.agentId;
+
+  return {
+    ...fallback,
+    ...(isGroupMember
+      ? {
+          subAgentId: memberAgentId,
+          orchestrationRole: 'member' as const,
+          isSupervisor: undefined,
+        }
+      : message.agentId && message.agentId !== 'supervisor'
+        ? { agentId: message.agentId }
+        : {}),
+    ...(message.groupId && { groupId: message.groupId }),
+    ...(message.metadata?.scope && {
+      scope: message.metadata.scope as RetryExecutionContext['scope'],
+    }),
+    ...(!isGroupMember &&
+      message.metadata?.subAgentId && {
+        subAgentId: message.metadata.subAgentId,
+      }),
+    isSupervisor: isSupervisor || undefined,
+    orchestrationRole: orchestrationRole || (isSupervisor ? 'supervisor' : undefined),
+  };
+};
+
+const findRetrySourceMessage = (
+  message: UIChatMessage,
+  dbMessages: UIChatMessage[],
+): UIChatMessage | undefined => {
+  if (message.role !== 'user') return message;
+
+  const children = dbMessages.filter((candidate) => candidate.parentId === message.id);
+  if (children.length === 0) return undefined;
+
+  const branchIndex =
+    message.metadata?.activeBranchIndex ?? message.branch?.activeBranchIndex ?? children.length - 1;
+  return children[branchIndex] ?? children.at(-1);
+};
+
+const findUserMessageId = (
+  message: UIChatMessage,
+  messages: UIChatMessage[],
+): string | undefined => {
+  const messagesById = new Map(messages.map((candidate) => [candidate.id, candidate]));
+  let currentMessage: UIChatMessage | undefined = message;
+
+  while (currentMessage) {
+    if (currentMessage.role === 'user') return currentMessage.id;
+    currentMessage = currentMessage.parentId
+      ? messagesById.get(currentMessage.parentId)
+      : undefined;
+  }
+};
+
+const getRetryExecutionAgentId = (context: ConversationContext) =>
+  context.groupId && context.orchestrationRole === 'member'
+    ? context.subAgentId || context.agentId
+    : context.agentId;
+
+const getRetryGatewayExecutionContext = (context: ConversationContext): ConversationContext => {
+  const agentId = getRetryExecutionAgentId(context);
+  if (agentId === context.agentId) return context;
+
+  return { ...context, agentId, subAgentId: undefined };
+};
+
 const captureRegenerateUserMessageSource = (
   get: () => ConversationStore,
 ): RegenerateUserMessageSource => {
@@ -275,8 +364,9 @@ const captureRegenerateUserMessageSource = (
 const regenerateUserMessageFromSource = async (
   messageId: string,
   source: RegenerateUserMessageSource,
+  retryExecutionContext?: RetryExecutionContext,
 ) => {
-  const { context, displayMessages, hooks, readDbMessages } = source;
+  const { context: sourceContext, displayMessages, hooks, readDbMessages } = source;
   const chatStore = useChatStore.getState();
 
   // Block a genuine double-regenerate, and ONLY that. The guard used to be
@@ -297,6 +387,11 @@ const regenerateUserMessageFromSource = async (
   const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
   const item = displayMessages[currentIndex];
   if (!item) return;
+  const dbMessages = readDbMessages();
+  const retrySourceMessage = findRetrySourceMessage(item, dbMessages);
+  const context = retryExecutionContext
+    ? { ...sourceContext, ...retryExecutionContext }
+    : getRetryExecutionContext(retrySourceMessage, sourceContext);
   // Start the interim regenerate op BEFORE the async preflight below
   // (document-context resolve + onBeforeRegenerate hook). In page / bound-
   // document contexts those reads are real round trips, so creating the op
@@ -342,7 +437,6 @@ const regenerateUserMessageFromSource = async (
     // Read the database messages from the captured conversation. If the shared
     // ConversationStore has switched context, the source falls back to the old
     // context's ChatStore bucket instead of observing the new topic.
-    const dbMessages = readDbMessages();
     const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
     const nextBranchIndex = childrenCount;
 
@@ -358,13 +452,14 @@ const regenerateUserMessageFromSource = async (
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const executionAgentId = getRetryExecutionAgentId(context);
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(executionAgentId);
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isGatewayMode: chatStore.isGatewayModeEnabled(executionAgentId),
       isWorkspaceAgent: workspaceScoped,
     });
 
@@ -383,8 +478,9 @@ const regenerateUserMessageFromSource = async (
       // `onComplete` still fires at session end for the UI hook; re-completing
       // the already-settled wrapper is an idempotent no-op.
       await chatStore.executeGatewayAgent({
-        context,
+        context: getRetryGatewayExecutionContext(context),
         message: item.content,
+        messageContext: context,
         onComplete: () =>
           settleGenerationEntry(chatStore, operationId, () =>
             hooks.onRegenerateComplete?.(messageId),
@@ -1162,7 +1258,7 @@ export const generationSlice: StateCreator<
   },
 
   regenerateAssistantMessage: async (messageId: string) => {
-    const { displayMessages } = get();
+    const { dbMessages, displayMessages } = get();
 
     // Find the assistant message
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
@@ -1170,12 +1266,16 @@ export const generationSlice: StateCreator<
 
     if (!currentMessage) return;
 
-    // Find the parent user message
-    const userId = currentMessage.parentId;
+    const userId = findUserMessageId(currentMessage, [...dbMessages, ...displayMessages]);
     if (!userId) return;
 
     // Delegate to regenerateUserMessage with the parent user message
-    await get().regenerateUserMessage(userId);
+    const source = captureRegenerateUserMessageSource(get);
+    await regenerateUserMessageFromSource(
+      userId,
+      source,
+      getRetryExecutionContext(currentMessage, source.context),
+    );
   },
 
   regenerateUserMessage: async (messageId: string) =>

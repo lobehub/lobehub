@@ -69,6 +69,7 @@ describe('Generation Actions', () => {
 
   afterEach(() => {
     vi.clearAllTimers();
+    mockIsGatewayModeEnabled.mockReset().mockReturnValue(false);
   });
 
   describe('stopGenerating', () => {
@@ -1218,6 +1219,305 @@ describe('Generation Actions', () => {
           parentMessageId: 'msg-1',
           parentMessageType: 'user',
           parentOperationId: 'test-op-id',
+        }),
+      );
+    });
+
+    it('reuses the active member branch identity instead of the group supervisor', async () => {
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', metadata: { activeBranchIndex: 1 }, role: 'user', content: 'Hello' },
+            {
+              agentId: 'first-member',
+              content: 'First response',
+              id: 'assistant-1',
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+            {
+              agentId: 'selected-member',
+              content: 'Selected response',
+              id: 'assistant-2',
+              metadata: { orchestrationRole: 'member', subAgentId: 'selected-member' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [{ id: 'user-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('user-1');
+      });
+
+      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            agentId: 'supervisor-agent',
+            isSupervisor: undefined,
+            orchestrationRole: 'member',
+            subAgentId: 'selected-member',
+          }),
+        }),
+      );
+    });
+
+    it('executes a member gateway retry with the member but keeps the group owner', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        switchMessageBranch: mockSwitchMessageBranch,
+      } as any);
+      mockIsGatewayModeEnabled.mockImplementation(
+        ((agentId: string) => agentId === 'member-agent') as any,
+      );
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [{ id: 'user-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('user-1');
+      });
+
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({ agentId: 'member-agent', subAgentId: undefined }),
+          messageContext: expect.objectContaining({
+            agentId: 'supervisor-agent',
+            subAgentId: 'member-agent',
+          }),
+        }),
+      );
+    });
+
+    it('reuses an assistant Orchestrator identity when regenerating its bubble', async () => {
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'orchestrator-agent',
+              content: 'Orchestrated response',
+              id: 'assistant-1',
+              metadata: { isSupervisor: true, orchestrationRole: 'supervisor' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'orchestrator-agent',
+              content: 'Orchestrated response',
+              id: 'assistant-1',
+              metadata: { isSupervisor: true, orchestrationRole: 'supervisor' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateAssistantMessage('assistant-1');
+      });
+
+      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            agentId: 'orchestrator-agent',
+            isSupervisor: true,
+            orchestrationRole: 'supervisor',
+          }),
+        }),
+      );
+    });
+
+    it('preserves a member assistant identity through gateway regeneration', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        switchMessageBranch: mockSwitchMessageBranch,
+      } as any);
+      mockIsGatewayModeEnabled.mockImplementation(
+        ((agentId: string) => agentId === 'member-agent') as any,
+      );
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateAssistantMessage('assistant-1');
+      });
+
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({ agentId: 'member-agent', subAgentId: undefined }),
+          messageContext: expect.objectContaining({
+            agentId: 'supervisor-agent',
+            orchestrationRole: 'member',
+            subAgentId: 'member-agent',
+          }),
+        }),
+      );
+    });
+
+    it('reuses a member identity when its assistant bubble is nested below a tool message', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        switchMessageBranch: mockSwitchMessageBranch,
+      } as any);
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            { id: 'speak-tool-1', parentId: 'user-1', role: 'tool', content: '' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'speak-tool-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'speak-tool-1',
+              role: 'assistant',
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateAssistantMessage('assistant-1');
+      });
+
+      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            agentId: 'supervisor-agent',
+            orchestrationRole: 'member',
+            subAgentId: 'member-agent',
+          }),
+          parentMessageId: 'user-1',
         }),
       );
     });
