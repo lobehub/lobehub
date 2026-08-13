@@ -620,7 +620,12 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
-      return [path.join(homedir(), '.local', 'bin', 'agent')];
+      return [
+        path.join(homedir(), '.local', 'bin', 'agent'),
+        // Cursor's installer creates both names. Keep the unambiguous legacy
+        // alias as a fallback when another CLI shadows the generic `agent`.
+        path.join(homedir(), '.local', 'bin', 'cursor-agent'),
+      ];
     }
     case 'kimi-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
