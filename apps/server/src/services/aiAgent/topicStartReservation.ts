@@ -18,11 +18,13 @@ const delay = (milliseconds: number): Promise<void> =>
  * 500 response, while interactive callers receive a finite busy failure.
  */
 export const acquireTopicStartReservation = async ({
+  allowRunningOperationId,
   replacesOperationId,
   reservationId,
   topicId,
   topicModel,
 }: {
+  allowRunningOperationId?: string;
   replacesOperationId?: string;
   reservationId: string;
   topicId: string;
@@ -32,6 +34,7 @@ export const acquireTopicStartReservation = async ({
     const reservation = await topicModel.tryReserveTaskCallback(
       topicId,
       reservationId,
+      allowRunningOperationId,
       replacesOperationId,
     );
 

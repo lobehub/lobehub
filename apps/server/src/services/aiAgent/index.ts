@@ -514,6 +514,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * such as TaskResultBridgeService.
    */
   topicStartReservationId?: string;
+  /** Running operation that owns the topic for an internally spawned child run. */
+  topicStartOwnerOperationId?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
@@ -1256,6 +1258,7 @@ export class AiAgentService {
     const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
     const reserved = await acquireTopicStartReservation({
       replacesOperationId: params.replacesOperationId,
+      allowRunningOperationId: params.topicStartOwnerOperationId,
       reservationId,
       topicId,
       topicModel: this.topicModel,
@@ -4618,7 +4621,7 @@ export class AiAgentService {
       // WebSocket for the rest of the run. The parent's mark stays authoritative;
       // a child's live progress already rides down the parent channel via
       // `appContext.subAgentProgress`.
-      if (!appContext?.isolationThread) {
+      if (!appContext?.isolationThread && appContext?.orchestrationRole !== 'member') {
         await this.topicModel.updateMetadata(topicId, {
           runningOperation: {
             assistantMessageId: assistantMessageRecord.id,
@@ -4978,6 +4981,7 @@ export class AiAgentService {
       parentOperationId,
       prompt: speakerInstruction,
       suppressUserMessage: true,
+      topicStartOwnerOperationId: parentOperationId,
       trigger: inheritedTrigger,
       userInterventionConfig: { approvalMode: 'headless' },
     });

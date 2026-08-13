@@ -1429,6 +1429,7 @@ export class TopicModel {
   tryReserveTaskCallback = async (
     id: string,
     messageId: string,
+    allowRunningOperationId?: string,
     replacesOperationId?: string,
   ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
@@ -1449,6 +1450,9 @@ export class TopicModel {
 
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
       const runningOperation = existing.metadata?.runningOperation;
+      const ownedRunningOperation =
+        allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
+      if (ownedRunningOperation) return true;
       const canReplaceRunningOperation =
         !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
       if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;

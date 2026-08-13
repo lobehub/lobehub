@@ -170,8 +170,8 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(true);
     });
 
-    it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
-      const topicId = 'topic-start-operation-handoff';
+  it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
+    const topicId = 'topic-start-operation-handoff';
       await serverDB.insert(topics).values({
         userId,
         id: topicId,
@@ -185,15 +185,42 @@ describe('TopicModel - Update', () => {
       });
 
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'different-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'different-operation'),
       ).resolves.toBe(false);
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'old-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'old-operation'),
       ).resolves.toBe(true);
 
       const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
       expect(topic?.metadata?.runningOperation).toBeNull();
       expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('new-start');
+    it('allows a child operation to re-enter its parent running operation', async () => {
+      const topicId = 'task-callback-parent-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            operationId: 'operation-parent',
+          },
+        },
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-1', 'operation-parent'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-2', 'operation-parent'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'unrelated-operation', 'operation-other'),
+      ).resolves.toBe(false);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.taskCallbackReservation).toBeUndefined();
+      expect(topic?.metadata?.runningOperation?.operationId).toBe('operation-parent');
     });
 
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
