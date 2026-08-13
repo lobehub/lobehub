@@ -118,19 +118,20 @@ export const knowledgeBaseRouter = router({
         }
       }
 
+      // Copying clones the full content into a caller-controlled scope, so it
+      // requires the same browse-level access as reading the file list —
+      // asserted before any count/quota work leaks size feedback.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: knowledgeBase.userId,
+        visibility: knowledgeBase.visibility ?? null,
+        workspaceId: knowledgeBase.workspaceId ?? null,
+      });
+
       const additionalSize = await ctx.knowledgeBaseModel.countFileUsage(input.id);
       await businessFileTransferStorageCheck({
         additionalSize,
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
-      });
-
-      // Copying clones the full content into a caller-controlled scope, so it
-      // requires the same browse-level access as reading the file list.
-      await assertKnowledgeBaseBrowsable(ctx, input.id, {
-        userId: knowledgeBase.userId,
-        visibility: knowledgeBase.visibility ?? null,
-        workspaceId: knowledgeBase.workspaceId ?? null,
       });
 
       return ctx.knowledgeBaseModel.copyToWorkspace(

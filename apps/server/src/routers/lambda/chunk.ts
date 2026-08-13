@@ -157,7 +157,9 @@ export const chunkRouter = router({
 
       return ctx.chunkModel.semanticSearch({
         embedding: embeddings![0],
-        fileIds: await filterRetrievableFileIds(ctx, input.fileIds ?? []),
+        // Omitted fileIds means "search all scoped chunks" — only a provided
+        // list is filtered, so the unscoped path keeps returning results.
+        fileIds: input.fileIds ? await filterRetrievableFileIds(ctx, input.fileIds) : undefined,
         query: input.query,
       });
     }),
