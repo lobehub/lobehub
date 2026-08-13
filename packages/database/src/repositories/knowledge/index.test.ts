@@ -1,10 +1,10 @@
 // @vitest-environment node
-import { FilesTabs } from '@lobechat/types';
+import { FileSource, FilesTabs, ResourceSourceFilter } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewDocument, NewFile } from '../../schemas/file';
-import { documents, files } from '../../schemas/file';
+import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../../schemas/file';
 import { chunks, embeddings } from '../../schemas/rag';
 import { fileChunks } from '../../schemas/relations';
 import { users } from '../../schemas/user';
@@ -126,24 +126,24 @@ describe('KnowledgeRepo', () => {
       expect(uploadedPdf).toBeUndefined();
     });
 
-    it('should include documents with sourceType="api" in Documents category', async () => {
+    it('should exclude document-table rows from Documents category (files only)', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
-      // Should include API PDF (application/pdf with sourceType='api')
-      const apiPdf = results.find((item) => item.name === 'api-pdf.pdf');
-      expect(apiPdf).toBeDefined();
-      expect(apiPdf?.sourceType).toBe('document');
-      expect(apiPdf?.fileType).toBe('application/pdf');
+      // Documents means uploaded document FILES; derived document rows stay out
+      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
+      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
+      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
     });
 
-    it('should include documents with sourceType="web" in Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
+    it('should surface custom/* document rows under the Pages category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Pages });
 
-      // Should include web document (custom/other with sourceType='web')
+      // custom/other derived doc belongs to Pages
       const webDoc = results.find((item) => item.name === 'web-doc.txt');
       expect(webDoc).toBeDefined();
       expect(webDoc?.sourceType).toBe('document');
-      expect(webDoc?.fileType).toBe('custom/other');
+      // uploaded files never surface under Pages
+      expect(results.every((item) => item.sourceType === 'document')).toBe(true);
     });
 
     it('should include files from files table in Documents category', async () => {
@@ -180,18 +180,14 @@ describe('KnowledgeRepo', () => {
       expect(regularFile).toBeDefined();
     });
 
-    it('should apply both filters together in Documents category', async () => {
+    it('should keep the Documents category free of document-table rows', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
-      // Count documents with sourceType='document'
       const documentTypeItems = results.filter((item) => item.sourceType === 'document');
+      expect(documentTypeItems).toHaveLength(0);
 
-      // Should have exactly 2 documents (api-pdf and web-doc)
-      // Excluded: uploaded-pdf (sourceType='file') and editor-doc (fileType='custom/document')
-      expect(documentTypeItems).toHaveLength(2);
-
-      const names = documentTypeItems.map((item) => item.name).sort();
-      expect(names).toEqual(['api-pdf.pdf', 'web-doc.txt']);
+      // the uploaded pdf file from the files table is still there
+      expect(results.find((item) => item.name === 'regular-pdf-file.pdf')).toBeDefined();
     });
   });
 
@@ -724,6 +720,64 @@ describe('KnowledgeRepo', () => {
       const otherUserItem = results.find((item) => item.name === 'other-recent.pdf');
       expect(otherUserItem).toBeUndefined();
     });
+
+    it('should still return pages when newer files would fill the limit', async () => {
+      // The page kind has to be filtered in SQL: filtering a truncated
+      // recent-everything list dropped every page as soon as the newest rows
+      // were all files, emptying the resource home "recent pages" section.
+      await serverDB.insert(files).values(
+        Array.from({ length: 5 }, (_, index) => ({
+          id: `newer-file-${index}`,
+          fileType: 'application/pdf',
+          name: `newer-${index}.pdf`,
+          size: 1024,
+          url: `newer-url-${index}`,
+          userId,
+          updatedAt: new Date('2024-02-01T10:00:00Z'),
+        })),
+      );
+
+      const results = await knowledgeRepo.queryRecent(3, 'page');
+
+      expect(results.map((item) => item.name)).toEqual(['recent-doc.txt']);
+    });
+
+    it('should exclude folders from the page kind', async () => {
+      await serverDB.insert(documents).values({
+        id: 'recent-folder',
+        fileType: 'custom/folder',
+        filename: 'recent folder',
+        source: 'api-source',
+        sourceType: 'api',
+        title: 'recent folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        updatedAt: new Date('2024-01-04T10:00:00Z'),
+        userId,
+      });
+
+      const results = await knowledgeRepo.queryRecent(10, 'page');
+
+      expect(results.some((item) => item.id === 'recent-folder')).toBe(false);
+      expect(results.map((item) => item.name)).toEqual(['recent-doc.txt']);
+    });
+
+    it('should exclude derived page rows from the file kind', async () => {
+      await serverDB.insert(files).values({
+        id: 'derived-page-file',
+        fileType: 'custom/document',
+        name: 'a page',
+        size: 0,
+        url: 'url-page',
+        userId,
+        updatedAt: new Date('2024-01-04T10:00:00Z'),
+      });
+
+      const results = await knowledgeRepo.queryRecent(10, 'file');
+
+      expect(results.some((item) => item.id === 'derived-page-file')).toBe(false);
+      expect(results.map((item) => item.name)).toEqual(['recent-1.pdf', 'recent-2.pdf']);
+    });
   });
 
   describe('deleteItem', () => {
@@ -1121,6 +1175,285 @@ describe('KnowledgeRepo', () => {
 
       expect(file1).toBeUndefined();
       expect(file2).toBeDefined();
+    });
+  });
+
+  describe('query - knowledge base scoping', () => {
+    beforeEach(async () => {
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-1', name: 'KB One', userId });
+
+      await serverDB.insert(files).values([
+        {
+          id: 'kb-file',
+          fileType: 'application/pdf',
+          name: 'in-kb.pdf',
+          size: 100,
+          url: 'kb-file-url',
+          userId,
+        },
+        {
+          id: 'loose-file',
+          fileType: 'application/pdf',
+          name: 'outside-kb.pdf',
+          size: 100,
+          url: 'loose-file-url',
+          userId,
+        },
+      ]);
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values([{ fileId: 'kb-file', knowledgeBaseId: 'kb-1', userId }]);
+
+      await serverDB.insert(documents).values([
+        // standalone note inside the KB — the document arm owns this row
+        {
+          id: 'kb-note',
+          content: 'note',
+          fileType: 'custom/other',
+          filename: 'kb-note.txt',
+          knowledgeBaseId: 'kb-1',
+          source: 'note-source',
+          sourceType: 'api',
+          totalCharCount: 10,
+          totalLineCount: 1,
+          userId,
+        },
+        // note outside any KB
+        {
+          id: 'loose-note',
+          content: 'note',
+          fileType: 'custom/other',
+          filename: 'loose-note.txt',
+          source: 'note-source',
+          sourceType: 'api',
+          totalCharCount: 10,
+          totalLineCount: 1,
+          userId,
+        },
+      ]);
+    });
+
+    it('should return only the files and standalone notes of the requested knowledge base', async () => {
+      const results = await knowledgeRepo.query({ knowledgeBaseId: 'kb-1' });
+
+      expect(results.map((item) => item.id).sort()).toEqual(['kb-file', 'kb-note']);
+    });
+
+    it('should exclude knowledge-base files from the default listing', async () => {
+      const results = await knowledgeRepo.query({ showFilesInKnowledgeBase: false });
+
+      const ids = results.map((item) => item.id);
+      expect(ids).toContain('loose-file');
+      expect(ids).not.toContain('kb-file');
+    });
+
+    it('should include knowledge-base files when asked to', async () => {
+      const results = await knowledgeRepo.query({ showFilesInKnowledgeBase: true });
+
+      expect(results.map((item) => item.id)).toContain('kb-file');
+    });
+  });
+
+  describe('query - parent scoping', () => {
+    beforeEach(async () => {
+      await serverDB.insert(documents).values({
+        id: 'folder-1',
+        content: null,
+        fileType: 'custom/folder',
+        filename: 'folder',
+        source: 'folder-source',
+        sourceType: 'api',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      });
+
+      await serverDB.insert(files).values([
+        {
+          id: 'child-file',
+          fileType: 'application/pdf',
+          name: 'child.pdf',
+          parentId: 'folder-1',
+          size: 100,
+          url: 'child-url',
+          userId,
+        },
+        {
+          id: 'root-file',
+          fileType: 'application/pdf',
+          name: 'root.pdf',
+          size: 100,
+          url: 'root-url',
+          userId,
+        },
+      ]);
+    });
+
+    it('should return only children of the requested parent', async () => {
+      const results = await knowledgeRepo.query({ parentId: 'folder-1' });
+
+      expect(results.map((item) => item.id)).toEqual(['child-file']);
+    });
+
+    it('should return only root-level rows when parentId is null', async () => {
+      const results = await knowledgeRepo.query({ parentId: null });
+
+      const ids = results.map((item) => item.id);
+      expect(ids).toContain('root-file');
+      expect(ids).toContain('folder-1');
+      expect(ids).not.toContain('child-file');
+    });
+  });
+
+  describe('acceptance evidence hiding', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'library-file',
+          fileType: 'text/plain',
+          name: 'notes.txt',
+          size: 100,
+          url: 'library-url',
+          userId,
+        },
+        {
+          id: 'evidence-file',
+          fileType: 'text/plain',
+          name: 'payload-execution.txt',
+          size: 100,
+          source: FileSource.Acceptance,
+          url: 'evidence-url',
+          userId,
+        },
+        {
+          id: 'generated-file',
+          fileType: 'image/png',
+          name: 'generated.png',
+          size: 100,
+          source: FileSource.ImageGeneration,
+          url: 'generated-url',
+          userId,
+        },
+      ]);
+    });
+
+    it('should hide acceptance evidence from the file list', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const ids = result.map((item) => item.fileId);
+      expect(ids).toContain('library-file');
+      expect(ids).toContain('generated-file');
+      expect(ids).not.toContain('evidence-file');
+    });
+
+    it('should hide acceptance evidence from recent items', async () => {
+      const result = await knowledgeRepo.queryRecent(50, 'file');
+
+      expect(result.map((item) => item.fileId)).not.toContain('evidence-file');
+    });
+
+    it('should still resolve acceptance evidence by id', async () => {
+      const result = await knowledgeRepo.findById('evidence-file', 'file');
+
+      expect(result?.name).toBe('payload-execution.txt');
+    });
+  });
+
+  describe('query - source filtering', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'uploaded-image',
+          fileType: 'image/png',
+          name: 'screenshot.png',
+          size: 100,
+          url: 'uploaded-url',
+          userId,
+        },
+        {
+          id: 'pasted-image',
+          fileType: 'image/png',
+          name: 'pasted.png',
+          size: 100,
+          source: FileSource.PageEditor,
+          url: 'pasted-url',
+          userId,
+        },
+        {
+          id: 'generated-image',
+          fileType: 'image/png',
+          name: 'generated.png',
+          size: 100,
+          source: FileSource.ImageGeneration,
+          url: 'generated-url',
+          userId,
+        },
+        {
+          id: 'evidence-image',
+          fileType: 'image/png',
+          name: 'evidence.png',
+          size: 100,
+          source: FileSource.Acceptance,
+          url: 'evidence-url',
+          userId,
+        },
+      ]);
+    });
+
+    const queryImageIds = async (sourceFilter?: ResourceSourceFilter) => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Images, sourceFilter });
+
+      return result.map((item) => item.fileId);
+    };
+
+    it('should keep the historical pool when the filter is all', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.All);
+
+      expect(ids).toContain('uploaded-image');
+      expect(ids).toContain('pasted-image');
+      expect(ids).toContain('generated-image');
+      expect(ids).not.toContain('evidence-image');
+    });
+
+    it('should return only model output when the filter is generated', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Generated);
+
+      expect(ids).toEqual(['generated-image']);
+    });
+
+    it('should treat page-editor images as uploads and exclude generated output', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Uploaded);
+
+      expect(ids).toContain('uploaded-image');
+      expect(ids).toContain('pasted-image');
+      expect(ids).not.toContain('generated-image');
+      expect(ids).not.toContain('evidence-image');
+    });
+
+    it('should surface otherwise-hidden evidence when the filter is acceptance', async () => {
+      const ids = await queryImageIds(ResourceSourceFilter.Acceptance);
+
+      expect(ids).toEqual(['evidence-image']);
+    });
+
+    it('should drop documents from the union once the filter narrows', async () => {
+      await serverDB.insert(documents).values({
+        content: 'note body',
+        fileType: 'custom/document',
+        id: 'source-filter-note',
+        source: 'note-source',
+        sourceType: 'api',
+        title: 'a note',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      } as NewDocument);
+
+      const all = await knowledgeRepo.query({ sourceFilter: ResourceSourceFilter.All });
+      const generated = await knowledgeRepo.query({ sourceFilter: ResourceSourceFilter.Generated });
+
+      expect(all.map((item) => item.id)).toContain('source-filter-note');
+      expect(generated.map((item) => item.id)).not.toContain('source-filter-note');
     });
   });
 

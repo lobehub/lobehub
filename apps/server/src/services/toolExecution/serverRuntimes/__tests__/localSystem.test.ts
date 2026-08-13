@@ -225,6 +225,104 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ command: 'git status', cwd: '/Users/me/repo' });
     });
 
+    it('forwards the sandbox decision to runCommand', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).toEqual({
+        command: 'git status',
+        cwd: '/Users/me/repo',
+        sandbox: true,
+        sandboxNetwork: false,
+      });
+    });
+
+    it('never lets a model-supplied cwd become the fence root', async () => {
+      // The sandbox policy is built from `params.cwd` on the device, so this
+      // stripping is what stops a guessed or replayed `cwd` from choosing what
+      // the command is fenced to. `cwd` is off-manifest for every api, but the
+      // arg schema does not reject extra properties — pin the behaviour here so
+      // relaxing the strip can never silently hand the model its own fence.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'cat ~/.ssh/id_rsa',
+        cwd: '/Users/me',
+      });
+
+      expect(parseArgs().cwd).toBe('/Users/me/repo');
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
+    it('forwards the network allowance for a fenced run', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        localSandboxNetwork: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'npm install' });
+
+      expect(parseArgs().sandboxNetwork).toBe(true);
+    });
+
+    it('omits the network flag when the run is not fenced', async () => {
+      // `sandboxNetwork` is meaningless without a sandbox — don't add noise to
+      // an unfenced command's args.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: false,
+        localSandboxNetwork: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).not.toHaveProperty('sandboxNetwork');
+      expect(parseArgs().sandbox).toBe(false);
+    });
+
+    it('overrides a sandbox flag the model tried to set itself', async () => {
+      // The manifest never exposes `sandbox`, but a model that guesses the field
+      // must not be able to unfence its own commands — the run's context wins.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'rm -rf /', sandbox: false });
+
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
+    it('leaves runCommand untouched when the run is not sandboxed', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).not.toHaveProperty('sandbox');
+    });
+
     it('injects scope into search ops that honor it', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.grepContent]({ pattern: 'TODO' });
@@ -271,11 +369,41 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/explicit' });
     });
 
-    it('does not override an explicit cwd/scope supplied by the model', async () => {
+    // Security: `cwd` is not a manifest field, so a model can never legitimately
+    // set it — and the out-of-scope intervention audit does not inspect it. If a
+    // provider forwards the unknown argument, honoring it would let
+    // `readFile({ path: 'passwd', cwd: '/etc' })` pass the audit (only `path` is
+    // checked, and it looks workspace-relative) and then execute against /etc.
+    it('overrides an off-contract cwd supplied by the model', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });
 
-      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/explicit' });
+      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/Users/me/repo' });
+    });
+
+    it('drops an off-contract cwd on file ops when a working directory is bound', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.readFile]({ cwd: '/etc', path: 'passwd' });
+
+      expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'passwd' });
+    });
+
+    // Search apis take `scope`, not `cwd` — but downstream `cwd` doubles as a
+    // legacy search-root alias and as the base a relative `scope` resolves
+    // against, so leaving it in place would let an audited workspace-relative
+    // `scope` execute somewhere else entirely.
+    it.each([
+      [LocalSystemApiName.globFiles, { cwd: '/', pattern: 'passwd', scope: 'etc' }],
+      [LocalSystemApiName.grepContent, { cwd: '/', pattern: 'root', scope: 'etc' }],
+      [LocalSystemApiName.searchFiles, { cwd: '/', keywords: 'passwd', scope: 'etc' }],
+    ])('strips an off-contract cwd from %s while keeping the audited scope', async (api, args) => {
+      mockExecuteToolCall.mockClear();
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[api](args);
+
+      const forwarded = JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+      expect(forwarded.cwd).toBeUndefined();
+      expect(forwarded.scope).toBe('etc');
     });
 
     it('injects cwd into file ops so the daemon can resolve a relative path', async () => {
@@ -314,6 +442,15 @@ describe('localSystemRuntime', () => {
       await proxy[LocalSystemApiName.runCommand]({ command: 'pwd' });
 
       expect(parseArgs()).toEqual({ command: 'pwd' });
+    });
+
+    // With nothing trusted to overwrite it with, an off-contract cwd is dropped
+    // rather than forwarded — the device then falls back to its own default.
+    it('strips an off-contract cwd when no working directory is bound', async () => {
+      const proxy = buildProxy(undefined);
+      await proxy[LocalSystemApiName.readFile]({ cwd: '/etc', path: 'passwd' });
+
+      expect(parseArgs()).toEqual({ path: 'passwd' });
     });
   });
 

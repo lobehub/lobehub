@@ -639,4 +639,84 @@ describe('buildTaskRunPrompt', () => {
     expect(taskSection).toContain('👤 user');
     expect(taskSection).toContain('🤖 agent');
   });
+
+  it('renders the goal loop section with reject comment, failed checks and CLI hint', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          failedChecks: [
+            { title: 'LCP < 2s', why: 'measured 2.8s — preload hero image' },
+            { title: 'Lighthouse ≥ 90' },
+          ],
+          maxRounds: 3,
+          rejectComment: '真机 LCP 还是 2.4s,按真机口径再优化',
+          round: 2,
+        },
+        task: {
+          ...baseTask,
+          identifier: 'TASK-1',
+          instruction: '官网首页改版并上线',
+          name: '首页改版',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Goal loop — round 2 of 3');
+    // Reject comment outranks the failed checks.
+    expect(result.indexOf('真机 LCP 还是 2.4s')).toBeLessThan(result.indexOf('LCP < 2s'));
+    expect(result).toContain('1. LCP < 2s — measured 2.8s — preload hero image');
+    expect(result).toContain('2. Lighthouse ≥ 90');
+    expect(result).toContain('`lh task topic view TASK-1 <seq>`');
+  });
+
+  it('omits the round budget suffix for uncapped goals', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: { maxRounds: null, round: 5 },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '写书', name: '写一本书' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Goal loop — round 5:');
+    expect(result).not.toContain('round 5 of');
+  });
+
+  it('expands full handoff for the two most recent rounds and keeps older ones title-only', () => {
+    const mkTopic = (seq: number, summary: string) => ({
+      createdAt: `2026-03-2${seq}T10:00:00Z`,
+      handoff: {
+        keyFindings: [`finding-${seq}`],
+        nextAction: `next-${seq}`,
+        summary,
+        title: `round ${seq}`,
+      },
+      id: `t${seq}`,
+      seq,
+      status: 'completed',
+    });
+    const result = buildTaskRunPrompt(
+      {
+        activities: {
+          topics: [
+            mkTopic(1, 'summary-one'),
+            mkTopic(2, 'summary-two'),
+            mkTopic(3, 'summary-three'),
+          ],
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '写书', name: '写一本书' },
+      },
+      NOW,
+    );
+
+    // Recent two rounds carry the full handoff…
+    expect(result).toContain('↳ summary: summary-two');
+    expect(result).toContain('↳ summary: summary-three');
+    expect(result).toContain('↳ findings: finding-3');
+    expect(result).toContain('↳ next: next-3');
+    // …the oldest stays title-only.
+    expect(result).not.toContain('summary-one');
+    expect(result).toContain('round 1');
+  });
 });

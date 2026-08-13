@@ -219,7 +219,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
-    const defaultCommand = providerConfig?.command || '';
+    const defaultCommand = providerConfig?.defaultCommand || '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
     const [status, setStatus] = useState<BinaryStatus | undefined>();
@@ -235,7 +235,10 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const showCliInstallGuide =
       (provider.type === 'amp' ||
         provider.type === 'claude-code' ||
+        provider.type === 'codebuddy' ||
         provider.type === 'codex' ||
+        provider.type === 'cursor' ||
+        provider.type === 'kimi-code' ||
         provider.type === 'opencode' ||
         provider.type === 'pi' ||
         provider.type === 'qoder') &&

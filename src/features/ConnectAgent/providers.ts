@@ -1,11 +1,26 @@
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+  RemoteHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import {
-  type HeterogeneousAgentType,
-  type LocalHeterogeneousAgentType,
+  isRemoteHeterogeneousType,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
-  type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
-import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode, Pi, Qoder } from '@lobehub/icons';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  HermesAgent,
+  Kimi,
+  OpenClaw,
+  OpenCode,
+  Pi,
+  Qoder,
+} from '@lobehub/icons';
 
 /**
  * One row in the connect wizard's agent inventory. `kind` mirrors the domain
@@ -19,8 +34,11 @@ export interface ConnectableProvider {
   brand:
     | typeof Amp
     | typeof ClaudeCode
+    | typeof CodeBuddy
     | typeof Codex
+    | typeof Cursor
     | typeof HermesAgent
+    | typeof Kimi
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
@@ -32,10 +50,26 @@ export interface ConnectableProvider {
   type: HeterogeneousAgentType;
 }
 
+export interface ConnectAgentProfile {
+  avatar?: string;
+  description?: string;
+  title?: string;
+}
+
+interface BuildConnectAgentConfigOptions {
+  overrides?: { description?: string; name?: string };
+  profile?: ConnectAgentProfile;
+  provider: ConnectableProvider;
+  target: { deviceId: string; kind: 'device' } | { kind: 'local' };
+}
+
 const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand']> = {
   'amp': Amp,
   'claude-code': ClaudeCode,
+  'codebuddy': CodeBuddy,
   'codex': Codex,
+  'cursor': Cursor,
+  'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
@@ -50,7 +84,7 @@ export const CONNECTABLE_PROVIDERS: ConnectableProvider[] = [
   ...HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((config) => ({
     avatar: config.avatar,
     brand: CLI_BRANDS[config.type],
-    command: config.command,
+    command: config.defaultCommand,
     kind: 'cli' as const,
     title: config.title,
     type: config.type,
@@ -75,3 +109,49 @@ export const buildPlatformAgencyConfig = (
     : undefined),
   heterogeneousProvider: { type },
 });
+
+export const buildConnectAgentConfig = ({
+  overrides,
+  profile,
+  provider,
+  target,
+}: BuildConnectAgentConfigOptions) => {
+  const name = overrides?.name?.trim() || undefined;
+
+  if (provider.kind === 'platform' && isRemoteHeterogeneousType(provider.type)) {
+    return {
+      agencyConfig: buildPlatformAgencyConfig(provider.type, target),
+      avatar: profile?.avatar || undefined,
+      description: (overrides?.description ?? profile?.description)?.trim() || undefined,
+      name,
+      title: profile?.title || provider.title,
+    };
+  }
+
+  const base = {
+    avatar: provider.avatar,
+    description: overrides?.description?.trim() || undefined,
+    name,
+    provider: provider.type,
+    systemRole: '',
+    title: provider.title,
+  };
+
+  if (target.kind === 'device') {
+    return {
+      ...base,
+      agencyConfig: {
+        boundDeviceId: target.deviceId,
+        executionTarget: 'device' as const,
+        heterogeneousProvider: { command: provider.command, type: provider.type },
+      },
+    };
+  }
+
+  return {
+    ...base,
+    agencyConfig: {
+      heterogeneousProvider: { command: provider.command, type: provider.type },
+    },
+  };
+};

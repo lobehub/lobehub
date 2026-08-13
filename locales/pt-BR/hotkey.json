@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Mostrar ou ocultar o painel esquerdo",
   "toggleLeftPanel.title": "Alternar Painel Esquerdo",
   "toggleRightPanel.desc": "Mostrar ou ocultar o painel direito",
-  "toggleRightPanel.title": "Alternar Painel Direito"
+  "toggleRightPanel.title": "Alternar Painel Direito",
+  "toggleTerminalPanel.desc": "Exibir ou ocultar o painel de terminal inferior",
+  "toggleTerminalPanel.title": "Alternar Painel de Terminal"
 }

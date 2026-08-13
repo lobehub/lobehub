@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
@@ -15,7 +16,7 @@ import type {
 } from '../types';
 
 const AMP_IDENTIFIER = 'amp';
-const AMP_DOCS_URL = 'https://ampcode.com/manual';
+const AMP_DOCS_URL = getHeterogeneousAgentConfigOrThrow(AMP_IDENTIFIER).auth.docsUrl;
 
 interface AmpUsage {
   cache_creation_input_tokens?: number;

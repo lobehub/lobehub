@@ -287,6 +287,23 @@ jobs:
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
+      # 测量 app.asar 大小并上传为基线 artifact(PR 的 ASAR size gate 用它做对比)
+      - name: Measure ASAR size
+        id: asar_size
+        shell: bash
+        run: |
+          node .github/scripts/bundle-size-gate.cjs measure --type asar --out size-report/asar.json
+          platform=$(node -p "require('./size-report/asar.json').platform")
+          mv size-report/asar.json "size-report/asar-size-baseline-${platform}.json"
+          echo "platform=${platform}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ASAR size baseline
+        uses: actions/upload-artifact@v6
+        with:
+          name: asar-size-baseline-${{ steps.asar_size.outputs.platform }}
+          path: size-report/asar-size-baseline-${{ steps.asar_size.outputs.platform }}.json
+          retention-days: 30
+
       - name: Upload artifacts
         uses: ./.github/actions/desktop-upload-artifacts
         with:

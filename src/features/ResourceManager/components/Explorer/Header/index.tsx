@@ -11,16 +11,17 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { getExplorerSelectedCount } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 
 import AddButton from '../../Header/AddButton';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
 import SortDropdown from '../ToolBar/SortDropdown';
+import SourceFilter from '../ToolBar/SourceFilter';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
 import SearchInput from './SearchInput';
@@ -34,15 +35,23 @@ const Header = memo(() => {
   const activeWorkspaceId = useActiveWorkspaceId();
 
   // Get state and actions from store
-  const [libraryId, category, onActionClick, selectAllState, selectFileIds, selectionTotal] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.category,
-      s.onActionClick,
-      s.selectAllState,
-      s.selectedFileIds,
-      s.selectionTotal,
-    ]);
+  const [
+    libraryId,
+    category,
+    onActionClick,
+    selectAllState,
+    selectFileIds,
+    selectionTotal,
+    viewMode,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.onActionClick,
+    s.selectAllState,
+    s.selectedFileIds,
+    s.selectionTotal,
+    s.viewMode,
+  ]);
   const isWorkspaceOwner = useIsWorkspaceOwner();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
   const total = useFileStore((s) => s.total);
@@ -184,6 +193,14 @@ const Header = memo(() => {
       left={leftContent}
       right={
         <>
+          {/*
+            Grid view carries the source chips on its item-count row (where the
+            count and the pool it counts belong together). The list view has no
+            such row — its header is a horizontally scrolling column strip — so
+            the chips live here instead, and a standing filter stays visible in
+            both views.
+          */}
+          {viewMode === 'list' && <SourceFilter />}
           <SearchInput />
           <SortDropdown />
           <BatchActionsDropdown selectCount={selectCount} onActionClick={onActionClick} />

@@ -241,6 +241,8 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       data: OpenAI.ChatCompletion,
     ) => ReadableStream<OpenAI.ChatCompletionChunk>;
     noUserId?: boolean;
+    /** Convert internal audio_url parts to OpenAI input_audio (WAV/MP3 only). */
+    supportsAudioInput?: boolean;
     /**
      * If true, route chat requests to Responses API path directly
      */
@@ -726,6 +728,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
           model: postPayload.model,
+          supportsAudioInput: chatCompletion?.supportsAudioInput,
           thoughtSignatureScope,
         });
         const includeUsageRequested = Boolean(postPayload.stream && !chatCompletion?.excludeUsage);

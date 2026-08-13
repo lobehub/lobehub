@@ -11,10 +11,8 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline-end: 4px;
   `,
   text: css`
-    overflow: hidden;
+    padding-block: 1px;
     color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
 }));
 

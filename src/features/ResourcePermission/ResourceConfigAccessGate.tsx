@@ -5,7 +5,7 @@ import { memo, type ReactNode, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -66,10 +66,10 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
         error={accessError}
         errorVariant={'page'}
         isLoading={!accessReady && !accessError}
-        loading={<Loading debugId="ResourceConfigAccessGate" />}
+        loading={<SurfaceSkeleton variant={'form'} />}
         onRetry={() => void retryAccess()}
       >
-        {canConfigure ? children : <Loading debugId="ResourceConfigAccessRedirect" />}
+        {canConfigure ? children : <SurfaceSkeleton variant={'form'} />}
       </AsyncBoundary>
     );
   },

@@ -1,9 +1,16 @@
 'use client';
 
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, RotateCcw } from 'lucide-react';
+import {
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ExternalLink,
+  RotateCcw,
+  Trash,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,13 +23,14 @@ import {
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Verify';
+import { usePermission } from '@/hooks/usePermission';
+import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
-import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
@@ -127,9 +135,11 @@ CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 
 const TaskAcceptance = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
+  const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
-  const currentPortalView = useChatStore(chatPortalSelectors.currentViewType);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
+  const { allowed: canEditTask } = usePermission('create_content');
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
@@ -156,6 +166,18 @@ const TaskAcceptance = memo(() => {
     verify?.requirement,
     bundle?.acceptance.requirement,
   );
+  const openCheck = (acceptanceId: string, checkId: string) => {
+    showTaskAgentPanel(true);
+    openAcceptanceCheck(acceptanceId, checkId);
+  };
+
+  // Same destination as a check, one level up: the report belongs in the panel
+  // beside the task, not on a page that replaces it.
+  const openReport = (acceptanceId: string) => {
+    showTaskAgentPanel(true);
+    openAcceptance(acceptanceId);
+  };
+
   const grouped = shouldGroupChecks(checks.length);
   const groups = useMemo(
     () =>
@@ -171,10 +193,65 @@ const TaskAcceptance = memo(() => {
   // replace the definitions with their live/result projection below.
   if (!acceptanceSubject && !subjectError) return <TaskVerifyConfig />;
 
+  // Removing the acceptance drops the aggregate (round reports detach) AND
+  // clears the task's verify config — otherwise the section would fall back to
+  // the configured-criteria view and the next run would recreate the aggregate.
+  // Ordering makes the two writes safe without a server transaction: the config
+  // is cleared FIRST (a failure aborts before anything is destroyed), and only
+  // then is the aggregate deleted (a failure there leaves it intact for retry).
+  // The inverse order could delete the record while the stale config survives
+  // to recreate it on the next run.
+  const handleRemoveAcceptance = () => {
+    if (!acceptanceSubject || !taskId) return;
+    confirmModal({
+      content: t('taskDetail.acceptance.removeConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.acceptance.removeConfirm.ok'),
+      onOk: async () => {
+        await useTaskStore.getState().updateVerifyConfig(taskId, {
+          enabled: false,
+          requirement: null,
+          verifyCriteriaIds: null,
+        });
+        await verifyService.deleteAcceptance(acceptanceSubject.id);
+        await mutateSubject();
+      },
+      title: t('taskDetail.acceptance.removeConfirm.title'),
+    });
+  };
+
+  // `acceptance.remove` only authorizes the acceptance creator (or a workspace
+  // owner, cloud-side), not everyone who can edit the task — so the affordance
+  // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
   const header = (
     <TaskAcceptanceHeader
       count={checks.length}
+      // The section shows the rounds and the checklist; the report is the full
+      // record behind them — reachable from the block it belongs to, instead
+      // of only from the status row at the top of the page.
       isOpen={sectionExpanded}
+      extra={
+        acceptanceSubject && (
+          <Flexbox horizontal align={'center'} gap={4}>
+            <Button
+              icon={<Icon icon={ExternalLink} />}
+              size={'small'}
+              type={'text'}
+              onClick={() => openReport(acceptanceSubject.id)}
+            >
+              {t('taskDetail.acceptance.openReport')}
+            </Button>
+            {canEditTask && bundle?.isOwner && (
+              <ActionIcon
+                icon={Trash}
+                size={'small'}
+                title={t('taskDetail.acceptance.remove')}
+                onClick={handleRemoveAcceptance}
+              />
+            )}
+          </Flexbox>
+        )
+      }
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
     />
   );
@@ -199,6 +276,7 @@ const TaskAcceptance = memo(() => {
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
+              <GoalRoundTimeline rounds={bundle.rounds} />
               {requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>
@@ -269,12 +347,7 @@ const TaskAcceptance = memo(() => {
                                 <CompactCheckRow
                                   check={check}
                                   key={check.id}
-                                  onOpen={() => {
-                                    if (currentPortalView !== PortalViewType.TaskDetail) {
-                                      showTaskAgentPanel(true);
-                                    }
-                                    openAcceptanceCheck(bundle.acceptance.id, check.id);
-                                  }}
+                                  onOpen={() => openCheck(bundle.acceptance.id, check.id)}
                                 />
                               ))}
                           </Flexbox>
@@ -284,12 +357,7 @@ const TaskAcceptance = memo(() => {
                         <CompactCheckRow
                           check={check}
                           key={check.id}
-                          onOpen={() => {
-                            if (currentPortalView !== PortalViewType.TaskDetail) {
-                              showTaskAgentPanel(true);
-                            }
-                            openAcceptanceCheck(bundle.acceptance.id, check.id);
-                          }}
+                          onOpen={() => openCheck(bundle.acceptance.id, check.id)}
                         />
                       ))}
                 </Block>

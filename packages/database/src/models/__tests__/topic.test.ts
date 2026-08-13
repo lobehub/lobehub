@@ -680,6 +680,45 @@ describe('TopicModel', () => {
       expect(clonedMessages.map((m) => m.id)).not.toContain('dup-m1');
     });
 
+    it('marks duplicated messages and resets the topic-level rollups', async () => {
+      const usage = { cost: 0.05, totalInputTokens: 100, totalOutputTokens: 50 };
+      const topic = await topicModel.create({ title: 'billed' });
+      await serverDB
+        .update(topics)
+        .set({ totalCost: '0.05' as any, totalTokens: 150 })
+        .where(eq(topics.id, topic.id));
+      await serverDB.insert(messages).values([
+        {
+          content: 'answer',
+          id: 'dup-billed',
+          metadata: { performance: { tps: 42 }, usage },
+          role: 'assistant',
+          topicId: topic.id,
+          usage,
+          userId,
+        },
+      ]);
+
+      const { topic: cloned, messages: clonedMessages } = await topicModel.duplicate(topic.id);
+
+      // per-message figures are transcript facts and survive the copy...
+      const clone = clonedMessages[0];
+      expect(clone.usage).toEqual(usage);
+      const metadata = clone.metadata as Record<string, unknown>;
+      expect(metadata.usage).toEqual(usage);
+      expect(metadata.performance).toEqual({ tps: 42 });
+      // ...but the row is marked, so usage reports skip it
+      expect(metadata.copied).toBe(true);
+
+      // the topic rollup answers "what did this topic cost this scope", and a
+      // fresh duplicate has spent nothing yet
+      const clonedTopic = await serverDB.query.topics.findFirst({
+        where: (t, { eq: is }) => is(t.id, cloned.id),
+      });
+      expect(clonedTopic?.totalCost).toBeNull();
+      expect(clonedTopic?.totalTokens).toBeNull();
+    });
+
     it('throws when the source topic does not exist', async () => {
       await expect(topicModel.duplicate('nope')).rejects.toThrow('not found');
     });

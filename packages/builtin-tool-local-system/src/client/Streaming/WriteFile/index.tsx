@@ -6,8 +6,14 @@ import { Highlighter, Markdown } from '@lobehub/ui';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 
-export const WriteFileStreaming = memo<BuiltinStreamingProps<WriteLocalFileParams>>(({ args }) => {
-  const { content, path: filePath } = args || {};
+type WriteFileArgs = WriteLocalFileParams & {
+  file_path?: string;
+  filePath?: string;
+};
+
+export const WriteFileStreaming = memo<BuiltinStreamingProps<WriteFileArgs>>(({ args }) => {
+  const content = args?.content;
+  const filePath = args?.path || args?.filePath || args?.file_path;
 
   // Don't render if no content yet
   if (!content) return null;

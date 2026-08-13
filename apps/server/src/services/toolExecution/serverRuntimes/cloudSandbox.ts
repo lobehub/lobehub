@@ -1,6 +1,7 @@
 import { CloudSandboxIdentifier, type ISandboxService } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
 
+import { UserModel } from '@/database/models/user';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
@@ -61,7 +62,7 @@ const withLhPreprocessing = (
  * Per-request runtime (needs topicId, userId)
  */
 export const cloudSandboxRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId || !context.topicId) {
       throw new Error('userId and topicId are required for Cloud Sandbox execution');
     }
@@ -70,7 +71,20 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       throw new Error('serverDB is required for Cloud Sandbox execution');
     }
 
-    const marketService = new MarketService({ userInfo: { userId: context.userId } });
+    // Read market accessToken from DB so server-side sandbox runtime can authenticate.
+    let accessToken: string | undefined;
+    try {
+      const userModel = new UserModel(context.serverDB, context.userId);
+      const settings = await userModel.getUserSettings();
+      accessToken = (settings?.market as any)?.accessToken;
+    } catch {
+      // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    const marketService = new MarketService({
+      accessToken,
+      userInfo: { userId: context.userId },
+    });
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const sandboxService = createSandboxService({
       fileService,

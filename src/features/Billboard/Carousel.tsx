@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
+import { resolveBillboardAction, runBillboardAction } from './actions';
 import { resolveBillboardItem } from './locale';
 
 type BillboardItem = GlobalBillboardItem;
@@ -142,18 +143,35 @@ const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position:
       [item, i18n.language],
     );
 
-    const handleCtaClick = useCallback(() => {
-      analytics?.track({
-        name: 'billboard_cta_clicked',
-        properties: {
-          billboard_slug: billboardSlug,
-          item_id: item.id,
-          link_url: item.linkUrl,
-          position,
-          spm: 'billboard.cta.clicked',
-        },
-      });
-    }, [analytics, billboardSlug, item.id, item.linkUrl, position]);
+    const action = resolveBillboardAction(item.action);
+
+    const trackCtaClick = useCallback(
+      (extra: Record<string, unknown>) => {
+        analytics?.track({
+          name: 'billboard_cta_clicked',
+          properties: {
+            billboard_slug: billboardSlug,
+            item_id: item.id,
+            position,
+            spm: 'billboard.cta.clicked',
+            ...extra,
+          },
+        });
+      },
+      [analytics, billboardSlug, item.id, position],
+    );
+
+    const handleActionClick = useCallback(() => {
+      if (!action) return;
+      trackCtaClick({ action });
+      // handlers may be async (e.g. resetOnboarding persists before navigating);
+      // a failed action must never surface as an unhandled rejection on the card
+      void Promise.resolve(runBillboardAction(action)).catch(() => {});
+    }, [action, trackCtaClick]);
+
+    const handleLinkClick = useCallback(() => {
+      trackCtaClick({ link_url: item.linkUrl });
+    }, [trackCtaClick, item.linkUrl]);
 
     const titleRef = useRef<HTMLDivElement>(null);
     const descRef = useRef<HTMLDivElement>(null);
@@ -203,18 +221,24 @@ const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position:
             ) : (
               descNode
             ))}
-          {item.linkUrl && (
-            <a
-              className={styles.action}
-              href={item.linkUrl}
-              rel="noopener noreferrer"
-              target="_blank"
-              onClick={handleCtaClick}
-            >
-              <Button block size="small" type="primary">
-                {resolved.linkLabel ?? t('billboard.learnMore')}
-              </Button>
-            </a>
+          {action ? (
+            <Button block className={styles.action} type="primary" onClick={handleActionClick}>
+              {resolved.linkLabel ?? t('billboard.learnMore')}
+            </Button>
+          ) : (
+            item.linkUrl && (
+              <a
+                className={styles.action}
+                href={item.linkUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+                onClick={handleLinkClick}
+              >
+                <Button block type="primary">
+                  {resolved.linkLabel ?? t('billboard.learnMore')}
+                </Button>
+              </a>
+            )
           )}
         </Flexbox>
       </Flexbox>

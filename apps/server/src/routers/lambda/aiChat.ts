@@ -337,7 +337,27 @@ export const aiChatRouter = router({
           () => ctx.messageModel.getLatestSpineMessageId({ threadId, topicId }),
           { hasThreadId: !!threadId },
         );
-        parentId = resolvedParentId ?? parentId;
+        if (!parentId) {
+          parentId = resolvedParentId;
+        } else if (resolvedParentId && resolvedParentId !== parentId) {
+          // Advance a stale client tail only when the server head is on the
+          // SAME branch. A historical taskCallback fork may contain a newer
+          // assistant row on a sibling branch; blindly taking the newest row
+          // attaches the user's next turn there and the UI drops it after
+          // branch reconciliation.
+          const advancesClientBranch = await runTimedStage(
+            timingContext,
+            'lambda.aiChat.validateResolvedParentBranch',
+            () =>
+              ctx.messageModel.isMessageDescendantOf({
+                ancestorId: parentId!,
+                descendantId: resolvedParentId,
+                topicId,
+              }),
+            { hasThreadId: !!threadId },
+          );
+          if (advancesClientBranch) parentId = resolvedParentId;
+        }
       }
 
       if (input.preloadMessages?.length) {
@@ -416,7 +436,7 @@ export const aiChatRouter = router({
             topicId,
           } satisfies CreateMessageParams;
           const assistantMessage = {
-            agentId: input.agentId,
+            agentId: input.newAssistantMessage.agentId ?? input.agentId,
             content: LOADING_FLAT,
             groupId: input.groupId,
             metadata: input.newAssistantMessage.metadata,

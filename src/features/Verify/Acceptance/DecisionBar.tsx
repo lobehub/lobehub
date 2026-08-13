@@ -3,7 +3,15 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BadgeCheck, CircleAlert, ListTodo, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
+import {
+  BadgeCheck,
+  CircleAlert,
+  ListTodo,
+  Loader2,
+  MessageSquarePlus,
+  RefreshCw,
+  RotateCcw,
+} from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -135,6 +143,8 @@ interface DecisionBarProps {
   /** Checks the user reviewed as needing a fix (待修复) — decided, not pending. */
   needsFixCount: number;
   onAccept: () => void;
+  /** Record a global (uncategorized) comment for the next round. */
+  onAddComment: () => void;
   /** Copy the hardcoded repair prompt for pasting to any agent. */
   onCopyReview: () => void;
   onOpenFeedback: () => void;
@@ -172,6 +182,7 @@ const DecisionBar = memo<DecisionBarProps>(
     ignoredCount,
     needsFixCount,
     onAccept,
+    onAddComment,
     onCopyReview,
     onOpenFeedback,
     onRejectComment,
@@ -252,7 +263,7 @@ const DecisionBar = memo<DecisionBarProps>(
         ) : (
           <ProgressRing done={decidedCount} total={totalCount} />
         )}
-        <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
+        <Flexbox gap={2} style={{ flex: '0 1 auto', minWidth: 0 }}>
           <Text ellipsis strong style={{ fontSize: 14 }}>
             {statusText}
           </Text>
@@ -263,7 +274,9 @@ const DecisionBar = memo<DecisionBarProps>(
           )}
         </Flexbox>
 
-        {/* The clearing list — every note this round queues for the next one. */}
+        {/* The clearing list — every note this round queues for the next one.
+            Sits with the status reading on the left: it explains that reading,
+            while the right side stays pure actions. */}
         {feedbackCount > 0 && (
           <Button
             icon={<Icon icon={ListTodo} />}
@@ -275,6 +288,8 @@ const DecisionBar = memo<DecisionBarProps>(
             {t('acceptance.bar.feedback', { count: feedbackCount })}
           </Button>
         )}
+
+        <div style={{ flex: 1, minWidth: 8 }} />
 
         {/* A dispatched send-back (repairing) keeps the copy entry alive —
             the reviewer may still hand the prompt to another agent. Embedded,
@@ -300,6 +315,17 @@ const DecisionBar = memo<DecisionBarProps>(
                   {t('acceptance.bar.copyReview')}
                 </Button>
               )}
+              {/* Last words before the repair leaves — a global note the next
+                  round reads, for what the queued per-check feedback missed. */}
+              <Button
+                disabled={pending}
+                icon={<Icon icon={MessageSquarePlus} />}
+                style={{ flex: 'none' }}
+                type={'fill'}
+                onClick={onAddComment}
+              >
+                {t('acceptance.bar.addComment')}
+              </Button>
               {rerunAvailable && (
                 <Button
                   disabled={pending}

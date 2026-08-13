@@ -4,6 +4,7 @@ import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
 import { FloatingPanel } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +28,7 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import TopicStatusIcon from '../TopicStatusIcon';
+import AssigneeAvatar from '../../features/AssigneeAvatar';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
@@ -64,7 +65,9 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     const runningOperation = useTaskStore(
       (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
     );
-    useGatewayReconnect(topicId, runningOperation);
+    // Pass this drawer's agent explicitly — the run drawer also mounts on the
+    // home surface, where the chat store's `activeAgentId` is unset.
+    useGatewayReconnect(topicId, runningOperation, agentId);
 
     const itemContent = useCallback(
       (index: number, id: string) => (
@@ -126,7 +129,6 @@ const TopicChatDrawer = memo(() => {
   useFetchTaskDetail(topicId ? activeTaskId : undefined);
 
   const open = !!topicId && !!agentId;
-  const status = activity?.status;
 
   const shareContext = useMemo<Partial<ConversationContext>>(
     () => ({ agentId: agentId ?? undefined, topicId: topicId ?? undefined }),
@@ -170,7 +172,7 @@ const TopicChatDrawer = memo(() => {
       gap={8}
       style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
     >
-      <TopicStatusIcon size={16} status={status} />
+      <AssigneeAvatar agentId={agentId} size={20} />
       {activity?.sourceTaskIdentifier && (
         <Tag
           size={'small'}
@@ -231,7 +233,10 @@ const TopicChatDrawer = memo(() => {
       width={640}
       styles={{
         body: { padding: 0 },
-        panel: { maxHeight: 'calc(100dvh - 16px)' },
+        panel: {
+          background: cssVar.colorBgContainer,
+          maxHeight: 'calc(100dvh - 16px)',
+        },
         title: {
           boxSizing: 'border-box',
           maxWidth: '100%',

@@ -12,6 +12,19 @@ export interface RunCommandOptions {
     error: (...args: any[]) => void;
     info: (...args: any[]) => void;
   };
+  /**
+   * The sandbox could not be established for this command (unsupported host,
+   * missing dependency, a runtime that refused the policy). Fired only for
+   * failures raised while building the launch plan — never for a command that
+   * ran sandboxed and exited non-zero.
+   *
+   * Exists because the cheap capability probe is not the whole truth: the
+   * backend can report itself available and still fail when the first real
+   * process is spawned (the egress fence is only verified then). Callers use
+   * this to downgrade what they advertise instead of offering an environment
+   * that fails on every command.
+   */
+  onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
 }
@@ -25,7 +38,7 @@ export async function runCommand(
     run_in_background,
     timeout = 30_000,
   }: RunCommandParams,
-  { processManager, logger, sandboxPolicy }: RunCommandOptions,
+  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
@@ -48,6 +61,9 @@ export async function runCommand(
   const shellConfig = await getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
   let releaseSandbox: (() => void) | undefined;
+  // What actually happened, reported back so nothing downstream has to infer a
+  // security property from the request that asked for it.
+  let sandboxed: boolean | undefined;
 
   try {
     let launchCommand = shellConfig;
@@ -57,15 +73,26 @@ export async function runCommand(
     // explicitly supplies a policy, and avoid loading the experimental runtime on the default path.
     if (sandboxPolicy) {
       const { createSandboxLaunchPlan } = await import('@lobechat/device-sandbox');
-      const launchPlan = await createSandboxLaunchPlan({
-        command: shellConfig,
-        cwd,
-        env: requestedEnv,
-        policy: sandboxPolicy,
-      });
+      // Narrow try/catch: only a failure to BUILD the sandbox counts as the
+      // sandbox being unavailable. Everything after this — spawn errors, a
+      // non-zero exit — is the command's own failure and must not make the
+      // caller think the environment is broken.
+      let launchPlan;
+      try {
+        launchPlan = await createSandboxLaunchPlan({
+          command: shellConfig,
+          cwd,
+          env: requestedEnv,
+          policy: sandboxPolicy,
+        });
+      } catch (error) {
+        onSandboxUnavailable?.(error as Error);
+        throw error;
+      }
       launchCommand = launchPlan;
       launchEnv = launchPlan.env as NodeJS.ProcessEnv;
       releaseSandbox = launchPlan.release;
+      sandboxed = launchPlan.sandboxed;
     }
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
@@ -116,6 +143,7 @@ export async function runCommand(
       return {
         output: '',
         output_files: processManager.getOutputFilesInfo(shellOutputFiles),
+        sandboxed,
         shell_id: shellId,
         success: true,
       };
@@ -128,6 +156,7 @@ export async function runCommand(
 
     return {
       ...observation,
+      sandboxed,
       shell_id: shellId,
     };
   } catch (error) {

@@ -81,7 +81,8 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp, OpenCode, Pi, and Qoder (which currently
+   * sandbox. Defaults to `false` for Amp, CodeBuddy, OpenCode, Pi, and Qoder
+   * (which currently
    * require a local or connected device) and `true` otherwise. Callers that only
    * know the provider through a legacy model discriminator can override the
    * inferred capability.
@@ -114,6 +115,9 @@ export interface ResolveExecutionTargetOptions {
 /** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
 export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
   type !== 'amp' &&
+  type !== 'codebuddy' &&
+  type !== 'cursor' &&
+  type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
   type !== 'openclaw' &&
@@ -223,6 +227,25 @@ export const resolveExecutionTarget = (
   }
   return effective;
 };
+
+/**
+ * Whether this run's shell commands must go through the device sandbox.
+ *
+ * The stored flag alone is not the answer: `localSandbox` qualifies *local*
+ * execution, so it applies only once the effective target actually resolved to
+ * `local`. A config that carries the flag but ran into a web coercion, a bot
+ * trigger promotion, or a `device` selection is not sandboxed — pretending
+ * otherwise would claim a guarantee the run never had.
+ *
+ * Callers pass the target they already resolved (`resolveExecutionTarget` /
+ * `ExecutionPlan.target`) rather than re-deriving it, so the picker, the server
+ * device-proxy, and the desktop runner cannot drift apart on which runs are
+ * fenced.
+ */
+export const isLocalSandboxEnabled = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  effectiveTarget: DeviceExecutionTarget,
+): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
 
 /**
  * Derive the `runtimeMode` tool gate from the unified execution target:

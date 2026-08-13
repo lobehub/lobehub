@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceSpendInsights from '@/business/client/features/WorkspaceSpendInsights';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
-import Page from '@/routes/(main)/settings/stats';
-import WorkspaceWelcome from '@/routes/(main)/settings/stats/features/overview/WorkspaceWelcome';
-import { type UserDisplay } from '@/routes/(main)/settings/stats/types';
+import Page from '@/features/Settings/stats';
+import WorkspaceWelcome from '@/features/Settings/stats/features/overview/WorkspaceWelcome';
+import { type UserDisplay } from '@/features/Settings/stats/types';
 
 interface WorkspaceStatsMemberProfile {
   avatar?: string | null;

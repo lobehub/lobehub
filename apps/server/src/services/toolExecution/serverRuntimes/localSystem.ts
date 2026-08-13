@@ -76,12 +76,34 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // or explicitly passed `.` (a relative reference that resolves to
         // process.cwd() on the device side — the LobeHub install directory on
         // packaged desktop instead of the user's actual workspace).
-        const scopeValue: unknown = workingDirArg ? args?.[workingDirArg] : undefined;
-        const needsInjection = scopeValue == null || scopeValue === '.';
-        let finalArgs =
-          workingDirArg && context.workingDirectory && needsInjection
-            ? { ...args, [workingDirArg]: context.workingDirectory }
-            : args;
+        //
+        // `cwd` and `scope` differ in how much the model is trusted:
+        // - `scope` IS a manifest field (the model may legitimately point a
+        //   search at a subdirectory), and the out-of-scope intervention audit
+        //   inspects it. Only fill it in when absent/`.`.
+        // - `cwd` is NOT in the manifest for ANY api — the model can never
+        //   legitimately set it, and the audit does not inspect it. So it is
+        //   stripped from every call before dispatch, and re-added only for the
+        //   apis that consume it, with the device-bound value.
+        //
+        // Stripping has to be unconditional, not limited to the `cwd`-arg apis:
+        // downstream, `cwd` also acts as a legacy search-root alias and as the
+        // base a relative `scope` resolves against. Left in place on a search
+        // call, `globFiles({ pattern: 'passwd', scope: 'etc', cwd: '/' })` would
+        // be approved by the audit as a workspace-relative `scope` and then
+        // execute against `/etc`. Likewise `readFile({ path: 'passwd', cwd:
+        // '/etc' })` — only `path` is audited, and it looks workspace-relative.
+        const { cwd: _offContractCwd, ...sanitized } = (args ?? {}) as Record<string, unknown>;
+        let finalArgs = sanitized as typeof args;
+        if (workingDirArg && context.workingDirectory) {
+          const scopeValue: unknown = finalArgs?.[workingDirArg];
+          // `cwd` was just stripped, so a `cwd`-arg api always needs it back.
+          const needsInjection =
+            workingDirArg === 'cwd' || scopeValue == null || scopeValue === '.';
+          if (needsInjection) {
+            finalArgs = { ...finalArgs, [workingDirArg]: context.workingDirectory };
+          }
+        }
 
         // A device shell has its own `lh`, so nothing is rewritten — but the
         // CLI would resolve to the device credentials' PERSONAL scope, which is
@@ -92,6 +114,23 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
           const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
+
+          // The sandbox decision belongs to the run's owner, not to the model:
+          // it is set here from the resolved execution context, overriding
+          // anything that arrived in the LLM args (the manifest doesn't expose
+          // the field, but a model that guessed it must not be able to switch
+          // its own fence off — or on).
+          if (context.localSandbox !== undefined) {
+            finalArgs = {
+              ...finalArgs,
+              sandbox: context.localSandbox,
+              // Only meaningful for a fenced run, so don't add noise to the
+              // args of an unfenced one.
+              ...(context.localSandbox
+                ? { sandboxNetwork: context.localSandboxNetwork === true }
+                : {}),
+            };
+          }
         }
 
         return deviceGateway.executeToolCall(

@@ -15,6 +15,14 @@
     "./gmail": {
       "types": "./src/gmail/index.ts",
       "default": "./src/gmail/index.ts"
+    },
+    "./notion": {
+      "types": "./src/notion/index.ts",
+      "default": "./src/notion/index.ts"
+    },
+    "./twitter": {
+      "types": "./src/twitter/index.ts",
+      "default": "./src/twitter/index.ts"
     }
   },
   "main": "./src/index.ts",

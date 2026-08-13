@@ -423,19 +423,33 @@ export class ChatTopicActionImpl {
    */
   #pendingTopicStatusWrites = new Map<string, { expiresAt: number; status: ChatTopicStatus }>();
 
+  /**
+   * Reconcile ONE server-sourced row against the pending optimistic writes.
+   *
+   * Every path that brings a topic row back from the server must go through
+   * here before the row reaches the store — list fetches, search, and the
+   * single-topic pull in {@link syncScheduledTopicRun} alike. A path that
+   * bypasses it silently reverts whatever the user just did, and the reader
+   * that trips it is usually the one the optimistic write itself woke up.
+   *
+   * Returns the row to trust: the fetched one, or the fetched one with the
+   * pending status re-applied when it predates the write.
+   */
+  #applyPendingStatusWrite = (item: ChatTopic): ChatTopic => {
+    const pending = this.#pendingTopicStatusWrites.get(item.id);
+    if (!pending) return item;
+    if (pending.expiresAt <= Date.now() || item.status === pending.status) {
+      this.#pendingTopicStatusWrites.delete(item.id);
+      return item;
+    }
+    return { ...item, status: pending.status };
+  };
+
   #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
     let next = items;
 
     if (this.#pendingTopicStatusWrites.size > 0) {
-      next = next.map((item) => {
-        const pending = this.#pendingTopicStatusWrites.get(item.id);
-        if (!pending) return item;
-        if (pending.expiresAt <= Date.now() || item.status === pending.status) {
-          this.#pendingTopicStatusWrites.delete(item.id);
-          return item;
-        }
-        return { ...item, status: pending.status };
-      });
+      next = next.map((item) => this.#applyPendingStatusWrite(item));
     }
 
     // In-flight first-send optimistic rows are client-only, so any refetch
@@ -696,8 +710,19 @@ export class ChatTopicActionImpl {
     // already has a live update path (or isn't loaded in the active bucket).
     if (stored?.status !== 'scheduled') return false;
 
-    const fresh = await topicService.getTopicDetail(topicId);
-    if (!fresh) return false;
+    const fetched = await topicService.getTopicDetail(topicId);
+    if (!fetched) return false;
+
+    // Same funnel every other server-sourced row goes through. It matters most
+    // here: `updateTopicStatus` dispatches `scheduled` optimistically and
+    // persists afterwards, and that dispatch is what arms this watch — so this
+    // fetch routinely overtakes the write and answers with the PRE-schedule row.
+    // Unreconciled, folding it in would revert the schedule the user just made
+    // (the button reading as a no-op until pressed a second time). The pin is
+    // dropped when the persist fails, so a write that never reached the DB
+    // still reverts here.
+    const fresh = this.#applyPendingStatusWrite(fetched);
+    if (fresh.status !== fetched.status) return false;
 
     // Server still parked — nothing to fold in.
     if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
@@ -1375,12 +1400,20 @@ export class ChatTopicActionImpl {
     );
   };
 
-  refreshTopic = async (): Promise<void> => {
+  /**
+   * @param ownerContainerKey - Revalidate this `topicDataMap` bucket instead of
+   *   the active agent/group one. Pass it whenever the affected row may live
+   *   elsewhere (Agent Builder panels render another agent's conversation);
+   *   omitting it refreshes whatever the page is showing.
+   */
+  refreshTopic = async (ownerContainerKey?: string): Promise<void> => {
     const { activeAgentId, activeGroupId } = this.#get();
     // Use topicMapKey to generate the same key used in useFetchTopics
     // Key format: topicKeys.list(containerKey, { isInbox, pageSize })
-    const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
-    const agentViewKey = activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null;
+    const containerKey =
+      ownerContainerKey ?? topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const agentViewKey =
+      ownerContainerKey ?? (activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null);
     await mutate(
       (key) =>
         Array.isArray(key) &&
@@ -1429,10 +1462,15 @@ export class ChatTopicActionImpl {
   };
 
   internal_updateTopic = async (id: string, data: Partial<ChatTopic>): Promise<void> => {
-    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
+    // The row is not necessarily in the active agent/group bucket — resolve the
+    // one that holds it, so the optimistic write and the revalidation both land
+    // where the topic is actually rendered (see `getTopicContainerKeyById`).
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+
+    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data, containerKey });
 
     await topicService.updateTopic(id, data);
-    await this.#get().refreshTopic();
+    await this.#get().refreshTopic(containerKey);
   };
 
   internal_updateTopicLinkedPullRequest = async (
@@ -1549,11 +1587,13 @@ export class ChatTopicActionImpl {
     const { activeAgentId, activeGroupId } = this.#get();
     const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
     const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);
-    const key = topicMapKey({
-      agentId: scopedAgentId,
-      groupId: scopedGroupId,
-      scope: payload.scope,
-    });
+    const key =
+      payload.containerKey ??
+      topicMapKey({
+        agentId: scopedAgentId,
+        groupId: scopedGroupId,
+        scope: payload.scope,
+      });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 

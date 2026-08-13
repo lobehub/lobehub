@@ -33,7 +33,6 @@ import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -45,18 +44,18 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
-import { useGoalArmStore } from '../../../Conversation/ChatInput/VerifyTray/goalArmStore';
-import { openTopicGoalModal } from '../../../Conversation/ChatInput/VerifyTray/useTopicChecklist';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
+import { useEffortMenuItem } from './useEffortMenuItem';
 
 const hotArea = css`
   &::before {
@@ -289,18 +288,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
-  const { t: tVerify } = useTranslation('verify');
   const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
-  // Topic acceptance (lab): a "new acceptance item" entry in the "+" menu, so a
-  // topic's checklist starts from here instead of an always-on strip above the
-  // composer. Global stores only — Plus renders on surfaces without conversation
-  // context.
+  // Goal creation is lab-gated while the product surface is being rolled out.
   const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -399,6 +393,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     [updateAgentChatConfig],
   );
 
+  const effortItem = useEffortMenuItem();
+
   const handleToggleParams = useCallback(() => {
     close();
     if (isParamsPanelActive) {
@@ -461,7 +457,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         <img
           alt=""
           className="cover"
-          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+          src={
+            isDark ? '/app-images/agent_gateway_dark.webp' : '/app-images/agent_gateway_light.webp'
+          }
         />
         <div className="body">
           <div className="title">{t('gatewayMode.cardTitle')}</div>
@@ -658,6 +656,10 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
       // Agent Gateway directly below the formatting toolbar.
       ...gatewayItem,
+      // Reasoning intensity — a personal per-model preference, so it is NOT
+      // gated on canConfigureResource; hidden only when the model has no
+      // reasoning extend params (the hook returns []).
+      ...effortItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -704,23 +706,19 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         ]
       : uploadItems;
 
-    // Before a topic exists there is nothing to persist a goal onto, so the
-    // entry *arms* the goal (the next message becomes it); once a topic exists
-    // it opens the editor directly.
+    // Goal creation has one canonical entry: drop the goal chip at the head of
+    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
       ? [
           {
             icon: TargetIcon,
             key: 'set-topic-goal',
-            label: tVerify('acceptance.tray.menuSetGoal'),
+            // Same string as the chip it inserts: one label for the affordance,
+            // so the menu row and the chip can never drift apart.
+            label: tEditor('slash.goal'),
             onClick: () => {
-              if (activeTopicId) {
-                void openTopicGoalModal(activeTopicId);
-              } else if (agentId) {
-                // Arm only — the persistent "armed" chip above the composer is the
-                // feedback now (the next message becomes the goal), not a toast.
-                useGoalArmStore.getState().arm(agentId);
-              }
+              insertGoalTag(editor, tEditor('slash.goal'));
             },
           },
         ]
@@ -740,10 +738,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   }, [
     agentId,
     activeSearchOption,
-    activeTopicId,
     canConfigureResource,
+    effortItem,
     enableTopicAcceptance,
-    tVerify,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -807,7 +804,7 @@ const PlusAction = memo(() => {
 
 PlusAction.displayName = 'PlusAction';
 
-const Plus = memo(() => (
+const Plus = () => (
   <Suspense
     fallback={
       <ChatInputAction
@@ -820,8 +817,6 @@ const Plus = memo(() => (
   >
     <PlusAction />
   </Suspense>
-));
-
-Plus.displayName = 'Plus';
+);
 
 export default Plus;

@@ -13,6 +13,7 @@ import {
   type MessageActionSlot,
 } from '../../components/MessageActionBar';
 import MessageBranch from '../../components/MessageBranch';
+import { shouldShowUserActions } from './visibility';
 
 const DEFAULT_BAR: MessageActionSlot[] = ['regenerate', 'edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
@@ -38,6 +39,9 @@ interface UserActionsProps {
 
 export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data }) => {
   const ctx = useMemo<MessageActionContext>(() => ({ data, id, role: 'user' }), [data, id]);
+
+  if (!shouldShowUserActions(data)) return null;
+
   return (
     <MessageActionBar
       bar={actionsConfig?.bar ?? DEFAULT_BAR}
@@ -62,6 +66,8 @@ const actionBarHolder = (
 const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   const { branch } = data;
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+
+  if (!shouldShowUserActions(data)) return null;
 
   return (
     <Flexbox horizontal align={'center'}>

@@ -15,13 +15,25 @@ import { nextHeartbeatFiring, nextScheduleFiring } from './scheduler/helpers';
 
 const padTime = (n: number) => String(n).padStart(2, '0');
 
-const formatCountdown = (msRemaining: number): string => {
+export type CountdownDisplay =
+  { countdown: string; type: 'time' } | { days: number; hours: number; type: 'days' };
+
+export const formatCountdown = (msRemaining: number): CountdownDisplay => {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+  const days = Math.floor(totalSeconds / 86_400);
+  if (days > 0) {
+    return { days, hours: Math.floor((totalSeconds % 86_400) / 3600), type: 'days' };
+  }
+
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (hours > 0) return `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`;
-  return `${padTime(minutes)}:${padTime(seconds)}`;
+  const countdown =
+    hours > 0
+      ? `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`
+      : `${padTime(minutes)}:${padTime(seconds)}`;
+
+  return { countdown, type: 'time' };
 };
 
 const TaskDetailRunPauseAction = memo(() => {
@@ -165,7 +177,9 @@ const TaskDetailRunPauseAction = memo(() => {
         </SplitButton>
         {countdownText && (
           <Text fontSize={12} type={'secondary'}>
-            {t('taskDetail.nextRunCountdown', { countdown: countdownText })}
+            {countdownText.type === 'days'
+              ? t('taskDetail.nextRunCountdownDays', countdownText)
+              : t('taskDetail.nextRunCountdown', countdownText)}
           </Text>
         )}
       </Flexbox>

@@ -1,6 +1,8 @@
 'use client';
 
-import { memo, type PropsWithChildren, useLayoutEffect, useRef } from 'react';
+import { memo, type PropsWithChildren, useLayoutEffect } from 'react';
+
+import { useSingleton } from '@/hooks/useSingleton';
 
 import { registerNavPanelContent, unregisterNavPanelContent } from './registry';
 
@@ -13,18 +15,17 @@ interface NavPanelPortalProps extends PropsWithChildren {
 }
 
 export const NavPanelPortal = memo<NavPanelPortalProps>(({ children, navKey = 'default' }) => {
-  const ownerRef = useRef(Symbol('NavPanelPortal'));
+  const owner = useSingleton(() => Symbol('NavPanelPortal'));
 
   useLayoutEffect(() => {
     if (!children) return;
-    const owner = ownerRef.current;
 
     registerNavPanelContent(navKey, owner, children);
 
     return () => {
       unregisterNavPanelContent(navKey, owner);
     };
-  }, [children, navKey]);
+  }, [children, navKey, owner]);
 
   return null;
 });

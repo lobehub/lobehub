@@ -1,15 +1,31 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
-
-/**
- * Selector value that means "do not override the underlying CLI".
- *
- * When persisted, it intentionally does not translate into CLI flags; the
- * underlying CLI keeps using its own settings, env vars, and account defaults.
- */
-export const HETEROGENEOUS_AGENT_DEFAULT_SELECTION = 'default' as const;
-
-export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
+import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from './heterogeneousAgent';
+import type {
+  ClaudeCodeReasoningEffort,
+  CodexReasoningEffort,
+  CodexSpeedMode,
+  HeteroCliEncoding,
+  HeterogeneousReasoningEffort,
+  HeterogeneousSpeedMode,
+  QoderReasoningEffort,
+} from './heteroSelectorCapabilities';
+import {
+  CODEX_REASONING_EFFORT_CONFIG_KEY,
+  CODEX_SERVICE_TIER_CONFIG_KEY,
+  HETERO_SELECTOR_CAPABILITIES,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isClaudeCodeReasoningEffort,
+  isCodexFastServiceTier,
+  isCodexReasoningEffort,
+  isQoderReasoningEffort,
+  QODER_REASONING_EFFORT_FLAG,
+} from './heteroSelectorCapabilities';
 
 export type HeterogeneousAgentModelCatalogErrorCode =
   'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
@@ -30,7 +46,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'opencode' | 'pi' | 'qoder';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -52,94 +68,14 @@ export type HeterogeneousAgentModelCatalog =
   HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
 /**
- * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
- * `--effort <level>` flag.
- */
-export const CLAUDE_CODE_REASONING_EFFORT_LEVELS = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const;
-
-export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
-
-export const CLAUDE_CODE_DEFAULT_MODEL = 'sonnet';
-export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'high' satisfies ClaudeCodeReasoningEffort;
-
-/**
- * Codex reasoning-effort levels, mirrored to the CLI config key
- * `model_reasoning_effort`.
- */
-export const CODEX_COMMON_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
-
-export const CODEX_REASONING_EFFORT_LEVELS = [
-  ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
-  'max',
-  'ultra',
-] as const;
-
-export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number];
-
-export const CODEX_DEFAULT_MODEL = 'gpt-5.6-sol';
-export const CODEX_DEFAULT_REASONING_EFFORT = 'medium' satisfies CodexReasoningEffort;
-export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
-
-const CODEX_MAX_REASONING_EFFORT_LEVELS = [
-  ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
-  'max',
-] as const satisfies readonly CodexReasoningEffort[];
-
-const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
-const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
-
-export type HeterogeneousReasoningEffort =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
-
-/**
- * Codex speed modes, mirrored to the CLI config key `service_tier`.
- *
- * `fast` maps to the Fast service tier (request value `priority`): ~1.5x
- * faster inference at a higher credit-consumption rate. Requires ChatGPT
- * sign-in; the Codex CLI silently omits the tier for unsupported models, so
- * passing it is always safe.
- */
-export const CODEX_SPEED_MODES = ['fast'] as const;
-
-export type CodexSpeedMode = (typeof CODEX_SPEED_MODES)[number];
-
-export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
-
-export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
-
-/**
- * Codex models whose catalog exposes the Fast (`priority`) service tier.
- * Sourced from the model catalog embedded in codex-cli.
- */
-export const CODEX_FAST_SPEED_MODELS = [
-  'gpt-5.6',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.5',
-  'gpt-5.4',
-] as const;
-
-/**
- * `service_tier` values the Codex CLI resolves to the Fast tier
- * (`ServiceTier::from_request_value` accepts both spellings).
- */
-const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
-
-/**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
  * instead of using the built-in model runtime.
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
+ *   `cursor` | `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -190,9 +126,76 @@ export interface HeterogeneousProviderConfig {
    * Combined with any runtime-generated context (e.g. cloned repo list).
    */
   systemContext?: string;
-  /** Agent runtime type. */
-  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw' | 'pi' | 'qoder';
+  /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
+  type: HeterogeneousAgentType;
 }
+
+const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
+  ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+  ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+]);
+
+const LEGACY_COMMAND_INFERENCE_TYPES = new Set<LocalHeterogeneousAgentType>([
+  'claude-code',
+  'codex',
+]);
+
+interface LegacyHeterogeneousProviderConfig extends HeterogeneousProviderConfig {
+  adapterType?: unknown;
+}
+
+const resolveKnownHeterogeneousAgentType = (value: unknown): HeterogeneousAgentType | undefined => {
+  if (typeof value !== 'string' || !value) return;
+  if (!HETEROGENEOUS_AGENT_TYPES.has(value)) {
+    throw new Error(`Unknown heterogeneous agent type: "${value}"`);
+  }
+  return value as HeterogeneousAgentType;
+};
+
+/**
+ * Upgrade a persisted provider config written before `type` became required.
+ *
+ * New callers must always write `type`; this compatibility path exists because
+ * `agents.agency_config` is JSONB and older rows are not runtime-schema parsed
+ * or backfilled. The old renderer preferred `adapterType`, then recognized
+ * Claude/Codex from `command`, and otherwise defaulted to Claude Code.
+ */
+export const normalizeHeterogeneousProviderConfig = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousProviderConfig => {
+  const legacyConfig = config as LegacyHeterogeneousProviderConfig;
+  const explicitType = resolveKnownHeterogeneousAgentType(legacyConfig.type);
+  if (explicitType && legacyConfig.adapterType === undefined) return config;
+
+  const adapterType = explicitType
+    ? undefined
+    : resolveKnownHeterogeneousAgentType(legacyConfig.adapterType);
+  const normalizedCommand = config.command?.trim().toLowerCase();
+  const inferredType = normalizedCommand
+    ? HETEROGENEOUS_AGENT_CONFIGS.find(
+        ({ defaultCommand, type }) =>
+          LEGACY_COMMAND_INFERENCE_TYPES.has(type) &&
+          normalizedCommand.includes(defaultCommand.toLowerCase()),
+      )?.type
+    : undefined;
+  const type = explicitType ?? adapterType ?? inferredType ?? 'claude-code';
+  const normalizedConfig = { ...legacyConfig };
+  delete normalizedConfig.adapterType;
+
+  return { ...normalizedConfig, type };
+};
+
+const normalizeAgencyConfigHeterogeneousProvider = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  const base = agencyConfig ?? undefined;
+  if (!base?.heterogeneousProvider) return base;
+
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(base.heterogeneousProvider);
+  return heterogeneousProvider === base.heterogeneousProvider
+    ? base
+    : { ...base, heterogeneousProvider };
+};
 
 interface ClaudeCodeSelectionSource {
   args?: string[];
@@ -207,143 +210,24 @@ interface CodexSelectionSource {
   speed?: string | null;
 }
 
-const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
-const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
+interface QoderSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
-const OPENCODE_MODEL_FLAGS = ['-m', '--model'] as const;
-const PI_MODEL_FLAGS = ['--model'] as const;
-const QODER_MODEL_FLAGS = ['-m', '--model'] as const;
 
-const hasCliFlag = (args: string[], flag: string): boolean =>
-  args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+const modelFlagsOf = (type: 'codex' | 'opencode' | 'pi' | 'qoder'): readonly string[] =>
+  HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
+    encoding.kind === 'flag' ? encoding.flags : [],
+  );
 
-const hasAnyCliFlag = (args: string[], flags: readonly string[]): boolean =>
-  flags.some((flag) => hasCliFlag(args, flag));
-
-const getCliFlagValue = (args: string[] | undefined, flag: string): string | undefined => {
-  if (!args) return undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === flag) {
-      const next = args[index + 1]?.trim();
-      if (next && !next.startsWith('-')) return next;
-    }
-
-    const prefix = `${flag}=`;
-    if (arg.startsWith(prefix)) {
-      const value = arg.slice(prefix.length).trim();
-      if (value) return value;
-    }
-  }
-
-  return undefined;
-};
-
-const getAnyCliFlagValue = (
-  args: string[] | undefined,
-  flags: readonly string[],
-): string | undefined => {
-  for (const flag of flags) {
-    const value = getCliFlagValue(args, flag);
-    if (value) return value;
-  }
-};
-
-const unquoteCliConfigValue = (value: string): string => {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-
-  if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
-    return trimmed.slice(1, -1);
-  }
-
-  return trimmed;
-};
-
-const escapeRegExp = (value: string): string => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const parseCliConfigAssignment = (assignment: string, key: string): string | undefined => {
-  const match = assignment.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*(.+?)\\s*$`));
-  if (!match?.[1]) return undefined;
-
-  const value = unquoteCliConfigValue(match[1]);
-  return value || undefined;
-};
-
-const getCliConfigValue = (args: string[] | undefined, key: string): string | undefined => {
-  if (!args) return undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    if (CODEX_CONFIG_FLAGS.includes(arg as (typeof CODEX_CONFIG_FLAGS)[number])) {
-      const next = args[index + 1];
-      if (next) {
-        const value = parseCliConfigAssignment(next, key);
-        if (value) return value;
-        index += 1;
-      }
-      continue;
-    }
-
-    const configFlag = CODEX_CONFIG_FLAGS.find((flag) => arg.startsWith(`${flag}=`));
-    if (configFlag) {
-      const value = parseCliConfigAssignment(arg.slice(configFlag.length + 1), key);
-      if (value) return value;
-    }
-  }
-};
-
-const hasCliConfigKey = (args: string[], key: string): boolean => !!getCliConfigValue(args, key);
-
-const isClaudeCodeReasoningEffort = (
-  value: string | undefined,
-): value is ClaudeCodeReasoningEffort =>
-  !!value && CLAUDE_CODE_REASONING_EFFORT_LEVELS.includes(value as ClaudeCodeReasoningEffort);
-
-const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
-  !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
-
-/**
- * Reasoning-effort levels exposed by a Codex model. Unknown and default model
- * selections use the conservative common set because their actual capability
- * cannot be known until the CLI resolves the model.
- */
-export const getCodexReasoningEffortLevels = (model: string): readonly CodexReasoningEffort[] => {
-  if (
-    CODEX_ULTRA_REASONING_MODELS.includes(model as (typeof CODEX_ULTRA_REASONING_MODELS)[number])
-  ) {
-    return CODEX_REASONING_EFFORT_LEVELS;
-  }
-
-  if (CODEX_MAX_REASONING_MODELS.includes(model as (typeof CODEX_MAX_REASONING_MODELS)[number])) {
-    return CODEX_MAX_REASONING_EFFORT_LEVELS;
-  }
-
-  return CODEX_COMMON_REASONING_EFFORT_LEVELS;
-};
-
-export const codexModelSupportsReasoningEffort = (
-  model: string,
-  effort: CodexReasoningEffort,
-): boolean => getCodexReasoningEffortLevels(model).includes(effort);
-
-export const resolveClaudeCodeModel = (
-  source: ClaudeCodeSelectionSource | null | undefined,
-): string => {
-  const model = (getCliFlagValue(source?.args, '--model') ?? source?.model)?.trim();
-  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-    ? model
-    : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-};
-
-export const resolveClaudeCodeReasoningEffort = (
-  source: ClaudeCodeSelectionSource | null | undefined,
-): ClaudeCodeReasoningEffort | HeterogeneousAgentDefaultSelection => {
-  const effort = (getCliFlagValue(source?.args, '--effort') ?? source?.effort)?.trim();
-  return isClaudeCodeReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-};
+const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
+const CURSOR_MODEL_FLAGS = ['--model'] as const;
+const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
+const PI_MODEL_FLAGS = modelFlagsOf('pi');
+const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
 
 const getExplicitClaudeCodeModel = (
   source: ClaudeCodeSelectionSource | null | undefined,
@@ -357,28 +241,6 @@ const getExplicitClaudeCodeReasoningEffort = (
 ): ClaudeCodeReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
-};
-
-export const resolveCodexModel = (source: CodexSelectionSource | null | undefined): string => {
-  const model = (
-    getAnyCliFlagValue(source?.args, CODEX_MODEL_FLAGS) ??
-    getCliConfigValue(source?.args, 'model') ??
-    source?.model
-  )?.trim();
-
-  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-    ? model
-    : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-};
-
-export const resolveCodexReasoningEffort = (
-  source: CodexSelectionSource | null | undefined,
-): CodexReasoningEffort | HeterogeneousAgentDefaultSelection => {
-  const effort = (
-    getCliConfigValue(source?.args, CODEX_REASONING_EFFORT_CONFIG_KEY) ?? source?.effort
-  )?.trim();
-
-  return isCodexReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 const getExplicitCodexModel = (
@@ -395,18 +257,11 @@ const getExplicitCodexReasoningEffort = (
   return isCodexReasoningEffort(effort) ? effort : undefined;
 };
 
-const isCodexFastServiceTier = (value: string | undefined): boolean =>
-  !!value &&
-  CODEX_FAST_SERVICE_TIER_VALUES.includes(value as (typeof CODEX_FAST_SERVICE_TIER_VALUES)[number]);
-
-export const resolveCodexSpeedMode = (
-  source: CodexSelectionSource | null | undefined,
-): HeterogeneousSpeedMode => {
-  const tier = (
-    getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) ?? source?.speed
-  )?.trim();
-
-  return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+const getExplicitQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isQoderReasoningEffort(effort) ? effort : undefined;
 };
 
 const getExplicitCodexSpeedMode = (
@@ -417,22 +272,13 @@ const getExplicitCodexSpeedMode = (
 };
 
 /**
- * Whether the Fast speed toggle applies to a selector model value. `default`
- * counts as supported so the CLI remains free to resolve its own model; an
- * unsupported resolved model simply ignores the tier.
- */
-export const codexModelSupportsFastSpeed = (model: string): boolean =>
-  model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
-  CODEX_FAST_SPEED_MODELS.includes(model as (typeof CODEX_FAST_SPEED_MODELS)[number]);
-
-/**
  * Resolve the effective native CLI args for a heterogeneous spawn.
  *
- * For `claude-code` and `codex`, the chat-input selector persists explicit
- * `model` + `effort` selections on the provider config; this is the single
- * place that maps those stored settings onto provider-specific argv for direct
- * local desktop spawns. OpenCode, Pi, and Qoder use their device-local model
- * catalogs and forward the selected model using the native `--model` flag.
+ * For `claude-code`, `codebuddy`, and `codex`, explicit `model` + `effort`
+ * selections are persisted on the provider config; this is the single place
+ * that maps those stored settings onto provider-specific argv for direct local
+ * desktop spawns. OpenCode, Pi, and Qoder use their device-local model catalogs
+ * and forward the selected model using the native `--model` flag.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -448,7 +294,10 @@ export const buildHeteroSpawnArgs = (
   if (!provider) return undefined;
   if (
     provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -459,7 +308,7 @@ export const buildHeteroSpawnArgs = (
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
 
-  if (provider.type === 'claude-code') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -498,6 +347,17 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
   if (provider.type === 'pi') {
     const model = provider.model?.trim();
     if (
@@ -517,6 +377,10 @@ export const buildHeteroSpawnArgs = (
       !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
     ) {
       extraArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
     }
   }
 
@@ -541,7 +405,10 @@ export const buildHeteroExecArgs = (
   if (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -553,7 +420,7 @@ export const buildHeteroExecArgs = (
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
   const selectorArgs: string[] = [];
 
-  if (provider.type === 'claude-code') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -600,6 +467,17 @@ export const buildHeteroExecArgs = (
     }
   }
 
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
   if (provider.type === 'pi') {
     const model = provider.model?.trim();
     if (
@@ -619,6 +497,10 @@ export const buildHeteroExecArgs = (
       !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
     }
   }
 
@@ -682,6 +564,38 @@ export interface LobeAgentAgencyConfig {
    */
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Confine the run's shell commands to the device sandbox. A *modifier* on
+   * `executionTarget: 'local'`, not a target of its own — the run still goes to
+   * the same machine through the same routing, it is only what the spawned
+   * command may touch that changes (writes limited to the working directory,
+   * no network).
+   *
+   * Modelled as a flag rather than a sixth `DeviceExecutionTarget` deliberately:
+   * every existing routing rule (web coercion, gateway upgrade, bot-trigger
+   * promotion, fixed-workspace policy) stays literally unchanged, and the flag
+   * composes if sandboxed execution later extends to `device` targets.
+   *
+   * Only shell commands are affected. File tools (`writeFile` / `editFile`) run
+   * in the desktop process itself, and heterogeneous CLI agents spawn through
+   * their own path — neither passes through the sandboxed runner. Say
+   * "commands" in user-facing copy, never "the agent".
+   */
+  localSandbox?: boolean;
+  /**
+   * Let the sandboxed commands reach the package-registry allowlist. Only
+   * meaningful with {@link localSandbox}; defaults to off.
+   *
+   * A separate field rather than a tri-state on `localSandbox` because the two
+   * answer different questions ("fence this?" vs "may the fence let installs
+   * through?"), and because the network choice must survive toggling the
+   * sandbox off and back on.
+   *
+   * Never means "the network is open" — the sandbox backend rejects a catch-all
+   * allowlist outright, so this opens a fixed set of registries and forges.
+   * User-facing copy must not promise more than that.
+   */
+  localSandboxNetwork?: boolean;
   /**
    * Workspace model-selection policy. `fixed` keeps the shared agent model
    * authoritative; `member` enables a per-user model override stored in
@@ -769,6 +683,9 @@ export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
  * - `fixed` shared config ignores the caller override entirely
  * - `override.executionTarget` wins when set; falls back to shared
  * - `override.boundDeviceId` wins when set; falls back to shared
+ * - `override.localSandbox` wins when set; falls back to shared. It rides along
+ *   with the target because it qualifies *this member's* local execution — one
+ *   member sandboxing their own machine says nothing about anyone else's.
  * - Nothing else (heterogeneousProvider, verifyRubricId, workingDirByDevice)
  *   is overridable — those describe the agent, not this user's routing
  *
@@ -778,18 +695,31 @@ export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
  */
 export const resolveAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
-  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
 ): LobeAgentAgencyConfig | undefined => {
-  const base = agencyConfig ?? undefined;
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
   if (!override) return base;
   const hasTarget = override.executionTarget !== undefined;
   const hasDevice = override.boundDeviceId !== undefined;
-  if (!hasTarget && !hasDevice) return base;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
   return {
     ...base,
     ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
     ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
   };
 };
 
@@ -810,15 +740,21 @@ export interface AgentAgencyConfigContext {
  */
 export const resolveAgentAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
-  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
   context: AgentAgencyConfigContext,
 ): LobeAgentAgencyConfig | undefined => {
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   const isPublicWorkspaceAgent =
     !!context.workspaceId && context.visibility !== 'private' && context.canManage !== true;
 
-  if (isPublicWorkspaceAgent) return resolveAgencyConfig(agencyConfig, override);
+  if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
 
-  const base = agencyConfig ?? undefined;
   if (!base?.executionTargetSelectionPolicy) return base;
 
   const { executionTargetSelectionPolicy, ...ownerConfig } = base;

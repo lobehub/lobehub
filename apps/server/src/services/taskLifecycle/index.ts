@@ -193,7 +193,20 @@ export class TaskLifecycleService {
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
-      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+      //
+      //    Goal-loop rounds are deliberately silent. The outer loop can run many
+      //    rounds before it converges, and a card per round buries the one moment
+      //    that actually needs the user. The settle path owns those moments:
+      //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
+      //    loop succeeds and the budget-exhausted alert when it stops.
+      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      if (
+        !isGoalLoopRound &&
+        getBriefMode(currentTask) === 'auto' &&
+        currentTask &&
+        topicId &&
+        lastAssistantContent
+      ) {
         await this.synthesizeTopicBrief(
           taskId,
           taskIdentifier,

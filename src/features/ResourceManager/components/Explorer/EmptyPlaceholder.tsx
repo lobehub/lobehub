@@ -1,15 +1,18 @@
 import { Center, FileTypeIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
 import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getResourceSourceFilter } from '@/features/ResourceManager/store/selectors';
 import { usePermission } from '@/hooks/usePermission';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
+import { ResourceSourceFilter } from '@/types/files';
 
 const ICON_SIZE = 80;
 
@@ -70,10 +73,29 @@ const EmptyPlaceholder = () => {
   const uploadTopLevel = useTopLevelFileUpload();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
+  const [sourceFilter, setSourceFilter] = useResourceManagerStore((s) => [
+    getResourceSourceFilter(s),
+    s.setSourceFilter,
+  ]);
   const currentFolderId = useCurrentFolderId();
 
   const { open } = useCreateNewModal();
   const { allowed: canCreate } = usePermission('create_content');
+
+  // A narrowed source can empty a category that is not actually empty — the
+  // images view opens on generated output, so a library of uploads would
+  // otherwise read as "you have nothing yet". Name the filter and offer the
+  // way back instead of the onboarding prompt.
+  if (sourceFilter !== ResourceSourceFilter.All) {
+    return (
+      <Center gap={12} height={'100%'} style={{ paddingBottom: 100 }} width={'100%'}>
+        <Text as={'h4'}>{t('FileManager.emptyStatus.filteredTitle')}</Text>
+        <Button size={'small'} onClick={() => setSourceFilter(ResourceSourceFilter.All)}>
+          {t('FileManager.emptyStatus.actions.showAllSources')}
+        </Button>
+      </Center>
+    );
+  }
 
   if (!canCreate) {
     return (

@@ -47,9 +47,14 @@ export class OperationActionsImpl {
     this.#get = get;
   }
 
-  internal_getConversationContext = (context?: { operationId?: string }): MessageMapKeyInput => {
-    if (context?.operationId) {
-      const operation = this.#get().operations[context.operationId];
+  internal_getConversationContext = (reference?: {
+    context?: MessageMapKeyInput;
+    operationId?: string;
+  }): MessageMapKeyInput => {
+    if (reference?.context) return reference.context;
+
+    if (reference?.operationId) {
+      const operation = this.#get().operations[reference.operationId];
       if (!operation) {
         // The op was already cleaned up (e.g. completed CC turn whose
         // runtime_end fired and was GC'd 30s later), but a late caller
@@ -59,17 +64,17 @@ export class OperationActionsImpl {
         // degrade to the global-state fallback and log loudly.
         log(
           '[internal_getConversationContext] WARNING: Operation not found, falling back to global state: %s',
-          context.operationId,
+          reference.operationId,
         );
         console.warn(
           '[internal_getConversationContext] operation not found, using global state:',
-          context.operationId,
+          reference.operationId,
         );
       } else {
         const { agentId, topicId, threadId, scope, groupId, documentId } = operation.context;
         log(
           '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s, documentId=%s',
-          context.operationId,
+          reference.operationId,
           agentId,
           topicId,
           threadId,

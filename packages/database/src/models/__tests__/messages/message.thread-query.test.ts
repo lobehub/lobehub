@@ -224,7 +224,10 @@ describe('MessageModel thread query', () => {
 
     it('should return parent messages + thread messages when querying with topicId and threadId', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(agents).values([{ id: 'agent1', userId }]);
+        await trx.insert(agents).values([
+          { id: 'agent1', userId },
+          { id: 'agent2', userId },
+        ]);
         await trx.insert(sessions).values([{ id: 'session1', userId }]);
         await trx.insert(topics).values([
           { id: 'topic1', sessionId: 'session1', userId },
@@ -275,6 +278,16 @@ describe('MessageModel thread query', () => {
             content: 'thread message 1',
             createdAt: new Date('2023-01-02T10:00:00'),
           },
+          {
+            id: 'delegated-thread-reply',
+            userId,
+            agentId: 'agent2',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'reply from the mentioned agent',
+            createdAt: new Date('2023-01-02T11:00:00'),
+          },
           // Messages in topic2 (should not be included)
           {
             id: 'topic2-msg1',
@@ -296,10 +309,16 @@ describe('MessageModel thread query', () => {
         threadId: 'thread1',
       });
 
-      // Should include parent messages (msg1, msg2) + thread message (thread-msg1)
+      // Should include parent messages and every reply in the topic thread, including replies
+      // persisted by an agent mentioned from the parent agent's portal.
       // Should NOT include topic2-msg1
-      expect(result).toHaveLength(3);
-      expect(result.map((m) => m.id)).toEqual(['msg1', 'msg2', 'thread-msg1']);
+      expect(result).toHaveLength(4);
+      expect(result.map((m) => m.id)).toEqual([
+        'msg1',
+        'msg2',
+        'thread-msg1',
+        'delegated-thread-reply',
+      ]);
     });
 
     it('should return only source message + thread messages for Standalone type', async () => {

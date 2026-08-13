@@ -548,6 +548,11 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_PROVIDER_READ')}:all`,
+    // API keys — members manage only the credentials they issued themselves.
+    `${action('API_KEY_READ')}:owner`,
+    `${action('API_KEY_CREATE')}:owner`,
+    `${action('API_KEY_UPDATE')}:owner`,
+    `${action('API_KEY_DELETE')}:owner`,
   ],
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: [
     // Read-only across the board
@@ -618,3 +623,95 @@ export const getWorkspaceRolePermissionCodes = (role: string): readonly string[]
   const systemRole = legacyRoleToWorkspaceRole(role);
   return systemRole ? WORKSPACE_ROLE_PERMISSIONS[systemRole] : [];
 };
+
+/**
+ * Default permission codes every authenticated user holds over their OWN data
+ * in personal (non-workspace) context.
+ *
+ * Why this exists (LOBE-12892): ordinary accounts have no `rbac_user_roles`
+ * rows — roles are only assigned via the admin backend — so any personal-mode
+ * check that consulted the DB alone returned 403 for every registered user,
+ * making the OpenAPI surface admin-only in practice. Personal data is already
+ * isolated by `user_id` at the resource layer, so the implicit baseline is the
+ * `:owner` grant set (mirroring what `workspace_member` gets inside a
+ * workspace).
+ *
+ * Scope notes:
+ * - Content resources are granted `:owner` — resource queries stay pinned to
+ *   the caller, and `hasGlobalPermission`-style `:all` widenings still require
+ *   a real DB role.
+ * - `agent_label` / `session_group` only define an `:all` scope (shared
+ *   registries — see `getAllowedScopesForAction`); in personal mode their data
+ *   is still `user_id`-bound, so the `:all` grant does not widen anything.
+ * - Deliberately absent: `rbac:*`, `workspace*` domains, `user:create` /
+ *   `user:delete` — administration stays behind explicitly assigned DB roles.
+ */
+export const PERSONAL_DEFAULT_PERMISSIONS: readonly string[] = [
+  // Agents
+  `${action('AGENT_READ')}:owner`,
+  `${action('AGENT_CREATE')}:owner`,
+  `${action('AGENT_UPDATE')}:owner`,
+  `${action('AGENT_DELETE')}:owner`,
+  `${action('AGENT_FORK')}:owner`,
+  `${action('AGENT_LABEL_READ')}:all`,
+  `${action('AGENT_LABEL_CREATE')}:all`,
+  `${action('AGENT_LABEL_UPDATE')}:all`,
+  `${action('AGENT_LABEL_DELETE')}:all`,
+  // Chat
+  `${action('SESSION_READ')}:owner`,
+  `${action('SESSION_CREATE')}:owner`,
+  `${action('SESSION_UPDATE')}:owner`,
+  `${action('SESSION_DELETE')}:owner`,
+  `${action('SESSION_GROUP_READ')}:all`,
+  `${action('SESSION_GROUP_CREATE')}:all`,
+  `${action('SESSION_GROUP_UPDATE')}:all`,
+  `${action('SESSION_GROUP_DELETE')}:all`,
+  `${action('MESSAGE_READ')}:owner`,
+  `${action('MESSAGE_CREATE')}:owner`,
+  `${action('MESSAGE_UPDATE')}:owner`,
+  `${action('MESSAGE_DELETE')}:owner`,
+  `${action('TOPIC_READ')}:owner`,
+  `${action('TOPIC_CREATE')}:owner`,
+  `${action('TOPIC_UPDATE')}:owner`,
+  `${action('TOPIC_DELETE')}:owner`,
+  `${action('TOPIC_COMMENT_READ')}:owner`,
+  `${action('TOPIC_COMMENT_CREATE')}:owner`,
+  `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+  `${action('TOPIC_COMMENT_DELETE')}:owner`,
+  `${action('TOPIC_COMMENT_RESTORE')}:owner`,
+  `${action('TRANSLATION_READ')}:owner`,
+  `${action('TRANSLATION_CREATE')}:owner`,
+  `${action('TRANSLATION_UPDATE')}:owner`,
+  `${action('TRANSLATION_DELETE')}:owner`,
+  // Files / knowledge
+  `${action('FILE_READ')}:owner`,
+  `${action('FILE_UPLOAD')}:owner`,
+  `${action('FILE_UPDATE')}:owner`,
+  `${action('FILE_DELETE')}:owner`,
+  `${action('DOCUMENT_READ')}:owner`,
+  `${action('DOCUMENT_CREATE')}:owner`,
+  `${action('DOCUMENT_UPDATE')}:owner`,
+  `${action('DOCUMENT_DELETE')}:owner`,
+  `${action('KNOWLEDGE_BASE_READ')}:owner`,
+  `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
+  `${action('KNOWLEDGE_BASE_UPDATE')}:owner`,
+  `${action('KNOWLEDGE_BASE_DELETE')}:owner`,
+  // Model infrastructure (personal provider/model config + invocation)
+  `${action('AI_MODEL_READ')}:owner`,
+  `${action('AI_MODEL_CREATE')}:owner`,
+  `${action('AI_MODEL_UPDATE')}:owner`,
+  `${action('AI_MODEL_DELETE')}:owner`,
+  `${action('AI_MODEL_INVOKE')}:owner`,
+  `${action('AI_PROVIDER_READ')}:owner`,
+  `${action('AI_PROVIDER_CREATE')}:owner`,
+  `${action('AI_PROVIDER_UPDATE')}:owner`,
+  `${action('AI_PROVIDER_DELETE')}:owner`,
+  // API keys (personal keys are self-managed)
+  `${action('API_KEY_READ')}:owner`,
+  `${action('API_KEY_CREATE')}:owner`,
+  `${action('API_KEY_UPDATE')}:owner`,
+  `${action('API_KEY_DELETE')}:owner`,
+  // Own profile
+  `${action('USER_READ')}:owner`,
+  `${action('USER_UPDATE')}:owner`,
+];

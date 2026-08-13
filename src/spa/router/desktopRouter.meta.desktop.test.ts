@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from 'lucide-react';
+import { ImageIcon, MessageSquarePlus } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
@@ -24,6 +24,13 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
 
     expect(staticMeta.titleKey).toBeDefined();
     expect(staticMeta.icon).toBeDefined();
+  });
+
+  it('uses the active resource category for the tab title and icon', () => {
+    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/resource/images');
+
+    expect(staticMeta.titleKey).toBe('navigation.resourceImages');
+    expect(staticMeta.icon).toBe(ImageIcon);
   });
 
   it('resolves a static agent meta and its DynamicMeta runner', () => {

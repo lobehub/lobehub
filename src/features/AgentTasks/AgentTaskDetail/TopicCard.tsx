@@ -13,11 +13,21 @@ import {
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  SquarePen,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
+import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
@@ -26,6 +36,8 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
+import RunVerifyDetail from './RunVerifyDetail';
+import RunVerifyTag from './RunVerifyTag';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -40,8 +52,8 @@ const formatDuration = (ms: number): string => {
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
 // the shared collapse clamps it with a fade and offers "show more", while the
-// whole card still opens the run drawer for deeper reading. `pointerEvents: none`
-// keeps every click inside markdown falling through to the card.
+// run drawer remains available from the explicit overflow action. The preview
+// itself is reading content, not an unlabeled navigation target.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
 const RunContent = memo<{ content: string }>(({ content }) => (
@@ -54,10 +66,17 @@ const RunContent = memo<{ content: string }>(({ content }) => (
 
 interface TopicCardProps {
   activity: TaskDetailActivity;
+  /**
+   * Whether the run body starts open. A goal loop can produce many rounds, and
+   * an all-expanded feed buries the newest result under older ones — the list
+   * opens only the latest and collapses the rest.
+   */
+  defaultExpanded?: boolean;
 }
 
-const TopicCard = memo<TopicCardProps>(({ activity }) => {
+const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) => {
   const { t } = useTranslation('chat');
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const addComment = useTaskStore((s) => s.addComment);
@@ -71,6 +90,12 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
+  const hasBody = Boolean(
+    activity.summary || activity.content || canFollowUp || activity.verify?.total,
+  );
+  // A verdict with no results behind it has nothing to move down to, so it
+  // stays in the header no matter what the body is doing.
+  const verifyDetailOpen = bodyExpanded && Boolean(activity.verify?.total);
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -162,23 +187,25 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
 
   const isAgent = activity.author?.type === 'agent';
 
-  const avatarNode = activity.author?.avatar ? (
-    <Avatar avatar={activity.author.avatar} size={24} />
-  ) : (
-    <div className={styles.activityAvatar}>
-      <CircleDot size={12} />
-    </div>
-  );
+  // An agent that simply never set an avatar is still an agent — it gets the
+  // same default face it wears everywhere else, not a placeholder dot. The dot
+  // stays for rows with no author at all.
+  const avatarNode =
+    activity.author?.avatar || isAgent ? (
+      <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
+    ) : (
+      <div className={styles.activityAvatar}>
+        <CircleDot size={12} />
+      </div>
+    );
 
   return (
     <Block
-      clickable={!!activity.id}
       gap={8}
       paddingBlock={8}
       paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
-      onClick={activity.id ? handleOpen : undefined}
     >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -211,11 +238,25 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               #{activity.seq}
             </Text>
           )}
+          {/* Only mark machine-opened rounds: a `manual` tag on every row the
+              user started themselves is noise, absence already means manual. */}
+          {activity.trigger && activity.trigger !== 'manual' && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            >
+              {t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            </Tag>
+          )}
           {durationText && (
             <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
               · {durationText}
             </Text>
           )}
+          {/* The verdict rides the header only while the run is folded; once
+              open it moves down to sit on the checklist that justifies it. */}
+          {!verifyDetailOpen && <RunVerifyTag verify={activity.verify} />}
         </Flexbox>
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -223,6 +264,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
               {startedAt}
             </Text>
+          )}
+          {hasBody && (
+            <Flexbox onClick={stopPropagation}>
+              <ActionIcon
+                icon={bodyExpanded ? ChevronDown : ChevronRight}
+                size={'small'}
+                title={t(bodyExpanded ? 'taskDetail.runCollapse' : 'taskDetail.runExpand')}
+                onClick={() => setBodyExpanded((open) => !open)}
+              />
+            </Flexbox>
           )}
           <Flexbox onClick={stopPropagation}>
             <DropdownMenu items={menuItems}>
@@ -232,7 +283,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
-      {(activity.summary || activity.content || canFollowUp) && (
+      {hasBody && bodyExpanded && (
         <Flexbox gap={8} paddingInline={4}>
           {activity.summary && (
             <Text
@@ -243,6 +294,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             </Text>
           )}
           {activity.content && <RunContent content={activity.content} />}
+          {/* The verdict's evidence, next to the delivery it judged — reading
+              one should never require leaving for the acceptance page. */}
+          {activity.verify && (
+            <Flexbox onClick={stopPropagation}>
+              <RunVerifyDetail
+                extra={<RunVerifyTag verify={activity.verify} />}
+                operationId={activity.operationId}
+              />
+            </Flexbox>
+          )}
           {canFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>

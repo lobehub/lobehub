@@ -222,6 +222,10 @@ export interface ToolStateChunkData {
 /** Data shape for tool_end events */
 export interface ToolEndData {
   isSuccess: boolean;
+  /** Canonical gateway payload used to resolve renderer-side lifecycle hooks. */
+  payload?: ToolCallPayload | { toolCalling: ToolCallPayload };
+  /** Builtin-tool-compatible result passed to renderer-side lifecycle hooks. */
+  result?: { content?: string; state?: unknown; success: boolean };
   /** Subagent context if this tool_end belongs to a subagent inner tool. */
   subagent?: SubagentEventContext;
   toolCallId: string;
@@ -351,6 +355,7 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  command?: string;
   /**
    * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
    * turn count, session id, …). Persisted verbatim into the error body so the

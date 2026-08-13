@@ -11,6 +11,7 @@ concurrency:
 
 # Add default permissions
 permissions:
+  actions: read # 跨 run 下载 canary 基线 artifact 需要
   contents: write
   pull-requests: write
 
@@ -191,6 +192,22 @@ jobs:
             ls -la latest*.yml || echo "No latest*.yml files found"
           fi
 
+      # 测量 app.asar 大小,供 ASAR size gate 与 canary 基线对比
+      - name: Measure ASAR size
+        id: asar_size
+        shell: bash
+        run: |
+          node .github/scripts/bundle-size-gate.cjs measure --type asar --out size-report/asar.json
+          platform=$(node -p "require('./size-report/asar.json').platform")
+          mv size-report/asar.json "size-report/asar-${platform}.json"
+
+      - name: Upload ASAR size report
+        uses: actions/upload-artifact@v6
+        with:
+          name: asar-size-${{ matrix.os }}
+          path: size-report/
+          retention-days: 1
+
       # 上传构建产物
       - name: Upload artifact
         uses: actions/upload-artifact@v6
@@ -207,6 +224,76 @@ jobs:
             apps/desktop/release/*.rpm*
             apps/desktop/release/*.tar.gz*
           retention-days: 5
+
+  # ASAR 包体积门禁:与 canary 基线对比,超阈值 fail
+  asar-size-gate:
+    needs: [build]
+    name: ASAR Size Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download ASAR size reports
+        uses: actions/download-artifact@v7
+        with:
+          path: size-reports
+          pattern: asar-size-*
+          merge-multiple: true
+
+      # 基线:release-desktop-canary 最近一次成功 run 上传的 asar-size-baseline-* artifacts
+      - name: Find latest canary baseline run
+        id: baseline_run
+        uses: actions/github-script@v8
+        with:
+          # github-script JSON-encodes return values by default; we need the raw run id string
+          result-encoding: string
+          script: |
+            const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
+            return await finder({ github, context, workflowId: 'release-desktop-canary.yml', artifactPrefix: 'asar-size-baseline-' });
+
+      - name: Download ASAR size baselines
+        if: steps.baseline_run.outputs.result != ''
+        uses: actions/download-artifact@v7
+        with:
+          pattern: asar-size-baseline-*
+          merge-multiple: true
+          path: .size-baseline
+          run-id: ${{ steps.baseline_run.outputs.result }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check ASAR sizes against baseline
+        id: asar_size_check
+        shell: bash
+        run: |
+          status=0
+          for platform in macos-arm64 macos-x64 windows-x64 linux-x64; do
+            node .github/scripts/bundle-size-gate.cjs check \
+              --current "size-reports/asar-${platform}.json" \
+              --baseline ".size-baseline/asar-size-baseline-${platform}.json" \
+              --label "ASAR (${platform})" \
+              --report size-reports/report.md || status=1
+          done
+          exit $status
+
+      - name: Comment ASAR size report on PR
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('node:fs');
+            const report = fs.existsSync('size-reports/report.md')
+              ? fs.readFileSync('size-reports/report.md', 'utf8')
+              : 'Build did not reach the size gate step.';
+            const comment = require('${{ github.workspace }}/.github/scripts/size-gate-comment.cjs');
+            await comment({
+              github,
+              context,
+              title: 'Desktop ASAR',
+              report,
+              failed: ${{ steps.asar_size_check.outcome == 'failure' }},
+              identifier: 'asar',
+            });
 
   # 合并 macOS 多架构 latest-mac.yml 文件
   merge-mac-files:

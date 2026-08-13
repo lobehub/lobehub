@@ -3,6 +3,7 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
@@ -31,7 +32,7 @@ import {
   UserSettingsSchema,
 } from '@lobechat/types';
 import { errorCauseFrom } from '@lobechat/utils';
-import { TRPCError } from '@trpc/server';
+import { tracked, TRPCError } from '@trpc/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
@@ -56,7 +57,15 @@ import {
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
-import { createTaskRecommendationService } from '@/server/services/taskRecommendation/service';
+import {
+  onboardingProgressEventId,
+  projectOnboardingGenerationProgress,
+  subscribeToOnboardingGenerationProgress,
+} from '@/server/services/onboardingProgress';
+import {
+  createTaskRecommendationService,
+  TaskRecommendationNotFoundError,
+} from '@/server/services/taskRecommendation/service';
 import { understandingProviders } from '@/server/services/understanding/providers';
 import { createUnderstandingService } from '@/server/services/understanding/service';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -141,6 +150,14 @@ const reviseOnboardingUnderstandingInputSchema = z
 const onboardingTaskRecommendationTopicInputSchema = z
   .object({ topicId: understandingIdSchema })
   .strict() satisfies z.ZodType<OnboardingTaskRecommendationTopicInput>;
+const onboardingGenerationProgressInputSchema = z
+  .object({
+    // tRPC injects this tracked cursor into reconnection inputs. It is intentionally not trusted
+    // as application state; polling remains the durable source of truth.
+    lastEventId: z.string().trim().min(1).max(4096).optional(),
+    topicId: understandingIdSchema,
+  })
+  .strict();
 const createOnboardingTasksInputSchema = z
   .object({
     recommendationIds: z.array(z.string().trim().min(1).max(128)).max(48),
@@ -236,6 +253,35 @@ const taskRecommendationServiceProcedure = personalOnboardingProcedure.use(
     return result;
   },
 );
+const onboardingGenerationProgressProcedure = personalOnboardingProcedure.use(
+  async ({ ctx, next }) => {
+    const [understandingService, taskRecommendationService] = await Promise.all([
+      createUnderstandingService({ db: ctx.serverDB, userId: ctx.userId }),
+      createTaskRecommendationService({ db: ctx.serverDB, userId: ctx.userId }),
+    ]);
+    const result = await next({ ctx: { taskRecommendationService, understandingService } });
+    if (!result.ok) {
+      throw mapUnderstandingTRPCError(errorCauseFrom(result.error) ?? result.error);
+    }
+    return result;
+  },
+);
+
+const INITIAL_PROGRESS_RECOVERY_DELAY = 3_000;
+const MAX_PROGRESS_RECOVERY_DELAY = 30_000;
+
+const waitForProgressRecovery = (delay: number, signal: AbortSignal | undefined) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, delay);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 
 export const userRouter = router({
   getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
@@ -273,9 +319,95 @@ export const userRouter = router({
       return ctx.taskRecommendationService.get(input.topicId);
     }),
 
+  watchOnboardingGenerationProgress: onboardingGenerationProgressProcedure
+    .input(onboardingGenerationProgressInputSchema)
+    .subscription(async function* ({ ctx, input, signal }) {
+      let lastEventId = input.lastEventId;
+      const readPersistedProgress = async () => {
+        const understanding = await ctx.understandingService.get(input.topicId);
+        const taskRecommendations = await ctx.taskRecommendationService
+          .get(input.topicId)
+          .catch((error: unknown) => {
+            if (error instanceof TaskRecommendationNotFoundError) return undefined;
+            throw error;
+          });
+        const eventId = onboardingProgressEventId(understanding, taskRecommendations);
+        const progress = projectOnboardingGenerationProgress(understanding, taskRecommendations);
+        return { eventId, progress };
+      };
+
+      const initial = await readPersistedProgress();
+      if (initial.eventId !== lastEventId) {
+        lastEventId = initial.eventId;
+        yield tracked(initial.eventId, initial.progress);
+      }
+      if (
+        initial.progress.phase === 'completed' ||
+        initial.progress.phase === 'failed' ||
+        initial.progress.phase === 'partial'
+      ) {
+        return;
+      }
+
+      const subscription = await subscribeToOnboardingGenerationProgress(input.topicId);
+      if (subscription) {
+        try {
+          while (!signal?.aborted) {
+            const notification = await subscription.next(signal);
+            if (!notification) return;
+
+            if (notification.eventId !== lastEventId) {
+              lastEventId = notification.eventId;
+              yield tracked(notification.eventId, notification.progress);
+            }
+            if (
+              notification.progress.phase === 'completed' ||
+              notification.progress.phase === 'failed' ||
+              notification.progress.phase === 'partial'
+            ) {
+              return;
+            }
+          }
+        } finally {
+          await subscription.unsubscribe();
+        }
+        return;
+      }
+
+      let recoveryDelay = INITIAL_PROGRESS_RECOVERY_DELAY;
+      while (!signal?.aborted) {
+        await waitForProgressRecovery(recoveryDelay, signal);
+        if (signal?.aborted) return;
+
+        const { eventId, progress } = await readPersistedProgress();
+        if (eventId !== lastEventId) {
+          lastEventId = eventId;
+          yield tracked(eventId, progress);
+        }
+
+        if (
+          progress.phase === 'completed' ||
+          progress.phase === 'failed' ||
+          progress.phase === 'partial'
+        ) {
+          return;
+        }
+        recoveryDelay = Math.min(recoveryDelay * 2, MAX_PROGRESS_RECOVERY_DELAY);
+      }
+    }),
+
   getSupportedUnderstandingProviders: understandingServiceProcedure.query(
-    async ({ ctx }): Promise<{ providerIds: string[]; sourceProviderIds: string[] }> => {
+    async ({
+      ctx,
+    }): Promise<{
+      connectionSources: Record<string, 'composio' | 'lobehub'>;
+      providerIds: string[];
+      sourceProviderIds: string[];
+    }> => {
       return {
+        connectionSources: Object.fromEntries(
+          understandingProviders.map((provider) => [provider.id, provider.connectionSource]),
+        ),
         providerIds: understandingProviders.map((provider) => provider.id),
         sourceProviderIds: await ctx.understandingService.listSourceProviderIds(),
       };
@@ -353,7 +485,12 @@ export const userRouter = router({
       lastName: state.lastName,
       onboarding: state.onboarding,
       preference: state.preference as UserPreference,
-      settings: state.settings,
+      // restricted API keys must not read decrypted provider/tool credentials
+      // or Marketplace OAuth tokens
+      settings:
+        ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)
+          ? { ...state.settings, keyVaults: undefined, market: undefined }
+          : state.settings,
       userId: ctx.userId,
       username: state.username,
 
@@ -708,6 +845,27 @@ export const userRouter = router({
 
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
+    // presence, not truthiness: `keyVaults: null` is an explicit credential clear
+    const hasKeyVaultsUpdate = 'keyVaults' in (input as Partial<UserSettings>);
+
+    // credential-bearing settings: `keyVaults` holds provider/tool credentials,
+    // `market` holds Marketplace OAuth access/refresh tokens. A restricted key
+    // needs `model:write` on top of the namespace's `user:write` to touch (or
+    // clear) either; full-access keys pass through.
+    const touchedCredentialFields = ['keyVaults', 'market'].filter(
+      (field) => field in (input as Partial<UserSettings>),
+    );
+    if (
+      touchedCredentialFields.length > 0 &&
+      ctx.apiKeyScopes !== undefined &&
+      !isFullAccessApiKey(ctx.apiKeyScopes) &&
+      !hasApiKeyScope(ctx.apiKeyScopes, 'model:write')
+    ) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `This API key cannot update credential settings ('${touchedCredentialFields.join("', '")}'): missing required scope 'model:write'.`,
+      });
+    }
 
     if (ctx.workspaceId && (hasOwnerSettingChange(res) || hasMemberSettingChange(res))) {
       const rbac = new RbacModel(ctx.serverDB, ctx.userId);
@@ -727,18 +885,23 @@ export const userRouter = router({
       }
     }
 
-    // Encrypt keyVaults
-    let encryptedKeyVaults: string | null = null;
+    // Encrypt keyVaults; only touch the column when the caller sent the field,
+    // so a settings update without `keyVaults` no longer clears stored creds
+    const nextValue: Record<string, unknown> = { ...res };
 
-    if (keyVaults) {
-      // TODO: better to add a validation
-      const data = JSON.stringify(keyVaults);
-      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    if (hasKeyVaultsUpdate) {
+      let encryptedKeyVaults: string | null = null;
 
-      encryptedKeyVaults = await gateKeeper.encrypt(data);
+      if (keyVaults) {
+        // TODO: better to add a validation
+        const data = JSON.stringify(keyVaults);
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+        encryptedKeyVaults = await gateKeeper.encrypt(data);
+      }
+
+      nextValue.keyVaults = encryptedKeyVaults;
     }
-
-    const nextValue = { ...res, keyVaults: encryptedKeyVaults };
 
     return ctx.userModel.updateSetting(nextValue);
   }),

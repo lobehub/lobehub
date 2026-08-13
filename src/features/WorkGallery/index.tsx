@@ -1,87 +1,86 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { Center, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, Center, Empty, Flexbox, Skeleton } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { openDocumentModal } from '@/features/DocumentModal/loader';
-import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
+import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
 
 const styles = createStaticStyles(({ css }) => ({
+  agentFilter: css`
+    flex: none;
+
+    padding-inline: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+
+    color: ${cssVar.colorTextSecondary};
+  `,
+  agentFilterActive: css`
+    border-color: ${cssVar.colorBorder};
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  cardList: css`
+    display: grid;
+    grid-template-columns: repeat(3, minmax(280px, 1fr));
+    gap: 16px;
+    width: 100%;
+
+    @media (width <= 920px) {
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+    }
+
+    @media (width <= 620px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  `,
   container: css`
     height: 100%;
   `,
-  header: css`
+  emptyState: css`
+    height: 100%;
+    min-height: 320px;
+  `,
+  filterBar: css`
+    scrollbar-width: none;
+
+    overflow: auto hidden;
     flex: none;
-    padding-block: 16px 8px;
-    padding-inline: 24px;
-  `,
-  scroll: css`
-    overflow: hidden auto;
-    flex: 1;
 
-    min-height: 0;
-    padding-block: 8px 24px;
+    padding-block: 12px 10px;
     padding-inline: 24px;
-  `,
-  // Single-column stack (not a grid): cards keep the library page's fixed
-  // proportions and read top-to-bottom within each topic group.
-  cardList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
 
-    width: 100%;
-    max-width: 420px;
+    &::-webkit-scrollbar {
+      display: none;
+    }
   `,
-  groupDate: css`
+  groupCount: css`
     flex: none;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
   groupHeader: css`
     display: flex;
-    gap: 16px;
+    gap: 10px;
     align-items: baseline;
-    justify-content: space-between;
-
     margin-block-end: 12px;
   `,
   groupTitle: css`
-    overflow: hidden;
-
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  // Loading placeholder shell that mirrors `WorkPreviewCard` so the skeleton
-  // lays out as vertical preview cards in the same grid.
-  skeletonCard: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  emptyState: css`
-    height: 100%;
-    min-height: 320px;
   `,
   loadMoreError: css`
     display: flex;
@@ -113,41 +112,62 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  scroll: css`
+    overflow: hidden auto;
+    flex: 1;
+
+    min-height: 0;
+    padding-block: 8px 24px;
+    padding-inline: 24px;
+  `,
+  skeletonCard: css`
+    aspect-ratio: 0.9;
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 16px;
+
+    background: ${cssVar.colorBgContainer};
+  `,
 }));
 
-/** Card-shaped loading placeholders laid out in the same grid as real cards. */
+interface AgentFilterProps {
+  active: boolean;
+  agentId: string;
+  onSelect: (agentId: string) => void;
+}
+
+const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
+  const agent = useAgentDisplayMeta(agentId);
+  if (!agent) return null;
+
+  return (
+    <Button
+      className={cx(styles.agentFilter, active && styles.agentFilterActive)}
+      size={'small'}
+      type={'text'}
+      icon={
+        <Avatar
+          emojiScaleWithBackground
+          avatar={agent.avatar}
+          background={agent.backgroundColor}
+          shape={'square'}
+          size={20}
+        />
+      }
+      onClick={() => onSelect(agentId)}
+    >
+      {agent.title}
+    </Button>
+  );
+});
+
+AgentFilter.displayName = 'AgentFilter';
+
 const SkeletonCards = memo<{ count: number }>(({ count }) => (
   <div className={styles.cardList}>
     {Array.from({ length: count }).map((_, index) => (
       <div className={styles.skeletonCard} key={index}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{ borderRadius: 6, height: 26, maxWidth: 26, minWidth: 26 }}
-          />
-          <Skeleton.Button
-            active
-            block
-            size={'small'}
-            style={{ borderRadius: 4, height: 14, maxWidth: '60%' }}
-          />
-        </Flexbox>
-        <Flexbox gap={8}>
-          <Skeleton.Button active block size={'small'} style={{ borderRadius: 4, height: 12 }} />
-          <Skeleton.Button
-            active
-            block
-            size={'small'}
-            style={{ borderRadius: 4, height: 12, maxWidth: '80%', opacity: 0.7 }}
-          />
-          <Skeleton.Button
-            active
-            block
-            size={'small'}
-            style={{ borderRadius: 4, height: 12, maxWidth: '55%', opacity: 0.4 }}
-          />
-        </Flexbox>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     ))}
   </div>
@@ -155,132 +175,80 @@ const SkeletonCards = memo<{ count: number }>(({ count }) => (
 
 SkeletonCards.displayName = 'SkeletonCards';
 
-/**
- * Initial-load placeholder mirroring the final layout: topic-group sections,
- * each with a title/date header row above its card grid — not a bare card pile.
- */
-const SkeletonGroups = memo(() => (
-  <Flexbox gap={32}>
-    {[3, 2].map((count, index) => (
-      <div key={index}>
-        <div className={styles.groupHeader}>
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{ borderRadius: 4, height: 16, minWidth: 160, width: 160 }}
-          />
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{ borderRadius: 4, height: 12, minWidth: 48, opacity: 0.5, width: 48 }}
-          />
-        </div>
-        <SkeletonCards count={count} />
-      </div>
-    ))}
-  </Flexbox>
-));
-
-SkeletonGroups.displayName = 'SkeletonGroups';
-
 interface WorkGalleryProps {
   galleryKey: WorkGalleryKey;
 }
 
-/**
- * The resource page's 产物 content area: a cross-topic, cursor-paginated flow
- * of Work previews grouped by origin topic. Renders `WorkPreviewCard` with an
- * `onOpen` that navigates without the chat portal (task → standalone detail
- * route, document → global preview modal, external skill works (linear /
- * github) → external link).
- */
 const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   const { t, i18n } = useTranslation('file');
-  const navigate = useWorkspaceAwareNavigate();
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  useFetchAgentList();
 
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useWorkspaceWorksInfinite(galleryKey);
 
-  // Group the flat (updatedAt desc) page stream by origin topic. First
-  // appearance decides group order, so groups sort by their newest work; later
-  // pages can still append older works into an already-rendered group.
-  const groups = useMemo(() => {
-    const byKey = new Map<
-      string,
-      { items: WorkSummaryItem[]; newestAt: Date; title: string | null }
-    >();
-    for (const item of items) {
-      // Deleted-topic and non-conversation works share one trailing bucket per
-      // render order; their titles are gone, so finer keys would only produce
-      // several identical "other" sections.
-      const key = item.originTopicId ?? '__no_topic__';
-      const group = byKey.get(key);
-      if (group) group.items.push(item);
-      else
-        byKey.set(key, {
-          items: [item],
-          newestAt: item.updatedAt,
-          title: item.originTopicTitle ?? null,
-        });
-    }
-    return [...byKey.entries()].map(([key, group]) => ({ key, ...group }));
-  }, [items]);
-
-  const handleOpen = useCallback(
-    (item: WorkSummaryItem) => {
-      const openTarget = getWorkTypeDescriptor(item).getOpenTarget(item);
-      if (!openTarget) return;
-
-      switch (openTarget.kind) {
-        case 'document': {
-          void openDocumentModal(openTarget.documentId);
-          return;
-        }
-        // external skill works (linear / github): external link (URL-less cards
-        // yield no target above).
-        case 'external': {
-          // Defense in depth: only ever hand http(s) to shell.openExternal.
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        // file works: the gallery lives outside the conversation UI, so the
-        // FilePreview chat portal isn't available — fall back to opening the
-        // persisted file URL like the pre-portal behavior.
-        case 'filePreview': {
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        // task: no external URL — the standalone detail route resolves the same
-        // identifier-or-id the chat portal uses.
-        case 'task': {
-          navigate(taskDetailPath(openTarget.identifier));
-        }
-      }
-    },
-    [navigate],
+  const agentIds = useMemo(
+    () => [...new Set(items.map((item) => item.originAgentId).filter(Boolean))] as string[],
+    [items],
   );
+  const filteredItems = useMemo(
+    () => (activeAgentId ? items.filter((item) => item.originAgentId === activeAgentId) : items),
+    [activeAgentId, items],
+  );
+  const groups = useMemo(() => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const dateKey = (date: Date) =>
+      `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    const todayKey = dateKey(today);
+    const yesterdayKey = dateKey(yesterday);
+    const byDate = new Map<string, { items: WorkSummaryItem[]; title: string }>();
 
-  // Infinite scroll: load the next page when a sentinel near the list's end
-  // scrolls into view (rootMargin pre-fetches before the user hits the bottom).
+    for (const item of filteredItems) {
+      const date = new Date(item.updatedAt);
+      const key = dateKey(date);
+      const title =
+        key === todayKey
+          ? t('work.date.today')
+          : key === yesterdayKey
+            ? t('work.date.yesterday')
+            : new Intl.DateTimeFormat(i18n.language, {
+                day: 'numeric',
+                month: 'short',
+                year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+              }).format(date);
+      const group = byDate.get(key);
+      if (group) group.items.push(item);
+      else byDate.set(key, { items: [item], title });
+    }
+
+    return [...byDate.entries()].map(([key, group]) => ({
+      key,
+      ...group,
+      totalCost: formatWorkVersionCost(
+        group.items.reduce((total, item) => total + (item.totalCost || 0), 0),
+      ),
+    }));
+  }, [filteredItems, i18n.language, t]);
+
+  const handleOpen = useOpenWork();
+
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasMore) return;
-    const io = new IntersectionObserver(
+    const element = sentinelRef.current;
+    if (!element || !hasMore) return;
+    const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) loadMore();
       },
       { rootMargin: '240px' },
     );
-    io.observe(el);
-    return () => io.disconnect();
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [hasMore, isLoadingMore, loadMore]);
 
   const renderBody = () => {
-    // A failed first fetch must read as an error with a retry — not masquerade
-    // as an empty "no works" page.
     if (error && items.length === 0)
       return (
         <Center className={styles.emptyState} gap={12}>
@@ -295,7 +263,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         </Center>
       );
 
-    if (isLoadingInitial && items.length === 0) return <SkeletonGroups />;
+    if (isLoadingInitial && items.length === 0) return <SkeletonCards count={8} />;
 
     if (items.length === 0)
       return (
@@ -308,37 +276,41 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         </Center>
       );
 
+    if (filteredItems.length === 0)
+      return (
+        <Center className={styles.emptyState}>
+          <Empty description={t('work.agentEmpty.desc')} title={t('work.agentEmpty.title')} />
+        </Center>
+      );
+
     return (
       <>
         <Flexbox gap={32}>
           {groups.map((group) => (
-            <div key={group.key}>
+            <section key={group.key}>
               <div className={styles.groupHeader}>
-                <span className={styles.groupTitle}>
-                  {group.title ?? t('work.topicGroup.other')}
+                <span className={styles.groupTitle}>{group.title}</span>
+                <span className={styles.groupCount}>
+                  {t('work.count', { count: group.items.length })}
                 </span>
-                <span className={styles.groupDate}>
-                  {formatTaskItemDate(group.newestAt, {
-                    formatOtherYear: t('time.formatOtherYear', { ns: 'common' }),
-                    formatThisYear: t('time.formatThisYear', { ns: 'common' }),
-                    locale: i18n.language,
-                  })}
-                </span>
+                {group.totalCost && (
+                  <span className={styles.groupCount}>
+                    {t('work.totalCost', { cost: group.totalCost })}
+                  </span>
+                )}
               </div>
               <div className={styles.cardList}>
                 {group.items.map((item) => (
                   <WorkPreviewCard item={item} key={item.id} onOpen={handleOpen} />
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </Flexbox>
-        {/* Sentinel drives infinite scroll; keep it mounted so the observer can
-            re-fire after each page appends. */}
         <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
         {isLoadingMore ? (
           <Flexbox style={{ marginBlockStart: 12 }}>
-            <SkeletonCards count={2} />
+            <SkeletonCards count={4} />
           </Flexbox>
         ) : error ? (
           <div className={styles.loadMoreError}>
@@ -354,11 +326,26 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
   return (
     <Flexbox className={styles.container}>
-      <div className={styles.header}>
-        <Text strong style={{ fontSize: 16 }}>
-          {t('work.group')}
-        </Text>
-      </div>
+      {agentIds.length > 0 && (
+        <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
+          <Button
+            className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
+            size={'small'}
+            type={'text'}
+            onClick={() => setActiveAgentId(null)}
+          >
+            {t('work.agentFilter.all')}
+          </Button>
+          {agentIds.map((agentId) => (
+            <AgentFilter
+              active={activeAgentId === agentId}
+              agentId={agentId}
+              key={agentId}
+              onSelect={setActiveAgentId}
+            />
+          ))}
+        </Flexbox>
+      )}
       <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
     </Flexbox>
   );

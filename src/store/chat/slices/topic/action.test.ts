@@ -310,6 +310,74 @@ describe('topic action', () => {
 
     // Additional tests for refreshTopic can be added here...
   });
+  describe('updateTopicModel', () => {
+    // The Agent Builder panels render a whole conversation for a builtin agent
+    // while the page's activeAgentId still points at the agent being edited, so
+    // the topic being switched lives in another `topicDataMap` bucket.
+    const BUILDER_KEY = topicMapKey({ agentId: 'builder-agent' });
+
+    const seedBuilderTopic = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'edited-agent',
+          activeTopicId: 'builder-topic',
+          topicDataMap: {
+            [BUILDER_KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'builder-topic',
+                  model: 'glm-5.2',
+                  provider: 'lobehub',
+                  title: 'Builder chat',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('applies the switch to the bucket that owns the topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+    });
+
+    it('revalidates the owning bucket instead of the active agent bucket', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      (mutate as Mock).mockClear();
+      seedBuilderTopic();
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      const matcherFn = (mutate as Mock).mock.calls[0][0];
+      expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
+      expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+    });
+  });
+
   describe('favoriteTopic', () => {
     it('should update the favorite state of a topic and refresh topics', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1994,6 +2062,103 @@ describe('topic action', () => {
       expect(synced).toBe(false);
       expect(useChatStore.getState().topicDataMap[key].items[0].status).toBe('scheduled');
       expect(refreshMessages).not.toHaveBeenCalled();
+    });
+
+    it('keeps the topic parked while our own scheduled write is still in flight', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshMessages = vi.fn();
+      // The pre-schedule row: the rate-limited turn parked the topic as 'failed'.
+      const topic = {
+        id: topicId,
+        metadata: {},
+        status: 'failed',
+        title: 'Rate limited topic',
+      } as unknown as ChatTopic;
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          refreshMessages,
+          topicDataMap: {
+            [key]: { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 },
+          },
+        });
+      });
+
+      // "Continue in ~1d 8h": the status is dispatched optimistically, the DB
+      // write is still on the wire.
+      let persistScheduled: () => void = () => {};
+      vi.spyOn(topicService, 'updateTopic').mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          persistScheduled = () => resolve();
+        }) as any,
+      );
+      act(() => {
+        void result.current.updateTopicStatus({ status: 'scheduled', topicId });
+      });
+      expect(useChatStore.getState().topicDataMap[key].items[0].status).toBe('scheduled');
+
+      // The watch this dispatch just armed fetches before the write lands, so
+      // the server still reports the pre-schedule row.
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        metadata: {},
+        status: 'failed',
+      } as any);
+
+      let synced = true;
+      await act(async () => {
+        synced = await result.current.syncScheduledTopicRun(topicId);
+      });
+
+      expect(synced).toBe(false);
+      // Reverting here is what made the button read as a no-op until clicked twice.
+      expect(useChatStore.getState().topicDataMap[key].items[0].status).toBe('scheduled');
+      expect(refreshMessages).not.toHaveBeenCalled();
+
+      persistScheduled();
+    });
+
+    it('folds in a stale row once the scheduled write failed to persist', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshMessages = vi.fn();
+      const topic = {
+        id: topicId,
+        metadata: {},
+        status: 'failed',
+        title: 'Rate limited topic',
+      } as unknown as ChatTopic;
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          refreshMessages,
+          topicDataMap: {
+            [key]: { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 },
+          },
+        });
+      });
+
+      // The persist rejects — the pin is dropped, so nothing should suppress the
+      // server's view of the topic any more.
+      vi.spyOn(topicService, 'updateTopic').mockRejectedValueOnce(new Error('offline'));
+      await act(async () => {
+        await result.current.updateTopicStatus({ status: 'scheduled', topicId });
+      });
+
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        metadata: {},
+        status: 'failed',
+      } as any);
+
+      let synced = false;
+      await act(async () => {
+        synced = await result.current.syncScheduledTopicRun(topicId);
+      });
+
+      expect(synced).toBe(true);
+      expect(useChatStore.getState().topicDataMap[key].items[0].status).toBe('failed');
     });
 
     it('does not fetch at all when the store topic is not scheduled', async () => {

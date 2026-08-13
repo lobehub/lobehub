@@ -6,7 +6,7 @@ import {
   type BuilderSuggestionMode,
   chainBuilderSuggestion,
 } from '@lobechat/prompts';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import useSWR from 'swr';
 
 import { swrKeys } from '@/libs/swr/keys';
@@ -51,21 +51,20 @@ export const useBuilderSuggestions = ({
   enabled,
   targetId,
 }: UseBuilderSuggestionsParams): BuilderSuggestionsResult => {
-  // Bumping the nonce forces a fresh generation (SWR key change) on manual refresh.
-  const [nonce, setNonce] = useState(0);
   const markRegenerated = useBuilderSuggestionFeedbackStore((s) => s.markRegenerated);
 
-  // Key on target identity only — the context summary is deliberately kept out of
-  // the key so config autosaves (which stream in new summaries for the same target)
-  // don't refetch. Only a target switch or a nonce bump regenerates; the fetcher
-  // closure reads the current summary, which is always the latest value on the
-  // render that changes the key.
+  // Key on target identity (+ locale, since chips are generated in the UI
+  // language) — the context summary is deliberately kept out of the key so
+  // config autosaves (which stream in new summaries for the same target) don't
+  // refetch. Only a target/locale switch or a manual refresh regenerates; the
+  // fetcher closure reads the current summary, which is always the latest value
+  // on the render that changes the key.
   const key =
     enabled && contextSummary && model && provider
-      ? swrKeys.agentBuilder.suggestions(mode, builderAgentId, targetId, nonce)
+      ? swrKeys.agentBuilder.suggestions(mode, builderAgentId, targetId, locale)
       : null;
 
-  const { data, isLoading, error } = useSWR(
+  const { data, isLoading, error, mutate } = useSWR(
     key,
     async () => {
       // Read mode/context/agent from the closure: SWR runs the fetcher from the
@@ -96,6 +95,11 @@ export const useBuilderSuggestions = ({
     },
     {
       dedupingInterval: 600_000,
+      // The key is persisted to the localStorage SWR tier (see `CACHE_TIERS.local`),
+      // so a revisit hydrates the last batch synchronously. Without this flag SWR
+      // would still revalidate the stale entry on mount, regenerating (and paying
+      // an LLM call) on every page load — the exact thing the persistence avoids.
+      revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       shouldRetryOnError: false,
@@ -104,8 +108,10 @@ export const useBuilderSuggestions = ({
 
   const refresh = useCallback(() => {
     markRegenerated(data?.tracingId);
-    setNonce((n) => n + 1);
-  }, [data?.tracingId, markRegenerated]);
+    // Clear the current batch (skeleton shows) and re-run the fetcher on the
+    // same key, so the fresh batch lands in the persisted cache entry.
+    void mutate(undefined, { revalidate: true });
+  }, [data?.tracingId, markRegenerated, mutate]);
 
   return {
     error,

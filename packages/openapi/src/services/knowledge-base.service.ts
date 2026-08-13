@@ -8,6 +8,7 @@ import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicKnowledgeBase } from '../helpers/public-fields';
 import type {
   CreateKnowledgeBaseRequest,
   CreateKnowledgeBaseResponse,
@@ -80,7 +81,7 @@ export class KnowledgeBaseService extends BaseService {
         const accessType: KnowledgeBaseAccessType = 'owner';
 
         return {
-          ...item,
+          ...projectPublicKnowledgeBase(item),
           accessType,
         } as KnowledgeBaseListItem;
       });
@@ -123,7 +124,7 @@ export class KnowledgeBaseService extends BaseService {
       this.log('info', 'Knowledge base detail retrieved successfully', { id });
 
       return {
-        knowledgeBase,
+        knowledgeBase: projectPublicKnowledgeBase(knowledgeBase),
       };
     } catch (error) {
       this.handleServiceError(error, '获取知识库详情');
@@ -164,7 +165,7 @@ export class KnowledgeBaseService extends BaseService {
       });
 
       return {
-        knowledgeBase,
+        knowledgeBase: projectPublicKnowledgeBase(knowledgeBase),
       };
     } catch (error) {
       this.handleServiceError(error, '创建知识库');
@@ -208,7 +209,7 @@ export class KnowledgeBaseService extends BaseService {
       this.log('info', 'Knowledge base updated successfully', { id });
 
       return {
-        knowledgeBase: updatedKb as KnowledgeBaseItem,
+        knowledgeBase: projectPublicKnowledgeBase(updatedKb as KnowledgeBaseItem),
       };
     } catch (error) {
       this.handleServiceError(error, '更新知识库');

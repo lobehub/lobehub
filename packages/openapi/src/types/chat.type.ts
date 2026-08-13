@@ -19,23 +19,32 @@ export interface ChatServiceParams {
   top_p?: number;
 }
 
-export const ChatServiceParamsSchema = z.object({
-  max_tokens: z.number().min(1).nullish(),
-  messages: z
-    .array(
-      z.object({
-        content: z.string().min(1, 'Message content cannot be empty'),
-        role: z.enum(['user', 'assistant', 'system'], {
-          error: 'Role must be user, assistant, or system',
+export const ChatServiceParamsSchema = z
+  .object({
+    frequency_penalty: z.number().min(-2).max(2).optional(),
+    max_tokens: z.number().int().min(1).max(1_000_000).nullish(),
+    messages: z
+      .array(
+        z.object({
+          content: z.string().min(1, 'Message content cannot be empty').max(1_000_000),
+          role: z.enum(['user', 'assistant', 'system'], {
+            error: 'Role must be user, assistant, or system',
+          }),
         }),
-      }),
-    )
-    .min(1, 'Message list cannot be empty'),
-  model: z.string().nullish(),
-  provider: z.string().nullish(),
-  stream: z.boolean().nullish(),
-  temperature: z.number().min(0).max(2).nullish(),
-});
+      )
+      .min(1, 'Message list cannot be empty')
+      .max(1000),
+    model: z.string().min(1).max(150).nullish(),
+    presence_penalty: z.number().min(-2).max(2).optional(),
+    provider: z.string().min(1).max(64).nullish(),
+    stream: z.boolean().nullish(),
+    temperature: z.number().min(0).max(2).nullish(),
+    top_p: z.number().min(0).max(1).optional(),
+  })
+  .refine((value) => value.stream !== true, {
+    message: 'Streaming is not supported on /chat; use /responses with stream=true',
+    path: ['stream'],
+  });
 
 /**
  * Chat response
@@ -66,11 +75,11 @@ export interface TranslateServiceParams {
 }
 
 export const TranslateServiceParamsSchema = z.object({
-  from: z.string().min(1, 'Source language cannot be empty').optional(),
-  model: z.string().nullish(),
-  provider: z.string().nullish(),
-  text: z.string().min(1, 'Text to translate cannot be empty'),
-  to: z.string().min(1, 'Target language cannot be empty'),
+  from: z.string().min(1, 'Source language cannot be empty').max(32).optional(),
+  model: z.string().min(1).max(150).nullish(),
+  provider: z.string().min(1).max(64).nullish(),
+  text: z.string().min(1, 'Text to translate cannot be empty').max(1_000_000),
+  to: z.string().min(1, 'Target language cannot be empty').max(32),
 });
 
 // ==================== Message Generation Types ====================
@@ -92,7 +101,7 @@ export interface MessageGenerationParams {
 }
 
 export const MessageGenerationParamsSchema = z.object({
-  agentId: z.string().nullish(),
+  agentId: z.string().min(1).max(64).nullish(),
   chatConfig: z
     .object({
       disableContextCaching: z.boolean().nullish(),
@@ -102,25 +111,27 @@ export const MessageGenerationParamsSchema = z.object({
       enableMaxTokens: z.boolean().nullish(),
       enableReasoning: z.boolean().nullish(),
       enableReasoningEffort: z.boolean().nullish(),
-      historyCount: z.number().nullish(),
-      inputTemplate: z.string().nullish(),
-      reasoningBudgetToken: z.number().nullish(),
+      historyCount: z.number().int().min(0).max(1000).nullish(),
+      inputTemplate: z.string().max(100_000).nullish(),
+      reasoningBudgetToken: z.number().int().min(0).max(1_000_000).nullish(),
       reasoningEffort: z.enum(['low', 'medium', 'high']).nullish(),
       searchMode: z.enum(['off', 'on', 'auto']).nullish(),
-      thinkingBudget: z.number().nullish(),
+      thinkingBudget: z.number().int().min(0).max(1_000_000).nullish(),
       useModelBuiltinSearch: z.boolean().nullish(),
     })
     .nullish(),
-  conversationHistory: z.array(
-    z.object({
-      content: z.string().min(1, 'Message content cannot be empty'),
-      role: z.enum(['user', 'assistant', 'system']),
-    }),
-  ),
-  model: z.string().nullish(),
-  provider: z.string().nullish(),
-  sessionId: z.string().nullable(),
-  userMessage: z.string().nullish(),
+  conversationHistory: z
+    .array(
+      z.object({
+        content: z.string().min(1, 'Message content cannot be empty').max(1_000_000),
+        role: z.enum(['user', 'assistant', 'system']),
+      }),
+    )
+    .max(1000),
+  model: z.string().min(1).max(150).nullish(),
+  provider: z.string().min(1).max(64).nullish(),
+  sessionId: z.string().min(1).max(64).nullable(),
+  userMessage: z.string().min(1).max(1_000_000),
 });
 
 // ==================== Configuration Types ====================

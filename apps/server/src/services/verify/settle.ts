@@ -9,6 +9,13 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import {
+  goalExhaustedBriefCopy,
+  goalReadyForReviewBriefCopy,
+  maybeContinueGoalLoop,
+  resolveGoalRoundBudget,
+  syncGoalToolState,
+} from './goalLoop';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
@@ -84,6 +91,10 @@ export const driveTaskFromVerify = async (
     // Only act on a terminally settled run (skip pending / verifying / repairing).
     if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
+    // Cheap read above, authoritative claim here: concurrent verifier
+    // callbacks would otherwise both pass the read and both act — spawning two
+    // rounds, or one spawning while the other pauses the task it just started.
+    if (!(await runModel.claimTaskDrive(run.id))) return;
 
     const operationModel = new AgentOperationModel(db, userId, workspaceId);
     const op = await operationModel.findById(operationId);
@@ -94,20 +105,65 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
+    const goal = taskModel.getGoalConfig(task);
+
     if (run.status === 'passed') {
-      if (task.automationMode) {
-        // Recurring tasks are parked back at `scheduled` and re-armed by the
-        // task lifecycle. Verify accepts this run, not the lifetime schedule.
-        log('verify passed → recurring task %s remains scheduled', taskOperation.taskId);
-      } else {
-        // Complete + cascade (checkpoint / sibling rollup / unlock downstream).
-        // The verify → TaskService → aiAgent → agentRuntime completion → verify
-        // cycle is safe statically since every use is call-time (inside this fn).
-        await new TaskService(db, userId, workspaceId).updateStatus({
-          id: taskOperation.taskId,
-          status: 'completed',
+      if (goal) {
+        // A goal's loop converging is NOT the same business fact as the task
+        // being done: the verifier's `passed` is a recommendation, the human's
+        // sign-off is the terminal event (the acceptance lifecycle already
+        // models this as delivered → accepted). Completing the task here would
+        // claim "done" on the agent's own say-so and leave the acceptance
+        // waiting on a decision nobody is told to make.
+        //
+        // So: park the task for review and raise the ONE brief a goal should
+        // produce. `AcceptanceService.accept` completes the task (with the same
+        // cascade) once the user signs off.
+        // `paused` is the only status the task vocabulary has for "stopped,
+        // needs a human" — and the UI renders every paused task identically as
+        // 待审阅. Without a reason on the row, a converged goal waiting for
+        // sign-off and a goal that gave up look the same. Write the reason so
+        // the task page can tell them apart.
+        const review = goalReadyForReviewBriefCopy(task, run.acceptanceId ?? undefined);
+        await taskModel.updateStatus(taskOperation.taskId, 'paused', {
+          error: review.summary,
         });
-        log('verify passed → task %s completed', taskOperation.taskId);
+        await new BriefModel(db, userId, workspaceId).create({
+          actions: review.actions,
+          agentId: task.assigneeAgentId || undefined,
+          priority: 'normal',
+          summary: review.summary,
+          taskId: taskOperation.taskId,
+          title: review.title,
+          trigger: 'task',
+          type: 'decision',
+        });
+        await syncGoalToolState({
+          db,
+          state: { phase: 'review', roundsRun: task.totalTopics || 0 },
+          task,
+          userId,
+          workspaceId,
+        });
+        log('verify passed → goal task %s parked for sign-off', taskOperation.taskId);
+      } else {
+        // Non-goal tasks keep the existing contract: verify passing completes
+        // the task and cascades (checkpoint / sibling rollup / downstream
+        // unlock). Changing that for every verify-enabled task is a separate
+        // product decision, deliberately not bundled into the goal loop.
+        if (task.automationMode) {
+          // Recurring tasks are parked back at `scheduled` and re-armed by the
+          // task lifecycle. Verify accepts this run, not the lifetime schedule.
+          log('verify passed → recurring task %s remains scheduled', taskOperation.taskId);
+        } else {
+          // The verify → TaskService → aiAgent → agentRuntime completion → verify
+          // cycle is safe statically since every use is call-time (inside this fn).
+          await new TaskService(db, userId, workspaceId).updateStatus({
+            id: taskOperation.taskId,
+            status: 'completed',
+          });
+          log('verify passed → task %s completed', taskOperation.taskId);
+        }
       }
     } else {
       // Two non-pass outcomes, kept distinct so an infra error never reads as a
@@ -116,21 +172,73 @@ export const driveTaskFromVerify = async (
       // - errored: the verifier could not run (infra) — the delivery was NOT
       //   evaluated, so we must not claim it "did not pass".
       const isErrored = run.status === 'errored';
+
+      // Goal outer loop: a *failed* (judged) run on a goal task spawns the next
+      // round in a fresh topic while budgets last, instead of parking the task
+      // on the user. `errored` stays on the pause path — verification never ran,
+      // so looping would burn budget without new signal.
+      let exhausted: 'exhausted-cost' | 'exhausted-rounds' | undefined;
+      if (goal && !isErrored) {
+        const outcome = await maybeContinueGoalLoop({ db, goal, task, userId, workspaceId });
+        if (outcome === 'continued') {
+          await syncGoalToolState({
+            db,
+            state: {
+              phase: 'running',
+              roundBudget: goal.maxIterations === null ? null : resolveGoalRoundBudget(goal),
+              roundsRun: (task.totalTopics || 0) + 1,
+            },
+            task,
+            userId,
+            workspaceId,
+          });
+          // No brief, no pause, no creator callback — the loop continues
+          // silently until it converges or a budget runs out. The drive marker
+          // was already stamped by the claim above.
+          return;
+        }
+        if (outcome === 'exhausted-cost' || outcome === 'exhausted-rounds') exhausted = outcome;
+        // 'spawn-failed' falls through to the regular pause + brief path.
+      }
+
+      const exhaustedCopy =
+        exhausted && goal ? goalExhaustedBriefCopy(task, exhausted, goal) : null;
+      const pauseSummary =
+        exhaustedCopy?.summary ??
+        (isErrored
+          ? 'Verification could not run (internal error); the delivery was not evaluated.'
+          : 'Delivery did not pass verification.');
       await new BriefModel(db, userId, workspaceId).create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
         agentId: task.assigneeAgentId || undefined,
         priority: 'urgent',
-        summary: isErrored
-          ? 'Verification could not run (internal error); the delivery was not evaluated.'
-          : 'Delivery did not pass verification.',
+        summary: pauseSummary,
         taskId: taskOperation.taskId,
-        title: isErrored
-          ? `${task.identifier} verification errored`
-          : `${task.identifier} failed verification`,
+        title:
+          exhaustedCopy?.title ??
+          (isErrored
+            ? `${task.identifier} verification errored`
+            : `${task.identifier} failed verification`),
         trigger: 'task',
         type: 'error',
       });
-      await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: null });
+      // Same reasoning as the passed branch: the reason has to live on the task
+      // row, not only in a brief. The task detail feed deliberately excludes
+      // briefs, so a brief-only explanation is invisible from the task page.
+      await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
+      if (goal) {
+        await syncGoalToolState({
+          db,
+          state: {
+            pausedReason: exhausted ?? (isErrored ? 'verify-errored' : 'verify-failed'),
+            phase: 'paused',
+            roundsRun: task.totalTopics || 0,
+          },
+          task,
+          userId,
+          workspaceId,
+        });
+      }
       log(
         isErrored
           ? 'verify errored → task %s paused + brief'
@@ -167,7 +275,7 @@ export const driveTaskFromVerify = async (
       );
     }
 
-    await runModel.setMetadata(run.id, { taskDrivenAt: new Date().toISOString() });
+    // The drive marker was stamped by the claim at the top of this function.
   } catch (error) {
     log('driveTaskFromVerify failed for op %s (non-fatal): %O', operationId, error);
   }

@@ -113,6 +113,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
 - [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
 - [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
+- [ ] An embedded/quoted document (evidence, log, attached report) folds to a **titled row** (first meaningful line as the label) expanding to full text — not a first-N-px cropped preview with a fade; expanded, it stays in a quiet container with a capped heading scale so it never masquerades as page structure.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 

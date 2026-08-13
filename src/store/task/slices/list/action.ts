@@ -85,8 +85,15 @@ export class TaskListSliceActionImpl {
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
     await Promise.all([
-      mutate(taskKeys.list(listAgentId, listQueryVisibility)),
+      // Both orderings of the same list: the Tasks page holds the createdAt
+      // entry and Home the updatedAt one, and an edit invalidates both — an
+      // edit is exactly what moves a task in the updatedAt ordering.
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'createdAt')),
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'updatedAt')),
       mutate(taskKeys.groupList(listAgentId, listVisibility)),
+      // A schedule can be attached, changed or removed from any task edit, so
+      // the automated roll-up has to be revalidated alongside the main list.
+      mutate(taskKeys.scheduledList(ALL_AGENTS_LIST_KEY)),
     ]);
   };
 
@@ -137,6 +144,7 @@ export class TaskListSliceActionImpl {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
           groups: DEFAULT_KANBAN_GROUPS,
+          hasGoal: false,
           visibility: filterToServerVisibility(listVisibility),
         });
       },
@@ -153,16 +161,55 @@ export class TaskListSliceActionImpl {
     );
   };
 
+  /**
+   * The automated-task roll-up behind Home's "Scheduled" section. Always
+   * cross-agent and unnarrowed by visibility: Home is an overview, not a
+   * continuation of the Task page's filter chip — so it needs neither the
+   * agent scope nor the visibility argument the main list carries, and its
+   * own state fields keep it from colliding with `tasks`.
+   */
+  useFetchScheduledTaskList = (options: { enabled?: boolean; limit?: number } = {}) => {
+    const { enabled = true, limit } = options;
+
+    return useClientDataSWR(
+      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY) : null,
+      async () =>
+        this.fetchTaskList({ automated: true, hasGoal: false, limit, orderBy: 'updatedAt' }),
+      {
+        onSuccess: (data: { data: TaskListItem[]; total: number }) => {
+          this.#set(
+            {
+              isScheduledTaskListInit: true,
+              scheduledTasks: data.data,
+              scheduledTasksTotal: data.total,
+            },
+            false,
+            'useFetchScheduledTaskList/onSuccess',
+          );
+        },
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
   useFetchTaskList = (
     options: {
       agentId?: string;
       allAgents?: boolean;
       enabled?: boolean;
+      /**
+       * Newest-first by creation unless a caller asks otherwise. A block that
+       * calls itself "recent" and prints `updatedAt` has to order by it too, or
+       * the task that just moved falls off the page in favour of a newer idle
+       * one. Part of the cache key: the Tasks page and Home read the same
+       * `tasks` field and must not serve each other's ordering.
+       */
+      orderBy?: 'createdAt' | 'updatedAt';
       /** Override the Task page's persisted filter for embedded consumers. */
       visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, visibility } = options;
+    const { agentId, allAgents = false, enabled = true, orderBy, visibility } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
     const { listAgentId, listQueryVisibility } = this.#get();
@@ -183,10 +230,12 @@ export class TaskListSliceActionImpl {
     }
 
     return useClientDataSWR(
-      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility) : null,
+      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility, orderBy) : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
           ...(allAgents ? {} : { assigneeAgentId: id }),
+          hasGoal: false,
+          orderBy,
           visibility: filterToServerVisibility(listVisibility),
         });
       },

@@ -1,4 +1,5 @@
 import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -128,7 +129,17 @@ export const aiProviderRouter = router({
     .input(z.object({ id: z.string() }))
 
     .query(async ({ input, ctx }): Promise<AiProviderDetailItem | undefined> => {
-      return ctx.aiInfraRepos.getAiProviderDetail(input.id, KeyVaultsGateKeeper.getUserKeyVaults);
+      const detail = await ctx.aiInfraRepos.getAiProviderDetail(
+        input.id,
+        KeyVaultsGateKeeper.getUserKeyVaults,
+      );
+
+      // restricted API keys must not exfiltrate decrypted provider credentials
+      if (detail && ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        return { ...detail, keyVaults: undefined };
+      }
+
+      return detail;
     }),
 
   getAiProviderList: aiProviderProcedure.query(async ({ ctx }) => {
@@ -138,9 +149,24 @@ export const aiProviderRouter = router({
   getAiProviderRuntimeState: aiProviderProcedure
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
-      return getUserScopedAiProviderRuntimeState(ctx.userId, () =>
+      const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
         ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
       );
+
+      // restricted API keys must not exfiltrate decrypted provider credentials
+      if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        return {
+          ...state,
+          runtimeConfig: Object.fromEntries(
+            Object.entries(state.runtimeConfig).map(([id, config]) => [
+              id,
+              { ...config, keyVaults: {} },
+            ]),
+          ),
+        };
+      }
+
+      return state;
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is

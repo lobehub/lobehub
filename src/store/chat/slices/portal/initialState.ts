@@ -24,6 +24,7 @@ export enum PortalViewType {
   TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  Topic = 'topic',
   TopicComments = 'topicComments',
   TopicCommentThread = 'topicCommentThread',
   VerifyReport = 'verifyReport',
@@ -72,6 +73,7 @@ export type PortalViewData =
       type: PortalViewType.ToolUI;
     }
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
+  | { topicId: string; type: PortalViewType.Topic }
   | { agentId: string; type: PortalViewType.GroupThread }
   | { taskId: string; type: PortalViewType.TaskDetail }
   | {

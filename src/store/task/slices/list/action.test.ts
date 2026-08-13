@@ -65,7 +65,23 @@ describe('TaskListSliceAction', () => {
 
       await useTaskStore.getState().refreshTaskList();
 
-      expect(mutate).toHaveBeenCalledWith(['task:list', 'agt_1', 'private']);
+      expect(mutate).toHaveBeenCalledWith(['task:list', 'agt_1', 'private', 'createdAt']);
+    });
+
+    // Home reads the same list under a different ordering. An edit is exactly
+    // what moves a task in that ordering, so refreshing one and not the other
+    // leaves Home showing a stale order with no way to notice.
+    it('should invalidate both orderings of the list', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        listAgentId: 'agt_1',
+        listQueryVisibility: 'private',
+        listVisibility: 'private',
+      });
+
+      await useTaskStore.getState().refreshTaskList();
+
+      expect(mutate).toHaveBeenCalledWith(['task:list', 'agt_1', 'private', 'updatedAt']);
     });
   });
 
@@ -77,7 +93,23 @@ describe('TaskListSliceAction', () => {
       useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__all__', 'all'],
+        ['task:list', '__all__', 'all', 'createdAt'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+    });
+
+    // Without the ordering in the key, Home and the Tasks page share one cache
+    // entry and whichever mounts first decides the other's order.
+    it('keys the cache by ordering so two surfaces cannot serve each other stale order', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, orderBy: 'updatedAt', visibility: 'all' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:list', '__all__', 'all', 'updatedAt'],
         expect.any(Function),
         expect.any(Object),
       );

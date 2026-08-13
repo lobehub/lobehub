@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerHeteroCommand } from './hetero';
+import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
 const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
   mockResolveHeteroSpawnCommand: vi.fn(),
@@ -102,24 +104,13 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (
-        agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder',
-        command?: string,
-      ) => ({
-        command:
-          command ??
-          (agentType === 'amp'
-            ? 'amp'
-            : agentType === 'codex'
-              ? 'codex'
-              : agentType === 'opencode'
-                ? 'opencode'
-                : agentType === 'pi'
-                  ? 'pi'
-                  : agentType === 'qoder'
-                    ? 'qodercli'
-                    : 'claude'),
-      }),
+      async (agentType: LocalHeterogeneousAgentType, command?: string) => {
+        const defaultCommand = HETEROGENEOUS_AGENT_CONFIGS.find(
+          ({ type }) => type === agentType,
+        )!.defaultCommand;
+
+        return { command: command ?? defaultCommand };
+      },
     );
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
@@ -164,6 +155,12 @@ describe('hetero exec command', () => {
     }
   };
 
+  it('supports exactly the local agent descriptor types', () => {
+    expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
+      HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+    );
+  });
+
   it('rejects unsupported agent types via process.exit(2)', async () => {
     await runCmd(['hetero', 'exec', '--type', 'kimi-cli', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -207,7 +204,7 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('runs Qoder with its default command and forwards model but not effort', async () => {
+  it('runs Qoder with its default command and forwards model and effort', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
     await runCmd([
@@ -228,7 +225,34 @@ describe('hetero exec command', () => {
       expect.objectContaining({
         agentType: 'qoder',
         command: 'qodercli',
-        extraArgs: ['--model', 'Claude Sonnet 4.5'],
+        extraArgs: ['--model', 'Claude Sonnet 4.5', '--reasoning-effort', 'high'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
+  it('runs Kimi Code with its default command and forwards model but not effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'kimi-code',
+      '--prompt',
+      'do thing',
+      '--model',
+      'kimi-for-coding',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('kimi-code', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        extraArgs: ['--model', 'kimi-for-coding'],
         prompt: 'do thing',
       }),
     );
@@ -250,6 +274,15 @@ describe('hetero exec command', () => {
 
     const call = mockSpawnAgent.mock.calls[0][0];
     expect(call.operationId).toBe('op-server-allocated');
+    expect(call.includePartialMessages).toBe(true);
+  });
+
+  it('does not request Claude partial-message framing for other heterogeneous agents', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi']);
+
+    expect(mockSpawnAgent.mock.calls[0][0].includePartialMessages).toBe(false);
   });
 
   it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
@@ -271,6 +304,30 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
       extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
+  it('passes CodeBuddy --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codebuddy',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('codebuddy', undefined);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      agentType: 'codebuddy',
+      command: 'codebuddy',
+      extraArgs: ['--model', 'gpt-5.4', '--effort', 'high'],
     });
   });
 
@@ -387,6 +444,35 @@ describe('hetero exec command', () => {
         agentType: 'amp',
         command: 'amp',
         extraArgs: ['--mode', 'high'],
+      }),
+    );
+  });
+
+  it('runs Cursor with model, resume, and native args', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'cursor',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'cursor-session',
+      '--model',
+      'sonnet-4-thinking',
+      '--agent-arg=--mode',
+      '--agent-arg=plan',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('cursor', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        command: 'agent',
+        extraArgs: ['--mode', 'plan', '--model', 'sonnet-4-thinking'],
+        resumeSessionId: 'cursor-session',
       }),
     );
   });
@@ -771,6 +857,38 @@ describe('hetero exec command', () => {
       topicId: 'topic-1',
     });
     expect(mockHeteroFinishMutate.mock.calls[0][0].error.body).toBeUndefined();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('preserves a working-directory error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockRejectedValue(
+      Object.assign(new Error('Working directory does not exist: /deleted/worktree'), {
+        code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { code: 'working_directory_not_found' },
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

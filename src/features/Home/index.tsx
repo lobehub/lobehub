@@ -6,6 +6,7 @@ import { lazy, memo, Suspense, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
@@ -13,6 +14,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
@@ -28,6 +30,7 @@ import type { HomeMode } from './types';
 // no-op. Lazy so the home bundle doesn't pay for the chat stack until a run is
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
+const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -56,12 +59,17 @@ const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_
 const BUBBLE_INLINE_MIN = 1080;
 const MINIMAL_STACK_GAP = 24;
 /**
- * The greeting's line box — 22px at a 1.4 line-height, from HomeHeader. Its
- * height plus the gap is what the block must shed below itself to land the
- * composer, not the pair's midpoint, on the center of the lane.
+ * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
+ * from AgentSelect) over the greeting line (22px × 1.4, from HomeHeader) with
+ * an 8px gap. That stack's height plus the gap below it is what the block must
+ * shed under itself to land the composer, not the stack's midpoint, on the
+ * center of the lane.
  */
 const MINIMAL_GREETING_LINE = Math.round(22 * 1.4);
-const MINIMAL_LIFT = MINIMAL_GREETING_LINE + MINIMAL_STACK_GAP;
+const MINIMAL_SWITCHER_ROW = 28;
+const MINIMAL_HEADER_GAP = 8;
+const MINIMAL_HEADER_HEIGHT = MINIMAL_SWITCHER_ROW + MINIMAL_HEADER_GAP + MINIMAL_GREETING_LINE;
+const MINIMAL_LIFT = MINIMAL_HEADER_HEIGHT + MINIMAL_STACK_GAP;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid
@@ -273,10 +281,14 @@ const Home = memo(() => {
   const [inputValue, setInputValue] = useState('');
 
   const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
+  const portalViewType = useChatStore(chatPortalSelectors.currentViewType);
+  const acceptancePortalOpen = isAcceptancePortalView(portalViewType);
   // Mount the drawer on first open and keep it mounted afterwards, so its
   // close animation can play instead of the panel vanishing with the state.
   const [drawerMounted, setDrawerMounted] = useState(false);
   if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
+  const [acceptanceDrawerMounted, setAcceptanceDrawerMounted] = useState(false);
+  if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
@@ -368,6 +380,11 @@ const Home = memo(() => {
       {drawerMounted && (
         <Suspense fallback={null}>
           <TopicChatDrawer />
+        </Suspense>
+      )}
+      {acceptanceDrawerMounted && (
+        <Suspense fallback={null}>
+          <AcceptancePortalDrawer />
         </Suspense>
       )}
     </Flexbox>

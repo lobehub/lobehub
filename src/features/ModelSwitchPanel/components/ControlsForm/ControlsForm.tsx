@@ -4,6 +4,7 @@ import { Flexbox, Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import isEqual from 'fast-deep-equal';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -31,6 +32,7 @@ import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
 import { GPT56ReasoningEffortSlider } from './GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from './Grok45ReasoningEffortSlider';
+import Grok46ReasoningEffortSlider from './Grok46ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from './Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
@@ -54,6 +56,8 @@ import ThinkingLevel4Slider from './ThinkingLevel4Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
+const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
+
 interface ControlsFormProps {
   /**
    * Override the config source. Defaults to the agent's own chatConfig; the
@@ -61,6 +65,14 @@ interface ControlsFormProps {
    */
   chatConfig?: LobeAgentChatConfig;
   disabled?: boolean;
+  /**
+   * Hide the reasoning-effort family + reasoningMode controls. The main-agent
+   * params panel sets this: those fields migrated to user-level model-instance
+   * settings edited via the ChatInput Effort control, so agent chatConfig
+   * writes here would be ignored at send time. The sub-agent panel keeps them
+   * as explicit per-sub-agent overrides.
+   */
+  hideReasoningParams?: boolean;
   model?: string;
   /**
    * Override the write sink. Defaults to updating the agent's chatConfig; the
@@ -95,6 +107,7 @@ const ControlsForm = memo<ControlsFormProps>(
   ({
     chatConfig: chatConfigProp,
     disabled,
+    hideReasoningParams,
     model: modelProp,
     onChatConfigChange,
     onUpdatingChange,
@@ -378,6 +391,16 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <Grok46ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'grok4_6ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <Hy3ReasoningEffortSlider />,
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
@@ -566,6 +589,7 @@ const ControlsForm = memo<ControlsFormProps>(
           variant={'borderless'}
           items={
             (modelExtendParams || [])
+              .filter((item: any) => !(hideReasoningParams && REASONING_PARAMS_SET.has(item)))
               .map((item: any) => items.find((i) => i.name === item))
               .filter(Boolean) as FormItemProps[]
           }

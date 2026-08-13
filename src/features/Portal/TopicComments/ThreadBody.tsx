@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import {
   useTopicCommentDetail,
   useTopicCommentReplies,
@@ -100,7 +100,7 @@ const ThreadBody = memo(() => {
     );
   }
   if (state === 'loading') {
-    return <Loading debugId="TopicCommentThreadPortal" />;
+    return <SurfaceSkeleton header={false} variant={'list'} />;
   }
   if (!root.data) return null;
 

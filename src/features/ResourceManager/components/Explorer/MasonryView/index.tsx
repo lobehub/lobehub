@@ -8,8 +8,8 @@ import { type UIEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { sortFileList } from '@/features/ResourceManager/store/selectors';
 import { useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 import type { ResourceQueryParams } from '@/types/resource';
@@ -18,6 +18,8 @@ import {
   useExplorerSelectionActions,
   useExplorerSelectionSummary,
 } from '../hooks/useExplorerSelection';
+import { isQueryNavigation } from '../isQueryNavigation';
+import SourceFilter from '../ToolBar/SourceFilter';
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
 import MasonryItemWrapper from './MasonryItem/MasonryItemWrapper';
 import MasonryViewSkeleton from './Skeleton';
@@ -80,18 +82,10 @@ const MasonryView = memo(function MasonryView({
 
   const { queryParams: currentQueryParams, hasMore, loadMoreResources } = useFileStore();
 
-  const isNavigating = useMemo(() => {
-    if (!currentQueryParams || !queryParams) return false;
-
-    // Sidebar mode toggle is a "space switch" — treat visibility change as
-    // navigation so the skeleton shows while the new fetch is in flight.
-    return (
-      currentQueryParams.libraryId !== queryParams.libraryId ||
-      currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category ||
-      currentQueryParams.visibility !== queryParams.visibility
-    );
-  }, [currentQueryParams, queryParams]);
+  const isNavigating = useMemo(
+    () => isQueryNavigation(currentQueryParams, queryParams),
+    [currentQueryParams, queryParams],
+  );
 
   // Map ResourceItem[] to FileListItem[] for compatibility
   // Spread `item` first so file-backed fields (e.g. `fileId`) are preserved —
@@ -248,6 +242,8 @@ const MasonryView = memo(function MasonryView({
                   ns: 'components',
                 })}
           </span>
+          <Flexbox flex={1} />
+          <SourceFilter />
         </Flexbox>
         {showSelectAllHint && (
           <Flexbox

@@ -7,7 +7,7 @@ import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
-import { hookDispatcher } from '../hooks';
+import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
@@ -524,6 +524,29 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
         type: ChatErrorType.FreePlanLimit,
       }),
     });
+  });
+
+  it('rethrows critical webhook failures after terminal persistence', async () => {
+    const lifecycle = buildLifecycle();
+    const persistCompletion = vi
+      .spyOn(lifecycle as any, 'persistCompletion')
+      .mockResolvedValue(undefined);
+    const dispatch = vi
+      .spyOn(hookDispatcher, 'dispatch')
+      .mockRejectedValue(
+        new CriticalHookDeliveryError('task-on-complete', new Error('qstash down')),
+      );
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await expect(
+      lifecycle.dispatchHooks(
+        'op-1',
+        { metadata: { _hooks: [] }, status: 'interrupted' },
+        'interrupted',
+      ),
+    ).rejects.toThrow('Critical webhook delivery failed: task-on-complete');
+
+    expect(persistCompletion).toHaveBeenCalledBefore(dispatch);
   });
 });
 

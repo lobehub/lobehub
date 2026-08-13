@@ -13,6 +13,7 @@ const addedDescriptionKeys = [
   'lobehub.gemini-3.1-flash-image-preview.description',
   'lobehub.gemini-3.1-flash-image-preview:image.description',
   'lobehub.qwen3.8-max.description',
+  'lobehub.grok-4.6.description',
 ] as const;
 
 describe('LobeHub online model descriptions', () => {

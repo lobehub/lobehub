@@ -1,45 +1,24 @@
 'use client';
 
-import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { acceptanceRejectIntents } from '@lobechat/const/verify';
+import type { AcceptanceRejectIntent, AcceptanceReviewAnnotation } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
-import {
-  Button,
-  createModal,
-  Modal,
-  type ModalInstance,
-  useModalContext,
-} from '@lobehub/ui/base-ui';
+import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { t } from 'i18next';
-import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
 import { AttachmentStrip, AttachmentUploadButton, useFeedbackAttachments } from './attachments';
+import { frostedModalStyles } from './modals';
 
 const styles = createStaticStyles(({ css }) => ({
-  canvasWrap: css`
-    position: relative;
-
-    .acceptance-annotate-fullscreen {
-      position: absolute;
-      z-index: 5;
-      inset-block-start: 8px;
-      inset-inline-end: 8px;
-
-      border: 1px solid ${cssVar.colorBorderSecondary};
-
-      opacity: 0;
-      background: ${cssVar.colorBgContainer};
-
-      transition: opacity 0.2s;
-    }
-
-    &:hover {
-      .acceptance-annotate-fullscreen {
-        opacity: 1;
-      }
+  modalPopup: css`
+    > div {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
     }
   `,
   fullscreenBody: css`
@@ -47,6 +26,25 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     gap: 16px;
     min-height: 0;
+
+    @media (width <= 640px) {
+      flex-direction: column;
+      gap: 12px;
+    }
+  `,
+  modalBody: css`
+    overflow: hidden;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+
+    min-height: 0;
+  `,
+  modalFooter: css`
+    flex: none;
+    padding-block: 12px;
+    padding-inline: 20px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   regionIndex: css`
     flex: none;
@@ -72,6 +70,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 320px;
     min-width: 0;
+
+    @media (width <= 640px) {
+      flex: 0 1 auto;
+      width: 100%;
+      max-height: 36%;
+    }
   `,
   thumb: css`
     cursor: pointer;
@@ -181,11 +185,27 @@ const readDraft = (key: string | undefined): RejectDraft | null => {
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
+export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
+
+export const rejectModalTitle = (title: string, description?: string) => ({
+  description: description?.trim() || undefined,
+  title,
+});
+
+export const canDismissRejectModal = (loading: boolean) => !loading;
+
 interface CheckRejectModalProps {
+  checkDescription?: string;
   checkTitle: string;
   /** Stable key (the check id) for the refresh-surviving draft cache. */
   draftKey?: string;
   evidence: RejectableEvidence[];
+  /**
+   * Regions to open with — set when confirming a model proposal, so the
+   * reviewer edits the model's boxes instead of redrawing them. Any stored
+   * draft is ignored in that case: the proposal is the newer starting point.
+   */
+  initialAnnotations?: AcceptanceReviewAnnotation[];
   /** Feedback already typed in the focused detail before opening annotation. */
   initialComment?: string;
   /** Perform the reject; resolve true to close, false to stay open. */
@@ -193,6 +213,7 @@ interface CheckRejectModalProps {
     annotations: AcceptanceReviewAnnotation[];
     comment: string;
     fileIds: string[];
+    rejectIntent: AcceptanceRejectIntent;
   }) => Promise<boolean>;
 }
 
@@ -204,41 +225,58 @@ export const mergeRejectComments = (initialComment = '', storedComment = '') => 
   return `${initial}\n\n${stored}`;
 };
 
-const CheckRejectContent = memo<CheckRejectModalProps>(
-  ({ checkTitle, draftKey, evidence, initialComment, onConfirm }) => {
+const CheckRejectModalContent = memo<CheckRejectModalProps>(
+  ({ checkTitle, draftKey, evidence, initialAnnotations, initialComment, onConfirm }) => {
     const { t: translate } = useTranslation('verify');
-    const { close } = useModalContext();
+    const { close, setCanDismissByClickOutside } = useModalContext();
     const [draft] = useState(() => readDraft(draftKey));
     const [comment, setComment] = useState(() =>
-      mergeRejectComments(initialComment, draft?.comment),
+      // A proposal supersedes the stored draft rather than merging with it —
+      // splicing the model's sentence into half-typed notes would produce
+      // feedback neither party wrote.
+      initialAnnotations?.length
+        ? (initialComment ?? '')
+        : mergeRejectComments(initialComment, draft?.comment),
     );
     const [loading, setLoading] = useState(false);
     const [activeEvidenceId, setActiveEvidenceId] = useState(evidence[0]?.id);
-    const [annotations, setAnnotations] = useState<DraftAnnotationEntry[]>(
-      // Only restore regions whose evidence still exists — a new round may
-      // have replaced the artifacts since the draft was written.
-      () =>
-        (draft?.annotations ?? [])
+    /**
+     * Which of the three jobs this reject is doing. Defaults to `unmet` — the
+     * common case, and the only one the check spec can be judged against — but
+     * the reviewer can reclassify, which is the entire point: a `new-idea`
+     * logged as `unmet` is the label noise that caps every downstream model.
+     */
+    const [intent, setIntent] = useState<AcceptanceRejectIntent>('unmet');
+    const [annotations, setAnnotations] = useState<DraftAnnotationEntry[]>(() => {
+      const source = initialAnnotations?.length ? initialAnnotations : (draft?.annotations ?? []);
+      return (
+        source
+          // Only restore regions whose evidence still exists — a new round may
+          // have replaced the artifacts since the draft was written.
           .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
-          .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
-    );
+          .map((entry) => ({
+            comment: entry.comment ?? '',
+            evidenceId: entry.evidenceId,
+            key: nextAnnotationKey(),
+            rect: entry.rect,
+          }))
+      );
+    });
+
+    useEffect(() => {
+      setCanDismissByClickOutside(canDismissRejectModal(loading));
+    }, [loading, setCanDismissByClickOutside]);
 
     // Your own screenshots (paste or upload) — attached to the reject alongside
     // the note and any circled regions.
     const { attachments, fileIds, handlePaste, remove, uploadFiles, uploading } =
       useFeedbackAttachments();
 
-    // Fullscreen inspect-and-annotate: same draft state, a zoomable stage.
-    const [fullscreen, setFullscreen] = useState(false);
     const [zoom, setZoom] = useState(1);
     const viewportRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState<number>();
-    // The stage edits the SHARED draft; Cancel must be able to hand back the
-    // annotations exactly as they were when the stage opened.
-    const fullscreenSnapshot = useRef<DraftAnnotationEntry[]>([]);
-
     useLayoutEffect(() => {
-      if (!fullscreen) return;
+      if (evidence.length === 0) return;
       let observer: ResizeObserver | undefined;
       let raf = 0;
       // The Modal body mounts async (portal + open animation), so the ref may
@@ -261,7 +299,7 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
         cancelAnimationFrame(raf);
         observer?.disconnect();
       };
-    }, [fullscreen, activeEvidenceId]);
+    }, [activeEvidenceId, evidence.length]);
 
     // Persist the draft as it is typed; an empty draft cleans the slot up.
     useEffect(() => {
@@ -310,6 +348,7 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
             })),
           comment: comment.trim(),
           fileIds,
+          rejectIntent: intent,
         });
         if (confirmed) {
           if (draftKey) localStorage.removeItem(draftStorageKey(draftKey));
@@ -379,96 +418,48 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
       </Flexbox>
     );
 
-    return (
-      <>
-        {/* Only the body scrolls — the action bar below stays pinned to the
-          modal's bottom edge however tall the evidence grows. */}
-        <Flexbox
-          flex={1}
-          gap={16}
-          paddingBlock={12}
-          paddingInline={16}
-          style={{ minHeight: 0, overflowY: 'auto' }}
-        >
-          <Text fontSize={13} type={'secondary'}>
-            {translate('acceptance.review.rejectDescription', { title: checkTitle })}
+    const footer = (
+      <Flexbox gap={10} style={{ width: '100%' }}>
+        <Text fontSize={12} type={'secondary'}>
+          {hasEvidence
+            ? translate('acceptance.review.supplement')
+            : translate('acceptance.review.rejectDescription', { title: checkTitle })}
+        </Text>
+        {/* Classifying the reject costs one click and is what keeps the three
+            jobs this button does from collapsing into one unusable label. */}
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          <Text fontSize={12} type={'secondary'}>
+            {translate('acceptance.review.intentLabel')}
           </Text>
-
-          {/* Circling the evidence is the primary feedback act; region notes
-              sit right under the canvas. Fullscreen opens the zoomable stage
-              for pixel-level inspection on large screenshots. */}
-          {hasEvidence && (
-            <Flexbox gap={8}>
-              <Flexbox gap={2}>
-                <Text strong fontSize={13}>
-                  {translate('acceptance.review.annotate')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {translate('acceptance.review.annotateHint')}
-                </Text>
-              </Flexbox>
-              {thumbnails}
-              {activeEvidence && (
-                <div className={styles.canvasWrap}>
-                  <AnnotationCanvas
-                    annotations={activeAnnotations}
-                    src={activeEvidence.fileUrl}
-                    {...canvasHandlers}
-                  />
-                  <ActionIcon
-                    className={'acceptance-annotate-fullscreen'}
-                    icon={Maximize2}
-                    size={'small'}
-                    title={translate('acceptance.review.fullscreen')}
-                    onClick={() => {
-                      setZoom(1);
-                      fullscreenSnapshot.current = annotations;
-                      setFullscreen(true);
-                    }}
-                  />
-                </div>
-              )}
-              {annotationInputs}
-            </Flexbox>
-          )}
-
-          <Flexbox gap={6}>
-            {hasEvidence && (
-              <Text fontSize={12} type={'secondary'}>
-                {translate('acceptance.review.supplement')}
-              </Text>
-            )}
-            <TextArea
-              autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
-              placeholder={translate('acceptance.review.rejectPlaceholder')}
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              onPaste={handlePaste}
-            />
-            {/* The picker sits on its own row right under the input; the
-                thumbnails stack BELOW it. Keeping them on separate rows means
-                the button never shifts as screenshots pile up — its position
-                is fixed, independent of the attachment count. */}
-            <Flexbox align={'flex-start'} gap={8}>
-              <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
-              <AttachmentStrip
-                attachments={attachments}
-                disabled={loading}
-                uploading={uploading}
-                onRemove={remove}
-              />
-            </Flexbox>
-          </Flexbox>
+          {acceptanceRejectIntents.map((value) => (
+            <Button
+              disabled={loading}
+              key={value}
+              size={'small'}
+              type={intent === value ? 'primary' : 'default'}
+              onClick={() => setIntent(value)}
+            >
+              {translate(`acceptance.review.intent.${value}` as never)}
+            </Button>
+          ))}
         </Flexbox>
-
-        <Flexbox
-          horizontal
-          gap={8}
-          justify={'flex-end'}
-          paddingBlock={12}
-          paddingInline={16}
-          style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`, flex: 'none' }}
-        >
+        <TextArea
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          placeholder={translate('acceptance.review.rejectPlaceholder')}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          onPaste={handlePaste}
+        />
+        <Flexbox horizontal align={'flex-start'} gap={8}>
+          <Flexbox horizontal flex={1} gap={8}>
+            <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+            <AttachmentStrip
+              attachments={attachments}
+              disabled={loading}
+              uploading={uploading}
+              onRemove={remove}
+            />
+          </Flexbox>
           <Button disabled={loading} onClick={close}>
             {translate('acceptance.actions.cancel')}
           </Button>
@@ -481,48 +472,22 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
             {translate('acceptance.review.confirmReject')}
           </Button>
         </Flexbox>
+      </Flexbox>
+    );
 
-        {/* Fullscreen inspect-and-annotate stage — a base-ui Modal so the mask,
-            theme scope and stacking are handled by the same layer system as
-            the reject dialog it opens over (nested modals stack correctly).
-            Same draft state; the stage is edit-in-place, so it closes through
-            explicit Done/Cancel (Cancel restores the entry snapshot). Zoom
-            lives as a floating pill over the stage; the how-to line sits with
-            the comments it produces. */}
-        <Modal
-          centered
-          destroyOnHidden
-          footer={null}
-          height={'94vh'}
-          open={fullscreen}
-          title={translate('acceptance.review.annotate')}
-          width={'min(98vw, 1680px)'}
-          styles={{
-            body: {
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              height: '100%',
-              minHeight: 0,
-              paddingBlock: 12,
-            },
-          }}
-          onCancel={() => setFullscreen(false)}
-        >
-          {activeEvidence && (
-            <>
+    return (
+      <div className={styles.modalBody}>
+        <Flexbox flex={1} gap={12} padding={hasEvidence ? 16 : 20} style={{ minHeight: 0 }}>
+          {activeEvidence ? (
+            <Flexbox gap={12} height={'100%'} style={{ minHeight: 0 }}>
               {thumbnails}
               <div className={styles.fullscreenBody} style={{ position: 'relative' }}>
                 <div className={styles.viewport} ref={viewportRef}>
                   <div className={styles.viewportInner}>
                     <AnnotationCanvas
                       annotations={activeAnnotations}
+                      imageWidth={viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined}
                       src={activeEvidence.fileUrl}
-                      imageWidth={
-                        // -2 keeps the frame's own border inside the viewport at
-                        // fit zoom, so no phantom horizontal scrollbar.
-                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
-                      }
                       {...canvasHandlers}
                     />
                   </div>
@@ -561,47 +526,50 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
                   {annotationInputs}
                 </div>
               </div>
-              <Flexbox horizontal gap={8} justify={'flex-end'} style={{ flex: 'none' }}>
-                <Button
-                  onClick={() => {
-                    setAnnotations(fullscreenSnapshot.current);
-                    setFullscreen(false);
-                  }}
-                >
-                  {translate('acceptance.actions.cancel')}
-                </Button>
-                <Button type={'primary'} onClick={() => setFullscreen(false)}>
-                  {translate('acceptance.review.fullscreenDone')}
-                </Button>
-              </Flexbox>
-            </>
+            </Flexbox>
+          ) : (
+            <Text fontSize={13} type={'secondary'}>
+              {translate('acceptance.review.rejectDescription', { title: checkTitle })}
+            </Text>
           )}
-        </Modal>
-      </>
+        </Flexbox>
+        <div className={styles.modalFooter}>{footer}</div>
+      </div>
     );
   },
 );
 
-CheckRejectContent.displayName = 'AcceptanceCheckRejectContent';
+CheckRejectModalContent.displayName = 'AcceptanceCheckRejectModalContent';
 
-/** Per-check reject dialog — a note plus circled regions; fullscreen zoom to inspect. */
-export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInstance =>
-  createModal({
-    content: <CheckRejectContent {...options} />,
+/** Per-check reject modal — media gets a near-fullscreen annotation surface without losing context. */
+export const openCheckRejectModal = (options: CheckRejectModalProps) => {
+  const modalTitle = rejectModalTitle(options.checkTitle, options.checkDescription);
+
+  return createModal({
+    classNames: { popup: styles.modalPopup },
+    content: <CheckRejectModalContent {...options} />,
     footer: null,
     maskClosable: true,
-    // The content region hosts its own scroll body + pinned action bar — it
-    // must not scroll (or pad) as a whole, or the bar scrolls away with it.
     styles: {
-      backdrop: { backdropFilter: 'blur(4px)' },
-      content: {
+      ...frostedModalStyles,
+      content: { display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', padding: 0 },
+      popup: {
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0,
-        overflow: 'hidden',
-        padding: 0,
+        height: CHECK_REJECT_MODAL_SIZE.height,
+        maxWidth: CHECK_REJECT_MODAL_SIZE.width,
       },
     },
-    title: t('acceptance.review.reject', { ns: 'verify' }),
-    width: 'min(92vw, 640px)',
+    title: (
+      <Flexbox gap={2}>
+        <Text strong>{modalTitle.title}</Text>
+        {modalTitle.description && (
+          <Text fontSize={12} type={'secondary'}>
+            {modalTitle.description}
+          </Text>
+        )}
+      </Flexbox>
+    ),
+    width: CHECK_REJECT_MODAL_SIZE.width,
   });
+};

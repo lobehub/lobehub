@@ -224,6 +224,8 @@ export interface AgentRunRequestMessage {
    * compatibility with older servers.
    */
   args?: string[];
+  /** Seed assistant message that receives terminal state from the CLI run. */
+  assistantMessageId?: string;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch

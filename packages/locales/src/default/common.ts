@@ -59,6 +59,7 @@ export default {
     'The "Sub-topic" feature is unavailable in the current mode. To use this feature, please switch to Postgres/Pglite DB mode or use LobeHub Cloud.',
   'branchingRequiresSavedTopic':
     'Current topic is not saved, please save it first to use subtopic feature',
+  'viewExecutionDetails': 'View execution details',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
   'alreadyUpToDate': 'Already Up to Date',
@@ -304,6 +305,15 @@ export default {
 
   'cmdk.video': 'AI Video',
 
+  'betaFeedback.desc':
+    'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.discord.action': 'Open Discord',
+  'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
+  'betaFeedback.discord.title': 'Discord',
+  'betaFeedback.title': 'Workspace beta feedback',
+  'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
+  'betaFeedback.wechat.title': 'WeChat group',
+
   'confirm': 'Confirm',
   'continue': 'Continue',
   'contact': 'Contact Us',
@@ -463,6 +473,8 @@ export default {
   'deleteSharedOwnerOnly':
     "Only a workspace owner can delete this — it carries other members' conversations",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
+  'openOnRight': 'Open on the right',
+  'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',
@@ -498,9 +510,6 @@ export default {
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'privacy': 'Privacy Policy',
-  'productHunt.actionLabel': 'Support us',
-  'productHunt.description': 'Support us on Product Hunt. Your support means a lot to us!',
-  'productHunt.title': "We're on Product Hunt!",
   'regenerate': 'Regenerate',
   'releaseNotes': 'Version Details',
   'rename': 'Rename',

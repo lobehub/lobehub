@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Lütfen tekrar deneyin veya farklı bir giriş yöntemi seçin",
   "authResult.failed.title": "Yetkilendirme Başarısız",
-  "authResult.success.desc": "LobeHub Desktop'u kullanmaya devam etmek için aşağıdaki Başlat düğmesine tıklayın",
-  "authResult.success.title": "Yetkilendirme Başarılı",
   "back": "Geri",
   "navigation.next": "Devam Et",
   "next": "İleri",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "İptal Et",
   "screen5.actions.connectToServer": "Sunucuya Bağlan",
   "screen5.actions.connecting": "Bağlanıyor...",
+  "screen5.actions.done": "Tamamlandı",
   "screen5.actions.signInCloud": "LobeHub Cloud'a Giriş Yap",
   "screen5.actions.signOut": "Çıkış Yap",
   "screen5.actions.signingIn": "Giriş yapılıyor...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Kendi Sunucunuzu Barındırın",
   "screen5.navigation.next": "Başlayın",
   "screen5.selfhost.endpointPlaceholder": "Sunucu URL'nizi girin (ör. https://sunucunuz.com)",
+  "screen5.status.cloud.title": "LobeHub Bulut'a Bağlı",
+  "screen5.status.description": "Ajanlar, Gruplar, ayarlar ve Bağlam tüm cihazlarınız arasında senkronize ediliyor.",
+  "screen5.status.selfhost.description": "Ajanlar, Gruplar, ayarlar ve Bağlam {{url}} ile senkronize ediliyor.",
+  "screen5.status.selfhost.title": "Kendi sunucunuza bağlı",
   "screen5.title": "Cihazlar arasında senkronize olmak için giriş yapın",
   "screen5.title2": "Verilerinizi her yerde senkronize tutun",
   "screen5.title3": "Verileriniz sizin kontrolünüzde kalır"

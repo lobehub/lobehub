@@ -6,6 +6,7 @@ import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicTopic, projectPublicUser } from '../helpers/public-fields';
 import type {
   TopicCreateRequest,
   TopicListQuery,
@@ -109,9 +110,9 @@ export class TopicService extends BaseService {
 
       return {
         topics: result.map((item) => ({
-          ...item.topic,
+          ...projectPublicTopic(item.topic),
           messageCount: item.messageCount,
-          user: item.user,
+          user: projectPublicUser(item.user),
         })),
         total: countResult.count,
       };
@@ -156,9 +157,9 @@ export class TopicService extends BaseService {
       }
 
       return {
-        ...result.topic,
+        ...projectPublicTopic(result.topic),
         messageCount: result.messageCount,
-        user: result.user,
+        user: projectPublicUser(result.user),
       };
     } catch (error) {
       return this.handleServiceError(error, '获取话题');

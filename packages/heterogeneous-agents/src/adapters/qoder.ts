@@ -4,16 +4,18 @@
  * Qoder's stream-json protocol is intentionally compatible with the
  * assistant/user/result framing used by Claude Code. Reuse that mature state
  * machine, but keep Qoder as a first-class provider: every normalized event,
- * tool payload, error, and usage record is stamped with Qoder's identity.
+ * tool payload, error, and usage record is stamped with Qoder's identity while
+ * shared derived state such as Task tool todos remains intact for the UI.
  */
 
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type { HeterogeneousAgentEvent } from '../types';
 import { ClaudeCodeAdapter } from './claudeCode';
 
 export const QODER_IDENTIFIER = 'qoder';
 
-const CLAUDE_CODE_AUTH_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
-const QODER_AUTH_DOCS_URL = 'https://docs.qoder.com/cli/auth.md';
+const CLAUDE_CODE_AUTH_DOCS_URL = getHeterogeneousAgentConfigOrThrow('claude-code').auth.docsUrl;
+const QODER_AUTH_DOCS_URL = getHeterogeneousAgentConfigOrThrow(QODER_IDENTIFIER).auth.docsUrl;
 const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const isQoderAuthAssistant = (raw: unknown): boolean => {
@@ -32,7 +34,7 @@ const isQoderAuthAssistant = (raw: unknown): boolean => {
   return QODER_AUTH_REQUIRED_PATTERNS.every((pattern) => pattern.test(text));
 };
 
-const normalizeQoderValue = (value: unknown, key?: string): void => {
+const normalizeQoderValue = (value: unknown): void => {
   if (!value || typeof value !== 'object') return;
 
   if (Array.isArray(value)) {
@@ -61,13 +63,8 @@ const normalizeQoderValue = (value: unknown, key?: string): void => {
       record[childKey] = childValue.replaceAll('Claude Code', 'Qoder');
       continue;
     }
-    normalizeQoderValue(childValue, childKey);
+    normalizeQoderValue(childValue);
   }
-
-  // Qoder's Task tools are not the Claude Code Todo/Task UI contract. Keep
-  // their native tool calls/results, but do not attach Claude-specific derived
-  // todo state to the normalized result.
-  if (key === 'pluginState') delete record.todos;
 };
 
 const normalizeQoderEvents = (events: HeterogeneousAgentEvent[]): HeterogeneousAgentEvent[] => {

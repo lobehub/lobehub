@@ -502,6 +502,11 @@ describe('ChatService', () => {
         // Mock aiModelSelectors for extend params support
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
+        // The user-level model-instance config supplies the effort; the legacy
+        // agent chatConfig value below must be ignored by the resolver
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
 
         await chatService.createAssistantMessage({
           messages,
@@ -509,7 +514,7 @@ describe('ChatService', () => {
           provider: 'test-provider',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'test-model', provider: 'test-provider' },
-            chatConfig: { reasoningEffort: 'high' },
+            chatConfig: { reasoningEffort: 'low' },
           }),
         });
 
@@ -531,6 +536,11 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
           'deepseekV4ReasoningEffort',
         ]);
+        // Reasoning fields are user-level model-instance settings now — agent
+        // chatConfig values are ignored by the resolver
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          deepseekV4ReasoningEffort: 'max',
+        }));
 
         await chatService.createAssistantMessage({
           messages,
@@ -538,7 +548,6 @@ describe('ChatService', () => {
           provider: 'deepseek',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-            chatConfig: { deepseekV4ReasoningEffort: 'max' },
           }),
         });
 
@@ -563,6 +572,9 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
           'deepseekV4ReasoningEffort',
         ]);
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          deepseekV4ReasoningEffort: 'none',
+        }));
 
         await chatService.createAssistantMessage({
           messages,
@@ -570,7 +582,6 @@ describe('ChatService', () => {
           provider: 'deepseek',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-            chatConfig: { deepseekV4ReasoningEffort: 'none' },
           }),
         });
 
@@ -2124,6 +2135,11 @@ describe('ChatService private methods', () => {
       // Mock aiModelSelectors for extend params support
       vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
       vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
+      // The user-level model-instance config supplies the effort; the legacy
+      // agent chatConfig value below must be ignored by the resolver
+      vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+        reasoningEffort: 'high',
+      }));
 
       await chatService.createAssistantMessage({
         messages,
@@ -2131,7 +2147,7 @@ describe('ChatService private methods', () => {
         provider: 'test-provider',
         resolvedAgentConfig: createMockResolvedConfig({
           agentConfig: { model: 'test-model', provider: 'test-provider' },
-          chatConfig: { reasoningEffort: 'high' },
+          chatConfig: { reasoningEffort: 'low' },
         }),
       });
 

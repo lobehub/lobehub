@@ -15,6 +15,7 @@ const testState = vi.hoisted(() => ({
           executionTargetSelectionPolicy?: 'fixed' | 'member';
           executionTarget?: string;
           heterogeneousProvider?: { type: string };
+          localSandbox?: boolean;
         }
       | undefined,
     agentMap: {} as Record<
@@ -32,7 +33,10 @@ const testState = vi.hoisted(() => ({
   user: {
     updateWorkspaceUserPreference: vi.fn(),
     workspaceUserPreference: {} as {
-      agentDeviceOverrides?: Record<string, { boundDeviceId?: string; executionTarget?: string }>;
+      agentDeviceOverrides?: Record<
+        string,
+        { boundDeviceId?: string; executionTarget?: string; localSandbox?: boolean }
+      >;
     },
   },
 }));
@@ -179,6 +183,54 @@ describe('useSelectExecutionTarget', () => {
       });
     });
 
+    it('records the sandbox choice alongside a local pick', async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { localSandbox: true });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'this-machine',
+          executionTarget: 'local',
+          localSandbox: true,
+        },
+      });
+    });
+
+    it('clears the sandbox when the plain local row is picked', async () => {
+      // Switching back has to be an explicit `false`, not an omission — a
+      // leftover `true` would keep fencing a run the user just un-fenced.
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      testState.agent.agencyConfig = { executionTarget: 'local', localSandbox: true };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { localSandbox: false });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'this-machine',
+          executionTarget: 'local',
+          localSandbox: false,
+        },
+      });
+    });
+
+    it('leaves the stored sandbox choice dormant when switching to another environment', async () => {
+      // Cloud Sandbox has no opinion about how the user's own machine is
+      // fenced, so flipping away and back must not silently forget it.
+      testState.agent.agencyConfig = { executionTarget: 'local', localSandbox: true };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { executionTarget: 'sandbox', localSandbox: true },
+      });
+    });
+
     it('does not switch a heterogeneous agent to local when no device can be resolved', async () => {
       testState.agent.isHetero = true;
       testState.getDeviceInfo.mockRejectedValue(new Error('no gateway'));
@@ -257,6 +309,35 @@ describe('useSelectExecutionTarget', () => {
           'agent-id': { executionTarget: 'sandbox' },
         },
       });
+    });
+
+    it("keeps a member's own sandbox choice in their override when they switch environment", async () => {
+      // One member fencing their own machine is theirs alone — it must live in
+      // the per-user override and survive a target switch, never reach the
+      // shared row where it would apply to everyone.
+      testState.user.workspaceUserPreference = {
+        agentDeviceOverrides: {
+          'agent-id': {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'local',
+            localSandbox: true,
+          },
+        },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'sandbox',
+            localSandbox: true,
+          },
+        },
+      });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
     });
 
     it('drops boundDeviceId when it cannot be resolved (e.g. web caller picks local)', async () => {

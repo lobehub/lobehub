@@ -1,8 +1,24 @@
+import type React from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
-import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
+import {
+  type SkillListItem,
+  SkillSection,
+  SkillsList,
+  useProjectSkills,
+} from '@/features/SkillsList';
+
+// Project skills are resolved by the underlying CLI agent itself, so
+// we serialize them as a literal `/skill-name` (projectSkill chip).
+const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
+  startSkillDrag(event, {
+    category: 'projectSkill',
+    label: item.name,
+    type: item.name,
+  });
+};
 
 interface ProjectLevelSkillsProps {
   /** Bound remote device id; when set, skills are scanned over RPC. */
@@ -42,15 +58,7 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
         items={projectItems}
         onOpenFile={onOpenFile}
         onOpenSkill={onOpenSkill}
-        onSkillDragStart={(item, event) => {
-          // Project skills are resolved by the underlying CLI agent itself, so
-          // we serialize them as a literal `/skill-name` (projectSkill chip).
-          startSkillDrag(event, {
-            category: 'projectSkill',
-            label: item.name,
-            type: item.name,
-          });
-        }}
+        onSkillDragStart={handleSkillDragStart}
       />
     );
 

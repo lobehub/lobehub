@@ -185,7 +185,18 @@ export const MessageWorkMetadataSchema = z.object({
   userMessageId: z.string().optional(),
 });
 
+export const AgentDispatchMetadataSchema = z.object({
+  kind: z.enum(['callAgent']),
+  visibility: z.literal('internal'),
+});
+
+export interface AgentDispatchMetadata {
+  kind: 'callAgent';
+  visibility: 'internal';
+}
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
+  agentDispatch: AgentDispatchMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
@@ -274,6 +285,11 @@ export interface MessageMetadata {
    */
   agentCouncil?: boolean;
   /**
+   * Explicit transport semantics for an internal cross-agent dispatch turn.
+   * Renderers consume this marker instead of inferring intent from the message tree.
+   */
+  agentDispatch?: AgentDispatchMetadata;
+  /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */
@@ -284,6 +300,15 @@ export interface MessageMetadata {
    * Page selections remain mirrored in `pageSelections` for compatibility.
    */
   contextSelections?: ContextSelection[];
+  /**
+   * This row is a DUPLICATED transcript (agent/group copy, workspace import),
+   * not a generation event in its current scope: the tokens were consumed by
+   * the source, so usage REPORTS exclude it. The row keeps its own token/cost
+   * figures — they describe the generation the transcript records, and the
+   * chat UI and context engine read them — so this marker is the only thing
+   * separating "what this scope spent" from "what this transcript shows".
+   */
+  copied?: boolean;
   /** @deprecated use the top-level message `usage` field instead */
   cost?: number;
   /** @deprecated use `metadata.performance` instead */

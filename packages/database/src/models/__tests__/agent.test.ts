@@ -20,8 +20,10 @@ import {
   users,
   workspaces,
 } from '../../schemas';
+import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { AGENT_TRANSFER_IN_PROGRESS } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -64,6 +66,10 @@ const fileList2 = [
 
 beforeEach(async () => {
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so `delete(users)` leaves them
+  // behind. On the shared server DB (`singleFork`) a stray pending job would
+  // outlive this file and trip the delete guard in the next one.
+  await serverDB.delete(agentHistoryJobs);
   await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
   await serverDB.insert(knowledgeBases).values([knowledgeBase, knowledgeBase2]);
   await serverDB.insert(files).values([...fileList, ...fileList2]);
@@ -71,6 +77,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('AgentModel', () => {
@@ -948,6 +955,44 @@ describe('AgentModel', () => {
   });
 
   describe('delete', () => {
+    it('refuses to delete an agent a pending history job still maps', async () => {
+      // A group copy's drain writes the TARGET agent id into `messages.agent_id`.
+      // Deleting that agent leaves the queue rows behind, so the drain hits a
+      // missing-agent FK and retries forever, stranding the copy as pending.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Copied Member', userId })
+        .returning();
+      // A DIFFERENT source agent, so only the target-side junction guard can
+      // catch this — the source-side guard must not be what fires.
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Copy Source', userId })
+        .returning();
+
+      const [job] = await serverDB
+        .insert(agentHistoryJobs)
+        .values({
+          agentIds: [agent.id],
+          payload: { agents: [{ newAgentId: agent.id, sourceAgentId: sourceAgent.id }] },
+          sessionIds: [],
+          sourceUserId: userId,
+          status: 'pending',
+          targetUserId: userId,
+          totalTopics: 1,
+          type: 'copy',
+        })
+        .returning({ id: agentHistoryJobs.id });
+      await serverDB.insert(agentHistoryJobAgents).values({ agentId: agent.id, jobId: job.id });
+
+      await expect(agentModel.delete(agent.id)).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
+
+      const stillAlive = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(stillAlive).toBeDefined();
+    });
+
     it('should delete an agent and its associated session', async () => {
       // Create agent and session
       const [agent] = await serverDB

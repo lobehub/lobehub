@@ -1,5 +1,9 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
-import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import {
+  BUILTIN_AGENT_SLUGS,
+  getAgentRuntimeConfig,
+  isCollaborativeBuiltinAgentRow,
+} from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { type LobeToolManifest } from '@lobechat/context-engine';
@@ -135,6 +139,13 @@ export interface ResolvedAgentConfig {
   plugins: string[];
   /** The agent's slug (if builtin) */
   slug?: string;
+  /**
+   * The raw sub-agent chatConfig override (`agencyConfig.subagent.chatConfig`).
+   * `chatConfig` above already has it merged in for non-migrated fields; this
+   * copy lets the model-params resolver re-apply the user's explicit sub-agent
+   * reasoning choices on top of the model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
   /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
   tools?: ChatCompletionTool[];
 }
@@ -192,11 +203,17 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
   const currentUserId = userProfileSelectors.userId(useUserStore.getState());
   const isAuthor = !!currentUserId && agent?.userId === currentUserId;
-  const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
-  const memberModelOverride = usesWorkspaceMemberSelection
-    ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
-    : undefined;
+  const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
+  // A collaborative builtin has no real author (the row is provisioned by
+  // whoever opened the feature first), so its *model* stays personal even for
+  // that member — see `AgentModelConfig.personalModelSelection`. Chat/Agent mode
+  // keeps the ordinary author rule.
+  const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
+  const usesWorkspaceMemberSelection = isPublicWorkspaceAgent && !isAuthor;
+  const memberModelOverride =
+    isPublicWorkspaceAgent && (personalModelSelection || !isAuthor)
+      ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
+      : undefined;
   const memberModeOverride = usesWorkspaceMemberSelection
     ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
     : undefined;
@@ -206,6 +223,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       {
         ...sharedAgentConfig,
         canManage: isAuthor,
+        personalModelSelection,
         visibility: agent?.visibility,
         workspaceId: agent?.workspaceId,
       },

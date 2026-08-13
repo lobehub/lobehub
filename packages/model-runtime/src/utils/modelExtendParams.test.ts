@@ -5,6 +5,7 @@ import {
   applyModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
+  resolveEffectiveReasoningChatConfig,
 } from './modelExtendParams';
 
 const chatConfig = (config: Partial<LobeAgentChatConfig> = {}): LobeAgentChatConfig =>
@@ -141,6 +142,16 @@ describe('applyModelExtendParams', () => {
     expect(result.reasoning_effort).toBe('high');
   });
 
+  it('resolves Grok 4.6 xhigh reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ grok4_6ReasoningEffort: 'xhigh' }),
+      extendParams: ['grok4_6ReasoningEffort'],
+      model: 'grok-4.6',
+    });
+
+    expect(result.reasoning_effort).toBe('xhigh');
+  });
+
   it('resolves GPT-5.6 Pro mode independently from reasoning effort', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({
@@ -260,5 +271,73 @@ describe('resolveDefaultThinkingLevelForModel', () => {
     expect(resolveDefaultThinkingLevelForModel('gemini-3.5-flash')).toBe('medium');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.5-flash-lite')).toBe('minimal');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.1-flash-lite')).toBe('minimal');
+  });
+});
+
+describe('resolveEffectiveReasoningChatConfig', () => {
+  it('should strip migrated reasoning fields from the agent chat config', () => {
+    const result = resolveEffectiveReasoningChatConfig({
+      agentChatConfig: chatConfig({
+        gpt5_6ReasoningEffort: 'max',
+        reasoningEffort: 'high',
+        reasoningMode: 'pro',
+        textVerbosity: 'low',
+        thinkingBudget: 2048,
+      }),
+    });
+
+    // Legacy agent-level values must not leak into the payload path
+    expect(result.gpt5_6ReasoningEffort).toBeUndefined();
+    expect(result.reasoningEffort).toBeUndefined();
+    expect(result.reasoningMode).toBeUndefined();
+    // Non-migrated params stay agent-scoped
+    expect(result.textVerbosity).toBe('low');
+    expect(result.thinkingBudget).toBe(2048);
+  });
+
+  it('should apply model-instance defaults over the stripped agent config', () => {
+    const result = resolveEffectiveReasoningChatConfig({
+      agentChatConfig: chatConfig({ gpt5_6ReasoningEffort: 'low' }),
+      modelReasoningConfig: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+    });
+
+    expect(result.gpt5_6ReasoningEffort).toBe('xhigh');
+    expect(result.reasoningMode).toBe('pro');
+  });
+
+  it('should let explicit sub-agent overrides win over model-instance defaults', () => {
+    const result = resolveEffectiveReasoningChatConfig({
+      agentChatConfig: chatConfig(),
+      modelReasoningConfig: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+      subAgentReasoningOverrides: { gpt5_6ReasoningEffort: 'low' },
+    });
+
+    expect(result.gpt5_6ReasoningEffort).toBe('low');
+    // Fields the sub-agent did not set still fall back to the model-instance value
+    expect(result.reasoningMode).toBe('pro');
+  });
+
+  it('should ignore non-reasoning fields smuggled into the override objects', () => {
+    const result = resolveEffectiveReasoningChatConfig({
+      agentChatConfig: chatConfig({ textVerbosity: 'high' }),
+      modelReasoningConfig: { textVerbosity: 'low' } as never,
+    });
+
+    expect(result.textVerbosity).toBe('high');
+  });
+
+  it('should produce the same extend params on both runtimes for a stale agent value', () => {
+    const effective = resolveEffectiveReasoningChatConfig({
+      agentChatConfig: chatConfig({ gpt5_6ReasoningEffort: 'low' }),
+      modelReasoningConfig: { gpt5_6ReasoningEffort: 'max' },
+    });
+
+    const params = applyModelExtendParams({
+      chatConfig: effective,
+      extendParams: ['reasoningMode', 'gpt5_6ReasoningEffort', 'textVerbosity'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(params.reasoning_effort).toBe('max');
   });
 });

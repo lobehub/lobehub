@@ -13,6 +13,7 @@ import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
+import { GoalManifest } from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -21,7 +22,7 @@ import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-t
 import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { MessageManifest } from '@lobechat/builtin-tool-message';
+import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
@@ -333,6 +334,9 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: MessageManifest.identifier,
     manifest: MessageManifest,
+    // Context-aware: drops APIs the current IM platform can't fulfil (e.g.
+    // WeChat has no `readMessages`), trimming both the tool list and systemRole.
+    resolveManifest: resolveMessageManifest,
     type: 'builtin',
   },
   {
@@ -360,6 +364,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: UserInteractionManifest.identifier,
     manifest: UserInteractionManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: GoalManifest.identifier,
+    manifest: GoalManifest,
     type: 'builtin',
   },
   {

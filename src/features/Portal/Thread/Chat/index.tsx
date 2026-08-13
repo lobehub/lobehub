@@ -14,15 +14,18 @@ import {
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
+import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { getThreadInputMode } from './inputMode';
 import ThreadDivider from './ThreadDivider';
 import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
 
@@ -31,80 +34,76 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  * Must be inside ConversationProvider to access the store
  */
 interface ThreadChatContentProps {
-  isSubagentThread: boolean;
+  composerWritable: boolean;
+  isHeterogeneousAgent: boolean;
+  readOnly: boolean;
 }
 
-const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) => {
-  // Get display messages from ConversationStore to determine thread divider position
-  // With the new backend API, parent messages have threadId === null
-  // and thread messages have threadId === context.threadId
-  const displayMessages = useConversationStore(conversationSelectors.displayMessages);
+const ThreadChatContent = memo<ThreadChatContentProps>(
+  ({ composerWritable, isHeterogeneousAgent, readOnly }) => {
+    const inputMode = getThreadInputMode({
+      isExternallyOwnedThread: readOnly,
+      isHeterogeneousAgent,
+    });
+    const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-  // Find the last parent message (source message) - it's the last message with threadId === null
-  const threadSourceInfo = useMemo(() => {
-    // Find the index of the last parent message (threadId is null or undefined)
-    let sourceMessageIndex = -1;
-    let sourceMessageId: string | undefined;
+    const threadSourceInfo = useMemo(() => {
+      let sourceMessageIndex = -1;
+      let sourceMessageId: string | undefined;
 
-    for (const [i, msg] of displayMessages.entries()) {
-      // Parent messages don't have threadId
-      if (!msg.threadId) {
-        sourceMessageIndex = i;
-        sourceMessageId = msg.id;
-      }
-    }
-
-    return { sourceMessageId, sourceMessageIndex };
-  }, [displayMessages]);
-
-  // Custom item content renderer for thread-specific features
-  const itemContent = useCallback(
-    (index: number, id: string) => {
-      // Check if this message needs ThreadDivider (after thread source message)
-      const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
-
-      // Check if this is a parent message (should be read-only)
-      // Parent messages are those with index <= sourceMessageIndex
-      const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
-
-      return (
-        <MessageItem
-          inPortalThread
-          disableEditing={isSubagentThread || isParentMessage}
-          endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
-          id={id}
-          index={index}
-        />
-      );
-    },
-    [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, isSubagentThread],
-  );
-
-  return (
-    <>
-      <Suspense
-        fallback={
-          <Flexbox flex={1} height={'100%'}>
-            <SkeletonList />
-          </Flexbox>
+      for (const [i, msg] of displayMessages.entries()) {
+        if (!msg.threadId) {
+          sourceMessageIndex = i;
+          sourceMessageId = msg.id;
         }
-      >
-        <Flexbox
-          flex={1}
-          width={'100%'}
-          style={{
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            position: 'relative',
-          }}
+      }
+
+      return { sourceMessageId, sourceMessageIndex };
+    }, [displayMessages]);
+
+    const itemContent = useCallback(
+      (index: number, id: string) => {
+        const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
+        const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
+
+        return (
+          <MessageItem
+            inPortalThread
+            disableEditing={readOnly || isParentMessage}
+            endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
+            id={id}
+            index={index}
+          />
+        );
+      },
+      [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
+    );
+
+    return (
+      <>
+        <Suspense
+          fallback={
+            <Flexbox flex={1} height={'100%'}>
+              <SkeletonList />
+            </Flexbox>
+          }
         >
-          <ChatList itemContent={itemContent} />
-        </Flexbox>
-      </Suspense>
-      {!isSubagentThread && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
-    </>
-  );
-});
+          <Flexbox
+            flex={1}
+            style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
+            width={'100%'}
+          >
+            <ChatList itemContent={itemContent} />
+          </Flexbox>
+        </Suspense>
+        {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
+        {composerWritable && inputMode === 'default' && (
+          <ChatInput leftActions={['typo']} rightActions={['voiceMessage', 'contextWindow']} />
+        )}
+      </>
+    );
+  },
+);
 
 ThreadChatContent.displayName = 'ThreadChatContent';
 
@@ -132,12 +131,18 @@ const ThreadChat = memo(() => {
   // executor on every spawn — unambiguous marker to flip the thread into a
   // read-only record (hides composer, wipes per-message actions, disables
   // double-click editing).
-  const isSubagentThread = useChatStore(
-    (s) => !!portalThreadSelectors.portalCurrentThread(s)?.metadata?.sourceToolCallId,
+  const portalThread = useChatStore(portalThreadSelectors.portalCurrentThread);
+  const threadMetadataResolved = !portalThreadId || !!portalThread;
+  const isSubagentThread = !!portalThread?.metadata?.sourceToolCallId;
+  const threadAgentId = portalThread?.agentId || activeAgentId;
+  const isHeterogeneousAgent = useAgentStore(
+    agentByIdSelectors.isAgentHeterogeneousById(threadAgentId || ''),
   );
 
   // Get thread-specific actionsBar config
-  const actionsBarConfig = useThreadActionsBarConfig({ readonly: isSubagentThread });
+  const actionsBarConfig = useThreadActionsBarConfig({
+    readonly: !threadMetadataResolved || isSubagentThread,
+  });
 
   // Build ConversationContext for thread
   // When creating new thread (!portalThreadId), use isNew + scope: 'thread'
@@ -146,7 +151,7 @@ const ThreadChat = memo(() => {
   // Context for ConversationProvider (includes sourceMessageId/threadType for new thread creation)
   const context: ConversationContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       // Use isNew + scope for new thread creation
       isNew: isCreatingNewThread,
       scope: 'thread',
@@ -157,7 +162,7 @@ const ThreadChat = memo(() => {
       topicId: activeTopicId,
     }),
     [
-      activeAgentId,
+      threadAgentId,
       activeTopicId,
       portalThreadId,
       threadStartMessageId,
@@ -169,17 +174,26 @@ const ThreadChat = memo(() => {
   // Context for messageMapKey (only needs fields used in key generation)
   const keyContext = useMemo<MessageMapKeyInput>(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       isNew: isCreatingNewThread,
       scope: 'thread',
       threadId: portalThreadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
+    [threadAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
   );
 
   // Generate messageMapKey for direct subscription to dbMessagesMap
   const chatKey = useMemo(() => messageMapKey(keyContext), [keyContext]);
+  const composerTarget = useMemo<ComposerTarget>(
+    () =>
+      resolveThreadComposerTarget({
+        contextKey: chatKey,
+        metadataResolved: threadMetadataResolved,
+        sourceToolCallId: portalThread?.metadata?.sourceToolCallId,
+      }),
+    [chatKey, portalThread?.metadata?.sourceToolCallId, threadMetadataResolved],
+  );
 
   // Subscribe directly to dbMessagesMap for reactive updates
   // This ensures optimistic updates work (read/write use same key)
@@ -190,7 +204,7 @@ const ThreadChat = memo(() => {
   const operationState = useOperationState(context);
 
   const agentChatConfig = useAgentStore(
-    chatConfigByIdSelectors.getChatConfigById(activeAgentId || ''),
+    chatConfigByIdSelectors.getChatConfigById(threadAgentId || ''),
   );
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
@@ -232,6 +246,7 @@ const ThreadChat = memo(() => {
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
+      composerTarget={composerTarget}
       context={context}
       hasInitMessages={!!messages}
       hooks={hooks}
@@ -242,7 +257,11 @@ const ThreadChat = memo(() => {
         replaceMessages(msgs, { context: ctx, source: meta?.source });
       }}
     >
-      <ThreadChatContent isSubagentThread={isSubagentThread} />
+      <ThreadChatContent
+        composerWritable={composerTarget.writable}
+        isHeterogeneousAgent={isHeterogeneousAgent}
+        readOnly={!composerTarget.writable}
+      />
     </ConversationProvider>
   );
 });

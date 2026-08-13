@@ -235,10 +235,18 @@ export default {
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
   'testConnectionFailed': 'Test connection failed: {{error}}',
   'tts.responseError': 'Service request failed, please check the configuration or try again',
+  'transfer.agentOwnedByGroup':
+    'This agent belongs to a chat group and cannot be moved on its own. Move the group instead, or remove the agent from it first.',
+  'transfer.groupHasInaccessibleMember':
+    'This group includes a member you do not have access to. Ask its owner to share it with the workspace, or remove it from the group, then try again.',
   'transfer.noPermission': "You don't have permission to move this resource.",
   'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
   'transfer.resourceNotFound':
     'This resource no longer exists or you no longer have access. Refresh and try again.',
+  'transfer.copyInProgress':
+    'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
+  'transfer.transferInProgress':
+    'A previous move of this resource is still migrating its history. Try again once it finishes.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetNoWriteAccess':

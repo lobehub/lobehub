@@ -1,5 +1,6 @@
-import type { ConnectorDataErrorOptions, ConnectorDataProvider } from './errors';
+import type { ConnectorDataErrorOptions } from './errors';
 import { ConnectorDataError } from './errors';
+import type { ConnectorDataProvider } from './providers';
 
 const DEFAULT_ATTEMPTS = 3;
 const FIRST_RETRY_DELAY_MS = 250;

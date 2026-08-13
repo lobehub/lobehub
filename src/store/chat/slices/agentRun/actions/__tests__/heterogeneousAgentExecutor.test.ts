@@ -17,7 +17,7 @@ import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1792,6 +1792,26 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             '-c',
             'model_reasoning_effort="xhigh"',
           ],
+        }),
+      );
+    });
+
+    it('should execute a persisted legacy provider config without type', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const legacyProvider = {
+        command: '/usr/local/bin/custom-codex',
+      } as unknown as HeterogeneousProviderConfig;
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: legacyProvider,
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'codex',
+          command: '/usr/local/bin/custom-codex',
         }),
       );
     });

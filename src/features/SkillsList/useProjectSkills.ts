@@ -1,7 +1,7 @@
 import type { ListProjectSkillsResult, ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import path from 'pathe';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
@@ -86,64 +86,80 @@ export const useProjectSkills = (
   // (isLocalFileInCurrentScope) from dropping the tab and clears the desktop
   // preview protocol's approved-root / symlink-containment check
   // (resolveApprovedPreviewPath), so previews open instead of showing blank.
-  const openSkillFile = (skill: ProjectSkillItem, filePath: string) => {
-    openLocalFile({
-      allowExternalFilePreview: skill.scope === 'device',
-      // A bound device (remote, or this machine as a device) reads the preview
-      // over RPC, exactly like the Files tab; an undefined deviceId falls back to
-      // local Electron IPC. The old `isRemote` no-op predated remote preview.
-      deviceId,
-      filePath,
-      workingDirectory: skill.previewRoot || previewRoot,
-    });
-  };
+  const openSkillFile = useCallback(
+    (skill: ProjectSkillItem, filePath: string) => {
+      openLocalFile({
+        allowExternalFilePreview: skill.scope === 'device',
+        // A bound device (remote, or this machine as a device) reads the preview
+        // over RPC, exactly like the Files tab; an undefined deviceId falls back to
+        // local Electron IPC. The old `isRemote` no-op predated remote preview.
+        deviceId,
+        filePath,
+        workingDirectory: skill.previewRoot || previewRoot,
+      });
+    },
+    [deviceId, openLocalFile, previewRoot],
+  );
 
-  const onOpenFile = (item: SkillListItem, relativePath: string) => {
-    const skill = skillByDir.get(item.id);
-    if (!skill) return;
-    openSkillFile(skill, path.join(skill.skillDir, relativePath));
-  };
+  const onOpenFile = useCallback(
+    (item: SkillListItem, relativePath: string) => {
+      const skill = skillByDir.get(item.id);
+      if (!skill) return;
+      openSkillFile(skill, path.join(skill.skillDir, relativePath));
+    },
+    [openSkillFile, skillByDir],
+  );
 
-  const onOpenSkill = (item: SkillListItem) => {
-    const skill = skillByDir.get(item.id);
-    if (!skill) return;
-    openSkillFile(skill, skill.path);
-  };
+  const onOpenSkill = useCallback(
+    (item: SkillListItem) => {
+      const skill = skillByDir.get(item.id);
+      if (!skill) return;
+      openSkillFile(skill, skill.path);
+    },
+    [openSkillFile, skillByDir],
+  );
 
-  const getRowActions = (_item: SkillListItem): SkillRowAction[] => {
-    const comingSoon = t('workingPanel.skills.actions.comingSoon');
-    return [
-      {
-        // Preview works in every mode: local via IPC, bound device via RPC
-        // (matches the Files tab, which reads remote files over RPC).
-        icon: EyeIcon,
-        key: 'view',
-        label: t('workingPanel.skills.actions.view'),
-        onClick: onOpenSkill,
-        sfSymbol: 'eye',
-      },
-      {
-        // Renaming a filesystem skill needs an IPC/RPC that doesn't exist yet.
-        disabled: true,
-        icon: PencilIcon,
-        key: 'rename',
-        label: t('workingPanel.skills.actions.rename'),
-        onClick: () => {},
-        sfSymbol: 'pencil',
-        tooltip: comingSoon,
-      },
-      {
-        danger: true,
-        disabled: true,
-        icon: Trash2Icon,
-        key: 'delete',
-        label: t('workingPanel.skills.actions.delete'),
-        onClick: () => {},
-        sfSymbol: 'trash',
-        tooltip: comingSoon,
-      },
-    ];
-  };
+  const getRowActions = useCallback(
+    (_item: SkillListItem): SkillRowAction[] => {
+      const comingSoon = t('workingPanel.skills.actions.comingSoon');
+      return [
+        {
+          // Preview works in every mode: local via IPC, bound device via RPC
+          // (matches the Files tab, which reads remote files over RPC).
+          icon: EyeIcon,
+          key: 'view',
+          label: t('workingPanel.skills.actions.view'),
+          onClick: onOpenSkill,
+          sfSymbol: 'eye',
+        },
+        {
+          // Renaming a filesystem skill needs an IPC/RPC that doesn't exist yet.
+          disabled: true,
+          icon: PencilIcon,
+          key: 'rename',
+          label: t('workingPanel.skills.actions.rename'),
+          onClick: () => {},
+          sfSymbol: 'pencil',
+          tooltip: comingSoon,
+        },
+        {
+          danger: true,
+          disabled: true,
+          icon: Trash2Icon,
+          key: 'delete',
+          label: t('workingPanel.skills.actions.delete'),
+          onClick: () => {},
+          sfSymbol: 'trash',
+          tooltip: comingSoon,
+        },
+      ];
+    },
+    [onOpenSkill, t],
+  );
+
+  const retry = useCallback(() => {
+    void mutate();
+  }, [mutate]);
 
   return {
     deviceItems,
@@ -151,9 +167,7 @@ export const useProjectSkills = (
     getRowActions,
     isLoading,
     items,
-    mutate: () => {
-      void mutate();
-    },
+    mutate: retry,
     onOpenFile,
     onOpenSkill,
     projectItems,

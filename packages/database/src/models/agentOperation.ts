@@ -1,5 +1,5 @@
 import type { VerifyRunStatus } from '@lobechat/types';
-import { and, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -247,6 +247,55 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Total USD cost of every operation bound to a task — the goal outer loop's
+   * budget meter. Only root (task-bound) operations carry `taskId`, and each
+   * root's `totalCost` scalar already includes its direct children's rollup
+   * (see `persistCompletion`), so this sum covers verify / repair sub-runs
+   * without walking parent chains. Re-derived on every call — exact regardless
+   * of how many times a round settles.
+   */
+  async sumCostByTask(taskId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ totalCost: sql<string | null>`sum(${agentOperations.totalCost})` })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.taskId, taskId), this.ownership()));
+
+    const parsed = Number(row?.totalCost ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  /**
+   * Per-operation cost and token totals for a set of runs, keyed by operation.
+   *
+   * Feeds the goal round rail's audit hover: a round's block should be able to
+   * say what it actually spent, and asking per round would be one query per
+   * block. Each root's `totalCost` already rolls up its direct children, so no
+   * parent-chain walk is needed here either.
+   */
+  async findUsageByOperations(
+    operationIds: string[],
+  ): Promise<Map<string, { cost: number; tokens: number }>> {
+    const ids = [...new Set(operationIds.filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({
+        id: agentOperations.id,
+        totalCost: agentOperations.totalCost,
+        totalTokens: agentOperations.totalTokens,
+      })
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, ids), this.ownership()));
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        { cost: Number(row.totalCost ?? 0) || 0, tokens: Number(row.totalTokens ?? 0) || 0 },
+      ]),
+    );
   }
 
   /**

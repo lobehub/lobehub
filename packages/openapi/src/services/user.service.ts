@@ -1,13 +1,16 @@
 import { and, count, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import { ALL_SCOPE } from '@/const/rbac';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE } from '@/database/models/agentTransferJob';
 import { RbacModel } from '@/database/models/rbac';
+import { UserModel } from '@/database/models/user';
 import { messages, roles, userRoles, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicRole, projectPublicUser } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   CreateUserRequest,
@@ -57,8 +60,8 @@ export class UserService extends BaseService {
         .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return {
-        ...user,
-        roles: userRoleResults.map((r) => r.roles),
+        ...projectPublicUser(user),
+        roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
       };
     }
 
@@ -77,9 +80,9 @@ export class UserService extends BaseService {
     ]);
 
     return {
-      ...user,
+      ...projectPublicUser(user),
       messageCount: messageCountResult[0]?.count || 0,
-      roles: userRoleResults.map((r) => r.roles),
+      roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
     };
   }
 
@@ -145,9 +148,9 @@ export class UserService extends BaseService {
             .where(eq(messages.userId, userRow.id));
 
           return {
-            ...userRow,
+            ...projectPublicUser(userRow),
             messageCount: messageCountResult[0]?.count || 0,
-            roles: userRoleResults.map((r) => r.roles),
+            roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
           };
         }),
       );
@@ -332,8 +335,18 @@ export class UserService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限删除该用户');
       }
 
-      // Check if the user exists
-      const result = await this.db.delete(users).where(eq(users.id, userId));
+      // Route through UserModel.deleteUser so its pending agent-transfer guard
+      // applies to admin/OpenAPI deletes too — a raw `delete from users` here
+      // would cascade away message rows a pending backfill still has to move.
+      let result: Awaited<ReturnType<typeof UserModel.deleteUser>>;
+      try {
+        result = await UserModel.deleteUser(this.db, userId);
+      } catch (error) {
+        if (error instanceof Error && error.message === AGENT_TRANSFER_PENDING_OWNER_DELETE) {
+          throw this.createBusinessError('该用户仍有进行中的智能体迁移任务，请等待迁移完成后重试');
+        }
+        throw error;
+      }
 
       if (!result.rowCount) {
         throw this.createNotFoundError('用户不存在');

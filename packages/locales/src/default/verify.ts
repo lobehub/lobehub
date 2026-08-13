@@ -26,6 +26,9 @@ export default {
   'acceptance.banner.rejectedHint':
     'The next verification round re-opens this acceptance when it lands.',
   'acceptance.banner.rejectedReason': 'Reason: {{reason}}',
+  'acceptance.bar.addComment': 'Add note',
+  'acceptance.bar.addCommentDescription':
+    'A delivery-wide note for what the queued feedback misses — the next verification round reads it.',
   'acceptance.bar.copied': 'Copied — paste it to any agent to start the repair.',
   'acceptance.bar.copyReview': 'Copy review prompt',
   'acceptance.bar.feedback': 'Feedback {{count}}',
@@ -47,6 +50,8 @@ export default {
   'acceptance.checks.emptyFilter.ignored': 'No checks ignored',
   'acceptance.checks.emptyFilter.needsFix': 'No checks marked for fixing',
   'acceptance.checks.emptyFilter.pending': 'No checks left to review',
+  'acceptance.checks.judgeReason': 'How this verdict was reached',
+  'acceptance.checks.viewTrace': 'View verification run',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
   'acceptance.checks.introduced': 'Added in round {{round}}',
@@ -66,6 +71,7 @@ export default {
   'acceptance.error.title': 'Unable to load acceptance',
   'acceptance.evidence.empty':
     'No evidence artifacts were submitted for this check in this round — only the verifier’s recorded observation.',
+  'acceptance.evidence.audio': '{{count}} audio evidence item(s)',
   'acceptance.evidence.file': '{{count}} text evidence item(s)',
   'acceptance.evidence.image': '{{count}} image evidence item(s)',
   'acceptance.evidence.video': '{{count}} video evidence item(s)',
@@ -176,6 +182,13 @@ export default {
   'acceptance.review.annotateHint':
     'Drag on the image to circle a region, then leave a note for it.',
   'acceptance.review.annotationPlaceholder': 'What is wrong in region {{index}}…',
+  'acceptance.proposal.confirm': 'Confirm and send back',
+  'acceptance.proposal.misidentified': 'Real problem, wrong spot',
+  'acceptance.proposal.notAnIssue': 'Not a problem',
+  'acceptance.proposal.regionCount': '{{count}} marked region(s)',
+  'acceptance.proposal.regionUnnamed': 'Marked region',
+  'acceptance.proposal.request': 'Ask AI to review the pending checks',
+  'acceptance.proposal.title': 'AI review · may not be met',
   'acceptance.review.attach': 'Attach screenshot',
   'acceptance.review.attachFailed': 'Screenshot upload failed — please try again.',
   'acceptance.review.attachLimit': 'Up to {{count}} screenshots.',
@@ -188,6 +201,10 @@ export default {
   'acceptance.review.fullscreenDone': 'Done annotating',
   'acceptance.review.ignore': 'Ignore',
   'acceptance.review.ignoredNote': 'Ignored · {{time}}',
+  'acceptance.review.intent.new-idea': 'I want something different',
+  'acceptance.review.intent.no-evidence': 'Not enough evidence',
+  'acceptance.review.intent.unmet': "This check isn't met",
+  'acceptance.review.intentLabel': 'This send-back is:',
   'acceptance.review.regionComments': 'Region comments',
   'acceptance.review.regionCommentsEmpty':
     'Drag on the image to circle a region — its comment lands here.',
@@ -255,7 +272,6 @@ export default {
   'acceptance.tray.goalSection': 'Goal',
   'acceptance.tray.saveFailed.network': 'You appear to be offline — the change wasn’t saved.',
   'acceptance.tray.saveFailed.server': 'Couldn’t save the change. Please try again.',
-  'acceptance.tray.menuSetGoal': 'Set goal',
   'acceptance.tray.section.method': 'How to check',
   'acceptance.tray.section.methodEmpty': 'No method described yet.',
   'acceptance.tray.trackCount': '· {{count}} tracked',
@@ -363,6 +379,7 @@ export default {
   'report.error.description':
     'The report could not be loaded. Check your connection and try again.',
   'report.error.title': 'Unable to load report',
+  'report.evidence.category.audio': 'Audio',
   'report.evidence.category.file': 'File',
   'report.evidence.category.image': 'Image',
   'report.evidence.category.video': 'Video',
@@ -412,6 +429,7 @@ export default {
   'report.overview.title': 'Check overview',
   'report.overview.total': 'All',
   'report.overview.uncertain': 'Uncertain',
+  'report.evidence.medium.audio': 'Audio',
   'report.evidence.medium.dom_snapshot': 'DOM snapshot',
   'report.evidence.medium.gif': 'GIF',
   'report.evidence.medium.markdown': 'Markdown',

@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Pokaż lub ukryj lewy panel",
   "toggleLeftPanel.title": "Przełącz lewy panel",
   "toggleRightPanel.desc": "Pokaż lub ukryj prawy panel",
-  "toggleRightPanel.title": "Przełącz prawy panel"
+  "toggleRightPanel.title": "Przełącz prawy panel",
+  "toggleTerminalPanel.desc": "Pokaż lub ukryj dolny panel terminala",
+  "toggleTerminalPanel.title": "Przełącz panel terminala"
 }

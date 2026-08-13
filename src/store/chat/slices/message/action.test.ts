@@ -14,6 +14,7 @@ import {
   runMessageListQuery,
 } from '@/services/message/cache';
 import { topicService } from '@/services/topic';
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useChatStore } from '../../store';
@@ -68,6 +69,7 @@ const mockState = {
   refreshTopic: vi.fn(),
   internal_coreProcessMessage: vi.fn(),
   saveToTopic: vi.fn(),
+  voiceMessageUploadMap: {},
 };
 
 beforeEach(() => {
@@ -1297,6 +1299,121 @@ describe('chatMessage actions', () => {
       expect(dataArg).toEqual(messages);
       expect(swrKey).toEqual(messageListKey(context));
       expect(isMessageListServerVerified(context)).toBe(false);
+    });
+
+    it('keeps an active local voice row in memory without writing it to SWR', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'voice-agent', topicId: 'voice-topic' };
+      const key = messageMapKey(context);
+      const persistedMessage = {
+        content: 'persisted',
+        createdAt: 1,
+        id: 'persisted-message',
+        role: 'assistant',
+        updatedAt: 1,
+      } as any;
+      const localVoiceMessage = {
+        audioList: [{ id: 'local-audio', url: 'blob:voice-preview' }],
+        content: '',
+        createdAt: 2,
+        id: 'tmp-voice-message',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        updatedAt: 2,
+      } as any;
+
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [key]: [localVoiceMessage] },
+          voiceMessageUploadMap: {
+            [localVoiceMessage.id]: { progress: 50, status: 'uploading' },
+          },
+        });
+      });
+
+      await act(async () => {
+        result.current.replaceMessages([persistedMessage], { context });
+      });
+
+      expect(result.current.dbMessagesMap[key]).toEqual([persistedMessage, localVoiceMessage]);
+      expect(mutate).toHaveBeenCalledWith(messageListKey(context), [persistedMessage], {
+        revalidate: false,
+      });
+    });
+
+    it('keeps an earlier local voice row ahead of a later server snapshot message', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'voice-order-agent', topicId: 'voice-order-topic' };
+      const key = messageMapKey(context);
+      const localVoiceMessage = {
+        audioList: [{ id: 'local-audio', url: 'blob:voice-preview' }],
+        content: '',
+        createdAt: 1,
+        id: 'tmp-voice-message',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        updatedAt: 1,
+      } as any;
+      const laterPersistedMessage = {
+        content: 'later text',
+        createdAt: 2,
+        id: 'persisted-message',
+        role: 'user',
+        updatedAt: 2,
+      } as any;
+
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [key]: [localVoiceMessage] },
+          voiceMessageUploadMap: {
+            [localVoiceMessage.id]: { progress: 50, status: 'uploading' },
+          },
+        });
+      });
+
+      await act(async () => {
+        result.current.replaceMessages([laterPersistedMessage], { context });
+      });
+
+      expect(result.current.dbMessagesMap[key]).toEqual([localVoiceMessage, laterPersistedMessage]);
+    });
+
+    it('drops an inactive local-only row from memory and cache input', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'inactive-voice-agent', topicId: 'inactive-voice-topic' };
+      const key = messageMapKey(context);
+      const persistedMessage = {
+        content: 'persisted',
+        createdAt: 1,
+        id: 'persisted-message',
+        role: 'assistant',
+        updatedAt: 1,
+      } as any;
+      const inactiveLocalMessage = {
+        audioList: [{ id: 'local-audio', url: 'blob:stale-preview' }],
+        content: '',
+        createdAt: 2,
+        id: 'tmp-stale-voice-message',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE },
+        role: 'user',
+        updatedAt: 2,
+      } as any;
+
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [key]: [inactiveLocalMessage] },
+          voiceMessageUploadMap: {},
+        });
+      });
+
+      await act(async () => {
+        result.current.replaceMessages([persistedMessage, inactiveLocalMessage], { context });
+      });
+
+      expect(result.current.dbMessagesMap[key]).toEqual([persistedMessage]);
+      expect(mutate).toHaveBeenCalledWith(messageListKey(context), [persistedMessage], {
+        revalidate: false,
+      });
     });
 
     it('skips write-through when the conversation has no persisted topic', async () => {

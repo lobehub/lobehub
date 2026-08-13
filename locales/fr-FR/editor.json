@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Les métadonnées n'ont pas été enregistrées. Réessayez ou continuez à modifier.",
   "skillFrontmatter.title": "Métadonnées de compétence",
   "slash.compact": "Compacter le contexte",
+  "slash.goal": "Définir un objectif",
+  "slash.goal.desc": "Planifiez et démarrez un objectif avec des critères d'acceptation modifiables",
   "slash.h1": "Titre 1",
   "slash.h2": "Titre 2",
   "slash.h3": "Titre 3",

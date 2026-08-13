@@ -171,7 +171,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         if (idx < q.options.length) {
           event.preventDefault();
           setHighlight(q, idx);
-          handleToggle(q, q.options[idx].label);
+          handleToggle(q, q.options[idx].label, { submitOnComplete: true });
         } else if (idx === q.options.length) {
           event.preventDefault();
           setHighlight(q, q.options.length);
@@ -216,7 +216,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           picks[q.question] !== q.options[highlightedIndex].label
         ) {
           event.preventDefault();
-          handleToggle(q, q.options[highlightedIndex].label);
+          handleToggle(q, q.options[highlightedIndex].label, { submitOnComplete: true });
           return;
         }
         if (isSubmitDisabled) return;

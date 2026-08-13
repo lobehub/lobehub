@@ -1,3 +1,4 @@
+import type { ChatContextContent } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,6 +70,112 @@ beforeEach(() => {
 });
 
 describe('useFileStore:chat', () => {
+  it('isolates context selections by conversation key', () => {
+    const { result } = renderHook(() => useStore());
+    const sharedIdSelectionA: ChatContextContent = {
+      content: 'selection A',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const sharedIdSelectionB: ChatContextContent = {
+      content: 'selection B',
+      id: 'shared-selection',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({ chatContextSelectionsByContext: {} });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-a',
+        selection: sharedIdSelectionA,
+      });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-b',
+        selection: sharedIdSelectionB,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-a': [sharedIdSelectionA],
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.removeChatContextSelection({
+        contextKey: 'topic-a',
+        id: sharedIdSelectionA.id,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.clearChatContextSelections('topic-b');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({});
+  });
+
+  it('moves context selections to a new conversation key without overwriting the target', () => {
+    const { result } = renderHook(() => useStore());
+    const sourceSelection: ChatContextContent = {
+      content: 'source selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetSelection: ChatContextContent = {
+      content: 'stale target selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetOnlySelection: ChatContextContent = {
+      content: 'target only',
+      id: 'target-only',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: {
+          'topic-new': [sourceSelection],
+          'topic-real': [targetSelection, targetOnlySelection],
+        },
+      });
+      result.current.moveChatContextSelections('topic-new', 'topic-real');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-real': [sourceSelection, targetOnlySelection],
+    });
+  });
+
+  it('restores submitted selections without overwriting context added while sending', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedSelection: ChatContextContent = {
+      content: 'submitted selection',
+      id: 'submitted',
+      type: 'text',
+    };
+    const newerSelection: ChatContextContent = {
+      content: 'newer selection',
+      id: 'newer',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: { topic: [newerSelection] },
+      });
+      result.current.restoreChatContextSelections('topic', [submittedSelection]);
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      topic: [submittedSelection, newerSelection],
+    });
+  });
+
   it('clearChatUploadFileList should clear the inputFilesList', () => {
     const { result } = renderHook(() => useStore());
 

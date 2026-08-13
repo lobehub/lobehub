@@ -34,6 +34,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
+    padding-block: 1px;
+
     color: ${cssVar.colorTextDescription};
   `,
 }));

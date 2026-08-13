@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeStepResult } from '@/server/workflows/testing/stepContext';
+
 import {
   failRunningUnderstandingProviders,
   processUnderstandingProviders,
@@ -16,6 +18,16 @@ const errors = vi.hoisted(() => {
 });
 
 vi.mock('@lobechat/database', () => ({
+  getUnderstandingSourceFingerprint: ({
+    sources,
+  }: {
+    sources: Record<string, { revision: number; status: string }>;
+  }) =>
+    Object.entries(sources)
+      .filter(([, source]) => source.status === 'completed')
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([providerId, source]) => `${providerId}@${source.revision}`)
+      .join(','),
   StaleUnderstandingSessionError: errors.DomainError,
   UnderstandingResourceNotFoundError: errors.DomainError,
   UnderstandingSessionNotFoundError: errors.DomainError,
@@ -32,6 +44,7 @@ const payload = {
   ],
   responseLanguage: 'zh-CN',
   sessionId: 'session-1',
+  startedAt: 1000,
   topicId: 'topic-1',
   userId: 'user-1',
 };
@@ -49,7 +62,7 @@ const createContext = (requestPayload: unknown) => {
       requestPayload,
       run: async <T>(stepName: string, action: () => Promise<T>) => {
         steps.push(stepName);
-        return action();
+        return serializeStepResult(await action());
       },
     },
     invocations,
@@ -68,7 +81,18 @@ const completed = (providerId: string, sourceFingerprint: string, revision = 1) 
 });
 
 describe('processUnderstandingProviders', () => {
-  it('runs one durable operation per provider concurrently and invokes each completed fingerprint immediately', async () => {
+  /**
+   * @example A faster GitHub provider cannot create downstream steps before a slower Gmail provider.
+   */
+  it('separates concurrent provider collection from deterministic downstream scheduling', async () => {
+    // ROOT CAUSE:
+    //
+    // If one provider completed before another, its async map callback immediately created writing
+    // and recommendation steps. Upstash then persisted a parallel group whose membership depended on
+    // completion timing, so replay could expect GitHub steps while receiving Twitter steps.
+    //
+    // Before: provider callbacks mixed collection and downstream workflow steps.
+    // After: all collection steps settle before a sorted downstream step sequence is created.
     let releaseGmail!: () => void;
     const gmailGate = new Promise<void>((resolve) => (releaseGmail = resolve));
     const service = {
@@ -85,15 +109,9 @@ describe('processUnderstandingProviders', () => {
       triggerTaskRecommendations,
     });
 
-    await vi.waitFor(() => expect(invocations).toHaveLength(1));
-    await vi.waitFor(() => expect(triggerTaskRecommendations).toHaveBeenCalledTimes(1));
-    expect(invocations[0].settings.body).toEqual({
-      responseLanguage: 'zh-CN',
-      sessionId: 'session-1',
-      sourceFingerprint: 'github@1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    await vi.waitFor(() => expect(service.processProvider).toHaveBeenCalledTimes(2));
+    expect(invocations).toHaveLength(0);
+    expect(triggerTaskRecommendations).not.toHaveBeenCalled();
     releaseGmail();
     await running;
 
@@ -110,6 +128,10 @@ describe('processUnderstandingProviders', () => {
       topicId: 'topic-1',
     });
     expect(invocations).toHaveLength(2);
+    expect(invocations.map(({ settings }) => settings.body.sourceFingerprint)).toEqual([
+      'github@1',
+      'github@1,gmail@1',
+    ]);
     expect(invocations[0].settings.flowControl).toEqual({
       key: 'onboarding-understanding.writing.session-1',
       parallelism: 1,
@@ -273,6 +295,19 @@ describe('failRunningUnderstandingProviders', () => {
       failProvider: vi.fn(async ({ revision }: { revision: number }) =>
         revision === 8 ? {} : undefined,
       ),
+      failWriting: vi.fn(),
+      get: vi.fn(async () => ({
+        id: 'session-1',
+        sources: {
+          github: {
+            errors: [],
+            failedCount: 1,
+            revision: 8,
+            status: 'failed',
+            succeededCount: 0,
+          },
+        },
+      })),
     };
     const current = {
       ...payload,
@@ -301,6 +336,60 @@ describe('failRunningUnderstandingProviders', () => {
       providerId: 'github',
       revision: 4,
       sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+  });
+
+  /** @example A provider workflow crash after collection projects the session as failed. */
+  it('marks writing failed when all providers completed but downstream scheduling did not start', async () => {
+    // ROOT CAUSE:
+    //
+    // The failure callback previously terminalized only running providers. If every provider had
+    // already completed but downstream step replay failed, no state changed and polling remained
+    // `processing` forever because the session had no writing state.
+    //
+    // We fixed this by creating a failed writing state for the completed source fingerprint.
+    const service = {
+      failProvider: vi.fn(async () => undefined),
+      failWriting: vi.fn(async () => ({})),
+      get: vi.fn(async () => ({
+        generationRevision: 0,
+        id: 'session-1',
+        sources: {
+          github: {
+            completedAt: '2026-08-11T21:04:08.922Z',
+            errors: [],
+            failedCount: 0,
+            revision: 1,
+            status: 'completed',
+            succeededCount: 10,
+          },
+          twitter: {
+            completedAt: '2026-08-11T21:04:03.458Z',
+            errors: [],
+            failedCount: 0,
+            revision: 1,
+            status: 'completed',
+            succeededCount: 3,
+          },
+        },
+      })),
+    };
+
+    await failRunningUnderstandingProviders(
+      {
+        ...payload,
+        providers: [
+          { id: 'github', revision: 1 },
+          { id: 'twitter', revision: 1 },
+        ],
+      },
+      { createService: async () => service as never },
+    );
+
+    expect(service.failWriting).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1,twitter@1',
       topicId: 'topic-1',
     });
   });

@@ -55,11 +55,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+// Both labels rendered on a row are searchable: the name and the role shown
+// beside it, so typing a role ("设计") finds the agent the user sees.
+const matchesSearch = (agent: SidebarAgentItem, q: string) =>
+  [agentDisplayName(agent), agent.title].some((label) => (label ?? '').toLowerCase().includes(q));
+
 const triggerStyle: CSSProperties = {
   alignItems: 'center',
   display: 'inline-flex',
   justifyContent: 'center',
   lineHeight: 1,
+  // Bound the trigger to its row so a chip inside it can cap at `max-width:
+  // 100%` and ellipsis its label, instead of overflowing a narrow column.
+  maxWidth: '100%',
+  minWidth: 0,
 };
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
@@ -129,17 +138,13 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const filteredPrivate = useMemo(() => {
       const q = search.trim().toLowerCase();
       if (!q) return privateAgents;
-      return privateAgents.filter((agent) =>
-        (agentDisplayName(agent) ?? '').toLowerCase().includes(q),
-      );
+      return privateAgents.filter((agent) => matchesSearch(agent, q));
     }, [privateAgents, search]);
 
     const filteredWorkspace = useMemo(() => {
       const q = search.trim().toLowerCase();
       if (!q) return workspaceAgents;
-      return workspaceAgents.filter((agent) =>
-        (agentDisplayName(agent) ?? '').toLowerCase().includes(q),
-      );
+      return workspaceAgents.filter((agent) => matchesSearch(agent, q));
     }, [workspaceAgents, search]);
 
     // Flat order for keyboard navigation and activeIndex: private first, then workspace.
@@ -212,10 +217,10 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           >
             <AgentItem
               active={flatIndex === activeIndex}
+              agent={agent}
               agentId={agent.id}
               agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
               avatar={agent.avatar}
-              heterogeneousType={agent.heterogeneousType}
               onAgentChange={handleAgentChange}
               onClose={() => setKey((k) => k + 1)}
             />
