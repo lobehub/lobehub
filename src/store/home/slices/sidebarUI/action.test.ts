@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { INBOX_SESSION_ID } from '@/const/session';
+import { mutate } from '@/libs/swr';
+import { sessionKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -58,6 +60,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+vi.mock('@/libs/swr', () => ({ mutate: vi.fn() }));
+
 describe('createSidebarUISlice', () => {
   // ========== Agent Operations ==========
   describe('pinAgent', () => {
@@ -74,6 +78,7 @@ describe('createSidebarUISlice', () => {
 
       expect(agentService.updateAgentPinned).toHaveBeenCalledWith(mockAgentId, true);
       expect(spyOnRefresh).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(sessionKeys.list(true));
     });
 
     it('should unpin an agent and refresh agent list', async () => {
@@ -181,6 +186,7 @@ describe('createSidebarUISlice', () => {
 
       expect(agentService.removeAgent).toHaveBeenCalledWith(mockAgentId);
       expect(spyOnRefresh).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(sessionKeys.list(true));
     });
 
     it('should switch to inbox when removing the active session', async () => {
@@ -228,6 +234,7 @@ describe('createSidebarUISlice', () => {
 
       expect(agentService.duplicateAgent).toHaveBeenCalledWith(mockAgentId, 'Copied Agent');
       expect(spyOnRefresh).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(sessionKeys.list(true));
       expect(mockSetActiveAgentId).toHaveBeenCalledWith(mockNewAgentId);
     });
 
@@ -283,6 +290,7 @@ describe('createSidebarUISlice', () => {
 
       expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith(mockAgentId, mockGroupId);
       expect(spyOnRefresh).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(sessionKeys.list(true));
     });
 
     it('should set group to default when groupId is null', async () => {

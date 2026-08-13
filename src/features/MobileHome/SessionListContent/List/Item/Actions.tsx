@@ -29,7 +29,7 @@ import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenEr
 interface ActionProps {
   group: string | undefined;
   id: string;
-  openCreateGroupModal: () => void;
+  openCreateGroupModal: (isVirtualAgent: boolean) => void;
   parentType: 'agent' | 'group';
   setOpen: (open: boolean) => void;
 }
@@ -156,7 +156,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 onClick: ({ domEvent }) => {
                   domEvent.stopPropagation();
                   if (!canCreate) return;
-                  openCreateGroupModal();
+                  openCreateGroupModal(isVirtualAgent);
                 },
               },
             ],
