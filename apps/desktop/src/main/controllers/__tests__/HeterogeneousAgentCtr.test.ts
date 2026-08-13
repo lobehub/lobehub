@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 
 import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
 import { app as electronAppMock } from 'electron';
@@ -1151,6 +1152,107 @@ describe('HeterogeneousAgentCtr', () => {
         }),
         sessionId,
       });
+    });
+
+    it('classifies a missing resumed ACP session after broadcasting its terminal error', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_603,
+        data: { code: 'FS_NOT_FOUND', detail: '/sessions/missing-grok-session' },
+        message: 'Path not found.',
+      });
+      grokAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onEvents([
+          {
+            data: {
+              agentType: 'grok-build',
+              details: {
+                code: missingSessionError.rpcError.code,
+                data: missingSessionError.rpcError.data,
+              },
+              message: missingSessionError.message,
+            },
+            operationId: options.operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'error',
+          },
+        ]);
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-grok-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-grok-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Grok Build session could not be found, so it can no longer be resumed.',
+      );
+
+      expect(grokAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({ resumeSessionId: 'missing-grok-session' }),
+      );
+      const eventIndex = send.mock.calls.findIndex(([channel]) => channel === 'heteroAgentEvent');
+      const errorIndex = send.mock.calls.findIndex(
+        ([channel]) => channel === 'heteroAgentSessionError',
+      );
+      expect(eventIndex).toBeGreaterThanOrEqual(0);
+      expect(errorIndex).toBeGreaterThan(eventIndex);
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'grok-build',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'grok',
+          details: {
+            code: -32_603,
+            data: { code: 'FS_NOT_FOUND', detail: '/sessions/missing-grok-session' },
+          },
+          message:
+            'The saved Grok Build session could not be found, so it can no longer be resumed.',
+          resumeSessionId: 'missing-grok-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('does not classify a non-load ACP filesystem error as a stale resume session', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const promptError = new AcpRpcResponseError('session/prompt', {
+        code: -32_603,
+        data: { code: 'FS_NOT_FOUND', detail: '/workspace/missing-file' },
+        message: 'Path not found.',
+      });
+
+      const payload = (ctr as any).getSessionErrorPayload(promptError, {
+        agentSessionId: 'grok-session',
+        agentType: 'grok-build',
+        args: [],
+        command: 'grok',
+        resumeSessionId: 'grok-session',
+        sessionId: 'session-1',
+      });
+
+      expect(payload).toBe(promptError.message);
     });
   });
 

@@ -55,7 +55,7 @@ export class AcpServerRequestError extends Error {
 /** An error returned by the ACP server for a client request. */
 export class AcpRpcResponseError extends Error {
   constructor(
-    method: string,
+    readonly method: string,
     readonly rpcError: AcpRpcErrorData,
   ) {
     const detail =

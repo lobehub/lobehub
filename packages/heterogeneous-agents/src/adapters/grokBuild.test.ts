@@ -69,13 +69,42 @@ describe('GrokBuildAdapter', () => {
       'stream_chunk',
     ]);
     expect(events.find(({ type }) => type === 'tool_start')?.data).toMatchObject({
-      toolCalling: { id: 'native-call-1', identifier: 'grok-build' },
+      toolCalling: { apiName: 'Read', id: 'native-call-1', identifier: 'grok-build' },
       toolCallId: 'native-call-1',
     });
     expect(events.find(({ type }) => type === 'tool_result')?.data).toEqual({
       content: 'file body',
       isError: false,
       toolCallId: 'native-call-1',
+    });
+  });
+
+  it('uses the stable execute kind for shell tools while preserving the raw command', () => {
+    const adapter = new GrokBuildAdapter();
+    const events = adapter.adapt(
+      update({
+        kind: 'execute',
+        rawInput: {
+          command: 'git worktree add /tmp/grok-wt',
+          description: 'Create a worktree',
+        },
+        sessionUpdate: 'tool_call',
+        status: 'in_progress',
+        title: 'Execute `git worktree add /tmp/grok-wt`',
+        toolCallId: 'execute-1',
+      }),
+    );
+
+    const toolCalling = events.find(({ type }) => type === 'tool_start')?.data
+      ?.toolCalling as Record<string, unknown>;
+    expect(toolCalling).toMatchObject({
+      apiName: 'execute',
+      id: 'execute-1',
+      identifier: 'grok-build',
+    });
+    expect(JSON.parse(String(toolCalling.arguments))).toEqual({
+      command: 'git worktree add /tmp/grok-wt',
+      description: 'Create a worktree',
     });
   });
 

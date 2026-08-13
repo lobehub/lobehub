@@ -233,9 +233,10 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     const toolCallId = update.toolCallId;
     if (typeof toolCallId !== 'string' || this.toolPayloadById.has(toolCallId)) return [];
 
-    const title = typeof update.title === 'string' && update.title ? update.title : 'tool';
+    const kind = typeof update.kind === 'string' && update.kind ? update.kind : undefined;
+    const title = typeof update.title === 'string' && update.title ? update.title : undefined;
     const tool: ToolCallPayload = {
-      apiName: title,
+      apiName: kind === 'execute' ? kind : (title ?? kind ?? 'tool'),
       arguments: stringifyUnknown(update.rawInput ?? {}),
       id: toolCallId,
       identifier: GROK_BUILD_IDENTIFIER,

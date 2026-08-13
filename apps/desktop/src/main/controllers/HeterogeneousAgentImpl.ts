@@ -43,6 +43,7 @@ import {
 } from '@lobechat/heterogeneous-agents/quota-sampler';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
+  AcpRpcResponseError,
   AgentStreamPipeline,
   buildAgentInput,
   buildCodexAppServerArgs,
@@ -64,6 +65,7 @@ import type {
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
@@ -524,6 +526,36 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private getGrokResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'grok-build' ||
+      !session.resumeSessionId ||
+      !(error instanceof AcpRpcResponseError) ||
+      error.method !== 'session/load' ||
+      !isRecord(error.rpcError.data) ||
+      error.rpcError.data.code !== 'FS_NOT_FOUND'
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'grok-build',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message: 'The saved Grok Build session could not be found, so it can no longer be resumed.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -547,7 +579,8 @@ export default class HeterogeneousAgentCtr {
       if (cliMissingError) return cliMissingError;
     }
 
-    const resumeError = this.getCodexResumeError(error, session);
+    const resumeError =
+      this.getCodexResumeError(error, session) ?? this.getGrokResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
