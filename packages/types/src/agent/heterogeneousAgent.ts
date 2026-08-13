@@ -178,6 +178,30 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
+      errorMessage: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'no model configured'],
+      signInCommand: 'kimi',
+    },
+    defaultCommand: 'kimi',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Kimi',
+    install: {
+      commands: [
+        'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
+        'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
+      ],
+      docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
+    },
+    kind: 'local-cli',
+    menuKey: 'newKimiCodeAgent',
+    menuLabelKey: 'newKimiCodeAgent',
+    resume: { supported: true },
+    title: 'Kimi Code',
+    type: 'kimi-code',
+  },
+  {
+    auth: {
       docsUrl: 'https://opencode.ai/docs',
       errorMessage:
         'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',

@@ -9,6 +9,17 @@ import { buildAgentInput } from './buildAgentInput';
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x10]);
 
 describe('buildAgentInput', () => {
+  it('puts Kimi Code text in argv and rejects images', async () => {
+    await expect(buildAgentInput('kimi-code', 'hello')).resolves.toEqual({
+      args: ['--prompt', 'hello'],
+      stdin: '',
+    });
+    await expect(
+      buildAgentInput('kimi-code', [
+        { source: { type: 'url', url: 'https://example.com/a.png' }, type: 'image' },
+      ]),
+    ).rejects.toThrow(/Kimi Code does not support image attachments/);
+  });
   let tmp: string;
 
   beforeEach(async () => {

@@ -3134,7 +3134,7 @@ table verify_review_predictions {
     workspace_id [name: 'verify_review_predictions_workspace_id_idx']
     (provider, model) [name: 'verify_review_predictions_model_idx']
     (check_result_id, provider, model, prompt_version) [name: 'verify_review_predictions_result_model_prompt_unique', unique]
-    
+
   }
 }
 

@@ -75,6 +75,16 @@ corepack install --global "${package_manager}"
 ln -sfn "${node_dir}/bin/pnpm" "${LOCAL_BIN}/pnpm"
 hash -r
 
+echo "==> Installing the latest LobeHub CLI"
+"${node_dir}/bin/npm" install \
+  --global \
+  --prefix "${node_dir}" \
+  "@lobehub/cli@latest"
+for executable in lh lobe lobehub; do
+  ln -sfn "${node_dir}/bin/${executable}" "${LOCAL_BIN}/${executable}"
+done
+hash -r
+
 bun_dir="${TOOLCHAIN_ROOT}/bun-v${BUN_VERSION}"
 if [[ ! -x "${bun_dir}/bun" ]]; then
   echo "==> Installing Bun ${BUN_VERSION}"
@@ -97,6 +107,7 @@ echo "==> Toolchain versions"
 node --version
 pnpm --version
 bun --version
+lh --version
 
 if [[ ! -f .env ]]; then
   echo "==> Creating the local development environment file"

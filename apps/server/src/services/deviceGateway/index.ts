@@ -465,7 +465,7 @@ export class DeviceGateway {
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type: 'codebuddy' | 'opencode' | 'pi' | 'qoder';
+    type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
     userId: string;
     workspaceId?: string;
   }): Promise<HeterogeneousAgentModelCatalog> {

@@ -83,6 +83,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Hermes',
     kind: 'remote',
   },
+  'kimi-code': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Kimi Code — Moonshot AI’s autonomous terminal coding agent with filesystem and shell access.',
+    displayName: 'Kimi Code',
+    kind: 'cli',
+  },
   'opencode': {
     capabilities: CODING_CAPABILITIES,
     description:

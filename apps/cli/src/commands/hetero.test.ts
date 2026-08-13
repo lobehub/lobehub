@@ -231,6 +231,33 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs Kimi Code with its default command and forwards model but not effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'kimi-code',
+      '--prompt',
+      'do thing',
+      '--model',
+      'kimi-for-coding',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('kimi-code', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        extraArgs: ['--model', 'kimi-for-coding'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

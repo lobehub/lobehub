@@ -1050,7 +1050,7 @@
   "settingSystemTools.tools.find.desc": "Unix find - 标准文件搜索命令",
   "settingSystemTools.tools.gemini.desc": "Gemini CLI - Google 命令行编码助理",
   "settingSystemTools.tools.grep.desc": "GNU grep - 标准文本搜索工具",
-  "settingSystemTools.tools.kimi.desc": "Kimi CLI - 月之暗面命令行编码助理",
+  "settingSystemTools.tools.kimi.desc": "Kimi Code - 月之暗面命令行编码助理",
   "settingSystemTools.tools.lobehub.desc": "LobeHub CLI - 管理和连接 LobeHub 服务",
   "settingSystemTools.tools.mdfind.desc": "macOS 聚焦搜索（快速索引搜索）",
   "settingSystemTools.tools.node.desc": "Node.js - 执行 JavaScript/TypeScript 的运行时",

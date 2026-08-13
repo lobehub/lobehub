@@ -2055,7 +2055,7 @@ export class AiAgentService {
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
     // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codebuddy /
-    // codex / cursor / opencode / pi / qoder) or
+    // codex / cursor / kimi-code / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -2364,6 +2364,7 @@ export class AiAgentService {
         heteroType === 'codebuddy' ||
         heteroType === 'codex' ||
         heteroType === 'cursor' ||
+        heteroType === 'kimi-code' ||
         heteroType === 'opencode' ||
         heteroType === 'pi' ||
         heteroType === 'qoder'
@@ -2585,8 +2586,9 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode / Pi) — fork between device dispatch
-        // and cloud sandbox via the shared execution plan:
+        // Local CLI hetero (Amp / Claude Code / Codex / Kimi Code / OpenCode /
+        // Pi / Qoder) — fork between device dispatch and cloud sandbox via the
+        // shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
         //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
@@ -2649,6 +2651,7 @@ export class AiAgentService {
                 heteroType === 'amp' ||
                 heteroType === 'codebuddy' ||
                 heteroType === 'cursor' ||
+                heteroType === 'kimi-code' ||
                 heteroType === 'opencode' ||
                 heteroType === 'pi' ||
                 heteroType === 'qoder'

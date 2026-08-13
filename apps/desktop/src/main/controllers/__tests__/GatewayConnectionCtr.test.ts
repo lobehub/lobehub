@@ -846,6 +846,7 @@ describe('GatewayConnectionCtr', () => {
       'claude-code',
       'codebuddy',
       'cursor',
+      'kimi-code',
       'opencode',
     ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
       const client = await connectAndOpen();

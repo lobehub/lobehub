@@ -1237,7 +1237,7 @@ export default {
   'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
   'settingSystemTools.tools.gemini.desc': 'Gemini CLI - Google agentic coding CLI',
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
-  'settingSystemTools.tools.kimi.desc': 'Kimi CLI - Moonshot AI agentic coding CLI',
+  'settingSystemTools.tools.kimi.desc': 'Kimi Code - Moonshot AI agentic coding CLI',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
   'settingSystemTools.tools.lobehub.desc': 'LobeHub CLI - manage and connect to LobeHub services',
   'settingSystemTools.tools.bun.desc': 'Bun - fast JavaScript runtime and package manager',

@@ -12,7 +12,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import HeterogeneousAgentCtr from '../HeterogeneousAgentImpl';
+import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
@@ -27,6 +27,44 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
+
+describe('redactPromptArgs', () => {
+  it('redacts separated and inline Kimi prompt values without changing unrelated arguments', () => {
+    expect(
+      redactPromptArgs(
+        [
+          '--prompt',
+          'private',
+          '--model',
+          'x',
+          '-p',
+          'short-private',
+          '-p=inline',
+          '--prompt=other',
+        ],
+        'kimi-code',
+      ),
+    ).toEqual([
+      '--prompt',
+      '[REDACTED]',
+      '--model',
+      'x',
+      '-p',
+      '[REDACTED]',
+      '-p=[REDACTED]',
+      '--prompt=[REDACTED]',
+    ]);
+  });
+
+  it.each(['claude-code', 'qoder'] as const)(
+    'keeps the %s mode flag and its following input-format argument intact',
+    (agentType) => {
+      expect(
+        redactPromptArgs(['-p', '--input-format', 'stream-json', '--prompt=private'], agentType),
+      ).toEqual(['-p', '--input-format', 'stream-json', '--prompt=[REDACTED]']);
+    },
+  );
+});
 
 const { mockGetAllWindows } = vi.hoisted(() => ({
   mockGetAllWindows: vi.fn<() => any[]>(() => []),

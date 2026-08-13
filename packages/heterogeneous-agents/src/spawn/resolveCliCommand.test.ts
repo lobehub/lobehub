@@ -162,6 +162,33 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it('validates Kimi Code using its bare semver and stream-json capabilities', async () => {
+      callExecFile('/Users/x/.kimi-code/bin/kimi\n');
+      callExecFile('1.8.0');
+      callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.kimi-code/bin/kimi',
+        version: '1.8.0',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
+    });
+
+    it('rejects the retired kimi-cli when stream-json capabilities are missing', async () => {
+      callExecFile('0.1.0');
+      callExecFile('Usage: kimi chat [options]');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(
+        detectHeterogeneousCliCommand('kimi-code', '/Users/x/.local/bin/kimi'),
+      ).resolves.toMatchObject({ available: false });
+    });
+
     it('resolves and validates Qoder using its bare semver output', async () => {
       callExecFile('/Users/x/.local/bin/qodercli\n');
       callExecFile('1.1.15');
@@ -207,7 +234,7 @@ describe('resolveCliCommand', () => {
         expect(status).toMatchObject({
           available: true,
           path: path.join(os.homedir(), '.local', 'bin', 'agent'),
-          version: 'Usage: agent [options] [command] [prompt...]',
+          version: undefined,
         });
         expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
         expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
@@ -256,6 +283,32 @@ describe('resolveCliCommand', () => {
           available: true,
           path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
           version: '1.18.3',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('finds Kimi Code in its official user-local install path', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which kimi
+        callExecFile('1.8.0'); // ~/.kimi-code/bin/kimi --version
+        callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.kimi-code', 'bin', 'kimi'),
+          version: '1.8.0',
         });
       } finally {
         process.env.PATH = originalPath;
@@ -609,6 +662,32 @@ describe('resolveCliCommand', () => {
         if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
         else process.env.LOCALAPPDATA = originalLocalAppData;
       }
+    });
+
+    it('capability-probes a Kimi .cmd shim without constructing a shell command', async () => {
+      const commandPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\kimi.cmd';
+      const scriptPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\kimi-code\\cli.js';
+      existingFiles({
+        [`${NPM_DIR}\\node.exe`]: true,
+        [commandPath]: npmShim('node_modules\\kimi-code\\cli.js'),
+        [scriptPath]: true,
+      });
+      callExecFile(`${commandPath}\r\n`);
+      callExecFile('1.8.0');
+      callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('kimi', {
+        validateHelpKeywords: ['--prompt', '--output-format'],
+        validatePattern: /^\d+\.\d+\.\d+$/,
+      });
+
+      expect(status.available).toBe(true);
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${NPM_DIR}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
+      expect(execFileMock.mock.calls[2]![0]).toBe(`${NPM_DIR}\\node.exe`);
+      expect(execFileMock.mock.calls[2]![1]).toEqual([scriptPath, '--help']);
+      expect(execMock).not.toHaveBeenCalled();
     });
 
     it('rejects a command containing shell metacharacters', async () => {

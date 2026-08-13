@@ -18,33 +18,65 @@ const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
 const CODEBUDDY_MODEL_OPTION = '--model <model>';
 const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
+const CURSOR_MODEL_ANNOTATIONS = [' (current)', ' (default)'] as const;
+const CURSOR_MODEL_ID_PATTERN = /^[A-Z0-9][\w./:@+-]*$/i;
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
 
-/** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
-export const parseCodeBuddyModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
-  const modelOptionIndex = stdout.indexOf(CODEBUDDY_MODEL_OPTION);
-  if (modelOptionIndex < 0) return [];
+const parseCodeBuddyModelCatalogResult = (
+  output: string,
+): HeterogeneousAgentModel[] | undefined => {
+  const modelOptionIndex = output.indexOf(CODEBUDDY_MODEL_OPTION);
+  if (modelOptionIndex < 0) return;
 
-  const labelStart = stdout.indexOf(
+  const labelStart = output.indexOf(
     CODEBUDDY_SUPPORTED_MODELS_LABEL,
     modelOptionIndex + CODEBUDDY_MODEL_OPTION.length,
   );
-  if (labelStart < 0) return [];
+  if (labelStart < 0) return;
 
   const labelEnd = labelStart + CODEBUDDY_SUPPORTED_MODELS_LABEL.length;
-  const modelsStart = stdout.indexOf('(', labelEnd);
-  if (modelsStart < 0 || stdout.slice(labelEnd, modelsStart).trim()) return [];
+  const modelsStart = output.indexOf('(', labelEnd);
+  if (modelsStart < 0 || output.slice(labelEnd, modelsStart).trim()) return;
 
-  const modelsEnd = stdout.indexOf(')', modelsStart + 1);
-  if (modelsEnd < 0) return [];
+  const modelsEnd = output.indexOf(')', modelsStart + 1);
+  if (modelsEnd < 0) return;
 
-  const supportedModels = stdout.slice(modelsStart + 1, modelsEnd);
+  const supportedModels = output.slice(modelsStart + 1, modelsEnd);
+  const modelIds = supportedModels.split(',').map((model) => model.trim());
+  if (modelIds.some((id) => !id)) return;
 
-  return [...new Set(supportedModels.split(',').map((model) => model.trim()))]
-    .filter((id) => id && id !== 'default-model')
+  return [...new Set(modelIds)]
+    .filter((id) => id !== 'default-model')
     .map((id) => ({ id, modelId: id, providerId: 'codebuddy' }));
+};
+
+/** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
+export const parseCodeBuddyModelCatalog = (output: string): HeterogeneousAgentModel[] =>
+  parseCodeBuddyModelCatalogResult(output) ?? [];
+
+/** Parse the `model-slug - Display Label` rows emitted by Cursor Agent. */
+export const parseCursorModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    const separatorIndex = line.indexOf(' - ');
+    if (separatorIndex <= 0) continue;
+
+    let id = line.slice(0, separatorIndex).trim();
+    const annotation = CURSOR_MODEL_ANNOTATIONS.find((item) => id.endsWith(item));
+    if (annotation) id = id.slice(0, -annotation.length);
+    const label = line.slice(separatorIndex + 3).trim();
+    if (!CURSOR_MODEL_ID_PATTERN.test(id) || !label || seen.has(id)) continue;
+
+    seen.add(id);
+    models.push({ id, label, modelId: id, providerId: 'cursor' });
+  }
+
+  return models;
 };
 
 export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
@@ -179,7 +211,7 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
-    const { stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
+    const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
       encoding: 'utf8',
       env: env as NodeJS.ProcessEnv,
@@ -188,10 +220,28 @@ export const listHeterogeneousAgentModels = async (
       windowsHide: true,
     });
 
+    if (params.type === 'codebuddy') {
+      const models =
+        parseCodeBuddyModelCatalogResult(String(stdout)) ??
+        parseCodeBuddyModelCatalogResult(String(stderr));
+      if (!models) {
+        return {
+          error: {
+            code: 'command_failed',
+            message: getCatalogErrorMessage('command_failed', params.type),
+          },
+          status: 'error',
+          updatedAt,
+        };
+      }
+
+      return { models, status: 'success', updatedAt };
+    }
+
     return {
       models:
-        params.type === 'codebuddy'
-          ? parseCodeBuddyModelCatalog(String(stdout))
+        params.type === 'cursor'
+          ? parseCursorModelCatalog(String(stdout))
           : params.type === 'pi'
             ? parsePiModelCatalog(String(stdout))
             : params.type === 'qoder'

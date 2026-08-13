@@ -222,6 +222,10 @@ export interface ToolStateChunkData {
 /** Data shape for tool_end events */
 export interface ToolEndData {
   isSuccess: boolean;
+  /** Canonical gateway payload used to resolve renderer-side lifecycle hooks. */
+  payload?: ToolCallPayload | { toolCalling: ToolCallPayload };
+  /** Builtin-tool-compatible result passed to renderer-side lifecycle hooks. */
+  result?: { content?: string; state?: unknown; success: boolean };
   /** Subagent context if this tool_end belongs to a subagent inner tool. */
   subagent?: SubagentEventContext;
   toolCallId: string;
