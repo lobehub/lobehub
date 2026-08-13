@@ -81,7 +81,7 @@ const createFakeProc = ({
   return { proc, start, stdinWrites };
 };
 
-const createGrokAcpProc = () => {
+const createGrokAcpProc = ({ loadError = false }: { loadError?: boolean } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -123,6 +123,21 @@ const createGrokAcpProc = () => {
           }
           case 'session/new': {
             send({ id: message.id, result: { sessionId: 'grok-cli-session' } });
+            return;
+          }
+          case 'session/load': {
+            if (loadError) {
+              send({
+                error: {
+                  code: -32_603,
+                  data: { code: 'FS_NOT_FOUND', detail: 'missing session' },
+                  message: 'Path not found.',
+                },
+                id: message.id,
+              });
+            } else {
+              send({ id: message.id, result: {} });
+            }
             return;
           }
           case 'session/prompt': {
@@ -266,6 +281,34 @@ describe('spawnAgent', () => {
       type: 'agent_runtime_end',
     });
 
+    processKill.mockRestore();
+  });
+
+  it('ends the Grok event iterable normally after emitting a structured ACP request error', async () => {
+    const fake = createGrokAcpProc({ loadError: true });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-resume',
+      prompt: 'continue',
+      resumeSessionId: 'missing-session',
+    });
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      data: {
+        agentType: 'grok-build',
+        details: { data: { code: 'FS_NOT_FOUND' } },
+      },
+      type: 'error',
+    });
+    await expect(handle.exit).resolves.toEqual({ code: 1, signal: null });
     processKill.mockRestore();
   });
 

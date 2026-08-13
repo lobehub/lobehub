@@ -409,6 +409,7 @@ const spawnGrokAcpAgent = async (
   const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
   const stderr = new PassThrough();
   const queue: AgentStreamEvent[] = [];
+  let emittedTerminalError = false;
   let streamEnded = false;
   let streamError: Error | undefined;
   let wakeup: (() => void) | undefined;
@@ -426,6 +427,7 @@ const spawnGrokAcpAgent = async (
     cwd,
     env: { ...process.env, ...options.env },
     onEvents: (events) => {
+      if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
       queue.push(...events);
       wake();
     },
@@ -445,7 +447,13 @@ const spawnGrokAcpAgent = async (
     .run()
     .then(() => ({ code: 0, signal: null }))
     .catch((error) => {
-      streamError = error instanceof Error ? error : new Error(String(error));
+      // ACP request failures are first adapted into a terminal error event and
+      // then reject the request promise. Once that structured event is queued,
+      // end the iterable normally so callers can apply their error policy.
+      // Transport failures with no terminal event must still throw.
+      if (!emittedTerminalError) {
+        streamError = error instanceof Error ? error : new Error(String(error));
+      }
       return { code: 1, signal: null };
     })
     .finally(() => {

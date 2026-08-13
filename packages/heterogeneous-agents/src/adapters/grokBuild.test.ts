@@ -119,20 +119,31 @@ describe('GrokBuildAdapter', () => {
         },
       }),
     ).toEqual([]);
-    const boundary = adapter.adapt(
+    const responseCompleted = update(
+      {
+        promptId: 'prompt-1',
+        sessionUpdate: 'response_completed',
+        stop_reason: 'end_turn',
+        usage: {
+          cache_read_input_tokens: 2,
+          input_tokens: 10,
+          output_tokens: 5,
+          reasoning_tokens: 2,
+        },
+      },
+      { eventId: 'response-final' },
+      'x.ai/session_notification',
+    );
+    const boundary = adapter.adapt(responseCompleted);
+    const durableCompletion = adapter.adapt(
       update(
         {
           promptId: 'prompt-1',
           sessionUpdate: 'turn_completed',
           stop_reason: 'end_turn',
-          usage: {
-            cache_read_input_tokens: 2,
-            input_tokens: 10,
-            output_tokens: 5,
-            reasoning_tokens: 2,
-          },
+          usage: { inputTokens: 10, outputTokens: 5 },
         },
-        {},
+        { eventId: 'turn-final' },
         'x.ai/session_notification',
       ),
     );
@@ -155,15 +166,8 @@ describe('GrokBuildAdapter', () => {
       },
       type: 'step_complete',
     });
-    expect(
-      adapter.adapt(
-        update({
-          promptId: 'prompt-1',
-          sessionUpdate: 'turn_completed',
-          usage: { inputTokens: 10, outputTokens: 5 },
-        }),
-      ),
-    ).toEqual([]);
+    expect(adapter.adapt(responseCompleted)).toEqual([]);
+    expect(durableCompletion).toEqual([]);
     expect(completed.map(({ type }) => type)).toEqual([
       'step_complete',
       'stream_end',
@@ -171,6 +175,81 @@ describe('GrokBuildAdapter', () => {
       'agent_runtime_end',
     ]);
     expect(completed.at(-1)?.data).toEqual({ reason: 'complete', transport: 'acp-stdio' });
+  });
+
+  it('separates consecutive tool-only model rounds that share one prompt id', () => {
+    const adapter = new GrokBuildAdapter();
+    const firstCompletion = adapter.adapt(
+      update(
+        {
+          promptId: 'prompt-1',
+          sessionUpdate: 'response_completed',
+          stopReason: 'tool_use',
+          usage: { inputTokens: 4, outputTokens: 2 },
+        },
+        { eventId: 'response-1' },
+        'x.ai/session_notification',
+      ),
+    );
+    const firstTool = adapter.adapt(
+      update({
+        rawInput: { path: 'a.ts' },
+        sessionUpdate: 'tool_call',
+        title: 'Read',
+        toolCallId: 'call-a',
+      }),
+    );
+    adapter.adapt(
+      update({
+        content: [{ text: 'a', type: 'text' }],
+        sessionUpdate: 'tool_call_update',
+        status: 'completed',
+        toolCallId: 'call-a',
+      }),
+    );
+    const secondResponse = update(
+      {
+        promptId: 'prompt-1',
+        sessionUpdate: 'response_completed',
+        stopReason: 'tool_use',
+        usage: { inputTokens: 6, outputTokens: 3 },
+      },
+      { eventId: 'response-2' },
+      'x.ai/session_notification',
+    );
+    const secondCompletion = adapter.adapt(secondResponse);
+    const secondTool = adapter.adapt(
+      update({
+        rawInput: { path: 'b.ts' },
+        sessionUpdate: 'tool_call',
+        title: 'Read',
+        toolCallId: 'call-b',
+      }),
+    );
+
+    expect(firstCompletion.map(({ type }) => type)).toEqual(['stream_start', 'step_complete']);
+    expect(firstTool.every(({ stepIndex }) => stepIndex === 0)).toBe(true);
+    expect(secondCompletion.map(({ type }) => type)).toEqual([
+      'stream_end',
+      'stream_start',
+      'step_complete',
+    ]);
+    expect(secondCompletion[1]).toMatchObject({
+      data: { newStep: true },
+      stepIndex: 1,
+      type: 'stream_start',
+    });
+    expect(secondCompletion.at(-1)).toMatchObject({
+      data: { usage: { totalTokens: 9 } },
+      stepIndex: 1,
+      type: 'step_complete',
+    });
+    expect(adapter.adapt(secondResponse)).toEqual([]);
+    expect(secondTool[0]).toMatchObject({
+      data: { toolsCalling: [{ id: 'call-b' }] },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
   });
 
   it('maps ACP auth errors to the structured auth-required guide', () => {

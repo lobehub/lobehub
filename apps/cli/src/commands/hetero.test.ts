@@ -1089,6 +1089,46 @@ describe('hetero exec command', () => {
       expect(exitSpy).toHaveBeenCalledWith(0);
     });
 
+    it('retries a missing Grok ACP session from its structured filesystem error', async () => {
+      const missingSessionEvent = {
+        data: {
+          agentType: 'grok-build',
+          details: {
+            code: -32_603,
+            data: { code: 'FS_NOT_FOUND', detail: 'missing session' },
+          },
+          message: 'Path not found.',
+        },
+        operationId: 'op-grok-resume',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [missingSessionEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'grok-build',
+        '--prompt',
+        'continue',
+        '--resume',
+        'missing-session',
+        '--operation-id',
+        'op-grok-resume',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+        resumeSessionId: 'missing-session',
+      });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
     it('retries without --resume when the error indicates context overflow', async () => {
       const contextOverflowEvent = {
         data: {

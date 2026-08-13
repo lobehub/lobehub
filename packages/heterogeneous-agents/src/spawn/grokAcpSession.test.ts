@@ -142,9 +142,23 @@ const createAcpProcess = ({
             });
             send({
               jsonrpc: '2.0',
-              method: 'session/update',
+              method: 'x.ai/session_notification',
               params: {
                 _meta: { eventId: 'grok-session-1-2' },
+                sessionId: 'grok-session-1',
+                update: {
+                  promptId: 'operation-1',
+                  sessionUpdate: 'response_completed',
+                  stopReason: 'tool_use',
+                  usage: { inputTokens: 3, outputTokens: 1 },
+                },
+              },
+            });
+            send({
+              jsonrpc: '2.0',
+              method: 'session/update',
+              params: {
+                _meta: { eventId: 'grok-session-1-3' },
                 sessionId: 'grok-session-1',
                 update: {
                   kind: 'read',
@@ -160,13 +174,38 @@ const createAcpProcess = ({
               jsonrpc: '2.0',
               method: 'session/update',
               params: {
-                _meta: { eventId: 'grok-session-1-3' },
+                _meta: { eventId: 'grok-session-1-4' },
                 sessionId: 'grok-session-1',
                 update: {
                   content: [{ text: 'read result', type: 'text' }],
                   sessionUpdate: 'tool_call_update',
                   status: 'completed',
                   toolCallId: 'call-1',
+                },
+              },
+            });
+            send({
+              jsonrpc: '2.0',
+              method: 'session/update',
+              params: {
+                sessionId: 'grok-session-1',
+                update: {
+                  content: { text: 'answer', type: 'text' },
+                  sessionUpdate: 'agent_message_chunk',
+                },
+              },
+            });
+            send({
+              jsonrpc: '2.0',
+              method: 'x.ai/session_notification',
+              params: {
+                _meta: { eventId: 'grok-session-1-5' },
+                sessionId: 'grok-session-1',
+                update: {
+                  promptId: 'operation-1',
+                  sessionUpdate: 'response_completed',
+                  stopReason: 'end_turn',
+                  usage: { inputTokens: 6, outputTokens: 3, reasoningTokens: 1 },
                 },
               },
             });
@@ -183,23 +222,13 @@ const createAcpProcess = ({
               jsonrpc: '2.0',
               method: 'x.ai/session_notification',
               params: {
+                _meta: { eventId: 'grok-session-1-6' },
                 sessionId: 'grok-session-1',
                 update: {
                   promptId: 'operation-1',
                   sessionUpdate: 'turn_completed',
                   stopReason: 'end_turn',
                   usage: { inputTokens: 6, outputTokens: 3, reasoningTokens: 1 },
-                },
-              },
-            });
-            send({
-              jsonrpc: '2.0',
-              method: 'session/update',
-              params: {
-                sessionId: 'grok-session-1',
-                update: {
-                  content: { text: 'answer', type: 'text' },
-                  sessionUpdate: 'agent_message_chunk',
                 },
               },
             });

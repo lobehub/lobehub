@@ -128,7 +128,6 @@ export class GrokBuildAdapter implements AgentEventAdapter {
   sessionId?: string;
 
   private completedToolCallIds = new Set<string>();
-  private completedTurnIds = new Set<string>();
   private pendingStepBoundary = false;
   private seenEventIds = new Set<string>();
   private settled = false;
@@ -213,10 +212,14 @@ export class GrokBuildAdapter implements AgentEventAdapter {
         return this.handleToolCallUpdate(update);
       }
       case 'response_completed': {
-        return this.handleTurnCompleted(update);
+        return this.handleResponseCompleted(update);
       }
       case 'turn_completed': {
-        return this.handleTurnCompleted(update);
+        // Grok emits one durable turn_completed update after the final
+        // response_completed for the prompt. The standard session/prompt
+        // response owns terminal lifecycle, so processing this again would
+        // duplicate final-turn usage and step metadata.
+        return [];
       }
       default: {
         // ACP is intentionally extensible. Unknown session updates must not
@@ -294,26 +297,24 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     if (typeof paramsValue.sessionId === 'string') this.sessionId = paramsValue.sessionId;
 
     // Grok sends this immediate extension notification before resolving the
-    // standard session/prompt request. The durable turn_completed update owns
-    // per-turn usage, while the standard response owns terminal lifecycle.
+    // standard session/prompt request. Per-response completion updates own
+    // model-round usage, while the standard response owns terminal lifecycle.
     return [];
   }
 
-  private handleTurnCompleted(update: Record<string, unknown>): HeterogeneousAgentEvent[] {
-    const promptId = update.promptId;
-    if (typeof promptId === 'string') {
-      if (this.completedTurnIds.has(promptId)) return [];
-      this.completedTurnIds.add(promptId);
-    }
-
+  private handleResponseCompleted(update: Record<string, unknown>): HeterogeneousAgentEvent[] {
+    // A pending boundary belongs after the tools requested by the previous
+    // model response. Reaching the next response completion proves that the
+    // next model round exists even when it emitted no text/thought chunks.
+    const events = this.ensureStream(true);
     const usage = toUsageData(update.usage);
     const data: StepCompleteData = {
       phase: 'turn_metadata',
       provider: GROK_BUILD_IDENTIFIER,
       ...(usage ? { usage } : {}),
     };
-    if ((update.stopReason ?? update.stop_reason) === 'tool_use') this.pendingStepBoundary = true;
-    return [...this.ensureStream(false), this.makeEvent('step_complete', data)];
+    this.pendingStepBoundary = (update.stopReason ?? update.stop_reason) === 'tool_use';
+    return [...events, this.makeEvent('step_complete', data)];
   }
 
   private handlePromptResult(result: Record<string, unknown>): HeterogeneousAgentEvent[] {
