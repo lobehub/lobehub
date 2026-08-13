@@ -177,6 +177,24 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
   });
 
   describe('native-thinking K3 models (kimi-k3)', () => {
+    it('should omit fixed sampling parameters', async () => {
+      await instance.chat({
+        frequency_penalty: 0.2,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'kimi-k3',
+        presence_penalty: 0.3,
+        temperature: 0.7,
+        top_p: 0.8,
+      } as any);
+
+      const payload = getLastRequestPayload();
+
+      expect(payload).not.toHaveProperty('frequency_penalty');
+      expect(payload).not.toHaveProperty('presence_penalty');
+      expect(payload).not.toHaveProperty('temperature');
+      expect(payload).not.toHaveProperty('top_p');
+    });
+
     it("should drop a saved thinking:disabled and keep reasoning_effort 'max' + forced reasoning_content", async () => {
       await instance.chat({
         messages: [
