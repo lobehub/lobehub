@@ -570,6 +570,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/resource/library/permission'),
+              'Desktop > Resource > Library > Permission',
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            path: 'permission',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/resource/library/[slug]'),
               'Desktop > Resource > Library > Slug',
             ),
@@ -898,6 +908,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: pageRouteMeta },
         path: ':id',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/page/[id]/permission'),
+          'Desktop > Page > Permission',
+        ),
+        handle: { meta: pageRouteMeta },
+        path: ':id/permission',
       },
     ],
     element: dynamicLayout(
