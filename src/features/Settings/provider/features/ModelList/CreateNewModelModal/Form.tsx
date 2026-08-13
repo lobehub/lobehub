@@ -8,9 +8,12 @@ import { useTranslation } from 'react-i18next';
 
 import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { featureFlagsSelectors } from '@/store/serverConfig/selectors';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
+import SchemaPasteField from './SchemaPasteField';
 import { hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
@@ -37,6 +40,8 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
     const [formInstance] = Form.useForm();
 
     const isMobile = useIsMobile();
+
+    const { enableModelSchemaPaste } = useServerConfigStore(featureFlagsSelectors);
 
     const modelTypeOptions = useMemo(
       () =>
@@ -192,6 +197,16 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
               placeholder={t('providerModels.item.modelConfig.type.placeholder')}
             />
           </Form.Item>
+          {/* Written by SchemaPasteField, never edited directly. */}
+          <Form.Item hidden name={'parameters'} />
+          {enableModelSchemaPaste && (
+            <Form.Item
+              extra={t('providerModels.item.modelConfig.schemaPaste.extra')}
+              label={t('providerModels.item.modelConfig.schemaPaste.title')}
+            >
+              <SchemaPasteField form={formInstance} />
+            </Form.Item>
+          )}
           {/*<Form.Item*/}
           {/*  extra={t('providerModels.item.modelConfig.files.extra')}*/}
           {/*  label={t('providerModels.item.modelConfig.files.title')}*/}
