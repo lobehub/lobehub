@@ -27,6 +27,7 @@ const mockCompleteOperation = vi.fn();
 const mockAssociateMessageWithOperation = vi.fn();
 const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
+const mockInternalExecGroupOrchestration = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
 
@@ -55,6 +56,7 @@ vi.mock('@/store/chat', () => ({
       completeOperation: mockCompleteOperation,
       failOperation: mockFailOperation,
       executeClientAgent: mockExecuteClientAgent,
+      internal_execGroupOrchestration: mockInternalExecGroupOrchestration,
       isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
     })),
@@ -1332,7 +1334,7 @@ describe('Generation Actions', () => {
       );
     });
 
-    it('reuses an assistant Orchestrator identity when regenerating its bubble', async () => {
+    it('restarts orchestration when regenerating an Orchestrator bubble', async () => {
       const context: ConversationContext = {
         agentId: 'supervisor-agent',
         groupId: 'group-1',
@@ -1373,15 +1375,15 @@ describe('Generation Actions', () => {
         await store.getState().regenerateAssistantMessage('assistant-1');
       });
 
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+      expect(mockInternalExecGroupOrchestration).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: expect.objectContaining({
-            agentId: 'orchestrator-agent',
-            isSupervisor: true,
-            orchestrationRole: 'supervisor',
-          }),
+          groupId: 'group-1',
+          initialResult: { payload: { groupId: 'group-1' }, type: 'init' },
+          supervisorAgentId: 'orchestrator-agent',
+          topicId: 'topic-1',
         }),
       );
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
     it('preserves a member assistant identity through gateway regeneration', async () => {
