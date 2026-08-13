@@ -62,7 +62,7 @@ const createDefaultChatStoreState = (): any => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
-    getState: vi.fn(createDefaultChatStoreState),
+    getState: vi.fn(),
     setState: vi.fn(),
   },
 }));
