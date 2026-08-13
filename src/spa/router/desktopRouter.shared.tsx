@@ -1205,7 +1205,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     handle: {
       meta: routeMeta({
         icon: MessageSquarePlus,
-        tabTitleKey: 'navigation.newChat',
+        tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),
     },
