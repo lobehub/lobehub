@@ -22,30 +22,35 @@ const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
 
-/** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
-export const parseCodeBuddyModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
-  const modelOptionIndex = stdout.indexOf(CODEBUDDY_MODEL_OPTION);
-  if (modelOptionIndex < 0) return [];
+const parseCodeBuddyModelCatalogResult = (
+  output: string,
+): HeterogeneousAgentModel[] | undefined => {
+  const modelOptionIndex = output.indexOf(CODEBUDDY_MODEL_OPTION);
+  if (modelOptionIndex < 0) return;
 
-  const labelStart = stdout.indexOf(
+  const labelStart = output.indexOf(
     CODEBUDDY_SUPPORTED_MODELS_LABEL,
     modelOptionIndex + CODEBUDDY_MODEL_OPTION.length,
   );
-  if (labelStart < 0) return [];
+  if (labelStart < 0) return;
 
   const labelEnd = labelStart + CODEBUDDY_SUPPORTED_MODELS_LABEL.length;
-  const modelsStart = stdout.indexOf('(', labelEnd);
-  if (modelsStart < 0 || stdout.slice(labelEnd, modelsStart).trim()) return [];
+  const modelsStart = output.indexOf('(', labelEnd);
+  if (modelsStart < 0 || output.slice(labelEnd, modelsStart).trim()) return;
 
-  const modelsEnd = stdout.indexOf(')', modelsStart + 1);
-  if (modelsEnd < 0) return [];
+  const modelsEnd = output.indexOf(')', modelsStart + 1);
+  if (modelsEnd < 0) return;
 
-  const supportedModels = stdout.slice(modelsStart + 1, modelsEnd);
+  const supportedModels = output.slice(modelsStart + 1, modelsEnd);
 
   return [...new Set(supportedModels.split(',').map((model) => model.trim()))]
     .filter((id) => id && id !== 'default-model')
     .map((id) => ({ id, modelId: id, providerId: 'codebuddy' }));
 };
+
+/** Parse the model IDs accepted by CodeBuddy's native `--model` option. */
+export const parseCodeBuddyModelCatalog = (output: string): HeterogeneousAgentModel[] =>
+  parseCodeBuddyModelCatalogResult(output) ?? [];
 
 export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
   const seen = new Set<string>();
@@ -179,7 +184,7 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
-    const { stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
+    const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
       encoding: 'utf8',
       env: env as NodeJS.ProcessEnv,
@@ -188,15 +193,31 @@ export const listHeterogeneousAgentModels = async (
       windowsHide: true,
     });
 
+    if (params.type === 'codebuddy') {
+      const models =
+        parseCodeBuddyModelCatalogResult(String(stdout)) ??
+        parseCodeBuddyModelCatalogResult(String(stderr));
+      if (!models) {
+        return {
+          error: {
+            code: 'command_failed',
+            message: getCatalogErrorMessage('command_failed', params.type),
+          },
+          status: 'error',
+          updatedAt,
+        };
+      }
+
+      return { models, status: 'success', updatedAt };
+    }
+
     return {
       models:
-        params.type === 'codebuddy'
-          ? parseCodeBuddyModelCatalog(String(stdout))
-          : params.type === 'pi'
-            ? parsePiModelCatalog(String(stdout))
-            : params.type === 'qoder'
-              ? parseQoderModelCatalog(String(stdout))
-              : parseOpenCodeModelCatalog(String(stdout)),
+        params.type === 'pi'
+          ? parsePiModelCatalog(String(stdout))
+          : params.type === 'qoder'
+            ? parseQoderModelCatalog(String(stdout))
+            : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

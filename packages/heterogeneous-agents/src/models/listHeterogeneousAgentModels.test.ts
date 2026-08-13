@@ -121,6 +121,58 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('fails discovery when CodeBuddy exits successfully without reporting a model catalog', async () => {
+    resolveExecFile(
+      [
+        'Usage: codebuddy [options]',
+        '  --model <model>  Model for the current session. Please provide the model ID.',
+      ].join('\n'),
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/codebuddy',
+        env: { CODEBUDDY_DISABLE_BUILTIN_MODELS: '1' },
+        type: 'codebuddy',
+      }),
+    ).resolves.toMatchObject({
+      error: { code: 'command_failed' },
+      status: 'error',
+    });
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('parses a CodeBuddy model catalog written to stderr', async () => {
+    resolveExecFile(
+      '',
+      [
+        'Usage: codebuddy [options]',
+        '  --model <model>  Model for the current session. Currently supported: (default-model,',
+        '                   gpt-5.4)',
+      ].join('\n'),
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/codebuddy', type: 'codebuddy' }),
+    ).resolves.toMatchObject({
+      models: [{ id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'codebuddy' }],
+      status: 'success',
+    });
+  });
+
+  it('accepts an explicit CodeBuddy catalog containing only the default model', async () => {
+    resolveExecFile(
+      '  --model <model>  Model for the current session. Currently supported: (default-model)',
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/codebuddy', type: 'codebuddy' }),
+    ).resolves.toMatchObject({ models: [], status: 'success' });
+  });
+
   it('parses adversarial CodeBuddy help output without polynomial backtracking', async () => {
     const stdout = `${'--model <model>'.repeat(1000)}${'Currently supported:(('.repeat(1000)}`;
     const { parseCodeBuddyModelCatalog } = await importModule();
