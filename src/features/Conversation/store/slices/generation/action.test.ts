@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
 import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
@@ -31,35 +32,37 @@ const mockInternalExecGroupOrchestration = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
 
+const createDefaultChatStoreState = () => ({
+  messagesMap: {
+    'session-1-': [
+      { id: 'msg-1', role: 'user', content: 'Hello' },
+      { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+    ],
+  },
+  operations: {},
+  operationsByMessage: {},
+
+  cancelOperations: mockCancelOperations,
+  cancelOperation: mockCancelOperation,
+  cancelSendMessageInServer: mockCancelSendMessageInServer,
+  regenerateUserMessage: mockRegenerateUserMessage,
+  regenerateAssistantMessage: mockRegenerateAssistantMessage,
+  continueGenerationMessage: mockContinueGenerationMessage,
+  deleteMessage: mockDeleteMessage,
+  switchMessageBranch: mockSwitchMessageBranch,
+  startOperation: mockStartOperation,
+  associateMessageWithOperation: mockAssociateMessageWithOperation,
+  completeOperation: mockCompleteOperation,
+  failOperation: mockFailOperation,
+  executeClientAgent: mockExecuteClientAgent,
+  internal_execGroupOrchestration: mockInternalExecGroupOrchestration,
+  isGatewayModeEnabled: mockIsGatewayModeEnabled,
+  executeGatewayAgent: mockExecuteGatewayAgent,
+});
+
 vi.mock('@/store/chat', () => ({
   useChatStore: {
-    getState: vi.fn(() => ({
-      messagesMap: {
-        'session-1-': [
-          { id: 'msg-1', role: 'user', content: 'Hello' },
-          { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
-        ],
-      },
-      operations: {},
-      operationsByMessage: {},
-
-      cancelOperations: mockCancelOperations,
-      cancelOperation: mockCancelOperation,
-      cancelSendMessageInServer: mockCancelSendMessageInServer,
-      regenerateUserMessage: mockRegenerateUserMessage,
-      regenerateAssistantMessage: mockRegenerateAssistantMessage,
-      continueGenerationMessage: mockContinueGenerationMessage,
-      deleteMessage: mockDeleteMessage,
-      switchMessageBranch: mockSwitchMessageBranch,
-      startOperation: mockStartOperation,
-      associateMessageWithOperation: mockAssociateMessageWithOperation,
-      completeOperation: mockCompleteOperation,
-      failOperation: mockFailOperation,
-      executeClientAgent: mockExecuteClientAgent,
-      internal_execGroupOrchestration: mockInternalExecGroupOrchestration,
-      isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      executeGatewayAgent: mockExecuteGatewayAgent,
-    })),
+    getState: vi.fn(createDefaultChatStoreState),
     setState: vi.fn(),
   },
 }));
@@ -67,6 +70,7 @@ vi.mock('@/store/chat', () => ({
 describe('Generation Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useChatStore.getState).mockReset().mockImplementation(createDefaultChatStoreState);
   });
 
   afterEach(() => {
@@ -1225,7 +1229,7 @@ describe('Generation Actions', () => {
       );
     });
 
-    it('reuses the active member branch identity instead of the group supervisor', async () => {
+    it('restarts orchestration when the active branch was produced by a member', async () => {
       const context: ConversationContext = {
         agentId: 'supervisor-agent',
         groupId: 'group-1',
@@ -1263,75 +1267,18 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('user-1');
       });
 
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-1', 2, {
+        operationId: 'test-op-id',
+      });
+      expect(mockInternalExecGroupOrchestration).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: expect.objectContaining({
-            agentId: 'supervisor-agent',
-            isSupervisor: undefined,
-            orchestrationRole: 'member',
-            subAgentId: 'selected-member',
-          }),
+          groupId: 'group-1',
+          parentMessageId: 'user-1',
+          supervisorAgentId: 'supervisor-agent',
         }),
       );
-    });
-
-    it('executes a member gateway retry with the member but keeps the group owner', async () => {
-      const { useChatStore } = await import('@/store/chat');
-      vi.mocked(useChatStore.getState).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        executeGatewayAgent: mockExecuteGatewayAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-        switchMessageBranch: mockSwitchMessageBranch,
-      } as any);
-      mockIsGatewayModeEnabled.mockImplementation(
-        ((agentId: string) => agentId === 'member-agent') as any,
-      );
-      const context: ConversationContext = {
-        agentId: 'supervisor-agent',
-        groupId: 'group-1',
-        scope: 'group',
-        threadId: null,
-        topicId: 'topic-1',
-      };
-      const store = createStore({ context });
-
-      act(() => {
-        store.setState({
-          dbMessages: [
-            { id: 'user-1', role: 'user', content: 'Hello' },
-            {
-              agentId: 'member-agent',
-              content: 'Member response',
-              id: 'assistant-1',
-              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
-              parentId: 'user-1',
-              role: 'assistant',
-            },
-          ],
-          displayMessages: [{ id: 'user-1', role: 'user', content: 'Hello' }],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().regenerateUserMessage('user-1');
-      });
-
-      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({ agentId: 'member-agent', subAgentId: undefined }),
-          messageContext: expect.objectContaining({
-            agentId: 'supervisor-agent',
-            subAgentId: 'member-agent',
-          }),
-        }),
-      );
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
 
     it('restarts orchestration when regenerating an Orchestrator bubble', async () => {
