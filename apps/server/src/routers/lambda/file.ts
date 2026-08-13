@@ -32,6 +32,7 @@ import {
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
@@ -983,6 +984,9 @@ export const fileRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
+        // Cloning strips knowledgeBaseId while preserving content, so
+        // restricted-KB entities must not be copyable out of the hidden library.
+        await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
         const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
         await businessFileTransferStorageCheck({
           additionalSize,
@@ -1004,6 +1008,7 @@ export const fileRouter = router({
           code: 'NOT_FOUND',
           message: 'File not found',
         });
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       await businessFileTransferStorageCheck({
         additionalSize: file.size,
         targetUserId: ctx.userId,

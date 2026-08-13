@@ -411,18 +411,13 @@ export const documentRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const result = await ctx.documentService.queryDocuments(input);
-      if (!ctx.workspaceId) return result;
-
       // KB pages are ordinary workspace-public documents, so listings must
-      // drop rows from restricted (member No-access) libraries.
-      const restricted = await getRestrictedKnowledgeBaseIds(ctx);
-      if (restricted.length === 0) return result;
-      const restrictedSet = new Set(restricted);
-      const items = result.items.filter(
-        (doc) => !doc.knowledgeBaseId || !restrictedSet.has(doc.knowledgeBaseId),
-      );
-      return { ...result, items, total: result.total - (result.items.length - items.length) };
+      // drop rows from restricted (member No-access) libraries. The exclusion
+      // runs inside the query so pagination and totals stay correct.
+      const excludeKnowledgeBaseIds = ctx.workspaceId
+        ? await getRestrictedKnowledgeBaseIds(ctx)
+        : [];
+      return ctx.documentService.queryDocuments({ ...input, excludeKnowledgeBaseIds });
     }),
 
   acquireDocumentLock: documentProcedure
@@ -776,6 +771,10 @@ export const documentRouter = router({
           });
         }
       }
+
+      // Cloning strips knowledgeBaseId while preserving content, so a
+      // restricted-KB document must not be copyable out of the hidden library.
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
 
       const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.documentId);
       await businessFileTransferStorageCheck({

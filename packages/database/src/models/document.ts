@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import { DOCUMENT_FOLDER_TYPE, documents, files, works } from '../schemas';
@@ -7,6 +7,12 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
   current?: number;
+  /**
+   * Knowledge-base ids whose documents must be dropped from the listing —
+   * restricted (member No-access) libraries. Applied inside the query so
+   * pagination and totals stay correct.
+   */
+  excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
   sourceTypes?: string[];
@@ -114,6 +120,7 @@ export class DocumentModel {
   query = async ({
     current = 0,
     pageSize = 9999,
+    excludeKnowledgeBaseIds,
     fileTypes,
     sourceTypes,
   }: QueryDocumentParams = {}): Promise<{
@@ -125,6 +132,15 @@ export class DocumentModel {
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
+    }
+
+    if (excludeKnowledgeBaseIds?.length) {
+      conditions.push(
+        or(
+          isNull(documents.knowledgeBaseId),
+          notInArray(documents.knowledgeBaseId, excludeKnowledgeBaseIds),
+        )!,
+      );
     }
 
     if (sourceTypes?.length) {
