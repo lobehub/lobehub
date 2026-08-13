@@ -88,6 +88,33 @@ type Setter = StoreSetter<AgentStore>;
 export const createAgentSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
   new AgentSliceActionImpl(set, get, _api);
 
+/**
+ * Resolve with `promise`, or reject as soon as `signal` aborts.
+ *
+ * A parse promise is shared between concurrent sends, so it cannot carry any one
+ * caller's signal. Racing it here is what lets a send stop waiting on a parse
+ * another send started.
+ */
+const raceAbortSignal = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return promise;
+
+  const abortError = () => {
+    const error = new Error('Knowledge file hydration aborted');
+    error.name = 'AbortError';
+
+    return error;
+  };
+
+  if (signal.aborted) return Promise.reject(abortError());
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+};
+
 export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
@@ -631,8 +658,9 @@ export class AgentSliceActionImpl {
    *
    * Resolves rather than rejects when a parse fails or the send is aborted: that
    * file stays out of the prompt, which is the behaviour before this hydration
-   * existed. The parse shares one promise per file id, so an abort releases every
-   * send waiting on that file.
+   * existed. One parse is shared per file id and each send races it against its
+   * own signal, so pressing Stop releases that send alone — the parse keeps
+   * running for whoever is still waiting on it.
    */
   ensureAgentFileContents = async (
     agentId?: string | null,
@@ -668,10 +696,23 @@ export class AgentSliceActionImpl {
         // those from racing into duplicate parse calls.
         let request = this.#pendingAgentFileContents.get(fileId);
         if (!request) {
-          request = ragService
-            .parseFileContent(fileId, undefined, signal)
+          // No caller's signal is attached to the shared parse: one send pressing
+          // Stop would otherwise cancel the parse another send is waiting on and
+          // drop that file from its prompt, which is the failure this hydration
+          // exists to remove.
+          const pending = ragService
+            .parseFileContent(fileId)
             .then((document) => document.content ?? '');
 
+          // Release the entry when the parse settles rather than when a caller
+          // stops waiting on it, so a send that aborts early does not leave the
+          // next one to start a second parse for the same file.
+          const release = () => {
+            this.#pendingAgentFileContents.delete(fileId);
+          };
+          pending.then(release, release);
+
+          request = pending;
           this.#pendingAgentFileContents.set(fileId, request);
         }
 
@@ -679,15 +720,14 @@ export class AgentSliceActionImpl {
           // Publish each file as it lands rather than after the whole batch: a
           // send that starts while a slower file is still parsing would otherwise
           // find this one neither cached nor in flight and parse it again.
-          this.#syncAgentFileContent(agentId, fileId, await request);
+          this.#syncAgentFileContent(agentId, fileId, await raceAbortSignal(request, signal));
         } catch (error) {
-          // Pressing Stop aborts the parse; that is a cancellation, not a failure
-          // worth reporting. Either way the file stays out of this prompt.
+          // Pressing Stop stops this send from waiting; that is a cancellation,
+          // not a failure worth reporting. Either way the file stays out of this
+          // prompt.
           if (!signal?.aborted) {
             console.error('[AgentStore] Failed to parse knowledge file:', fileId, error);
           }
-        } finally {
-          this.#pendingAgentFileContents.delete(fileId);
         }
       }),
     );

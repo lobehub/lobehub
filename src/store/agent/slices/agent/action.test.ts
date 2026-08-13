@@ -418,7 +418,7 @@ describe('AgentSlice Actions', () => {
 
       await useAgentStore.getState().ensureAgentFileContents('agent-1');
 
-      expect(ragService.parseFileContent).toHaveBeenCalledWith('file-1', undefined, undefined);
+      expect(ragService.parseFileContent).toHaveBeenCalledWith('file-1');
       expect(contentOf(0)).toBe('parsed body');
     });
 
@@ -535,13 +535,15 @@ describe('AgentSlice Actions', () => {
 
     it('stops waiting when the send is aborted, without reporting a failure', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      vi.mocked(ragService.parseFileContent).mockImplementation(
-        ((_id: string, _skipExist?: boolean, signal?: AbortSignal) =>
-          new Promise((_resolve, reject) => {
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          })) as any,
+      // The parse never settles on its own: only the caller's signal can end this
+      // wait, which is what the assertion below is about.
+      let settle: (document: { content: string }) => void = () => {};
+      vi.mocked(ragService.parseFileContent).mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }) as any,
       );
-      mountFiles([knowledgeFile({ enabled: true })]);
+      mountFiles([knowledgeFile({ enabled: true, id: 'aborted-alone' })]);
 
       const controller = new AbortController();
       const pending = useAgentStore
@@ -553,6 +555,122 @@ describe('AgentSlice Actions', () => {
       expect(contentOf(0)).toBeUndefined();
       expect(errorSpy).not.toHaveBeenCalled();
       errorSpy.mockRestore();
+      settle({ content: 'late body' });
+    });
+
+    it('stops listening on the send signal once the parse settles', async () => {
+      vi.mocked(ragService.parseFileContent).mockResolvedValue({ content: 'parsed body' } as any);
+      mountFiles([knowledgeFile({ enabled: true, id: 'listener' })]);
+
+      const controller = new AbortController();
+      const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+
+      await useAgentStore.getState().ensureAgentFileContents('agent-1', controller.signal);
+
+      // A send that finishes normally must not leave its abort listener behind on
+      // a signal that outlives the parse.
+      await vi.waitFor(() =>
+        expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function)),
+      );
+      removeListener.mockRestore();
+    });
+
+    it('does not wait at all when the send was aborted before hydration ran', async () => {
+      let settle: (document: { content: string }) => void = () => {};
+      vi.mocked(ragService.parseFileContent).mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }) as any,
+      );
+      mountFiles([knowledgeFile({ enabled: true, id: 'pre-aborted' })]);
+
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        useAgentStore.getState().ensureAgentFileContents('agent-1', controller.signal),
+      ).resolves.toBeUndefined();
+      expect(contentOf(0)).toBeUndefined();
+      settle({ content: 'late body' });
+    });
+
+    it('releases a send that aborts while another send waits on the same parse', async () => {
+      let settle: (document: { content: string }) => void = () => {};
+      vi.mocked(ragService.parseFileContent).mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }) as any,
+      );
+      mountFiles([knowledgeFile({ enabled: true, id: 'shared-abort' })]);
+
+      const firstSend = new AbortController();
+      const secondSend = new AbortController();
+      const first = useAgentStore.getState().ensureAgentFileContents('agent-1', firstSend.signal);
+      const second = useAgentStore.getState().ensureAgentFileContents('agent-1', secondSend.signal);
+
+      secondSend.abort();
+
+      // Resolves while the shared parse is still pending: the second send waits on
+      // a promise the first one created, so only its own signal can release it.
+      await expect(second).resolves.toBeUndefined();
+      expect(contentOf(0)).toBeUndefined();
+
+      settle({ content: 'parsed body' });
+      await expect(first).resolves.toBeUndefined();
+      expect(contentOf(0)).toBe('parsed body');
+      expect(ragService.parseFileContent).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let one send cancel the parse another send is waiting on', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let settle: (document: { content: string }) => void = () => {};
+      vi.mocked(ragService.parseFileContent).mockImplementation(
+        ((_id: string, _skipExist?: boolean, signal?: AbortSignal) =>
+          new Promise((resolve, reject) => {
+            settle = resolve;
+            signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          })) as any,
+      );
+      mountFiles([knowledgeFile({ enabled: true, id: 'shared-alive' })]);
+
+      const firstSend = new AbortController();
+      const first = useAgentStore.getState().ensureAgentFileContents('agent-1', firstSend.signal);
+      const second = useAgentStore.getState().ensureAgentFileContents('agent-1');
+
+      firstSend.abort();
+      await expect(first).resolves.toBeUndefined();
+
+      settle({ content: 'parsed body' });
+      await expect(second).resolves.toBeUndefined();
+
+      expect(ragService.parseFileContent).toHaveBeenCalledWith('shared-alive');
+      expect(contentOf(0)).toBe('parsed body');
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it('keeps the shared parse in flight when the send that started it aborts', async () => {
+      let settle: (document: { content: string }) => void = () => {};
+      vi.mocked(ragService.parseFileContent).mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }) as any,
+      );
+      mountFiles([knowledgeFile({ enabled: true, id: 'shared-inflight' })]);
+
+      const firstSend = new AbortController();
+      const aborted = useAgentStore.getState().ensureAgentFileContents('agent-1', firstSend.signal);
+      firstSend.abort();
+      await expect(aborted).resolves.toBeUndefined();
+
+      // A send that arrives after the abort must join the parse already running
+      // rather than start a second one for the same file.
+      const next = useAgentStore.getState().ensureAgentFileContents('agent-1');
+      settle({ content: 'parsed body' });
+      await expect(next).resolves.toBeUndefined();
+
+      expect(ragService.parseFileContent).toHaveBeenCalledTimes(1);
+      expect(contentOf(0)).toBe('parsed body');
     });
 
     it('skips a file with no id, which has no document to parse under', async () => {
