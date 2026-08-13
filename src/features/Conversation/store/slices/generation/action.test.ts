@@ -32,7 +32,7 @@ const mockInternalExecGroupOrchestration = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
 
-const createDefaultChatStoreState = () => ({
+const createDefaultChatStoreState = (): any => ({
   messagesMap: {
     'session-1-': [
       { id: 'msg-1', role: 'user', content: 'Hello' },
