@@ -1946,6 +1946,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         workingDirectory: '/Users/me/repo',
         workingDirectoryConfig: { path: '/Users/me/repo' },
       });
+      expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
     });
 
     it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {
@@ -2186,6 +2187,54 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         );
         expect(t2Create).toBeDefined();
         expect(t2Create![0].parentId).toBe(attemptedAssistantId);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
+
+  describe('Desktop IPC session lifecycle', () => {
+    it('persists the native resume session before releasing the temporary run session', async () => {
+      const store = createMockStore();
+
+      await runWithEvents([ccInit('native-session-1'), ccResult()], { store });
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({ heteroSessionId: 'native-session-1' }),
+      );
+      expect(mockStopSession).toHaveBeenCalledOnce();
+      expect(mockStopSession).toHaveBeenCalledWith('ipc-sess-1');
+
+      const lastMetadataSave = store.updateTopicMetadata.mock.invocationCallOrder.at(-1)!;
+      const stopSessionCall = mockStopSession.mock.invocationCallOrder[0];
+      expect(stopSessionCall).toBeGreaterThan(lastMetadataSave);
+    });
+
+    it('preserves the run error when temporary session cleanup fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const runError = new Error('prompt failed');
+      const cleanupError = new Error('cleanup failed');
+      mockSendPrompt.mockRejectedValueOnce(runError);
+      mockStopSession.mockRejectedValueOnce(cleanupError);
+
+      try {
+        const store = createMockStore();
+        const get = vi.fn(() => store);
+
+        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toBeUndefined();
+
+        expect(mockUpdateMessageError).toHaveBeenCalledWith(
+          'ast-initial',
+          expect.objectContaining({ message: 'prompt failed' }),
+          expect.any(Object),
+        );
+        expect(mockStopSession).toHaveBeenCalledOnce();
+        expect(mockStopSession).toHaveBeenCalledWith('ipc-sess-1');
+        expect(consoleError).toHaveBeenCalledWith(
+          '[HeterogeneousAgent] IPC run session cleanup failed:',
+          cleanupError,
+        );
       } finally {
         consoleError.mockRestore();
       }
