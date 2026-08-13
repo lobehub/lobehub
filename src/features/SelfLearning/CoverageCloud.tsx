@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,32 +19,13 @@ const styles = createStaticStyles(({ css }) => ({
     height: 7px;
     border-radius: 999px;
   `,
-  segment: css`
-    min-width: 3px;
-    height: 8px;
-
-    &:first-child {
-      border-start-start-radius: 6px;
-      border-end-start-radius: 6px;
-    }
-
-    &:last-child {
-      border-start-end-radius: 6px;
-      border-end-end-radius: 6px;
-    }
-  `,
-  track: css`
-    overflow: hidden;
-    display: flex;
-
-    width: 100%;
-    border-radius: 4px;
-
-    background: ${cssVar.colorFillQuaternary};
+  pie: css`
+    flex: none;
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
   `,
 }));
-
-const OPACITIES = [0.35, 0.5, 0.65, 0.8, 1];
 
 interface CoverageSnapshotProps {
   detail: ExpertiseDomainDetail;
@@ -53,13 +34,13 @@ interface CoverageSnapshotProps {
 /** A composition chart answers “where is the learning concentrated?”; empty layers stay explicit gaps. */
 const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
   const { t } = useTranslation('selfLearning');
+  const theme = useTheme();
   const { domain, layerCounts, lessonStats } = detail;
 
   const { covered, empty, total } = useMemo(() => {
-    const layers = (domain.layers ?? []).map((layer, index) => ({
+    const layers = (domain.layers ?? []).map((layer) => ({
       count: layerCounts[layer.key] ?? 0,
       key: layer.key,
-      opacity: OPACITIES[index % OPACITIES.length],
       title: layer.title,
     }));
     return {
@@ -70,6 +51,16 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
   }, [domain.layers, layerCounts]);
 
   if (covered.length === 0 && empty.length === 0) return null;
+
+  const colors = [theme.blue6, theme.cyan6, theme.green6, theme.gold6, theme.magenta6];
+  let cursor = 0;
+  const pie = covered
+    .map((layer, index) => {
+      const start = cursor;
+      cursor += (layer.count / total) * 100;
+      return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+    })
+    .join(', ');
 
   return (
     <Block gap={12} padding={16} variant={'outlined'}>
@@ -87,34 +78,20 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
       </Flexbox>
 
       {total > 0 && (
-        <Flexbox gap={10}>
-          <div className={styles.track}>
-            {covered.map((layer) => (
-              <Tooltip
-                key={layer.key}
-                title={t('coverage.share', { count: layer.count, title: layer.title })}
-              >
-                <div
-                  className={styles.segment}
-                  style={{
-                    background: cssVar.colorPrimary,
-                    flex: layer.count,
-                    opacity: layer.opacity,
-                  }}
-                />
-              </Tooltip>
-            ))}
-          </div>
-          <Flexbox horizontal gap={14} wrap={'wrap'}>
+        <Flexbox horizontal align={'center'} gap={24}>
+          <Tooltip title={t('coverage.total', { count: total })}>
+            <div className={styles.pie} style={{ background: `conic-gradient(${pie})` }} />
+          </Tooltip>
+          <Flexbox gap={8}>
             {covered.map((layer) => (
               <Flexbox horizontal align={'center'} gap={6} key={layer.key}>
                 <div
                   className={styles.legendDot}
-                  style={{ background: cssVar.colorPrimary, opacity: layer.opacity }}
+                  style={{ background: colors[covered.indexOf(layer) % colors.length] }}
                 />
                 <Text fontSize={11.5}>{layer.title}</Text>
                 <Text fontSize={11} type={'secondary'}>
-                  {layer.count}
+                  {layer.count} · {Math.round((layer.count / total) * 100)}%
                 </Text>
               </Flexbox>
             ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text, Tooltip } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
@@ -21,11 +21,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 40px 72px minmax(0, 1fr);
     column-gap: 8px;
     align-items: center;
 
     padding-block: 7px;
+  `,
+  usage: css`
+    overflow: hidden;
+    height: 5px;
+    border-radius: 4px;
+    background: var(--ant-color-fill-quaternary);
   `,
 }));
 
@@ -59,6 +65,7 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
 
   const visibleGroups =
     tierFilter === 'all' ? grouped : grouped.filter((g) => g.tier === tierFilter);
+  const maxHits = Math.max(1, ...lessons.map((lesson) => lesson.hitCount));
 
   return (
     <Block gap={10} padding={16} variant={'outlined'}>
@@ -93,6 +100,18 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
               <Text className={styles.code} fontSize={10.5} type={'secondary'}>
                 {lesson.code}
               </Text>
+              <Tooltip title={t('rules.hitCount', { count: lesson.hitCount })}>
+                <div className={styles.usage}>
+                  <div
+                    style={{
+                      background: 'var(--ant-color-primary)',
+                      height: '100%',
+                      opacity: lesson.hitCount === 0 ? 0 : 0.65,
+                      width: `${(lesson.hitCount / maxHits) * 100}%`,
+                    }}
+                  />
+                </div>
+              </Tooltip>
               <Flexbox horizontal align={'center'} className={styles.content} gap={8}>
                 <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
                   {lesson.title}

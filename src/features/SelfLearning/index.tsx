@@ -1,10 +1,10 @@
 'use client';
 
-import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { ChevronRightIcon, GraduationCapIcon, PlusIcon, SparklesIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { ChevronRightIcon, PlusIcon, SparklesIcon } from 'lucide-react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -20,7 +20,6 @@ import { useAgentStore } from '@/store/agent';
 import { openCreateDomainModal } from './CreateDomainModal';
 import Curves from './Curves';
 import { type ExpertiseShape, shapeOf, useExpertiseOverview } from './hooks';
-import JourneyStrip from './JourneyStrip';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -93,6 +92,13 @@ const SelfLearning = memo(() => {
   /** 全都还没练过的时候，坐标轴会退化成一排「第 1 次」—— 那张空网格不如不画。 */
   const hasCurves = domains.some((d) => d.series.length > 1);
 
+  // A single expertise is an inspection job, not a comparison job. Skip the redundant list shell.
+  useEffect(() => {
+    if (!isLoading && domains.length === 1 && activeAgentId) {
+      navigate(urlJoin('/agent', activeAgentId, 'self-learning', domains[0].id), { replace: true });
+    }
+  }, [activeAgentId, domains, isLoading, navigate]);
+
   const openDomain = (domainId: string) => {
     if (!activeAgentId) return;
     navigate(urlJoin('/agent', activeAgentId, 'self-learning', domainId));
@@ -154,31 +160,19 @@ const SelfLearning = memo(() => {
             loading={<Loading debugId="SelfLearning" />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
-                <Flexbox align={'center'} gap={20} style={{ maxWidth: 680 }}>
-                  <Empty
-                    description={t('empty.desc')}
-                    descriptionProps={{ fontSize: 13 }}
-                    icon={GraduationCapIcon}
-                    style={{ maxWidth: 420 }}
-                    title={t('empty.title')}
-                    action={
-                      <Button
-                        icon={PlusIcon}
-                        type={'primary'}
-                        onClick={() => {
-                          if (!activeAgentId) return;
-                          openCreateDomainModal({
-                            agentId: activeAgentId,
-                            onCreated: () => void mutate(),
-                          });
-                        }}
-                      >
-                        {t('create.entry')}
-                      </Button>
-                    }
-                  />
-                  <JourneyStrip />
-                </Flexbox>
+                <Button
+                  icon={PlusIcon}
+                  type={'primary'}
+                  onClick={() => {
+                    if (!activeAgentId) return;
+                    openCreateDomainModal({
+                      agentId: activeAgentId,
+                      onCreated: () => void mutate(),
+                    });
+                  }}
+                >
+                  {t('create.entry')}
+                </Button>
               </Center>
             }
             onRetry={() => mutate()}

@@ -131,6 +131,7 @@ export default {
   'coverage.gaps': 'No rules yet',
   'coverage.invented': 'Layer model has no canonical source',
   'coverage.share': '{{title}} · {{count}} rules',
+  'coverage.total': '{{count}} lessons total',
   'coverage.sub': '{{covered}}/{{total}} layers have rules · {{unused}} rules never used',
   'coverage.title': 'Where the learning has landed',
   'create.briefHelp':
@@ -145,6 +146,7 @@ export default {
   'journey.step3': 'Read where it stands',
   'journey.step3Desc': 'the curve becomes readable',
   'rules.hitsShort': '{{count}} uses',
+  'rules.hitCount': 'Used {{count}} times',
   'rules.filter.all': 'All rules',
   'rules.filter.core': 'Backbone',
   'rules.filter.niche': 'Situational',
