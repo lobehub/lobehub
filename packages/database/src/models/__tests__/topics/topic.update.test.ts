@@ -248,6 +248,7 @@ describe('TopicModel - Update', () => {
           expect.objectContaining({ operationId: 'child-operation-2' }),
         ]),
       );
+    });
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
       await serverDB.insert(topics).values({
