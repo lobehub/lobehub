@@ -14,12 +14,12 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
+    expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
 
     expect(isHeteroSelectorAvailable('amp')).toBe(false);
-    expect(isHeteroSelectorAvailable('cursor')).toBe(false);
     expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
@@ -28,7 +28,7 @@ describe('selector availability', () => {
   it('exposes the dimensions each provider actually supports', () => {
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
-    expect(getHeteroSelectorCapability('cursor')?.model).toBeUndefined();
+    expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
     expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
     expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('static');
@@ -89,6 +89,25 @@ describe('applyHeteroSelection', () => {
       'gpt-5.4',
       '--effort',
       'low',
+    ]);
+  });
+
+  it('clears a hand-authored Cursor model before applying a catalog selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--mode', 'plan', '--model=old-model'],
+      type: 'cursor',
+    };
+    const patch = applyHeteroSelection(provider, { model: 'claude-sonnet-4-6-thinking' });
+
+    expect(patch).toEqual({
+      args: ['--mode', 'plan'],
+      model: 'claude-sonnet-4-6-thinking',
+    });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--mode',
+      'plan',
+      '--model',
+      'claude-sonnet-4-6-thinking',
     ]);
   });
 

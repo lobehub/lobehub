@@ -199,6 +199,71 @@ describe('heterogeneous agent model discovery', () => {
     expect(performance.now() - startedAt).toBeLessThan(100);
   });
 
+  it('parses and discovers Cursor model slugs and labels', async () => {
+    const stdout = [
+      'Available models',
+      '',
+      'auto (default) - Auto',
+      'claude-sonnet-4-6-thinking - Claude 4.6 Sonnet Thinking',
+      'gpt-5.5-medium-fast (current) - GPT-5.5 Medium Fast',
+      'claude-sonnet-4-6-thinking - Duplicate label',
+      'diagnostic-without-a-label',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseCursorModelCatalog } = await importModule();
+
+    expect(parseCursorModelCatalog(stdout)).toEqual([
+      { id: 'auto', label: 'Auto', modelId: 'auto', providerId: 'cursor' },
+      {
+        id: 'claude-sonnet-4-6-thinking',
+        label: 'Claude 4.6 Sonnet Thinking',
+        modelId: 'claude-sonnet-4-6-thinking',
+        providerId: 'cursor',
+      },
+      {
+        id: 'gpt-5.5-medium-fast',
+        label: 'GPT-5.5 Medium Fast',
+        modelId: 'gpt-5.5-medium-fast',
+        providerId: 'cursor',
+      },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/agent',
+        cwd: '/repo',
+        env: { CURSOR_API_KEY: 'test-key' },
+        type: 'cursor',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'auto', label: 'Auto', modelId: 'auto', providerId: 'cursor' },
+        {
+          id: 'claude-sonnet-4-6-thinking',
+          label: 'Claude 4.6 Sonnet Thinking',
+          modelId: 'claude-sonnet-4-6-thinking',
+          providerId: 'cursor',
+        },
+        {
+          id: 'gpt-5.5-medium-fast',
+          label: 'GPT-5.5 Medium Fast',
+          modelId: 'gpt-5.5-medium-fast',
+          providerId: 'cursor',
+        },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/agent',
+      ['--list-models'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { CURSOR_API_KEY: 'test-key' },
+      }),
+      expect.any(Function),
+    );
+  });
+
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();
