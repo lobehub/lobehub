@@ -21,6 +21,7 @@ const mockRegenerateUserMessage = vi.fn();
 const mockRegenerateAssistantMessage = vi.fn();
 const mockContinueGenerationMessage = vi.fn();
 const mockDeleteMessage = vi.fn();
+const mockDeleteMessages = vi.fn();
 const mockSwitchMessageBranch = vi.fn();
 const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
@@ -50,6 +51,7 @@ vi.mock('@/store/chat', () => ({
       regenerateAssistantMessage: mockRegenerateAssistantMessage,
       continueGenerationMessage: mockContinueGenerationMessage,
       deleteMessage: mockDeleteMessage,
+      deleteMessages: mockDeleteMessages,
       switchMessageBranch: mockSwitchMessageBranch,
       startOperation: mockStartOperation,
       associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -1383,6 +1385,7 @@ describe('Generation Actions', () => {
           topicId: 'topic-1',
         }),
       );
+      expect(mockDeleteMessages).toHaveBeenCalledWith(['assistant-1']);
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
@@ -1407,6 +1410,7 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('user-1');
       });
 
+      expect(mockDeleteMessages).not.toHaveBeenCalled();
       expect(mockInternalExecGroupOrchestration).toHaveBeenCalledWith({
         groupId: 'group-1',
         initialResult: { payload: { groupId: 'group-1' }, type: 'init' },
@@ -1414,6 +1418,35 @@ describe('Generation Actions', () => {
         topicId: 'topic-1',
       });
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+    });
+
+    it('deletes the Orchestrator and member descendants before retrying the group turn', async () => {
+      const context: ConversationContext = {
+        agentId: 'orchestrator-agent',
+        groupId: 'group-1',
+        scope: 'group',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { content: 'Hello', id: 'user-1', role: 'user' },
+            { content: 'speak', id: 'orchestrator-1', parentId: 'user-1', role: 'assistant' },
+            { content: 'hi', id: 'member-1', parentId: 'orchestrator-1', role: 'assistant' },
+          ],
+          displayMessages: [{ content: 'Hello', id: 'user-1', role: 'user' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('user-1');
+      });
+
+      expect(mockDeleteMessages).toHaveBeenCalledWith(['orchestrator-1', 'member-1']);
+      expect(mockInternalExecGroupOrchestration).toHaveBeenCalled();
     });
 
     it('preserves a member assistant identity through gateway regeneration', async () => {

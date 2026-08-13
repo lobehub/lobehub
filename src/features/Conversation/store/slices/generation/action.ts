@@ -330,6 +330,32 @@ const findUserMessageId = (
   }
 };
 
+const findDescendantMessageIds = (parentId: string, messages: UIChatMessage[]): string[] => {
+  const childrenByParent = new Map<string, UIChatMessage[]>();
+
+  for (const message of messages) {
+    if (!message.parentId) continue;
+    const children = childrenByParent.get(message.parentId) ?? [];
+    children.push(message);
+    childrenByParent.set(message.parentId, children);
+  }
+
+  const descendantIds: string[] = [];
+  const pendingIds = [parentId];
+
+  while (pendingIds.length > 0) {
+    const currentId = pendingIds.shift()!;
+    const children = childrenByParent.get(currentId) ?? [];
+
+    for (const child of children) {
+      descendantIds.push(child.id);
+      pendingIds.push(child.id);
+    }
+  }
+
+  return descendantIds;
+};
+
 const getRetryExecutionAgentId = (context: ConversationContext) =>
   context.groupId && context.orchestrationRole === 'member'
     ? context.subAgentId || context.agentId
@@ -437,6 +463,24 @@ const regenerateUserMessageFromSource = async (
     // Read the database messages from the captured conversation. If the shared
     // ConversationStore has switched context, the source falls back to the old
     // context's ChatStore bucket instead of observing the new topic.
+    const shouldRestartGroupOrchestration =
+      !!context.groupId &&
+      (context.orchestrationRole === 'supervisor' || !retrySourceMessage);
+
+    if (shouldRestartGroupOrchestration) {
+      const descendantIds = findDescendantMessageIds(messageId, dbMessages);
+      if (descendantIds.length > 0) await chatStore.deleteMessages(descendantIds);
+
+      await chatStore.internal_execGroupOrchestration({
+        groupId: context.groupId!,
+        initialResult: { payload: { groupId: context.groupId }, type: 'init' },
+        supervisorAgentId: context.agentId,
+        topicId: context.topicId ?? undefined,
+      });
+      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
+      return;
+    }
+
     const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
     const nextBranchIndex = childrenCount;
 
@@ -451,20 +495,6 @@ const regenerateUserMessageFromSource = async (
     // already switched, which is harmless — no assistant turn has started yet.
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
-
-    if (
-      context.groupId &&
-      (context.orchestrationRole === 'supervisor' || !retrySourceMessage)
-    ) {
-      await chatStore.internal_execGroupOrchestration({
-        groupId: context.groupId,
-        initialResult: { payload: { groupId: context.groupId }, type: 'init' },
-        supervisorAgentId: context.agentId,
-        topicId: context.topicId ?? undefined,
-      });
-      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
-      return;
-    }
 
     const executionAgentId = getRetryExecutionAgentId(context);
     const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(executionAgentId);
