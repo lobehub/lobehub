@@ -42,19 +42,18 @@ describe('Python interpreter', () => {
   });
 
   // A cross-origin script URL and a CSP that forbids workers both make the
-  // constructor throw. Raised while the module evaluates it would reach every
-  // importer and blank the app, so the failure has to stay inside this call.
-  it('reports an unavailable interpreter instead of throwing', async () => {
-    vi.stubGlobal(
-      'Worker',
-      vi.fn().mockImplementation(() => {
-        throw new DOMException('cannot be accessed from origin', 'SecurityError');
-      }),
-    );
+  // constructor throw. Swallowing it hands back the same `undefined` a healthy
+  // run can produce, and the caller reports a blocked interpreter as a success.
+  it('replays a construction failure to every caller', async () => {
+    const Worker = vi.fn().mockImplementation(() => {
+      throw new DOMException('cannot be accessed from origin', 'SecurityError');
+    });
+    vi.stubGlobal('Worker', Worker);
 
     const { getPythonInterpreter } = await import('../index');
-    expect(() => getPythonInterpreter()).not.toThrow();
-    expect(getPythonInterpreter()).toBeUndefined();
+    expect(() => getPythonInterpreter()).toThrow('cannot be accessed from origin');
+    expect(() => getPythonInterpreter()).toThrow('cannot be accessed from origin');
+    expect(Worker).toHaveBeenCalledTimes(1);
   });
 
   it('constructs the worker once and reuses it', async () => {

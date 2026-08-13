@@ -97,7 +97,7 @@ export class ChatCodeInterpreterActionImpl {
       // Complete interpreter operation
       this.#get().completeOperation(interpreterOpId);
 
-      if (result?.files) {
+      if (result.files) {
         await this.#get().optimisticUpdateMessageContent(
           id,
           JSON.stringify(result),

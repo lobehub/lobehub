@@ -8,9 +8,10 @@ class PythonService {
     code: string,
     packages: string[],
     files: File[],
-  ): Promise<CodeInterpreterResponse | undefined> {
+  ): Promise<CodeInterpreterResponse> {
     const PythonInterpreter = getPythonInterpreter();
-    if (!PythonInterpreter) return;
+    if (!PythonInterpreter)
+      throw new Error('Python interpreter is unavailable: this environment has no Web Worker.');
 
     const interpreter = await new PythonInterpreter({
       pyodideIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_INDEX_URL!,
