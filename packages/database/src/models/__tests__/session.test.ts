@@ -115,6 +115,24 @@ describe('SessionModel', () => {
       expect(result.sessionGroups).toHaveLength(0);
     });
 
+    it('should include non-virtual agents without a linked session', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'orphan-agent', title: 'Orphan Agent', userId, model: 'gpt-4' },
+        { id: 'virtual-agent', title: 'Virtual Agent', userId, virtual: true },
+      ]);
+
+      const result = await sessionModel.queryWithGroups();
+
+      expect(result.sessions).toHaveLength(1);
+      expect(result.sessions[0]).toMatchObject({
+        config: { id: 'orphan-agent', title: 'Orphan Agent' },
+        id: 'orphan-agent',
+        meta: { title: 'Orphan Agent' },
+        model: 'gpt-4',
+        type: 'agent',
+      });
+    });
+
     it('should map group sessions with members correctly', async () => {
       // Create a group session with multiple agents
       await serverDB.transaction(async (trx) => {

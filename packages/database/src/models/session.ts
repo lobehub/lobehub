@@ -83,7 +83,7 @@ export class SessionModel {
   };
 
   queryWithGroups = async (): Promise<ChatSessionList> => {
-    // Query all sessions
+    // Query all sessions (each session is joined with its agent)
     const result = await this.query();
 
     const groups = await this.db.query.sessionGroups.findMany({
@@ -93,10 +93,76 @@ export class SessionModel {
 
     const mappedSessions = result.map((item) => this.mapSessionItem(item as any));
 
+    // Backfill: agents that have no session attached are invisible to mobile/SPA
+    // because the query above is `from(sessions)`. Wrap them as virtual session
+    // items so the sidebar shows the same set of agents as desktop's
+    // `getSidebarAgentList`. The route uses `agentId` (not sessionId) anyway.
+    const orphanAgents = await this.findAgentsWithoutSession();
+    const orphanSessions = orphanAgents.map((agent) =>
+      this.buildVirtualSessionForAgent(agent),
+    );
+
+    const allSessions = [...mappedSessions, ...orphanSessions].sort(
+      (a, b) =>
+        new Date((b as any).updatedAt).getTime() - new Date((a as any).updatedAt).getTime(),
+    );
+
     return {
       sessionGroups: groups as unknown as ChatSessionList['sessionGroups'],
-      sessions: mappedSessions,
+      sessions: allSessions,
     };
+  };
+
+  /**
+   * Find agents owned by current user/workspace that are NOT linked to any
+   * session via `agentsToSessions`. Used to backfill the mobile sidebar so
+   * orphan agents are still listed.
+   */
+  private findAgentsWithoutSession = async (): Promise<AgentItem[]> => {
+    const rows = await this.db
+      .select({ agent: agents })
+      .from(agents)
+      .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
+      .where(
+        and(
+          this.agentsOwnership(),
+          not(eq(agents.virtual, true)),
+          sql`${agentsToSessions.agentId} IS NULL`,
+        ),
+      )
+      .orderBy(desc(agents.updatedAt));
+
+    return rows.map((r) => r.agent);
+  };
+
+  /**
+   * Build a virtual `LobeAgentSession` payload for an agent that has no real
+   * session row. The returned object mirrors the shape produced by
+   * `mapSessionItem` so the frontend can treat it uniformly. We reuse the
+   * agent's id as the virtual session id; the SPA route only relies on
+   * `agentId` for navigation, so this stays consistent.
+   */
+  private buildVirtualSessionForAgent = (agent: AgentItem): LobeAgentSession => {
+    return {
+      config: agent as any,
+      createdAt: agent.createdAt as any,
+      group: agent.sessionGroupId ?? undefined,
+      id: agent.id,
+      meta: {
+        avatar: agent.avatar ?? undefined,
+        backgroundColor: agent.backgroundColor ?? undefined,
+        description: agent.description ?? undefined,
+        marketIdentifier: agent.marketIdentifier ?? undefined,
+        tags: (agent.tags as string[] | undefined) ?? undefined,
+        title: agent.title ?? undefined,
+      },
+      model: agent.model ?? '',
+      pinned: agent.pinned ?? false,
+      slug: agent.slug ?? undefined,
+      type: 'agent',
+      updatedAt: agent.updatedAt as any,
+      userId: this.userId,
+    } as unknown as LobeAgentSession;
   };
 
   queryByKeyword = async (keyword: string) => {
