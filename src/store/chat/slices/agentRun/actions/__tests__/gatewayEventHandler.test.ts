@@ -1,4 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
@@ -853,6 +854,45 @@ describe('createGatewayEventHandler', () => {
           toolCallId: 'tc-2',
         }),
       );
+    });
+
+    it('dispatches a Kimi Code Shell result through the registered renderer hook contract', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onAfterCall });
+      const adapter = createAdapter('kimi-code');
+
+      adapter.adapt({
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: JSON.stringify({ command: 'git worktree add /tmp/kimi-wt' }),
+              name: 'Shell',
+            },
+            id: 'kimi-shell-1',
+            type: 'function',
+          },
+        ],
+      });
+      const toolEnd = adapter
+        .adapt({ content: 'created', role: 'tool', tool_call_id: 'kimi-shell-1' })
+        .find((event) => event.type === 'tool_end');
+
+      expect(toolEnd).toBeDefined();
+      handler(makeEvent('tool_end', toolEnd!.data));
+      await flush();
+
+      expect(getExecutorMock).toHaveBeenCalledWith('kimi-code');
+      expect(onAfterCall).toHaveBeenCalledWith({
+        apiName: 'Shell',
+        identifier: 'kimi-code',
+        params: { command: 'git worktree add /tmp/kimi-wt' },
+        result: { content: 'created', success: true },
+        toolCallId: 'kimi-shell-1',
+        topicId: 'topic-1',
+      });
     });
 
     it('should skip onAfterCall when payload identifier/apiName are missing', async () => {

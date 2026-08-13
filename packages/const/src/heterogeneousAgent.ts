@@ -16,6 +16,7 @@ export const HETEROGENEOUS_AGENT_MODEL_IDS = [
   'codebuddy',
   'codex',
   'cursor',
+  'kimi-code',
   'opencode',
   'pi',
   'qoder',

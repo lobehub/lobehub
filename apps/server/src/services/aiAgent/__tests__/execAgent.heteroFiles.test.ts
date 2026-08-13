@@ -465,6 +465,33 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  it('dispatches Kimi Code to a bound device with its model args', async () => {
+    heteroAgentConfig.model = 'kimi-code';
+    heteroAgentConfig.provider = 'kimi-code';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        model: 'kimi-for-coding',
+        type: 'kimi-code',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Kimi Code on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'kimi-code',
+        args: ['--model', 'kimi-for-coding'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('dispatches Cursor to a bound device with its model args', async () => {
     heteroAgentConfig.model = 'cursor';
     heteroAgentConfig.provider = 'cursor';

@@ -8,8 +8,7 @@ import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code /
- * CodeBuddy / Codex / OpenCode / Pi / Qoder).
+ * Shared resolver for external CLI-agent binaries.
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -47,6 +46,8 @@ export interface CliCommandStatus {
 
 interface ValidateOptions {
   validateFlag?: string;
+  /** Additional `--help` markers that must all be present after version validation. */
+  validateHelpKeywords?: string[];
   validateKeywords?: string[];
   validatePattern?: RegExp;
   versionFlag?: string;
@@ -382,7 +383,13 @@ export const detectValidatedCommand = async (
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
-  const { validateFlag = '--version', validateKeywords, validatePattern, versionFlag } = options;
+  const {
+    validateFlag = '--version',
+    validateHelpKeywords,
+    validateKeywords,
+    validatePattern,
+    versionFlag,
+  } = options;
 
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
@@ -417,6 +424,24 @@ export const detectValidatedCommand = async (
 
     if (!matchesKeyword && !matchesPattern) {
       return { available: false };
+    }
+
+    // Kimi Code shares the `kimi` executable name with the retired Python
+    // kimi-cli. Both can print a valid version, so capability-probe the exact
+    // resolved binary before accepting it as the stream-json runtime.
+    if (validateHelpKeywords?.length) {
+      let helpResult;
+      try {
+        helpResult = await execProbe(resolvedPath, ['--help'], env, viaShell);
+      } catch {
+        return { available: false };
+      }
+      if (helpResult === UNRESOLVED_SHIM) return UNRESOLVED_SHIM;
+
+      const helpOutput = `${helpResult.stdout}\n${helpResult.stderr}`.toLowerCase();
+      if (!validateHelpKeywords.every((keyword) => helpOutput.includes(keyword.toLowerCase()))) {
+        return { available: false };
+      }
     }
 
     let versionBanner = firstLine;
@@ -496,6 +521,10 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
+  },
+  'kimi-code': {
+    validateHelpKeywords: ['--prompt', '--output-format'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'opencode': {
     // OpenCode prints only a bare version (for example `1.18.3`) for
@@ -592,6 +621,16 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
       return [path.join(homedir(), '.local', 'bin', 'agent')];
+    }
+    case 'kimi-code': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [
+        path.join(homedir(), '.kimi-code', 'bin', 'kimi'),
+        path.join(homedir(), '.local', 'bin', 'kimi'),
+        path.join(homedir(), '.bun', 'bin', 'kimi'),
+        path.join(homedir(), '.npm-global', 'bin', 'kimi'),
+        path.join(homedir(), 'Library', 'pnpm', 'kimi'),
+      ];
     }
     case 'opencode': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];

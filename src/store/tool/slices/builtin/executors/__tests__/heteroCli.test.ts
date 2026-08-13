@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claudeCodeExecutor,
   codexExecutor,
+  kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
@@ -35,6 +36,7 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(kimiCodeExecutor.identifier).toBe('kimi-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
     expect(piExecutor.identifier).toBe('pi');
     expect(qoderExecutor.identifier).toBe('qoder');
@@ -78,6 +80,22 @@ describe('heteroCli executors', () => {
 
     expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: 'git worktree add /tmp/opencode-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Kimi Code Shell calls for worktree side effects', async () => {
+    await kimiCodeExecutor.onAfterCall!(
+      call({
+        apiName: 'Shell',
+        identifier: 'kimi-code',
+        params: { command: 'git worktree add /tmp/kimi-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/kimi-wt',
       resultContent: '',
       topicId: 't1',
     });

@@ -13,7 +13,7 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'amp'` | `'claude-code'` | `'codebuddy'` | `'codex'` | `'cursor'` | `'opencode'` | `'pi'` | `'qoder'`). */
+  /** Registered local heterogeneous-agent type key. */
   agentType: string;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
@@ -208,6 +208,7 @@ export const CURSOR_BASE_ARGS = [
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
 export const PI_BASE_ARGS = ['--mode', 'json'] as const;
+export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
 export const QODER_BASE_ARGS = [
   '-p',
   '--input-format',
@@ -312,6 +313,13 @@ const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsPa
   ...extraArgs,
 ];
 
+const buildKimiCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
+  ...KIMI_CODE_BASE_ARGS,
+  ...(resumeSessionId ? ['--session', resumeSessionId] : []),
+  ...extraArgs,
+  ...inputArgs,
+];
+
 export interface QoderSpawnArgsOptions {
   extraArgs?: string[];
   inputArgs?: string[];
@@ -345,6 +353,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'cursor': {
       return buildCursorArgs(params);
+    }
+    case 'kimi-code': {
+      return buildKimiCodeArgs(params);
     }
     case 'opencode': {
       return buildOpenCodeArgs(params);
@@ -389,10 +400,10 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, OpenCode,
- * Pi, or Qoder) and yield its stream as
- * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
- * terminal runs and (later) sandbox-driven runs that ingest into the server.
+ * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Kimi Code,
+ * OpenCode, Pi, or Qoder) and yield its stream as unified `AgentStreamEvent`s.
+ * Used by `lh hetero exec` for both standalone terminal runs and (later)
+ * sandbox-driven runs that ingest into the server.
  *
  * Stays minimal on purpose — no on-disk tracing, no proxy env composition,
  * no CLI-not-found classification. Those host concerns live in the desktop

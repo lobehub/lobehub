@@ -313,6 +313,7 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
   },
   'cursor': {},
+  'kimi-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

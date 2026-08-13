@@ -74,7 +74,8 @@ export type HeterogeneousAgentModelCatalog =
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` | `cursor` | `opencode` | `pi` | `qoder`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
+ *   `cursor` | `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -296,6 +297,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -345,7 +347,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor') {
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -406,6 +408,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder'
@@ -464,7 +467,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor') {
+  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&

@@ -516,9 +516,9 @@ const InterruptTaskSchema = z
     /** Thread ID */
     threadId: z.string().optional(),
     /**
-     * Topic ID — required to cancel remote hetero tasks (openclaw / hermes).
+     * Topic ID — used to cancel device-backed heterogeneous agent tasks.
      * When provided and the topic's runningOperation has a deviceId, the server
-     * will dispatch a cancelHeteroTask tool call to kill the remote process.
+     * will dispatch a cancelHeteroTask tool call to kill the device process.
      */
     topicId: z.string().optional(),
   })
@@ -571,6 +571,7 @@ const HeteroIngestSchema = z.object({
     'codebuddy',
     'codex',
     'cursor',
+    'kimi-code',
     'opencode',
     'pi',
     'qoder',
@@ -597,6 +598,7 @@ const HeteroFinishSchema = z.object({
     'codebuddy',
     'codex',
     'cursor',
+    'kimi-code',
     'opencode',
     'pi',
     'qoder',

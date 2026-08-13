@@ -7,10 +7,13 @@ describe('isHeterogeneousAgentModelId', () => {
     expect(isHeterogeneousAgentModelId(model)).toBe(true);
   });
 
-  it('includes qoder so bare model: "qoder" routes as a heterogeneous agent', () => {
-    expect(HETEROGENEOUS_AGENT_MODEL_IDS).toContain('qoder');
-    expect(isHeterogeneousAgentModelId('qoder')).toBe(true);
-  });
+  it.each(['kimi-code', 'qoder'] as const)(
+    'includes %s so its bare model routes as a heterogeneous agent',
+    (model) => {
+      expect(HETEROGENEOUS_AGENT_MODEL_IDS).toContain(model);
+      expect(isHeterogeneousAgentModelId(model)).toBe(true);
+    },
+  );
 
   it('includes cursor so bare model: "cursor" routes as a heterogeneous agent', () => {
     expect(HETEROGENEOUS_AGENT_MODEL_IDS).toContain('cursor');

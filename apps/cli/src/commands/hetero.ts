@@ -35,6 +35,9 @@ import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
+const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
+  ({ defaultCommand }) => `\`${defaultCommand}\``,
+).join(', ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -134,16 +137,17 @@ const buildExtraArgs = (
               ...(options.model ? ['--model', options.model] : []),
               ...(options.effort ? ['--effort', options.effort] : []),
             ]
-          : options.type === 'cursor' || options.type === 'opencode'
+          : options.type === 'cursor' ||
+              options.type === 'kimi-code' ||
+              options.type === 'opencode' ||
+              options.type === 'pi'
             ? [...(options.model ? ['--model', options.model] : [])]
-            : options.type === 'pi'
-              ? [...(options.model ? ['--model', options.model] : [])]
-              : options.type === 'qoder'
-                ? [
-                    ...(options.model ? ['--model', options.model] : []),
-                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                  ]
-                : [];
+            : options.type === 'qoder'
+              ? [
+                  ...(options.model ? ['--model', options.model] : []),
+                  ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                ]
+              : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -947,7 +951,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codebuddy`, `codex`, `agent`, `opencode`, `pi`, or `qodercli`)',
+      `Override the agent CLI binary name (defaults: ${SUPPORTED_AGENT_COMMANDS})`,
     )
     .option(
       '--operation-id <id>',
