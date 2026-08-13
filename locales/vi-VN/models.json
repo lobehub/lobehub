@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "Mô hình thông minh, cực nhanh, có khả năng suy luận trước khi phản hồi.",
   "lobehub.grok-4.3.description": "Mô hình ngôn ngữ lớn tìm kiếm sự thật nhất trên thế giới",
   "lobehub.grok-4.5.description": "Grok 4.5 mang lại hiệu suất gần với Claude Opus 4.8 với phản hồi cực kỳ nhanh.",
+  "lobehub.grok-4.6.description": "Grok 4.6 được phát triển dựa trên Grok 4.5 với trọng tâm đặc biệt vào các tác vụ dài hạn và các công việc tương tác, trực quan tham vọng hơn.",
   "lobehub.imagen-4.0-fast-generate-001.description": "Dòng mô hình chuyển đổi văn bản thành hình ảnh thế hệ thứ 4 của Imagen.",
   "lobehub.imagen-4.0-generate-001.description": "Dòng mô hình chuyển văn bản thành hình ảnh thế hệ thứ tư Imagen",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Phiên bản Ultra của dòng mô hình chuyển văn bản thành hình ảnh thế hệ thứ tư Imagen",
