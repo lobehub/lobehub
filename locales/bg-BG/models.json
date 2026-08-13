@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "Интелигентен, изключително бърз модел, който разсъждава преди да отговори",
   "lobehub.grok-4.3.description": "Най-истинно търсещият голям езиков модел в света",
   "lobehub.grok-4.5.description": "Grok 4.5 предоставя производителност, близка до Claude Opus 4.8, с изключително бързи отговори.",
+  "lobehub.grok-4.6.description": "Grok 4.6 надгражда Grok 4.5 с особен акцент върху дългосрочни агенти и по-амбициозна интерактивна и визуална работа.",
   "lobehub.imagen-4.0-fast-generate-001.description": "Imagen 4-то поколение модели за текст-към-изображение.",
   "lobehub.imagen-4.0-generate-001.description": "Четвърто поколение модели Imagen за преобразуване от текст към изображение.",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Ultra версията от четвъртото поколение модели Imagen за преобразуване от текст към изображение.",
