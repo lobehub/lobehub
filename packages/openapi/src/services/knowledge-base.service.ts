@@ -1,10 +1,11 @@
-import { and, count, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, notInArray, or } from 'drizzle-orm';
 
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { KnowledgeBaseItem } from '@/database/schemas';
 import { knowledgeBases } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService as CoreFileService } from '@/server/services/file';
+import { getRestrictedKnowledgeBaseIds } from '@/server/services/knowledgeBaseAccess';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -52,6 +53,17 @@ export class KnowledgeBaseService extends BaseService {
       const { keyword } = request;
 
       const conditions = [this.buildWorkspaceWhere(knowledgeBases)];
+
+      // Restricted (member No-access) libraries are hidden from non-managers,
+      // mirroring the lambda listing filter.
+      const restrictedKbIds = await getRestrictedKnowledgeBaseIds({
+        serverDB: this.db,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (restrictedKbIds.length > 0) {
+        conditions.push(notInArray(knowledgeBases.id, restrictedKbIds));
+      }
 
       if (keyword) {
         conditions.push(
@@ -119,6 +131,17 @@ export class KnowledgeBaseService extends BaseService {
 
       if (!knowledgeBase) {
         throw this.createNotFoundError('Knowledge base not found or access denied');
+      }
+
+      // Restricted (member No-access) libraries are manager-only, mirroring
+      // the lambda detail guard.
+      const restrictedKbIds = await getRestrictedKnowledgeBaseIds({
+        serverDB: this.db,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (restrictedKbIds.includes(id)) {
+        throw this.createAuthorizationError('仅知识库管理者可访问此知识库');
       }
 
       this.log('info', 'Knowledge base detail retrieved successfully', { id });

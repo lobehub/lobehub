@@ -21,6 +21,7 @@ import {
 import {
   assertKnowledgeBaseBrowsable,
   filterRestrictedKnowledgeBases,
+  getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -167,13 +168,23 @@ export const knowledgeBaseRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
-      const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+    .query(
+      async ({ ctx, input }): Promise<(KnowledgeBaseItem & { memberRestricted?: boolean })[]> => {
+        const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
 
-      // Restricted KBs are fully hidden from non-privileged members here; the
-      // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
-      return filterRestrictedKnowledgeBases(ctx, list);
-    }),
+        // Restricted KBs are fully hidden from non-privileged members here; the
+        // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
+        const visible = await filterRestrictedKnowledgeBases(ctx, list);
+
+        // Managers keep seeing restricted KBs — flag them so the client can
+        // render the lock badge without a per-row permission request.
+        if (!ctx.workspaceId) return visible;
+        const useLevelIds = await getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId);
+        if (useLevelIds.length === 0) return visible;
+        const useLevelSet = new Set(useLevelIds);
+        return visible.map((kb) => ({ ...kb, memberRestricted: useLevelSet.has(kb.id) }));
+      },
+    ),
 
   publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))

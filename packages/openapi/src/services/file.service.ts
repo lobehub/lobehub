@@ -1,6 +1,6 @@
 import type { FileMetadata } from '@lobechat/types';
 import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
-import { and, count, desc, eq, gte, ilike, inArray, lte, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, lte, notInArray, sum } from 'drizzle-orm';
 import { sha256 } from 'js-sha256';
 
 import type { PERMISSION_ACTIONS } from '@/const/rbac';
@@ -24,6 +24,7 @@ import type { S3 } from '@/server/modules/S3';
 import { FileS3 } from '@/server/modules/S3';
 import { DocumentService } from '@/server/services/document';
 import { FileService as CoreFileService } from '@/server/services/file';
+import { getRestrictedKnowledgeBaseIds } from '@/server/services/knowledgeBaseAccess';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { nanoid } from '@/utils/uuid';
 
@@ -142,8 +143,43 @@ export class FileUploadService extends BaseService {
   /**
    * Batch file upload
    */
+  /**
+   * Restricted (member No-access) libraries: the OpenAPI surface mirrors the
+   * lambda routers — a `use`-level KB and its linked files are manager-only.
+   */
+  private async getRestrictedKbIds(): Promise<string[]> {
+    return getRestrictedKnowledgeBaseIds({
+      serverDB: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+  }
+
+  private async assertKnowledgeBaseNotRestricted(knowledgeBaseId: string): Promise<void> {
+    const restricted = await this.getRestrictedKbIds();
+    if (restricted.includes(knowledgeBaseId)) {
+      throw this.createAuthorizationError('仅知识库管理者可访问此知识库');
+    }
+  }
+
+  private async assertFileNotRestricted(fileId: string): Promise<void> {
+    const restricted = await this.getRestrictedKbIds();
+    if (restricted.length === 0) return;
+
+    const memberships = await this.db
+      .select({ knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId })
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.fileId, fileId));
+    if (memberships.some((m) => restricted.includes(m.knowledgeBaseId))) {
+      throw this.createAuthorizationError('仅知识库管理者可访问此文件');
+    }
+  }
+
   async uploadFiles(request: BatchFileUploadRequest): Promise<BatchFileUploadResponse> {
     try {
+      if (request.knowledgeBaseId) {
+        await this.assertKnowledgeBaseNotRestricted(request.knowledgeBaseId);
+      }
       const isPermitted = await this.resolveOperationPermission('FILE_UPLOAD');
       if (!isPermitted.isPermitted) {
         throw this.createAuthorizationError(isPermitted.message || '无权上传文件');
@@ -237,6 +273,8 @@ export class FileUploadService extends BaseService {
 
       // If knowledge base ID is specified, use JOIN query
       if (knowledgeBaseId) {
+        await this.assertKnowledgeBaseNotRestricted(knowledgeBaseId);
+
         // Build query conditions
         const whereConditions = [
           eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
@@ -292,6 +330,19 @@ export class FileUploadService extends BaseService {
 
       // No knowledge base ID specified, use relational query (auto join user and knowledgeBases)
       const whereConditions = this.buildFileWhereConditions(request, permissionResult);
+      const restrictedKbIds = await this.getRestrictedKbIds();
+      if (restrictedKbIds.length > 0) {
+        // A file linked to ANY restricted KB is fully hidden from the listing.
+        whereConditions.push(
+          notInArray(
+            files.id,
+            this.db
+              .select({ fileId: knowledgeBaseFiles.fileId })
+              .from(knowledgeBaseFiles)
+              .where(inArray(knowledgeBaseFiles.knowledgeBaseId, restrictedKbIds)),
+          ),
+        );
+      }
       const whereClause = and(...whereConditions);
 
       // Current files relation does not define user/knowledgeBases, use basic query and manually supplement associated data
@@ -557,6 +608,7 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
       }
 
+      await this.assertFileNotRestricted(fileId);
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
       // Check if the file is an image
@@ -615,6 +667,7 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
       }
 
+      await this.assertFileNotRestricted(fileId);
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
       // Set expiry time (default 1 hour)
@@ -803,6 +856,7 @@ export class FileUploadService extends BaseService {
       }
 
       // 2. Query file
+      await this.assertFileNotRestricted(fileId);
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
       // 3. Check if file type supports parsing
@@ -960,6 +1014,7 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
       }
 
+      await this.assertFileNotRestricted(fileId);
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
       const [chunkCount, chunkTask, embeddingTask] = await Promise.all([

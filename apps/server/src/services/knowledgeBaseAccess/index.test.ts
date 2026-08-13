@@ -12,7 +12,7 @@ import {
   filterRetrievableFileIds,
   filterRetrievableKnowledgeBaseIds,
   getRestrictedKnowledgeBaseIds,
-} from './knowledgeBaseAccess';
+} from './index';
 
 vi.mock('@/server/services/workspacePermission', () => ({
   getWorkspaceScopedPermissionMatches: vi.fn(),
