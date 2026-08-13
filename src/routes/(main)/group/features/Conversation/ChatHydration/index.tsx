@@ -58,8 +58,19 @@ const ChatHydration = memo(() => {
       (s) => s.activeTopicId,
       (state) => {
         const { gid } = paramsRef.current;
+        const { pathname } = locationRef.current;
 
         if (!gid) return;
+
+        // Guard: when activeTopicId becomes null, only navigate back to the group
+        // root if the current route has no topic segment at all. During a group
+        // switch, GroupIdSync may clear the store (`switchTopic(null)`) in the same
+        // render cycle while the URL still carries `/group/<gid>/<topicId>` —
+        // navigating then would bounce the user out of the topic they just opened.
+        // The agent-side ChatHydration already distinguishes programmatic clears
+        // from real "no topic" states (see PR #14231); mirror that here.
+        const topicSegments = pathname.split('/').filter(Boolean);
+        if (!state && topicSegments.length >= 3) return;
 
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
