@@ -45,7 +45,7 @@ export default {
   'detail.totals': '{{runs}} practices · {{lessons}} rules · {{hits}} hits',
 
   'empty.desc':
-    'Expertise comes from doing, not from writing it down. Point it at something it does often, and the rules will start coming out of the work itself.',
+    'Point it at something it does often, and rules will grow out of repeated real practice.',
   'empty.title': 'Turn real work into expertise',
   'headline.alsoDeclining': ' {{name}} has turned back down.',
   'headline.alsoRising': ' {{name}} is still climbing steeply.',
@@ -127,7 +127,9 @@ export default {
   'create.titleLabel': 'Name',
   'create.titlePlaceholder': 'e.g. Incident response',
   'coverage.blankHint': 'never tested at this layer',
+  'coverage.canon': 'Layer model: {{source}}',
   'coverage.gaps': 'No rules yet',
+  'coverage.invented': 'Layer model has no canonical source',
   'coverage.share': '{{title}} · {{count}} rules',
   'coverage.sub': '{{covered}}/{{total}} layers have rules · {{unused}} rules never used',
   'coverage.title': 'Where the learning has landed',

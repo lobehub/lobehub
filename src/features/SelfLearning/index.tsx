@@ -322,11 +322,7 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
           <Text fontSize={13.5} weight={500}>
             {domain.title}
           </Text>
-          {domain.anchorPending ? (
-            <Tag>{t('anchor.tag')}</Tag>
-          ) : (
-            <Tag>{t(`shape.tag.${shape}`)}</Tag>
-          )}
+          <Tag>{t(`shape.tag.${shape}`)}</Tag>
         </Flexbox>
         <Text fontSize={11} type={'secondary'}>
           {t('overview.rowMeta', { lessons: domain.lessonCount, runs: domain.runCount })}

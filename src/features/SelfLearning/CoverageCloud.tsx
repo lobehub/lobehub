@@ -9,9 +9,9 @@ import type { ExpertiseDomainDetail } from '@/services/expertise';
 
 const styles = createStaticStyles(({ css }) => ({
   empty: css`
-    padding-block: 5px;
-    padding-inline: 10px;
-    border: 1px dashed ${cssVar.colorWarningBorder};
+    padding-block: 3px;
+    padding-inline: 8px;
+    border: 1px dashed ${cssVar.colorBorder};
     border-radius: 999px;
   `,
   legendDot: css`
@@ -21,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   segment: css`
     min-width: 3px;
-    height: 12px;
+    height: 8px;
 
     &:first-child {
       border-start-start-radius: 6px;
@@ -36,23 +36,15 @@ const styles = createStaticStyles(({ css }) => ({
   track: css`
     overflow: hidden;
     display: flex;
-    gap: 2px;
 
     width: 100%;
-    padding: 2px;
-    border-radius: 8px;
+    border-radius: 4px;
 
     background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
-const COLORS = [
-  cssVar.colorPrimary,
-  cssVar.colorInfo,
-  cssVar.colorSuccess,
-  cssVar.colorWarning,
-  cssVar.colorTextTertiary,
-];
+const OPACITIES = [0.35, 0.5, 0.65, 0.8, 1];
 
 interface CoverageSnapshotProps {
   detail: ExpertiseDomainDetail;
@@ -65,9 +57,9 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
 
   const { covered, empty, total } = useMemo(() => {
     const layers = (domain.layers ?? []).map((layer, index) => ({
-      color: COLORS[index % COLORS.length],
       count: layerCounts[layer.key] ?? 0,
       key: layer.key,
+      opacity: OPACITIES[index % OPACITIES.length],
       title: layer.title,
     }));
     return {
@@ -80,7 +72,7 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
   if (covered.length === 0 && empty.length === 0) return null;
 
   return (
-    <Block gap={14} padding={16} variant={'outlined'}>
+    <Block gap={12} padding={16} variant={'outlined'}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'} wrap={'wrap'}>
         <Text fontSize={13} weight={600}>
           {t('coverage.title')}
@@ -104,7 +96,11 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
               >
                 <div
                   className={styles.segment}
-                  style={{ background: layer.color, flex: layer.count }}
+                  style={{
+                    background: cssVar.colorPrimary,
+                    flex: layer.count,
+                    opacity: layer.opacity,
+                  }}
                 />
               </Tooltip>
             ))}
@@ -112,7 +108,10 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
           <Flexbox horizontal gap={14} wrap={'wrap'}>
             {covered.map((layer) => (
               <Flexbox horizontal align={'center'} gap={6} key={layer.key}>
-                <div className={styles.legendDot} style={{ background: layer.color }} />
+                <div
+                  className={styles.legendDot}
+                  style={{ background: cssVar.colorPrimary, opacity: layer.opacity }}
+                />
                 <Text fontSize={11.5}>{layer.title}</Text>
                 <Text fontSize={11} type={'secondary'}>
                   {layer.count}
@@ -130,13 +129,24 @@ const CoverageSnapshot = memo<CoverageSnapshotProps>(({ detail }) => {
           </Text>
           {empty.map((layer) => (
             <div className={styles.empty} key={layer.key}>
-              <Text fontSize={11.5} type={'warning'}>
+              <Text fontSize={11.5} type={'secondary'}>
                 {layer.title}
               </Text>
             </div>
           ))}
         </Flexbox>
       )}
+
+      <Text fontSize={10.5} type={'secondary'}>
+        {domain.layerSource === 'canonical'
+          ? t('coverage.canon', {
+              source:
+                [
+                  ...new Set((domain.layers ?? []).map((layer) => layer.canonRef).filter(Boolean)),
+                ].join(' · ') || '—',
+            })
+          : t('coverage.invented')}
+      </Text>
     </Block>
   );
 });

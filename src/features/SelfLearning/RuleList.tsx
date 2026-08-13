@@ -11,7 +11,20 @@ import type { ExpertiseDomainDetail, ExpertiseLessonItem } from '@/services/expe
 import type { ExpertiseTier } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
+  content: css`
+    overflow: hidden;
+    min-width: 0;
+  `,
+  code: css`
+    align-self: center;
+    width: 40px;
+  `,
   row: css`
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: center;
+
     padding-block: 7px;
   `,
 }));
@@ -76,23 +89,21 @@ const RuleList = memo<RuleListProps>(({ lessons, stats }) => {
       {visibleGroups.map(({ tier, items }) => (
         <Flexbox gap={4} key={tier}>
           {items.map((lesson) => (
-            <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={lesson.id}>
-              <Flexbox gap={1} style={{ flex: 1, minWidth: 0 }}>
-                <Flexbox horizontal align={'center'} gap={7}>
-                  <Text fontSize={10.5} style={{ flex: 'none', width: 34 }} type={'secondary'}>
-                    {lesson.code}
-                  </Text>
-                  <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
-                    {lesson.title}
-                  </Text>
-                </Flexbox>
+            <div className={styles.row} key={lesson.id}>
+              <Text className={styles.code} fontSize={10.5} type={'secondary'}>
+                {lesson.code}
+              </Text>
+              <Flexbox horizontal align={'center'} className={styles.content} gap={8}>
+                <Text ellipsis fontSize={12} lineHeight={1.5} style={{ flex: 1 }}>
+                  {lesson.title}
+                </Text>
                 {!lesson.canonAnchor && (
-                  <Flexbox horizontal paddingInline={'41px 0'}>
-                    <Tag size={'small'}>{t('rules.unanchored')}</Tag>
-                  </Flexbox>
+                  <Tag size={'small'} style={{ flex: 'none' }}>
+                    {t('rules.unanchored')}
+                  </Tag>
                 )}
               </Flexbox>
-            </Flexbox>
+            </div>
           ))}
         </Flexbox>
       ))}

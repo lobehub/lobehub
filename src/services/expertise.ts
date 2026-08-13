@@ -34,9 +34,6 @@ class ExpertiseService {
     title?: string;
   }) => lambdaClient.expertise.createDomain.mutate(params);
 
-  chooseAnchor = async (domainId: string, candidateKey: string) =>
-    lambdaClient.expertise.chooseAnchor.mutate({ candidateKey, domainId });
-
   dismissInsight = async (insightId: string, reason?: string) =>
     lambdaClient.expertise.dismissInsight.mutate({ insightId, reason });
 }

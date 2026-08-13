@@ -1,12 +1,10 @@
 'use client';
 
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
-import { ArrowRightIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -14,12 +12,10 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
 import CoverageCloud from '../CoverageCloud';
 import { runsToRatio, useExpertiseDomain, useExpertiseLessons } from '../hooks';
-import LayerCoverage from '../LayerCoverage';
 import RuleList from '../RuleList';
 import FitCurve from './FitCurve';
 
@@ -63,6 +59,7 @@ const SHAPE_CLAUSE: Record<
 const DomainDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
   const theme = useTheme();
+  const navigate = useNavigate();
   const params = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const domainId = params.domainId;
@@ -71,10 +68,15 @@ const DomainDetail = memo(() => {
   const { data: lessons } = useExpertiseLessons(domainId);
 
   const maturity = data?.maturity;
-  const anchored = !!data?.domain.anchorChosenAt;
   const selfLearningPath = activeAgentId
     ? urlJoin('/agent', activeAgentId, 'self-learning')
     : undefined;
+
+  useEffect(() => {
+    if (!isLoading && !error && !data && selfLearningPath) {
+      navigate(selfLearningPath, { replace: true });
+    }
+  }, [data, error, isLoading, navigate, selfLearningPath]);
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
@@ -118,7 +120,7 @@ const DomainDetail = memo(() => {
                   </Text>
                 </Flexbox>
 
-                {anchored && data.runCount === 0 ? (
+                {data.runCount === 0 ? (
                   /* 刚定完方向、一次还没练过：画不出曲线，坐标轴会退化成一排「1 条」。
                      这时候该说的是下一步做什么，而不是摆一张空图。 */
                   <Block gap={8} padding={20} variant={'outlined'}>
@@ -133,7 +135,7 @@ const DomainDetail = memo(() => {
                       {data.domain.domainFilter}
                     </Text>
                   </Block>
-                ) : anchored ? (
+                ) : (
                   <>
                     <Text className={styles.sentence}>
                       {t('detail.headline', {
@@ -207,14 +209,7 @@ const DomainDetail = memo(() => {
 
                     <CoverageCloud detail={data} />
 
-                    <Flexbox horizontal gap={16} wrap={'wrap'}>
-                      <Flexbox gap={0} style={{ flex: 1, minWidth: 330 }}>
-                        <LayerCoverage detail={data} />
-                      </Flexbox>
-                      <Flexbox gap={0} style={{ flex: 1, minWidth: 330 }}>
-                        <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
-                      </Flexbox>
-                    </Flexbox>
+                    <RuleList lessons={lessons ?? []} stats={data.lessonStats} />
 
                     <Block gap={7} padding={16} variant={'outlined'}>
                       <Text fontSize={13} weight={600}>
@@ -236,8 +231,6 @@ const DomainDetail = memo(() => {
                       )}
                     </Block>
                   </>
-                ) : (
-                  <AnchorChoice detail={data} onChosen={() => mutate()} />
                 )}
               </Flexbox>
             )}
@@ -247,113 +240,6 @@ const DomainDetail = memo(() => {
     </Flexbox>
   );
 });
-
-/**
- * 锚点未定时的那一屏。
- *
- * 上一轮验收的原话是「这里缺少可行的 action？」—— 说得对：文案写着「等你先定一个方向」，
- * 却没有任何地方能定。锚定阶段读出来的候选本来就存在 anchorCandidates 里，
- * 这里把它们摆出来让人点。没选的那条**不删**，半年后还要能回答「当时选另一个会怎样」。
- */
-const AnchorChoice = memo<{
-  detail: NonNullable<ReturnType<typeof useExpertiseDomain>['data']>;
-  onChosen: () => void;
-}>(({ detail, onChosen }) => {
-  const { t } = useTranslation('selfLearning');
-  const [pending, setPending] = useState<string>();
-  const candidates = detail.domain.anchorCandidates ?? [];
-
-  const choose = async (key: string) => {
-    setPending(key);
-    try {
-      await expertiseService.chooseAnchor(detail.domain.id, key);
-      onChosen();
-    } catch {
-      toast.error(t('anchor.chooseFailed'));
-    } finally {
-      setPending(undefined);
-    }
-  };
-
-  return (
-    <Flexbox gap={12}>
-      <Block gap={8} padding={20} variant={'outlined'}>
-        <Text weight={600}>{t('anchor.pending')}</Text>
-        <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
-          {t('anchor.pendingDesc')}
-        </Text>
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {[
-            t('anchor.traceConversations'),
-            t('anchor.traceCluster'),
-            t('anchor.traceCandidates', { count: candidates.length }),
-          ].map((label, index, list) => (
-            <Flexbox horizontal align={'center'} gap={8} key={label}>
-              <Tag size={'small'}>{label}</Tag>
-              {index < list.length - 1 && <Icon icon={ArrowRightIcon} size={12} />}
-            </Flexbox>
-          ))}
-        </Flexbox>
-        <Text fontSize={11.5} lineHeight={1.7} type={'secondary'}>
-          {t('anchor.traceHelp')}
-        </Text>
-      </Block>
-
-      {candidates.length === 0 ? (
-        <Block gap={6} padding={20} variant={'filled'}>
-          <Text fontSize={13} weight={600}>
-            {t('anchor.noCandidates')}
-          </Text>
-          <Text fontSize={12} lineHeight={1.7} type={'secondary'}>
-            {t('anchor.noCandidatesDesc')}
-          </Text>
-        </Block>
-      ) : (
-        candidates.map((c) => (
-          <Block gap={10} key={c.key} padding={20} variant={'outlined'}>
-            <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
-              <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
-                <Text fontSize={15} weight={600}>
-                  {c.title}
-                </Text>
-                {c.rationale && (
-                  <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
-                    {c.rationale}
-                  </Text>
-                )}
-              </Flexbox>
-              <Button
-                disabled={!!pending}
-                loading={pending === c.key}
-                style={{ flex: 'none' }}
-                onClick={() => choose(c.key)}
-              >
-                {t('anchor.choose')}
-              </Button>
-            </Flexbox>
-            <Flexbox gap={4}>
-              <Text fontSize={12} lineHeight={1.7} type={'secondary'}>
-                <Text as={'span'} weight={600}>
-                  {t('detail.domainFilter')}
-                </Text>
-                {c.domainFilter}
-              </Text>
-              <Flexbox horizontal gap={6} wrap={'wrap'}>
-                {c.layers.map((l) => (
-                  <Tag key={l.key} size={'small'}>
-                    {l.title}
-                  </Tag>
-                ))}
-              </Flexbox>
-            </Flexbox>
-          </Block>
-        ))
-      )}
-    </Flexbox>
-  );
-});
-
-AnchorChoice.displayName = 'AnchorChoice';
 
 /** 图下那一行：可信就说还要练多少次，不可信就说为什么不外推。 */
 const FitNote = memo<{ detail: NonNullable<ReturnType<typeof useExpertiseDomain>['data']> }>(
