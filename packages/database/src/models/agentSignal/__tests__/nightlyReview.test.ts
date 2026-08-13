@@ -20,22 +20,19 @@ beforeEach(async () => {
 
 describe('AgentSignalNightlyReviewModel', () => {
   describe('listEligibleUsers', () => {
-    it('lists only users with AgentSignal self-iteration enabled', async () => {
+    it('lists all users regardless of the lab opt-in preference', async () => {
       await serverDB.insert(users).values([
         {
           createdAt: new Date('2026-05-01T00:00:00.000Z'),
           id: enabledUserId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-02T00:00:00.000Z'),
           id: enabledUserWithoutTimezoneId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-03T00:00:00.000Z'),
           id: disabledUserId,
-          preference: { lab: { enableAgentSelfIteration: false } },
         },
       ]);
       await serverDB.insert(userSettings).values({
@@ -58,6 +55,11 @@ describe('AgentSignalNightlyReviewModel', () => {
           id: enabledUserWithoutTimezoneId,
           timezone: 'UTC',
         },
+        {
+          createdAt: new Date('2026-05-03T00:00:00.000Z'),
+          id: disabledUserId,
+          timezone: 'UTC',
+        },
       ]);
     });
 
@@ -66,12 +68,10 @@ describe('AgentSignalNightlyReviewModel', () => {
         {
           createdAt: new Date('2026-05-01T00:00:00.000Z'),
           id: enabledUserId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-02T00:00:00.000Z'),
           id: enabledUserWithoutTimezoneId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
       ]);
 
