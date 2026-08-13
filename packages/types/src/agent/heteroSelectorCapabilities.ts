@@ -312,7 +312,13 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       supported: codexModelSupportsFastSpeed,
     },
   },
-  'cursor': {},
+  'cursor': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'kimi-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },

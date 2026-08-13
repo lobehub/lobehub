@@ -46,7 +46,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
