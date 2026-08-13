@@ -125,13 +125,18 @@ describe('nightlyReviewScheduleService', () => {
             id: 'user-3',
             timezone: 'Asia/Shanghai',
           },
+          {
+            createdAt: new Date('2026-04-01T00:00:00.000Z'),
+            id: 'user-4',
+            timezone: 'Asia/Shanghai',
+          },
         ])
         .mockResolvedValueOnce([]);
       const service = createSelfReviewScheduleService(deps);
 
       const summary = await service.dispatchNightlyReviewRequests({ limit: 2 });
 
-      expect(summary).toEqual({ enqueued: 3, skipped: 0 });
+      expect(summary).toEqual({ enqueued: 4, skipped: 0 });
       expect(deps.listEligibleUsers).toHaveBeenCalledTimes(3);
       expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(1, {
         cursor: undefined,
@@ -144,11 +149,11 @@ describe('nightlyReviewScheduleService', () => {
         whitelist: undefined,
       });
       expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(3, {
-        cursor: { createdAt: new Date('2026-03-01T00:00:00.000Z'), id: 'user-3' },
+        cursor: { createdAt: new Date('2026-04-01T00:00:00.000Z'), id: 'user-4' },
         limit: 2,
         whitelist: undefined,
       });
-      expect(deps.enqueueSource).toHaveBeenCalledTimes(3);
+      expect(deps.enqueueSource).toHaveBeenCalledTimes(4);
     });
 
     it('stops paginating after the first page when no limit is provided', async () => {
