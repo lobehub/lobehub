@@ -208,6 +208,15 @@ describe('pollReplicateVideoStatus', () => {
     });
   });
 
+  it('reports an aborted prediction as a failure rather than burning the polling budget', async () => {
+    const get = vi.fn().mockResolvedValue({ status: 'aborted' });
+
+    await expect(pollReplicateVideoStatus(buildClient({ get }), 'pred-1')).resolves.toEqual({
+      error: 'Video generation was aborted before it started',
+      status: 'failed',
+    });
+  });
+
   it('reports cancellation as a failure', async () => {
     const get = vi.fn().mockResolvedValue({ status: 'canceled' });
 
