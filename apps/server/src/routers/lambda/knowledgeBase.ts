@@ -125,6 +125,14 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
+      // Copying clones the full content into a caller-controlled scope, so it
+      // requires the same browse-level access as reading the file list.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: knowledgeBase.userId,
+        visibility: knowledgeBase.visibility ?? null,
+        workspaceId: knowledgeBase.workspaceId ?? null,
+      });
+
       return ctx.knowledgeBaseModel.copyToWorkspace(
         input.id,
         input.targetWorkspaceId,

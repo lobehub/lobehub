@@ -22,6 +22,10 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
 }));
 
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: vi.fn(),
+}));
+
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(() => ({
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
@@ -47,7 +51,12 @@ describe('knowledgeBaseRouter', () => {
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
-    mockKnowledgeBaseModelFindById.mockResolvedValue({ id: 'kb-1', userId: 'test-user' });
+    mockKnowledgeBaseModelFindById.mockResolvedValue({
+      id: 'kb-1',
+      userId: 'test-user',
+      visibility: 'public',
+      workspaceId: 'workspace-active',
+    });
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
   });
 

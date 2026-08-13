@@ -8,6 +8,8 @@ import { ProjectModel } from '@/database/models/project';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { assertKnowledgeBaseAttachable } from './_helpers/knowledgeBaseAccess';
+
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
@@ -85,6 +87,9 @@ export const projectRouter = router({
       }),
     )
     .mutation(async ({ ctx, input: { id, ...input } }) => {
+      // Project task retrieval reads attached KBs, so restricted KBs must be
+      // blocked here just like the agent attach paths.
+      await assertKnowledgeBaseAttachable(ctx, input.knowledgeBaseId);
       try {
         return {
           data: requireResult(await ctx.projectModel.addKnowledgeBase(id, input)),
