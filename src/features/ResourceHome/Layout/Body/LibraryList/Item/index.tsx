@@ -4,9 +4,12 @@ import { Loader2Icon, LockIcon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepoIcon from '@/components/LibIcon';
+import LockedLibIcon from '@/components/LibIcon/Locked';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -64,8 +67,21 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
       [canEdit, toggleEditing],
     );
 
-    // Icon: loader while pending, lock for private KBs, repo icon otherwise.
-    // Lock signals "only you can see this" — mirrors the private-agent / private-task visual.
+    // Restricted (No-access) KBs are invisible to plain members, so this row
+    // only renders for managers — the lock tells them at a glance which shared
+    // KBs members cannot open. Same SWR key as the dropdown's permission
+    // fetch, so it costs no extra request.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const { data: permissionData } = useResourcePermission(
+      'knowledgeBase',
+      activeWorkspaceId && visibility === 'public' ? id : undefined,
+    );
+    const isMemberRestricted = permissionData?.accessLevel === 'use';
+
+    // Icon: loader while pending; a plain lock for private KBs ("only you can
+    // see this", the private-agent / private-task visual); the folder with a
+    // small corner lock for member-restricted shared KBs ("shared, but members
+    // cannot open it").
     const icon = useMemo(() => {
       if (isLoading) {
         return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
@@ -73,8 +89,11 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
       if (visibility === 'private') {
         return <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={18} />;
       }
+      if (isMemberRestricted) {
+        return <LockedLibIcon size={18} />;
+      }
       return <RepoIcon size={18} />;
-    }, [isLoading, visibility]);
+    }, [isLoading, visibility, isMemberRestricted]);
 
     const dropdownMenu = useDropdownMenu({
       description,

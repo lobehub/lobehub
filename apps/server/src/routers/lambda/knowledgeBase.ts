@@ -18,6 +18,10 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertKnowledgeBaseBrowsable,
+  filterRestrictedKnowledgeBases,
+} from './_helpers/knowledgeBaseAccess';
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -132,7 +136,18 @@ export const knowledgeBaseRouter = router({
   getKnowledgeBaseById: knowledgeBaseProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }): Promise<KnowledgeBaseItem | undefined> => {
-      return ctx.knowledgeBaseModel.findById(input.id);
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) return kb;
+
+      // Restricted KBs (resource-permission `use` level) stay mountable but
+      // their detail/content view is manager-only.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+
+      return kb;
     }),
 
   getKnowledgeBases: knowledgeBaseProcedure
@@ -144,7 +159,11 @@ export const knowledgeBaseRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
-      return ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+      const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+
+      // Restricted KBs are fully hidden from non-privileged members here; the
+      // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
+      return filterRestrictedKnowledgeBases(ctx, list);
     }),
 
   publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
