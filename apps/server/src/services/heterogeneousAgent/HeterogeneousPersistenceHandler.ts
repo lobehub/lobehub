@@ -801,9 +801,10 @@ export class HeterogeneousPersistenceHandler {
 
   private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
     const topic = await this.deps.topicModel.findById(state.topicId);
-    const running = topic?.metadata?.runningOperation;
+    const marker = topic?.metadata?.runningOperation;
+    const running = marker?.operationId === state.operationId ? marker : marker?.childOperations?.find((child) => child.operationId === state.operationId);
 
-    if (running && running.operationId !== state.operationId) {
+    if (!running) {
       throw new StaleHeteroOperationError(
         `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${running.operationId}`,
       );

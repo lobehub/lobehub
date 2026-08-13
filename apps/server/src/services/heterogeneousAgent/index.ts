@@ -339,14 +339,7 @@ export class HeterogeneousAgentService {
       if (marker?.operationId === operationId) {
         await this.topicModel.updateMetadata(topicId, { runningOperation: null });
       } else if (marker?.childOperations) {
-        await this.topicModel.updateMetadata(topicId, {
-          runningOperation: {
-            ...marker,
-            childOperations: marker.childOperations.filter(
-              (child) => child.operationId !== operationId,
-            ),
-          },
-        });
+        await this.topicModel.removeRunningOperationChild(topicId, operationId);
       }
       if (marker?.operationId === operationId) {
         // Settle `status: 'running'` for runs with no renderer attached (e.g. a

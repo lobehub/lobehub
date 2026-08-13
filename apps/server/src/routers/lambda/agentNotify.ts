@@ -79,6 +79,7 @@ const NotifySchema = z.object({
    * in-place, keeping a single bubble in the UI.
    */
   messageId: z.string().optional(),
+  operationId: z.string().optional(),
   /**
    * Role of the message to write:
    * - 'user' (default): write as user message and trigger the agent to reply
@@ -139,8 +140,8 @@ export const agentNotifyRouter = router({
 
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
-    const remoteOperationId = (topic.metadata as any)?.runningOperation?.operationId as
-      string | undefined;
+    const marker = (topic.metadata as any)?.runningOperation;
+    const remoteOperationId = input.operationId ?? marker?.operationId ?? marker?.childOperations?.[0]?.operationId;
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -190,8 +191,11 @@ export const agentNotifyRouter = router({
           // (Previously this fired the stripped-down dispatchTerminalHooks, which
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
           // Hooks were serialized onto runningOperation at dispatch time.
-          const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
-            SerializedHook[] | undefined;
+          const currentMarker = (await ctx.topicModel.findById(topicId))?.metadata?.runningOperation as any;
+          const activeOperation = currentMarker?.operationId === remoteOperationId
+            ? currentMarker
+            : currentMarker?.childOperations?.find((child: any) => child.operationId === remoteOperationId);
+          const serializedHooks = activeOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
@@ -264,7 +268,11 @@ export const agentNotifyRouter = router({
 
           // The operation is finished — drop the running marker so a duplicate
           // terminal signal / reconnect doesn't re-fire the hooks.
-          await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
+          if (currentMarker?.operationId === remoteOperationId) {
+            await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
+          } else {
+            await ctx.topicModel.removeRunningOperationChild(topicId, remoteOperationId).catch(() => {});
+          }
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {

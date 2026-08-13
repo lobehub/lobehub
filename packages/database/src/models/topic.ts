@@ -1451,6 +1451,19 @@ export class TopicModel {
       return true;
     });
 
+  removeRunningOperationChild = async (id: string, operationId: string): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx.select({ metadata: topics.metadata }).from(topics)
+        .where(and(eq(topics.id, id), this.ownership())).for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation?.childOperations) return false;
+      await tx.update(topics).set({ metadata: {
+        ...existing.metadata,
+        runningOperation: { ...runningOperation, childOperations: runningOperation.childOperations.filter((child) => child.operationId !== operationId) },
+      }}).where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
   /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
