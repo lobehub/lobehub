@@ -163,11 +163,11 @@ describe('GatewayStreamNotifier', () => {
 
   describe('publishAgentRuntimeEnd', () => {
     it('waits for the terminal gateway push before resolving', async () => {
-      let resolveFetch!: () => void;
-      mockFetch.mockImplementationOnce(
+      let resolvePush!: () => void;
+      vi.spyOn(notifier as any, 'pushEvent').mockImplementationOnce(
         () =>
-          new Promise((resolve) => {
-            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          new Promise<void>((resolve) => {
+            resolvePush = resolve;
           }),
       );
 
@@ -186,7 +186,7 @@ describe('GatewayStreamNotifier', () => {
       await Promise.resolve();
       expect(resolved).toBe(false);
 
-      resolveFetch();
+      resolvePush();
       await expect(result).resolves.toBe('publishAgentRuntimeEnd-result');
     });
 
