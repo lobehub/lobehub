@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createStepRunner } from '@/server/workflows/testing/stepContext';
+
 import { dispatchTopicAutoSummary } from './dispatch';
 
 const mocks = vi.hoisted(() => ({
@@ -22,10 +24,7 @@ vi.mock('@/server/workflows/topicAutoSummary', () => ({
 }));
 
 const createContext = (requestPayload: Record<string, unknown>) =>
-  ({
-    requestPayload,
-    run: vi.fn(async (_step: string, callback: () => unknown) => callback()),
-  }) as never;
+  ({ requestPayload, run: createStepRunner() }) as never;
 
 describe('dispatchTopicAutoSummary', () => {
   beforeEach(() => {
@@ -143,5 +142,16 @@ describe('dispatchTopicAutoSummary', () => {
         processed: 2,
       }),
     );
+  });
+
+  it('rejects a malformed cursor instead of querying with an invalid date', async () => {
+    mocks.listCandidates.mockResolvedValue([]);
+
+    await expect(
+      dispatchTopicAutoSummary(
+        createContext({ cursor: { id: 'topic-1', lastMessageUpdatedAt: 'not-a-date' } }),
+      ),
+    ).rejects.toThrow('Invalid topic auto summary cursor timestamp');
+    expect(mocks.listCandidates).not.toHaveBeenCalled();
   });
 });

@@ -18,10 +18,15 @@ import type { IBuiltinToolExecutor } from '../types';
 import {
   ampExecutor,
   claudeCodeExecutor,
+  codeBuddyExecutor,
   codexExecutor,
+  cursorExecutor,
+  grokBuildExecutor,
+  kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
+  traeExecutor,
 } from './heteroCli';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
@@ -40,10 +45,15 @@ export const builtinToolExecutors = [
   // observe their shell tool results via `onAfterCall` (never invoked).
   ampExecutor,
   claudeCodeExecutor,
+  codeBuddyExecutor,
   codexExecutor,
+  cursorExecutor,
+  grokBuildExecutor,
+  kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
+  traeExecutor,
   agentBuilderExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,

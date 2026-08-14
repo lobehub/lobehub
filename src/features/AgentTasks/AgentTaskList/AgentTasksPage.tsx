@@ -73,9 +73,11 @@ interface AgentTasksPageProps {
    * shows tasks across all agents.
    */
   agentId?: string;
+  /** When provided, shows the complete task workspace scoped to one project. */
+  projectId?: string;
 }
 
-const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
+const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -83,7 +85,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, mutate } = useFetchTaskList(
-    agentId ? { agentId } : { allAgents: true },
+    projectId ? { projectId, visibility: 'all' } : agentId ? { agentId } : { allAgents: true },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
@@ -133,11 +135,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
     createTaskModal({
       agentId,
       lockAssignee: !!agentId,
+      projectId,
       onCreated: (task) => {
         navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
       },
     });
-  }, [agentId, canCreateTask, createActionBehavior.mode, navigate, updateSystemStatus]);
+  }, [agentId, canCreateTask, createActionBehavior.mode, navigate, projectId, updateSystemStatus]);
 
   const handleShowHiddenCompleted = useCallback(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
@@ -151,7 +154,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         left={headerVisibility.showBreadcrumb ? <Breadcrumb /> : undefined}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {!agentId && <TaskListVisibilityFilter />}
+            {!agentId && !projectId && <TaskListVisibilityFilter />}
             {(inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}
@@ -181,10 +184,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         }}
       />
       {isEmptyHero ? (
-        <EmptyState agentId={agentId} />
+        <EmptyState agentId={agentId} projectId={projectId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} routeScope={routeScope} />
+          <KanbanBoard agentId={agentId} projectId={projectId} routeScope={routeScope} />
         </Flexbox>
       ) : (
         <WideScreenContainer
@@ -192,7 +195,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           paddingBlock={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
-          {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} />}
+          {!inlineCollapsed && (
+            <CreateTaskInlineEntry
+              agentId={agentId}
+              lockAssignee={!!agentId}
+              projectId={projectId}
+            />
+          )}
           <TaskList
             data={isTaskListInit || undefined}
             error={error}

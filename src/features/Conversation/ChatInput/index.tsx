@@ -279,7 +279,7 @@ const ChatInput = memo<ChatInputProps>(
     );
 
     // Pre-topic "armed goal" state (topic Goal lab). `armedAt` is only ever set
-    // by the lab-gated "+" → Set goal entry, so its presence already implies the
+    // by the lab-gated "+" → Goal entry, so its presence already implies the
     // lab is on. While armed the goal chip rides the action bar and the composer
     // placeholder prompts for the goal (the next message becomes it).
     const goalArmedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));

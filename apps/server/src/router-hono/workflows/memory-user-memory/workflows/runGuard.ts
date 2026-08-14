@@ -4,6 +4,7 @@ import { getRedisConfig } from '@/envs/redis';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { type BaseRedisProvider } from '@/libs/redis/types';
 import { assertWorkflowRunAllowed, WorkflowRunGuardError } from '@/server/workflows/runGuard';
+import { runStep } from '@/server/workflows/step';
 
 const getRedis = async (): Promise<BaseRedisProvider | null> => {
   const config = getRedisConfig();
@@ -133,7 +134,7 @@ export const ensureWorkflowStarted = (
   workflowPath: string,
 ): Promise<{ started: true }> =>
   Promise.resolve(
-    context.run(`memory:user-memory:workflow-started:${workflowPath}`, () => ({
+    runStep(context, `memory:user-memory:workflow-started:${workflowPath}`, () => ({
       started: true as const,
     })),
   );
@@ -163,7 +164,8 @@ export const checkGuard = async <
   options: MemoryWorkflowRunGuardCheckOptions<TExtra> = {},
 ): Promise<MemoryWorkflowRunGuardCheck<TExtra>> => {
   const { response, stepName } = options;
-  const block = await context.run<MemoryWorkflowRunGuardBlock | null>(
+  const block = await runStep<MemoryWorkflowRunGuardBlock | null>(
+    context,
     `memory:user-memory:run-guard:${workflowPath}:${stepName ?? 'entry'}`,
     async () => {
       const redis = await getRedis();

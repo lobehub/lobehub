@@ -20,6 +20,25 @@ export interface ConnectorReference {
   status: string;
 }
 
+export interface PublicConnectorRecord {
+  agentId: string | null;
+  avatar: string | null;
+  createdAt: Date;
+  description: string | null;
+  hasCredentials: boolean;
+  id: string;
+  identifier: string;
+  isEnabled: boolean;
+  mcpConnectionType: string | null;
+  mcpServerUrl: string | null;
+  name: string;
+  sourceType: string;
+  status: string;
+  updatedAt: Date;
+  /** Row creator. Needed for row-level manage checks; never surfaced to API responses. */
+  userId: string;
+}
+
 export interface ComposioConnectorReference extends ConnectorReference {
   composio?: {
     appSlug: string;
@@ -60,6 +79,24 @@ export class ConnectorModel {
    * and collide on identifier.
    */
   private baseScope = () => and(this.ownership(), isNull(userConnectors.agentId));
+
+  private publicSelection = {
+    agentId: userConnectors.agentId,
+    avatar: sql<string | null>`${userConnectors.metadata} ->> 'avatar'`,
+    createdAt: userConnectors.createdAt,
+    description: sql<string | null>`${userConnectors.metadata} ->> 'description'`,
+    hasCredentials: sql<boolean>`${userConnectors.credentials} IS NOT NULL`,
+    id: userConnectors.id,
+    identifier: userConnectors.identifier,
+    isEnabled: userConnectors.isEnabled,
+    mcpConnectionType: userConnectors.mcpConnectionType,
+    mcpServerUrl: userConnectors.mcpServerUrl,
+    name: userConnectors.name,
+    sourceType: userConnectors.sourceType,
+    status: userConnectors.status,
+    updatedAt: userConnectors.updatedAt,
+    userId: userConnectors.userId,
+  };
 
   /**
    * Candidate rows for agent-aware resolution within the current scope. For an
@@ -192,6 +229,14 @@ export class ConnectorModel {
     const rows = await this.db.select().from(userConnectors).where(this.baseScope());
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
+  };
+
+  /**
+   * Query base-scope connector metadata without selecting or decrypting any
+   * credential/OIDC fields. Intended for public API and read-only inventory.
+   */
+  queryPublic = async (): Promise<PublicConnectorRecord[]> => {
+    return this.db.select(this.publicSelection).from(userConnectors).where(this.baseScope());
   };
 
   /**
@@ -378,6 +423,19 @@ export class ConnectorModel {
 
     if (!row) return null;
     return decryptRow(row, gateKeeper);
+  };
+
+  /**
+   * Find connector metadata without selecting or decrypting credentials.
+   */
+  findPublicById = async (id: string): Promise<PublicConnectorRecord | null> => {
+    const [row] = await this.db
+      .select(this.publicSelection)
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+
+    return row ?? null;
   };
 
   update = async (

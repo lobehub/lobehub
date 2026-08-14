@@ -409,6 +409,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'runCommand': {
         // RunCommandResult has snake_case fields from local-file-shell
         return {
+          // Surface raw.error at the top level so ComputerRuntime.errorOutput
+          // has a real message to render. Its priority chain reads the
+          // ServiceResult's own `error`, then `state.stderr`, then
+          // `state.error` — a runCommand that fails before spawning fills none
+          // of those (there is no process, so no stderr), so every such failure
+          // collapsed to the generic "[UNKNOWN_EXEC_ERROR] Tool execution
+          // failed" with the reason discarded. That hid, among others, every
+          // Local Sandbox refusal: "requires a working directory", "unavailable
+          // on this device". Mirrors editLocalFile / grep / glob below.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             error: raw.error,
             exitCode: raw.exit_code,
@@ -416,6 +426,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             commandId: raw.shell_id,
             durationMs: raw.duration_ms,
             outputFiles: raw.output_files,
+            // Carried through so the run itself can say whether it was fenced.
+            // The picker's chip only shows the user's intent, and a run that
+            // lost the flag somewhere in between looks identical otherwise.
+            sandboxed: raw.sandboxed,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,

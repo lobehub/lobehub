@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createStepRunner } from '@/server/workflows/testing/stepContext';
+
 const mocks = vi.hoisted(() => ({
   assertWorkflowRunAllowed: vi.fn(),
   initializeRedis: vi.fn(),
@@ -28,7 +30,7 @@ const { checkGuard, ensureWorkflowStarted } = await import('../runGuard');
 
 const createContext = (payload: unknown, workflowRunId = 'wfr_context') => ({
   requestPayload: payload,
-  run: vi.fn((_name: string, callback: () => unknown) => callback()),
+  run: createStepRunner(),
   workflowRunId,
 });
 

@@ -4,6 +4,13 @@ import { platform } from 'node:os';
 import path from 'node:path';
 
 const WINDOWS_EXE_EXT_PATTERN = /\.exe$/i;
+// `CreateProcess` limit, which is what this plan is spawned through: the plan
+// always names a real executable (an `.exe`, or `node.exe` plus the script a
+// shim pointed at), never a shell. Routing it through cmd.exe instead would
+// drop the ceiling to 8191 — and hand the prompt and conversation context to
+// cmd.exe for a second round of parsing (CVE-2024-27980). Detection probes a
+// `.cmd` we can't unwrap through `%ComSpec%` under its own 8191 check; the
+// launch path deliberately does not.
 const WINDOWS_MAX_COMMAND_LINE_LENGTH = 32_767;
 const WINDOWS_NODE_EXE_PATTERN = /(?:^|[\\/])node(?:\.exe)?$/i;
 

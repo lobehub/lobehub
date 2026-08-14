@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CursorAdapter } from '../adapters/cursor';
 import type { SubagentIntent } from '../subagentCoordinator';
 import { createMainAgentRunState, reduceMainAgent } from './index';
 import type { MainAgentIntent, MainAgentReduceCtx, MainAgentRunState } from './types';
@@ -241,6 +242,50 @@ describe('main agent reducer', () => {
     expect(flush).toMatchObject({ content: 'first', messageId: 'A0' });
     const created = ofKind(steps[3], 'createAssistant')[0];
     expect(created).toMatchObject({ messageId: 'msg_2', parentId: 'A0' });
+  });
+
+  it('persists Cursor post-tool output in a new assistant turn', () => {
+    const adapter = new CursorAdapter();
+    const cursorAssistant = (text: string, timestamp_ms: number) => ({
+      message: { content: [{ text, type: 'text' }], role: 'assistant' },
+      timestamp_ms,
+      type: 'assistant',
+    });
+    const started = {
+      call_id: 'cursor-tool',
+      subtype: 'started',
+      tool_call: { readToolCall: { args: { path: 'README.md' } } },
+      type: 'tool_call',
+    };
+    const events = [
+      ...adapter.adapt({ model: 'sonnet', subtype: 'init', type: 'system' }),
+      ...adapter.adapt(cursorAssistant('before tool', 1)),
+      ...adapter.adapt(started),
+      ...adapter.adapt({
+        ...started,
+        subtype: 'completed',
+        tool_call: {
+          readToolCall: {
+            args: { path: 'README.md' },
+            result: { success: { content: '# Project' } },
+          },
+        },
+      }),
+      ...adapter.adapt(cursorAssistant('after tool', 2)),
+    ];
+    const { state, steps } = run(events);
+    const created = steps.flatMap((step) => ofKind(step, 'createAssistant'));
+    const streamed = steps.flatMap((step) => ofKind(step, 'streamContent'));
+
+    expect(created).toEqual([
+      expect.objectContaining({ messageId: 'msg_2', parentId: 'A0', provider: 'cursor' }),
+    ]);
+    expect(streamed.at(-1)).toEqual({
+      content: 'after tool',
+      kind: 'streamContent',
+      messageId: 'msg_2',
+    });
+    expect(state.currentAssistantId).toBe('msg_2');
   });
 
   // ─── Signal/反应式 turns stay tool-mounted; the next normal turn resumes the spine ───

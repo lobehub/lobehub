@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { FileItem, KnowledgeBaseItem } from '@/database/schemas';
-
+import type { PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -19,8 +18,6 @@ export interface FileUploadRequest {
   file: File;
   /** Knowledge base ID (optional) */
   knowledgeBaseId?: string;
-  /** Custom path (optional) */
-  pathname?: string;
   /** Session ID (optional) */
   sessionId?: string;
   /** Whether to skip file type check */
@@ -54,6 +51,31 @@ export interface PublicFileUploadRequest {
   /** Whether to skip deduplication check */
   skipDeduplication?: boolean;
 }
+
+const MultipartOptionalIdSchema = z.string().trim().min(1).max(255).optional();
+const MultipartOptionalPathSchema = z.string().trim().min(1).max(1024).optional();
+const MultipartBooleanSchema = z
+  .enum(['true', 'false'])
+  .transform((value) => value === 'true')
+  .optional();
+
+export const FileUploadFormFieldsSchema = z
+  .object({
+    agentId: MultipartOptionalIdSchema,
+    directory: MultipartOptionalPathSchema,
+    knowledgeBaseId: MultipartOptionalIdSchema,
+    sessionId: MultipartOptionalIdSchema,
+    skipCheckFileType: MultipartBooleanSchema,
+    skipDeduplication: MultipartBooleanSchema,
+  })
+  .strict();
+
+export const BatchFileUploadFormFieldsSchema = FileUploadFormFieldsSchema.omit({
+  skipDeduplication: true,
+});
+
+export type FileUploadFormFields = z.infer<typeof FileUploadFormFieldsSchema>;
+export type BatchFileUploadFormFields = z.infer<typeof BatchFileUploadFormFieldsSchema>;
 
 // ==================== File Management Types ====================
 
@@ -298,13 +320,13 @@ export interface FileUserItem {
 /**
  * File list item (includes optional chunking status info)
  */
-export interface FileListItem extends Partial<FileItem> {
+export interface FileListItem extends Partial<PublicFile> {
   /** Chunking task info (includes basic async task info and chunk count) */
   chunking?: FileAsyncTaskResponse | null;
   /** Embedding task info (includes basic async task info) */
   embedding?: FileAsyncTaskResponse | null;
   /** Associated knowledge base list */
-  knowledgeBases?: Array<KnowledgeBaseItem>;
+  knowledgeBases?: Array<PublicKnowledgeBase>;
   /** Associated user list (all users with the same fileHash) */
   users?: Array<FileUserItem>;
 }

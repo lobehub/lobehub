@@ -42,8 +42,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/components/Loading/BrandTextLoading', () => ({
-  default: ({ debugId }: { debugId: string }) => <div data-testid="loading">{debugId}</div>,
+vi.mock('@/components/Skeleton/Conversation/Segment', () => ({
+  default: () => <div data-testid="loading" />,
 }));
 
 vi.mock('@/features/Conversation', () => ({

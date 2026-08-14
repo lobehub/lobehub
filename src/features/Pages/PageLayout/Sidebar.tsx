@@ -1,17 +1,13 @@
 'use client';
 
-import { memo } from 'react';
-
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import SidebarContent from './SidebarContent';
 
-const Sidebar = memo(() => (
+const Sidebar = () => (
   <NavPanelPortal navKey="page">
     <SidebarContent />
   </NavPanelPortal>
-));
-
-Sidebar.displayName = 'PageSidebar';
+);
 
 export default Sidebar;

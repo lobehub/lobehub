@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 import { type ActionDropdownMenuItems } from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import { ChatInputAction } from '@/features/ChatInput/ActionBar/components/ChatInputAction';
-import { enterGoalMode } from '@/features/ChatInput/InputEditor/goalMode';
+import { insertGoalTag } from '@/features/ChatInput/InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
 import { useUserStore } from '@/store/user';
@@ -40,12 +40,10 @@ import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 const HeteroPlus = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
-  const { t: tVerify } = useTranslation('verify');
   const [open, setOpen] = useState(false);
 
-  const [editor, setGoalMode, showTypoBar, setShowTypoBar] = useChatInputStore((s) => [
+  const [editor, showTypoBar, setShowTypoBar] = useChatInputStore((s) => [
     s.editor,
-    s.setGoalMode,
     s.showTypoBar,
     s.setShowTypoBar,
   ]);
@@ -103,17 +101,18 @@ const HeteroPlus = memo(() => {
         onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
         type: 'switch',
       },
-      // Goal creation shares the same hidden /goal mode as the standard input.
+      // Goal creation shares the standard input's goal chip.
       ...(enableTopicAcceptance
         ? ([
             { type: 'divider' },
             {
               icon: TargetIcon,
               key: 'set-topic-goal',
-              label: tVerify('acceptance.tray.menuSetGoal'),
+              // Same string as the chip it inserts — see the agent composer's Plus.
+              label: tEditor('slash.goal'),
               onClick: () => {
                 setOpen(false);
-                enterGoalMode(editor, setGoalMode);
+                insertGoalTag(editor, tEditor('slash.goal'));
               },
             },
           ] as ActionDropdownMenuItems)
@@ -122,14 +121,12 @@ const HeteroPlus = memo(() => {
   }, [
     t,
     tEditor,
-    tVerify,
     showTypoBar,
     setShowTypoBar,
     armSchedule,
     scheduledSendAt,
     enableTopicAcceptance,
     editor,
-    setGoalMode,
   ]);
 
   return (

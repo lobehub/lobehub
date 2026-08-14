@@ -300,15 +300,22 @@ describe('TaskRecommendationService', () => {
   it('does not create duplicate tasks when materialization is retried', async () => {
     let persisted = structuredClone(session);
     const materialize = vi.fn(async ({ recommendationId }: { recommendationId: string }) => {
+      const created = !persisted.createdTaskIds[recommendationId];
       persisted.createdTaskIds[recommendationId] ??= 'task-1';
-      return { status: 'success' as const, taskId: persisted.createdTaskIds[recommendationId] };
+      return {
+        created,
+        status: 'success' as const,
+        taskId: persisted.createdTaskIds[recommendationId],
+      };
     });
+    const runTask = vi.fn(async () => ({ taskId: 'task-1' }));
     const service = new TaskRecommendationService({
       configurator: new TaskRecommendationConfigurator(),
       connectorData: {},
       materializer: { materialize },
       onboarding: { getInboxAgentId: vi.fn(async () => 'inbox-1') },
       providers: new Map(),
+      runner: { runTask },
       topic: {
         findById: vi.fn(async () => ({
           metadata: { onboardingSession: { taskRecommendations: persisted } },
@@ -337,5 +344,51 @@ describe('TaskRecommendationService', () => {
       topicId: 'topic-1',
     });
     expect(persisted.createdTaskIds).toEqual({ 'recommendation-1': 'task-1' });
+    expect(runTask).toHaveBeenCalledTimes(1);
+    expect(runTask).toHaveBeenCalledWith({ taskId: 'task-1' });
+  });
+
+  /** @example A failed immediate kickoff leaves the durable task available for manual retry. */
+  it('keeps the created task mapping when immediate execution fails', async () => {
+    const persisted = structuredClone(session);
+    const runTask = vi.fn(async () => {
+      throw new Error('QStash unavailable');
+    });
+    const service = new TaskRecommendationService({
+      configurator: new TaskRecommendationConfigurator(),
+      connectorData: {},
+      materializer: {
+        materialize: vi.fn(async ({ recommendationId }: { recommendationId: string }) => {
+          persisted.createdTaskIds[recommendationId] = 'task-1';
+          return { created: true, status: 'success' as const, taskId: 'task-1' };
+        }),
+      },
+      onboarding: { getInboxAgentId: vi.fn(async () => 'inbox-1') },
+      providers: new Map(),
+      runner: { runTask },
+      topic: {
+        findById: vi.fn(async () => ({
+          metadata: { onboardingSession: { taskRecommendations: persisted } },
+        })),
+        updateMetadata: vi.fn(),
+      },
+      writer: {},
+    } as never);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      service.createTasks({
+        recommendationIds: ['recommendation-1'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ 'recommendation-1': 'task-1' });
+
+    expect(runTask).toHaveBeenCalledWith({ taskId: 'task-1' });
+    expect(consoleError).toHaveBeenCalledWith(
+      '[TaskRecommendationService] failed to start onboarding task:',
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
   });
 });

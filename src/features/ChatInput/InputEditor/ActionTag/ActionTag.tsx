@@ -48,6 +48,7 @@ const ActionTag = memo<ActionTagProps>(({ node, editor, label }) => {
         clickable={!!open}
         description={skill?.description}
         label={label}
+        type={node.actionType}
       />
     </span>
   );

@@ -220,6 +220,22 @@ export interface ToolExecutionContext {
   /** Whether this tool call is executing inside an isolated sub-agent run. */
   isSubAgent?: boolean;
   /**
+   * The run resolved to a local device AND the owner asked for the device
+   * sandbox (`agencyConfig.localSandbox`). The Local System device-proxy passes
+   * it to `runCommand` so the desktop confines the spawned command.
+   *
+   * Resolved once against the run's effective execution target — never
+   * re-derived downstream from the raw flag, which says nothing about where the
+   * run actually landed.
+   */
+  localSandbox?: boolean;
+  /**
+   * The sandboxed run may reach the package-registry allowlist
+   * (`agencyConfig.localSandboxNetwork`). Meaningless without
+   * {@link localSandbox}.
+   */
+  localSandboxNetwork?: boolean;
+  /**
    * Optional server-owned embedding runtime for memory search.
    *
    * Use when the acting user is synthetic and should not read user key vaults.

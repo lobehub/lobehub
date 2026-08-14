@@ -10,6 +10,7 @@ import { shallow } from 'zustand/shallow';
 import { useBriefStore } from '@/store/brief';
 import { useTaskStore } from '@/store/task';
 
+import { BriefActionLink } from './BriefActionLink';
 import CommentInput from './CommentInput';
 import { styles } from './style';
 
@@ -262,14 +263,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           {otherActions.map((action) => {
             if (action.type === 'link') {
               return (
-                <Button
+                <BriefActionLink
+                  agentId={agentId}
                   className={styles.actionBtn}
-                  href={action.url}
                   key={action.key}
-                  shape={'round'}
+                  taskId={taskId}
+                  url={action.url}
                 >
                   {getActionLabel(action)}
-                </Button>
+                </BriefActionLink>
               );
             }
 
@@ -300,14 +302,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
               // A link primary (e.g. the budget-error "Upgrade" remedy) navigates
               // to its url instead of resolving the brief; render it as a filled
               // primary so the fix is the clear call to action.
-              <Button
+              <BriefActionLink
+                primary
+                agentId={agentId}
                 className={styles.actionBtnPrimary}
-                href={primaryActions.url}
-                shape={'round'}
-                type={'primary'}
+                taskId={taskId}
+                url={primaryActions.url}
               >
                 {getActionLabel(primaryActions)}
-              </Button>
+              </BriefActionLink>
             ) : (
               <Button
                 className={styles.actionBtnPrimary}

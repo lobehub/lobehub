@@ -511,3 +511,49 @@ export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
   'uploadVoiceMessage',
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
+
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
+
+/**
+ * Single source of truth for "a fresh send must queue behind this op instead of
+ * starting a concurrent run" — shared by the enqueue check
+ * (`conversationLifecycle`) and the QueueTray "Send now" cancel path, so both
+ * agree on what a follow-up is queued behind.
+ *
+ * Deliberately mirrors what the composer shows rather than a bare
+ * `status === 'running'`: the Send button comes back on `isAborting` /
+ * `visibleLoadingDone`, and when the enqueue check disagreed, an idle-looking
+ * composer silently swallowed messages into the tray — permanently when the
+ * terminal event never landed, since the queue only drains on success.
+ */
+export const isQueueBlockingOperation = (
+  operation: Operation,
+  options?: {
+    /**
+     * Whether this run's bucket already holds queued follow-ups. See below —
+     * order beats latency once a queue exists.
+     */
+    hasQueuedMessages?: boolean;
+  },
+): boolean => {
+  if (!QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type)) return false;
+  if (operation.status !== 'running') return false;
+
+  // Stop was pressed. With no older queue, this run cannot absorb a follow-up,
+  // so let the next send start fresh. When older items already exist, keep the
+  // operation blocking until cancellation completes; the send lifecycle then
+  // restarts that orphaned FIFO as one ordered batch.
+  if (operation.metadata.isAborting && !options?.hasQueuedMessages) return false;
+
+  // Visible output is done and the op is only finishing terminal bookkeeping
+  // (DB reconciliation, title, drain). The answer is complete on screen and the
+  // composer says Send, so honor that: start a fresh turn instead of parking the
+  // message in a tray the user has no reason to expect.
+  //
+  // Unless this run already has follow-ups queued behind it: the terminal drain
+  // will send those, so jumping ahead of them would both reorder the
+  // conversation and run two turns at once. Order beats latency there.
+  if (operation.metadata.visibleLoadingDone && !options?.hasQueuedMessages) return false;
+
+  return true;
+};

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { parseWorkflowDate } from '@/server/workflows/step';
 
 /**
  * Cursor shape accepted by workflow pagination serializers.
@@ -42,18 +43,13 @@ export interface WorkflowCursorLike {
 export const serializeWorkflowCursor = (
   cursor: WorkflowCursorLike,
   errorMessage = 'Invalid workflow cursor date',
-) => {
+) => ({
   // NOTICE:
   // Upstash Workflow persists step results as JSON and restores Date values as strings.
-  // This cursor can come from a live DB result or a restored context.run result.
-  // Keep accepting both shapes until workflow step serialization preserves Date objects.
-  const createdAt = new Date(cursor.createdAt);
-  if (Number.isNaN(createdAt.getTime())) {
-    throw new Error(errorMessage);
-  }
-
-  return { createdAt: createdAt.toISOString(), id: cursor.id };
-};
+  // This cursor can come from a live DB result or a restored step result.
+  createdAt: parseWorkflowDate(cursor.createdAt, errorMessage).toISOString(),
+  id: cursor.id,
+});
 
 /**
  * Checks whether an hourly user-memory extraction task has requested cancellation.

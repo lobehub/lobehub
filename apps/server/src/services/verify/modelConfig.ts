@@ -20,6 +20,7 @@ const HETEROGENEOUS_PROVIDER_IDS = new Set([
   'amp',
   'claude-code',
   'codex',
+  'cursor',
   'hermes',
   'opencode',
   'openclaw',

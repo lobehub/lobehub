@@ -22,9 +22,9 @@ import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSk
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
-import { enterGoalMode } from '../goalMode';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
-import { type ActionTagData, BUILTIN_COMMANDS } from './types';
+import { insertGoalTag } from './goalTag';
+import { type ActionTagData, BUILTIN_COMMANDS, GOAL_COMMAND_TYPE } from './types';
 import { useInstalledSkillsAndTools } from './useInstalledSkillsAndTools';
 
 type SlashItem = NonNullable<SlashOptions['items'] extends (infer U)[] ? U : never>;
@@ -45,7 +45,6 @@ const COMMAND_ICONS: Record<string, any> = {
 export const useSlashActionItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
   const editorInstance = useChatInputStore((s) => s.editor);
-  const setGoalMode = useChatInputStore((s) => s.setGoalMode);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   // Resolve the active working directory so we can surface filesystem skills.
@@ -236,14 +235,16 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
       if (isAtLineStart) {
         allItems.push({
           icon: TargetIcon,
-          key: 'goal',
+          key: GOAL_COMMAND_TYPE,
           label: t('slash.goal' as any),
           metadata: {
             category: 'command',
             description: t('slash.goal.desc' as any, { defaultValue: '' }),
-            type: 'goal',
+            type: GOAL_COMMAND_TYPE,
           },
-          onSelect: (editor: IEditor) => enterGoalMode(editor, setGoalMode, true),
+          // Unlike the other commands this one is not inserted at the caret —
+          // the chip has to lead the message. See `insertGoalTag`.
+          onSelect: (editor: IEditor) => insertGoalTag(editor, t('slash.goal' as any) as string),
         } as SlashItem);
         for (const action of BUILTIN_COMMANDS) {
           if (action.type === 'newTopic' && !activeTopicId) continue;
@@ -282,14 +283,6 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       return allItems;
     },
-    [
-      t,
-      editorInstance,
-      activeTopicId,
-      projectSkills,
-      installedSkills,
-      agentDocumentSkills,
-      setGoalMode,
-    ],
+    [t, editorInstance, activeTopicId, projectSkills, installedSkills, agentDocumentSkills],
   );
 };

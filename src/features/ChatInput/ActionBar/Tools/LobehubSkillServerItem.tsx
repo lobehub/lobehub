@@ -1,4 +1,5 @@
-import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

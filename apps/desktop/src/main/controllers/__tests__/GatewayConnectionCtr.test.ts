@@ -839,18 +839,24 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'opencode'] as const)(
-      'forwards agentType "%s" to spawnLhHeteroExec',
-      async (agentType) => {
-        const client = await connectAndOpen();
-        client.simulateAgentRunRequest(agentType);
-        await vi.advanceTimersByTimeAsync(0);
+    it.each([
+      'openclaw',
+      'hermes',
+      'codex',
+      'claude-code',
+      'codebuddy',
+      'cursor',
+      'kimi-code',
+      'opencode',
+    ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
 
-        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-          expect.objectContaining({ agentType }),
-        );
-      },
-    );
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType }),
+      );
+    });
 
     it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
@@ -1614,10 +1620,8 @@ describe('GatewayConnectionCtr', () => {
 
       const info = await ctr.getDeviceInfo();
       expect(info).toEqual({
-        description: '',
         deviceId: 'my-device',
         hostname: 'mock-hostname',
-        name: 'mock-hostname',
         platform: process.platform,
       });
     });

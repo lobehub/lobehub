@@ -11,6 +11,7 @@ import {
 import { TOOL_RESULTS_DIR_NAME } from './constants';
 
 const TOOL_RESULTS_DIR = `./${TOOL_RESULTS_DIR_NAME}`;
+const ARCHIVE_VERIFICATION_ERROR = 'Archived content verification failed';
 
 export interface ToolResultArchiveOutcome {
   archived: boolean;
@@ -69,7 +70,16 @@ export const archiveToolResultIfNeeded = async ({
   try {
     const vfsService = new AgentDocumentVfsService(serverDB, userId, workspaceId);
     await vfsService.mkdir(TOOL_RESULTS_DIR, { agentId, topicId }, { recursive: true });
-    const stats = await vfsService.write(archivePath, content, { agentId, topicId });
+    const stats = await vfsService.write(
+      archivePath,
+      content,
+      { agentId, topicId },
+      { contentFormat: 'raw' },
+    );
+    const persisted = await vfsService.read(archivePath, { agentId, topicId });
+
+    // Never tell the model that a full result exists unless the VFS can return it losslessly.
+    if (persisted.content !== content) throw new Error(ARCHIVE_VERIFICATION_ERROR);
 
     if (stats.documentId) {
       const topicDocumentModel = new TopicDocumentModel(serverDB, userId, workspaceId);

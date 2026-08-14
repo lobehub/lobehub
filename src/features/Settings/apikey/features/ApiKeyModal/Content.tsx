@@ -26,7 +26,6 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
   const { close } = useModalContext();
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
-  // scopes are immutable after creation, so the choice only exists here
   const [fullAccess, setFullAccess] = useState(true);
   const [selectedScopes, setSelectedScopes] = useState<ApiKeyScope[]>([]);
 

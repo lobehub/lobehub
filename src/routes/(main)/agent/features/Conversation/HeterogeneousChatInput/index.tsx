@@ -1,6 +1,7 @@
 'use client';
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -10,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
-import GoalModeChip from '@/features/ChatInput/ActionBar/GoalModeChip';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
@@ -106,17 +106,8 @@ const HeterogeneousChatInput = memo(() => {
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
-  // Codex show the selector on every execution path (local / sandbox / device)
-  // since dispatch forwards --model/--effort everywhere.
-  const isSelectableHeteroProvider =
-    providerType === 'claude-code' ||
-    providerType === 'codex' ||
-    providerType === 'opencode' ||
-    providerType === 'pi' ||
-    providerType === 'qoder';
   const showHeteroModel =
-    isSelectableHeteroProvider &&
+    isHeteroSelectorAvailable(providerType) &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget,
@@ -128,7 +119,6 @@ const HeterogeneousChatInput = memo(() => {
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () => [
       { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
-      { alwaysDisplay: true, children: <GoalModeChip />, key: 'goalModeChip' },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
     [],

@@ -134,8 +134,20 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   // ==================== Shell Commands ====================
 
+  // The sandbox decision rides on the context, resolved by the caller from the
+  // agent's config — never from the model's args, which the manifest doesn't
+  // expose it in. The runtime anchors `cwd` to `ctx.workingDirectory` (and
+  // refuses the model's own `cwd` while `trustArgsCwd` is off), which is exactly
+  // the root the fence needs: a model must not get to choose what it is fenced
+  // to. An unfenced command adds neither field and behaves as before.
   runCommand = (params: RunCommandParams, ctx?: BuiltinToolContext) =>
-    this.execute('runCommand', params, ctx);
+    this.execute(
+      'runCommand',
+      ctx?.localSandbox === true
+        ? { ...params, sandbox: true, sandboxNetwork: ctx?.localSandboxNetwork === true }
+        : params,
+      ctx,
+    );
 
   getCommandOutput = (params: GetCommandOutputParams, ctx?: BuiltinToolContext) =>
     this.execute('getCommandOutput', params, ctx);

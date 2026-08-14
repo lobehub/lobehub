@@ -1,5 +1,5 @@
 import { type ResourceManagerMode } from '@/features/ResourceManager';
-import { FilesTabs, SortType } from '@/types/files';
+import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
 
 export type ViewMode = 'list' | 'masonry';
 export type SelectAllState = 'all' | 'loaded' | 'none';
@@ -75,6 +75,14 @@ export interface State {
    */
   sortType: SortType;
   /**
+   * Explicit origin narrowing picked by the user. `undefined` means "not
+   * chosen here", which resolves to the category's own default (see
+   * `getResourceSourceFilter`) — Images opens on AI-generated, everything else
+   * on All. Cleared whenever the category changes so each category comes back
+   * to its own default rather than inheriting the previous one's choice.
+   */
+  sourceFilter?: ResourceSourceFilter;
+  /**
    * File explorer view mode (list or masonry)
    */
   viewMode: ViewMode;
@@ -95,5 +103,6 @@ export const initialState: State = {
   selectedFileIds: [],
   sortType: SortType.Desc,
   sorter: 'createdAt',
+  sourceFilter: undefined,
   viewMode: 'list',
 };

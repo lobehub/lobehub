@@ -2795,4 +2795,132 @@ describe('BotMessageRouter', () => {
       expect(event.channel.post.mock.calls[0][0]).toMatch(/Approved Lin/i);
     });
   });
+
+  describe('/mode command (per-conversation agent/chat switch)', () => {
+    async function loadModeHandlers() {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings: { allowFrom: 'alice-id' } }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const cmdHandlerCall = mockOnNewMessage.mock.calls.find(
+        (call) => call[0] instanceof RegExp && call[0].source.includes('mode'),
+      );
+      const slashModeCall = mockOnSlashCommand.mock.calls.find((c) => c[0] === '/mode');
+      if (!cmdHandlerCall || !slashModeCall) throw new Error('/mode handlers not registered');
+      return {
+        cmdRegexHandler: cmdHandlerCall[1] as (thread: any, message: any) => Promise<void>,
+        slashMode: slashModeCall[1] as (event: any) => Promise<void>,
+      };
+    }
+
+    function makeThread(state: Record<string, unknown> | null = null) {
+      return {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+        state: Promise.resolve(state),
+      };
+    }
+
+    const makeMessage = (text: string) => ({
+      author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      isMention: false,
+      text,
+    });
+
+    it('switches to chat mode via text dispatch and confirms', async () => {
+      const { cmdRegexHandler } = await loadModeHandlers();
+      const thread = makeThread();
+
+      await cmdRegexHandler(thread, makeMessage('/mode chat'));
+
+      // Merge write (NOT replace) — switching mode must not clobber topicId.
+      expect(thread.setState).toHaveBeenCalledWith({ toolMode: 'chat' }, undefined);
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('Chat Mode');
+    });
+
+    it('switches to agent mode via the native slash path', async () => {
+      const { slashMode } = await loadModeHandlers();
+      const channel = makeThread();
+      const event = {
+        channel,
+        text: 'agent',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      };
+
+      await slashMode(event);
+
+      expect(channel.setState).toHaveBeenCalledWith({ toolMode: 'agent' }, undefined);
+      expect(channel.post.mock.calls[0][0]).toContain('Agent Mode');
+    });
+
+    it('reports the explicit mode on no-arg /mode without writing state', async () => {
+      const { cmdRegexHandler } = await loadModeHandlers();
+      const thread = makeThread({ toolMode: 'chat', topicId: 'topic-1' });
+
+      await cmdRegexHandler(thread, makeMessage('/mode'));
+
+      expect(thread.setState).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain('Chat Mode');
+    });
+
+    it('reports the effective (agent-default) mode when no override is set', async () => {
+      const { cmdRegexHandler } = await loadModeHandlers();
+      const thread = makeThread(null);
+
+      await cmdRegexHandler(thread, makeMessage('/mode'));
+
+      // No override → the handler resolves the agent's configured default.
+      // In this harness the agent-config lookup fails (stub DB), so the
+      // best-effort fallback reports the product default: Agent Mode.
+      expect(thread.setState).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain('Agent Mode');
+    });
+
+    it('rejects an unknown mode argument with usage help', async () => {
+      const { cmdRegexHandler } = await loadModeHandlers();
+      const thread = makeThread();
+
+      await cmdRegexHandler(thread, makeMessage('/mode banana'));
+
+      expect(thread.setState).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain('/mode agent');
+    });
+
+    it('/new preserves the /mode choice across the state reset', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings: { allowFrom: 'alice-id' } }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      await webhookHandler(
+        new Request('https://example.com/webhook', { body: '{}', method: 'POST' }),
+      );
+      const cmdHandlerCall = mockOnNewMessage.mock.calls.find(
+        (call) => call[0] instanceof RegExp && call[0].source.includes('new'),
+      );
+      const cmdRegexHandler = cmdHandlerCall![1] as (thread: any, message: any) => Promise<void>;
+      const thread = makeThread({
+        channelContext: { guild: { id: 'g' } },
+        toolMode: 'chat',
+        topicId: 'topic-1',
+      });
+
+      await cmdRegexHandler(thread, makeMessage('/new'));
+
+      // topicId cleared via replace, toolMode carried over, channelContext
+      // intentionally dropped (same as before this feature).
+      expect(thread.setState).toHaveBeenCalledWith(
+        { toolMode: 'chat', topicId: undefined },
+        { replace: true },
+      );
+    });
+  });
 });

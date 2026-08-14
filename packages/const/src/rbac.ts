@@ -485,7 +485,12 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('DOCUMENT_DELETE')}:owner`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
     `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
-    `${action('KNOWLEDGE_BASE_UPDATE')}:owner`,
+    // `:all` marks admins as knowledge-base curators: it powers the
+    // resource-permission manage/browse bypass (restricted KBs stay visible to
+    // them). Row-level mutations are still creator/owner-gated by
+    // `assertWorkspaceRowManageable`, so this does not let admins edit other
+    // members' knowledge bases.
+    `${action('KNOWLEDGE_BASE_UPDATE')}:all`,
     `${action('KNOWLEDGE_BASE_DELETE')}:owner`,
     // Shared workspace configuration
     `${action('AI_MODEL_READ')}:all`,
@@ -548,6 +553,11 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_PROVIDER_READ')}:all`,
+    // API keys — members manage only the credentials they issued themselves.
+    `${action('API_KEY_READ')}:owner`,
+    `${action('API_KEY_CREATE')}:owner`,
+    `${action('API_KEY_UPDATE')}:owner`,
+    `${action('API_KEY_DELETE')}:owner`,
   ],
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: [
     // Read-only across the board

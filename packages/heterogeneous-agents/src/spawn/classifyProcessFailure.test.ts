@@ -16,6 +16,13 @@ describe('isHeteroStatusGuideErrorData', () => {
     ).toBe(true);
     expect(
       isHeteroStatusGuideErrorData({
+        agentType: 'codebuddy',
+        code: 'auth_required',
+        message: 'Authentication required',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
         agentType: 'codex',
         code: 'working_directory_not_found',
         message: 'Working directory does not exist: /tmp/gone',
@@ -26,6 +33,13 @@ describe('isHeteroStatusGuideErrorData', () => {
         agentType: 'codex',
         code: 'rate_limit',
         message: 'usage limit reached',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'cursor',
+        code: 'auth_required',
+        message: 'Authentication required',
       }),
     ).toBe(true);
     expect(
@@ -130,6 +144,40 @@ describe('classifyHeteroProcessFailure', () => {
 
     expect(result).toMatchObject({ agentType: 'opencode', code: 'cli_not_found' });
     expect(result?.message).toContain('`opencode`');
+  });
+
+  it('classifies missing CodeBuddy and its real headless authentication prompt', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'codebuddy',
+        detail: 'Error: spawn codebuddy ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'codebuddy', code: 'cli_not_found' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'codebuddy',
+        detail: 'Authentication required. Please use /login',
+      }),
+    ).toMatchObject({ agentType: 'codebuddy', code: 'auth_required' });
+  });
+
+  it('classifies missing Cursor and its real authentication prompt', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'cursor',
+        detail: 'Error: spawn agent ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'cursor', code: 'cli_not_found', command: 'agent' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'cursor',
+        detail: 'Authentication required',
+      }),
+    ).toMatchObject({ agentType: 'cursor', code: 'auth_required' });
   });
 
   it('classifies missing Pi and Pi provider credentials', () => {

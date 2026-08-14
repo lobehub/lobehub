@@ -14,6 +14,14 @@
  */
 export type { UsageData } from '../types';
 export {
+  type AcpRpcErrorData,
+  type AcpRpcMessage,
+  AcpRpcResponseError,
+  AcpServerRequestError,
+  AcpStdioClient,
+  type AcpStdioClientOptions,
+} from './acpStdioClient';
+export {
   AgentStreamPipeline,
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
@@ -60,6 +68,13 @@ export {
   type FileStorePort,
 } from './fileStoreImageUploader';
 export {
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  type GrokAcpContentBlock,
+  GrokAcpSession,
+  type GrokAcpSessionOptions,
+} from './grokAcpSession';
+export {
   type AgentContentBlock,
   type AgentImageBlock,
   type AgentImageSource,
@@ -92,10 +107,13 @@ export {
   AMP_BASE_ARGS,
   buildQoderArgs,
   CLAUDE_CODE_BASE_ARGS,
+  CODEBUDDY_BASE_ARGS,
   CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
+  CURSOR_BASE_ARGS,
+  KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
   PI_BASE_ARGS,
   QODER_BASE_ARGS,
@@ -103,6 +121,16 @@ export {
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,
+  spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
+export {
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  type TraeAcpImagePromptBlock,
+  type TraeAcpPromptBlock,
+  TraeAcpSession,
+  type TraeAcpSessionOptions,
+  type TraeAcpTextPromptBlock,
+} from './traeAcpSession';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

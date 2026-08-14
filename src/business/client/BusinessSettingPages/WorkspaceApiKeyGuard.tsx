@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 
-export default function WorkspaceApiKeyGuard({ children }: PropsWithChildren): ReactNode {
+export function WorkspaceApiKeyGuard({ children }: PropsWithChildren): ReactNode {
   return children;
 }

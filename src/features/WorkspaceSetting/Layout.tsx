@@ -33,16 +33,14 @@ const COMPACT_HEADER_TABS = new Set<string>([
  * Bare workspace settings shell — sidebar + outlet, no content padding.
  * Use this when a child route owns its own full-bleed layout (e.g. Provider).
  */
-const WorkspaceSettingsLayout: FC = memo(() => {
+const WorkspaceSettingsLayout: FC = () => {
   return (
     <>
       <SideBar />
       <Outlet />
     </>
   );
-});
-
-WorkspaceSettingsLayout.displayName = 'WorkspaceSettingsLayout';
+};
 
 /**
  * Standard workspace settings content layout. Compact-header tabs use the

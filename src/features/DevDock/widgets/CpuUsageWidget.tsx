@@ -1,9 +1,9 @@
 'use client';
 
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 
-import { electronDevtoolsService } from '@/services/electron/devtools';
+import { useAppProcessMetrics } from './appProcessMetrics';
 
 const styles = createStaticStyles(({ css }) => ({
   high: css`
@@ -21,37 +21,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const CpuUsageWidget = memo(() => {
-  const [percent, setPercent] = useState<number | null>(null);
+  const metrics = useAppProcessMetrics();
 
-  useEffect(() => {
-    let disposed = false;
-    // Electron reports usage since the previous getAppMetrics call, so the
-    // first sample is meaningless — prime once and only render from the second.
-    let primed = false;
+  if (!metrics) return null;
 
-    const tick = async () => {
-      try {
-        const usage = await electronDevtoolsService.getAppCpuUsage();
-        if (disposed) return;
-        if (!primed) {
-          primed = true;
-          return;
-        }
-        setPercent(usage.percent);
-      } catch {
-        /* ipc unavailable — keep the widget hidden */
-      }
-    };
-
-    void tick();
-    const timer = setInterval(tick, 2000);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  if (percent === null) return null;
+  const percent = metrics.cpuPercent;
 
   return (
     <span

@@ -139,11 +139,10 @@ export class TaskService {
       createData.projectId ??= parent.projectId ?? undefined;
     }
 
-    if (
-      createData.projectId &&
-      !(await this.projectModel.findManageableById(createData.projectId))
-    ) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+    if (createData.projectId) {
+      const project = await this.projectModel.findManageableById(createData.projectId);
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      createData.identifierPrefix ??= project.identifier;
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single
@@ -927,6 +926,7 @@ export class TaskService {
               timezone: task.scheduleTimezone,
             }
           : undefined,
+      startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,
       verify: this.taskModel.getVerifyConfig(task),

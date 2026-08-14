@@ -36,6 +36,11 @@ const SEGMENT_BY_CATEGORY = Object.fromEntries(
 export const resourceCategoryPath = (category: FilesTabs): string =>
   SEGMENT_BY_CATEGORY[category] ? `/resource/${SEGMENT_BY_CATEGORY[category]}` : '/resource';
 
+export const resolveResourcePathCategory = (
+  category: string | undefined,
+  pathname: string,
+): string | undefined => category ?? pathname.match(/\/resource\/([^/]+)\/?$/)?.[1];
+
 /** Path segment of the cross-topic Work gallery: /resource/works */
 export const WORKS_PATH_SEGMENT = 'works';
 
@@ -49,10 +54,9 @@ const ResourceHomePage = memo(() => {
     s.setLibraryId,
   ]);
 
-  // /resource/page is a static route (no :category param) — recover the
-  // segment from the pathname there.
-  const pathCategory =
-    params.category ?? (/\/resource\/page\/?$/.test(location.pathname) ? 'page' : undefined);
+  // Category-specific route metadata uses static sibling routes, so recover
+  // their segment from the pathname when React Router has no :category param.
+  const pathCategory = resolveResourcePathCategory(params.category, location.pathname);
   const segmentCategory = pathCategory ? CATEGORY_BY_SEGMENT[pathCategory] : undefined;
   const isValidPathCategory = segmentCategory !== undefined;
   // The Work gallery owns its own path segment; `?works=<key>` narrows it

@@ -8,7 +8,6 @@ import {
   FileText,
   HouseIcon,
   ImageIcon,
-  LayoutPanelTopIcon,
   type LucideIcon,
   Mic2,
   SquarePlay,
@@ -44,9 +43,11 @@ const CategoryMenu = memo(() => {
   // workspace prefix.
   const worksActive = location.pathname.endsWith('/resource/works');
 
-  // Two groups below the fixed Home/All entries: file-based categories
-  // (uploaded files by type) and LobeHub business entities (pages, works,
-  // webpages), separated by a gap.
+  // Two groups below the fixed Home entry: file-based categories (uploaded
+  // files by type) and LobeHub business entities (pages, works, webpages),
+  // separated by a gap. The flat everything-list stays reachable at
+  // /resource/all (the home page's "view all" target) but is not a nav entry —
+  // browsing starts from a category, not from an undifferentiated pile.
   const groups = useMemo(
     () => [
       [
@@ -55,12 +56,6 @@ const CategoryMenu = memo(() => {
           key: FilesTabs.Home,
           title: t('tab.home'),
           url: '/resource',
-        },
-        {
-          icon: LayoutPanelTopIcon,
-          key: FilesTabs.All,
-          title: t('tab.all'),
-          url: '/resource/all',
         },
       ],
       // file-based categories — Files (the misc raw-data bucket) sits last

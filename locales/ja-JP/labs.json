@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "メッセージテキスト選択アクション",
   "features.oauthApps.desc": "個人およびワークスペース設定でOAuthアプリ管理を表示します。この機能はデフォルトでは非表示です。",
   "features.oauthApps.title": "OAuthアプリ",
+  "features.projects.desc": "長期的な目標を専用のワークスペースに整理し、それぞれに専用のエージェント、知識ベース、タスクを設定できます。",
+  "features.projects.title": "プロジェクトワークスペース",
   "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",
   "features.taskVerify.title": "タスク納品受け入れ",
   "features.topicAcceptance.desc": "現在のトピックのための配達チェックリストを作成し、コンポーザーのすぐ上に配置します。これにより、会話がいつでも編集可能な基準に従って行われます。",

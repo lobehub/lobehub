@@ -24,6 +24,7 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { ConnectorDataService } from '@/server/services/connectorData';
 import { OnboardingService } from '@/server/services/onboarding';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
+import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { TaskRecommendationConfigurator } from './config';
 import { TaskRecommendationMaterializer } from './materializer';
@@ -63,6 +64,7 @@ interface TaskRecommendationServiceDependencies {
   materializer: Pick<TaskRecommendationMaterializer, 'materialize'>;
   onboarding: Pick<OnboardingService, 'getInboxAgentId'>;
   providers: ReadonlyMap<string, TaskRecommendationProvider>;
+  runner: Pick<TaskRunnerService, 'runTask'>;
   topic: Pick<TopicModel, 'findById' | 'updateMetadata'>;
   writer: Pick<TaskRecommendationWriter, 'generate'>;
 }
@@ -375,6 +377,16 @@ export class TaskRecommendationService {
       });
       if (result.status === 'stale') throw new StaleTaskRecommendationSessionError();
       if (result.status === 'not-found') throw new TaskRecommendationNotFoundError();
+      if (result.created) {
+        try {
+          await this.dependencies.runner.runTask({ taskId: result.taskId });
+        } catch (error) {
+          // TaskRunnerService keeps a failed kickoff visible as a paused task with the error
+          // attached. Do not fail onboarding after the durable task and idempotency mapping
+          // have already committed; the user can inspect or retry it from the task list.
+          console.error('[TaskRecommendationService] failed to start onboarding task:', error);
+        }
+      }
     }
     return (await this.get(input.topicId)).createdTaskIds;
   };
@@ -398,6 +410,7 @@ export const createTaskRecommendationService = async ({
     materializer: new TaskRecommendationMaterializer(db, userId),
     onboarding: new OnboardingService(db, userId),
     providers: taskRecommendationProviderMap,
+    runner: new TaskRunnerService(db, userId),
     topic: new TopicModel(db, userId),
     writer: new TaskRecommendationWriter({
       generator: new AiGenerationService(db, userId),

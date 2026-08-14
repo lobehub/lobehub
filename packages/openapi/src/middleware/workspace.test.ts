@@ -2,7 +2,11 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OPENAPI_WORKSPACE_HEADER, workspaceAuthMiddleware } from './workspace';
+import {
+  OPENAPI_WORKSPACE_HEADER,
+  requireWorkspaceRoleWhenScoped,
+  workspaceAuthMiddleware,
+} from './workspace';
 
 interface TestHonoEnv {
   Variables: {
@@ -215,13 +219,17 @@ describe('OpenAPI workspace middleware', () => {
     expect(response.status).toBe(200);
   });
 
-  it('rejects a workspace API Key after its issuer is demoted below Admin', async () => {
+  it('keeps a workspace API Key active after its issuer becomes a member', async () => {
     const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });
     mockWorkspaceMembersFindFirst.mockResolvedValueOnce({ role: 'member' });
 
     const response = await app.request('/workspace');
 
-    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      workspaceId: 'workspace-1',
+      workspaceRole: 'member',
+    });
+    expect(response.status).toBe(200);
   });
 
   it('rejects a different workspace header for a workspace API Key', async () => {
@@ -255,5 +263,38 @@ describe('OpenAPI workspace middleware', () => {
 
     expect(response.status).toBe(200);
     expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('workspace-1');
+  });
+
+  // `workspaceAuthMiddleware` only admin-gates `apikey` auth, so an OIDC/session
+  // member previously reached routes whose model predicate is workspace-wide.
+  describe('requireWorkspaceRoleWhenScoped', () => {
+    const roleApp = (role: string | undefined, workspaceId: string | undefined) => {
+      const app = new Hono<TestHonoEnv>();
+      app.use('*', async (c, next) => {
+        c.set('workspaceId', workspaceId);
+        c.set('workspaceRole', role);
+        return next();
+      });
+      app.get('/guarded', requireWorkspaceRoleWhenScoped('admin'), (c) => c.json({ ok: true }));
+      app.onError((error) =>
+        error instanceof HTTPException ? error.getResponse() : new Response(null, { status: 500 }),
+      );
+      return app;
+    };
+
+    it.each(['member', 'viewer', undefined])(
+      'rejects an OIDC workspace request from role %s',
+      async (role) => {
+        expect((await roleApp(role, 'workspace-1').request('/guarded')).status).toBe(403);
+      },
+    );
+
+    it.each(['admin', 'owner'])('allows role %s', async (role) => {
+      expect((await roleApp(role, 'workspace-1').request('/guarded')).status).toBe(200);
+    });
+
+    it('passes through personal (non-workspace) requests', async () => {
+      expect((await roleApp(undefined, undefined).request('/guarded')).status).toBe(200);
+    });
   });
 });

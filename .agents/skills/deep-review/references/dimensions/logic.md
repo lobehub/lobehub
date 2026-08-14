@@ -17,7 +17,7 @@ Does the change do what the requirement asked, and does it hold up under real in
 - Error handling: failure paths that leave state half-mutated or the UI stuck
 - State machines: unreachable/unhandled states after this change
 - Requirement deviation: the diff contradicts the stated need, acceptance criteria, or key decisions recorded in the PR/issue/conversation. Report even when the code is internally correct — the reviewer cannot tell a legitimate mid-implementation adjustment from a forgotten decision (context loss, compaction), so the fix is always two-option: align the implementation with the recorded decision, or update the record to state why the decision changed
-- Bug fixes ship a regression test covering the fixed scenario; new services / store actions / utilities have test coverage; new database Model/Repository ships a sibling `__tests__/<name>.test.ts` incl. user isolation (see `.agents/skills/testing/`)
+- Bug fixes ship a regression test covering the fixed scenario (skip pure style/CSS fixes whose only practical assertion is stylesheet source-string matching — see `.agents/skills/testing/`); new services / store actions / utilities have test coverage; new database Model/Repository ships a sibling `__tests__/<name>.test.ts` incl. user isolation
 
 ## Rule sources (deep mode: read before reviewing)
 
@@ -36,7 +36,7 @@ Does the change do what the requirement asked, and does it hold up under real in
 
 - A concrete input/state sequence produces a wrong result, crash, stuck UI, or half-committed state.
 - The change silently narrows/broadens behavior versus the requirement.
-- A bug fix without a test that would have caught the original bug.
+- A bug fix without a test that would have caught the original bug (except pure style/CSS fixes per the testing skill).
 
 ## Not violations
 

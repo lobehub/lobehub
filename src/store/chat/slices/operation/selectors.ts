@@ -6,7 +6,7 @@ import { type Operation, type OperationType } from './types';
 import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
-  QUEUE_BLOCKING_OPERATION_TYPES,
+  isQueueBlockingOperation,
 } from './types';
 
 // === Basic Queries ===
@@ -275,8 +275,11 @@ const isAgentRuntimeVisiblyRunningByContext =
   };
 
 /**
- * All running queue-blocking operation ids in a context (see
- * QUEUE_BLOCKING_OPERATION_TYPES). "Send now" cancels every one of them, not just
+ * All live queue-blocking operation ids in a context (see
+ * `isQueueBlockingOperation` — the same predicate the enqueue check uses, so
+ * "Send now" cancels exactly what a fresh send would have queued behind and
+ * never fires at an op that already stopped holding the queue). "Send now"
+ * cancels every one of them, not just
  * the first: a retry via delAndRegenerate/delAndResendThread runs an outer
  * wrapper `regenerate` op AND an inner regenerateUserMessage `regenerate` op at
  * once, so cancelling only one would leave the queue blocked and make "Send now"
@@ -286,8 +289,9 @@ const getRunningQueueBlockingOperationIds =
   (context: MessageMapKeyInput) =>
   (s: ChatStoreState): string[] => {
     if (!context.agentId) return [];
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
     return getOperationsByContext(context)(s)
-      .filter((op) => QUEUE_BLOCKING_OPERATION_TYPES.includes(op.type) && op.status === 'running')
+      .filter((op) => isQueueBlockingOperation(op, { hasQueuedMessages }))
       .map((op) => op.id);
   };
 

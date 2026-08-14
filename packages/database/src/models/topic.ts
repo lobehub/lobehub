@@ -1426,7 +1426,11 @@ export class TopicModel {
    * callback can claim the topic, so the callback always re-anchors on the
    * completed turn's latest spine.
    */
-  tryReserveTaskCallback = async (id: string, messageId: string): Promise<boolean | null> =>
+  tryReserveTaskCallback = async (
+    id: string,
+    messageId: string,
+    replacesOperationId?: string,
+  ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata })
@@ -1444,13 +1448,17 @@ export class TopicModel {
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
-      if (existing.metadata?.runningOperation || hasLiveReservation) return false;
+      const runningOperation = existing.metadata?.runningOperation;
+      const canReplaceRunningOperation =
+        !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
+      if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;
 
       await tx
         .update(topics)
         .set({
           metadata: {
             ...existing.metadata,
+            ...(canReplaceRunningOperation && { runningOperation: null }),
             taskCallbackReservation: {
               messageId,
               reservedAt: new Date().toISOString(),

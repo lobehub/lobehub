@@ -1,6 +1,8 @@
 import { MemorySourceType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createStepRunner } from '@/server/workflows/testing/stepContext';
+
 import { processTopicsHandler } from '../processTopics';
 
 const mocks = vi.hoisted(() => ({
@@ -74,7 +76,7 @@ vi.mock('../runGuard', () => ({
 
 const createContext = (requestPayload: Record<string, unknown>) => ({
   requestPayload,
-  run: vi.fn((_name: string, callback: () => unknown) => callback()),
+  run: createStepRunner(),
 });
 
 describe('processTopicsHandler hourly task behavior', () => {

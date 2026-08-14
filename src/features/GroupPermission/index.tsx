@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -47,7 +47,7 @@ const GroupPermission = memo(() => {
             <AsyncBoundary
               data={isGroupLoading ? undefined : true}
               isLoading={isGroupLoading}
-              loading={<Loading debugId="GroupPermission" />}
+              loading={<SurfaceSkeleton header={false} variant={'form'} />}
             >
               <PermissionForm groupId={activeGroupId ?? ''} />
             </AsyncBoundary>

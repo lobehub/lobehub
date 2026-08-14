@@ -1,7 +1,12 @@
 import type {
   AcceptanceCheckReviewAction,
+  AcceptanceRejectIntent,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  ReviewAdjudication,
+  ReviewPredictionAction,
+  ReviewPredictionStatus,
+  ReviewProposalEdit,
   VerifierType,
   VerifyCheckResultStatus,
   VerifyEvidenceCapturedBy,
@@ -19,8 +24,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type {
   acceptanceCheckReviewActions,
+  acceptanceRejectIntents,
   acceptanceStatuses,
   acceptanceSubjectTypes,
+  reviewAdjudications,
+  reviewPredictionActions,
+  reviewPredictionStatuses,
+  reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -66,6 +76,17 @@ describe('verify vocabulary', () => {
     expectTypeOf<
       (typeof acceptanceCheckReviewActions)[number]
     >().toEqualTypeOf<AcceptanceCheckReviewAction>();
+    expectTypeOf<
+      (typeof acceptanceRejectIntents)[number]
+    >().toEqualTypeOf<AcceptanceRejectIntent>();
+    expectTypeOf<
+      (typeof reviewPredictionActions)[number]
+    >().toEqualTypeOf<ReviewPredictionAction>();
+    expectTypeOf<
+      (typeof reviewPredictionStatuses)[number]
+    >().toEqualTypeOf<ReviewPredictionStatus>();
+    expectTypeOf<(typeof reviewAdjudications)[number]>().toEqualTypeOf<ReviewAdjudication>();
+    expectTypeOf<(typeof reviewProposalEdits)[number]>().toEqualTypeOf<ReviewProposalEdit>();
   });
 });
 

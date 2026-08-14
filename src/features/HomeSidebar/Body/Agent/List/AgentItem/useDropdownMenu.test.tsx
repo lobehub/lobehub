@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   canEditResource: false,
   canManage: false,
+  confirmModal: vi.fn(),
+  toastError: vi.fn(),
   activeWorkspaceId: 'workspace-1' as string | null,
   home: {
     duplicateAgent: vi.fn(),
@@ -40,6 +42,11 @@ vi.mock('antd', async (importOriginal) => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: mocks.confirmModal,
+  toast: { error: mocks.toastError, success: vi.fn() },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -273,6 +280,43 @@ describe('useAgentDropdownMenu', () => {
     await hideItem.onClick({ domEvent: { stopPropagation: vi.fn() } } as never);
 
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
+  });
+
+  it('tells the user to wait when delete is refused by a pending history migration', async () => {
+    // Regression: a 409 TRANSFER_IN_PROGRESS used to fall through to the
+    // generic "operation failed, please try again", which invited immediate
+    // retries that could never succeed until the backfill drained.
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.home.removeAgent.mockRejectedValueOnce(
+      Object.assign(new Error('migrating'), {
+        data: { code: 'CONFLICT', errorData: { code: 'TRANSFER_IN_PROGRESS' }, httpStatus: 409 },
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const deleteItem = (result.current() ?? []).find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
+    if (!deleteItem) throw new Error('Expected delete menu item');
+
+    deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
+    await onOk();
+
+    expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
   });
 
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {

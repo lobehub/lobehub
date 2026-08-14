@@ -120,7 +120,7 @@ const ActionsDropdown = memo<ActionsDropdownProps>(
 
     return (
       <DropdownMenu items={items}>
-        <ActionIcon icon={EllipsisIcon} size={'small'} />
+        <ActionIcon icon={EllipsisIcon} size={'small'} title={t('more')} />
       </DropdownMenu>
     );
   },
@@ -204,6 +204,7 @@ GroupItemActions.displayName = 'GroupItemActions';
  * so the real menu is mounted by the time it is needed.
  */
 const ItemActions = memo<ItemActionsProps>((props) => {
+  const { t } = useTranslation('common');
   const [selfActivated, setSelfActivated] = useState(false);
   const activated = selfActivated || props.forceActivated;
   const containerRef = useRef<HTMLSpanElement>(null);
@@ -232,7 +233,10 @@ const ItemActions = memo<ItemActionsProps>((props) => {
         )
       ) : props.hideTrigger ? null : (
         <span onFocus={activateFromFocus} onPointerEnter={activate}>
-          <ActionIcon icon={EllipsisIcon} size={'small'} />
+          {/* Explicit aria-label: outside a popup trigger, ActionIcon does not
+              derive one from `title`, leaving the focusable placeholder
+              unnamed for screen readers until the real trigger mounts. */}
+          <ActionIcon aria-label={t('more')} icon={EllipsisIcon} size={'small'} title={t('more')} />
         </span>
       )}
     </span>

@@ -18,11 +18,11 @@ const styles = createStaticStyles(({ css }) => ({
     background-size: 512px auto;
   `,
   footer_dark: css`
-    background-image: url('/images/community_footer_dark.webp');
+    background-image: url('/app-images/community_footer_dark.webp');
     background-blend-mode: screen;
   `,
   footer_light: css`
-    background-image: url('/images/community_footer_light.webp');
+    background-image: url('/app-images/community_footer_light.webp');
     background-blend-mode: multiply;
   `,
 }));

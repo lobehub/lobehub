@@ -125,7 +125,7 @@ const confirmOnboardingUnderstandingInputSchema = z
   .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
 const reviseOnboardingUnderstandingInputSchema = z
   .object({
-    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).optional(),
     feedback: z.string().trim().min(1).max(MAX_UNDERSTANDING_FEEDBACK_LENGTH).optional(),
     providerIds: z
       .array(
@@ -397,8 +397,17 @@ export const userRouter = router({
     }),
 
   getSupportedUnderstandingProviders: understandingServiceProcedure.query(
-    async ({ ctx }): Promise<{ providerIds: string[]; sourceProviderIds: string[] }> => {
+    async ({
+      ctx,
+    }): Promise<{
+      connectionSources: Record<string, 'composio' | 'lobehub'>;
+      providerIds: string[];
+      sourceProviderIds: string[];
+    }> => {
       return {
+        connectionSources: Object.fromEntries(
+          understandingProviders.map((provider) => [provider.id, provider.connectionSource]),
+        ),
         providerIds: understandingProviders.map((provider) => provider.id),
         sourceProviderIds: await ctx.understandingService.listSourceProviderIds(),
       };

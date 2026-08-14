@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
@@ -16,12 +17,19 @@ const routerMocks = vi.hoisted(() => {
     businessFileTransferStorageCheck: vi.fn(),
     hasWorkspaceScopedPermission: vi.fn(),
     serverDB: {
+      // `where` doubles as an awaitable empty result (restricted-KB lookups)
+      // and as a `.limit()` chain (workspace-role lookups).
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
       transaction: vi.fn(async (callback: (trx: unknown) => unknown) =>
         callback(transactionClient),
@@ -82,12 +90,18 @@ function createCallerWithCtx(partialCtx: any = {}) {
 
   const ctx = {
     serverDB: {
+      // Same dual-shape `where` as the module-level mock above.
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
     } as any,
     userId: 'test-user',
@@ -361,6 +375,48 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should persist a known upload source so the origin filter can see it', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: FileSource.PageEditor,
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: FileSource.PageEditor }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should drop an unrecognised source instead of failing the upload', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: 'some-future-client',
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: undefined }),
+        true,
+        routerMocks.transactionClient,
+      );
     });
 
     it('should refresh global file metadata when an existing hash points to a missing object', async () => {
@@ -973,6 +1029,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: 'test-user',
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
@@ -986,6 +1043,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: undefined,
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,

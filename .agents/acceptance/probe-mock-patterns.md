@@ -285,6 +285,36 @@ no session, so it ends in the same error for a different reason. See also the tw
 neighbouring entries on this proxy (loading-shell in an isolated context; no seeded
 agent-browser session).
 
+### The composer's slash menu needs real key events — `keyboard type` never opens it
+
+**Situation:** driving the chat composer's `/` slash menu (or anything else gated on
+a Lexical `KEY_DOWN_COMMAND`) through agent-browser.
+
+**Doesn't work:** `agent-browser keyboard type "/"`. It inserts through CDP
+`Input.insertText`, which produces no `keydown` at all — verified by installing a
+capturing `document.addEventListener("keydown", …)` and watching it stay empty while
+the character lands in the composer. The editor's SlashPlugin keeps `suppressOpen`
+true until a keydown with `key.length === 1` resets it, so the text appears and the
+menu never does. Reads exactly like "the slash menu is broken", which is worse than
+a visible failure because the composer clearly received the input.
+
+**Works:** use `agent-browser press '/'` for the trigger (and `press Backspace` to
+clear). `press` goes through `Input.dispatchKeyEvent`, so the keydown reaches
+Lexical. `keyboard type` remains fine for bulk text that no plugin is gated on —
+type the prose with it, but fire any menu trigger with `press`.
+
+```bash
+agent-browser --session "$RS" click '[data-probe=composer]'
+agent-browser --session "$RS" press '/'   # menu opens
+agent-browser --session "$RS" press Enter # selects the highlighted item
+```
+
+Confirm the mechanism rather than assuming a menu is missing:
+
+```bash
+agent-browser --session "$RS" eval '(() => { window.__KD=[]; document.addEventListener("keydown", e => window.__KD.push(e.key), true); return "installed"; })()'
+```
+
 ### Reading a transitioned CSS property immediately after focus/hover
 
 **Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
@@ -1149,6 +1179,24 @@ and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped c
 needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
 dispatched `pointerover`+`mouseover` pair) before its content mounts.
 
+### A pool instance seeded from the login snapshot can boot signed out — `safeStorage` cannot decrypt the copied token
+
+**Situation:** `electron-dev.sh start <id>` in a worktree; the helper reports the
+renderer ready and the seeded login is present on disk.
+
+**Doesn't work:** trusting `login-status`'s "refresh token PRESENT" as proof the
+instance will come up authenticated. The pool's copied userData can fail to decrypt
+its access token — `/tmp/lobe-electron-pool/instance-<id>.log` repeats
+`Failed to decrypt access token: Error while decrypting the ciphertext provided to
+safeStorage.decryptString` — and the app boots signed out (`app-probe.sh auth` →
+`isSignedIn: false`) with a near-blank shell that reads like a broken route tree.
+Cause not established; re-seeding and restarting the same pool id does not help.
+
+**Works:** fall back to the legacy single instance (`electron-dev.sh start`, no id),
+which runs on the golden profile in place and decrypts normally. It boots on the
+loading shell once, so reload once before probing (see L-S8). Gate on
+`app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
@@ -1232,3 +1280,19 @@ ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已
 / `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
 `http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
 server-auth 200、`isUserStateInit` true。
+
+### 服务端读取本地 S3 证据会被 SSRF 拦下 — 需显式放行私有 IP
+
+**Situation:** 验证任何「服务端把已上传的证据 / 文件再读回来」的能力时（多模态判图、
+缩略图处理、把截图喂给模型），本地环境下服务端读文件必然走 `s3rver`
+（`http://127.0.0.1:29000/...` 的预签名 URL）。表现是功能整体静默失败：接口正常返回、
+业务计数是 0，日志里既没有模型报错也没有鉴权报错，很像模型判定为「无需处理」。
+
+**Doesn't work:** 排查模型侧、检查 provider key、确认证据行和 fileId 都在。这些都会正常，
+因为请求根本没发出去 —— 失败点在服务端 fetch 图片那一步。
+
+**Works:** 在 dev server 环境里加 `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`。判据是日志里的
+`SSRF protection blocked request: ... DNS lookup 127.0.0.1 ... is not allowed. Because,
+It is private IP address.` 与紧随其后的 `Error converting image to base64`。
+生产用真实对象存储域名，不受影响，所以这纯粹是本地验证环境的门槛，不是产品缺陷 ——
+不要把它当 bug 报上去，也不要为了绕开它改用 inline base64 从而验证了一条产品不会走的路径。

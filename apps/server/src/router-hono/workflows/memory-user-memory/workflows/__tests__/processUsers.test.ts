@@ -1,6 +1,8 @@
 import { MemorySourceType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createStepRunner } from '@/server/workflows/testing/stepContext';
+
 import { processUsersHandler } from '../processUsers';
 
 const mocks = vi.hoisted(() => ({
@@ -57,7 +59,7 @@ describe('processUsersHandler', () => {
         dryRun: true,
         sources: [MemorySourceType.ChatTopic],
       },
-      run: vi.fn((_name: string, callback: () => unknown) => callback()),
+      run: createStepRunner(),
     } as never);
 
     expect(result).toEqual({

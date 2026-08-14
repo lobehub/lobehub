@@ -70,10 +70,12 @@ describe('TaskRecommendationMaterializer', () => {
     };
 
     await expect(materializer.materialize(input)).resolves.toEqual({
+      created: true,
       status: 'success',
       taskId: 'task-1',
     });
     await expect(materializer.materialize(input)).resolves.toEqual({
+      created: false,
       status: 'success',
       taskId: 'task-1',
     });

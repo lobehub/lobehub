@@ -26,6 +26,7 @@ export const TRACING_SCENARIOS = {
   TopicTitle: 'topic_title',
   TopicAutoSummary: 'topic_auto_summary',
   Unknown: 'unknown',
+  ReviewPredict: 'review_predict',
   VerifyJudge: 'verify_judge',
   VerifyPlanGen: 'verify_plan_gen',
 } as const;

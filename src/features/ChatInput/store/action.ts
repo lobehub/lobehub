@@ -21,7 +21,6 @@ export interface Action {
   setActiveAudioInputMode: (mode?: State['activeAudioInputMode']) => void;
   setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expend: boolean) => void;
-  setGoalMode: (enabled: boolean) => void;
   setJSONState: (content: any) => void;
   setShowTypoBar: (show: boolean) => void;
   updateMarkdownContent: () => void;
@@ -97,14 +96,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
       clearContent: () => {
         editor?.cleanDocument();
         if (sentDraftKey) removeDraft(sentDraftKey);
-        set({ goalMode: false });
       },
       editor: editor!,
       getEditorData: get().getJSONState,
-      getMarkdownContent: () => {
-        const content = get().getMarkdownContent();
-        return get().goalMode ? `/goal ${content}`.trimEnd() : content;
-      },
+      getMarkdownContent: get().getMarkdownContent,
     });
 
     if (historySnapshot) {
@@ -143,10 +138,6 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     const editor = get().editor;
     const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
     set({ _savedEditorState, expand });
-  },
-
-  setGoalMode: (goalMode) => {
-    set({ goalMode });
   },
 
   setJSONState: (content) => {

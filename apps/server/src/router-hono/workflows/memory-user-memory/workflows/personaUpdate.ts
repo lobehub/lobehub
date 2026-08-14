@@ -6,6 +6,7 @@ import {
   buildUserPersonaJobInput,
   UserPersonaService,
 } from '@/server/services/memory/userMemory/persona/service';
+import { runStep } from '@/server/workflows/step';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { isHourlyMemoryExtractionCancelled } from './utils';
@@ -34,7 +35,7 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
   });
   if (!parsePayloadGuard.result) return parsePayloadGuard.response;
 
-  const payload = await context.run(parsePayloadStepName, () =>
+  const payload = await runStep(context, parsePayloadStepName, () =>
     workflowPayloadSchema.parse(context.requestPayload || {}),
   );
   const db = await getServerDB();
@@ -55,7 +56,7 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
     });
     if (!hourlyCancellationGuard.result) return hourlyCancellationGuard.response;
 
-    const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+    const hourlyCancelled = await runStep(context, hourlyCancellationStepName, () =>
       isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
     );
     if (hourlyCancelled) continue;
@@ -67,7 +68,7 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
     });
     if (!guard.result) return guard.response;
 
-    await context.run(stepName, async () => {
+    await runStep(context, stepName, async () => {
       const jobInput = await buildUserPersonaJobInput(db, userId);
       const result = await service.composeWriting({ ...jobInput, userId });
       return {
