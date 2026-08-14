@@ -99,8 +99,8 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 <details>
   <summary><kbd>Star History</kbd></summary>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
-    <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobehub&type=Date">
+    <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
+    <img width="100%" src="https://star-history.dera.page/svg?repos=lobehub%2Flobehub&type=Date">
   </picture>
 </details>
 
