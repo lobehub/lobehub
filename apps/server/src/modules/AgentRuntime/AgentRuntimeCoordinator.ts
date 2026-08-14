@@ -41,6 +41,12 @@ const hasEnteredStreamEndState = (
 
 export interface AgentRuntimeCoordinatorOptions {
   /**
+   * Runs after terminal state persistence and the authoritative
+   * `agent_runtime_end` event have both completed. Server callers use this
+   * boundary to remove reconnect metadata without opening a refresh race.
+   */
+  onAgentRuntimeEndPublished?: (operationId: string, state: AgentState) => Promise<void>;
+  /**
    * Custom state manager implementation
    * Defaults to automatic selection based on Redis availability
    */
@@ -75,6 +81,10 @@ export interface AgentRuntimeCoordinatorOptions {
  * Supports dependency injection, allowing custom implementations to be passed in
  */
 export class AgentRuntimeCoordinator {
+  private onAgentRuntimeEndPublished?: (
+    operationId: string,
+    state: AgentState,
+  ) => Promise<void>;
   private stateManager: IAgentStateManager;
   private streamEventManager: IStreamEventManager;
   private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
@@ -82,6 +92,7 @@ export class AgentRuntimeCoordinator {
   constructor(options?: AgentRuntimeCoordinatorOptions) {
     this.stateManager = options?.stateManager ?? createAgentStateManager();
     this.streamEventManager = options?.streamEventManager ?? createStreamEventManager();
+    this.onAgentRuntimeEndPublished = options?.onAgentRuntimeEndPublished;
     this.uiMessagesResolver = options?.uiMessagesResolver;
   }
 
@@ -190,6 +201,7 @@ export class AgentRuntimeCoordinator {
           stepIndex,
           uiMessages: await this.resolveUiMessages(state),
         });
+        await this.onAgentRuntimeEndPublished?.(operationId, state);
         log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
       }
     } catch (error) {
@@ -226,6 +238,7 @@ export class AgentRuntimeCoordinator {
           stepIndex,
           uiMessages: await this.resolveUiMessages(stepResult.newState),
         });
+        await this.onAgentRuntimeEndPublished?.(operationId, stepResult.newState);
         log(
           '[%s] Agent runtime reached terminal state after step result: %s',
           operationId,
