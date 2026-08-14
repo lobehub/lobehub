@@ -206,17 +206,17 @@ describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
     const flashLatest = googleModels.find((model) => model.id === 'gemini-flash-latest');
-    const currentFlash = googleModels.find((model) => model.id === 'gemini-3.7-flash');
+    const flash = googleModels.find((model) => model.id === 'gemini-3.6-flash');
     const flashLiteLatest = googleModels.find((model) => model.id === 'gemini-flash-lite-latest');
     const flashLite = googleModels.find((model) => model.id === 'gemini-3.5-flash-lite');
 
     expect(flashLatest).toEqual(
       expect.objectContaining({
-        description: 'Points to gemini-3.7-flash',
+        description: 'Points to gemini-3.6-flash',
         knowledgeCutoff: '2026-03',
       }),
     );
-    expect(flashLatest?.pricing).toEqual(currentFlash?.pricing);
+    expect(flashLatest?.pricing).toEqual(flash?.pricing);
     expect(flashLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
 
     expect(flashLiteLatest).toEqual(
@@ -254,6 +254,7 @@ describe('Google Gemini 3.1 Flash Image models', () => {
           type: 'image',
         }),
         expect.objectContaining({
+          enabled: true,
           id: 'gemini-3.1-flash-image-preview',
           releasedAt: '2026-02-26',
           type: 'chat',
