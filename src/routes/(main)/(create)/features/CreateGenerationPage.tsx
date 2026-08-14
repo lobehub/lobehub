@@ -122,6 +122,9 @@ const CreateGenerationPage = memo<CreateGenerationPageProps>(
         />
         {onUploadFiles ? (
           <DragUploadZone
+            // Clipboard paste anywhere on the page routes into the same
+            // image-only reference upload flow (parity with chat).
+            enablePasteUpload
             disabled={dragDisabled}
             // Generation upload only accepts images; keep the overlay copy/icons
             // image-only so a dropped PDF/text file isn't falsely invited.
