@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentStreamPipeline } from './agentStreamPipeline';
 import { buildGrokAcpArgs, buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
@@ -278,7 +280,7 @@ const createAcpProcess = ({
     }),
   };
 
-  return { child, requests };
+  return { child, requests, send };
 };
 
 const createSession = (
@@ -452,6 +454,59 @@ describe('GrokAcpSession', () => {
       data: { reason: 'cancelled' },
       type: 'agent_runtime_end',
     });
+  });
+
+  it('does not emit an in-flight ACP event after host close', async () => {
+    const { child, requests, send } = createAcpProcess({ autoComplete: false });
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const originalPush = AgentStreamPipeline.prototype.push;
+    let releaseLateEvent: (() => void) | undefined;
+    vi.spyOn(AgentStreamPipeline.prototype, 'push').mockImplementation(function (chunk) {
+      if (!String(chunk).includes('late after close')) return originalPush.call(this, chunk);
+
+      return new Promise((resolve) => {
+        releaseLateEvent = () =>
+          resolve([
+            {
+              data: { chunkType: 'text', content: 'late after close' },
+              operationId: 'operation-1',
+              stepIndex: 0,
+              timestamp: 1,
+              type: 'stream_chunk',
+            } satisfies AgentStreamEvent,
+          ]);
+      });
+    });
+    const { events, session, statuses } = createSession();
+    const run = session.run();
+    await vi.waitFor(() => {
+      expect(requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    const promptRequest = requests.find(({ method }) => method === 'session/prompt');
+    expect(promptRequest?.id).toBeDefined();
+    send({ id: promptRequest!.id, result: { stopReason: 'end_turn' } });
+    send({
+      method: 'session/update',
+      params: {
+        sessionId: 'grok-session-1',
+        update: {
+          content: { text: 'late after close', type: 'text' },
+          sessionUpdate: 'agent_message_chunk',
+        },
+      },
+    });
+    await vi.waitFor(() => expect(releaseLateEvent).toBeTypeOf('function'));
+
+    session.close();
+    releaseLateEvent!();
+    await run;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(events.some(({ data }) => data?.content === 'late after close')).toBe(false);
+    expect(statuses.at(-1)?.state).toBe('closed');
+    expect(statuses.some(({ state }) => state === 'idle')).toBe(false);
   });
 
   it('rejects unsupported ACP protocol versions', async () => {

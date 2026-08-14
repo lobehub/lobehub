@@ -114,6 +114,41 @@ describe('AcpStdioClient', () => {
     client.close();
   });
 
+  it('does not dispatch queued or subsequent stdout messages after host close', async () => {
+    const { child, stdout } = createProcess();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    let releaseFirstMessage: (() => void) | undefined;
+    const onMessage = vi.fn().mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirstMessage = resolve;
+        }),
+    );
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onMessage,
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    stdout.write(`${JSON.stringify({ method: 'first' })}\n`);
+    stdout.write(`${JSON.stringify({ method: 'queued' })}\n`);
+    await vi.waitFor(() => expect(releaseFirstMessage).toBeTypeOf('function'));
+
+    client.close();
+    stdout.write(`${JSON.stringify({ method: 'after-close' })}\n`);
+    releaseFirstMessage!();
+    await client.drain();
+
+    expect(onMessage).toHaveBeenCalledOnce();
+    expect(onMessage).toHaveBeenCalledWith({ method: 'first' });
+  });
+
   it('terminates the child process tree with taskkill on Windows', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
     const { child } = createProcess();

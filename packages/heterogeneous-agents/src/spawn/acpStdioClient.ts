@@ -99,6 +99,7 @@ export class AcpStdioClient {
     if (this.closed) throw new Error('ACP stdio client is closed');
 
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
+    if (this.closed) throw new Error('ACP stdio client is closed');
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
@@ -115,7 +116,9 @@ export class AcpStdioClient {
     child.stdout?.once('error', (error) => this.fail(error));
     child.stderr?.on('data', (chunk: Buffer) => {
       void Promise.resolve()
-        .then(() => this.options.onStderr(chunk.toString('utf8')))
+        .then(() => {
+          if (!this.closed) return this.options.onStderr(chunk.toString('utf8'));
+        })
         .catch((error) => this.fail(this.toError(error)));
     });
     child.once('error', (error) => this.fail(error));
@@ -172,11 +175,13 @@ export class AcpStdioClient {
   close(signal: NodeJS.Signals = 'SIGTERM'): void {
     if (this.closed) return;
     this.closed = true;
+    this.stdoutBuffer = '';
     this.rejectPendingRequests(new Error('ACP stdio client closed by host'));
     this.shutdownProcess(signal);
   }
 
   private consumeStdout(chunk: Buffer): void {
+    if (this.closed) return;
     this.stdoutBuffer += chunk.toString('utf8');
 
     let newlineIndex: number;
@@ -188,6 +193,10 @@ export class AcpStdioClient {
   }
 
   private consumeRemainingStdout(): void {
+    if (this.closed) {
+      this.stdoutBuffer = '';
+      return;
+    }
     if (!this.stdoutBuffer) return;
     const line = this.stdoutBuffer;
     this.stdoutBuffer = '';
@@ -195,11 +204,14 @@ export class AcpStdioClient {
   }
 
   private enqueueLine(rawLine: string): void {
+    if (this.closed) return;
     const line = rawLine.trim();
     if (!line) return;
 
     void Promise.resolve()
-      .then(() => this.options.onRawMessage(`${line}\n`))
+      .then(() => {
+        if (!this.closed) return this.options.onRawMessage(`${line}\n`);
+      })
       .catch((error) => this.fail(this.toError(error)));
 
     let message: AcpRpcMessage;
@@ -217,6 +229,7 @@ export class AcpStdioClient {
   }
 
   private async handleMessage(message: AcpRpcMessage): Promise<void> {
+    if (this.closed) return;
     const pending =
       message.method === undefined && message.id !== undefined
         ? this.pendingRequests.get(String(message.id))
@@ -224,6 +237,7 @@ export class AcpStdioClient {
     await this.options.onMessage(
       message.error && pending ? { ...message, requestMethod: pending.method } : message,
     );
+    if (this.closed) return;
 
     if (message.method) {
       if (message.id !== undefined) await this.handleServerRequest(message);
@@ -264,6 +278,7 @@ export class AcpStdioClient {
   }
 
   private fail(error: Error): void {
+    if (this.closed) return;
     this.fatalError ??= error;
     this.rejectPendingRequests(error);
   }

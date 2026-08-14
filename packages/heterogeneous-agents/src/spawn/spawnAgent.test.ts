@@ -306,7 +306,36 @@ describe('spawnAgent', () => {
     handle.kill('SIGKILL');
 
     expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
-    await handle.exit;
+    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
+    processKill.mockRestore();
+  });
+
+  it('preserves SIGINT when the transport fails during graceful cancellation', async () => {
+    const fake = createGrokAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-interrupted-failure',
+      prompt: 'keep running',
+    });
+    await vi.waitFor(() => {
+      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    handle.kill('SIGINT');
+    fake.proc.emit('close', 1, null);
+
+    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGINT' });
+    await expect(
+      (async () => {
+        for await (const _event of handle.events) {
+          // Host cancellation ends the event stream without a transport error.
+        }
+      })(),
+    ).resolves.toBeUndefined();
     processKill.mockRestore();
   });
 

@@ -410,6 +410,7 @@ const spawnGrokAcpAgent = async (
   const stderr = new PassThrough();
   const queue: AgentStreamEvent[] = [];
   let emittedTerminalError = false;
+  let hostSignal: NodeJS.Signals | null = null;
   let streamEnded = false;
   let streamError: Error | undefined;
   let wakeup: (() => void) | undefined;
@@ -419,6 +420,8 @@ const spawnGrokAcpAgent = async (
     wakeup = undefined;
     resolve?.();
   };
+  const getHostExit = (): { code: null; signal: NodeJS.Signals } | undefined =>
+    hostSignal ? { code: null, signal: hostSignal } : undefined;
 
   const session = new GrokAcpSession({
     args: options.extraArgs ?? [],
@@ -445,8 +448,11 @@ const spawnGrokAcpAgent = async (
 
   const exit = session
     .run()
-    .then(() => ({ code: 0, signal: null }))
+    .then(() => getHostExit() ?? { code: 0, signal: null })
     .catch((error) => {
+      const hostExit = getHostExit();
+      if (hostExit) return hostExit;
+
       // ACP request failures are first adapted into a terminal error event and
       // then reject the request promise. Once that structured event is queued,
       // end the iterable normally so callers can apply their error policy.
@@ -484,6 +490,7 @@ const spawnGrokAcpAgent = async (
     events,
     exit,
     kill: (signal = 'SIGINT') => {
+      hostSignal = signal;
       if (signal === 'SIGINT') session.interrupt();
       else session.close(signal);
     },

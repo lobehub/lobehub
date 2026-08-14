@@ -205,7 +205,9 @@ export class GrokAcpSession {
         false,
       );
       await this.client.drain();
+      if (this.closedByHost) return;
       await this.emitEvents(await this.pipeline.flush());
+      if (this.closedByHost) return;
       this.emitStatus('idle');
     } catch (error) {
       if (this.closedByHost) return;
@@ -241,8 +243,10 @@ export class GrokAcpSession {
   }
 
   private async handleRpcMessage(message: AcpRpcMessage): Promise<void> {
-    if (this.isReplayMessage(message)) return;
-    await this.emitEvents(await this.pipeline.push(`${JSON.stringify(message)}\n`));
+    if (this.closedByHost || this.isReplayMessage(message)) return;
+    const events = await this.pipeline.push(`${JSON.stringify(message)}\n`);
+    if (this.closedByHost) return;
+    await this.emitEvents(events);
   }
 
   private handleServerRequest(message: AcpRpcMessage): unknown {
@@ -306,11 +310,11 @@ export class GrokAcpSession {
   }
 
   private async emitEvents(events: AgentStreamEvent[]): Promise<void> {
-    if (events.length > 0) await this.options.onEvents(events);
+    if (!this.closedByHost && events.length > 0) await this.options.onEvents(events);
   }
 
   private emitStatus(state: HeterogeneousAgentRuntimeStatus['state']): void {
-    if (state === this.lastStatus) return;
+    if (this.lastStatus === 'closed' || state === this.lastStatus) return;
     this.lastStatus = state;
     this.options.onRuntimeStatus({
       activeTasks: [],
