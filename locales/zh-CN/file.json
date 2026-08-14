@@ -49,6 +49,7 @@
   "home.recentPages": "最近文稿",
   "home.uploadEntries.library.title": "新建资源库",
   "home.viewAll": "查看全部",
+  "library.backToResources": "返回资源库",
   "library.hierarchy.empty.desc": "上传文件或新建文件夹开始整理",
   "library.hierarchy.empty.title": "这里还没有内容",
   "library.import.action": "导入到工作区…",

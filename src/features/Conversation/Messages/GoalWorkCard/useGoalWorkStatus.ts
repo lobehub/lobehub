@@ -42,5 +42,10 @@ export const useGoalWorkStatus = ({
     taskStatus: task?.status,
   });
 
-  return { isGoal, progress, taskName: task?.name ?? undefined };
+  return {
+    isGoal,
+    progress,
+    startedAt: task?.startedAt,
+    taskName: task?.name ?? undefined,
+  };
 };

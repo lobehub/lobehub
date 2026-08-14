@@ -17,6 +17,10 @@ import type {
  * the two don't collide and `refreshTaskList()` can invalidate the correct entry.
  */
 export const ALL_AGENTS_LIST_KEY = '__all__';
+const PROJECT_LIST_KEY_PREFIX = '__project__:';
+
+const projectIdFromListKey = (key?: string) =>
+  key?.startsWith(PROJECT_LIST_KEY_PREFIX) ? key.slice(PROJECT_LIST_KEY_PREFIX.length) : undefined;
 
 // Default kanban groups: 5 columns
 // 'scheduled' shares the 'running' column — both represent "automation in
@@ -76,7 +80,9 @@ export class TaskListSliceActionImpl {
 
   refreshTaskGroupList = async (): Promise<void> => {
     const { listAgentId, listVisibility } = this.#get();
-    await mutate(taskKeys.groupList(listAgentId, listVisibility));
+    await mutate(
+      taskKeys.groupList(listAgentId, listVisibility, projectIdFromListKey(listAgentId)),
+    );
   };
 
   fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
@@ -84,13 +90,14 @@ export class TaskListSliceActionImpl {
 
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
+    const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
       // Both orderings of the same list: the Tasks page holds the createdAt
       // entry and Home the updatedAt one, and an edit invalidates both — an
       // edit is exactly what moves a task in the updatedAt ordering.
-      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'createdAt')),
-      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'updatedAt')),
-      mutate(taskKeys.groupList(listAgentId, listVisibility)),
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'createdAt', projectId)),
+      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'updatedAt', projectId)),
+      mutate(taskKeys.groupList(listAgentId, listVisibility, projectId)),
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
       mutate(taskKeys.scheduledList(ALL_AGENTS_LIST_KEY)),
@@ -125,10 +132,15 @@ export class TaskListSliceActionImpl {
       agentId?: string;
       allAgents?: boolean;
       enabled?: boolean;
+      projectId?: string;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true } = options;
-    const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
+    const { agentId, allAgents = false, enabled = true, projectId } = options;
+    const effectiveKey = projectId
+      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+      : allAgents
+        ? ALL_AGENTS_LIST_KEY
+        : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
       this.#set(
         { ...scopeChangeResetState, listAgentId: effectiveKey },
@@ -139,12 +151,13 @@ export class TaskListSliceActionImpl {
     const listVisibility = this.#get().listVisibility;
 
     return useClientDataSWR(
-      enabled && effectiveKey ? taskKeys.groupList(effectiveKey, listVisibility) : null,
+      enabled && effectiveKey ? taskKeys.groupList(effectiveKey, listVisibility, projectId) : null,
       async () => {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
           groups: DEFAULT_KANBAN_GROUPS,
           hasGoal: false,
+          projectId,
           visibility: filterToServerVisibility(listVisibility),
         });
       },
@@ -205,12 +218,17 @@ export class TaskListSliceActionImpl {
        * `tasks` field and must not serve each other's ordering.
        */
       orderBy?: 'createdAt' | 'updatedAt';
+      projectId?: string;
       /** Override the Task page's persisted filter for embedded consumers. */
       visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, orderBy, visibility } = options;
-    const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
+    const { agentId, allAgents = false, enabled = true, orderBy, projectId, visibility } = options;
+    const effectiveKey = projectId
+      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+      : allAgents
+        ? ALL_AGENTS_LIST_KEY
+        : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
     const { listAgentId, listQueryVisibility } = this.#get();
 
@@ -230,12 +248,15 @@ export class TaskListSliceActionImpl {
     }
 
     return useClientDataSWR(
-      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility, orderBy) : null,
+      enabled && effectiveKey
+        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId)
+        : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
-          ...(allAgents ? {} : { assigneeAgentId: id }),
+          ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
           hasGoal: false,
           orderBy,
+          projectId,
           visibility: filterToServerVisibility(listVisibility),
         });
       },

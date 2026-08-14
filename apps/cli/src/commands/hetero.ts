@@ -26,6 +26,7 @@ import {
   isHeteroStatusGuideErrorData,
   spawnAgent,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
@@ -75,6 +76,13 @@ const RESUME_RETRY_PATTERNS = [
 const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
   RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
+const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): boolean => {
+  if (data?.agentType !== 'grok-build' || !isRecord(data.details)) return false;
+  const { details } = data;
+  const rpcData = details.data;
+  return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
+};
+
 interface ExecOptions {
   agentArg?: string[];
   command?: string;
@@ -122,7 +130,7 @@ const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
-    options.type === 'amp'
+    options.type === 'amp' || options.type === 'trae'
       ? []
       : options.type === 'codex'
         ? [
@@ -678,7 +686,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
-          if (looksLikeNeedsRetryWithoutResume(msg)) {
+          if (looksLikeNeedsRetryWithoutResume(msg) || isMissingGrokResumeSession(data)) {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
@@ -792,6 +800,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
+      initialModel: options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -825,6 +834,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
+        initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.prompt,
         uploadImage,
@@ -906,7 +916,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
-  if (code !== null) process.exit(result.ingestError ? 1 : code);
+  if (code !== null) {
+    const hasRunError = result.ingestError || (!result.cancelled && result.sawTerminalError);
+    process.exit(hasRunError ? 1 : code);
+  }
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);

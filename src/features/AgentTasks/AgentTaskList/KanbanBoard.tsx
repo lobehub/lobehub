@@ -79,10 +79,11 @@ const optimisticMoveTask = (
 interface KanbanBoardProps {
   /** When set, scopes the board (and task creation) to a single agent. */
   agentId?: string;
+  projectId?: string;
   routeScope?: TaskItemRouteScope;
 }
 
-const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
+const KanbanBoard = memo<KanbanBoardProps>(({ agentId, projectId, routeScope }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
@@ -90,7 +91,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, mutate } = useFetchTaskGroupList(
-    agentId ? { agentId } : { allAgents: true },
+    projectId ? { projectId } : agentId ? { agentId } : { allAgents: true },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope or visibility switch the store resets
@@ -163,12 +164,13 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
     createTaskModal({
       agentId,
       lockAssignee: !!agentId,
+      projectId,
       onCreated: (task) => {
         navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
       },
       showInlineToggle: false,
     });
-  }, [agentId, canEditTask, navigate]);
+  }, [agentId, canEditTask, navigate, projectId]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {

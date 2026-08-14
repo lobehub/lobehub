@@ -10,6 +10,7 @@
   "brief.action.feedback": "Feedback",
   "brief.action.ignore": "Ignore",
   "brief.action.retry": "Retry",
+  "brief.action.review": "Review delivery",
   "brief.action.upgrade": "Upgrade plan",
   "brief.actionFailed": "That didn't go through. Please try again.",
   "brief.addFeedback": "Share feedback",

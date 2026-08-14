@@ -53,6 +53,13 @@ beforeEach(() => {
     },
     {
       abilities: {},
+      displayName: 'DeepSeek V4 Flash',
+      id: 'deepseek-v4-flash',
+      providerId: 'deepseek',
+      settings: { extendParams: ['deepseekV4GAReasoningEffort'] },
+    },
+    {
+      abilities: {},
       displayName: 'GPT-4o Mini',
       id: 'gpt-4o-mini',
       providerId: 'openai',
@@ -198,6 +205,40 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
     expect(hints.shouldReplayAssistantReasoning).toBe(false);
     expect(hints.resolvedExtendParams).toEqual({ thinking: { type: 'disabled' } });
+  });
+
+  it('should derive the DeepSeek V4 GA thinking opt-out from the instance config', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4GAReasoningEffort: 'none' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: { deepseekV4GAReasoningEffort: 'high' } }),
+      llmPayload,
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+
+    expect(hints.shouldReplayAssistantReasoning).toBe(false);
+    expect(hints.resolvedExtendParams).toEqual({ thinking: { type: 'disabled' } });
+  });
+
+  /**
+   * Replay-off is not the official 400. A leftover preview `none` on a GA-only
+   * card still suppresses replay today, but `applyModelExtendParams` ignores
+   * that leftover so thinking stays on and the payload builder emits the
+   * whitespace placeholder rather than omitting the thinking field.
+   */
+  it('does not disable thinking for leftover preview none on a GA-only card', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4ReasoningEffort: 'none' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+
+    expect(hints.shouldReplayAssistantReasoning).toBe(false);
+    expect(hints.resolvedExtendParams?.thinking).not.toEqual({ type: 'disabled' });
   });
 
   it('should keep DeepSeek V4 forced reasoning replay when no opt-out is saved', async () => {

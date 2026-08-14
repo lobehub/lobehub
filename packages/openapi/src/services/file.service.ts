@@ -136,6 +136,18 @@ export class FileUploadService extends BaseService {
       throw this.createNotFoundError('知识库不存在或无权访问');
     }
 
+    // `KNOWLEDGE_BASE_UPDATE:all` is a curation scope (restricted-KB
+    // visibility / permission management) that admins also hold, so it must
+    // not bypass the row gate. Mirror the lambda routers' creator/owner
+    // check — `KNOWLEDGE_BASE_DELETE:all` is owner-only in the role matrix.
+    if (
+      this.workspaceId &&
+      knowledgeBase.userId !== this.userId &&
+      !(await this.hasGlobalPermission('KNOWLEDGE_BASE_DELETE'))
+    ) {
+      throw this.createAuthorizationError('仅创建者或工作区所有者可修改此知识库');
+    }
+
     return knowledgeBase;
   }
 

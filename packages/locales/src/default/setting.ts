@@ -234,11 +234,16 @@ export default {
     'Your member permission here is "Can use" — you can view and use it, but not edit. Ask the creator or a workspace owner for edit access.',
   'permission.accessTag.viewOnlyTip':
     'Your member permission here is "Can view" — you can view it, but not use or edit. Ask the creator or a workspace owner for more access.',
-  'permission.generalAccess.label': 'Member Permissions',
   'permission.generalAccess.trigger': 'Members: {{level}}',
   'permission.generalAccess.editable': 'Can edit',
   'permission.generalAccess.editableDesc': 'Members can view, use, and edit',
   'permission.generalAccess.editableDocumentDesc': 'Members can view and edit',
+  'permission.generalAccess.kbAccessible': 'Can access',
+  'permission.generalAccess.kbAccessibleDesc':
+    'Members can open the knowledge base and view the files inside',
+  'permission.generalAccess.kbNoAccess': 'No access',
+  'permission.generalAccess.kbNoAccessDesc':
+    'Members cannot see or attach this knowledge base; agents it is already attached to keep retrieving',
   'permission.generalAccess.usable': 'Can use',
   'permission.generalAccess.usableDesc': 'Members can view and use, but cannot edit',
   'permission.generalAccess.viewable': 'Can view',
@@ -257,7 +262,21 @@ export default {
   'permission.page.devicePolicyUnset':
     'Pick an execution environment in Agent Profile first, then you can fix it here.',
   'permission.page.editableWhenShared': 'Can edit when shared',
-  'permission.page.entry': 'Member Permissions',
+  'permission.page.documentAccessLevelPrivateHint':
+    'Members get this level once the page is published to the workspace. It can be changed after publishing.',
+  'permission.page.documentGeneralAccessDesc':
+    'What every workspace member can do with this page. The creator and workspace owners always keep full access; admins can manage these permissions.',
+  'permission.page.documentPrivateNotice':
+    'This page is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.entry': 'Permissions',
+  'permission.page.kbAccessibleWhenShared': 'Can access when shared',
+  'permission.page.kbNoAccessWhenShared': 'No access when shared',
+  'permission.page.libraryAccessLevelPrivateHint':
+    'Members get this level once the knowledge base is published to the workspace. It can be changed after publishing.',
+  'permission.page.libraryGeneralAccessDesc':
+    'What every workspace member can do with this knowledge base. The creator and workspace owners always keep full access; admins can manage these permissions.',
+  'permission.page.libraryPrivateNotice':
+    'This knowledge base is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.generalAccessDesc':
     'What every workspace member can do with this agent. The creator and workspace owners always keep full access.',
   'permission.page.groupAccessLevelPrivateHint':
@@ -291,8 +310,9 @@ export default {
   'permission.page.personalTitle': 'Permissions apply to workspace agents',
   'permission.page.privateNotice':
     'This agent is still private. Everything here takes effect once you publish it to the workspace.',
-  'permission.page.title': 'Member Permissions',
+  'permission.page.title': 'Permissions',
   'permission.page.usableWhenShared': 'Can use when shared',
+  'permission.page.viewableWhenShared': 'Can view when shared',
   'permission.saveNoEditPermission':
     'You have view-only access to this page, so your changes were not saved',
   'permission.updateError': 'Failed to update permission',
@@ -555,22 +575,6 @@ export default {
   'devices.visibilityTabs.private': 'Private',
   'devices.visibilityTabs.workspace': 'Workspace',
   'devices.workingDirectory': 'Working dir: {{path}}',
-  'downloads.desktop.cta': 'Download desktop app',
-  'downloads.desktop.desc':
-    'Use the native desktop app for local files, system tools, and focused work on your computer.',
-  'downloads.desktop.title': 'Desktop App',
-  'downloads.messenger.cta': 'Open Messenger settings',
-  'downloads.messenger.desc':
-    'Connect LobeHub to the messaging platforms you already use, with quick setup or your own bot configuration.',
-  'downloads.messenger.quickSetup': 'Quick setup',
-  'downloads.messenger.quickSetupTooltip':
-    'You can chat with the official LobeHub account on this platform or manually set up your own.',
-  'downloads.messenger.title': 'Messenger integration',
-  'downloads.mobile.cta': 'Get Mobile App',
-  'downloads.mobile.desc':
-    'Start conversations from your phone and keep LobeHub available when you are away from the desk.',
-  'downloads.mobile.title': 'Mobile App',
-  'downloads.title': 'Discover more ways to use LobeHub',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
@@ -2701,6 +2705,7 @@ When I am ___, I need ___
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
   'workspace.waitlistPage.badge': 'Workspace · Private Beta',
+  'workspace.waitlistPage.createWorkspaceCta': 'Create workspace',
   'workspace.waitlistPage.enabledSubtitle': 'Workspace is already enabled for your account.',
   'workspace.waitlistPage.enabledTitle': 'Workspace is ready for you',
   'workspace.waitlistPage.entryCta': 'Join Workspace Beta',
@@ -2711,6 +2716,10 @@ When I am ___, I need ___
     "We're opening access in batches and will notify you by email as soon as your access is ready.",
   'workspace.waitlistPage.pendingTitle': "You're on the list",
   'workspace.waitlistPage.requiredField': 'This field is required',
+  'workspace.waitlistPage.rewardApprovedHint':
+    'After you create a workspace, your $5 beta credits will arrive automatically within a few minutes (valid for 3 months).',
+  'workspace.waitlistPage.rewardBanner':
+    'Get approved and create a workspace to receive $5 in free trial credits (valid for 3 months).',
   'workspace.waitlistPage.roleLabel': 'Your role (optional)',
   'workspace.waitlistPage.rolePlaceholder': 'e.g. Team lead, teacher, parent',
   'workspace.waitlistPage.signIn': 'Sign in to join',

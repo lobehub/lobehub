@@ -62,6 +62,14 @@ describe('builtin executor registry', () => {
     );
   }, 30_000);
 
+  it('registers the hook-only Grok Build executor without exposing invokable APIs', async () => {
+    await registerBuiltinToolExecutors();
+
+    expect(getRegisteredIdentifiers()).toContain('grok-build');
+    await expect(hasExecutor('grok-build', 'execute')).resolves.toBe(false);
+    expect(getApiNamesForIdentifier('grok-build')).toEqual([]);
+  }, 30_000);
+
   it('rejects nested sub-agent execution', async () => {
     const subAgentRun = vi.fn();
     const baseContext = {

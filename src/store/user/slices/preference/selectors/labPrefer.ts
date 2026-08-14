@@ -7,8 +7,6 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentGraphConfig ??
     DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??
     false,
-  enableAgentSelfIteration: (s: UserState): boolean =>
-    s.preference.lab?.enableAgentSelfIteration ?? false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
@@ -26,6 +24,7 @@ export const labPreferSelectors = {
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
+  enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
   enableTopicAcceptance: (s: UserState): boolean =>
     s.preference.lab?.enableTopicAcceptance ?? false,

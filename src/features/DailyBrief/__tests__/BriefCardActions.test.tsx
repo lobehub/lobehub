@@ -1,3 +1,5 @@
+import type * as LobechatConst from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { BriefAction } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -12,6 +14,11 @@ import BriefCardActions from '../BriefCardActions';
 
 const renderWithRouter = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobechatConst>()),
+  isDesktop: true,
+}));
+
 // Mock i18n
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -23,6 +30,7 @@ vi.mock('react-i18next', () => ({
         'brief.commentSubmit': 'Submit feedback',
         'brief.action.confirm': 'Confirm',
         'brief.action.confirmDone': 'Confirm complete',
+        'brief.action.review': 'Review delivery',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
       };
@@ -77,6 +85,55 @@ beforeEach(() => {
 });
 
 describe('BriefCardActions', () => {
+  it('should route primary and secondary link actions through BriefActionLink', () => {
+    const actions: BriefAction[] = [
+      { key: 'primary', label: 'Primary link', type: 'link', url: '/settings/profile' },
+      { key: 'secondary', label: 'Secondary link', type: 'link', url: '/settings/common' },
+    ];
+
+    renderWithRouter(
+      <BriefCardActions
+        actions={actions}
+        agentId="agent-1"
+        briefId="brief-links"
+        briefType="decision"
+        taskId="task-1"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Primary link' })).toHaveAttribute(
+      RENDERER_HANDLED_LINK_ATTR,
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Secondary link' })).toHaveAttribute(
+      RENDERER_HANDLED_LINK_ATTR,
+      'true',
+    );
+  });
+
+  it('should leave a taskless acceptance link to the desktop preload interceptor', () => {
+    renderWithRouter(
+      <BriefCardActions
+        briefId="brief-acceptance"
+        briefType="decision"
+        actions={[
+          {
+            // A key with no `brief.action.*` locale entry, so the
+            // server-provided label renders as-is (locale copy wins otherwise).
+            key: 'reviewAcceptance',
+            label: 'Review acceptance',
+            type: 'link',
+            url: '/acceptance/acceptance-1',
+          },
+        ]}
+      />,
+    );
+
+    const link = screen.getByRole('button', { name: 'Review acceptance' });
+    expect(link).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
+    expect(fireEvent.click(link)).toBe(true);
+  });
+
   it('should render resolve action buttons from actions prop', () => {
     renderWithRouter(
       <BriefCardActions actions={sampleActions} briefId="brief-1" briefType="decision" />,
@@ -223,6 +280,29 @@ describe('BriefCardActions', () => {
     renderWithRouter(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
 
     expect(screen.getByText('✅ Confirm')).toBeInTheDocument();
+  });
+
+  it('should localize a review link action instead of showing its persisted label', () => {
+    renderWithRouter(
+      <BriefCardActions
+        briefId="brief-review"
+        briefType="decision"
+        actions={[
+          {
+            key: 'review',
+            label: 'Legacy review label',
+            type: 'link',
+            url: '/acceptance/acceptance-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Review delivery' })).toHaveAttribute(
+      'href',
+      '/acceptance/acceptance-1',
+    );
+    expect(screen.queryByText('Legacy review label')).not.toBeInTheDocument();
   });
 
   it('should hardcode primary action label to "Confirm complete" for result briefs', () => {

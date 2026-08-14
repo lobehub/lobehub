@@ -230,6 +230,11 @@ export interface ExecAgentParams {
   prompt: string;
   /** Override the agent's default provider */
   provider?: string;
+  /**
+   * Existing topic operation this fresh turn atomically supersedes. The server
+   * accepts the handoff only while the topic marker still belongs to this id.
+   */
+  replacesOperationId?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
   /**

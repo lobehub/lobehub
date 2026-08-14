@@ -12,10 +12,12 @@ import {
   CodeBuddyAdapter,
   CodexAdapter,
   CursorAdapter,
+  GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
+  TraeAcpAdapter,
 } from './adapters';
 import type { LocalHeterogeneousAgentType } from './config';
 import type { AgentEventAdapter } from './types';
@@ -40,6 +42,9 @@ const localAgentRegistry = {
   'cursor': {
     createAdapter: () => new CursorAdapter(),
   },
+  'grok-build': {
+    createAdapter: () => new GrokBuildAdapter(),
+  },
   'kimi-code': {
     createAdapter: () => new KimiCodeAdapter(),
   },
@@ -51,6 +56,9 @@ const localAgentRegistry = {
   },
   'qoder': {
     createAdapter: () => new QoderAdapter(),
+  },
+  'trae': {
+    createAdapter: () => new TraeAcpAdapter(),
   },
   // 'kimi-cli': { createAdapter: () => new KimiCLIAdapter() },
 } satisfies Record<LocalHeterogeneousAgentType, AgentRegistryEntry>;

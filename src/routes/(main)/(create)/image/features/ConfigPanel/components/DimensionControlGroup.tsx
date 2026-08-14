@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, SliderWithInput } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { SliderWithInput } from '@lobehub/ui/base-ui';
 import { LockIcon, UnlockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

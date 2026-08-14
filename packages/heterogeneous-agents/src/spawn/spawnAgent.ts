@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
@@ -9,8 +10,10 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStrea
 import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
+import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 
 export interface SpawnAgentOptions {
   /** Registered local heterogeneous-agent type key. */
@@ -34,6 +37,8 @@ export interface SpawnAgentOptions {
    * connected client renders live token streaming.
    */
   includePartialMessages?: boolean;
+  /** Initial model selected through the agent protocol after session setup (TRAE ACP only). */
+  initialModel?: string;
   /**
    * Image normalization options (URL fetch + on-disk cache + path
    * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
@@ -399,11 +404,114 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   }
 };
 
+const spawnGrokAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
+  const stderr = new PassThrough();
+  const queue: AgentStreamEvent[] = [];
+  let emittedTerminalError = false;
+  let hostSignal: NodeJS.Signals | null = null;
+  let streamEnded = false;
+  let streamError: Error | undefined;
+  let wakeup: (() => void) | undefined;
+
+  const wake = () => {
+    const resolve = wakeup;
+    wakeup = undefined;
+    resolve?.();
+  };
+  const getHostExit = (): { code: null; signal: NodeJS.Signals } | undefined =>
+    hostSignal ? { code: null, signal: hostSignal } : undefined;
+
+  const session = new GrokAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    onEvents: (events) => {
+      if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
+      queue.push(...events);
+      wake();
+    },
+    onRawMessage: (line) => options.onRawStdout?.(Buffer.from(line)),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: (data) => {
+      stderr.write(data);
+    },
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+
+  const exit = session
+    .run()
+    .then(() => getHostExit() ?? { code: 0, signal: null })
+    .catch((error) => {
+      const hostExit = getHostExit();
+      if (hostExit) return hostExit;
+
+      // ACP request failures are first adapted into a terminal error event and
+      // then reject the request promise. Once that structured event is queued,
+      // end the iterable normally so callers can apply their error policy.
+      // Transport failures with no terminal event must still throw.
+      if (!emittedTerminalError) {
+        streamError = error instanceof Error ? error : new Error(String(error));
+      }
+      return { code: 1, signal: null };
+    })
+    .finally(() => {
+      streamEnded = true;
+      stderr.end();
+      wake();
+    });
+
+  const events: AsyncIterable<AgentStreamEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<AgentStreamEvent>> {
+          while (true) {
+            const event = queue.shift();
+            if (event) return { done: false, value: event };
+            if (streamError) throw streamError;
+            if (streamEnded) return { done: true, value: undefined };
+            await new Promise<void>((resolve) => {
+              wakeup = resolve;
+            });
+          }
+        },
+      };
+    },
+  };
+
+  return {
+    events,
+    exit,
+    kill: (signal = 'SIGINT') => {
+      hostSignal = signal;
+      if (signal === 'SIGINT') session.interrupt();
+      else session.close(signal);
+    },
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return session.sessionId;
+    },
+    stderr,
+  };
+};
+
 /**
- * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Kimi Code,
- * OpenCode, Pi, or Qoder) and yield its stream as unified `AgentStreamEvent`s.
- * Used by `lh hetero exec` for both standalone terminal runs and (later)
- * sandbox-driven runs that ingest into the server.
+ * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
+ * Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
+ * `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
+ * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
  * Stays minimal on purpose — no on-disk tracing, no proxy env composition,
  * no CLI-not-found classification. Those host concerns live in the desktop
@@ -415,7 +523,20 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
  * failed image fetch surfaces before the child starts.
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
+  if (options.agentType === 'trae') return spawnTraeAcpAgent(options);
+
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
+  const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
+  if (options.agentType === 'grok-build') {
+    return spawnGrokAcpAgent(options, command, cwd);
+  }
+
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
   const args = buildSpawnArgs({
     agentType: options.agentType,
@@ -425,13 +546,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     inputText: inputPlan.stdin,
     resumeSessionId: options.resumeSessionId,
   });
-  const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
   const childEnv = {
     ...process.env,
     ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),
@@ -471,6 +585,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   // wakeup promise — keeps backpressure simple and avoids a third-party
   // dependency.
   const queue: AgentStreamEvent[] = [];
+  let killedByUs = false;
   let streamEnded = false;
   let streamError: Error | undefined;
   let wakeup: (() => void) | undefined;
@@ -538,6 +653,10 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       try {
         const events = await pipeline.flush();
         for (const event of events) queue.push(event);
+        const { code } = await exit;
+        if (code === 0 && !killedByUs) {
+          for (const event of pipeline.validateCompletion()) queue.push(event);
+        }
       } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
       } finally {
@@ -594,10 +713,123 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   return {
     events,
     exit,
-    kill: (signal: NodeJS.Signals = 'SIGINT') => killProcessTree(proc, signal),
+    kill: (signal: NodeJS.Signals = 'SIGINT') => {
+      killedByUs = true;
+      killProcessTree(proc, signal);
+    },
     pid: proc.pid,
     get sessionId() {
       return pipeline.sessionId;
+    },
+    stderr,
+  };
+};
+
+/** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
+export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
+  const command = resolveHeterogeneousAgentCommand('trae', options.command);
+  const commandName = command
+    .trim()
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
+  if (commandName?.toLowerCase() === 'trae-cli') {
+    throw new Error(
+      'The open-source `trae-cli` trajectory runner is unsupported; install TRAE Enterprise `traecli` instead.',
+    );
+  }
+
+  const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
+
+  const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
+  const stderr = new PassThrough();
+  const queue: AgentStreamEvent[] = [];
+  let ended = false;
+  let wakeup: (() => void) | undefined;
+  const wake = () => {
+    wakeup?.();
+    wakeup = undefined;
+  };
+
+  let nativeSessionId: string | undefined;
+  const session = new TraeAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: '1.0.0',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
+    onEvents: (events) => {
+      queue.push(...events);
+      wake();
+    },
+    onRawMessage: (line) => {
+      if (!options.onRawStdout) return;
+      try {
+        options.onRawStdout(Buffer.from(line));
+      } catch {
+        // Diagnostic tee failures must not affect the ACP run.
+      }
+    },
+    onRuntimeStatus: () => {},
+    onSessionId: (sessionId) => {
+      nativeSessionId = sessionId;
+    },
+    onStderr: (data) => {
+      stderr.write(data);
+    },
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+
+  const exit = session
+    .run()
+    .then(
+      () => ({ code: 0, signal: null }),
+      () => ({ code: 1, signal: null }),
+    )
+    .finally(() => {
+      ended = true;
+      stderr.end();
+      wake();
+    });
+
+  const events: AsyncIterable<AgentStreamEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<AgentStreamEvent>> {
+          while (queue.length === 0 && !ended) {
+            await new Promise<void>((resolve) => {
+              wakeup = resolve;
+            });
+          }
+          const event = queue.shift();
+          return event ? { done: false, value: event } : { done: true, value: undefined };
+        },
+      };
+    },
+  };
+
+  return {
+    events,
+    exit,
+    kill: (signal: NodeJS.Signals = 'SIGINT') => {
+      if (signal === 'SIGINT') void session.interrupt();
+      else session.close();
+    },
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return nativeSessionId;
     },
     stderr,
   };

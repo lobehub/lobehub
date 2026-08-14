@@ -47,7 +47,14 @@ vi.mock('../goalLoop', () => ({
   }),
   goalReadyForReviewBriefCopy: (task: any, acceptanceId?: string) => ({
     actions: acceptanceId
-      ? [{ key: 'review', type: 'link', url: `/acceptance/${acceptanceId}` }]
+      ? [
+          {
+            key: 'review',
+            label: 'Review delivery',
+            type: 'link',
+            url: `/acceptance/${acceptanceId}`,
+          },
+        ]
       : [],
     summary: 'ready for your sign-off',
     title: `${task.identifier} goal delivered`,
@@ -397,7 +404,12 @@ describe('driveTaskFromVerify', () => {
       // bypassing the sign-off this branch exists to require.
       expect(brief.type).toBe('decision');
       expect(brief.actions).toEqual([
-        expect.objectContaining({ type: 'link', url: '/acceptance/acc-9' }),
+        expect.objectContaining({
+          key: 'review',
+          label: 'Review delivery',
+          type: 'link',
+          url: '/acceptance/acc-9',
+        }),
       ]);
     });
   });

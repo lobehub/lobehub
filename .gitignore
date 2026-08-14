@@ -158,4 +158,5 @@ docs/superpowers/
 .kagura/
 
 # Amp agent runtime
-.amp/
+.amp/*
+!.amp/settings.json

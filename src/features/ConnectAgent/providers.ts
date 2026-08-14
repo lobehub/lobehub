@@ -14,12 +14,14 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Grok,
   HermesAgent,
   Kimi,
   OpenClaw,
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 /**
@@ -37,12 +39,14 @@ export interface ConnectableProvider {
     | typeof CodeBuddy
     | typeof Codex
     | typeof Cursor
+    | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
-    | typeof Qoder;
+    | typeof Qoder
+    | typeof Trae;
   /** Spawn command — cli providers only. */
   command?: string;
   kind: 'cli' | 'platform';
@@ -69,10 +73,12 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'codebuddy': CodeBuddy,
   'codex': Codex,
   'cursor': Cursor,
+  'grok-build': Grok,
   'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
+  'trae': Trae,
 };
 
 const PLATFORM_BRANDS: Record<RemoteHeterogeneousAgentType, ConnectableProvider['brand']> = {

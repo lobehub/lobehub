@@ -130,6 +130,22 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
+    '%s exposes projects as task and goal containers only',
+    (_, factory) => {
+      const projectRoute = factory().find((route) => route.path === 'project/:projectId');
+      const projectIndexRoute = projectRoute?.children?.find((route) => route.index);
+      const projectPaths = projectRoute?.children
+        ?.map((route) => route.path)
+        .filter((routePath): routePath is string => Boolean(routePath));
+
+      expect(projectPaths).toEqual(['tasks', 'goals']);
+      expect(
+        (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
+      ).toBe('tasks');
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s personal memory settings are not shadowed by workspace memory routes',
     (_, factory) => {
       const matches = matchRoutes(createMainAreaRoutes(factory), '/settings/memory');

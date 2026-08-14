@@ -4,10 +4,10 @@ import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-too
 import { openCriterionEditModal } from '@lobechat/builtin-tool-task/client';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
   CircleDashed,
@@ -32,9 +32,12 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
-import { buildGoalTaskConfig, deriveInitialGoalCriterionTitle } from './goalConfig';
+import { buildGoalTaskConfig } from './goalConfig';
+import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -123,37 +126,34 @@ const styles = createStaticStyles(({ css }) => ({
       padding: 2px;
       border-radius: inherit;
 
-      background: linear-gradient(
-        90deg,
-        ${cssVar.colorBorderSecondary} 0%,
-        ${cssVar.colorBorderSecondary} 16%,
-        #ff3d8d 30%,
-        #8b5cf6 40%,
-        #00c8ff 50%,
-        #22e6a8 60%,
-        #ffd43b 70%,
-        #ff6b35 80%,
-        ${cssVar.colorBorderSecondary} 92%,
-        ${cssVar.colorBorderSecondary} 100%
+      background: conic-gradient(
+        from var(--goal-border-angle),
+        ${cssVar.colorBorderSecondary} 0deg 210deg,
+        #ff3d8d 238deg,
+        #8b5cf6 258deg,
+        #00c8ff 278deg,
+        #22e6a8 298deg,
+        #ffd43b 318deg,
+        #ff6b35 338deg,
+        ${cssVar.colorBorderSecondary} 360deg
       );
-      background-size: 300% 100%;
 
       mask:
         linear-gradient(#fff 0 0) content-box,
         linear-gradient(#fff 0 0);
 
-      animation: goal-input-flow 1.2s linear infinite;
+      animation: goal-input-flow 1.8s linear infinite;
 
       mask-composite: exclude;
     }
 
     @keyframes goal-input-flow {
       from {
-        background-position: 0% 50%;
+        --goal-border-angle: 0deg;
       }
 
       to {
-        background-position: 150% 50%;
+        --goal-border-angle: 360deg;
       }
     }
 
@@ -174,16 +174,6 @@ const styles = createStaticStyles(({ css }) => ({
     & > div > div > div {
       padding-block-end: 0 !important;
     }
-  `,
-  optional: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  required: css`
-    flex: none;
-    color: ${cssVar.colorInfo};
-    background: ${cssVar.colorInfoBg};
   `,
   reviewSection: css`
     padding-block: 16px;
@@ -222,6 +212,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+const GoalBorderFlowStyle = createGlobalStyle`
+  @property --goal-border-angle {
+    inherits: false;
+    initial-value: 0deg;
+    syntax: '<angle>';
+  }
+`;
+
 const criterionRequirement = (drafts: GoalCriterionDraft[]) =>
   drafts
     .map((draft) => draft.title.trim())
@@ -238,6 +236,7 @@ export interface CreateGoalContentProps {
   initialRoundBudget?: number;
   initialTitle?: string;
   onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  projectId?: string;
 }
 
 /**
@@ -249,7 +248,8 @@ export interface CreateGoalContentProps {
  * hardcoded), so this form asks for them outright.
  */
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
-  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated } = props;
+  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
+    props;
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -257,6 +257,16 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const model = useAgentStore((s) =>
+    agentId
+      ? agentByIdSelectors.getAgentModelById(agentId)(s)
+      : agentSelectors.currentAgentModel(s),
+  );
+  const provider = useAgentStore((s) =>
+    agentId
+      ? agentByIdSelectors.getAgentModelProviderById(agentId)(s)
+      : agentSelectors.currentAgentModelProvider(s),
+  );
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -277,13 +287,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
-  const prepareTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
-  useEffect(
-    () => () => {
-      if (prepareTimerRef.current) clearTimeout(prepareTimerRef.current);
-    },
-    [],
-  );
   const instructionRef = useRef(plan.instruction);
   const assigneeMeta = useAgentDisplayMeta(agentId);
   const requirement = useMemo(() => criterionRequirement(plan.criteria), [plan.criteria]);
@@ -298,30 +301,41 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
-    if (!canCreate || !instruction) return;
-    const criterionTitle = deriveInitialGoalCriterionTitle(instruction, initialRequirement);
+    if (!canCreate || !instruction || !model || !provider) return;
+    const name = plan.name.trim() || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
-      criteria:
-        current.criteria.length > 0
-          ? current.criteria
-          : [
-              {
-                onFail: 'auto_repair',
-                required: true,
-                title: criterionTitle,
-                verifierType: 'agent',
-              },
-            ],
       instruction,
-      name: current.name.trim() || deriveGoalTitle(instruction),
+      name,
     }));
     instructionRef.current = instruction;
     setStep('preparing');
-    prepareTimerRef.current = setTimeout(() => setStep('review'), 1200);
-  }, [canCreate, initialRequirement, plan.instruction]);
+    try {
+      const generated = await generateGoalCriteria({
+        context: name ? `Goal: ${name}` : undefined,
+        goal: initialRequirement?.trim() || instruction,
+        model,
+        provider,
+      });
+      setPlan((current) => ({
+        ...current,
+        criteria: generated,
+      }));
+      setStep('review');
+    } catch (error) {
+      console.error('[CreateGoalContent] generate failed:', error);
+      setPlan((current) => ({
+        ...current,
+        criteria: [createFallbackGoalCriterion(instruction)],
+        instruction,
+        name: instruction,
+      }));
+      setStep('review');
+      toast.warning(t('createGoal.generateFailed'));
+    }
+  }, [canCreate, initialRequirement, model, plan.instruction, plan.name, provider, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -402,6 +416,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         editorData,
         instruction,
         name: plan.name.trim() || undefined,
+        projectId,
         visibility: activeWorkspaceId ? visibility : undefined,
       });
 
@@ -426,6 +441,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     editor,
     onCreated,
     plan,
+    projectId,
     requirement,
     t,
     visibility,
@@ -448,6 +464,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   return (
     <Flexbox onKeyDown={handleKeyDown}>
+      <GoalBorderFlowStyle />
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
@@ -544,10 +561,10 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
                     {criterion.title || t('createGoal.criterionPlaceholder')}
                   </Text>
-                  <Button
-                    className={(criterion.required ?? true) ? styles.required : styles.optional}
+                  <Tag
+                    color={(criterion.required ?? true) ? 'info' : undefined}
                     size={'small'}
-                    type={'text'}
+                    variant={'filled'}
                     onClick={(event) => {
                       event.stopPropagation();
                       updateCriterion(index, {
@@ -559,7 +576,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                     {(criterion.required ?? true)
                       ? t('verifyConfig.required')
                       : t('verifyConfig.optional')}
-                  </Button>
+                  </Tag>
                   <ActionIcon
                     icon={Pencil}
                     size={'small'}
@@ -596,9 +613,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   min={2}
                   size={'small'}
                   style={{ width: '100%' }}
-                  suffix={t('createGoal.roundsUnit')}
                   value={plan.maxIterations ?? undefined}
                   variant={'filled'}
+                  suffix={
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('createGoal.roundsUnit')}
+                    </Text>
+                  }
                   onChange={(value) => setPlan((current) => ({ ...current, maxIterations: value }))}
                 />
                 <Text className={styles.sectionHint} fontSize={12}>
@@ -615,11 +636,15 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   disabled={!canCreate}
                   min={0}
                   placeholder={t('createGoal.costBudgetPlaceholder')}
-                  prefix={'$'}
                   size={'small'}
                   style={{ width: '100%' }}
                   value={plan.maxTotalCost}
                   variant={'filled'}
+                  prefix={
+                    <Text fontSize={12} type={'secondary'}>
+                      $
+                    </Text>
+                  }
                   onChange={(value) => setPlan((current) => ({ ...current, maxTotalCost: value }))}
                 />
                 <Text className={styles.sectionHint} fontSize={12}>
