@@ -81,10 +81,7 @@ export interface AgentRuntimeCoordinatorOptions {
  * Supports dependency injection, allowing custom implementations to be passed in
  */
 export class AgentRuntimeCoordinator {
-  private onAgentRuntimeEndPublished?: (
-    operationId: string,
-    state: AgentState,
-  ) => Promise<void>;
+  private onAgentRuntimeEndPublished?: (operationId: string, state: AgentState) => Promise<void>;
   private stateManager: IAgentStateManager;
   private streamEventManager: IStreamEventManager;
   private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
