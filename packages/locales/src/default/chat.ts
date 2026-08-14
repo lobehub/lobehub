@@ -521,6 +521,9 @@ export default {
   'heteroAgent.executionTarget.infoTooltip':
     'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
   'heteroAgent.executionTarget.gateway': 'Gateway',
+  'heteroAgent.executionTarget.cliChecking': 'Checking {{name}} CLI…',
+  'heteroAgent.executionTarget.cliNotInstalled': '{{name}} CLI not installed on this device',
+  'heteroAgent.executionTarget.cliOutdated': 'Update LobeHub on this device to check {{name}} CLI',
   'heteroAgent.executionTarget.gatewayDesc':
     'Run through the device gateway so other clients can follow progress',
   'heteroAgent.executionTarget.loading': 'Loading devices…',

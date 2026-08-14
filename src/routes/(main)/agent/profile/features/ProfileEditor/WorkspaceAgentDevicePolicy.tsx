@@ -11,6 +11,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { useDeviceAgentScans } from '@/features/DeviceManager/useDeviceAgentScan';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import {
   ExecutionTargetDeviceStatus,
@@ -107,6 +108,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ExecutionTargetLabelProps {
+  cliNotInstalledLabel?: string;
+  cliOutdatedLabel?: string;
   compact?: boolean;
   description: string;
   device?: DeviceListItem;
@@ -117,8 +120,20 @@ interface ExecutionTargetLabelProps {
 }
 
 const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
-  ({ compact, description, device, label, offlineLabel, onlineLabel, target }) => {
+  ({
+    cliNotInstalledLabel,
+    cliOutdatedLabel,
+    compact,
+    description,
+    device,
+    label,
+    offlineLabel,
+    onlineLabel,
+    target,
+  }) => {
     const icon = <ExecutionTargetIcon devicePlatform={device?.platform} target={target} />;
+    // A device that is online but cannot run this agent's CLI reports the
+    // reason instead of the generic online dot.
     const secondary = device ? (
       <ExecutionTargetDeviceStatus
         offlineLabel={offlineLabel}
@@ -129,6 +144,14 @@ const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
       description
     );
 
+    const cliOutdated = !!cliOutdatedLabel && device?.online;
+    const cliNotInstalled = !cliOutdated && !!cliNotInstalledLabel && device?.online;
+    const effectiveSecondary = cliOutdated
+      ? cliOutdatedLabel
+      : cliNotInstalled
+        ? cliNotInstalledLabel
+        : secondary;
+
     if (compact) {
       return (
         <span className={styles.triggerLabel}>
@@ -136,7 +159,7 @@ const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
             {icon}
           </span>
           <span className={styles.triggerName}>{label}</span>
-          {device ? <span className={styles.optionDescription}>{secondary}</span> : null}
+          {device ? <span className={styles.optionDescription}>{effectiveSecondary}</span> : null}
         </span>
       );
     }
@@ -148,7 +171,7 @@ const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
         </span>
         <Flexbox flex={1} style={{ minWidth: 0 }}>
           <span className={styles.optionName}>{label}</span>
-          <span className={styles.optionDescription}>{secondary}</span>
+          <span className={styles.optionDescription}>{effectiveSecondary}</span>
         </Flexbox>
       </span>
     );
@@ -177,6 +200,28 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
+
+    // Probe every candidate device for this agent's CLI so options without it
+    // can be disabled — picking a device that cannot run the agent would
+    // strand every run there (same verdict the conversation picker uses).
+    const { scanMap, scannedMap } = useDeviceAgentScans(
+      isHeterogeneous ? publicWorkspaceDevices.map((device) => device.deviceId) : undefined,
+      heterogeneousType,
+    );
+    const cliNotInstalledLabel = isHeterogeneous
+      ? t('chat:heteroAgent.executionTarget.cliNotInstalled', {
+          name: heterogeneousType
+            ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+            : '',
+        })
+      : undefined;
+    const cliOutdatedLabel = isHeterogeneous
+      ? t('chat:heteroAgent.executionTarget.cliOutdated', {
+          name: heterogeneousType
+            ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+            : '',
+        })
+      : undefined;
 
     const targetLabels = useMemo(
       () => ({
@@ -227,9 +272,19 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
           offlineLabel={t('chat:heteroAgent.executionTarget.offline')}
           onlineLabel={t('chat:heteroAgent.executionTarget.online')}
           target={'device'}
+          cliNotInstalledLabel={
+            scannedMap[device.deviceId] && scanMap[device.deviceId]?.available === false
+              ? cliNotInstalledLabel
+              : undefined
+          }
+          cliOutdatedLabel={
+            scannedMap[device.deviceId] && scanMap[device.deviceId] === undefined
+              ? cliOutdatedLabel
+              : undefined
+          }
         />
       ),
-      [t],
+      [cliNotInstalledLabel, cliOutdatedLabel, scanMap, scannedMap, t],
     );
 
     const targetOptions = useMemo<SelectOptions<string>>(() => {
@@ -266,6 +321,14 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
           ]
         : publicWorkspaceDevices.length > 0
           ? publicWorkspaceDevices.map((device) => ({
+              // Devices whose scan explicitly reports the CLI missing, or
+              // whose client predates the agent type (absent from the scan
+              // map), are disabled. A failed probe (offline/older client
+              // without the scan tool) must not silently block a target.
+              disabled:
+                scannedMap[device.deviceId] && scanMap[device.deviceId] === undefined
+                  ? true
+                  : scannedMap[device.deviceId] && scanMap[device.deviceId]?.available === false,
               label: renderDeviceLabel(device),
               title: device.friendlyName || device.hostname || device.deviceId,
               value: executionTargetValue('device', device.deviceId),
@@ -296,6 +359,8 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       publicWorkspaceDevices,
       renderDeviceLabel,
       renderTargetLabel,
+      scanMap,
+      scannedMap,
       supportsSandbox,
       t,
       targetLabels,

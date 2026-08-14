@@ -373,8 +373,20 @@ export default {
   'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
   'heterogeneousStatus.cloud.repoAdd': 'Add',
 
-  // Heterogeneous agent — Desktop tab
-  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+  // Heterogeneous agent — Devices tab (startup command + per-device CLI status)
+  'heterogeneousStatus.desktop.tabLabel': 'Devices',
+  'heterogeneousStatus.devices.label': 'Devices',
+  'heterogeneousStatus.devices.thisDevice': 'This device',
+  'heterogeneousStatus.devices.offline': 'Offline',
+  'heterogeneousStatus.devices.available': 'Available',
+  'heterogeneousStatus.devices.checking': 'Checking {{name}} CLI…',
+  'heterogeneousStatus.devices.empty':
+    'No connected devices yet. Run `lh connect` on another machine to add one.',
+  'heterogeneousStatus.devices.notInstalled': 'CLI not installed',
+  'heterogeneousStatus.devices.outdated': 'Outdated client',
+  'heterogeneousStatus.devices.outdatedDesc':
+    'The LobeHub client on this device is too old to detect {{name}} CLI. Update the device client to check it.',
+  'heterogeneousStatus.devices.checkFailed': 'Unable to check',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',
