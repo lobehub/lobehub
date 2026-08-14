@@ -293,11 +293,7 @@ describe('AgentRuntimeCoordinator', () => {
 
       await orderedCoordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(order).toEqual([
-        'save-terminal-state',
-        'publish-runtime-end',
-        'clear-running-mark',
-      ]);
+      expect(order).toEqual(['save-terminal-state', 'publish-runtime-end', 'clear-running-mark']);
       expect(onAgentRuntimeEndPublished).toHaveBeenCalledWith(operationId, stepResult.newState);
     });
 
