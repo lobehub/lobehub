@@ -130,22 +130,6 @@ vi.mock('@lobehub/ui', () => ({
       {title}
     </button>
   ),
-  Alert: ({
-    description,
-    message,
-    style,
-    title,
-  }: {
-    description?: ReactNode;
-    message?: ReactNode;
-    style?: React.CSSProperties;
-    title?: ReactNode;
-  }) => (
-    <div data-testid="channel-paid-alert" style={style}>
-      <div data-testid="channel-paid-alert-title">{title || message}</div>
-      <div data-testid="channel-paid-alert-description">{description}</div>
-    </div>
-  ),
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
@@ -211,6 +195,22 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Alert: ({
+    description,
+    message,
+    style,
+    title,
+  }: {
+    description?: ReactNode;
+    message?: ReactNode;
+    style?: React.CSSProperties;
+    title?: ReactNode;
+  }) => (
+    <div data-testid="channel-paid-alert" style={style}>
+      <div data-testid="channel-paid-alert-title">{title || message}</div>
+      <div data-testid="channel-paid-alert-description">{description}</div>
+    </div>
+  ),
   Button: ({
     children,
     disabled,

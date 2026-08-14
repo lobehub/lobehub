@@ -1,16 +1,15 @@
 import type { CrawlResult } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import {
-  Alert,
   CopyButton,
   Flexbox,
   Highlighter,
   Icon,
   Markdown,
-  Segmented,
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { Alert, Segmented } from '@lobehub/ui/base-ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
