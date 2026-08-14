@@ -302,6 +302,8 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     setLatestAssistant: (value: typeof latestAssistant) => (latestAssistant = value),
     setAssistantMetadata: (id: string, value: OnboardingUnderstandingMessageMetadata) =>
       assistantMetadata.set(id, value),
+    setProvider: (providerId: string, provider: UnderstandingProvider) =>
+      providers.set(providerId, provider),
     setSession: (value: OnboardingUnderstandingSession) => (session = value),
     sourceStore,
     sourceStoreFactory,
@@ -631,7 +633,7 @@ describe('UnderstandingService', () => {
   /** @example A missing Gmail scope remains an actionable failed-provider diagnostic. */
   it('persists a provider-owned failure code without its free-form message', async () => {
     const harness = createHarness(createSession({ gmail: providerState('running', 1) }));
-    harness.dependencies.providers.set('gmail', {
+    harness.setProvider('gmail', {
       collect: vi.fn(async () => ({
         context: '',
         diagnostics: {
