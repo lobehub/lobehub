@@ -36,7 +36,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Form: ({
     items,
@@ -68,6 +67,7 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Switch: () => <button />,
 }));
 
