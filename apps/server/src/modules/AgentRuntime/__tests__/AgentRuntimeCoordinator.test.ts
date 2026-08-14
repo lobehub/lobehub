@@ -267,6 +267,40 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('clears reconnect metadata only after terminal state persistence and delivery', async () => {
+      const order: string[] = [];
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'done', stepCount: 5 },
+        stepIndex: 5,
+      };
+      const onAgentRuntimeEndPublished = vi.fn(async () => {
+        order.push('clear-running-mark');
+      });
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+      mockStateManager.saveStepResult.mockImplementation(async () => {
+        order.push('save-terminal-state');
+      });
+      mockStreamManager.publishAgentRuntimeEnd.mockImplementation(async () => {
+        order.push('publish-runtime-end');
+      });
+      const orderedCoordinator = new AgentRuntimeCoordinator({
+        onAgentRuntimeEndPublished,
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+      });
+
+      await orderedCoordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(order).toEqual([
+        'save-terminal-state',
+        'publish-runtime-end',
+        'clear-running-mark',
+      ]);
+      expect(onAgentRuntimeEndPublished).toHaveBeenCalledWith(operationId, stepResult.newState);
+    });
+
     it('should still publish step-result end event when visible output event publish fails', async () => {
       const operationId = 'test-operation-id';
       const stepResult = {
