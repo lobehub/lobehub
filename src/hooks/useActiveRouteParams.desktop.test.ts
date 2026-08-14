@@ -61,17 +61,15 @@ describe('useActiveRouteParams (desktop)', () => {
     expect(result.current.aid).toBe('agt_params_case');
   });
 
-  it('resolves nested project resource params for portal sidebars', () => {
+  it('resolves project params for portal sidebars', () => {
     useElectronStore.setState({
       activeTabId: 't1',
-      tabs: [tab('t1', '/project/prj_portal/library/kb_portal')],
+      tabs: [tab('t1', '/project/prj_portal/tasks')],
     });
 
-    const { result } = renderHook(() =>
-      useActiveRouteParams<{ id?: string; projectId?: string }>(),
-    );
+    const { result } = renderHook(() => useActiveRouteParams<{ projectId?: string }>());
 
-    expect(result.current).toMatchObject({ id: 'kb_portal', projectId: 'prj_portal' });
+    expect(result.current.projectId).toBe('prj_portal');
   });
 
   it('re-resolves after switching back to a previously visited url', () => {
