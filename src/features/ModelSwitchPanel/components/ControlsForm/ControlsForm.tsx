@@ -154,6 +154,7 @@ const ControlsForm = memo<ControlsFormProps>(
 
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
+    const thinkingLevel3DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel3');
 
     // Show descriptions as a question-mark tooltip beside the label, matching
     // the ControlRow items rendered above this form in the params panel.
@@ -512,7 +513,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <ThinkingLevel3Slider />,
+        children: <ThinkingLevel3Slider defaultValue={thinkingLevel3DefaultValue} />,
         label: t('extendParams.thinkingLevel.title'),
         layout: 'vertical',
         minWidth: undefined,

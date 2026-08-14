@@ -105,6 +105,9 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
   'gemini-3.6-flash': {
     thinkingLevel: 'medium',
   },
+  'gemini-3.7-flash': {
+    thinkingLevel3: 'medium',
+  },
   'gemini-3.5-flash': {
     thinkingLevel: 'medium',
   },
@@ -147,10 +150,13 @@ const isThinkingLevelExtendParam = (
   extendParam: ExtendParamsType,
 ): extendParam is ThinkingLevelExtendParam => extendParam in DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM;
 
-export const resolveDefaultThinkingLevelForModel = (model?: string): ThinkingLevelValue => {
-  if (!model) return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM.thinkingLevel;
+export const resolveDefaultThinkingLevelForModel = (
+  model?: string,
+  extendParam: ThinkingLevelExtendParam = 'thinkingLevel',
+): ThinkingLevelValue => {
+  if (!model) return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[extendParam];
 
-  return resolveThinkingLevelDefault(model, 'thinkingLevel');
+  return resolveThinkingLevelDefault(model, extendParam);
 };
 
 /**
