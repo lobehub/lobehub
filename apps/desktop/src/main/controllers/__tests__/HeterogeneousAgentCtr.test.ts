@@ -115,6 +115,10 @@ const {
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
   grokAcpSessionRunMock,
+  traeAcpSessionCloseMock,
+  traeAcpSessionConstructMock,
+  traeAcpSessionInterruptMock,
+  traeAcpSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
@@ -133,6 +137,10 @@ const {
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
   grokAcpSessionRunMock: vi.fn(),
+  traeAcpSessionCloseMock: vi.fn(),
+  traeAcpSessionConstructMock: vi.fn(),
+  traeAcpSessionInterruptMock: vi.fn(),
+  traeAcpSessionRunMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -289,6 +297,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockTraeAcpSession {
+    constructor(private readonly options: any) {
+      traeAcpSessionConstructMock(options);
+    }
+
+    close() {
+      traeAcpSessionCloseMock();
+    }
+
+    async interrupt() {
+      traeAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (traeAcpSessionRunMock.getMockImplementation()) {
+        return traeAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'trae-acp',
+      });
+      this.options.onSessionId('trae_session_1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'trae-acp',
+      });
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
@@ -297,6 +352,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
+    TraeAcpSession: MockTraeAcpSession,
   };
 });
 
@@ -440,6 +496,10 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
     loggerInfoMock.mockReset();
+    traeAcpSessionCloseMock.mockReset();
+    traeAcpSessionConstructMock.mockReset();
+    traeAcpSessionInterruptMock.mockReset();
+    traeAcpSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
@@ -2354,6 +2414,93 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (trae)', () => {
+    it('routes TRAE through ACP and persists the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        args: ['--feature=test'],
+        command: 'traecli',
+        initialModel: 'gpt-5.4',
+        resumeSessionId: 'trae_session_old',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-trae', prompt: 'inspect this repo', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(traeAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--feature=test'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'traecli',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'gpt-5.4',
+          operationId: 'op-trae',
+          prompt: [{ text: 'inspect this repo', type: 'text' }],
+          resumeSessionId: 'trae_session_old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'trae_session_1',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentRuntimeStatus', {
+        activeTasks: [],
+        lastEventAt: expect.any(Number),
+        operationId: 'op-trae',
+        sessionId,
+        state: 'running',
+        transport: 'trae-acp',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      traeAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Please sign in through TRAE Enterprise\n');
+        throw new Error('TRAE ACP exited unexpectedly (code 1, signal null)');
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-trae-auth', prompt: 'work', sessionId }),
+      ).rejects.toThrow('TRAE CLI could not authenticate');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'trae',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command: 'traecli',
+          stderr: expect.stringContaining('Please sign in through TRAE Enterprise'),
+        }),
+        sessionId,
+      });
+    });
+  });
+
   describe('spawnLhHeteroExec', () => {
     const params = {
       agentType: 'opencode',
@@ -2840,6 +2987,26 @@ describe('HeterogeneousAgentCtr', () => {
       if (!match) throw new Error(`no handler registered for "${eventName}"`);
       return match[1];
     };
+
+    it('before-quit closes a running TRAE ACP session', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'trae', command: 'traecli' });
+      const session = (ctr as any).sessions.get(sessionId);
+      session.traeAcpSession = { close: traeAcpSessionCloseMock };
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit();
+
+      expect(traeAcpSessionCloseMock).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      expect((ctr as any).sessions.has(sessionId)).toBe(false);
+    });
 
     it('before-quit synchronously unlinks every pending intervention temp config', async () => {
       const electron = (await import('electron')) as any;

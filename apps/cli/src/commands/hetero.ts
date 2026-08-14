@@ -130,7 +130,7 @@ const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
-    options.type === 'amp'
+    options.type === 'amp' || options.type === 'trae'
       ? []
       : options.type === 'codex'
         ? [
@@ -800,6 +800,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
+      initialModel: options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -833,6 +834,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
+        initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.prompt,
         uploadImage,

@@ -12,6 +12,7 @@ import type {
 import { getHeterogeneousTypeLabel } from '../labels';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
+import { listTraeAcpModels } from '../spawn/traeAcpSession';
 
 const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
@@ -190,13 +191,6 @@ export const listHeterogeneousAgentModels = async (
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
   const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
-  const args =
-    params.type === 'codebuddy'
-      ? ['--help']
-      : params.type === 'opencode'
-        ? ['models']
-        : ['--list-models'];
-  const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
   const callerEnv = params.env ?? process.env;
   const mergedPath = [
     ...new Set(
@@ -211,6 +205,24 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
+    if (params.type === 'trae') {
+      const models = await listTraeAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: params.cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
+    const args =
+      params.type === 'codebuddy'
+        ? ['--help']
+        : params.type === 'opencode'
+          ? ['models']
+          : ['--list-models'];
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
       encoding: 'utf8',

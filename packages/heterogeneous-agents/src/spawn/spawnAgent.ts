@@ -13,6 +13,7 @@ import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 
 export interface SpawnAgentOptions {
   /** Registered local heterogeneous-agent type key. */
@@ -36,6 +37,8 @@ export interface SpawnAgentOptions {
    * connected client renders live token streaming.
    */
   includePartialMessages?: boolean;
+  /** Initial model selected through the agent protocol after session setup (TRAE ACP only). */
+  initialModel?: string;
   /**
    * Image normalization options (URL fetch + on-disk cache + path
    * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
@@ -505,10 +508,10 @@ const spawnGrokAcpAgent = async (
 };
 
 /**
- * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Kimi Code,
- * OpenCode, Pi, or Qoder) and yield its stream as unified `AgentStreamEvent`s.
- * Used by `lh hetero exec` for both standalone terminal runs and (later)
- * sandbox-driven runs that ingest into the server.
+ * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
+ * Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
+ * `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
+ * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
  * Stays minimal on purpose — no on-disk tracing, no proxy env composition,
  * no CLI-not-found classification. Those host concerns live in the desktop
@@ -520,6 +523,8 @@ const spawnGrokAcpAgent = async (
  * failed image fetch surfaces before the child starts.
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
+  if (options.agentType === 'trae') return spawnTraeAcpAgent(options);
+
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
   if (!existsSync(cwd)) {
@@ -715,6 +720,116 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     pid: proc.pid,
     get sessionId() {
       return pipeline.sessionId;
+    },
+    stderr,
+  };
+};
+
+/** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
+export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
+  const command = resolveHeterogeneousAgentCommand('trae', options.command);
+  const commandName = command
+    .trim()
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
+  if (commandName?.toLowerCase() === 'trae-cli') {
+    throw new Error(
+      'The open-source `trae-cli` trajectory runner is unsupported; install TRAE Enterprise `traecli` instead.',
+    );
+  }
+
+  const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
+
+  const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
+  const stderr = new PassThrough();
+  const queue: AgentStreamEvent[] = [];
+  let ended = false;
+  let wakeup: (() => void) | undefined;
+  const wake = () => {
+    wakeup?.();
+    wakeup = undefined;
+  };
+
+  let nativeSessionId: string | undefined;
+  const session = new TraeAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: '1.0.0',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
+    onEvents: (events) => {
+      queue.push(...events);
+      wake();
+    },
+    onRawMessage: (line) => {
+      if (!options.onRawStdout) return;
+      try {
+        options.onRawStdout(Buffer.from(line));
+      } catch {
+        // Diagnostic tee failures must not affect the ACP run.
+      }
+    },
+    onRuntimeStatus: () => {},
+    onSessionId: (sessionId) => {
+      nativeSessionId = sessionId;
+    },
+    onStderr: (data) => {
+      stderr.write(data);
+    },
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+
+  const exit = session
+    .run()
+    .then(
+      () => ({ code: 0, signal: null }),
+      () => ({ code: 1, signal: null }),
+    )
+    .finally(() => {
+      ended = true;
+      stderr.end();
+      wake();
+    });
+
+  const events: AsyncIterable<AgentStreamEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<AgentStreamEvent>> {
+          while (queue.length === 0 && !ended) {
+            await new Promise<void>((resolve) => {
+              wakeup = resolve;
+            });
+          }
+          const event = queue.shift();
+          return event ? { done: false, value: event } : { done: true, value: undefined };
+        },
+      };
+    },
+  };
+
+  return {
+    events,
+    exit,
+    kill: (signal: NodeJS.Signals = 'SIGINT') => {
+      if (signal === 'SIGINT') void session.interrupt();
+      else session.close();
+    },
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return nativeSessionId;
     },
     stderr,
   };

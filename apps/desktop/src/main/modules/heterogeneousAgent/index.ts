@@ -10,6 +10,7 @@ import { kimiCodeDriver } from './drivers/kimiCode';
 import { opencodeDriver } from './drivers/opencode';
 import { piDriver } from './drivers/pi';
 import { qoderDriver } from './drivers/qoder';
+import { traeDriver } from './drivers/trae';
 import type { HeterogeneousAgentDriver } from './types';
 
 const heterogeneousAgentDrivers = {
@@ -23,10 +24,11 @@ const heterogeneousAgentDrivers = {
   'opencode': opencodeDriver,
   'pi': piDriver,
   'qoder': qoderDriver,
+  'trae': traeDriver,
 } satisfies Record<LocalHeterogeneousAgentType, HeterogeneousAgentDriver>;
 
 export const getHeterogeneousAgentDriver = (agentType: string): HeterogeneousAgentDriver => {
-  const driver = heterogeneousAgentDrivers[agentType as LocalHeterogeneousAgentType];
+  const driver = heterogeneousAgentDrivers[agentType as keyof typeof heterogeneousAgentDrivers];
 
   if (!driver) {
     throw new Error(`Unknown heterogeneous agent type: ${agentType}`);

@@ -830,6 +830,7 @@
   "lobehub.gemini-3.5-flash-lite.description": "Gemini 3.5 Flash-Lite is Google's fastest, lowest-cost 3.5 model, optimized for high-throughput agentic tasks, document parsing, and multimodal data extraction.",
   "lobehub.gemini-3.5-flash.description": "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.",
+  "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
   "lobehub.glm-5.1.description": "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   "lobehub.glm-5.2.description": "GLM-5.2 is the first open-source model to approach the performance of the latest-generation Claude Opus released in the same period.",
   "lobehub.gpt-4-turbo.description": "GPT-4 Turbo is a cost-effective multimodal model that balances accuracy and efficiency for real-time tasks.",

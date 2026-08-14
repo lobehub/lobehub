@@ -32,7 +32,7 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
-  /** Exact value accepted by the CLI's model-selection flag. Treat as opaque. */
+  /** Exact value accepted by the provider's native model selector. Treat as opaque. */
   id: string;
   /** Optional human-readable model label. */
   label?: string;
@@ -43,10 +43,11 @@ export interface HeterogeneousAgentModel {
 }
 
 export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -75,7 +76,7 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder`):
+ *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -300,7 +301,8 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }
@@ -411,7 +413,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }
@@ -501,6 +504,13 @@ export const buildHeteroExecArgs = (
     const effort = getExplicitQoderReasoningEffort(provider);
     if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
       selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'trae') {
+    const model = provider.model?.trim();
+    if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
+      selectorArgs.push('--model', model);
     }
   }
 

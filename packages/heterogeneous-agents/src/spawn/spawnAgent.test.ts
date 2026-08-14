@@ -166,6 +166,80 @@ const createGrokAcpProc = ({
   return { proc, requests };
 };
 
+const createFakeAcpProc = () => {
+  const proc = new EventEmitter() as any;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const requests: Array<{ id?: number; method?: string }> = [];
+  const send = (message: Record<string, unknown>) =>
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  proc.stdout = stdout;
+  proc.stderr = stderr;
+  proc.pid = 12_345;
+  proc.killed = false;
+  proc.kill = vi.fn(() => true);
+  proc.stdin = {
+    once: vi.fn(),
+    write: vi.fn((chunk: string) => {
+      const message = JSON.parse(chunk.trim()) as { id?: number; method?: string };
+      requests.push(message);
+      queueMicrotask(() => {
+        switch (message.method) {
+          case 'initialize': {
+            send({
+              id: message.id,
+              result: {
+                agentCapabilities: { loadSession: true, promptCapabilities: {} },
+                protocolVersion: 1,
+              },
+            });
+            return;
+          }
+          case 'session/new': {
+            send({
+              id: message.id,
+              result: {
+                configOptions: [
+                  {
+                    category: 'model',
+                    currentValue: 'seed-2.0-code',
+                    id: 'model',
+                    name: 'Model',
+                    options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+                    type: 'select',
+                  },
+                ],
+                sessionId: 'trae-session-1',
+              },
+            });
+            return;
+          }
+          case 'session/set_config_option': {
+            send({ id: message.id, result: {} });
+            return;
+          }
+          case 'session/prompt': {
+            send({
+              method: 'session/update',
+              params: {
+                sessionId: 'trae-session-1',
+                update: {
+                  content: { text: 'TRAE response', type: 'text' },
+                  sessionUpdate: 'agent_message_chunk',
+                },
+              },
+            });
+            send({ id: message.id, result: { stopReason: 'end_turn' } });
+          }
+        }
+      });
+      return true;
+    }),
+  };
+
+  return { proc, requests };
+};
+
 const ccInit = `${JSON.stringify({
   model: 'claude-sonnet-4-6',
   session_id: 'cc-1',
@@ -418,6 +492,63 @@ describe('spawnAgent', () => {
     });
     expect(fake.stdinWrites).toEqual([]);
     expect(fake.proc.stdin.end).toHaveBeenCalledOnce();
+  });
+
+  it('runs TRAE through ACP behind the standard handle contract', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        extraArgs: ['--feature=test'],
+        initialModel: 'gpt-5.4',
+        operationId: 'op-trae',
+        prompt: 'do a thing',
+      });
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', 'serve', '--yolo', '--feature=test'],
+        command: 'traecli',
+      });
+      expect(fake.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(handle.sessionId).toBe('trae-session-1');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'stream_chunk' &&
+            event.data?.chunkType === 'text' &&
+            event.data?.content === 'TRAE response',
+        ),
+      ).toBe(true);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('does not treat the open-source trae-cli trajectory runner as TRAE ACP', async () => {
+    const { spawnAgent } = await import('./spawnAgent');
+
+    await expect(
+      spawnAgent({
+        agentType: 'trae',
+        command: 'trae-cli',
+        operationId: 'op-trae',
+        prompt: 'do a thing',
+      }),
+    ).rejects.toThrow('trajectory runner is unsupported');
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('passes --include-partial-messages only when includePartialMessages=true', async () => {

@@ -830,6 +830,7 @@
   "lobehub.gemini-3.5-flash-lite.description": "Gemini 3.5 Flash-Lite 是谷歌最快、成本最低的 3.5 模型，专为高吞吐量智能代理任务、文档解析和多模态数据提取优化。",
   "lobehub.gemini-3.5-flash.description": "Gemini 的最智能模型，专为速度而设计，结合前沿智能与卓越的搜索和基础能力。",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash 在速度与智能之间实现平衡，适用于强大的智能代理、编码和多模态性能，并提高了令牌效率。",
+  "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash 是 Google 最强的 Flash 模型，面向复杂编程、智能体工作流和可靠的多步执行。",
   "lobehub.glm-5.1.description": "Zai 的最新旗舰模型，在整体和编码能力上与 Claude Opus 4.6 对齐。擅长长时间任务，支持长达 8 小时的自主工作，是自主代理和长时间编码代理的理想基础。",
   "lobehub.glm-5.2.description": "GLM-5.2 是首个接近同期发布的最新一代 Claude Opus 性能的开源模型。",
   "lobehub.gpt-4-turbo.description": "GPT-4 Turbo 是一个成本效益高的多模态模型，在实时任务中平衡了准确性和效率。",

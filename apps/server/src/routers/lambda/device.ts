@@ -302,15 +302,17 @@ export const deviceRouter = router({
   listHeterogeneousAgentModels: deviceProcedure
     .input(
       z.object({
+        args: z.array(z.string()).optional(),
         command: z.string().optional(),
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.enum(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder']),
+        type: z.enum(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder', 'trae']),
       }),
     )
     .query(async ({ ctx, input }) =>
       deviceGateway.listHeterogeneousAgentModels({
+        args: input.args,
         command: input.command,
         cwd: input.cwd,
         deviceId: input.deviceId,

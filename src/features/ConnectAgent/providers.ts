@@ -21,6 +21,7 @@ import {
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 /**
@@ -44,7 +45,8 @@ export interface ConnectableProvider {
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
-    | typeof Qoder;
+    | typeof Qoder
+    | typeof Trae;
   /** Spawn command — cli providers only. */
   command?: string;
   kind: 'cli' | 'platform';
@@ -76,6 +78,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
+  'trae': Trae,
 };
 
 const PLATFORM_BRANDS: Record<RemoteHeterogeneousAgentType, ConnectableProvider['brand']> = {

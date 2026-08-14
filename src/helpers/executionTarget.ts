@@ -122,7 +122,8 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'opencode' &&
   type !== 'openclaw' &&
   type !== 'pi' &&
-  type !== 'qoder';
+  type !== 'qoder' &&
+  type !== 'trae';
 
 /**
  * Single source of truth for where an agent executes — one global

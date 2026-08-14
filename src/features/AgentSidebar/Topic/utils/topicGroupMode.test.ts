@@ -21,7 +21,7 @@ describe('resolveAgentTopicGroupMode', () => {
     ).toBe('byProject');
   });
 
-  it.each(['amp', 'codebuddy', 'opencode', 'pi', 'qoder'] as const)(
+  it.each(['amp', 'codebuddy', 'opencode', 'pi', 'qoder', 'trae'] as const)(
     'defaults %s agents to project grouping',
     (agentType) => {
       expect(
