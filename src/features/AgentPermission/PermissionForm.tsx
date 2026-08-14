@@ -2,7 +2,8 @@
 
 import type { AgentModelSelectionPolicy } from '@lobechat/types';
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Alert, Empty, Form, Icon } from '@lobehub/ui';
+import { Empty, Form, Icon } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Bot, InfoIcon, LockIcon, MonitorSmartphone, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
