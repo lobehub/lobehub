@@ -2457,7 +2457,14 @@ export class AiAgentService {
               heteroType,
             }
           : {}),
-        ...(isRemoteHetero && remoteDeviceId ? { deviceId: remoteDeviceId, deviceUserId: remoteDeviceUserId, deviceWorkspaceId: remoteDeviceWorkspaceId, heteroType } : {}),
+        ...(isRemoteHetero && remoteDeviceId
+          ? {
+              deviceId: remoteDeviceId,
+              deviceUserId: remoteDeviceUserId,
+              deviceWorkspaceId: remoteDeviceWorkspaceId,
+              heteroType,
+            }
+          : {}),
         operationId,
         scope: appContext?.scope ?? undefined,
         threadId: appContext?.threadId ?? undefined,

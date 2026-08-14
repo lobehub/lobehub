@@ -78,6 +78,7 @@ describe('acquireTopicStartReservation', () => {
       'topic-1',
       'child-operation',
       'parent-operation',
+      undefined,
     );
   });
 });

@@ -119,6 +119,7 @@ vi.mock('@/database/models/plugin', () => ({
 }));
 
 const topicMock = {
+  appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
@@ -208,6 +209,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
   beforeEach(() => {
     vi.clearAllMocks();
+    topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
@@ -763,7 +765,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       },
     };
 
-    // Pick out the updateMetadata call that persists the running operation.
     const findRunningOpSeed = () =>
       topicMock.updateMetadata.mock.calls
         .map((call) => call[1])
@@ -791,11 +792,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         topicStartOwnerOperationId: 'parent-operation',
       } as any);
 
-      const seed = findRunningOpSeed();
-      expect(seed.runningOperation.operationId).toBe('parent-operation');
-      expect(seed.runningOperation.childOperations).toEqual([
+      expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
-      ]);
+      );
     });
 
     it('serializes the onComplete webhook hook onto runningOperation (sandbox dispatch)', async () => {

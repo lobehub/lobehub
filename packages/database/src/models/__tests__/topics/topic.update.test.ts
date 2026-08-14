@@ -170,8 +170,8 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(true);
     });
 
-  it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
-    const topicId = 'topic-start-operation-handoff';
+    it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
+      const topicId = 'topic-start-operation-handoff';
       await serverDB.insert(topics).values({
         userId,
         id: topicId,
@@ -194,6 +194,8 @@ describe('TopicModel - Update', () => {
       const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
       expect(topic?.metadata?.runningOperation).toBeNull();
       expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('new-start');
+    });
+
     it('allows a child operation to re-enter its parent running operation', async () => {
       const topicId = 'task-callback-parent-operation';
       await serverDB.insert(topics).values({
@@ -229,15 +231,22 @@ describe('TopicModel - Update', () => {
         userId,
         id: topicId,
         title: 'Test',
-        metadata: { runningOperation: { assistantMessageId: 'assistant-parent', operationId: 'parent-operation' } },
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            operationId: 'parent-operation',
+          },
+        },
       });
 
       await Promise.all([
         topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
-          assistantMessageId: 'assistant-child-1', operationId: 'child-operation-1',
+          assistantMessageId: 'assistant-child-1',
+          operationId: 'child-operation-1',
         }),
         topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
-          assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2',
+          assistantMessageId: 'assistant-child-2',
+          operationId: 'child-operation-2',
         }),
       ]);
 

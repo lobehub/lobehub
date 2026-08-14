@@ -141,7 +141,8 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const marker = (topic.metadata as any)?.runningOperation;
-    const remoteOperationId = input.operationId ?? marker?.operationId ?? marker?.childOperations?.[0]?.operationId;
+    const remoteOperationId =
+      input.operationId ?? marker?.operationId ?? marker?.childOperations?.[0]?.operationId;
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -191,10 +192,14 @@ export const agentNotifyRouter = router({
           // (Previously this fired the stripped-down dispatchTerminalHooks, which
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
           // Hooks were serialized onto runningOperation at dispatch time.
-          const currentMarker = (await ctx.topicModel.findById(topicId))?.metadata?.runningOperation as any;
-          const activeOperation = currentMarker?.operationId === remoteOperationId
-            ? currentMarker
-            : currentMarker?.childOperations?.find((child: any) => child.operationId === remoteOperationId);
+          const currentMarker = (await ctx.topicModel.findById(topicId))?.metadata
+            ?.runningOperation as any;
+          const activeOperation =
+            currentMarker?.operationId === remoteOperationId
+              ? currentMarker
+              : currentMarker?.childOperations?.find(
+                  (child: any) => child.operationId === remoteOperationId,
+                );
           const serializedHooks = activeOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
@@ -269,9 +274,13 @@ export const agentNotifyRouter = router({
           // The operation is finished — drop the running marker so a duplicate
           // terminal signal / reconnect doesn't re-fire the hooks.
           if (currentMarker?.operationId === remoteOperationId) {
-            await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
+            await ctx.topicModel
+              .updateMetadata(topicId, { runningOperation: null })
+              .catch(() => {});
           } else {
-            await ctx.topicModel.removeRunningOperationChild(topicId, remoteOperationId).catch(() => {});
+            await ctx.topicModel
+              .removeRunningOperationChild(topicId, remoteOperationId)
+              .catch(() => {});
           }
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
