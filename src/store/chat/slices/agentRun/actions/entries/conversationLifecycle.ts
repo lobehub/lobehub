@@ -78,7 +78,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
-import { getChatTopicById, getCurrentChatTopic } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -791,7 +791,7 @@ export class ConversationLifecycleActionImpl {
 
     useUserMemoryStore.getState().setActiveMemoryContext({
       agent: getAgentMeta(agentId),
-      topic: getCurrentChatTopic(),
+      topic: getChatTopicById(this.#get().activeTopicId),
       latestUserMessage: lastMessage?.content,
       sendingMessage: message,
     });

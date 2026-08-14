@@ -3,7 +3,7 @@ import isEqual from 'fast-deep-equal';
 
 import { electronGitService } from '@/services/electron/git';
 import { gitService } from '@/services/git';
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import {
   canReadTopicGitTransport,

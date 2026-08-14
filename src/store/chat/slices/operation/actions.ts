@@ -2,7 +2,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
 
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';

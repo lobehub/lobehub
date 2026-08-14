@@ -1,5 +1,5 @@
 import { type ChatStoreState } from '@/store/chat/initialState';
-import { getChatTopicById, getChatTopicsByAgentId } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById, getChatTopicsByAgentId } from '@/store/chat/slices/topic/projectionRead';
 import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 
 import { type Operation, type OperationType } from './types';

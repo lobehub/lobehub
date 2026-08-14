@@ -6,7 +6,9 @@ import { snapshotAgentModel } from './snapshotAgentModel';
 
 const agentMap: Record<string, any> = {};
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({ agentMap }) }));
+vi.mock('@/projection', () => ({
+  getAgentProjectionById: (id: string | undefined) => (id ? agentMap[id] : undefined),
+}));
 
 const seedAgent = (id: string, config: Record<string, any>) => {
   agentMap[id] = config;

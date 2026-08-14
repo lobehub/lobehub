@@ -81,7 +81,7 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
+    const { listAgentId, listVisibility } = this.#get();
     const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
       // Invalidate every list signature: visibility, ordering and any future

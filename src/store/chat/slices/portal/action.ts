@@ -1,7 +1,7 @@
 import type { TopicCommentItem } from '@lobechat/types';
 
 import { projectFileService } from '@/services/projectFile';
-import { getChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
+import { getChatTopicWorkingDirectoryById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
@@ -53,8 +53,8 @@ const getLocalFilesInEntryScope = <T extends OpenLocalFileParams & { id?: string
   scopeKey: string,
 ) => openLocalFiles.filter((file) => getLocalFileEntryScopeKey(file) === scopeKey);
 
-const getCurrentLocalFileScopeKey = (_state: ChatStore): string | undefined => {
-  const workingDirectory = getChatTopicWorkingDirectory();
+const getCurrentLocalFileScopeKey = (state: ChatStore): string | undefined => {
+  const workingDirectory = getChatTopicWorkingDirectoryById(state.activeTopicId);
 
   return workingDirectory ? createLocalFileScopeKey(workingDirectory) : undefined;
 };

@@ -1,17 +1,8 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 
-import {
-  getChatProjection,
-  selectChatTopicContainerKeyById,
-  selectChatTopicItem,
-  selectChatTopicsView,
-  useChatTopicProjection,
-  useChatTopicsProjectionView,
-} from '@/projection';
+import { useChatTopicProjection, useChatTopicsProjectionView } from '@/projection';
 import type {
   ChatTopic,
   ChatTopicSummary,
@@ -30,21 +21,24 @@ import {
 import { getChatStoreState, useChatStore } from '../../store';
 import { topicMapKey } from '../../utils/topicMapKey';
 import { operationSelectors } from '../operation/selectors';
+import {
+  extractChatTopicWorkingDirectory,
+  getChatTopicById,
+  getChatTopics,
+  getChatTopicWorkingDirectoryById,
+} from './projectionRead';
 
-export const getChatTopicById = (id: string | undefined): ChatTopic | undefined =>
-  id ? getChatProjection((scope) => selectChatTopicItem(scope, id)) : undefined;
-
-export const getChatTopicContainerKeyById = (id: string): string | undefined =>
-  getChatProjection((scope) => selectChatTopicContainerKeyById(scope, id));
+export {
+  extractChatTopicWorkingDirectory,
+  getChatTopicById,
+  getChatTopicContainerKeyById,
+  getChatTopicModelById,
+  getChatTopics,
+  getChatTopicsByAgentId,
+} from './projectionRead';
 
 export const getCurrentChatTopic = (): ChatTopic | undefined =>
   getChatTopicById(getChatStoreState().activeTopicId);
-
-export const getChatTopics = (
-  containerKey: string,
-  surface: 'agentView' | 'sidebar' = 'sidebar',
-): ChatTopic[] | undefined =>
-  getChatProjection((scope) => selectChatTopicsView(scope, surface, containerKey)?.items);
 
 export const getCurrentChatTopics = (): ChatTopic[] | undefined => {
   const { activeAgentId, activeGroupId } = getChatStoreState();
@@ -52,38 +46,10 @@ export const getCurrentChatTopics = (): ChatTopic[] | undefined => {
   return getChatTopics(topicMapKey({ agentId: activeAgentId, groupId: activeGroupId }));
 };
 
-export const getChatTopicsByAgentId = (agentId: string): ChatTopic[] | undefined =>
-  getChatTopics(topicMapKey({ agentId }));
-
-export const getChatTopicModelById = (
-  id: string | undefined,
-): { model: string; provider: string } | undefined => {
-  const topic = getChatTopicById(id);
-  if (!topic?.model) return undefined;
-  return { model: topic.model, provider: topic.provider || '' };
-};
-
-export const extractChatTopicWorkingDirectory = (
-  topic: ChatTopic | undefined,
-): string | undefined => {
-  if (!topic) return undefined;
-  if (isDesktop) {
-    return getWorkingDirEffectivePath(
-      topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
-    );
-  }
-
-  const metadata = topic.metadata;
-  return (
-    metadata?.repos?.[0] ??
-    getWorkingDirEffectivePath(metadata?.workingDirectoryConfig ?? metadata?.workingDirectory)
-  );
-};
-
 export const getChatTopicWorkingDirectory = (id?: string | null): string | undefined =>
   id === null
     ? undefined
-    : extractChatTopicWorkingDirectory(id ? getChatTopicById(id) : getCurrentChatTopic());
+    : getChatTopicWorkingDirectoryById(id ?? getChatStoreState().activeTopicId);
 
 export const useChatTopicById = (id: string | undefined) => useChatTopicProjection(id);
 

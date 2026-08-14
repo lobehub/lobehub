@@ -31,6 +31,19 @@ import { resolveHeteroResume } from '../transports/hetero/heteroResume';
 
 // ─── Mocks ───
 
+const mockTopicProjection = vi.hoisted(() => ({
+  getState: undefined as undefined | (() => Record<string, any>),
+}));
+
+vi.mock('@/store/chat/slices/topic/projectionRead', () => ({
+  getChatTopicById: (topicId: string) => {
+    const state = mockTopicProjection.getState?.();
+    return Object.values(state?.topicDataMap ?? {})
+      .flatMap((data: any) => data?.items ?? [])
+      .find((topic: any) => topic.id === topicId);
+  },
+}));
+
 // messageService — the DB layer under test
 const mockBatchMutate = vi.fn();
 const mockCreateMessage = vi.fn();
@@ -269,6 +282,8 @@ function createMockStore(overrides: Record<string, any> = {}) {
       };
     });
   }
+
+  mockTopicProjection.getState = () => store;
 
   return store;
 }
@@ -510,6 +525,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTopicProjection.getState = undefined;
     ipc = setupIpcCapture();
     // Register the IPC session's agent type from the params the executor
     // hands to startSession, so the helper picks the right adapter when the
@@ -605,6 +621,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     opts?: { params?: Partial<typeof defaultParams>; store?: any },
   ) {
     const store = opts?.store ?? createMockStore();
+    mockTopicProjection.getState = () => store;
     const get = vi.fn(() => store);
 
     // sendPrompt will resolve after we emit all events

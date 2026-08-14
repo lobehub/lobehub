@@ -19,7 +19,7 @@ import { getEffectiveConversationModel } from '@/features/Conversation/store/uti
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
-import { getAgentProjectionById } from '@/projection';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
@@ -32,7 +32,7 @@ import {
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,

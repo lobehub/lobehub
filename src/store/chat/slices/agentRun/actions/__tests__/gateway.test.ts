@@ -80,6 +80,9 @@ const mockRuntime = vi.hoisted(() => ({ isChatMode: false, isLocal: false }));
 const mockAgentStore = vi.hoisted(() => ({
   state: { activeAgentId: undefined, agentMap: {} } as any,
 }));
+const mockTopicProjection = vi.hoisted(() => ({
+  getState: undefined as undefined | (() => Record<string, any>),
+}));
 
 vi.mock('@/const/version', async (importOriginal) => {
   const actual = await importOriginal<typeof ConstVersion>();
@@ -96,6 +99,30 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
 }));
 
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => mockAgentStore.state }));
+
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: (agentId: string) => {
+    const agent = mockAgentStore.state.agentMap?.[agentId];
+    if (!agent) return undefined;
+
+    return {
+      ...agent,
+      chatConfig: {
+        ...agent.chatConfig,
+        ...(mockRuntime.isChatMode ? { enableAgentMode: false } : undefined),
+      },
+    };
+  },
+}));
+
+vi.mock('@/store/chat/slices/topic/projectionRead', () => ({
+  getChatTopicById: (topicId: string) => {
+    const state = mockTopicProjection.getState?.();
+    return Object.values(state?.topicDataMap ?? {})
+      .flatMap((data: any) => data?.items ?? [])
+      .find((topic: any) => topic.id === topicId);
+  },
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
@@ -144,6 +171,11 @@ function createMockClient(): GatewayConnection['client'] & {
 
 const TEST_TOPIC_ID = 'topic-test';
 
+const instantiateGatewayAction = (set: any, get: () => any, api?: unknown) => {
+  mockTopicProjection.getState = get;
+  return new GatewayActionImpl(set, get, api);
+};
+
 function createTestAction() {
   const state: Record<string, any> = { gatewayConnections: {} };
   const set = vi.fn((updater: any) => {
@@ -155,7 +187,7 @@ function createTestAction() {
   });
   const get = vi.fn(() => state as any);
 
-  const action = new GatewayActionImpl(set as any, get, undefined);
+  const action = instantiateGatewayAction(set as any, get, undefined);
 
   // Inject mock client factory
   const mockClient = createMockClient();
@@ -168,6 +200,7 @@ describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
+    mockTopicProjection.getState = undefined;
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
     mockToolInterventionConfig.allowList = [];
@@ -574,7 +607,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => mockClient);
 
       return {
@@ -1038,7 +1071,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => mockClient);
       const interruptTaskSpy = vi
         .mocked(aiAgentService.interruptTask)
@@ -1127,7 +1160,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => mockClient);
       const interruptTaskSpy = vi
         .mocked(aiAgentService.interruptTask)
@@ -1215,7 +1248,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -1303,7 +1336,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -1399,7 +1432,7 @@ describe('GatewayActionImpl', () => {
         },
       };
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -1655,7 +1688,7 @@ describe('GatewayActionImpl', () => {
         token: 'fresh-token',
       } as any);
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => mockClient);
 
       return { action, startOperation };
@@ -1783,7 +1816,7 @@ describe('GatewayActionImpl', () => {
         token: 'fresh-token',
       } as any);
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
       return { action, captured, completeOperation, updateTopicStatus };
@@ -1916,7 +1949,7 @@ describe('GatewayActionImpl', () => {
         token: 'fresh-token',
       } as any);
 
-      const action = new GatewayActionImpl(set as any, get, undefined);
+      const action = instantiateGatewayAction(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
       return { action, captured, connectToGateway, internalDispatchTopic };

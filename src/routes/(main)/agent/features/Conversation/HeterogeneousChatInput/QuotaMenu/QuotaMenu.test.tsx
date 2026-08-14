@@ -64,6 +64,11 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
+vi.mock('@/store/agent/projection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useAgentConfigStatus: () => ({ isLoading: false }),
+}));
+
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     isAgentConfigLoadingById: () => () => false,

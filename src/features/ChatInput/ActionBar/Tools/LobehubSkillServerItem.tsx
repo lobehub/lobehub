@@ -199,11 +199,12 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             .lobehubSkillServers?.find((s) => s.identifier === provider);
           if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
             const newPluginId = latestServer.identifier;
-          const currentAgentPlugins = getAgentProjectionById(effectiveAgentId)?.plugins || [];
-          const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
-          if (canEdit && !isAlreadyEnabled) {
-            console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
-            togglePlugin(newPluginId);
+            const currentAgentPlugins = getAgentProjectionById(effectiveAgentId)?.plugins || [];
+            const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
+            if (canEdit && !isAlreadyEnabled) {
+              console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
+              togglePlugin(newPluginId);
+            }
           }
         }
       };

@@ -25,14 +25,11 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ onTopicChange, topicId }) =>
 
   useFetchAgentTopics({ agentId });
 
-  const [globalActiveTopicId, switchTopic] = useChatStore((s) => [
-    s.activeTopicId,
-    s.switchTopic,
-  ]);
+  const [globalActiveTopicId, switchTopic] = useChatStore((s) => [s.activeTopicId, s.switchTopic]);
 
   const activeTopicId = topicId === undefined ? globalActiveTopicId : topicId;
   const topics = useChatTopicsByAgentId(agentId)?.items;
-  const currentTopic = useChatTopicById(activeTopicId);
+  const currentTopic = useChatTopicById(activeTopicId ?? undefined);
 
   const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const hasOverride = !!usePageAgentPanelOverride();

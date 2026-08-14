@@ -64,7 +64,7 @@ import {
   reconstructUploadFilesFromQueue,
   type StreamRetryMetadata,
 } from '@/store/chat/slices/operation/types';
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';

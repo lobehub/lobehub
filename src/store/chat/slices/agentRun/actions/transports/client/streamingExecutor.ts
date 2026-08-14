@@ -56,8 +56,8 @@ import {
 } from '@/store/chat/slices/message/selectors/dbMessage';
 import {
   getChatTopicModelById,
-  getChatTopicWorkingDirectory,
-} from '@/store/chat/slices/topic/projection';
+  getChatTopicWorkingDirectoryById,
+} from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -340,7 +340,7 @@ export class StreamingExecutorActionImpl {
       provider: agentConfigData.provider!,
     };
 
-    const topicWorkingDirectory = getChatTopicWorkingDirectory();
+    const topicWorkingDirectory = getChatTopicWorkingDirectoryById(this.#get().activeTopicId);
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     const agentWorkingDirectory = getAgentWorkingDirectory(
       getAgentStoreState().activeAgentId,

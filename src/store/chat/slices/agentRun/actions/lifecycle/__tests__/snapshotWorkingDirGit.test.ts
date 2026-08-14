@@ -71,7 +71,7 @@ vi.mock('@/services/electron/git', () => ({
 
 const topicMocks = vi.hoisted(() => ({ getTopicById: vi.fn() }));
 
-vi.mock('@/store/chat/slices/topic/projection', () => ({
+vi.mock('@/store/chat/slices/topic/projectionRead', () => ({
   getChatTopicById: (id: string) => topicMocks.getTopicById(id),
 }));
 

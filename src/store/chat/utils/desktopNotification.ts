@@ -10,7 +10,7 @@ import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { getAgentMeta } from '@/store/agent/projection';
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 

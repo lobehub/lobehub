@@ -65,6 +65,22 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
 }));
 
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: () => ({
+    agencyConfig: {
+      boundDeviceId: 'workspace-device',
+      executionTarget: mockSharedExecutionTarget,
+      heterogeneousProvider: { type: 'claude-code' },
+      workingDirByDevice: {
+        'personal-device': '/Users/me/project',
+        'workspace-device': '/workspace/project',
+      },
+    },
+    visibility: mockAgentVisibility,
+    ...(mockIsWorkspaceAgent ? { workspaceId: 'workspace-1' } : undefined),
+  }),
+}));
+
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgentById: () => () =>
@@ -89,6 +105,10 @@ vi.mock('@/store/agent/selectors', () => ({
 
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: { getTopicById: () => () => undefined },
+}));
+
+vi.mock('@/store/chat/slices/topic/projectionRead', () => ({
+  getChatTopicById: () => undefined,
 }));
 
 vi.mock('@/store/electron', () => ({

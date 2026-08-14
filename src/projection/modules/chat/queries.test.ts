@@ -22,7 +22,7 @@ describe('Chat Projection queries', () => {
 
   it('projects a by-id topic detail that is absent from the paginated list', async () => {
     const archivedTopic = {
-      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      createdAt: Date.parse('2026-08-01T00:00:00.000Z'),
       description: 'Archived topic detail',
       favorite: false,
       firstUserMessage: 'First message',
@@ -32,7 +32,7 @@ describe('Chat Projection queries', () => {
       status: 'completed',
       title: 'Archived topic',
       trigger: null,
-      updatedAt: new Date('2026-08-02T00:00:00.000Z'),
+      updatedAt: Date.parse('2026-08-02T00:00:00.000Z'),
     } as ChatTopic;
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(archivedTopic);
 
@@ -44,10 +44,7 @@ describe('Chat Projection queries', () => {
 
     expect(topicService.getTopicDetail).toHaveBeenCalledWith(archivedTopic.id);
     expect(
-      selectChatTopicDetailItem(
-        useProjectionStore.getState().scopes[SCOPE],
-        archivedTopic.id,
-      ),
+      selectChatTopicDetailItem(useProjectionStore.getState().scopes[SCOPE], archivedTopic.id),
     ).toMatchObject({
       description: 'Archived topic detail',
       messageCount: 4,

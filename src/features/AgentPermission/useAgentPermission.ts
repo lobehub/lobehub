@@ -4,7 +4,6 @@ import type { AgentModelSelectionPolicy } from '@lobechat/types';
 
 import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
-import { usePermission } from '@/hooks/usePermission';
 import type { ResourceAccessLevel } from '@/services/resourcePermission';
 import { useAgentData } from '@/store/agent/projection';
 
@@ -12,7 +11,7 @@ export interface AgentPermissionState {
   accessError: unknown;
   accessLevel?: ResourceAccessLevel;
   accessLoading: boolean;
-  /** Role-level gate for changing model and execution-target selection policies. */
+  /** Only the creator or a workspace owner may change member selection policies. */
   canEditConfig: boolean;
   /** Members can be assigned a target only if one is actually resolvable. */
   canFixExecutionTarget: boolean;
@@ -37,7 +36,6 @@ export interface AgentPermissionState {
  * about what happens once it reaches the workspace.
  */
 export const useAgentPermission = (agentId: string): AgentPermissionState => {
-  const { allowed: canEditContent } = usePermission('edit_own_content');
   const agent = useAgentData(agentId);
 
   const isWorkspaceAgent = !!agent?.workspaceId;
@@ -61,7 +59,7 @@ export const useAgentPermission = (agentId: string): AgentPermissionState => {
     accessError,
     accessLevel: access?.accessLevel,
     accessLoading,
-    canEditConfig: canEditContent,
+    canEditConfig: access?.canManage === true,
     canManageAccess: access?.canManage === true,
     isPrivate,
     isWorkspaceAgent,

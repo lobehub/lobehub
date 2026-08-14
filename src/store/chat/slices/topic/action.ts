@@ -999,17 +999,6 @@ export class ChatTopicActionImpl {
     const topicIds = [...new Set([...loadedTopicIds, ...projectedTopicIds])];
 
     await topicService.removeTopicsByAgentId(activeAgentId, scope);
-    this.#set(
-      (state) => ({
-        topicDetailMap: Object.fromEntries(
-          Object.entries(state.topicDetailMap).filter(
-            ([, topic]) => topic.sessionId !== activeAgentId,
-          ),
-        ),
-      }),
-      false,
-      n('removeSessionTopics/detail'),
-    );
     getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
@@ -1041,9 +1030,6 @@ export class ChatTopicActionImpl {
     const topicIds = [...new Set([...loadedTopicIds, ...projectedTopicIds])];
 
     await topicService.removeTopicsByGroupId(groupId, scope);
-    // Topic detail rows don't carry their group id, so the safe invalidation
-    // boundary for a group-wide delete is the whole by-id detail cache.
-    this.#set({ topicDetailMap: {} }, false, n('removeGroupTopics/detail'));
     getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this group)
@@ -1063,7 +1049,6 @@ export class ChatTopicActionImpl {
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
-    this.#set({ topicDetailMap: {} }, false, n('removeAllTopics/detail'));
     getProjectionStoreState().deleteChatTopicProjections(projectionScope, topicIds, observedAt);
     await refreshTopic();
     // every topic is gone — wipe all cached message lists

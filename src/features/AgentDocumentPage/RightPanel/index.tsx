@@ -18,11 +18,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import {
-  agentProjectionSelectors,
-  useAgentMeta,
-  useAgentValue,
-} from '@/store/agent/projection';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   backLink: css`

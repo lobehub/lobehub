@@ -1,23 +1,67 @@
 import { act, renderHook } from '@testing-library/react';
 import { ModelProvider } from 'model-bank/modelProvider';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useAgentStore } from '@/store/agent';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useAiInfraStore } from '@/store/aiInfra';
-import { useChatStore } from '@/store/chat';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useUserStore } from '@/store/user';
 
 import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapability';
 
-const initialAgentState = useAgentStore.getState();
 const initialAiInfraState = useAiInfraStore.getState();
-const initialChatState = useChatStore.getState();
 const initialUserState = useUserStore.getState();
+const SCOPE = 'user-1:personal';
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => SCOPE,
+  isAnonymousScope: () => false,
+  isScopeTrusted: () => true,
+  useCacheScope: () => SCOPE,
+}));
+
+const seedAgent = (id: string, model: string) => {
+  getProjectionStoreState().commitAgentConfig(
+    SCOPE,
+    { chatConfig: {}, id, model, provider: ModelProvider.Google },
+    'full',
+    'network',
+  );
+};
+
+const seedTopic = (agentId: string, id: string, model: string, observedAt: number) => {
+  getProjectionStoreState().commitChatTopicsPage(
+    SCOPE,
+    {
+      containerKey: topicMapKey({ agentId }),
+      context: { agentId },
+      items: [
+        {
+          createdAt: 0,
+          id,
+          model,
+          provider: ModelProvider.Google,
+          title: '',
+          updatedAt: observedAt,
+        } as any,
+      ],
+      page: 0,
+      pageSize: 20,
+      signature: {},
+      surface: 'sidebar',
+      total: 1,
+    },
+    { observedAt, source: 'network' },
+  );
+};
+
+beforeEach(() => {
+  useProjectionStore.setState({ scopes: {} });
+});
 
 afterEach(() => {
-  useAgentStore.setState(initialAgentState, true);
+  useProjectionStore.setState({ scopes: {} });
   useAiInfraStore.setState(initialAiInfraState, true);
-  useChatStore.setState(initialChatState, true);
   useUserStore.setState(initialUserState, true);
 });
 
@@ -39,33 +83,15 @@ describe('canSendVoiceMessage', () => {
       providerId: ModelProvider.Google,
       type: 'chat',
     } as const;
-    useAgentStore.setState({
-      agentMap: {
-        [agentId]: { chatConfig: {}, model: audioModel.id, provider: ModelProvider.Google },
-      },
-    } as any);
+    seedAgent(agentId, audioModel.id);
     useAiInfraStore.setState({ enabledAiModels: [audioModel, textModel] });
     useUserStore.setState({ workspaceUserPreference: {} });
-    useChatStore.setState({
-      activeAgentId: 'another-agent',
-      activeTopicId: 'another-topic',
-      topicDataMap: {
-        [`agent_${agentId}`]: {
-          items: [{ id: topicId, model: audioModel.id, provider: ModelProvider.Google }],
-        },
-      },
-    } as any);
+    seedTopic(agentId, topicId, audioModel.id, 1);
     const context = { agentId, topicId };
 
     expect(canSendVoiceMessage(context)).toBe(true);
 
-    useChatStore.setState({
-      topicDataMap: {
-        [`agent_${agentId}`]: {
-          items: [{ id: topicId, model: textModel.id, provider: ModelProvider.Google }],
-        },
-      },
-    } as any);
+    seedTopic(agentId, topicId, textModel.id, 2);
 
     expect(canSendVoiceMessage(context)).toBe(false);
   });
@@ -89,15 +115,7 @@ describe('useCanSendVoiceMessage', () => {
       type: 'chat',
     } as const;
     act(() => {
-      useAgentStore.setState({
-        agentMap: {
-          [agentId]: {
-            chatConfig: {},
-            model: audioModel.id,
-            provider: ModelProvider.Google,
-          },
-        },
-      } as any);
+      seedAgent(agentId, audioModel.id);
       useAiInfraStore.setState({ enabledAiModels: [audioModel, textModel] });
       useUserStore.setState({ workspaceUserPreference: {} });
     });
@@ -108,29 +126,13 @@ describe('useCanSendVoiceMessage', () => {
     expect(result.current).toBe(true);
 
     act(() => {
-      useAgentStore.setState({
-        agentMap: {
-          [agentId]: {
-            chatConfig: {},
-            model: textModel.id,
-            provider: ModelProvider.Google,
-          },
-        },
-      } as any);
+      seedAgent(agentId, textModel.id);
     });
 
     expect(result.current).toBe(false);
 
     act(() => {
-      useAgentStore.setState({
-        agentMap: {
-          [agentId]: {
-            chatConfig: {},
-            model: audioModel.id,
-            provider: ModelProvider.Google,
-          },
-        },
-      } as any);
+      seedAgent(agentId, audioModel.id);
     });
 
     expect(result.current).toBe(true);

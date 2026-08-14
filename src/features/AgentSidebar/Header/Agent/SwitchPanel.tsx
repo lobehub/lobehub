@@ -4,10 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import {
-  type AgentRowRef,
-  useHomeAgentRows,
-} from '@/features/Home/AgentSelect/useHomeAgentRows';
+import { type AgentRowRef, useHomeAgentRows } from '@/features/Home/AgentSelect/useHomeAgentRows';
 import { resolvePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { SidebarHeaderSelectPopover } from '@/features/NavPanel/SidebarHeaderSelect';
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
@@ -37,9 +34,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const items = useMemo<SwitcherItem[]>(() => {
     const toItem = (row: AgentRowRef, isPrivate = false): SwitcherItem | undefined => {
       const meta =
-        row.source === 'builtin'
-          ? inboxMeta
-          : homeSidebarSelectors.getAgentById(row.id)(sidebar);
+        row.source === 'builtin' ? inboxMeta : homeSidebarSelectors.getAgentById(row.id)(sidebar);
       if (row.source === 'entity' && !meta) return undefined;
 
       return {

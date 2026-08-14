@@ -16,7 +16,7 @@ import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
-import { getAgentProjectionById } from '@/projection';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -28,7 +28,7 @@ import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentProjectionSelectors } from '@/store/agent/projection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
-import { getChatTopicById } from '@/store/chat/slices/topic/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getFileStoreState } from '@/store/file/store';
