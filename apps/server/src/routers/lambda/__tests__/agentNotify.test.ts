@@ -317,4 +317,35 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       expect.objectContaining({ type: 'notify_update' }),
     );
   });
+
+  it('writes a child notification to its own placeholder message', async () => {
+    const childOperationId = 'op-child-1';
+    const childMessageId = 'msg-child';
+    const supervisorMessageId = 'msg-supervisor';
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          assistantMessageId: supervisorMessageId,
+          childOperations: [{ assistantMessageId: childMessageId, operationId: childOperationId }],
+          operationId: OP,
+        },
+      },
+    });
+    mockMessageFindById.mockResolvedValue({ content: '', topicId: TOPIC });
+
+    await createCaller().notify({
+      content: 'child response',
+      operationId: childOperationId,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(mockMessageUpdate).toHaveBeenCalledWith(childMessageId, { content: 'child response' });
+    expect(mockMessageUpdate).not.toHaveBeenCalledWith(supervisorMessageId, expect.anything());
+    expect(mockPublishStreamEvent).toHaveBeenCalledWith(
+      childOperationId,
+      expect.objectContaining({ type: 'notify_update' }),
+    );
+  });
 });
