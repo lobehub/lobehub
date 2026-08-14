@@ -27,7 +27,10 @@ describe('resolveRailVisibility', () => {
 
   it('hides the rail once every widget it hosts is off, even with the preference on', () => {
     expect(
-      resolveRailVisibility({ ...signedIn, hiddenWidgets: ['running', 'news', 'suggestions'] }),
+      resolveRailVisibility({
+        ...signedIn,
+        hiddenWidgets: ['goals', 'running', 'news', 'suggestions'],
+      }),
     ).toBe(false);
   });
 
@@ -35,7 +38,7 @@ describe('resolveRailVisibility', () => {
     expect(
       resolveRailVisibility({
         ...signedIn,
-        hiddenWidgets: ['running', 'news', 'suggestions'],
+        hiddenWidgets: ['goals', 'running', 'news', 'suggestions'],
       }),
     ).toBe(false);
     expect(RAIL_INBOX_PROPS).toEqual({ hideNeedsYou: true, hideUnread: true });
@@ -48,7 +51,7 @@ describe('canHostRail', () => {
   });
 
   it('goes false exactly when the rail has no widget left to show', () => {
-    expect(canHostRail(['running', 'news', 'suggestions'])).toBe(false);
+    expect(canHostRail(['goals', 'running', 'news', 'suggestions'])).toBe(false);
   });
 
   it('stays true while needs-you and unread are the only ones off', () => {

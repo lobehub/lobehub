@@ -2118,7 +2118,11 @@ export class AgentEvalRunService {
       config?: EvalRunConfig | null;
       id: string;
       metrics?: EvalRunMetrics | null;
-      startedAt?: Date | null;
+      /**
+       * Accepts a string because the finalize-run workflow reads this row inside a step, and
+       * Upstash restores step results from JSON — the `Date` arrives as an ISO string.
+       */
+      startedAt?: Date | null | string;
     };
     runTopics: Array<{
       evalResult?: EvalRunTopicResult | null;

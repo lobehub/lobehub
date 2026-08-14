@@ -16,7 +16,7 @@ import {
 import type { ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
-import { isDeviceCapablePlan } from '@/helpers/executionTarget';
+import { isDeviceCapablePlan, isLocalSandboxEnabled } from '@/helpers/executionTarget';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
 import {
   isDeviceToolIdentifier,
@@ -206,10 +206,23 @@ export class ServerToolTransport implements ToolTransport {
                 : undefined,
               documentId: context.state.metadata?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
+              editingGroupId: context.state.metadata?.editingGroupId,
               execSubAgent: this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
               groupId: context.state.metadata?.groupId,
               isSubAgent: context.state.metadata?.isSubAgent === true,
+              // Sandboxing qualifies a `local` run, so it is gated on the plan's
+              // resolved target rather than the stored flag: a config that says
+              // `localSandbox` but landed on `sandbox`/`device` was never fenced,
+              // and telling the device otherwise would fence the wrong run.
+              localSandbox: context.state.metadata?.executionPlan
+                ? isLocalSandboxEnabled(
+                    context.state.metadata?.agentConfig?.agencyConfig,
+                    context.state.metadata.executionPlan.target,
+                  )
+                : undefined,
+              localSandboxNetwork:
+                context.state.metadata?.agentConfig?.agencyConfig?.localSandboxNetwork === true,
               memoryToolPermission:
                 context.state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
               messageId: context.state.metadata?.sourceMessageId,

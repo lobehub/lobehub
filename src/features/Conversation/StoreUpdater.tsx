@@ -8,6 +8,7 @@ import { createStoreUpdater } from 'zustand-utils';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useConversationStoreApi } from './store';
+import { createEphemeralResetState } from './store/initialState';
 import {
   type ActionsBarConfig,
   type ComposerTarget,
@@ -98,6 +99,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         // Update context first so replaceMessages uses the correct context
         // when calling onMessagesChange (otherwise writes to the old topic key)
         storeApi.setState({
+          ...createEphemeralResetState(),
           context,
           dbMessages: messages ?? [],
           displayMessages: [],

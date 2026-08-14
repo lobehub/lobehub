@@ -359,7 +359,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
 
       return {
-        content: `Goal task ${identifier} created and started with ${criteria.length} acceptance criteria.`,
+        content: `Goal task ${identifier} created and started with ${criteria.length} acceptance criteria. Execution continues in its separate task topic; do not perform or reproduce the task in this conversation.`,
         state: {
           identifier,
           name: params.name,

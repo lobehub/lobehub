@@ -16,7 +16,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock('@/components/AsyncBoundary', () => ({
   default: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('@/components/Loading/BrandTextLoading', () => ({ default: () => null }));
+vi.mock('@/components/Skeleton/Surface', () => ({ default: () => null }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));

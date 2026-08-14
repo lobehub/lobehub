@@ -11,7 +11,8 @@ import {
 } from '@/business/server/agent-transfer/jobRunner';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentModel } from '@/database/models/agent';
+import { AgentModel, AgentOwnedByGroupError } from '@/database/models/agent';
+import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
@@ -26,7 +27,11 @@ import { TopicModel } from '@/database/models/topic';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import type { ResourceAccessLevel } from '@/database/schemas';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
+import {
+  DEFAULT_RESOURCE_ACCESS_LEVELS,
+  LEGACY_VIEWER_ACCESS_LEVELS,
+  RESOURCE_ACCESS_LEVELS_BY_TYPE,
+} from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
@@ -44,6 +49,10 @@ import {
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import {
+  getRestrictedKnowledgeBaseIds,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
 
 const protectAgentConfig = async <T extends Record<string, any>>(
@@ -621,8 +630,17 @@ export const agentRouter = router({
       // in the model layer, and (b) hard-force `visibility='public'` when
       // the agent is public — the client tab is a UX aid, not a gate.
       const agentVisibility = await ctx.agentModel.getAgentVisibility(input.agentId);
-      const effectiveVisibility =
-        agentVisibility === 'public' ? ('public' as const) : input.visibility;
+
+      // `visibility` is workspace-scoped. In personal mode buildWorkspaceWhere
+      // ignores the column entirely (every row is implicitly private to its
+      // owner) while the column still defaults to 'public', so forcing a scope
+      // here would filter personal rows by a value that carries no meaning.
+      // Only workspace agents get a visibility scope.
+      const effectiveVisibility = ctx.workspaceId
+        ? agentVisibility === 'public'
+          ? ('public' as const)
+          : input.visibility
+        : undefined;
 
       const knowledgeBases = await ctx.knowledgeBaseModel.query({
         callerAgentVisibility: agentVisibility,
@@ -637,6 +655,23 @@ export const agentRouter = router({
 
       const knowledge = await ctx.agentModel.getAgentAssignedKnowledge(input.agentId);
 
+      // Member-restricted (No-access) KBs disappear from the picker for
+      // non-privileged members, except ones already attached to this agent —
+      // an invisible-but-attached row would be impossible to unmount. Managers
+      // keep seeing them, with a flag so the client can badge the icon.
+      const [restrictedForCaller, useLevelIds] = ctx.workspaceId
+        ? await Promise.all([
+            getRestrictedKnowledgeBaseIds(ctx),
+            getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          ])
+        : [[], []];
+      const restrictedSet = new Set(restrictedForCaller);
+      const memberRestrictedSet = new Set(useLevelIds);
+      const visibleKnowledgeBases = knowledgeBases.filter(
+        (kb) =>
+          !restrictedSet.has(kb.id) || knowledge.knowledgeBases.some((item) => item.id === kb.id),
+      );
+
       return [
         ...files
           // Filter out all images
@@ -650,11 +685,12 @@ export const agentRouter = router({
             type: KnowledgeType.File,
             visibility: file.visibility as 'private' | 'public',
           })),
-        ...knowledgeBases.map((knowledgeBase) => ({
+        ...visibleKnowledgeBases.map((knowledgeBase) => ({
           avatar: knowledgeBase.avatar,
           description: knowledgeBase.description,
           enabled: knowledge.knowledgeBases.some((item) => item.id === knowledgeBase.id),
           id: knowledgeBase.id,
+          memberRestricted: memberRestrictedSet.has(knowledgeBase.id),
           name: knowledgeBase.name,
           ownerUserId: knowledgeBase.userId,
           type: KnowledgeType.KnowledgeBase,
@@ -716,7 +752,28 @@ export const agentRouter = router({
           });
         }
       }
-      const result = await ctx.agentModel.delete(input.agentId);
+      let result;
+      try {
+        result = await ctx.agentModel.delete(input.agentId);
+      } catch (error) {
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        // A backfill still maps this agent's message rows — deleting it now
+        // would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferInProgress } },
+            code: 'CONFLICT',
+            message: "A previous transfer of this agent's history is still migrating",
+          });
+        }
+        throw error;
+      }
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
           'agent',
@@ -813,8 +870,27 @@ export const agentRouter = router({
         jobId: job.id,
         pendingTopicIds,
         totalTopics: job.totalTopics,
+        // `transfer` vs `copy` — the client words its progress hints by it.
+        type: job.type,
       };
     }),
+
+  /**
+   * What moving these agents would do to the chat groups they are in.
+   *
+   * Asked before the move, because both outcomes are invisible otherwise: a
+   * transfer drops every group link the agent holds — historically without a
+   * word — and a group-owned agent cannot be moved at all. The mutation
+   * enforces the second case regardless; this endpoint exists so the user
+   * learns about it while they can still choose differently.
+   */
+  getGroupMembershipImpact: agentProcedure
+    .input(z.object({ agentIds: z.array(z.string()).min(1).max(100) }))
+    .query(async ({ input, ctx }) =>
+      // Reports only on agents the caller can see — the model does that scoping
+      // itself, because the guard path deliberately does not.
+      ctx.agentModel.getGroupMembershipImpact(input.agentIds),
+    ),
 
   /**
    * The user opened a topic whose history is still migrating — jump it to the
@@ -941,6 +1017,22 @@ export const agentRouter = router({
             message: "Only workspace owners can transfer an agent carrying others' conversations",
           });
         }
+        if (error instanceof AgentOwnedByGroupError) {
+          throw new TRPCError({
+            // The group list travels with the code: "this agent belongs to a
+            // group" is only actionable once the user knows which group.
+            cause: { data: { code: TransferErrorCode.AgentOwnedByGroup, groups: error.groups } },
+            code: 'CONFLICT',
+            message: 'This agent belongs to a chat group and cannot be moved on its own',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
         if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TransferInProgress } },
@@ -962,9 +1054,17 @@ export const agentRouter = router({
         );
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        // A released client's two-valued `viewer` is an explicit "less than
+        // editor" choice, so it resolves through the legacy map rather than the
+        // default (which is `edit`); saying nothing at all still means "what a
+        // newly created agent would get".
         const targetAccessLevel =
           input.targetAccessLevel ??
-          (input.targetGeneralAccess === 'editor' ? 'edit' : DEFAULT_RESOURCE_ACCESS_LEVELS.agent);
+          (input.targetGeneralAccess
+            ? input.targetGeneralAccess === 'editor'
+              ? 'edit'
+              : LEGACY_VIEWER_ACCESS_LEVELS.agent
+            : DEFAULT_RESOURCE_ACCESS_LEVELS.agent);
         await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
           'agent',
           input.agentId,
@@ -1086,6 +1186,20 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
             message: "Only workspace owners can transfer agents carrying others' conversations",
+          });
+        }
+        if (error instanceof AgentOwnedByGroupError) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.AgentOwnedByGroup, groups: error.groups } },
+            code: 'CONFLICT',
+            message: 'One of these agents belongs to a chat group and cannot be moved on its own',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
           });
         }
         if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {

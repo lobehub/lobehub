@@ -22,6 +22,11 @@ const recommendationSession = (): OnboardingTaskRecommendationSession => ({
       sources: [
         { type: 'github', url: 'https://github.com/lobehub/lobehub/pull/1' },
         { subject: 'CI result', type: 'gmail', url: 'gmail:thread:1' },
+        {
+          title: 'Launch plan',
+          type: 'notion',
+          url: 'https://www.notion.so/launch-plan',
+        },
       ],
       title: 'Inspect the pull request state',
     },
@@ -65,10 +70,12 @@ describe('TaskRecommendationMaterializer', () => {
     };
 
     await expect(materializer.materialize(input)).resolves.toEqual({
+      created: true,
       status: 'success',
       taskId: 'task-1',
     });
     await expect(materializer.materialize(input)).resolves.toEqual({
+      created: false,
       status: 'success',
       taskId: 'task-1',
     });
@@ -84,6 +91,7 @@ describe('TaskRecommendationMaterializer', () => {
           'Sources:',
           '- https://github.com/lobehub/lobehub/pull/1',
           '- CI result: gmail:thread:1',
+          '- Launch plan: https://www.notion.so/launch-plan',
         ].join('\n'),
       }),
     );

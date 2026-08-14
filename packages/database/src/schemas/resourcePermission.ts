@@ -9,17 +9,27 @@ import { workspaces } from './workspace';
  * polymorphic on purpose: adding permission support to a new entity only
  * requires a new literal here, not a new table.
  */
-export const PERMISSION_RESOURCE_TYPES = ['agent', 'agentGroup', 'document'] as const;
+export const PERMISSION_RESOURCE_TYPES = [
+  'agent',
+  'agentGroup',
+  'document',
+  'knowledgeBase',
+] as const;
 export type PermissionResourceType = (typeof PERMISSION_RESOURCE_TYPES)[number];
 
 /**
  * Workspace-wide access levels for a public resource:
  * - Agent / Agent Group: `view`, `use`, or `edit`
  * - Document: `view` or `edit`
+ * - Knowledge Base: `use` or `edit`
  *
  * `use` grants chat execution without configuration access. `view` is the
  * read-only state. `edit` grants collaborative content/configuration editing
  * but never resource ownership or permission management.
+ *
+ * Knowledge bases invert the usual view/use ordering: `use` means "mountable
+ * on agents for retrieval" while browsing the internal file list is the
+ * privileged act, so browsing requires `edit` and there is no `view` level.
  * Permission management is deliberately not an access level: it is derived
  * from creator ownership or a workspace-scoped `:all` RBAC capability.
  */
@@ -30,17 +40,53 @@ export const RESOURCE_ACCESS_LEVELS_BY_TYPE = {
   agent: ['view', 'use', 'edit'],
   agentGroup: ['view', 'use', 'edit'],
   document: ['view', 'edit'],
+  knowledgeBase: ['use', 'edit'],
 } as const satisfies Record<PermissionResourceType, readonly ResourceAccessLevel[]>;
 
+/**
+ * What a public resource grants the workspace when nobody has said otherwise.
+ *
+ * Agents and Agent Groups default to `edit`: a workspace is a collaborative
+ * space, and the same default has to hold for both — a group whose members
+ * could only *use* it while the agents inside it were editable (or vice versa)
+ * reads as a bug, not as a policy. Documents stay `view`, which is the Notion-
+ * style expectation for a written page.
+ *
+ * Lowering a resource is one control away (the Permission page), and the
+ * creator / workspace owners are unaffected either way.
+ */
 export const DEFAULT_RESOURCE_ACCESS_LEVELS = {
-  agent: 'use',
-  agentGroup: 'use',
+  agent: 'edit',
+  agentGroup: 'edit',
   document: 'view',
+  // `edit` keeps the pre-feature behavior: every member may browse the file
+  // list until an admin/creator explicitly restricts the knowledge base.
+  knowledgeBase: 'edit',
 } as const satisfies Record<PermissionResourceType, ResourceAccessLevel>;
 
 export const getDefaultResourceAccessLevel = (
   resourceType: PermissionResourceType,
 ): ResourceAccessLevel => DEFAULT_RESOURCE_ACCESS_LEVELS[resourceType];
+
+/**
+ * What the released clients' two-valued `viewer` / `editor` role maps onto.
+ *
+ * Deliberately not `DEFAULT_RESOURCE_ACCESS_LEVELS`: those two happened to be
+ * the same value once, but they answer different questions — "nobody chose"
+ * versus "the caller chose the non-editor option". Now that the Agent / Group
+ * default is `edit`, resolving `viewer` through the default would hand edit
+ * access to a client that explicitly asked for less.
+ */
+export const LEGACY_VIEWER_ACCESS_LEVELS = {
+  agent: 'use',
+  agentGroup: 'use',
+  document: 'view',
+  knowledgeBase: 'use',
+} as const satisfies Record<PermissionResourceType, ResourceAccessLevel>;
+
+export const getLegacyViewerAccessLevel = (
+  resourceType: PermissionResourceType,
+): ResourceAccessLevel => LEGACY_VIEWER_ACCESS_LEVELS[resourceType];
 
 export const isResourceAccessLevelAllowed = (
   resourceType: PermissionResourceType,
@@ -55,9 +101,9 @@ export const isResourceAccessLevelAllowed = (
  *
  * The current phase intentionally has exactly one possible subject: the
  * resource's workspace. New or newly-published resources store an explicit
- * row. Public resources without a row resolve to the resource-specific safe
- * default (`use` for Agent/Group, `view` for Document), avoiding a production
- * backfill while keeping the rollout non-editable by default.
+ * row. Public resources without a row resolve to the resource-specific default
+ * (`edit` for Agent/Group, `view` for Document), so no production backfill is
+ * needed to keep legacy rows consistent with newly created ones.
  *
  * Visibility itself stays on the resources' own `visibility` column; this
  * table only grades what visible workspace members may do. Private resources

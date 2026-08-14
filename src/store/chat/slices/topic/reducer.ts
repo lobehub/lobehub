@@ -13,6 +13,12 @@ import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
  */
 interface ChatTopicScope {
   agentId?: string;
+  /**
+   * Pre-resolved `topicDataMap` key, taking precedence over the fields above.
+   * For callers that hold a topic id but not its container coordinates — see
+   * `topicSelectors.getTopicContainerKeyById`.
+   */
+  containerKey?: string;
   groupId?: string;
   scope?: TopicMapScope;
 }

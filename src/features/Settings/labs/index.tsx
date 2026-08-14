@@ -64,9 +64,11 @@ const LabsForm = memo(() => {
     enableImessage,
     enableClaudeCodeSdk,
     enableCodexAppServer,
+    enableDesktopSplitView,
     enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
+    enableProjects,
     enableInAppBrowser,
     enableArtifactDeployment,
     enableTopicAcceptance,
@@ -81,9 +83,11 @@ const LabsForm = memo(() => {
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableCodexAppServer(s),
+    labPreferSelectors.enableDesktopSplitView(s),
     labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
+    labPreferSelectors.enableProjects(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
     labPreferSelectors.enableTopicAcceptance(s),
@@ -154,6 +158,13 @@ const LabsForm = memo(() => {
       title: tLabs('features.topicAcceptance.title'),
     },
     {
+      checked: enableProjects,
+      desc: tLabs('features.projects.desc'),
+      flag: 'enableProjects',
+      stage: 'alpha',
+      title: tLabs('features.projects.title'),
+    },
+    {
       checked: enableOAuthApps,
       desc: tLabs('features.oauthApps.desc'),
       flag: 'enableOAuthApps',
@@ -172,6 +183,13 @@ const LabsForm = memo(() => {
   // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
   // in-app browser (renderer-retained Electron webviews).
   const desktopItems: LabToggle[] = [
+    {
+      checked: enableDesktopSplitView,
+      desc: tLabs('features.desktopSplitView.desc'),
+      flag: 'enableDesktopSplitView',
+      stage: 'alpha',
+      title: tLabs('features.desktopSplitView.title'),
+    },
     {
       checked: enableImessage,
       desc: tLabs('features.imessage.desc'),

@@ -1,13 +1,12 @@
 'use client';
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
-import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
@@ -86,7 +85,6 @@ const HeterogeneousChatInput = memo(() => {
   // the global (hijack-prone) active agent.
   const agentId = useConversationStore(contextSelectors.agentId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
-  const params = useParams<{ aid: string }>();
   const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
@@ -108,17 +106,8 @@ const HeterogeneousChatInput = memo(() => {
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
-  // Codex show the selector on every execution path (local / sandbox / device)
-  // since dispatch forwards --model/--effort everywhere.
-  const isSelectableHeteroProvider =
-    providerType === 'claude-code' ||
-    providerType === 'codex' ||
-    providerType === 'opencode' ||
-    providerType === 'pi' ||
-    providerType === 'qoder';
   const showHeteroModel =
-    isSelectableHeteroProvider &&
+    isHeteroSelectorAvailable(providerType) &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget,
@@ -152,7 +141,7 @@ const HeterogeneousChatInput = memo(() => {
   const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 
   const goToAgentProfile = () => {
-    if (params.aid) navigate(urlJoin('/agent', params.aid, 'profile'));
+    if (agentId) navigate(`/agent/${agentId}/profile`);
   };
 
   const deviceBlocked =

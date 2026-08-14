@@ -10,13 +10,9 @@ import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@
 import type { DragEvent, ForwardedRef, MouseEvent } from 'react';
 import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 
-import {
-  arrayEqual,
-  type NormalizedTree,
-  normalizeTree,
-  remapIdsToPaths,
-  remapPathsToIds,
-} from '../adapter';
+import { useSingleton } from '@/hooks/useSingleton';
+
+import { arrayEqual, normalizeTree, remapIdsToPaths, remapPathsToIds } from '../adapter';
 import { extractName, toCanonicalTreePath } from '../adapter/path';
 import type {
   ExplorerTreeHandle,
@@ -67,7 +63,9 @@ function ExplorerTreeInner<TData>(
   const propsRef = useRef(props);
   propsRef.current = props;
 
-  const adapterRef = useRef<NormalizedTree<TData>>(normalizeTree(props.nodes));
+  const adapterRef = useSingleton(() => ({
+    current: normalizeTree(props.nodes),
+  }));
 
   // emitted values so we don't fire feedback loops on change listeners
   const lastEmittedSelectedIds = useRef<string[]>(
@@ -250,7 +248,7 @@ function ExplorerTreeInner<TData>(
       lastExpandedSignatureRef.current = signature;
       onChange(nextExpanded);
     });
-  }, [model]);
+  }, [adapterRef, model]);
 
   const lastExpandedSignatureRef = useRef<string>('');
 
@@ -278,7 +276,7 @@ function ExplorerTreeInner<TData>(
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [props.selectedIds, model]);
+  }, [adapterRef, props.selectedIds, model]);
 
   useLayoutEffect(() => {
     const expandedIds = props.expandedIds;
@@ -304,7 +302,7 @@ function ExplorerTreeInner<TData>(
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [props.expandedIds, model]);
+  }, [adapterRef, props.expandedIds, model]);
 
   // nodes prop changes → resetPaths
   useLayoutEffect(() => {
@@ -398,7 +396,7 @@ function ExplorerTreeInner<TData>(
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [props.nodes, model]);
+  }, [adapterRef, props.nodes, model]);
 
   useImperativeHandle(
     ref,
@@ -439,7 +437,7 @@ function ExplorerTreeInner<TData>(
         model.startRenaming(path);
       },
     }),
-    [model],
+    [adapterRef, model],
   );
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {

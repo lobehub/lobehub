@@ -76,6 +76,22 @@ describe('collectGlobalApprovals', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('excludes a conversation visible in the side-by-side topic portal', () => {
+    const primaryContext = { agentId: 'agt_a', topicId: 'tpc_primary' };
+    const portalContext = { agentId: 'agt_a', scope: 'main' as const, topicId: 'tpc_portal' };
+    const primaryKey = messageMapKey(primaryContext);
+    const portalKey = messageMapKey(portalContext);
+
+    const groups = collectGlobalApprovals(
+      { [portalKey]: [pendingToolMessage('msg_1', 'call_1')] },
+      { op_1: op(portalContext) },
+      primaryKey,
+      portalKey,
+    );
+
+    expect(groups).toHaveLength(0);
+  });
+
   it('skips buckets that resolve to neither an operation nor message fields', () => {
     const ctx = { agentId: 'agt_a', topicId: 'tpc_1' };
     const key = messageMapKey(ctx);

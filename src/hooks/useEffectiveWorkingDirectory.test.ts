@@ -36,6 +36,9 @@ vi.mock('@/store/chat/selectors', () => ({
     currentTopicMetadata: (s: { topicMetadata?: object }) => s.topicMetadata,
     currentTopicWorkingDirectory: (s: { topicWorkingDirectory?: string }) =>
       s.topicWorkingDirectory,
+    getTopicById: () => (s: { topicMetadata?: object }) => ({ metadata: s.topicMetadata }),
+    getTopicWorkingDirectory: (id?: string | null) => (s: { topicWorkingDirectory?: string }) =>
+      id === null ? undefined : s.topicWorkingDirectory,
   },
 }));
 vi.mock('@/store/device', () => ({
@@ -136,6 +139,38 @@ describe('useEffectiveWorkingDirectory', () => {
     );
 
     expect(result.current).toBe('/repo/topic-project');
+  });
+
+  it('resolves a route-scoped topic override', () => {
+    setupStores({
+      agencyConfig: { workingDirByDevice: { 'device-A': '/repo/project' } },
+      topicWorkingDirectory: '/repo/split-pane-topic',
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveWorkingDirectory('agent-1', {
+        homeFallback: false,
+        topicId: 'topic-in-split-pane',
+      }),
+    );
+
+    expect(result.current).toBe('/repo/split-pane-topic');
+  });
+
+  it('does not inherit the active topic directory for a new-topic pane', () => {
+    setupStores({
+      agencyConfig: { workingDirByDevice: { 'device-A': '/repo/agent-default' } },
+      topicWorkingDirectory: '/repo/other-pane-topic',
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveWorkingDirectory('agent-1', {
+        homeFallback: false,
+        topicId: null,
+      }),
+    );
+
+    expect(result.current).toBe('/repo/agent-default');
   });
 
   it('keeps the device default cwd with homeFallback disabled', () => {

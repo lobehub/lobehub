@@ -296,6 +296,7 @@ export class TaskTopicModel {
         // assignee (which changes when the task is reassigned).
         agentId: topics.agentId,
         completedAt: topics.completedAt,
+        totalCost: topics.totalCost,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         metadata: topics.metadata,
@@ -323,6 +324,7 @@ export class TaskTopicModel {
         // assignee (which changes when the task is reassigned).
         agentId: topics.agentId,
         completedAt: topics.completedAt,
+        totalCost: topics.totalCost,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         metadata: topics.metadata,

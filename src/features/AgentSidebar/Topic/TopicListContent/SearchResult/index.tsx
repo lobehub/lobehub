@@ -13,10 +13,7 @@ import TopicItem from '../../List/Item';
 
 const SearchResult = memo(() => {
   const { t } = useTranslation('topic');
-  const [activeTopicId, isSearchingTopic] = useChatStore((s) => [
-    s.activeTopicId,
-    topicSelectors.isSearchingTopic(s),
-  ]);
+  const isSearchingTopic = useChatStore((s) => topicSelectors.isSearchingTopic(s));
   const topics = useChatStore(topicSelectors.searchTopics, isEqual);
 
   if (isSearchingTopic) return <SkeletonList />;
@@ -32,7 +29,6 @@ const SearchResult = memo(() => {
     <>
       {topics.map((topic) => (
         <TopicItem
-          active={activeTopicId === topic.id}
           fav={topic.favorite}
           id={topic.id}
           key={topic.id}

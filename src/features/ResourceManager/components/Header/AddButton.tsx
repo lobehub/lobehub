@@ -34,7 +34,7 @@ const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
       return 'audio/*';
     }
     case FilesTabs.Documents: {
-      return '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx';
+      return '.pdf,.doc,.docx,.md,.markdown,.txt,.rtf,.csv,.xls,.xlsx,.ppt,.pptx,.epub';
     }
     case FilesTabs.Images: {
       return 'image/*';
@@ -69,8 +69,9 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Navigate to "All" category first if not already there
-    if (category !== FilesTabs.All) {
+    // Navigate to "All" category first if not already there. The home
+    // dashboard and the Pages category both surface the new page, so stay put.
+    if (category !== FilesTabs.All && category !== FilesTabs.Home && category !== FilesTabs.Pages) {
       setCategory(FilesTabs.All);
     }
 
@@ -101,7 +102,7 @@ const AddButton = () => {
 
   const handleCreateFolder = useCallback(async () => {
     // Navigate to "All" category first if not already there
-    if (category !== FilesTabs.All) {
+    if (category !== FilesTabs.All && category !== FilesTabs.Home) {
       setCategory(FilesTabs.All);
     }
 

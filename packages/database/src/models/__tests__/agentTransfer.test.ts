@@ -809,6 +809,151 @@ describe('AgentModel.transferAgent', () => {
     expect(groupLinks).toHaveLength(0);
   });
 
+  it('should refuse to move a group supervisor and leave the group untouched', async () => {
+    // The regression this guards: the roster delete below used to run
+    // unconditionally, so the group lost its supervisor, and the next read
+    // silently minted a blank replacement — systemRole, model and all.
+    const model = new AgentModel(serverDB, userId);
+    const supervisor = await model.create({
+      model: 'gpt-5',
+      systemRole: 'You orchestrate the group',
+      title: 'Supervisor',
+      virtual: true,
+    });
+
+    await serverDB.insert(chatGroups).values({ id: 'sup-group', title: 'Squad', userId });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: supervisor.id,
+      chatGroupId: 'sup-group',
+      role: 'supervisor',
+      userId,
+    });
+
+    await expect(model.transferAgent(supervisor.id, wsId1, userId)).rejects.toMatchObject({
+      groups: [{ agentId: supervisor.id, groupId: 'sup-group', groupTitle: 'Squad' }],
+      message: 'AGENT_OWNED_BY_GROUP',
+    });
+
+    const [link] = await serverDB
+      .select()
+      .from(chatGroupsAgents)
+      .where(eq(chatGroupsAgents.agentId, supervisor.id));
+    expect(link.role).toBe('supervisor');
+
+    const kept = await serverDB.query.agents.findFirst({ where: eq(agents.id, supervisor.id) });
+    expect(kept).toMatchObject({
+      model: 'gpt-5',
+      systemRole: 'You orchestrate the group',
+      workspaceId: null,
+    });
+  });
+
+  it('should refuse a supervisor row regardless of the agent flags', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const supervisor = await model.create({ title: 'Legacy Supervisor', virtual: true });
+
+    await serverDB.insert(chatGroups).values({ id: 'legacy-sup-group', title: 'Legacy', userId });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: supervisor.id,
+      chatGroupId: 'legacy-sup-group',
+      role: 'supervisor',
+      userId,
+    });
+
+    await expect(model.transferAgent(supervisor.id, wsId1, userId)).rejects.toThrow(
+      'AGENT_OWNED_BY_GROUP',
+    );
+  });
+
+  it('getGroupMembershipImpact reports groups an agent would leave', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Joiner' });
+
+    await serverDB.insert(chatGroups).values({ id: 'impact-group', title: 'Impact', userId });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: agent.id,
+      chatGroupId: 'impact-group',
+      userId,
+    });
+
+    await expect(model.getGroupMembershipImpact([agent.id])).resolves.toEqual({
+      blocked: [],
+      leaving: [
+        {
+          agentId: agent.id,
+          groupAvatar: null,
+          groupBackgroundColor: null,
+          groupId: 'impact-group',
+          groupTitle: 'Impact',
+          groupVisible: true,
+        },
+      ],
+    });
+  });
+
+  it('getGroupMembershipImpact withholds the title of a group the caller cannot see', async () => {
+    // The membership still counts — the guard must not weaken because of who
+    // is asking — but the name of another member's private group is not the
+    // caller's to read.
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Shared', visibility: 'public' });
+
+    await serverDB.insert(chatGroups).values({
+      id: 'hidden-group',
+      title: 'Someone Else Private Group',
+      userId: targetUserId,
+      visibility: 'private',
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: agent.id,
+      chatGroupId: 'hidden-group',
+      userId: targetUserId,
+      workspaceId: wsId1,
+    });
+
+    await expect(model.getGroupMembershipImpact([agent.id])).resolves.toEqual({
+      blocked: [],
+      // A hidden group withholds its whole identity, not just the name.
+      leaving: [
+        {
+          agentId: agent.id,
+          groupAvatar: null,
+          groupBackgroundColor: null,
+          // Hidden as a unit: the id is identity too.
+          groupId: null,
+          groupTitle: null,
+          groupVisible: false,
+        },
+      ],
+    });
+  });
+
+  it('getGroupMembershipImpact reports nothing for an agent the caller cannot see', async () => {
+    // Otherwise the endpoint answers "which groups is this id in?" for any id
+    // at all. The guard inside `transferAgents` is deliberately unscoped; this
+    // read is not, and the difference has to hold at the model boundary.
+    const owner = new AgentModel(serverDB, targetUserId);
+    const secret = await owner.create({ title: 'Not Yours' });
+
+    await serverDB.insert(chatGroups).values({
+      id: 'unseen-group',
+      title: 'Unseen',
+      userId: targetUserId,
+    });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: secret.id,
+      chatGroupId: 'unseen-group',
+      userId: targetUserId,
+    });
+
+    const stranger = new AgentModel(serverDB, userId);
+    await expect(stranger.getGroupMembershipImpact([secret.id])).resolves.toEqual({
+      blocked: [],
+      leaving: [],
+    });
+  });
+
   it('should throw when agent not found', async () => {
     const model = new AgentModel(serverDB, userId);
     await expect(model.transferAgent('nonexistent', wsId1, userId)).rejects.toThrow(

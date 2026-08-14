@@ -4,20 +4,21 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
-  codexModelSupportsFastSpeed,
-  codexModelSupportsReasoningEffort,
-  getCodexReasoningEffortLevels,
-  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+} from './agencyConfig';
+import {
+  codexModelSupportsFastSpeed,
+  getCodexReasoningEffortLevels,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
-} from './agencyConfig';
+} from './heteroSelectorCapabilities';
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {
@@ -112,7 +113,52 @@ describe('buildHeteroSpawnArgs', () => {
     expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
   });
 
-  it('forwards Qoder native args and model while leaving effort to the CLI default', () => {
+  it('forwards Cursor native args and configured model without duplicating --model', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--mode', 'plan'],
+      model: 'sonnet-4-thinking',
+      type: 'cursor',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--mode',
+      'plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--mode',
+      '--agent-arg=plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'gpt-5'],
+        model: 'sonnet-4-thinking',
+        type: 'cursor',
+      }),
+    ).toEqual(['--model', 'gpt-5']);
+  });
+
+  it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--feature', 'test'],
+      effort: 'high',
+      model: 'ignored-selector',
+      type: 'trae',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--feature', 'test']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+      '--model',
+      'ignored-selector',
+    ]);
+  });
+
+  it('forwards Qoder native args, model, and reasoning effort', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--verbose'],
       effort: 'high',
@@ -120,15 +166,39 @@ describe('buildHeteroSpawnArgs', () => {
       type: 'qoder',
     };
 
-    expect(buildHeteroSpawnArgs(provider)).toEqual(['--verbose', '--model', 'qoder-model']);
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--verbose',
+      '--model',
+      'qoder-model',
+      '--reasoning-effort',
+      'high',
+    ]);
     expect(buildHeteroExecArgs(provider)).toEqual([
       '--agent-arg=--verbose',
       '--model',
       'qoder-model',
+      '--effort',
+      'high',
     ]);
   });
 
-  it('preserves a Qoder model from native args and does not inject Default', () => {
+  it('forwards Kimi Code native args and an explicit model through both spawn paths', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--verbose'],
+      effort: 'high',
+      model: 'kimi-for-coding',
+      type: 'kimi-code',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--verbose', '--model', 'kimi-for-coding']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--verbose',
+      '--model',
+      'kimi-for-coding',
+    ]);
+  });
+
+  it('preserves Qoder model and reasoning effort from native args without injecting duplicates', () => {
     expect(
       buildHeteroSpawnArgs({
         args: ['-m', 'native-model'],
@@ -143,6 +213,20 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'qoder',
       }),
     ).toEqual(['--agent-arg=--model=native-model']);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--reasoning-effort', 'max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--reasoning-effort', 'max']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--reasoning-effort=max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--agent-arg=--reasoning-effort=max']);
     expect(
       buildHeteroSpawnArgs({
         model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
@@ -265,6 +349,13 @@ describe('buildHeteroSpawnArgs', () => {
       '--effort',
       'high',
     ]);
+  });
+
+  it('appends CodeBuddy model and effort using its Claude-compatible CLI flags', () => {
+    const provider = { effort: 'high', model: 'gpt-5.4', type: 'codebuddy' } as const;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
   });
 
   it('preserves existing args and appends after them', () => {
@@ -437,14 +528,6 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-sol')).toEqual(ultraLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.6-terra')).toEqual(ultraLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
-  });
-
-  it('reports model-specific Max and Ultra support', () => {
-    expect(codexModelSupportsReasoningEffort('gpt-5.6', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-sol', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-terra', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'max')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'ultra')).toBe(false);
   });
 
   it('uses conservative common levels for old, unknown, and default models', () => {

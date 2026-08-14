@@ -94,6 +94,56 @@ describe('AiInfraRepos', () => {
       );
     });
 
+    it('should keep the builtin deploymentName when the user row only stores chatConfig', async () => {
+      const mockProviders = [
+        {
+          enabled: true,
+          id: 'volcengine',
+          name: 'Volcengine',
+          sort: 1,
+          source: 'builtin' as const,
+        },
+      ];
+
+      // Preference-only row created by updateModelReasoningConfig: its config
+      // holds just chatConfig, but must not shadow the builtin card's
+      // config.deploymentName that findDeploymentName relies on
+      const mockAllModels = [
+        {
+          config: { chatConfig: { reasoningEffort: 'high' } },
+          id: 'deepseek-v4',
+          providerId: 'volcengine',
+          type: 'chat' as const,
+        },
+      ] as any[];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue(mockAllModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          abilities: {},
+          config: { deploymentName: 'deepseek-v4-250801' },
+          displayName: 'DeepSeek V4',
+          enabled: true,
+          id: 'deepseek-v4',
+          type: 'chat' as const,
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+
+      expect(result).toContainEqual(
+        expect.objectContaining({
+          config: {
+            chatConfig: { reasoningEffort: 'high' },
+            deploymentName: 'deepseek-v4-250801',
+          },
+          id: 'deepseek-v4',
+          providerId: 'volcengine',
+        }),
+      );
+    });
+
     it('should handle case when user model not found', async () => {
       const mockProviders = [
         { enabled: true, id: 'openai', name: 'OpenAI', sort: 1, source: 'builtin' as const },

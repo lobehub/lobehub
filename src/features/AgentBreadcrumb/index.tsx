@@ -40,8 +40,11 @@ interface AgentBreadcrumbProps {
   extraItems?: ReactNode[];
   /**
    * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
+   * Omit it where the page already names its own section — the profile group
+   * carries a Segmented switcher, so repeating the active tab here would render
+   * the same word twice in one 44px bar.
    */
-  title: ReactNode;
+  title?: ReactNode;
 }
 
 /**
@@ -80,13 +83,17 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
             </Link>
           ),
         },
-        {
-          title: (
-            <Text as={'span'} color={'inherit'} weight={500}>
-              {title}
-            </Text>
-          ),
-        },
+        ...(title === undefined || title === null
+          ? []
+          : [
+              {
+                title: (
+                  <Text as={'span'} color={'inherit'} weight={500}>
+                    {title}
+                  </Text>
+                ),
+              },
+            ]),
         ...(extraItems ?? []).map((item, index) => ({
           key: `extra-${index}`,
           title: (

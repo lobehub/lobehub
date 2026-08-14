@@ -7,6 +7,7 @@ import { useChatStore } from '@/store/chat';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 
 import { type Store as ConversationStore } from '../../../action';
+import { isSameConversationContext } from '../../../utils/contextGuard';
 import { dataSelectors } from '../../data/selectors';
 
 /**
@@ -82,7 +83,7 @@ export const messageStateSlice: StateCreator<
     });
 
     // Replace messages with restored original messages
-    replaceMessages(messages);
+    replaceMessages(messages, { expectedContext: context });
   },
 
   copyMessage: async (id, content) => {
@@ -114,7 +115,7 @@ export const messageStateSlice: StateCreator<
   },
 
   modifyMessageContent: async (id, content, editorData) => {
-    const { hooks } = get();
+    const { context, hooks } = get();
 
     // Get original content for hook
     const originalMessage = dataSelectors.getDisplayMessageById(id)(get());
@@ -122,6 +123,7 @@ export const messageStateSlice: StateCreator<
 
     // Update content
     await get().updateMessageContent(id, content, editorData ? { editorData } : undefined);
+    if (!isSameConversationContext(context, get().context)) return;
 
     // ===== Hook: onMessageModified =====
     if (hooks.onMessageModified) {
@@ -160,7 +162,7 @@ export const messageStateSlice: StateCreator<
     });
 
     // Sync with server data
-    replaceMessages(messages);
+    replaceMessages(messages, { expectedContext: context });
   },
 
   toggleInspectExpanded: async (id, expanded) => {

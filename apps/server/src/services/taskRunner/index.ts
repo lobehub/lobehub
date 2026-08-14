@@ -216,6 +216,7 @@ export class TaskRunnerService {
               // knows whether this was a manual run or an automation tick.
               body: { runTrigger: trigger, taskId, taskIdentifier, userId },
               delivery: 'qstash' as const,
+              fallback: 'none' as const,
               url: '/api/workflows/task/on-topic-complete',
             },
           },

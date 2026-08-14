@@ -1,5 +1,5 @@
 import { Timer, TimerOff } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -18,7 +18,6 @@ const History = memo(() => {
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     chatConfigByIdSelectors.getChatConfigById(agentId)(s),
   ]);
-  const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
   const isMobile = useIsMobile();
 
@@ -41,11 +40,10 @@ const History = memo(() => {
   return (
     <ChatInputAction
       icon={enableHistoryCount ? Timer : TimerOff}
-      loading={updating}
       showTooltip={false}
       title={title}
       popover={{
-        content: <Controls setUpdating={setUpdating} updating={updating} />,
+        content: <Controls />,
         minWidth: 240,
         trigger: isMobile ? 'click' : 'hover',
       }}

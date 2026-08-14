@@ -22,7 +22,7 @@ import {
   ModelRuntime,
 } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
-import { type ClientSecretPayload } from '@lobechat/types';
+import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -78,12 +78,30 @@ describe('initModelRuntimeWithUserPayload method', () => {
     it('OpenAI provider: with apikey and endpoint', async () => {
       const jwtPayload: ClientSecretPayload = {
         apiKey: 'user-openai-key',
-        baseURL: 'user-endpoint',
+        baseURL: 'https://user-endpoint.test/v1',
       };
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, jwtPayload);
       expect(runtime).toBeInstanceOf(ModelRuntime);
       expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
       expect(runtime['_runtime'].baseURL).toBe(jwtPayload.baseURL);
+    });
+
+    it('rejects an invalid user baseURL as a bad request before SDK initialization', () => {
+      let thrownError: unknown;
+
+      try {
+        initModelRuntimeWithUserPayload(ModelProvider.OpenAI, {
+          apiKey: 'user-openai-key',
+          baseURL: 'https://api.example.com /v1/chat/completions',
+        });
+      } catch (error) {
+        thrownError = error;
+      }
+
+      expect(thrownError).toEqual({
+        error: { message: 'Invalid provider baseURL' },
+        errorType: ChatErrorType.BadRequest,
+      });
     });
 
     it('Azure AI provider: with apikey, endpoint and apiversion', async () => {
@@ -354,7 +372,7 @@ describe('initModelRuntimeWithUserPayload method', () => {
     it('Unknown Provider: with apikey and endpoint, should initialize to OpenAi', async () => {
       const jwtPayload: ClientSecretPayload = {
         apiKey: 'user-unknown-key',
-        baseURL: 'user-unknown-endpoint',
+        baseURL: 'https://user-unknown-endpoint.test/v1',
       };
       const runtime = await initModelRuntimeWithUserPayload('unknown', jwtPayload);
       expect(runtime).toBeInstanceOf(ModelRuntime);

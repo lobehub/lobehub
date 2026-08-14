@@ -19,6 +19,9 @@ export default {
   'features.codexAppServer.desc':
     'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
   'features.codexAppServer.title': 'Codex App Server Runtime',
+  'features.desktopSplitView.desc':
+    'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
+  'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
@@ -39,6 +42,9 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
+  'features.projects.desc':
+    'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
+  'features.projects.title': 'Project Workspaces',
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',

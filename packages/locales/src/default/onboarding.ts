@@ -69,13 +69,18 @@ export default {
   'flow.steps.learnYourWorld.analysisFailed':
     'We could not finish analyzing your connected sources.',
   'flow.steps.learnYourWorld.description': 'Building your user profile',
+  'flow.steps.learnYourWorld.factsTitle': 'What we found',
   'flow.steps.learnYourWorld.progress.build': 'Building a user profile based on what we learn.',
+  'flow.steps.learnYourWorld.progress.buildEta': 'about 20–30s',
   'flow.steps.learnYourWorld.progress.explore': 'Exploring more signals to understand you better.',
+  'flow.steps.learnYourWorld.progress.exploreEta': 'about 20–30s',
   'flow.steps.learnYourWorld.progress.review': 'Reviewing your connected information.',
   'flow.steps.learnYourWorld.retry': 'Retry',
   'flow.steps.learnYourWorld.sectionHint':
     'Analyze your connected data to understand what matters to you…',
   'flow.steps.learnYourWorld.skipAhead': 'Skip ahead',
+  'flow.steps.learnYourWorld.skipNotificationHint':
+    "💡 You can skip this step for now — we'll notify you when your profile is ready.",
   'flow.steps.learnYourWorld.title': 'Learn your world',
   'flow.steps.messenger.connect': 'Connect',
   'flow.steps.messenger.connected': 'Connected',

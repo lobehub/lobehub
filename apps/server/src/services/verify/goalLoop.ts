@@ -99,7 +99,7 @@ export const goalReadyForReviewBriefCopy = (
     ? [
         {
           key: 'review',
-          label: '🔍 Review delivery',
+          label: 'Review delivery',
           type: 'link',
           url: `/acceptance/${acceptanceId}`,
         },

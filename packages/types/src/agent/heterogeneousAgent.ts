@@ -1,3 +1,5 @@
+import type { TopicGroupMode } from '../topic/topic';
+
 export interface HeterogeneousAgentAuthDescriptor {
   docsUrl: string;
   errorMessage: string;
@@ -19,6 +21,13 @@ export interface HeterogeneousAgentInstallDescriptor {
 export interface LocalHeterogeneousAgentDescriptor {
   auth: HeterogeneousAgentAuthDescriptor;
   defaultCommand: string;
+  /**
+   * Topic-list grouping the agent's conversations fall back to when neither the
+   * agent nor the user has pinned an explicit mode. CLI agents run anchored to a
+   * working directory, so folder-based `byProject` grouping is the natural
+   * default for them. Omit to inherit the global user preference.
+   */
+  defaultTopicGroupMode?: TopicGroupMode;
   iconId: string;
   install: HeterogeneousAgentInstallDescriptor;
   kind: 'local-cli';
@@ -50,6 +59,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'amp login',
     },
     defaultCommand: 'amp',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Amp',
     install: {
       commands: [
@@ -70,10 +80,15 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       errorMessage:
         'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-      patterns: COMMON_AUTH_REQUIRED_PATTERNS,
+      // Current Claude Code builds can emit this as plain process output before
+      // the structured result event reaches the adapter. Keep it in the shared
+      // process classifier so server-side `heteroFinish` can still recover the
+      // dedicated auth-required error card from a flattened payload.
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'not logged in'],
       signInCommand: 'claude',
     },
     defaultCommand: 'claude',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'ClaudeCode',
     install: {
       commands: [
@@ -91,6 +106,35 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://www.codebuddy.ai/docs/cli/installation',
+      errorMessage: 'CodeBuddy could not authenticate. Run `codebuddy`, use `/login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'please use \\/login',
+        'not logged in',
+      ],
+      signInCommand: 'codebuddy',
+    },
+    defaultCommand: 'codebuddy',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'CodeBuddy',
+    install: {
+      commands: [
+        'npm install -g @tencent-ai/codebuddy-code',
+        'brew install Tencent-CodeBuddy/tap/codebuddy-code',
+      ],
+      docsUrl: 'https://www.codebuddy.ai/docs/cli/installation',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCodeBuddyAgent',
+    menuLabelKey: 'newCodeBuddyAgent',
+    resume: { supported: true },
+    title: 'CodeBuddy',
+    type: 'codebuddy',
+  },
+  {
+    auth: {
       docsUrl: 'https://github.com/openai/codex#installing-and-running-codex-cli',
       errorMessage:
         'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
@@ -98,6 +142,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'codex',
     },
     defaultCommand: 'codex',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Codex',
     install: {
       commands: ['npm install -g @openai/codex', 'brew install --cask codex'],
@@ -112,6 +157,81 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://cursor.com/docs/cli/installation',
+      errorMessage: 'Cursor could not authenticate. Run `agent login`, then retry.',
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'authentication required', 'not logged in'],
+      signInCommand: 'agent login',
+    },
+    defaultCommand: 'agent',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Cursor',
+    install: {
+      commands: ['curl https://cursor.com/install -fsS | bash'],
+      docsUrl: 'https://cursor.com/docs/cli/installation',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCursorAgent',
+    menuLabelKey: 'newCursorAgent',
+    resume: { supported: true },
+    title: 'Cursor',
+    type: 'cursor',
+  },
+  {
+    auth: {
+      docsUrl: 'https://docs.x.ai/build/overview',
+      errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'no cached auth token found',
+        'session expired',
+        'run `grok login`',
+      ],
+      signInCommand: 'grok login',
+    },
+    defaultCommand: 'grok',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Grok',
+    install: {
+      commands: [
+        'curl -fsSL https://x.ai/cli/install.sh | bash',
+        'irm https://x.ai/cli/install.ps1 | iex',
+      ],
+      docsUrl: 'https://docs.x.ai/build/overview',
+    },
+    kind: 'local-cli',
+    menuKey: 'newGrokBuildAgent',
+    menuLabelKey: 'newGrokBuildAgent',
+    resume: { supported: true },
+    title: 'Grok Build',
+    type: 'grok-build',
+  },
+  {
+    auth: {
+      docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
+      errorMessage: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'no model configured'],
+      signInCommand: 'kimi',
+    },
+    defaultCommand: 'kimi',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Kimi',
+    install: {
+      commands: [
+        'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
+        'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
+      ],
+      docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
+    },
+    kind: 'local-cli',
+    menuKey: 'newKimiCodeAgent',
+    menuLabelKey: 'newKimiCodeAgent',
+    resume: { supported: true },
+    title: 'Kimi Code',
+    type: 'kimi-code',
+  },
+  {
+    auth: {
       docsUrl: 'https://opencode.ai/docs',
       errorMessage:
         'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
@@ -123,6 +243,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'opencode auth login',
     },
     defaultCommand: 'opencode',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'OpenCode',
     install: {
       commands: ['curl -fsSL https://opencode.ai/install | bash'],
@@ -146,6 +267,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'pi',
     },
     defaultCommand: 'pi',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Pi',
     install: {
       commands: ['npm install -g @earendil-works/pi-coding-agent'],
@@ -166,6 +288,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       signInCommand: 'qodercli login',
     },
     defaultCommand: 'qodercli',
+    defaultTopicGroupMode: 'byProject',
     iconId: 'Qoder',
     install: {
       commands: [
@@ -180,6 +303,32 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     resume: { supported: true },
     title: 'Qoder',
     type: 'qoder',
+  },
+  {
+    auth: {
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+      errorMessage: 'TRAE CLI could not authenticate. Sign in through TRAE Enterprise, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'please (?:log|sign) in',
+      ],
+      signInCommand: 'traecli',
+    },
+    defaultCommand: 'traecli',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Trae',
+    install: {
+      commands: [],
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+    },
+    kind: 'local-cli',
+    menuKey: 'newTraeAgent',
+    menuLabelKey: 'newTraeAgent',
+    resume: { supported: true },
+    title: 'TRAE CLI',
+    type: 'trae',
   },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
 

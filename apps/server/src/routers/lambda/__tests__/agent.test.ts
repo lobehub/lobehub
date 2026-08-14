@@ -13,6 +13,7 @@ import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -78,6 +79,22 @@ vi.mock('@/server/services/agent', () => ({
 
 vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
+}));
+
+// The serverDatabase middleware replaces ctx.serverDB with this. The chain is
+// awaitable-empty so the restricted-KB lookups resolve to "no restrictions".
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(() => ({
+    select: vi.fn(() => ({
+      from: vi.fn(() => {
+        const whereResult = () => Promise.resolve([]);
+        return {
+          innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+          where: vi.fn(whereResult),
+        };
+      }),
+    })),
+  })),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
@@ -328,6 +345,7 @@ describe('agentRouter', () => {
           description: 'desc 1',
           enabled: true,
           id: 'kb1',
+          memberRestricted: false,
           name: 'KB 1',
           ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,
@@ -338,12 +356,48 @@ describe('agentRouter', () => {
           description: 'desc 2',
           enabled: false,
           id: 'kb2',
+          memberRestricted: false,
           name: 'KB 2',
           ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,
           visibility: undefined,
         },
       ]);
+    });
+
+    // Regression: `visibility` is workspace-scoped — buildWorkspaceWhere ignores
+    // the column in personal mode while it still defaults to 'public', so
+    // forcing the public scope there filtered personal rows by a value that
+    // carries no meaning.
+    it('sends no visibility scope in personal mode, even for a public agent', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller(mockCtx);
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+      expect(knowledgeBaseModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
+      );
+    });
+
+    it('forces the workspace scope for a public agent inside a workspace', async () => {
+      agentModelMock.getAgentVisibility.mockResolvedValue('public');
+      fileModelMock.query.mockResolvedValue([]);
+      knowledgeBaseModelMock.query.mockResolvedValue([]);
+      agentModelMock.getAgentAssignedKnowledge.mockResolvedValue({ files: [], knowledgeBases: [] });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      await caller.getKnowledgeBasesAndFiles({ agentId: 'agent1', visibility: 'private' });
+
+      expect(fileModelMock.query).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'public' }),
+      );
     });
   });
 
@@ -496,7 +550,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'copied-agent',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
       // Folder placement is shared state, carried by AgentModel.duplicate's
@@ -555,7 +609,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });
@@ -701,7 +755,7 @@ describe('agentRouter', () => {
       expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
         'agent',
         'agent-1',
-        'use',
+        DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
         userId,
       );
     });

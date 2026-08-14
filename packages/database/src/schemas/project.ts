@@ -33,9 +33,16 @@ export const projects = pgTable(
       .$defaultFn(() => idGenerator('projects'))
       .notNull(),
     slug: varchar('slug', { length: 100 }).$defaultFn(() => randomSlug(3)),
+    /** Human-readable task prefix within the project scope, for example LOBE. */
+    identifier: varchar('identifier', { length: 6 }).notNull(),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),
     avatar: text('avatar'),
+
+    /** Dedicated agent that coordinates all conversations and work inside this project. */
+    coordinatorAgentId: text('coordinator_agent_id')
+      .references(() => agents.id, { onDelete: 'restrict' })
+      .notNull(),
 
     status: text('status').$type<ProjectStatus>().notNull().default('backlog'),
 
@@ -65,10 +72,17 @@ export const projects = pgTable(
     uniqueIndex('projects_slug_workspace_id_unique')
       .on(t.workspaceId, t.slug)
       .where(sql`${t.workspaceId} IS NOT NULL`),
+    uniqueIndex('projects_identifier_user_id_unique')
+      .on(t.identifier, t.userId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    uniqueIndex('projects_identifier_workspace_id_unique')
+      .on(t.workspaceId, t.identifier)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
     index('projects_user_id_idx').on(t.userId),
     index('projects_workspace_id_idx').on(t.workspaceId),
     index('projects_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     index('projects_status_updated_at_idx').on(t.status, t.updatedAt),
+    uniqueIndex('projects_coordinator_agent_id_unique').on(t.coordinatorAgentId),
     check(
       'projects_completed_requires_human_review',
       sql`${t.status} <> 'completed' OR (${t.completedReviewId} IS NOT NULL AND ${t.completedAt} IS NOT NULL)`,

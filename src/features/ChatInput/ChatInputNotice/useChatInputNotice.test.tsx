@@ -18,7 +18,8 @@ interface TestProviderWithModels {
 const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as
-      { executionTarget?: string; heterogeneousProvider?: { type: string } } | undefined,
+      | { executionTarget?: string; heterogeneousProvider?: { type: string } }
+      | undefined,
     isConfigLoading: false,
     model: 'gpt-4o',
     provider: 'openai',
@@ -154,7 +155,7 @@ describe('useChatInputNotice', () => {
     expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
   });
 
-  it('stays silent for a gated member who can use but not edit the agent (LOBE-12547)', () => {
+  it('stays silent for a gated member who can use but not edit the agent', () => {
     // The use-only permission is explained on the controls it actually locks
     // (model trigger / device chip), not as a standing banner.
     testState.resourceAccess = {

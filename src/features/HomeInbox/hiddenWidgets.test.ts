@@ -79,7 +79,10 @@ describe('hasVisibleRailWidget', () => {
   // either would keep an empty rail on screen forever.
   it('drops the rail once every widget it hosts is off, ignoring the ones it never shows', () => {
     expect(
-      hasVisibleRailWidget({ ...railColumn, hiddenWidgets: ['running', 'news', 'suggestions'] }),
+      hasVisibleRailWidget({
+        ...railColumn,
+        hiddenWidgets: ['goals', 'running', 'news', 'suggestions'],
+      }),
     ).toBe(false);
   });
 
@@ -87,7 +90,7 @@ describe('hasVisibleRailWidget', () => {
     expect(
       hasVisibleRailWidget({
         ...railColumn,
-        hiddenWidgets: ['needsYou', 'unread', 'running', 'news', 'suggestions'],
+        hiddenWidgets: ['goals', 'needsYou', 'unread', 'running', 'news', 'suggestions'],
       }),
     ).toBe(false);
   });

@@ -1,6 +1,7 @@
 import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LobeVertexAI } from '../../providers/vertexai';
 import { getRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
@@ -13,6 +14,7 @@ describe('createRouterRuntime', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    vi.doUnmock('./baseRuntimeMap');
   });
 
   describe('initialization', () => {
@@ -631,6 +633,163 @@ describe('createRouterRuntime', () => {
   });
 
   describe('fallback mechanism', () => {
+    it('should only use raw-audio-compatible routes for audio messages', async () => {
+      const attemptedRoutes: string[] = [];
+
+      class CompatibleRuntime implements LobeRuntimeAI {
+        private readonly apiKey: string;
+
+        constructor(options: any) {
+          this.apiKey = options.apiKey;
+        }
+
+        chat = vi.fn().mockImplementation(async () => {
+          attemptedRoutes.push(this.apiKey);
+          throw new Error(`${this.apiKey} failed`);
+        });
+      }
+
+      vi.doMock('./baseRuntimeMap', () => ({
+        baseRuntimeMap: {
+          google: CompatibleRuntime,
+          openai: CompatibleRuntime,
+        },
+      }));
+
+      const vertexChat = vi.fn().mockImplementation(async () => {
+        attemptedRoutes.push('vertexai');
+        return 'vertex-response';
+      });
+      vi.spyOn(LobeVertexAI, 'initFromVertexAI').mockReturnValue({ chat: vertexChat } as any);
+
+      const unsupportedChat = vi.fn();
+
+      class UnsupportedRuntime implements LobeRuntimeAI {
+        chat = unsupportedChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'anthropic',
+            models: ['audio-model'],
+            options: [
+              { apiKey: 'anthropic-key', apiType: 'anthropic' },
+              { apiKey: 'google-key', apiType: 'google' },
+              { apiKey: 'xai-key', apiType: 'xai' },
+              { apiKey: 'openai-key', apiType: 'openai' },
+              { apiKey: 'vertex-key', apiType: 'vertexai' },
+            ],
+            runtime: UnsupportedRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const result = await runtime.chat({
+        messages: [
+          {
+            content: [
+              {
+                audio_url: { mimeType: 'audio/wav', url: 'https://example.com/voice.wav' },
+                type: 'audio_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        model: 'audio-model',
+      });
+
+      expect(result).toBe('vertex-response');
+      expect(attemptedRoutes).toEqual(['google-key', 'openai-key', 'vertexai']);
+      expect(unsupportedChat).not.toHaveBeenCalled();
+      expect(vertexChat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fail closed when no route supports raw audio input', async () => {
+      const unsupportedChat = vi.fn();
+
+      class UnsupportedRuntime implements LobeRuntimeAI {
+        chat = unsupportedChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'anthropic',
+            models: ['audio-model'],
+            options: [
+              { apiKey: 'anthropic-key', apiType: 'anthropic' },
+              { apiKey: 'xai-key', apiType: 'xai' },
+            ],
+            runtime: UnsupportedRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+
+      await expect(
+        runtime.chat({
+          messages: [
+            {
+              content: [
+                {
+                  audio_url: { mimeType: 'audio/wav', url: 'https://example.com/voice.wav' },
+                  type: 'audio_url',
+                },
+              ],
+              role: 'user',
+            },
+          ],
+          model: 'audio-model',
+        }),
+      ).rejects.toThrow('No provider route supports raw audio input for model audio-model');
+      expect(unsupportedChat).not.toHaveBeenCalled();
+    });
+
+    it('should preserve the original fallback order for text messages', async () => {
+      const attemptedKeys: string[] = [];
+
+      class TextRuntime implements LobeRuntimeAI {
+        private readonly apiKey: string;
+
+        constructor(options: any) {
+          this.apiKey = options.apiKey;
+        }
+
+        chat = vi.fn().mockImplementation(async () => {
+          attemptedKeys.push(this.apiKey);
+          if (this.apiKey === 'key-1') throw new Error('first route failed');
+          return 'text-response';
+        });
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'anthropic',
+            models: ['text-model'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: TextRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const result = await runtime.chat({
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'text-model',
+      });
+
+      expect(result).toBe('text-response');
+      expect(attemptedKeys).toEqual(['key-1', 'key-2']);
+    });
+
     it('should fallback to next option when first option fails', async () => {
       // Test that errors are caught and re-thrown when all options fail
       const mockChatAlwaysFail = vi.fn().mockRejectedValue(new Error('All failed'));
@@ -753,6 +912,39 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       await expect(
         runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(invalidRequestError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not retry an InvalidRequestFormat media download failure', async () => {
+      const invalidRequestError = {
+        error: { message: 'failed to download or process media content' },
+        errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(invalidRequestError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['mimo-v2.5'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'mimo-v2.5', messages: [], temperature: 0.7 }),
       ).rejects.toEqual(invalidRequestError);
 
       expect(mockChatFail).toHaveBeenCalledTimes(1);

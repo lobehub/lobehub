@@ -1,3 +1,4 @@
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -32,7 +33,11 @@ const agentNotifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },

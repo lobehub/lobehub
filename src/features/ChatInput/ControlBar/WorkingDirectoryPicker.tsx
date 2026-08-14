@@ -19,6 +19,7 @@ import {
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useConversationStore } from '@/features/Conversation/store';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
 import {
   resolveAgentWorkingDirectorySource,
@@ -283,6 +284,7 @@ interface WorkingDirectoryPickerProps {
  * runs in when nothing is picked is never invisible.
  */
 const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) => {
+  const topicId = useConversationStore((s) => s.context.topicId);
   const { t } = useTranslation('device');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -310,10 +312,10 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const recents = useMemo(() => rawRecents.filter(isValidWorkingDirEntry), [rawRecents]);
   const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(targetDeviceId));
   const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
-  const rawTopicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const rawTopicWorkingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
   const topicWorkingDirectory = getWorkingDirectoryPathString(rawTopicWorkingDirectory);
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  const topicWorkingDirectoryConfig = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig : undefined,
   );
   const rawLegacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],
@@ -348,7 +350,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     legacyAgentWorkingDirectory
   );
 
-  const { clear, commit } = useCommitWorkingDirectory(agentId);
+  const { clear, commit } = useCommitWorkingDirectory(agentId, topicId);
   const clearDeviceDefaultCwd = useDeviceStore((s) => s.clearDeviceDefaultCwd);
   const removeDeviceWorkingDir = useDeviceStore((s) => s.removeDeviceWorkingDir);
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);

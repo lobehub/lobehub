@@ -13,6 +13,7 @@ import {
   Hash,
   Link2,
   LucideCopy,
+  PanelRight,
   PanelTop,
   PencilLine,
   Star,
@@ -62,6 +63,7 @@ export const useTopicItemDropdownMenu = ({
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
+  const openTopicInPortal = useChatStore((s) => s.openTopicInPortal);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();
@@ -186,6 +188,18 @@ export const useTopicItemDropdownMenu = ({
                 navigate(url, { escape: true });
               },
             },
+          ]
+        : []),
+      {
+        icon: <Icon icon={PanelRight} />,
+        key: 'openOnRight',
+        label: t('openOnRight', { ns: 'common' }),
+        onClick: () => {
+          openTopicInPortal(id);
+        },
+      },
+      ...(isDesktop
+        ? [
             {
               icon: <Icon icon={ExternalLink} />,
               key: 'openInNewWindow',
@@ -198,7 +212,7 @@ export const useTopicItemDropdownMenu = ({
               type: 'divider' as const,
             },
           ]
-        : []),
+        : [{ type: 'divider' as const }]),
       {
         icon: <Icon icon={Hash} />,
         key: 'copySessionId',
@@ -307,6 +321,7 @@ export const useTopicItemDropdownMenu = ({
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,
+    openTopicInPortal,
     addTab,
     navigate,
     t,

@@ -22,6 +22,7 @@ import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEd
 import { useOpenEditedFile } from './useOpenEditedFile';
 
 export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
+export const AGGREGATE_EDITED_FILE_ICON_SIZE = 40;
 
 /** Fire a toggle on Enter/Space so the div-based expander is keyboard operable. */
 const toggleOnKey = (toggle: () => void) => (event: KeyboardEvent<HTMLDivElement>) => {
@@ -52,7 +53,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   headerIcon: css`
     flex-shrink: 0;
+
+    width: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
+    height: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
+    border-radius: 10px;
+
     color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   singleHeader: css`
     padding-block: 10px;
@@ -209,13 +217,13 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
             className={cx(styles.viewChanges, expanded && styles.viewChangesVisible)}
             size={'small'}
             type={'text'}
+            // Enter/Space on the button must not bubble into the row's own
+            // key handler, which would also open the file preview.
+            onKeyDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
               setExpanded((prev) => !prev);
             }}
-            // Enter/Space on the button must not bubble into the row's own
-            // key handler, which would also open the file preview.
-            onKeyDown={(event) => event.stopPropagation()}
           >
             {t(expanded ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
           </Button>
@@ -361,23 +369,26 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
         align={'center'}
         aria-expanded={expanded}
         className={styles.header}
-        gap={8}
+        gap={10}
         role={'button'}
         tabIndex={0}
         onClick={() => setExpanded((prev) => !prev)}
         onKeyDown={toggleOnKey(() => setExpanded((prev) => !prev))}
       >
-        <FilePenLineIcon className={styles.headerIcon} size={16} />
-        <Text ellipsis className={styles.title}>
-          {t('editedFiles.title', { count: entries.length })}
-        </Text>
-        <Flexbox flex={1} />
-        <LineStats
-          hideZeroDeltas
-          className={styles.stats}
-          linesAdded={totals.linesAdded}
-          linesDeleted={totals.linesDeleted}
-        />
+        <Center className={styles.headerIcon}>
+          <FilePenLineIcon size={24} />
+        </Center>
+        <Flexbox flex={1} gap={3} style={{ minWidth: 0 }}>
+          <Text ellipsis className={styles.title}>
+            {t('editedFiles.title', { count: entries.length })}
+          </Text>
+          <LineStats
+            hideZeroDeltas
+            className={styles.stats}
+            linesAdded={totals.linesAdded}
+            linesDeleted={totals.linesDeleted}
+          />
+        </Flexbox>
         {expanded ? (
           <ChevronDownIcon className={styles.chevron} size={16} />
         ) : (

@@ -5,7 +5,7 @@ exists. When it doesn't — a standalone delivery, a task run without
 `$LOBE_OPERATION_ID`, or any run where **you** author the checks — publish a
 **structured report round** instead: a self-contained directory that
 `lh acceptance run ingest` uploads as one immutable verification round. The
-verify page renders itself from `result.json`: provenance, the overall
+acceptance page renders itself from `result.json`: provenance, the overall
 conclusion, and the check list from `plan[]` paired with `cases[]`, each with
 its evidence inline — **images render as figures, before/after pairs render
 under tinted comparison bands**. A chat-only summary or a bare markdown report
@@ -32,7 +32,8 @@ the checks and use one of these first-class paths:
 REPORT_DIR=./acceptance-report
 
 # A. first external-project round — creates a standalone acceptance automatically
-lh acceptance run ingest "$REPORT_DIR" --json
+lh acceptance run ingest "$REPORT_DIR" \
+  --requirement "<one-sentence business goal>" --json
 
 # Re-verification — append a new immutable round to the same acceptance
 lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
@@ -58,6 +59,18 @@ history is the point, not something to hide. Reuse the same `--subject` across
 rounds for a LobeHub object, or pass `--acceptance <acceptanceId>` after an
 external project's first standalone round.
 
+Before composing a repair round, read the aggregate:
+
+```bash
+lh acceptance view "$ACCEPTANCE_ID" --json
+```
+
+- Omit checks whose latest `userReview.action` is `accept` unless the repair can
+  regress them.
+- Address non-stale rejects and reuse their exact stable check ids.
+- A semantic replacement declares `supersedes: ["old-id"]`; every later round
+  reusing the successor id repeats its full `supersedes` chain.
+
 ## Directory layout
 
 Any directory works — no repo convention required:
@@ -72,9 +85,14 @@ Any directory works — no repo convention required:
 ## Workflow
 
 1. **Write `plan[]` BEFORE you run anything.** Each item is
-   `{ id, title, category, verifier, method, expected, requiredEvidence }`.
+   `{ id, title, category, verifier, method, expected, requiredEvidence,
+supersedes? }`.
    A planned item that never produces a case renders as **未执行** rather than
    vanishing — cut coverage in the open.
+   **HARD RULE: every item must be an outcome the reader can judge.** Never
+   plan a programmatic gate (tests / type-check / lint / build) as a check —
+   ingest drops them, and a gates-only round fails to publish. See
+   [what is not an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
 2. **Collect evidence into `assets/` as you test.** Screenshots/charts must be
    **visually verified with the Read tool before being cited** — never cite an
    image you haven't looked at. Numeric results worth seeing (loss curves,
@@ -96,13 +114,18 @@ Any directory works — no repo convention required:
    lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
    ```
 
+   On the first ingest, add `--requirement "<one-sentence business goal>"`.
+   Describe the durable goal of the whole acceptance, not this round's narrower
+   implementation scope.
+
    Inside a LobeHub topic, the command groups the round under the current topic.
    Outside one, it creates a standalone acceptance automatically; no Task ID is
    required. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and prints
-   `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>` — include the full
-   URLs in your final reply. Never update a prior round after a fix; publish the
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form. Include
+   only the full acceptance URL in your final reply; never expose local paths or
+   internal run-page paths. Never update a prior round after a fix; publish the
    re-verification as the next round.
 
 ## result.json schema
@@ -153,31 +176,72 @@ Optional fields: `branch` / `commit` / `pullRequest` (provenance line; when
 
 ### Closed vocabularies — the pipeline acts on these, they are not labels
 
-| field                           | values                                                                       | what it does                                                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
-| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)    | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
+| field                           | values                                                                                                | what it does                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)                             | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
 
 `category` names the user-facing requirement area (e.g. `Task hierarchy`,
 `Rate-limit recovery`) — never a technical surface. `method` / `expected` stay
 free prose; they render under the check next to the outcome.
 
+### HARD RULE — what is not an acceptance check
+
+An acceptance check is something a **person decides about the delivery**. The
+repo's own automated gates are not that, and they are actively harmful on the
+page: twenty green "unit tests pass" rows bury the two checks that actually
+needed someone to look.
+
+**These MUST NOT appear as `plan[]` / `cases[]` items, under any phrasing:**
+
+| Not a check                                                | Where it belongs                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
+| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
+| "the test suite is green", "CI passes"                     | same                                                 |
+
+This is enforced, not advisory. `lh acceptance run ingest` **drops every
+matching item** — matched on title, category, AND `method`, so writing
+"run `bun run test`" into `method` under a product-sounding title still
+matches — warns with the dropped ids, and recounts `summary` from the checks
+that remain. A round consisting **only** of such checks **fails to publish**.
+Either way, a gate written as a check is effort spent proving something nobody
+accepts: apply the rule at plan time, before the first case runs.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a fine acceptance item (`verifier: "program"`). "Run
+`bun run test`" is not.
+
+**What IS an acceptance check:** what the user sees, hears, reads, or receives —
+a rendered screen, a produced file, an API response shape a client depends on,
+an audio clip that actually plays, a failure state that recovers.
+
 ### Before/after comparison pairs
 
 The page renders a complete pair under tinted bands (red `before`, green
-`after`). Both halves need the same string `id`; set `layout`
-(`horizontal` default; `vertical` for wide, short strips) and a `label` stating
-the measured delta on each side:
+`after`). Both halves need the same string `id`; use `layout: "horizontal"` for
+a left/right comparison and `layout: "vertical"` for a top/bottom comparison.
+When omitted, `layout` defaults to `horizontal`. Add a `label` stating the
+measured delta on each side:
 
 ```json
 "evidence": [
   { "path": "assets/before.png",
-    "comparison": { "id": "topic-row", "role": "before", "layout": "vertical", "label": "before: 11px" } },
+    "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
   { "path": "assets/after.png",
-    "comparison": { "id": "topic-row", "role": "after", "layout": "vertical", "label": "after: 12px" } }
+    "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
 ]
 ```
+
+Choose the layout by comparison intent, not by the source image dimensions:
+
+- `horizontal` — before on the left, after on the right. Use it when the reader
+  should compare the same region across two versions at a glance. This is the
+  normal choice for full-page or full-window before/after screenshots.
+- `vertical` — before on top, after below. Use it when preserving each image's
+  full width matters more than simultaneous scanning, such as a very wide,
+  shallow toolbar or timeline strip.
 
 A comparison pair means the same view in two states — sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.
@@ -186,6 +250,13 @@ flow are ordinary ordered evidence with captions, not a pair.
 
 - **No evidence, no claim** — every `pass`/`fail` in `cases[]` links at least
   one asset.
+- **Non-visual behavioral claims need dual text evidence** — attach a concise
+  reviewer-facing reasoning document and a separate audit-facing execution
+  artifact containing the exact command/request and observed values. Neither
+  unsupported prose nor an unexplained log dump is sufficient.
+- **Final handoff exposes only Acceptance** — use `/acceptance/<acceptanceId>` or
+  its `?r=<roundIndex>` snapshot. Never include images, local paths, local file
+  links, or internal run-page paths in chat.
 - **Report failures faithfully** — a failing case with clear evidence is a good
   report; a vague green one is not.
 - If coverage was cut, say so in `report.md` — silent truncation reads as

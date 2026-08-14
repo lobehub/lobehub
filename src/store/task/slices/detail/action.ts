@@ -183,6 +183,7 @@ export class TaskDetailSliceActionImpl {
   createTask = async (params: {
     assigneeAgentId?: string;
     automationMode?: 'heartbeat' | 'schedule';
+    config?: Record<string, unknown>;
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
@@ -190,6 +191,7 @@ export class TaskDetailSliceActionImpl {
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';

@@ -40,9 +40,10 @@ interface FakeThread {
 
 interface FakeTopicMetadata {
   heteroCurrentMsgId?: { msgId: string; operationId: string };
-  runningOperation: {
+  runningOperation?: {
     assistantMessageId: string;
     operationId: string;
+    threadId?: string;
   };
 }
 
@@ -53,10 +54,12 @@ interface FakeTopic {
 }
 
 const createHarness = (params: {
+  assistantAgentId?: string | null;
   assistantMessageId: string;
   operationId: string;
   topicAgentId?: string | null;
   topicId: string;
+  threadId?: string;
 }) => {
   let nextMsgIdSeq = 0;
   const messages = new Map<string, FakeMessage>();
@@ -65,10 +68,11 @@ const createHarness = (params: {
   // Seed the initial assistant message that the orchestrator would have
   // created before triggering the CLI ingest.
   messages.set(params.assistantMessageId, {
-    agentId: params.topicAgentId ?? null,
+    agentId: params.assistantAgentId ?? params.topicAgentId ?? null,
     content: '',
     id: params.assistantMessageId,
     role: 'assistant',
+    threadId: params.threadId ?? null,
     topicId: params.topicId,
   });
 
@@ -117,14 +121,17 @@ const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
-    getLastMainThreadSpineMessageId: vi.fn(async (_topicId: string) => {
-      // Mirror the SQL: most recent main-agent (threadId null) message that is
-      // NOT a tool and NOT a signal-tagged callback. Insertion order == creation.
-      const match = [...messages.values()].findLast(
-        (m) => m.role !== 'tool' && !m.threadId && !(m as any).metadata?.signal,
-      );
-      return match?.id;
-    }),
+    getLatestSpineMessageId: vi.fn(
+      async ({ threadId }: { threadId?: string | null; topicId: string }) => {
+        const match = [...messages.values()].findLast(
+          (m) =>
+            m.role !== 'tool' &&
+            (m.threadId ?? null) === (threadId ?? null) &&
+            !(m as any).metadata?.signal,
+        );
+        return match?.id;
+      },
+    ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -160,6 +167,7 @@ const createHarness = (params: {
           runningOperation: {
             assistantMessageId: params.assistantMessageId,
             operationId: params.operationId,
+            threadId: params.threadId,
           },
         } satisfies FakeTopicMetadata,
       };
@@ -544,6 +552,52 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('3-phase tool persist (main agent)', () => {
+    it('keeps tool rows and post-tool assistants attributed to the direct target agent', async () => {
+      const h = createHarness({
+        assistantAgentId: 'agent-direct-target',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicAgentId: 'agent-conversation-owner',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Read',
+        arguments: '{"file_path":"tool-proof.txt"}',
+        id: 'tc-1',
+        identifier: 'claude-code',
+        type: 'default' as const,
+      };
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('tool_result', 1, {
+            content: 'TOOL_CALL_MARKER',
+            isError: false,
+            toolCallId: 'tc-1',
+          }),
+          buildEvent('stream_start', 2, { newStep: true }),
+          buildEvent('stream_chunk', 3, {
+            chunkType: 'text',
+            content: 'TOOL_CALL_MARKER',
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const toolMessage = [...h.messages.values()].find((message) => message.role === 'tool');
+      const finalAssistant = [...h.messages.values()].find(
+        (message) => message.role === 'assistant' && message.id !== 'asst-1',
+      );
+
+      expect(toolMessage?.agentId).toBe('agent-direct-target');
+      expect(finalAssistant?.agentId).toBe('agent-direct-target');
+      expect(finalAssistant?.parentId).toBe('asst-1');
+      expect(finalAssistant?.content).toBe('TOOL_CALL_MARKER');
+    });
+
     it('writes assistant.tools[] then tool message then backfilled result_msg_id in order', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -637,6 +691,41 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('step boundaries (stream_start newStep)', () => {
+    it('recovers an isolation run from the thread spine instead of the projected topic reply', async () => {
+      const h = createHarness({
+        assistantMessageId: 'thread-asst-1',
+        operationId: 'op-1',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+      h.messages.set('projected-topic-reply', {
+        agentId: 'target-agent',
+        content: 'projected answer',
+        id: 'projected-topic-reply',
+        role: 'assistant',
+        threadId: null,
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const nextThreadAssistant = [...h.messages.values()].find(
+        (message) =>
+          message.role === 'assistant' &&
+          message.threadId === 'thread-1' &&
+          message.id !== 'thread-asst-1',
+      );
+      expect(nextThreadAssistant?.parentId).toBe('thread-asst-1');
+      expect(h.messageModel.getLatestSpineMessageId).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+    });
+
     it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -680,7 +769,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
     it('chains off the prior assistant (spine) across a multi-replica boundary, recovered from DB', async () => {
       // Phase 2: the chain parent is the run's latest non-tool / non-signal
-      // main message, recovered from the DB (`getLastMainThreadSpineMessageId`)
+      // scoped message, recovered from the DB (`getLatestSpineMessageId`)
       // independent of the in-memory current-assistant pointer. So even when the
       // prior step's tools_calling drained on a DIFFERENT replica (this replica's
       // toolState stays empty), step 2 still chains off step 1's assistant — a
@@ -1440,6 +1529,51 @@ describe('HeterogeneousPersistenceHandler', () => {
         code: 'cli_not_found',
       });
       expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() projects the terminal error by assistant id after runningOperation was cleared', async () => {
+      // Gateway session completion can clear runningOperation before the CLI's
+      // heteroFinish request arrives. The producer-carried assistant id must
+      // keep that race from leaving an empty assistant with error=null.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.messages.get('asst-1')!.content = '...';
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {},
+      });
+
+      await h.handler.finish({
+        assistantMessageId: 'asst-1',
+        error: {
+          body: {
+            agentType: 'claude-code',
+            clearEchoedContent: true,
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          },
+          message: "You've hit your session limit",
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toMatchObject({
+        body: {
+          agentType: 'claude-code',
+          code: 'rate_limit',
+        },
+        message: "You've hit your session limit",
+        type: 'AgentRuntimeError',
+      });
+      expect(asst.content).toBe('');
     });
 
     it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {

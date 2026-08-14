@@ -653,7 +653,7 @@ export class MarketService {
             microsoft: 'Outlook Calendar',
             notion: 'Notion',
             posthog: 'PostHog',
-            twitter: 'X (Twitter)',
+            twitter: 'X',
             vercel: 'Vercel',
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;

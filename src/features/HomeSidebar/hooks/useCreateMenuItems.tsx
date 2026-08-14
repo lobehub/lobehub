@@ -377,7 +377,7 @@ export const useCreateMenuItems = () => {
         if (!canCreate) return;
 
         if (openCreateGroupModal) {
-          // Let the user name the group at creation time (LOBE-12597)
+          // Let the user name the group at creation time
           openCreateGroupModal(undefined, options?.visibility);
           return;
         }

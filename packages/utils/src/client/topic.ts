@@ -75,7 +75,7 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
  * Resolve the timestamp a topic sorts/groups by for the given field. For
  * `updatedAt` this is the server-provided `sortUpdatedAt` (latest message
  * activity), falling back to the raw `updatedAt` when absent — so the sidebar
- * order matches the server ORDER BY and doesn't jump. 
+ * order matches the server ORDER BY and doesn't jump.
  */
 export const getTopicSortTime = (topic: ChatTopic, field: 'createdAt' | 'updatedAt'): number =>
   field === 'updatedAt' ? (topic.sortUpdatedAt ?? topic.updatedAt) : topic.createdAt;
@@ -206,7 +206,7 @@ export const groupTopicsByProject = (
 // the sidebar surfaces "needs attention" in one place. The remaining buckets map
 // 1:1 to a status. The group `id` resolves its title via `groupTitle.byStatus.<id>`.
 export type TopicStatusBucket =
-  'pending' | 'running' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived';
+  'pending' | 'running' | 'scheduled' | 'active' | 'completed' | 'archived';
 
 // Fixed priority order: `pending` (needs attention) comes first, then running,
 // then active; the remaining states fall below. Topics without a status are
@@ -223,7 +223,6 @@ export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
   'running',
   'scheduled',
   'active',
-  'paused',
   'completed',
   'archived',
 ];
@@ -248,7 +247,7 @@ const resolveStatusBucket = (
   // into `pending`, so users don't read it as "needs manual action".
   if (topic.status === 'scheduled') return 'scheduled';
   const status: ChatTopicStatus = topic.status ?? 'active';
-  if (status === 'paused' || status === 'completed' || status === 'archived') return status;
+  if (status === 'completed' || status === 'archived') return status;
   return 'active';
 };
 

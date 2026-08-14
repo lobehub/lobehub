@@ -19,9 +19,6 @@ import { BaseExecutor } from '@lobechat/types';
 import { localFileService } from '@/services/electron/localFileService';
 
 import { LocalSystemIdentifier } from '../../types';
-import { resolveArgsWithScope, resolvePathWithScope } from '../../utils/path';
-
-const DEFAULT_FILE_SEARCH_LIMIT = 100;
 
 const LocalSystemApiEnum = {
   editFile: 'editFile' as const,
@@ -41,14 +38,42 @@ const LocalSystemApiEnum = {
 /**
  * Local System Tool Executor
  *
- * Delegates standard computer operations to LocalSystemExecutionRuntime (extends ComputerRuntime).
- * Handles scope resolution for paths before delegating.
+ * Thin adapter over `LocalSystemExecutionRuntime.executeToolCall`, which owns
+ * legacy alias normalization, IPC field mapping, and working-directory
+ * anchoring for every tool. The executor only contributes the two things the
+ * runtime can't know:
+ * - `ctx.workingDirectory` — the agent's effective working directory, sourced
+ *   from the same place as the `{{workingDirectory}}` prompt placeholder, so
+ *   what tools operate on matches what the prompt promises;
+ * - the `BuiltinServerRuntimeOutput` → `BuiltinToolResult` conversion.
  */
 class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   readonly identifier = LocalSystemIdentifier;
   protected readonly apiEnum = LocalSystemApiEnum;
 
   private runtime = new LocalSystemExecutionRuntime(localFileService);
+
+  private execute = async (
+    apiName: keyof typeof LocalSystemApiEnum,
+    params: Record<string, any>,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      // `trustArgsCwd` stays off: `params` came straight from the model, and
+      // `ctx.workingDirectory` is undefined whenever the agent has none
+      // configured — so an off-contract `cwd` must be dropped here rather than
+      // mistaken for a server-injected one.
+      const output = await this.runtime.executeToolCall(apiName, params, {
+        workingDirectory: ctx?.workingDirectory,
+      });
+      // apiEnum and the runtime dispatch cover the same tool set, so a null
+      // (unknown tool) here is a programming error, not a user-facing state.
+      if (!output) return this.errorResult(new Error(`Unknown local-system API: ${apiName}`));
+      return this.toResult(output);
+    } catch (error) {
+      return this.errorResult(error);
+    }
+  };
 
   /**
    * Convert BuiltinServerRuntimeOutput to BuiltinToolResult.
@@ -86,191 +111,57 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   // ==================== File Operations ====================
 
-  listFiles = async (params: ListLocalFileParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.listFiles({
-        directoryPath: params.path,
-        limit: params.limit,
-        sortBy: params.sortBy,
-        sortOrder: params.sortOrder,
-      } as any);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  listFiles = (params: ListLocalFileParams, ctx?: BuiltinToolContext) =>
+    this.execute('listFiles', params, ctx);
 
-  readFile = async (params: LocalReadFileParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.readFile({
-        endLine: params.loc?.[1],
-        path: params.path,
-        startLine: params.loc?.[0],
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  readFile = (params: LocalReadFileParams, ctx?: BuiltinToolContext) =>
+    this.execute('readFile', params, ctx);
 
-  readFiles = async (params: LocalReadFilesParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.readFiles(params);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  readFiles = (params: LocalReadFilesParams, ctx?: BuiltinToolContext) =>
+    this.execute('readFiles', params, ctx);
 
-  searchFiles = async (
-    params: LocalSearchFilesParams,
-    ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      const resolvedParams = resolveArgsWithScope(params, 'directory', ctx?.workingDirectory);
-      const result = await this.runtime.searchFiles({
-        ...resolvedParams,
-        directory: resolvedParams.directory || '',
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  searchFiles = (params: LocalSearchFilesParams, ctx?: BuiltinToolContext) =>
+    this.execute('searchFiles', params, ctx);
 
-  moveFiles = async (params: MoveLocalFilesParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.moveFiles({
-        operations: params.items.map((item) => ({
-          destination: item.newPath,
-          source: item.oldPath,
-        })),
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  moveFiles = (params: MoveLocalFilesParams, ctx?: BuiltinToolContext) =>
+    this.execute('moveFiles', params, ctx);
 
-  writeFile = async (params: WriteLocalFileParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.writeFile(params);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  writeFile = (params: WriteLocalFileParams, ctx?: BuiltinToolContext) =>
+    this.execute('writeFile', params, ctx);
 
-  editFile = async (params: EditLocalFileParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.editFile({
-        all: params.replace_all,
-        path: params.file_path,
-        replace: params.new_string,
-        search: params.old_string,
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  editFile = (params: EditLocalFileParams, ctx?: BuiltinToolContext) =>
+    this.execute('editFile', params, ctx);
 
   // ==================== Shell Commands ====================
 
-  runCommand = async (params: RunCommandParams): Promise<BuiltinToolResult> => {
-    try {
-      // The manifest exposes `run_in_background`, but ComputerRuntime's RunCommandState
-      // reads `args.background` for the `isBackground` field — without this normalize
-      // the UI/state would always say foreground even for background commands.
-      // The IPC handler reads `run_in_background` itself, so we keep that field too.
-      const result = await this.runtime.runCommand({
-        ...params,
-        background: params.run_in_background,
-      } as any);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  // The sandbox decision rides on the context, resolved by the caller from the
+  // agent's config — never from the model's args, which the manifest doesn't
+  // expose it in. The runtime anchors `cwd` to `ctx.workingDirectory` (and
+  // refuses the model's own `cwd` while `trustArgsCwd` is off), which is exactly
+  // the root the fence needs: a model must not get to choose what it is fenced
+  // to. An unfenced command adds neither field and behaves as before.
+  runCommand = (params: RunCommandParams, ctx?: BuiltinToolContext) =>
+    this.execute(
+      'runCommand',
+      ctx?.localSandbox === true
+        ? { ...params, sandbox: true, sandboxNetwork: ctx?.localSandboxNetwork === true }
+        : params,
+      ctx,
+    );
 
-  getCommandOutput = async (params: GetCommandOutputParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.getCommandOutput({
-        commandId: params.shell_id,
-        filter: params.filter,
-      } as any);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  getCommandOutput = (params: GetCommandOutputParams, ctx?: BuiltinToolContext) =>
+    this.execute('getCommandOutput', params, ctx);
 
-  killCommand = async (params: KillCommandParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.killCommand({
-        commandId: params.shell_id,
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  killCommand = (params: KillCommandParams, ctx?: BuiltinToolContext) =>
+    this.execute('killCommand', params, ctx);
 
   // ==================== Search & Find ====================
 
-  grepContent = async (
-    params: GrepContentParams,
-    ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      // Resolve the search root to an ABSOLUTE path anchored on the agent's
-      // effective working directory. The grep manifest/systemRole tell the model
-      // `scope` "defaults to the working directory", but without this the
-      // downstream `resolveSearchPath` drops to the Electron main process
-      // `process.cwd()` (`/` in a packaged app) — so a scope-less OR relative
-      // (e.g. `.`) scope made every grep return 0 matches. `ctx.workingDirectory`
-      // is sourced from the same place as the `{{workingDirectory}}` prompt
-      // placeholder, so what the search targets matches what the prompt promises.
-      // `resolvePathWithScope(scope, workingDir)` treats the model's `scope` as a
-      // path resolved against the working directory:
-      // - scope omitted → working directory
-      // - scope relative (`.`, `src`) → joined onto the working directory
-      // - scope absolute → used as-is
-      // It only returns undefined when there is no working directory AND no scope
-      // (web / nothing configured) — then we leave params untouched.
-      const searchRoot = resolvePathWithScope(params.scope, ctx?.workingDirectory);
-      const resolvedParams = searchRoot ? { ...params, path: searchRoot } : params;
-      // Forward the full IPC params (glob / output_mode / -i / -A / -B / -C / -n /
-      // multiline / head_limit / type / tool) instead of stripping to {directory, pattern}.
-      // ComputerRuntime.callService passes args through unchanged, so the runtime type
-      // narrowing was the only blocker — the underlying rg/grep needs these flags to
-      // honor the agent's filter and stop scanning dist/* and tsbuildinfo.
-      const result = await this.runtime.grepContent(resolvedParams as any);
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  grepContent = (params: GrepContentParams, ctx?: BuiltinToolContext) =>
+    this.execute('grepContent', params, ctx);
 
-  globFiles = async (
-    params: GlobFilesParams,
-    ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      const resolvedScope = resolvePathWithScope(params.scope, ctx?.workingDirectory);
-      const result = await this.runtime.globFiles({
-        directory: resolvedScope,
-        limit:
-          Number.isFinite(params.limit) && params.limit && params.limit > 0
-            ? Math.floor(params.limit)
-            : DEFAULT_FILE_SEARCH_LIMIT,
-        pattern: params.pattern,
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
+  globFiles = (params: GlobFilesParams, ctx?: BuiltinToolContext) =>
+    this.execute('globFiles', params, ctx);
 
   // ==================== Helpers ====================
 

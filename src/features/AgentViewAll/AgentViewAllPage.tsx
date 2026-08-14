@@ -656,12 +656,10 @@ AgentViewAllPage.displayName = 'AgentViewAllPage';
 // blank-agent creation, and that modal lives in AgentModalContext — normally
 // mounted by the Home layout, which this standalone route is NOT inside. Wrap
 // the page so the "+" menu opens the same create wizard as the sidebar.
-const AgentViewAllPageWithModals = memo(() => (
+const AgentViewAllPageWithModals = () => (
   <AgentModalProvider>
     <AgentViewAllPage />
   </AgentModalProvider>
-));
-
-AgentViewAllPageWithModals.displayName = 'AgentViewAllPageWithModals';
+);
 
 export default AgentViewAllPageWithModals;

@@ -4,7 +4,8 @@
  * Qoder's stream-json protocol is intentionally compatible with the
  * assistant/user/result framing used by Claude Code. Reuse that mature state
  * machine, but keep Qoder as a first-class provider: every normalized event,
- * tool payload, error, and usage record is stamped with Qoder's identity.
+ * tool payload, error, and usage record is stamped with Qoder's identity while
+ * shared derived state such as Task tool todos remains intact for the UI.
  */
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
@@ -33,7 +34,7 @@ const isQoderAuthAssistant = (raw: unknown): boolean => {
   return QODER_AUTH_REQUIRED_PATTERNS.every((pattern) => pattern.test(text));
 };
 
-const normalizeQoderValue = (value: unknown, key?: string): void => {
+const normalizeQoderValue = (value: unknown): void => {
   if (!value || typeof value !== 'object') return;
 
   if (Array.isArray(value)) {
@@ -62,13 +63,8 @@ const normalizeQoderValue = (value: unknown, key?: string): void => {
       record[childKey] = childValue.replaceAll('Claude Code', 'Qoder');
       continue;
     }
-    normalizeQoderValue(childValue, childKey);
+    normalizeQoderValue(childValue);
   }
-
-  // Qoder's Task tools are not the Claude Code Todo/Task UI contract. Keep
-  // their native tool calls/results, but do not attach Claude-specific derived
-  // todo state to the normalized result.
-  if (key === 'pluginState') delete record.todos;
 };
 
 const normalizeQoderEvents = (events: HeterogeneousAgentEvent[]): HeterogeneousAgentEvent[] => {

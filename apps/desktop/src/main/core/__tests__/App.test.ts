@@ -143,6 +143,7 @@ vi.mock('../browser/BrowserManager', () => ({
   BrowserManager: vi.fn().mockImplementation(() => ({
     initializeBrowsers: vi.fn(),
     getIdentifierByWebContents: vi.fn(),
+    waitForMainWindowFirstFrame: vi.fn(() => new Promise(() => {})),
   })),
 }));
 
@@ -206,6 +207,24 @@ describe('App', () => {
       beforeQuitHandler();
 
       expect(destroy).toHaveBeenCalledOnce();
+    });
+
+    it('prewarms the local database after browser initialization yields to the event loop', async () => {
+      appInstance = new App();
+      const databaseService = appInstance.getService(LocalDatabaseService);
+      const initialize = vi.spyOn(databaseService, 'initialize').mockImplementation(() => {});
+
+      await appInstance.bootstrap();
+
+      expect(appInstance.browserManager.initializeBrowsers).toHaveBeenCalledOnce();
+      expect(initialize).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(initialize).toHaveBeenCalledOnce();
+      expect(
+        vi.mocked(appInstance.browserManager.initializeBrowsers).mock.invocationCallOrder[0],
+      ).toBeLessThan(initialize.mock.invocationCallOrder[0]);
     });
   });
 

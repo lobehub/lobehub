@@ -9,6 +9,7 @@ export interface SpawnHeteroAgentRunParams {
   agentType: string;
   /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
+  assistantMessageId?: string;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
@@ -54,6 +55,7 @@ export function spawnHeteroAgentRun(
 ): Promise<AgentRunAckResult> {
   const {
     agentType,
+    assistantMessageId,
     args: extraArgs,
     cwd,
     imageList,
@@ -107,6 +109,7 @@ export function spawnHeteroAgentRun(
       cwd: workDir,
       env: {
         ...process.env,
+        ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
         LOBEHUB_JWT: jwt,
         LOBEHUB_SERVER: serverUrl,
       },

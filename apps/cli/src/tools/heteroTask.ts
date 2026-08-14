@@ -16,6 +16,15 @@ import { log } from '../utils/logger';
 const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
 const HERMES_SESSIONS_FILE = path.join(os.homedir(), LOBEHUB_DIR_NAME, 'hermes-sessions.json');
 
+function parseHermesSessionId(stderr: string): string | undefined {
+  for (const line of stderr.split(/\r?\n/).reverse()) {
+    const match = line.match(/^session_id:\s*(\S+)\s*$/);
+    if (match) return match[1];
+  }
+
+  return undefined;
+}
+
 function getHermesSessionId(topicId: string): string | undefined {
   try {
     const data = JSON.parse(fs.readFileSync(HERMES_SESSIONS_FILE, 'utf8')) as Record<
@@ -54,6 +63,7 @@ export interface RunHeteroTaskParams {
   agentType: RemoteHeterogeneousAgentType;
   cwd?: string;
   operationId: string;
+  platformAgentId?: string;
   prompt: string;
   taskId: string;
   topicId: string;
@@ -154,7 +164,17 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
 }
 
 export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string> {
-  const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = params;
+  const {
+    agentId,
+    agentType,
+    cwd,
+    operationId,
+    platformAgentId,
+    prompt,
+    taskId,
+    topicId,
+    workspaceId,
+  } = params;
   const workDir = cwd || process.cwd();
   const lhPath = resolveLhPath();
   // Propagate workspace scope into the spawned child so its own `lh notify`
@@ -168,7 +188,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
     // The --session-id links turns into the same conversation history on disk.
     // Requires the `openclaw` binary to be on PATH with Node >=22.19.
-    const openclawAgent = process.env.OPENCLAW_AGENT_ID ?? 'main';
+    const openclawAgent = platformAgentId?.trim() || process.env.OPENCLAW_AGENT_ID || 'main';
 
     // Always inject the notify protocol so openclaw knows how to report results
     // back to the LobeHub UI — even if the previous turn failed and the session
@@ -280,13 +300,13 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       hermesArgs.push('--resume', existingSessionId);
     }
 
-    // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
-    // We capture stdout, parse both fields on exit, and relay the response via notify.
+    // Hermes keeps stdout response-only in --quiet mode and prints the final
+    // session_id to stderr so callers can resume the session on the next turn.
     const child = spawn('hermes', hermesArgs, {
       cwd: workDir,
       detached: true,
       env: childEnv,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     const pid = child.pid;
@@ -305,9 +325,13 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     });
     log.info(`Hermes task started: taskId=${taskId} pid=${pid}`);
 
+    let stderr = '';
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
 
     child.on('close', (code, signal) => {
@@ -329,10 +353,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         return;
       }
 
-      // Parse "session_id: <id>" from the first line, response from the rest.
-      const sessionIdMatch = stdout.match(/^session_id:\s*(\S+)/m);
-      const sessionId = sessionIdMatch?.[1];
-      const response = stdout.replace(/^session_id:[^\n]*\n?/, '').trim();
+      // Diagnostics may precede the final ID, and context compaction can rotate
+      // it, so persist the last complete session_id line emitted this turn.
+      const sessionId = parseHermesSessionId(stderr);
+      const response = stdout.trim();
 
       if (sessionId) saveHermesSessionId(topicId, sessionId);
 

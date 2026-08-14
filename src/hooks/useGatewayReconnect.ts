@@ -29,6 +29,12 @@ interface RunningOperation {
 export const useGatewayReconnect = (
   topicId: string | null | undefined,
   runningOperation: RunningOperation | null | undefined,
+  /**
+   * Agent owning the rendered conversation. Required off the agent route (task
+   * detail / home run drawer), where the chat store's `activeAgentId` is stale or
+   * unset — see `reconnectToGatewayOperation`.
+   */
+  agentId?: string,
 ) => {
   const agentGatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
 
@@ -40,6 +46,7 @@ export const useGatewayReconnect = (
       if (!runningOperation || !topicId) return;
 
       await useChatStore.getState().reconnectToGatewayOperation({
+        agentId,
         assistantMessageId: runningOperation.assistantMessageId,
         operationId: runningOperation.operationId,
         scope: runningOperation.scope,

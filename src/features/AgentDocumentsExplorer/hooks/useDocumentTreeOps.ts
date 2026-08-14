@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import type { AgentDocumentItem } from '../types';
@@ -66,7 +67,7 @@ export const useDocumentTreeOps = ({
 
   // Tracks in-flight creates so a rename committed before the server response
   // lands can be deferred to the real row id once the create resolves.
-  const pendingCreatesRef = useRef(new Map<string, Promise<string | null>>());
+  const pendingCreates = useSingleton(() => new Map<string, Promise<string | null>>());
 
   const byRowId = useMemo(() => {
     const map = new Map<string, AgentDocumentItem>();
@@ -167,14 +168,14 @@ export const useDocumentTreeOps = ({
           );
           return null;
         } finally {
-          pendingCreatesRef.current.delete(pending.id);
+          pendingCreates.delete(pending.id);
         }
       })();
 
-      pendingCreatesRef.current.set(pending.id, createPromise);
+      pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, mutate, pickUniqueFilename, t],
+    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
   );
 
   const createDocument = useCallback(
@@ -226,14 +227,14 @@ export const useDocumentTreeOps = ({
           );
           return null;
         } finally {
-          pendingCreatesRef.current.delete(pending.id);
+          pendingCreates.delete(pending.id);
         }
       })();
 
-      pendingCreatesRef.current.set(pending.id, createPromise);
+      pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, mutate, pickUniqueFilename, t],
+    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
   );
 
   const renameDocument = useCallback(
@@ -255,7 +256,7 @@ export const useDocumentTreeOps = ({
       // path-based rename state survives the hydration, so the user's input
       // stays intact.
       if (isPendingId(id)) {
-        const pendingPromise = pendingCreatesRef.current.get(id);
+        const pendingPromise = pendingCreates.get(id);
         if (!pendingPromise) return;
         const realId = await pendingPromise;
         if (!realId) return;
@@ -291,7 +292,7 @@ export const useDocumentTreeOps = ({
         );
       }
     },
-    [agentId, mutate, t],
+    [agentId, mutate, pendingCreates, t],
   );
 
   const moveDocument: DocumentTreeOps['moveDocument'] = useCallback(

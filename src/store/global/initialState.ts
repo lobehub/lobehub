@@ -214,6 +214,12 @@ export interface SystemStatus {
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
+  /**
+   * Home rail: the goals card folded to its title. Persisted, because a card
+   * you deliberately put away must stay away across reloads — otherwise the
+   * affordance is only a scroll trick.
+   */
+  homeGoalsCollapsed?: boolean;
   homeRecentsCount?: number;
   /**
    * Agent picked from the home AgentSelect dropdown. When unset the home page
@@ -521,6 +527,7 @@ export const INITIAL_STATUS = {
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
+  homeGoalsCollapsed: false,
   homeRecentsCount: 8,
   homeTaskCount: 8,
   imagePanelWidth: 320,

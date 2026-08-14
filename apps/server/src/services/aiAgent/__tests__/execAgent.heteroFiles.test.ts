@@ -30,8 +30,8 @@ const {
   mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Local hetero (claude-code / codex / opencode) seeds publishAgentRuntimeInit so the
-// agent-gateway DO reports `running` on a later reconnect. Stub the factory so
+// Local hetero (claude-code / codebuddy / codex / cursor / opencode / pi / qoder) seeds
+// publishAgentRuntimeInit so the agent-gateway DO reports `running` on a later reconnect. Stub the factory so
 // the assertion below can verify the init, and so the real one (which probes
 // Redis synchronously) doesn't throw a server-env error in the test env.
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
@@ -380,8 +380,67 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
-    expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
+    expect(dispatchParams).toEqual(
+      expect.objectContaining({ assistantMessageId: 'msg-1', deviceId: 'device-1' }),
+    );
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  it('dispatches CodeBuddy to a bound device with its model and effort args', async () => {
+    heteroAgentConfig.model = 'codebuddy';
+    heteroAgentConfig.provider = 'codebuddy';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        effort: 'high',
+        model: 'gpt-5.4',
+        type: 'codebuddy',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use CodeBuddy on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'codebuddy',
+        args: ['--model', 'gpt-5.4', '--effort', 'high'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('dispatches TRAE to a bound device with encoded native args and its ACP model', async () => {
+    heteroAgentConfig.model = 'trae';
+    heteroAgentConfig.provider = 'trae';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        args: ['--feature', 'test'],
+        effort: 'high',
+        model: 'gpt-5.4',
+        type: 'trae',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use TRAE on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'trae',
+        args: ['--agent-arg=--feature', '--agent-arg=test', '--model', 'gpt-5.4'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
   it('does not reinject the device workspace note when resuming a native session', async () => {
@@ -435,6 +494,60 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  it('dispatches Kimi Code to a bound device with its model args', async () => {
+    heteroAgentConfig.model = 'kimi-code';
+    heteroAgentConfig.provider = 'kimi-code';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        model: 'kimi-for-coding',
+        type: 'kimi-code',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Kimi Code on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'kimi-code',
+        args: ['--model', 'kimi-for-coding'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('dispatches Cursor to a bound device with its model args', async () => {
+    heteroAgentConfig.model = 'cursor';
+    heteroAgentConfig.provider = 'cursor';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        model: 'sonnet-4-thinking',
+        type: 'cursor',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Cursor on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        args: ['--model', 'sonnet-4-thinking'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('never falls back to a cloud sandbox for unbound OpenCode', async () => {
     heteroAgentConfig.model = 'opencode';
     heteroAgentConfig.provider = 'opencode';
@@ -446,6 +559,60 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Do not run OpenCode in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound Cursor', async () => {
+    heteroAgentConfig.model = 'cursor';
+    heteroAgentConfig.provider = 'cursor';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'cursor' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run Cursor in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound CodeBuddy', async () => {
+    heteroAgentConfig.model = 'codebuddy';
+    heteroAgentConfig.provider = 'codebuddy';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'codebuddy' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run CodeBuddy in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound TRAE', async () => {
+    heteroAgentConfig.model = 'trae';
+    heteroAgentConfig.provider = 'trae';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'trae' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run TRAE in cloud',
     });
 
     expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
@@ -745,7 +912,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     it('keeps the conversation workspace separate from a personal platform device scope', async () => {
       heteroAgentConfig.agencyConfig = {
         executionTarget: 'local',
-        heterogeneousProvider: { type: 'openclaw' },
+        heterogeneousProvider: { platformAgentId: 'researcher', type: 'openclaw' },
       } as any;
       (heteroAgentConfig as any).userId = userId;
       (heteroAgentConfig as any).visibility = 'public';
@@ -774,6 +941,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(JSON.parse(toolCall.arguments)).toEqual(
         expect.objectContaining({
           agentType: 'openclaw',
+          platformAgentId: 'researcher',
           workspaceId: 'workspace-a',
         }),
       );

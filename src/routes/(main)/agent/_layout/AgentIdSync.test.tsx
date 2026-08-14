@@ -14,6 +14,11 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 const useSearchParamsMock = vi.hoisted(() => vi.fn());
 const useNavigateMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
+const useInitAgentConfigMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/hooks/useInitAgentConfig', () => ({
+  useInitAgentConfig: useInitAgentConfigMock,
+}));
 
 vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -34,6 +39,7 @@ describe('AgentIdSync', () => {
     useSearchParamsMock.mockReset();
     useNavigateMock.mockReset();
     useLocationMock.mockReset();
+    useInitAgentConfigMock.mockReset();
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 
     useChatStore.setState(
@@ -46,6 +52,15 @@ describe('AgentIdSync', () => {
       },
       false,
     );
+  });
+
+  it('hydrates the agent resolved from the current route', () => {
+    useParamsMock.mockReturnValue({ aid: 'agent-2' });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), vi.fn()]);
+
+    render(<AgentIdSync />);
+
+    expect(useInitAgentConfigMock).toHaveBeenCalledWith('agent-2');
   });
 
   it('clears portal state when switching to another agent without a topic in the URL', () => {

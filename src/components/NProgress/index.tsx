@@ -2,11 +2,10 @@
 
 import { cssVar } from 'antd-style';
 import NextTopLoader from 'nextjs-toploader';
-import { memo } from 'react';
 
 import { isDesktop } from '@/const/version';
 
-const NProgress = memo(() => {
+const NProgress = () => {
   return (
     !isDesktop && (
       <NextTopLoader
@@ -18,6 +17,6 @@ const NProgress = memo(() => {
       />
     )
   );
-});
+};
 
 export default NProgress;

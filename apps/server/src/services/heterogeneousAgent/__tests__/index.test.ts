@@ -10,7 +10,11 @@ import type { AgentHook, SerializedHook } from '@/server/services/agentRuntime/h
 import * as verifyService from '@/server/services/verify';
 
 import type { HeterogeneousPersistenceHandler } from '..';
-import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
+import {
+  HeterogeneousAgentService,
+  normalizeHeterogeneousFinishError,
+  StaleHeteroOperationError,
+} from '..';
 import { HeteroTraceRecorder } from '../HeteroTraceRecorder';
 
 // Force queue/production mode so the terminal funnel takes the serialized-webhook
@@ -83,6 +87,48 @@ const createService = (overrides: { streamEventManager?: IStreamEventManager } =
 };
 
 describe('HeterogeneousAgentService', () => {
+  describe('normalizeHeterogeneousFinishError', () => {
+    it('classifies a flattened Claude Code login failure for the frontend status guide', () => {
+      expect(
+        normalizeHeterogeneousFinishError('claude-code', {
+          message: 'Not logged in · Please run /login',
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({
+        body: {
+          agentType: 'claude-code',
+          code: 'auth_required',
+          stderr: 'Not logged in · Please run /login',
+        },
+        type: 'AgentRuntimeError',
+      });
+    });
+
+    it('classifies auth details nested in a flattened error body', () => {
+      expect(
+        normalizeHeterogeneousFinishError('claude-code', {
+          body: { stderr: 'Not logged in. Please run /login' },
+          message: 'Agent execution failed',
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({ body: { agentType: 'claude-code', code: 'auth_required' } });
+    });
+
+    it('preserves an existing structured status-guide error', () => {
+      const error = {
+        body: {
+          agentType: 'claude-code',
+          code: 'auth_required',
+          message: 'existing',
+        },
+        message: 'existing',
+        type: 'AgentRuntimeError',
+      };
+
+      expect(normalizeHeterogeneousFinishError('claude-code', error)).toBe(error);
+    });
+  });
+
   describe('heteroIngest', () => {
     it('republishes every event through the stream manager preserving ordering', async () => {
       const { manager, published, service } = createService();
@@ -376,6 +422,32 @@ describe('HeterogeneousAgentService', () => {
         reason: 'error',
       });
       expect(published[0].event.data.sessionId).toBeUndefined();
+    });
+
+    it('persists and publishes a structured auth_required error from a flattened finish', async () => {
+      const { persistenceHandler, published, service } = createService();
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        error: { message: 'Not logged in · Please run /login', type: 'AgentRuntimeError' },
+        operationId: 'op-auth',
+        result: 'error',
+        topicId: 'topic-auth',
+      });
+
+      expect(persistenceHandler.finish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            body: expect.objectContaining({
+              agentType: 'claude-code',
+              code: 'auth_required',
+            }),
+          }),
+        }),
+      );
+      expect(published[0].event.data.error).toMatchObject({
+        body: { agentType: 'claude-code', code: 'auth_required' },
+      });
     });
 
     it('handles cancelled runs and runs without sessionId', async () => {

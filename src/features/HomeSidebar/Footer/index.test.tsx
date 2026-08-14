@@ -1,4 +1,5 @@
 import type * as LobechatConst from '@lobechat/const';
+import { DOWNLOAD_URL } from '@lobechat/const';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -13,9 +14,6 @@ vi.mock('react-i18next', () => ({
       ({
         'changelog': 'Changelog',
         'getApp': 'Get App',
-        'productHunt.actionLabel': 'Support us',
-        'productHunt.description': 'Support us on Product Hunt.',
-        'productHunt.title': "We're on Product Hunt!",
         'userPanel.discord': 'Discord',
         'userPanel.docs': 'Docs',
         'userPanel.feedback': 'Feedback',
@@ -32,32 +30,10 @@ interface RenderFooterOptions {
   enableBusinessFeatures?: boolean;
   hideGitHub?: boolean;
   homeSidebar?: boolean;
-  serverConfigInit?: boolean;
 }
 
-let mockGlobalState: Record<string, unknown>;
 let mockServerConfigState: Record<string, unknown>;
 let mockUserState: Record<string, unknown>;
-
-interface MockStoreHook {
-  (selector: (state: Record<string, unknown>) => unknown): unknown;
-  getState: () => Record<string, unknown>;
-}
-
-const createGlobalState = () => ({
-  status: {
-    readNotificationSlugs: [],
-  },
-  updateSystemStatus: vi.fn((patch: { readNotificationSlugs?: string[] }) => {
-    mockGlobalState = {
-      ...mockGlobalState,
-      status: {
-        ...(mockGlobalState.status as Record<string, unknown>),
-        ...patch,
-      },
-    };
-  }),
-});
 
 const renderFooter = async ({
   billboardItems = [],
@@ -65,7 +41,6 @@ const renderFooter = async ({
   enableBusinessFeatures = false,
   homeSidebar = false,
   hideGitHub = true,
-  serverConfigInit = true,
 }: RenderFooterOptions = {}) => {
   vi.resetModules();
   analyticsTrack.mockReset();
@@ -75,10 +50,8 @@ const renderFooter = async ({
     setItem: vi.fn(),
   });
 
-  mockGlobalState = createGlobalState();
   mockServerConfigState = {
     enableBusinessFeatures,
-    serverConfigInit,
   };
   mockUserState = {
     defaultSettings: {},
@@ -108,37 +81,6 @@ const renderFooter = async ({
   vi.doMock('@/components/FeedbackModal', () => ({
     default: vi.fn(),
     openFeedbackModal: vi.fn(),
-  }));
-  vi.doMock('@/components/HighlightNotification', () => ({
-    default: (props: {
-      actionLabel?: string;
-      description?: string;
-      onAction?: () => void;
-      onActionClick?: () => void;
-      onClose?: () => void;
-      open?: boolean;
-      title?: string;
-    }) =>
-      props.open ? (
-        <div data-testid="highlight-notification">
-          <div>{props.title}</div>
-          <div>{props.description}</div>
-          <button type="button" onClick={props.onClose}>
-            Close promo
-          </button>
-          {props.actionLabel && (
-            <button
-              type="button"
-              onClick={() => {
-                if (props.onAction) props.onAction();
-                else props.onActionClick?.();
-              }}
-            >
-              {props.actionLabel}
-            </button>
-          )}
-        </div>
-      ) : null,
   }));
   vi.doMock('@/features/Billboard', () => ({
     default: () => null,
@@ -176,13 +118,6 @@ const renderFooter = async ({
   vi.doMock('@/hooks/useNavLayout', () => ({
     useNavLayout: createNavLayoutState,
   }));
-  const selectFromGlobalStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockGlobalState)) as MockStoreHook;
-  vi.doMock('@/store/global', () => {
-    selectFromGlobalStore.getState = () => mockGlobalState;
-
-    return { useGlobalStore: selectFromGlobalStore };
-  });
   function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
     return selector(mockServerConfigState);
   }
@@ -218,14 +153,12 @@ afterEach(() => {
   vi.doUnmock('@lobehub/analytics/react');
   vi.doUnmock('@/components/ChangelogModal');
   vi.doUnmock('@/components/FeedbackModal');
-  vi.doUnmock('@/components/HighlightNotification');
   vi.doUnmock('@/features/Billboard');
   vi.doUnmock('@/features/Billboard/MenuItems');
   vi.doUnmock('@/features/NavPanel');
   vi.doUnmock('@/features/User/UserPanel/ThemeButton');
   vi.doUnmock('@/features/Workspace/WorkspaceLink');
   vi.doUnmock('@/hooks/useNavLayout');
-  vi.doUnmock('@/store/global');
   vi.doUnmock('@/store/serverConfig');
   vi.doUnmock('@/store/user');
 });
@@ -240,7 +173,7 @@ describe('Footer help menu tracking', () => {
     const getApp = await screen.findByRole('link', { name: 'Get App' });
     const github = screen.getByRole('link', { name: 'GitHub' });
 
-    expect(getApp).toHaveAttribute('href', '/downloads');
+    expect(getApp).toHaveAttribute('href', DOWNLOAD_URL.default);
     expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 20000);
 

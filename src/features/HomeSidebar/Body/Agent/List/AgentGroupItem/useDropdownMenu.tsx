@@ -12,7 +12,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -135,13 +135,7 @@ export const useGroupDropdownMenu = ({
                         await removeAgentGroup(id);
                         toast.success(t('confirmRemoveGroupSuccess'));
                       } catch (error) {
-                        toast.error(
-                          isOwnerOnlyForbiddenError(error)
-                            ? t('deleteSharedOwnerOnly', { ns: 'common' })
-                            : isForbiddenError(error)
-                              ? t('manageOnlyCreator', { ns: 'common' })
-                              : t('operationFailed', { ns: 'common' }),
-                        );
+                        toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                       }
                     },
                     title: t('delete', { ns: 'common' }),

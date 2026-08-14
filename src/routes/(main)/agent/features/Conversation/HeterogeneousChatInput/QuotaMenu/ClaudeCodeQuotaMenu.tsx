@@ -1,10 +1,11 @@
 'use client';
 
 import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useSingleton } from '@/hooks/useSingleton';
 import { agentQuotaService } from '@/services/agentQuota';
 import { fetchClaudeCodeQuotaSnapshot } from '@/services/heteroAgentQuota';
 
@@ -66,7 +67,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
   // menu has observed that device return the same external account identity.
   // This avoids painting another machine's pinned/first account on a device
   // switch while still preserving last-known-good data after later failures.
-  const trustedDeviceAccountsRef = useRef(new Map<string, string>());
+  const trustedDeviceAccounts = useSingleton(() => new Map<string, string>());
 
   /**
    * DB-first: render the persisted windows from our own database, and go to the
@@ -90,9 +91,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       let accounts = initialAccounts;
       let claude = accounts.filter((a) => a.provider === 'claude-code');
       const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
-      const trustedExternalAccountId = deviceId
-        ? trustedDeviceAccountsRef.current.get(deviceId)
-        : undefined;
+      const trustedExternalAccountId = deviceId ? trustedDeviceAccounts.get(deviceId) : undefined;
       let account = deviceId
         ? claude.find((a) => a.externalAccountId === trustedExternalAccountId)
         : (claude.find((a) => a.id === pinnedId) ?? claude[0]);
@@ -117,7 +116,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
 
         const externalAccountId = live?.identity?.externalAccountId;
         if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
-          if (deviceId) trustedDeviceAccountsRef.current.set(deviceId, externalAccountId);
+          if (deviceId) trustedDeviceAccounts.set(deviceId, externalAccountId);
 
           // A revalidation inside the main-process cache's fresh window gets the
           // readings we already persisted echoed back (same capturedAt).
@@ -162,7 +161,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       if (merged && hasRenderableWindow(merged)) return merged;
       return live ?? merged ?? unavailableSnapshot();
     },
-    [deviceId, env, agentId],
+    [agentId, deviceId, env, trustedDeviceAccounts],
   );
 
   const getWindows = useCallback(

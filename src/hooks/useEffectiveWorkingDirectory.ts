@@ -24,6 +24,7 @@ interface UseEffectiveWorkingDirectoryOptions {
    * @default true
    */
   homeFallback?: boolean;
+  topicId?: string | null;
 }
 
 /**
@@ -39,7 +40,7 @@ interface UseEffectiveWorkingDirectoryOptions {
  */
 export const useEffectiveWorkingDirectory = (
   agentId?: string,
-  { homeFallback = true }: UseEffectiveWorkingDirectoryOptions = {},
+  { homeFallback = true, topicId }: UseEffectiveWorkingDirectoryOptions = {},
 ): string | undefined => {
   // Self-populate the device store (SWR dedupes by key across all callers).
   // Devices live behind an authed lambda procedure, so only fetch once signed in
@@ -54,9 +55,11 @@ export const useEffectiveWorkingDirectory = (
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  const topicWorkingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
+  const topicWorkingDirectoryConfig = useChatStore((s) =>
+    topicId
+      ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig
+      : topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {

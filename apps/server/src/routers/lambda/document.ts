@@ -26,6 +26,10 @@ import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  getRestrictedKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
+import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
@@ -257,6 +261,9 @@ export const documentRouter = router({
   getDocumentById: documentProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      // KB-scoped documents inherit the KB's public visibility, so direct
+      // reads must honor the restricted-KB (member No-access) policy too.
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       const doc = await ctx.documentService.getDocumentById(input.id);
       // `source` is a storage key for file-backed documents; sign it so PDF viewers
       // and downloads receive a usable URL. Absolute URLs (web sources) pass through.
@@ -275,6 +282,7 @@ export const documentRouter = router({
   listDocumentHistory: documentProcedure
     .input(listDocumentHistoryInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.listDocumentHistory(
         {
           ...input,
@@ -289,6 +297,7 @@ export const documentRouter = router({
   getDocumentHistoryItem: documentProcedure
     .input(getDocumentHistoryItemInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.getDocumentHistoryItem(input, {
         historySince: getFreeDocumentHistorySince(),
       });
@@ -297,6 +306,7 @@ export const documentRouter = router({
   compareDocumentHistoryItems: documentProcedure
     .input(compareDocumentHistoryItemsInputSchema)
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
       return ctx.documentService.compareDocumentHistoryItems(input, {
         historySince: getFreeDocumentHistorySince(),
       });
@@ -389,7 +399,13 @@ export const documentRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      return ctx.documentService.queryDocuments(input);
+      // KB pages are ordinary workspace-public documents, so listings must
+      // drop rows from restricted (member No-access) libraries. The exclusion
+      // runs inside the query so pagination and totals stay correct.
+      const excludeKnowledgeBaseIds = ctx.workspaceId
+        ? await getRestrictedKnowledgeBaseIds(ctx)
+        : [];
+      return ctx.documentService.queryDocuments({ ...input, excludeKnowledgeBaseIds });
     }),
 
   acquireDocumentLock: documentProcedure
@@ -606,10 +622,15 @@ export const documentRouter = router({
 
       const result = await ctx.documentService.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        // A level staged on the permission page while the document was still
+        // private must survive publishing — only fall back to the default
+        // when neither an explicit input nor a staged row exists.
+        const staged = await permissionModel.getAccessLevel('document', input.id);
+        await permissionModel.setAccessLevel(
           'document',
           input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
+          input.accessLevel ?? staged ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
           ctx.userId,
         );
       }
@@ -678,19 +699,21 @@ export const documentRouter = router({
       }
 
       const result = await ctx.documentService.setVisibility(input.id, input.visibility);
+      // A level staged on the permission page while the document was still
+      // private must survive publishing — only fall back to the default when
+      // neither an explicit input nor a staged row exists.
+      const staged =
+        input.visibility === 'public'
+          ? await permissionModel.getAccessLevel('document', input.id)
+          : null;
       const accessLevel =
         input.visibility === 'private'
           ? 'edit'
-          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document);
+          : (input.accessLevel ?? staged ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document);
       if (input.visibility === 'private') {
         await permissionModel.removeAll('document', input.id);
       } else {
-        await permissionModel.setAccessLevel(
-          'document',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.document,
-          ctx.userId,
-        );
+        await permissionModel.setAccessLevel('document', input.id, accessLevel, ctx.userId);
       }
       return {
         ...buildResourcePermissionState({

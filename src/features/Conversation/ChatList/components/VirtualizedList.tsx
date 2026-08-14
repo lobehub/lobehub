@@ -88,6 +88,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       spacerActive,
       spacerHeight,
     } = useConversationScroll({
+      contextKey,
       dataSource,
       headerOffset,
       isSecondLastMessageFromUser,

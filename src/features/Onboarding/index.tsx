@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -10,6 +10,7 @@ import OnboardingContainer from '@/features/Onboarding/Layout';
 import ResponseLanguageStep from '@/features/Onboarding/steps/ResponseLanguageStep';
 import TelemetryStep from '@/features/Onboarding/steps/TelemetryStep';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
+import { useSingleton } from '@/hooks/useSingleton';
 import {
   trackOnboardingStepCompleted,
   trackOnboardingStepViewed,
@@ -30,7 +31,7 @@ const OnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
   const hasStepParam = searchParams.has('step');
-  const viewedStepKeysRef = useRef<Set<string>>(new Set());
+  const viewedStepKeys = useSingleton(() => new Set<string>());
 
   useOnboardingAgentTemplates(isUserStateInit && (!commonStepsCompleted || hasStepParam));
 
@@ -47,11 +48,11 @@ const OnboardingPage = memo(() => {
     if (!isUserStateInit || (commonStepsCompleted && !hasStepParam)) return;
 
     const payload = COMMON_STEP_TRACKING[step];
-    if (viewedStepKeysRef.current.has(payload.step)) return;
+    if (viewedStepKeys.has(payload.step)) return;
 
-    viewedStepKeysRef.current.add(payload.step);
+    viewedStepKeys.add(payload.step);
     trackOnboardingStepViewed(payload);
-  }, [commonStepsCompleted, hasStepParam, isUserStateInit, step]);
+  }, [commonStepsCompleted, hasStepParam, isUserStateInit, step, viewedStepKeys]);
 
   const goNextFromTelemetry = useCallback(() => {
     trackOnboardingStepCompleted(COMMON_STEP_TRACKING[1]);

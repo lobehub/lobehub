@@ -18,6 +18,7 @@ const makeFakeChild = () => {
 
 const baseParams = {
   agentType: 'claudeCode',
+  assistantMessageId: 'asst',
   jwt: 'jwt',
   operationId: 'op',
   prompt: 'hi',
@@ -67,6 +68,7 @@ describe('spawnHeteroAgentRun', () => {
     expect(opts).toMatchObject({
       cwd: '/work/dir',
       env: expect.objectContaining({
+        LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst',
         LOBEHUB_JWT: 'jwt-token',
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),

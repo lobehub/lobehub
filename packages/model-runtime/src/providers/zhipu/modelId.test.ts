@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isToolStreamSupportedGLMModel, parseGLMModelId } from './modelId';
+import {
+  isAlwaysOnThinkingGLMModel,
+  isToolStreamSupportedGLMModel,
+  parseGLMModelId,
+} from './modelId';
 
 describe('parseGLMModelId', () => {
   it('should parse base GLM ids', () => {
@@ -53,5 +57,21 @@ describe('isToolStreamSupportedGLMModel', () => {
     expect(isToolStreamSupportedGLMModel('glm-4.5')).toBe(false);
     expect(isToolStreamSupportedGLMModel('glm-5-turbo')).toBe(false);
     expect(isToolStreamSupportedGLMModel('glm-5v-turbo')).toBe(false);
+  });
+});
+
+describe('isAlwaysOnThinkingGLMModel', () => {
+  it('should require thinking from GLM-5.3 onward', () => {
+    expect(isAlwaysOnThinkingGLMModel('glm-5.3')).toBe(true);
+    expect(isAlwaysOnThinkingGLMModel('glm-5.4')).toBe(true);
+    expect(isAlwaysOnThinkingGLMModel('glm-6')).toBe(true);
+  });
+
+  it('should keep earlier GLM generations optional', () => {
+    expect(isAlwaysOnThinkingGLMModel('glm-5.2')).toBe(false);
+    expect(isAlwaysOnThinkingGLMModel('glm-5.1')).toBe(false);
+    expect(isAlwaysOnThinkingGLMModel('glm-5')).toBe(false);
+    expect(isAlwaysOnThinkingGLMModel('glm-4.7')).toBe(false);
+    expect(isAlwaysOnThinkingGLMModel('glm-5-turbo')).toBe(false);
   });
 });

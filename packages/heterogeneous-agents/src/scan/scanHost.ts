@@ -1,13 +1,7 @@
-import {
-  HETEROGENEOUS_AGENT_CONFIGS,
-  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
-  type RemoteHeterogeneousAgentType,
-} from '../config';
-import {
-  type CliCommandStatus,
-  detectHeterogeneousCliCommand,
-  detectValidatedCommand,
-} from '../spawn/resolveCliCommand';
+import type { RemoteHeterogeneousAgentType } from '../config';
+import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '../config';
+import type { CliCommandStatus } from '../spawn/resolveCliCommand';
+import { detectHeterogeneousCliCommand, detectValidatedCommand } from '../spawn/resolveCliCommand';
 import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './types';
 
 /**
@@ -18,15 +12,6 @@ import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './
  * (`@lobechat/heterogeneous-agents/scanHost`), never from a browser bundle.
  */
 
-// openclaw prints "openclaw x.y.z"; hermes prints "Hermes Agent vX.Y.Z (...)"
-const parsePlatformVersion = (type: RemoteHeterogeneousAgentType, output: string) => {
-  if (type === 'hermes') {
-    const match = output.match(/v(\d+\.\d+\.\d+)/);
-    if (match) return match[1];
-  }
-  return output.split(/\s+/).at(-1);
-};
-
 /**
  * Resolve and validate a notify-based platform executable using the same
  * login-shell PATH and Windows npm-shim handling as the CLI agent resolver.
@@ -35,12 +20,7 @@ const parsePlatformVersion = (type: RemoteHeterogeneousAgentType, output: string
  */
 export const resolveRemotePlatformCommand = async (
   type: RemoteHeterogeneousAgentType,
-): Promise<CliCommandStatus> => {
-  const status = await detectValidatedCommand(type, { validateKeywords: [type] });
-  return status.version
-    ? { ...status, version: parsePlatformVersion(type, status.version) }
-    : status;
-};
+): Promise<CliCommandStatus> => detectValidatedCommand(type, { validateKeywords: [type] });
 
 export const probeRemotePlatform = async (
   type: RemoteHeterogeneousAgentType,

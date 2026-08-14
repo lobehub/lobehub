@@ -11,10 +11,11 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
-const resourcePermissionMenuItemMock = vi.hoisted(() => ({
-  args: [] as unknown[],
-  item: null as null | { key: string; label: string },
+const resourcePermissionMock = vi.hoisted(() => ({
+  canManage: false,
+  workspaceId: undefined as string | undefined,
 }));
+const wsNavigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -64,7 +65,7 @@ vi.mock('antd-style', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  useActiveWorkspaceId: () => undefined,
+  useActiveWorkspaceId: () => resourcePermissionMock.workspaceId,
 }));
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
@@ -79,11 +80,19 @@ vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => null,
 }));
 
-vi.mock('@/features/ResourcePermission/useResourcePermissionMenuItem', () => ({
-  useResourcePermissionMenuItem: (...args: unknown[]) => {
-    resourcePermissionMenuItemMock.args = args;
-    return resourcePermissionMenuItemMock.item;
-  },
+vi.mock('@/features/ResourcePermission/useResourcePermission', () => ({
+  useResourcePermission: (_type: string, resourceId?: string) => ({
+    data: resourceId ? { canManage: resourcePermissionMock.canManage } : undefined,
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+    setAccessLevel: vi.fn(),
+    updating: false,
+  }),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => wsNavigateMock,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -169,22 +178,30 @@ describe('PageEditor header menu', () => {
   beforeEach(() => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
-    resourcePermissionMenuItemMock.args = [];
-    resourcePermissionMenuItemMock.item = null;
+    resourcePermissionMock.canManage = false;
+    resourcePermissionMock.workspaceId = undefined;
+    wsNavigateMock.mockClear();
   });
 
-  it('places workspace member permission settings in the overflow menu', () => {
-    resourcePermissionMenuItemMock.item = {
-      key: 'member-permissions',
-      label: 'Members: Can view',
-    };
+  it('places the member-permission page entry in the overflow menu for managers', () => {
+    resourcePermissionMock.workspaceId = 'ws-1';
+    resourcePermissionMock.canManage = true;
 
     const { result } = renderHook(() => useMenu());
 
-    expect(getMenuItem(result.current.menuItems, 'member-permissions')).toMatchObject({
-      label: 'Members: Can view',
-    });
-    expect(resourcePermissionMenuItemMock.args[2]).toEqual({ showReadOnly: true });
+    const item = getMenuItem(result.current.menuItems, 'member-permissions');
+    expect(item).toMatchObject({ label: 'permission.page.entry' });
+    (item as { onClick: () => void }).onClick();
+    expect(wsNavigateMock).toHaveBeenCalledWith('/page/doc-1/permission');
+  });
+
+  it('hides the member-permission entry for non-managers', () => {
+    resourcePermissionMock.workspaceId = 'ws-1';
+    resourcePermissionMock.canManage = false;
+
+    const { result } = renderHook(() => useMenu());
+
+    expect(getMenuItem(result.current.menuItems, 'member-permissions')).toBeUndefined();
   });
 
   it('disables mutating page actions for workspace viewers', () => {

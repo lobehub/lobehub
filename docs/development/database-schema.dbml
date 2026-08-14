@@ -302,7 +302,7 @@ table agent_eval_runs {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-
+    
     dataset_id [name: 'agent_eval_runs_dataset_id_idx']
     experiment_id [name: 'agent_eval_runs_experiment_id_idx']
     parent_run_id [name: 'agent_eval_runs_parent_run_id_idx']
@@ -346,12 +346,24 @@ table agent_history_job_agents {
   }
 }
 
+table agent_history_job_groups {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  job_id text [not null]
+  group_id text [not null]
+
+  indexes {
+    (job_id, group_id) [name: 'agent_history_job_groups_job_id_group_id_unique', unique]
+    group_id [name: 'agent_history_job_groups_group_id_idx']
+  }
+}
+
 table agent_history_job_topics {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   job_id text [not null]
   topic_id text [not null]
   priority boolean [not null, default: false]
   activity_at "timestamp with time zone" [not null]
+  payload jsonb
 
   indexes {
     (job_id, topic_id) [name: 'agent_history_job_topics_job_id_topic_id_unique', unique]
@@ -364,6 +376,7 @@ table agent_history_jobs {
   id text [pk, not null]
   status text [not null, default: 'pending']
   type text [not null, default: 'transfer']
+  payload jsonb
   agent_ids jsonb [not null]
   session_ids jsonb [not null]
   group_ids jsonb [not null, default: `[]`]
@@ -764,6 +777,7 @@ table api_keys {
   key varchar(256) [not null, unique]
   key_hash varchar(128) [unique]
   enabled boolean [default: true]
+  scopes jsonb
   expires_at "timestamp with time zone"
   last_used_at "timestamp with time zone"
   user_id text [not null]
@@ -1886,7 +1900,7 @@ table project_completion_reviews {
     (project_id, created_at) [name: 'project_completion_reviews_project_id_created_at_idx']
     reviewer_user_id [name: 'project_completion_reviews_reviewer_user_id_idx']
     workspace_id [name: 'project_completion_reviews_workspace_id_idx']
-
+    
   }
 }
 
@@ -1913,9 +1927,11 @@ table project_knowledge_bases {
 table projects {
   id text [pk, not null]
   slug varchar(100)
+  identifier varchar(6) [not null]
   name varchar(255) [not null]
   description text
   avatar text
+  coordinator_agent_id text [not null]
   status text [not null, default: 'backlog']
   user_id text [not null]
   workspace_id text
@@ -1931,11 +1947,14 @@ table projects {
   indexes {
     (slug, user_id) [name: 'projects_slug_user_id_unique', unique]
     (workspace_id, slug) [name: 'projects_slug_workspace_id_unique', unique]
+    (identifier, user_id) [name: 'projects_identifier_user_id_unique', unique]
+    (workspace_id, identifier) [name: 'projects_identifier_workspace_id_unique', unique]
     user_id [name: 'projects_user_id_idx']
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
-
+    coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
+    
   }
 }
 
@@ -2485,7 +2504,7 @@ table tasks {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-
+    
     (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
     created_by_user_id [name: 'tasks_created_by_user_id_idx']
     created_by_agent_id [name: 'tasks_created_by_agent_id_idx']
@@ -2655,10 +2674,10 @@ table topic_comments {
 
   indexes {
     (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
-
-
-
-
+    
+    
+    
+    
     (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
     (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
     (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']
@@ -3086,6 +3105,39 @@ table verify_reports {
   }
 }
 
+table verify_review_predictions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  check_result_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  model text [not null]
+  prompt_version text [not null]
+  status text [not null]
+  action text
+  status_reason text
+  confidence "numeric(3, 2)"
+  comment text
+  rationale text
+  annotations jsonb
+  adjudication text
+  adjudication_edit text
+  adjudicated_at "timestamp with time zone"
+  latency_ms integer
+  prompt_tokens integer
+  completion_tokens integer
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    check_result_id [name: 'verify_review_predictions_check_result_id_idx']
+    user_id [name: 'verify_review_predictions_user_id_idx']
+    workspace_id [name: 'verify_review_predictions_workspace_id_idx']
+    (provider, model) [name: 'verify_review_predictions_model_idx']
+    (check_result_id, provider, model, prompt_version) [name: 'verify_review_predictions_result_model_prompt_unique', unique]
+
+  }
+}
+
 table verify_rubric_criteria {
   rubric_id uuid [not null]
   criterion_id uuid [not null]
@@ -3147,7 +3199,7 @@ table verify_runs {
     workspace_id [name: 'verify_runs_workspace_id_idx']
     acceptance_id [name: 'verify_runs_acceptance_id_idx']
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
-
+    
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
     user_decision [name: 'verify_runs_user_decision_idx']

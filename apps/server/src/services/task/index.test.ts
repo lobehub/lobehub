@@ -139,6 +139,7 @@ describe('TaskService', () => {
         name: 'Task One',
         parentTaskId: null,
         priority: 'normal',
+        startedAt: new Date('2024-01-01T00:02:00Z'),
         status: 'todo',
         totalTopics: 0,
       };
@@ -166,6 +167,7 @@ describe('TaskService', () => {
       expect(result?.agentId).toBe('agent-1');
       expect(result?.userId).toBe('user-1');
       expect(result?.createdAt).toBe('2024-01-01T00:00:00.000Z');
+      expect(result?.startedAt).toBe('2024-01-01T00:02:00.000Z');
       expect(result?.subtasks).toEqual([]);
       expect(result?.dependencies).toEqual([]);
       expect(result?.activities).toBeUndefined();
@@ -930,7 +932,7 @@ describe('TaskService', () => {
       });
     });
 
-    it('should propagate topic completedAt to the topic activity', async () => {
+    it('should propagate topic completedAt and cost to the topic activity', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -957,6 +959,7 @@ describe('TaskService', () => {
           handoff: null,
           seq: 1,
           status: 'completed',
+          totalCost: '0.0425',
           topicId: 'topic-done',
         },
         {
@@ -965,6 +968,7 @@ describe('TaskService', () => {
           handoff: null,
           seq: 2,
           status: 'running',
+          totalCost: null,
           topicId: 'topic-running',
         },
       ];
@@ -987,7 +991,9 @@ describe('TaskService', () => {
       const done = topicActivities.find((a) => a.id === 'topic-done');
       const running = topicActivities.find((a) => a.id === 'topic-running');
       expect(done?.completedAt).toBe('2024-01-03T00:01:30.000Z');
+      expect(done?.cost).toBe(0.0425);
       expect(running?.completedAt).toBeUndefined();
+      expect(running?.cost).toBeNull();
     });
 
     it('should not include topicCount when no topics exist', async () => {

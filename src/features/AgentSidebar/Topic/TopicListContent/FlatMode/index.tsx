@@ -25,15 +25,11 @@ const FlatMode = memo(() => {
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
 
-  const [activeTopicId, activeThreadId, hasMore, isExpandingPageSize, activeAgentId] = useChatStore(
-    (s) => [
-      s.activeTopicId,
-      s.activeThreadId,
-      topicSelectors.hasMoreTopicsForSidebar(s),
-      topicSelectors.isExpandingPageSize(s),
-      s.activeAgentId,
-    ],
-  );
+  const [hasMore, isExpandingPageSize, activeAgentId] = useChatStore((s) => [
+    topicSelectors.hasMoreTopicsForSidebar(s),
+    topicSelectors.isExpandingPageSize(s),
+    s.activeAgentId,
+  ]);
 
   const activeTopicList = useChatStore(
     topicSelectors.displayTopicsForSidebar(topicPageSize, topicSortBy, topicIncludeCompleted),
@@ -44,13 +40,11 @@ const FlatMode = memo(() => {
     <Flexbox gap={1}>
       {activeTopicList?.map((topic) => (
         <TopicItem
-          active={activeTopicId === topic.id}
           fav={topic.favorite}
           id={topic.id}
           key={topic.id}
           metadata={topic.metadata}
           status={topic.status}
-          threadId={activeThreadId}
           title={topic.title}
           userId={topic.userId}
         />

@@ -313,6 +313,7 @@ describe('GatewayConnectionCtr', () => {
 
   afterEach(() => {
     ctr.disconnect();
+    vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
@@ -838,18 +839,24 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'opencode'] as const)(
-      'forwards agentType "%s" to spawnLhHeteroExec',
-      async (agentType) => {
-        const client = await connectAndOpen();
-        client.simulateAgentRunRequest(agentType);
-        await vi.advanceTimersByTimeAsync(0);
+    it.each([
+      'openclaw',
+      'hermes',
+      'codex',
+      'claude-code',
+      'codebuddy',
+      'cursor',
+      'kimi-code',
+      'opencode',
+    ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
 
-        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-          expect.objectContaining({ agentType }),
-        );
-      },
-    );
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType }),
+      );
+    });
 
     it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
@@ -864,6 +871,18 @@ describe('GatewayConnectionCtr', () => {
           cwd: '/Users/alice/repo',
           systemContext: 'WORKSPACE CONTEXT',
         }),
+      );
+    });
+
+    it('forwards the seeded assistant message id to the hetero launcher', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-assistant', 'hi', 'mock-jwt', {
+        assistantMessageId: 'asst-1',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ assistantMessageId: 'asst-1' }),
       );
     });
 
@@ -984,6 +1003,15 @@ describe('GatewayConnectionCtr', () => {
   // ─── runHeteroTask ───
 
   describe('runHeteroTask', () => {
+    function makeMockStream() {
+      const listeners: Array<(chunk: Buffer) => void> = [];
+
+      return {
+        on: vi.fn((_event: string, cb: (chunk: Buffer) => void) => listeners.push(cb)),
+        _emit: (content: string) => listeners.forEach((cb) => cb(Buffer.from(content))),
+      };
+    }
+
     /** Creates a minimal mock child process returned by spawn(). */
     function makeMockChild(pid = 9999) {
       const listeners: Record<string, Array<(...a: any[]) => void>> = {};
@@ -993,6 +1021,8 @@ describe('GatewayConnectionCtr', () => {
           listeners[event].push(cb);
         }),
         pid,
+        stderr: makeMockStream(),
+        stdout: makeMockStream(),
         unref: vi.fn(),
         _emit: (event: string, ...args: any[]) => listeners[event]?.forEach((cb) => cb(...args)),
       };
@@ -1047,6 +1077,49 @@ describe('GatewayConnectionCtr', () => {
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
     });
+
+    it.each([
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'researcher',
+        platformAgentId: ' researcher ',
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: undefined,
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: '   ',
+      },
+      { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+    ])(
+      'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+      async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+        vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+        spawnMock.mockReturnValue(makeMockChild());
+
+        const client = await connectAndOpen();
+        client.simulateToolCallRequest(
+          'runHeteroTask',
+          {
+            agentType: 'openclaw',
+            operationId: 'op-agent-selection',
+            platformAgentId,
+            prompt: 'hello',
+            taskId: 'task-agent-selection',
+            topicId: 'topic-agent-selection',
+          },
+          'req-agent-selection',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+        expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+      },
+    );
 
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
@@ -1267,6 +1340,127 @@ describe('GatewayConnectionCtr', () => {
 
       killSpy.mockRestore();
     });
+
+    describe('hermes', () => {
+      beforeEach(() => {
+        resolveRemotePlatformCommandMock.mockResolvedValue({
+          available: true,
+          path: '/resolved/bin/hermes',
+          resolvedPathEnv: '/resolved/bin:/usr/bin',
+          version: '0.20.0',
+        });
+      });
+
+      it('relays stdout intact and saves the final session id from stderr', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-hermes-1',
+          prompt: 'hello',
+          taskId: 'task-hermes-1',
+          topicId: 'topic-hermes',
+        });
+
+        const [command, , spawnOptions] = spawnMock.mock.calls[0] as [
+          string,
+          string[],
+          { stdio: string[] },
+        ];
+        expect(command).toBe('/resolved/bin/hermes');
+        expect(spawnOptions.stdio).toEqual(['ignore', 'pipe', 'pipe']);
+
+        child.stdout._emit('session_id: part of the final answer\nHello from Hermes\n');
+        child.stderr._emit(
+          'Restored working directory: /repo\r\nsession_id: session-before-compaction\r\n' +
+            'Context compacted\r\nsession_id: session-continuation\r\n',
+        );
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'session_id: part of the final answer\nHello from Hermes',
+            topicId: 'topic-hermes',
+          }),
+        );
+        expect((ctr as any).hermesSessionMap.get('topic-hermes')).toBe('session-continuation');
+      });
+
+      it('resumes the saved session and replaces it with a continuation id', async () => {
+        const firstChild = makeMockChild(1001);
+        const secondChild = makeMockChild(1002);
+        const thirdChild = makeMockChild(1003);
+        spawnMock
+          .mockReturnValueOnce(firstChild)
+          .mockReturnValueOnce(secondChild)
+          .mockReturnValueOnce(thirdChild);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-1',
+          prompt: 'remember this',
+          taskId: 'task-1',
+          topicId: 'topic-multi-turn',
+        });
+        firstChild.stderr._emit('session_id: session-a\n');
+        firstChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-2',
+          prompt: 'what did I say?',
+          taskId: 'task-2',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[1][1]).toEqual([
+          'chat',
+          '--query',
+          'what did I say?',
+          '--quiet',
+          '--accept-hooks',
+          '--resume',
+          'session-a',
+        ]);
+
+        secondChild.stderr._emit('session_id: session-continuation\n');
+        secondChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-3',
+          prompt: 'continue',
+          taskId: 'task-3',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[2][1]).toContain('session-continuation');
+      });
+
+      it('still relays a successful response when stderr has no session id', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-no-session',
+          prompt: 'hello',
+          taskId: 'task-no-session',
+          topicId: 'topic-no-session',
+        });
+        child.stdout._emit('Successful response\n');
+        child.stderr._emit('Provider diagnostic only\n');
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'Successful response' }),
+        );
+        expect((ctr as any).hermesSessionMap.has('topic-no-session')).toBe(false);
+      });
+    });
   });
 
   // ─── Platform Capability Probing ───
@@ -1426,10 +1620,8 @@ describe('GatewayConnectionCtr', () => {
 
       const info = await ctr.getDeviceInfo();
       expect(info).toEqual({
-        description: '',
         deviceId: 'my-device',
         hostname: 'mock-hostname',
-        name: 'mock-hostname',
         platform: process.platform,
       });
     });

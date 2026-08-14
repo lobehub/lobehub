@@ -4,7 +4,7 @@ import type { ResourceManagerMode } from '@/features/ResourceManager';
 import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
-import type { FilesTabs, SortType } from '@/types/files';
+import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
 import { DEFAULT_WORKSPACE_LIST_VISIBILITY, initialState } from './initialState';
@@ -154,7 +154,31 @@ export class ResourceManagerStoreActionImpl {
   };
 
   setCategory = (category: FilesTabs): void => {
-    this.#set({ category });
+    // Drop any explicit source pick so the new category falls back to its own
+    // default — an "AI generated" choice made under Images must not silently
+    // hide every uploaded file under Documents.
+    this.#set({ category, sourceFilter: undefined });
+  };
+
+  setSourceFilter = (sourceFilter: ResourceSourceFilter): void => {
+    if (this.#get().sourceFilter === sourceFilter) return;
+
+    // The visible pool changes, so a standing "select all" would target rows
+    // that are no longer on screen — same reset as the visibility toggle.
+    this.#set({
+      selectAllState: 'none',
+      selectedFileIds: [],
+      selectionTotal: undefined,
+      sourceFilter,
+    });
+
+    // Drop the previous source's rows immediately, exactly as the visibility
+    // toggle does. Without this the old rows stay on screen and interactive
+    // under the newly active chip until the fetch lands — and a "select all"
+    // fired in that window resolves against `useFileStore.queryParams`, which
+    // still carries the previous source, so the following batch action would
+    // target rows the user is no longer looking at.
+    useFileStore.getState().clearCurrentQueryResources();
   };
 
   setCurrentViewItemId = (currentViewItemId?: string): void => {

@@ -26,6 +26,11 @@ const transformOpenAIStream = (
   chunk:
     | OpenAI.Responses.ResponseStreamEvent
     | {
+        delta: string;
+        item_id: string;
+        type: 'response.reasoning_text.delta';
+      }
+    | {
         annotation: {
           end_index: number;
           start_index: number;
@@ -128,7 +133,8 @@ const transformOpenAIStream = (
         }
       }
 
-      case 'response.reasoning_summary_text.delta': {
+      case 'response.reasoning_summary_text.delta':
+      case 'response.reasoning_text.delta': {
         return { data: chunk.delta, id: chunk.item_id, type: 'reasoning' };
       }
 
