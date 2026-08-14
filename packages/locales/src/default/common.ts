@@ -305,12 +305,19 @@ export default {
 
   'cmdk.video': 'AI Video',
 
+  'betaFeedback.collapse': 'Collapse',
   'betaFeedback.desc':
     'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
   'betaFeedback.discord.action': 'Open Discord',
   'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
   'betaFeedback.discord.title': 'Discord',
+  'betaFeedback.dismiss': "Don't show again",
+  'betaFeedback.promoBanner':
+    'Join the group chat and share issues or suggestions for a chance to earn free trial credits.',
+  'betaFeedback.promoTooltip': 'Join the group chat for a chance to earn free credits',
   'betaFeedback.title': 'Workspace beta feedback',
+  'betaFeedback.waitlistPromo': 'Join the Workspace beta and get $5 in credits',
+  'betaFeedback.waitlistTitle': 'Workspace beta application',
   'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
   'betaFeedback.wechat.title': 'WeChat group',
 
@@ -470,6 +477,8 @@ export default {
   'loading': 'Loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
+  'deleteHistoryMigrating':
+    'Chat history is still migrating. It can be deleted once the migration finishes — please try again in a few minutes.',
   'deleteSharedOwnerOnly':
     "Only a workspace owner can delete this — it carries other members' conversations",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',

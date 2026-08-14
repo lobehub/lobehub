@@ -75,9 +75,9 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `kimi-code` | `opencode` | `pi` | `qoder`): spawned as a child
- *   process on the desktop or a connected device; uses `command`, `args`, `env`,
- *   `systemContext`.
+ *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder`):
+ *   spawned as a child process on the desktop or a connected device; uses
+ *   `command`, `args`, `env`, `systemContext`.
  *
  * - **Platform task** (`openclaw` | `hermes`): runs on this desktop when
  *   `executionTarget` is `local`, or on a machine connected via `lh connect`

@@ -57,6 +57,7 @@ const createFakeProc = ({
   proc.stderr = stderr;
   proc.stdin = {
     end: vi.fn(),
+    once: vi.fn(),
     write: vi.fn((chunk: string, cb?: () => void) => {
       stdinWrites.push(chunk);
       cb?.();
@@ -78,6 +79,91 @@ const createFakeProc = ({
   };
 
   return { proc, start, stdinWrites };
+};
+
+const createGrokAcpProc = ({
+  loadError = false,
+  promptAutoComplete = true,
+}: { loadError?: boolean; promptAutoComplete?: boolean } = {}) => {
+  const proc = new EventEmitter() as any;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const requests: Array<{
+    id?: number | string;
+    method?: string;
+    params?: Record<string, unknown>;
+  }> = [];
+  const send = (message: Record<string, unknown>) => {
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  };
+
+  proc.stdout = stdout;
+  proc.stderr = stderr;
+  proc.pid = 54_321;
+  proc.killed = false;
+  proc.kill = vi.fn(() => true);
+  proc.stdin = {
+    once: vi.fn(),
+    write: vi.fn((chunk: string) => {
+      const message = JSON.parse(chunk.trim());
+      requests.push(message);
+      queueMicrotask(() => {
+        switch (message.method) {
+          case 'initialize': {
+            send({
+              id: message.id,
+              result: {
+                _meta: { defaultAuthMethodId: 'cached_token' },
+                authMethods: [{ id: 'cached_token' }],
+                protocolVersion: 1,
+              },
+            });
+            return;
+          }
+          case 'authenticate': {
+            send({ id: message.id, result: {} });
+            return;
+          }
+          case 'session/new': {
+            send({ id: message.id, result: { sessionId: 'grok-cli-session' } });
+            return;
+          }
+          case 'session/load': {
+            if (loadError) {
+              send({
+                error: {
+                  code: -32_603,
+                  data: { code: 'FS_NOT_FOUND', detail: 'missing session' },
+                  message: 'Path not found.',
+                },
+                id: message.id,
+              });
+            } else {
+              send({ id: message.id, result: {} });
+            }
+            return;
+          }
+          case 'session/prompt': {
+            if (!promptAutoComplete) return;
+            send({
+              method: 'session/update',
+              params: {
+                sessionId: 'grok-cli-session',
+                update: {
+                  content: { text: 'done', type: 'text' },
+                  sessionUpdate: 'agent_message_chunk',
+                },
+              },
+            });
+            send({ id: message.id, result: { stopReason: 'end_turn' } });
+          }
+        }
+      });
+      return true;
+    }),
+  };
+
+  return { proc, requests };
 };
 
 const ccInit = `${JSON.stringify({
@@ -151,6 +237,134 @@ describe('spawnAgent', () => {
     // Events flow through the pipeline (session id extracted by adapter).
     expect(events.length).toBeGreaterThan(0);
     for (const event of events) expect(event.operationId).toBe('op-1');
+  });
+
+  it('runs Grok Build through ACP and exposes its native session to CLI callers', async () => {
+    const fake = createGrokAcpProc();
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      extraArgs: ['--model', 'grok-build'],
+      operationId: 'op-grok',
+      prompt: 'do a thing',
+    });
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+
+    expect(spawnCalls[0]).toMatchObject({
+      args: [
+        '--no-auto-update',
+        'agent',
+        '--no-leader',
+        '--always-approve',
+        '--model',
+        'grok-build',
+        'stdio',
+      ],
+      command: 'grok',
+    });
+    expect(fake.requests.map(({ method }) => method)).toEqual([
+      'initialize',
+      'authenticate',
+      'session/new',
+      'session/prompt',
+    ]);
+    expect(fake.requests.at(-1)?.params).toMatchObject({
+      prompt: [{ text: 'do a thing', type: 'text' }],
+      sessionId: 'grok-cli-session',
+    });
+    expect(handle.sessionId).toBe('grok-cli-session');
+    expect(events.some(({ data }) => data?.content === 'done')).toBe(true);
+    expect(events.at(-1)).toMatchObject({
+      data: { reason: 'complete', transport: 'acp-stdio' },
+      type: 'agent_runtime_end',
+    });
+
+    processKill.mockRestore();
+  });
+
+  it('preserves SIGKILL when force-stopping a Grok ACP run', async () => {
+    const fake = createGrokAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-force-stop',
+      prompt: 'keep running',
+    });
+    await vi.waitFor(() => {
+      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    handle.kill('SIGKILL');
+
+    expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
+    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
+    processKill.mockRestore();
+  });
+
+  it('preserves SIGINT when the transport fails during graceful cancellation', async () => {
+    const fake = createGrokAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-interrupted-failure',
+      prompt: 'keep running',
+    });
+    await vi.waitFor(() => {
+      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    handle.kill('SIGINT');
+    fake.proc.emit('close', 1, null);
+
+    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGINT' });
+    await expect(
+      (async () => {
+        for await (const _event of handle.events) {
+          // Host cancellation ends the event stream without a transport error.
+        }
+      })(),
+    ).resolves.toBeUndefined();
+    processKill.mockRestore();
+  });
+
+  it('ends the Grok event iterable normally after emitting a structured ACP request error', async () => {
+    const fake = createGrokAcpProc({ loadError: true });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-resume',
+      prompt: 'continue',
+      resumeSessionId: 'missing-session',
+    });
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      data: {
+        agentType: 'grok-build',
+        details: { data: { code: 'FS_NOT_FOUND' }, method: 'session/load' },
+      },
+      type: 'error',
+    });
+    await expect(handle.exit).resolves.toEqual({ code: 1, signal: null });
+    processKill.mockRestore();
   });
 
   it('fails before spawn when the configured working directory no longer exists', async () => {

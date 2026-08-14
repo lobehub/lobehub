@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "Modelo inteligente e extremamente rápido que raciocina antes de responder",
   "lobehub.grok-4.3.description": "O modelo de linguagem de grande porte mais comprometido com a verdade no mundo.",
   "lobehub.grok-4.5.description": "Grok 4.5 oferece desempenho próximo ao Claude Opus 4.8 com respostas excepcionalmente rápidas.",
+  "lobehub.grok-4.6.description": "O Grok 4.6 baseia-se no Grok 4.5 com um foco particular em agentes de longa duração e trabalhos interativos e visuais mais ambiciosos.",
   "lobehub.imagen-4.0-fast-generate-001.description": "Série de modelos de texto para imagem da 4ª geração Imagen.",
   "lobehub.imagen-4.0-generate-001.description": "Série de modelos de geração de imagem a partir de texto Imagen de quarta geração.",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Versão Ultra da série de modelos de geração de imagem a partir de texto Imagen de quarta geração.",

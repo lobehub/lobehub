@@ -1026,6 +1026,67 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalWrite![1].provider).toBe('claude-code');
     });
 
+    it('persists the Grok prompt-result model with per-turn rather than aggregate usage', async () => {
+      await runWithEvents(
+        [
+          {
+            jsonrpc: '2.0',
+            method: 'session/update',
+            params: {
+              sessionId: 'grok-session',
+              update: {
+                content: { text: 'Grok answer', type: 'text' },
+                sessionUpdate: 'agent_message_chunk',
+              },
+            },
+          },
+          {
+            jsonrpc: '2.0',
+            method: 'x.ai/session_notification',
+            params: {
+              _meta: { eventId: 'grok-response-completed' },
+              sessionId: 'grok-session',
+              update: {
+                sessionUpdate: 'response_completed',
+                stop_reason: 'end_turn',
+                usage: { input_tokens: 10, output_tokens: 5 },
+              },
+            },
+          },
+          {
+            id: 5,
+            jsonrpc: '2.0',
+            result: {
+              _meta: {
+                modelId: 'grok-build',
+                usage: { inputTokens: 12, outputTokens: 4 },
+              },
+              stopReason: 'end_turn',
+            },
+          },
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'grok', type: 'grok-build' },
+          },
+        },
+      );
+
+      const modelWrite = mockUpdateMessage.mock.calls.find(
+        ([id, value]: any) => id === 'ast-initial' && value.model === 'grok-build' && value.usage,
+      );
+      expect(modelWrite).toBeDefined();
+      expect(modelWrite![1]).toMatchObject({
+        model: 'grok-build',
+        provider: 'grok-build',
+        usage: {
+          totalInputTokens: 10,
+          totalOutputTokens: 5,
+          totalTokens: 15,
+        },
+      });
+    });
+
     // The run's first assistant already exists in `dbMessagesMap` before the
     // executor starts, so the gateway handler's stream_start seed-insert (its
     // only model/provider → store path) is skipped for it. The executor must
@@ -1947,6 +2008,100 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         workingDirectoryConfig: { path: '/Users/me/repo' },
       });
       expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
+    });
+
+    it('retries Grok without resume when a recoverable session error follows a terminal event', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const sendPromptControllers = new Map<
+        string,
+        { reject: (reason?: unknown) => void; resolve: () => void }
+      >();
+      let startCount = 0;
+      mockStartSession.mockImplementation(async (params: any) => {
+        startCount += 1;
+        const sid = startCount === 1 ? 'ipc-sess-1' : 'ipc-sess-2';
+        ipc.setAgentType(sid, params.agentType ?? 'grok-build');
+        return { sessionId: sid };
+      });
+      mockSendPrompt.mockImplementation(
+        ({ sessionId }: { sessionId: string }) =>
+          new Promise<void>((resolve, reject) => {
+            sendPromptControllers.set(sessionId, { reject, resolve });
+          }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'grok', type: 'grok-build' as const },
+        resumeSessionId: 'missing-grok-session',
+        workingDirectory: '/Users/me/repo',
+      });
+      await flush();
+
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: {
+          agentType: 'grok-build',
+          details: { data: { code: 'FS_NOT_FOUND' } },
+          message: 'Path not found.',
+        },
+        type: 'error',
+      });
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'grok-build',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message: 'The saved Grok Build session could not be found.',
+      });
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+      await flush();
+
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentType: 'grok-build',
+          resumeSessionId: 'missing-grok-session',
+        }),
+      );
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          agentType: 'grok-build',
+          resumeSessionId: undefined,
+        }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: undefined,
+        heteroSessionIdByWorkingDirectory: {},
+        workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
+
+      ipc.emitRawLine('ipc-sess-2', {
+        id: 2,
+        jsonrpc: '2.0',
+        result: { sessionId: 'grok-new-session' },
+      });
+      ipc.emitStreamEvent('ipc-sess-2', {
+        data: { reason: 'complete', transport: 'acp-stdio' },
+        type: 'agent_runtime_end',
+      });
+      ipc.emitComplete('ipc-sess-2');
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-2')?.resolve();
+      await executorPromise;
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'grok-new-session',
+        heteroSessionIdByWorkingDirectory: {
+          '/Users/me/repo': 'grok-new-session',
+        },
+        workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
     });
 
     it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {

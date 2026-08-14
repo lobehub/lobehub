@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "응답 전에 추론하는 지능적이고 매우 빠른 모델입니다.",
   "lobehub.grok-4.3.description": "세계에서 가장 진실을 추구하는 대규모 언어 모델",
   "lobehub.grok-4.5.description": "Grok 4.5는 Claude Opus 4.8에 근접한 성능을 제공하며, 응답 속도가 매우 빠릅니다.",
+  "lobehub.grok-4.6.description": "Grok 4.6은 Grok 4.5를 기반으로 장기 실행 에이전트와 더욱 야심찬 인터랙티브 및 시각적 작업에 중점을 둡니다.",
   "lobehub.imagen-4.0-fast-generate-001.description": "Imagen 4세대 텍스트-이미지 모델 시리즈",
   "lobehub.imagen-4.0-generate-001.description": "Imagen 4세대 텍스트-이미지 모델 시리즈입니다.",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Imagen 4세대 텍스트-이미지 모델 시리즈의 Ultra 버전입니다.",

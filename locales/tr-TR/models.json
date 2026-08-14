@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "Yanıt vermeden önce akıl yürüten, son derece hızlı ve akıllı bir model.",
   "lobehub.grok-4.3.description": "Dünyanın en doğruyu arayan büyük dil modeli",
   "lobehub.grok-4.5.description": "Grok 4.5, Claude Opus 4.8'e yakın performans sunar ve olağanüstü hızlı yanıtlar verir.",
+  "lobehub.grok-4.6.description": "Grok 4.6, Grok 4.5 üzerine inşa edilmiştir ve özellikle uzun süre çalışan ajanlar ile daha iddialı etkileşimli ve görsel çalışmalar üzerine odaklanmaktadır.",
   "lobehub.imagen-4.0-fast-generate-001.description": "Imagen 4. nesil metinden görüntü oluşturma model serisi",
   "lobehub.imagen-4.0-generate-001.description": "Imagen 4. nesil metinden görsele model serisi",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Imagen 4. nesil metinden görsele model serisinin Ultra sürümü",
