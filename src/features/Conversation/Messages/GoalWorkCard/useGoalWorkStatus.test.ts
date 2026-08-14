@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGoalWorkStatus } from './useGoalWorkStatus';
 
 const mocks = vi.hoisted(() => ({
-  taskDetailMap: {} as Record<string, { config?: unknown; name?: string }>,
+  taskDetailMap: {} as Record<string, { config?: unknown; name?: string; startedAt?: string }>,
   useAcceptanceBundle: vi.fn(() => ({ data: undefined })),
   useAcceptanceBySubject: vi.fn(() => ({ data: undefined })),
   useFetchTaskDetail: vi.fn(),
@@ -39,11 +39,15 @@ describe('useGoalWorkStatus', () => {
   });
 
   it('polls acceptance after task detail identifies a Goal task', () => {
-    mocks.taskDetailMap['T-2'] = { config: { goal: {} } };
+    mocks.taskDetailMap['T-2'] = {
+      config: { goal: {} },
+      startedAt: '2026-08-14T08:00:00.000Z',
+    };
 
     const { result } = renderHook(() => useGoalWorkStatus({ identifier: 'T-2', taskId: 'task-2' }));
 
     expect(result.current.isGoal).toBe(true);
+    expect(result.current.startedAt).toBe('2026-08-14T08:00:00.000Z');
     expect(mocks.useAcceptanceBySubject).toHaveBeenCalledWith('task', 'task-2');
   });
 

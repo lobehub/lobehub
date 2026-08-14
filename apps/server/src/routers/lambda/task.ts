@@ -117,6 +117,7 @@ const listSchema = z.object({
   parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  projectId: z.string().optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
   // UI-side narrowing of the result set. Omitted means "All" (the chip's
   // default 'private' is enforced client-side; the server stays permissive
@@ -139,6 +140,7 @@ const groupListSchema = z.object({
     .max(10),
   hasGoal: z.boolean().optional(),
   parentTaskId: z.string().nullish(),
+  projectId: z.string().optional(),
   visibility: z.enum(['private', 'public']).optional(),
 });
 

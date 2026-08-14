@@ -813,6 +813,38 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
+        element: redirectElement('tasks'),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/tasks'),
+          'Desktop > Project Tasks',
+        ),
+        handle: { meta: tasksRouteMeta },
+        path: 'tasks',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/goals'),
+          'Desktop > Project Goals',
+        ),
+        handle: { meta: goalsRouteMeta },
+        path: 'goals',
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/project/_layout'),
+      'Desktop > Project Workspace > Layout',
+      { preloadId: 'project' },
+    ),
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'project/:projectId',
+  },
+
+  {
+    children: [
+      {
         children: [
           {
             element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks', {

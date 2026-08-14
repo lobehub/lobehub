@@ -201,6 +201,7 @@ describe('systemStatusSelectors', () => {
         'private',
         'agent',
         'recents',
+        'project',
         SIDEBAR_SPACER_ID,
         'pages',
         'tasks',
@@ -214,6 +215,7 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
+        'project',
         'recents',
         'private',
         'agent',
@@ -252,6 +254,7 @@ describe('systemStatusSelectors', () => {
         'tasks',
         'pages',
         'recents',
+        'project',
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
@@ -275,11 +278,12 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('resource');
       expect(items).toContain('memory');
       // accordion block is flush against the spacer, in stored order
-      expect(items[spacerIdx - 2]).toBe('agent');
-      expect(items[spacerIdx - 1]).toBe('recents');
+      expect(items[spacerIdx - 3]).toBe('agent');
+      expect(items[spacerIdx - 2]).toBe('recents');
+      expect(items[spacerIdx - 1]).toBe('project');
       // missing top-group defaults slot in just before the accordion
-      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
-      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 3);
+      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
       expect(items.indexOf('pages')).toBeGreaterThan(spacerIdx);
@@ -298,6 +302,7 @@ describe('systemStatusSelectors', () => {
         'private',
         'agent',
         'recents',
+        'project',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
@@ -318,6 +323,7 @@ describe('systemStatusSelectors', () => {
         'resource',
         'private',
         'recents',
+        'project',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',

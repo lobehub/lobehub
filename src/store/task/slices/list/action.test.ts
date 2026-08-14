@@ -86,6 +86,27 @@ describe('TaskListSliceAction', () => {
   });
 
   describe('useFetchTaskList', () => {
+    it('requests only tasks from the selected project', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchTaskList({ projectId: 'project-1', visibility: 'all' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:list', '__project__:project-1', 'all', 'createdAt', 'project-1'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (key: string[]) => unknown;
+      await fetcher(['task:list', '__project__:project-1', 'all', 'project-1']);
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'project-1' }),
+      );
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.not.objectContaining({ assigneeAgentId: expect.anything() }),
+      );
+    });
+
     it('allows embedded overviews to ignore the Task page visibility filter', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       useTaskStore.setState({ listVisibility: 'private' });

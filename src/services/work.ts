@@ -71,6 +71,7 @@ class WorkService {
   listByWorkspace = async (params: {
     cursor?: string | null;
     limit?: number;
+    originAgentId?: string | null;
     provider?: WorkSkillProvider;
     type?: WorkType | null;
   }): Promise<WorkSummaryPage> =>

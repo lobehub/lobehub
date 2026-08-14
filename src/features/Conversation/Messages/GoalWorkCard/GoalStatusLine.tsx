@@ -81,15 +81,19 @@ const GoalStatusLine = memo<GoalStatusLineProps>(
 
     return (
       <Flexbox horizontal align={'center'} gap={6}>
-        <Icon
-          className={styles.statusIcon}
-          color={meta.color}
-          icon={meta.icon}
-          size={12}
-          spin={meta.spin}
-        />
-        <Text className={styles.status}>{t(`goalWork.status.${phase}`)}</Text>
-        <Text className={styles.status}>·</Text>
+        {phase !== 'running' && (
+          <>
+            <Icon
+              className={styles.statusIcon}
+              color={meta.color}
+              icon={meta.icon}
+              size={12}
+              spin={meta.spin}
+            />
+            <Text className={styles.status}>{t(`goalWork.status.${phase}`)}</Text>
+            <Text className={styles.status}>·</Text>
+          </>
+        )}
         <Text className={styles.status}>
           {maxRounds
             ? t('goalWork.roundWithBudget', { current: round, total: maxRounds })

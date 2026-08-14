@@ -181,6 +181,23 @@ describe('buildRunLifecycle.completeRun — client resets a viewed topic out of 
     );
   });
 
+  it('does not reset a viewed topic after a newer client run starts', async () => {
+    const { get, store } = makeStore();
+    Object.assign(store.operations, {
+      op2: {
+        context: CONTEXT,
+        id: 'op2',
+        metadata: {},
+        status: 'running',
+        type: 'execAgentRuntime',
+      },
+    });
+
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
   it('client success on a VIEWED group topic routes the reset to the group bucket (scope: group)', async () => {
     // A group run's start-write passes scope: 'group'; the reset must too, or the
     // optimistic patch derives `group_agent` and misses the visible group row.

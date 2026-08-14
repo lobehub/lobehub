@@ -1255,6 +1255,7 @@ export class AiAgentService {
 
     const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
     const reserved = await acquireTopicStartReservation({
+      replacesOperationId: params.replacesOperationId,
       reservationId,
       topicId,
       topicModel: this.topicModel,

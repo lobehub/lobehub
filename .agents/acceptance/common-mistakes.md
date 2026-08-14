@@ -537,6 +537,20 @@ to the code. Never attribute it to the change under test without that A/B — an
 note that `electron-dev.sh start` reports "Ready" even when the renderer never
 became interactive, so its own readiness line is not the gate.
 
+### L-P1 — A Project conversation must preserve Project identity across routing and history
+
+**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
+ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
+history.
+
+**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
+the visible owner and navigation contract, so users reasonably read the conversation as belonging
+to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+
+**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
+route and Project sidebar. The coordinator may still execute the conversation internally, but the
+visible URL, active list, empty state, and navigation must consistently identify the Project.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions

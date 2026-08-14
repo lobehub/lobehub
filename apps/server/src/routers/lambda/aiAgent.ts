@@ -256,6 +256,8 @@ const ExecAgentSchema = z
     fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
+    /** Existing gateway operation this fresh turn atomically supersedes. */
+    replacesOperationId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
