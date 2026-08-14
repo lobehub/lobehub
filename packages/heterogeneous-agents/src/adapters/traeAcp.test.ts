@@ -114,6 +114,81 @@ describe('TraeAcpAdapter', () => {
     expect(dataFor(events, 'tool_end')).toEqual([{ isSuccess: false, toolCallId: 'tool-2' }]);
   });
 
+  it('preserves tool content from a running update when the terminal update only has status', () => {
+    const adapter = new TraeAcpAdapter();
+
+    adapter.adapt({
+      sessionUpdate: 'tool_call',
+      title: 'Read file',
+      toolCallId: 'tool-content',
+    });
+    adapter.adapt({
+      content: [{ content: { text: 'file contents', type: 'text' }, type: 'content' }],
+      sessionUpdate: 'tool_call_update',
+      status: 'in_progress',
+      toolCallId: 'tool-content',
+    });
+    const events = adapter.adapt({
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-content',
+    });
+
+    expect(dataFor(events, 'tool_result')).toEqual([
+      { content: 'file contents', isError: false, toolCallId: 'tool-content' },
+    ]);
+  });
+
+  it('opens a new step after every parallel tool in the previous round completes', () => {
+    const adapter = new TraeAcpAdapter();
+    adapter.adapt({ sessionId: 'trae-session-steps', type: 'trae_session' });
+    adapter.adapt({
+      sessionUpdate: 'tool_call',
+      title: 'First tool',
+      toolCallId: 'tool-a',
+    });
+    adapter.adapt({
+      sessionUpdate: 'tool_call',
+      title: 'Second tool',
+      toolCallId: 'tool-b',
+    });
+
+    const firstResult = adapter.adapt({
+      output: 'A',
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-a',
+    });
+    const secondResult = adapter.adapt({
+      output: 'B',
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-b',
+    });
+    const finalText = adapter.adapt({
+      content: { text: 'Final answer', type: 'text' },
+      sessionUpdate: 'agent_message_chunk',
+    });
+
+    expect(firstResult.some((event) => event.data?.newStep)).toBe(false);
+    expect(secondResult.some((event) => event.data?.newStep)).toBe(false);
+    expect(firstResult.every((event) => event.stepIndex === 0)).toBe(true);
+    expect(secondResult.every((event) => event.stepIndex === 0)).toBe(true);
+    expect(finalText).toEqual([
+      expect.objectContaining({ data: {}, stepIndex: 0, type: 'stream_end' }),
+      expect.objectContaining({
+        data: { newStep: true, provider: 'trae', sessionId: 'trae-session-steps' },
+        stepIndex: 1,
+        type: 'stream_start',
+      }),
+      expect.objectContaining({
+        data: { chunkType: 'text', content: 'Final answer' },
+        stepIndex: 1,
+        type: 'stream_chunk',
+      }),
+    ]);
+  });
+
   it('ignores malformed and unknown updates and closes pending tools during flush', () => {
     const adapter = new TraeAcpAdapter();
 
