@@ -8,6 +8,7 @@ import {
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
+  traeExecutor,
 } from '../heteroCli';
 
 const detectMocks = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ describe('heteroCli executors', () => {
     expect(openCodeExecutor.identifier).toBe('opencode');
     expect(piExecutor.identifier).toBe('pi');
     expect(qoderExecutor.identifier).toBe('qoder');
+    expect(traeExecutor.identifier).toBe('trae');
     // Empty apiEnum → never treated as an invokable client tool.
     expect(claudeCodeExecutor.hasApi('Bash')).toBe(false);
     expect(claudeCodeExecutor.getApiNames()).toEqual([]);

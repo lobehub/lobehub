@@ -324,6 +324,22 @@ describe('cliAgentBinaries', () => {
       });
     });
 
+    it('detects TRAE Enterprise and rejects the unrelated trae-cli binary', async () => {
+      callExecFile('/Users/test/.local/bin/traecli\n');
+      callExecFile('TraeCode CLI 1.4.0');
+
+      const { traeBinary } = await import('../cliAgentBinaries');
+      await expect(traeBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/traecli',
+        version: '1.4.0',
+      });
+
+      callExecFile('/Users/test/.local/bin/traecli\n');
+      callExecFile('trae-cli 0.1.0');
+      await expect(traeBinary.detect()).resolves.toEqual({ available: false });
+    });
+
     it('runs the binary directly via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/claude\n');
       callExecFile('1.2.3 (Claude Code)');

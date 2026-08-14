@@ -130,7 +130,7 @@ const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
-    options.type === 'amp'
+    options.type === 'amp' || options.type === 'trae'
       ? []
       : options.type === 'codex'
         ? [

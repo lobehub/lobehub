@@ -121,6 +121,16 @@ export {
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,
+  spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
+export {
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  type TraeAcpImagePromptBlock,
+  type TraeAcpPromptBlock,
+  TraeAcpSession,
+  type TraeAcpSessionOptions,
+  type TraeAcpTextPromptBlock,
+} from './traeAcpSession';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

@@ -258,6 +258,32 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs TRAE Enterprise with traecli and only forwards provider arguments', async () => {
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'traecli' });
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'trae',
+      '--prompt',
+      'do thing',
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('trae', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'trae',
+        command: 'traecli',
+        extraArgs: ['--feature', 'test'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

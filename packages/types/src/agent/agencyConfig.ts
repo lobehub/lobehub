@@ -75,7 +75,7 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder`):
+ *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -300,7 +300,8 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }
@@ -411,7 +412,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }

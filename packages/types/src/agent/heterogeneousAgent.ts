@@ -304,6 +304,32 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     title: 'Qoder',
     type: 'qoder',
   },
+  {
+    auth: {
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+      errorMessage: 'TRAE CLI could not authenticate. Sign in through TRAE Enterprise, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'please (?:log|sign) in',
+      ],
+      signInCommand: 'traecli',
+    },
+    defaultCommand: 'traecli',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Trae',
+    install: {
+      commands: [],
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+    },
+    kind: 'local-cli',
+    menuKey: 'newTraeAgent',
+    menuLabelKey: 'newTraeAgent',
+    resume: { supported: true },
+    title: 'TRAE CLI',
+    type: 'trae',
+  },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
 
 export interface RemoteHeterogeneousAgentDescriptor {

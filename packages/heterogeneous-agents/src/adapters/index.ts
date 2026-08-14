@@ -8,3 +8,4 @@ export { KimiCodeAdapter } from './kimiCode';
 export { OpenCodeAdapter } from './opencode';
 export { PiAdapter } from './pi';
 export { QoderAdapter } from './qoder';
+export { TraeAcpAdapter } from './traeAcp';

@@ -340,6 +340,7 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },
+  'trae': {},
 } satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
 
 export const getHeteroSelectorCapability = (
