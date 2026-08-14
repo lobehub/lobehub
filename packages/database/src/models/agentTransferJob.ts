@@ -236,7 +236,7 @@ export const remapResidualMessageAgentIds = async (
  * Blocking on copy jobs is therefore pure cost: copy sits on the ordinary user
  * path (importing a heavy agent into a workspace), so it would let any member
  * wedge an owner's workspace/account deletion — after the caller has already
- * cancelled Stripe and wiped the billing rows. See LOBE-12922.
+ * cancelled Stripe and wiped the billing rows.
  */
 const isPendingTransfer = () =>
   and(eq(agentHistoryJobs.status, 'pending'), eq(agentHistoryJobs.type, 'transfer'));
@@ -350,7 +350,7 @@ export class AgentTransferJobModel {
    * agent is exactly the one a concurrent transfer must not move: the copy's
    * drain keeps writing history into the scope the transfer just rewrote, so
    * the conversation ends up split across both scopes. Exempting `copy` from
-   * the OWNER-DELETE guards (LOBE-12922) is a separate judgement — it does not
+   * the OWNER-DELETE guards is a separate judgement — it does not
    * extend to agent mutations.
    */
   static hasPendingJobForAgents = async (

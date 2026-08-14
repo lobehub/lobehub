@@ -15,7 +15,7 @@ const { UserController } = await import('./user.controller');
 
 /**
  * `/me` is open to any authenticated caller so a key can resolve its own
- * identity (LOBE-12934), which makes `messageCount` the one field on it that
+ * identity, which makes `messageCount` the one field on it that
  * still needs gating — it is chat-usage metadata, not identity.
  */
 describe('UserController.getCurrentUser', () => {
