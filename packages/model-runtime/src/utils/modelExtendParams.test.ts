@@ -313,6 +313,37 @@ describe('applyModelExtendParams', () => {
     });
   });
 
+  /**
+   * Official DeepSeek 400s only when a thinking-mode tool-call turn omits the
+   * thinking block entirely. A leftover preview `none` on a GA-only card must
+   * not flip thinking to disabled — the payload builder then keeps the
+   * whitespace placeholder instead of dropping the field.
+   */
+  it('ignores leftover preview none when the card only declares the GA effort param', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ deepseekV4ReasoningEffort: 'none' }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.thinking).toBeUndefined();
+    expect(result.reasoning_effort).toBeUndefined();
+  });
+
+  it('keeps GA thinking on when leftover preview none is stored beside a GA high', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'high',
+        deepseekV4ReasoningEffort: 'none',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('high');
+    expect(result.thinking).toEqual({ type: 'enabled' });
+  });
+
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),

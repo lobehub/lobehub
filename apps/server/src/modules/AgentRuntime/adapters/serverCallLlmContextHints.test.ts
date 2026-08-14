@@ -221,6 +221,26 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     expect(hints.resolvedExtendParams).toEqual({ thinking: { type: 'disabled' } });
   });
 
+  /**
+   * Replay-off is not the official 400. A leftover preview `none` on a GA-only
+   * card still suppresses replay today, but `applyModelExtendParams` ignores
+   * that leftover so thinking stays on and the payload builder emits the
+   * whitespace placeholder rather than omitting the thinking field.
+   */
+  it('does not disable thinking for leftover preview none on a GA-only card', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4ReasoningEffort: 'none' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+
+    expect(hints.shouldReplayAssistantReasoning).toBe(false);
+    expect(hints.resolvedExtendParams?.thinking).not.toEqual({ type: 'disabled' });
+  });
+
   it('should keep DeepSeek V4 forced reasoning replay when no opt-out is saved', async () => {
     const hints = await resolveServerCallLlmContextHints({
       ctx: createCtx({ chatConfig: {} }),
