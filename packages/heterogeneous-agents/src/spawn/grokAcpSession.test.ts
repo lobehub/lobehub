@@ -462,7 +462,10 @@ describe('GrokAcpSession', () => {
     vi.spyOn(process, 'kill').mockImplementation(() => true);
     const originalPush = AgentStreamPipeline.prototype.push;
     let releaseLateEvent: (() => void) | undefined;
-    vi.spyOn(AgentStreamPipeline.prototype, 'push').mockImplementation(function (chunk) {
+    vi.spyOn(AgentStreamPipeline.prototype, 'push').mockImplementation(function (
+      this: AgentStreamPipeline,
+      chunk,
+    ) {
       if (!String(chunk).includes('late after close')) return originalPush.call(this, chunk);
 
       return new Promise((resolve) => {
