@@ -45,6 +45,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { ServerOperationStore } from '@/server/modules/AgentRuntime/adapters/ServerOperationStore';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
@@ -323,6 +324,16 @@ export class AgentRuntimeService {
       createStreamEventManager();
     this.coordinator = new AgentRuntimeCoordinator({
       ...options?.coordinatorOptions,
+      onAgentRuntimeEndPublished: async (operationId, state) => {
+        const metadata = state.metadata ?? {};
+        await new ServerOperationStore(
+          this.serverDB,
+          metadata.userId ?? this.userId,
+          this.workspaceId,
+          metadata.topicId,
+          operationId,
+        ).clearRunningMark();
+      },
       streamEventManager: this.streamManager,
       // Provide the canonical UIChatMessage[] for terminal-state events so
       // the client can use the pushed payload directly instead of refetching
