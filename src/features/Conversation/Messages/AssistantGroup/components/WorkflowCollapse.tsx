@@ -469,7 +469,6 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             style={{
               minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
               minWidth: 0,
-              overflow: 'hidden',
             }}
           >
             <div style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -491,6 +490,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                     style={{
                       color: pendingInterventionPresent ? cssVar.colorInfo : undefined,
                       overflow: 'hidden',
+                      paddingBlock: 1,
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     }}
@@ -508,12 +508,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         ) : (
-          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
             <Text
               type="secondary"
               style={{
                 minWidth: 0,
                 overflow: 'hidden',
+                paddingBlock: 1,
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}

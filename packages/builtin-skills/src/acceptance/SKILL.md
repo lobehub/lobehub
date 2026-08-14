@@ -68,6 +68,42 @@ means "skip the acceptance"** — it only means you author the plan instead of
 discovering it. On a later repair round, pass the previously printed
 `--acceptance <acceptanceId>` so the new snapshot joins the same history.
 
+On the first ingest, always supply `--requirement "<one-sentence business goal>"`.
+The requirement describes what the whole acceptance judges, not the narrower
+scope of one round. It is immutable once recorded.
+
+## HARD RULE — programmatic gates are NEVER acceptance checks
+
+This is a binding constraint on every check you author, enforced at ingest —
+not a style preference.
+
+Every check MUST be an outcome a **person decides about the delivery**: what
+the user sees, hears, reads, or receives. The repo's own automated gates are
+not that. The following MUST NOT appear as a check, in any round, under any
+phrasing:
+
+- unit / integration / regression / snapshot tests; test suites or test cases
+- coverage, `type-check` / `tsc`, lint / `eslint`, format, "compiles cleanly",
+  "build passes", "CI is green"
+
+They are preconditions of shipping, and a page full of them buries the two or
+three checks that actually needed a human eye. Run them — then report them as
+**one line of narrative**, never as a check.
+
+Enforcement, so plan around it rather than against it:
+
+- `lh acceptance run ingest` **drops** every matching plan item and case and
+  warns — the round publishes without them, so a gate-check wastes the effort
+  spent producing it.
+- A round consisting **only** of such checks **fails to publish entirely**:
+  there is nothing in it for a person to accept.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a good acceptance item (`verifier: "program"`);
+"`bun run test` is green" is not. Before writing any plan, re-read each draft
+check and ask: _would the user click accept/reject on this?_ If the honest
+answer is "it's a gate", it does not go in.
+
 ## Rounds are immutable — repair means a NEW round
 
 A published round is a permanent record of what was true at that moment. **Never
@@ -76,11 +112,18 @@ re-verification as the next round, and let the acceptance page show the
 progression. Correcting a typo in the same session's report is fine; passing off
 post-fix evidence as the original round is not.
 
+Before a repair round, read the current acceptance with
+`lh acceptance view <acceptanceId | type:id> --json`. Omit checks whose latest
+`userReview.action` is `accept`; address non-stale rejects and reuse their exact
+stable check ids. When one check semantically replaces another, declare
+`supersedes: ['old-id']` and repeat the complete lineage in every later round
+that reuses the successor id.
+
 The **acceptance** (`/acceptance/<acceptanceId>`) is the stable cross-round
-decision surface that aggregates every round for a subject; each **round**
-(`/verify/<verifyRunId>`) is one immutable snapshot with its evidence. Lead your
-final reply with the acceptance link when one exists; the round link follows as
-the record of this attempt.
+decision surface that aggregates every immutable round for a subject. In the
+final reply, expose only the acceptance page. A fixed snapshot of the current
+round uses that same path with `?r=<roundIndex>`; implementation-level run pages
+stay internal.
 
 ## Prerequisites
 
@@ -96,8 +139,10 @@ the record of this attempt.
 
 ## Step 1 — Discover the plan (what to prove)
 
-> Plan-driven path only. Authoring your own checks instead? Jump to
-> [references/report.md](references/report.md), then use the relevant surface
+> Plan-driven path only. Authoring your own checks instead? Apply the
+> [hard rule](#hard-rule--programmatic-gates-are-never-acceptance-checks) to
+> every check you write, then jump to
+> [references/report.md](references/report.md) and use the relevant surface
 > recipes below to capture its evidence. Publish that authored plan and its
 > cases together with `lh acceptance run ingest`.
 
@@ -135,8 +180,11 @@ the cheapest surface that can actually prove it, and escalate only if needed:
 Rules of thumb:
 
 - **Don't open a browser for a backend change.** If a criterion is satisfied by a
-  command's output or a test passing, capture that as `text` — it's the strongest,
-  cheapest proof.
+  command's output, capture that as `text` — it's the strongest, cheapest proof.
+- **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
+  alert tone: upload the clip itself so the page renders a player. Prose about a
+  sound, or a screenshot of a waveform, proves nothing.
+  See [references/evidence.md](references/evidence.md#audio-deliverables).
 - **Web vs Electron:** use **web** when the behavior is identical in a normal
   browser against the app's dev server or deployed URL. Use **Electron** only when
   the criterion depends on desktop-only behavior (native windows, IPC, the
@@ -179,7 +227,8 @@ lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_
 call; call again for each additional one (same `--item` reuses the row). Leave the
 pass/fail **verdict** to the review step — only add `--verdict` if your task
 explicitly asks you to self-assert the outcome. Every successful submit prints the
-full `/verify/<verifyRunId>` report URL. Preserve that URL for the final handoff.
+an internal run URL. Keep the returned run id only for coverage checks; never
+expose that URL in the final handoff.
 
 ## Step 4 — Self-check coverage (do not skip)
 
@@ -201,17 +250,17 @@ how good the work is.
 
 ### Final handoff (mandatory)
 
-The final response MUST include the published URLs, together with the explicit
-coverage result. Do not finish with only a check-result id, local artifact path,
-or prose claim.
+The final response MUST include the published acceptance URL when the round is
+attached to an acceptance, together with the explicit coverage result. Do not
+finish with only a check-result id or prose claim.
 
-Lead with the **acceptance** link when the command printed one — it is the stable
-cross-round decision surface; the **round** link follows as this attempt's
-immutable record. Put no images or local file links in the chat reply.
+Expose only the **acceptance** link — it is the stable cross-round decision
+surface. For this round's fixed snapshot, append `?r=<roundIndex>` to that same
+URL. Put no images, local paths, local file links, or internal run-page paths in
+the chat reply.
 
 ```text
 Acceptance:   https://app.lobehub.com/acceptance/<acceptanceId>
-This round:   https://app.lobehub.com/verify/<verifyRunId>
 Coverage: 2/2 criteria, all required evidence uploaded
 ```
 

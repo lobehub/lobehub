@@ -54,6 +54,7 @@
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.66",
     "@base-ui/react": "^1.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
@@ -65,6 +66,7 @@
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",

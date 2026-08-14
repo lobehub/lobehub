@@ -12,6 +12,7 @@ import DotsLoading from '@/components/DotsLoading';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
+import { TopicMigrationIndicator } from '@/features/AgentTransferMigration';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import TopicCreatorAvatar, { useTopicCreator } from '@/features/TopicCreatorAvatar';
@@ -320,6 +321,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         active={active && !threadId}
         contextMenuItems={dropdownMenu}
         disabled={editing}
+        // A conversation whose history is still being migrated/copied stays
+        // listed (hiding it would read as data loss) and shows a spinner;
+        // opening it jumps it to the front of the backfill queue.
+        extra={<TopicMigrationIndicator groupId={activeGroupId} topicId={id} />}
         href={!editing ? href : undefined}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}

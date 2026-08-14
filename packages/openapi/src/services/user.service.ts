@@ -10,6 +10,7 @@ import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicRole, projectPublicUser } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   CreateUserRequest,
@@ -59,8 +60,8 @@ export class UserService extends BaseService {
         .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return {
-        ...user,
-        roles: userRoleResults.map((r) => r.roles),
+        ...projectPublicUser(user),
+        roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
       };
     }
 
@@ -79,9 +80,9 @@ export class UserService extends BaseService {
     ]);
 
     return {
-      ...user,
+      ...projectPublicUser(user),
       messageCount: messageCountResult[0]?.count || 0,
-      roles: userRoleResults.map((r) => r.roles),
+      roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
     };
   }
 
@@ -147,9 +148,9 @@ export class UserService extends BaseService {
             .where(eq(messages.userId, userRow.id));
 
           return {
-            ...userRow,
+            ...projectPublicUser(userRow),
             messageCount: messageCountResult[0]?.count || 0,
-            roles: userRoleResults.map((r) => r.roles),
+            roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
           };
         }),
       );

@@ -20,6 +20,8 @@ import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
+import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
+
 const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -76,6 +78,8 @@ export const chunkRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
       return {
         items: await ctx.chunkModel.findByFileId(input.id, input.cursor || 0),
         nextCursor: input.cursor ? input.cursor + 1 : 1,

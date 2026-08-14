@@ -18,6 +18,16 @@ const GMAIL_PROFILE_SEARCHES = [
 const MAX_CONTEXT_MESSAGES = 32;
 const MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN = 6;
 
+const hasGmailReadPermission = (scopes: readonly string[]) =>
+  scopes.some((scope) =>
+    ['gmail.modify', 'gmail.readonly', 'mail.google.com/'].some((permission) =>
+      scope.endsWith(permission),
+    ),
+  );
+
+const getGmailCollectionErrorCode = (reason: unknown) =>
+  reason instanceof ConnectorDataError ? reason.code : 'GMAIL_SEARCH_FAILED';
+
 const evidencePriority = ({ labels }: GmailMessage) => {
   const normalized = new Set(labels.map((label) => label.toUpperCase()));
   if (normalized.has('CATEGORY_PROMOTIONS')) return 2;
@@ -74,9 +84,32 @@ const selectContextMessages = (messages: GmailMessage[]) => {
 export const GMAIL_PROFILE_QUERIES = GMAIL_PROFILE_SEARCHES.map(({ query }) => query);
 
 export const gmailUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'gmail',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGmailClient();
+    const account = await client.getAccount();
+    if (!hasGmailReadPermission(account.scopes)) {
+      console.warn('[understanding:gmail] skipped because Gmail read permission is missing');
+      return {
+        context: '',
+        diagnostics: {
+          errors: [
+            {
+              code: 'GMAIL_READ_PERMISSION_REQUIRED',
+              message: 'Gmail read permission is required to collect Understanding evidence',
+              operation: 'permission',
+              provider: 'gmail',
+              retryable: false,
+            },
+          ],
+          evidenceCount: 0,
+          failedCount: 1,
+          succeededCount: 0,
+        },
+        sourceCount: 0,
+      };
+    }
     const settled = await Promise.allSettled(
       GMAIL_PROFILE_SEARCHES.map(({ query }) => client.searchMessages({ query })),
     );
@@ -87,7 +120,7 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
       result.status === 'rejected'
         ? [
             {
-              code: 'GMAIL_SEARCH_FAILED',
+              code: getGmailCollectionErrorCode(result.reason),
               message: 'Gmail search category failed',
               operation: GMAIL_PROFILE_SEARCHES[index].operation,
               provider: 'gmail',

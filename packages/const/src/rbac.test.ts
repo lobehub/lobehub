@@ -47,10 +47,18 @@ describe('workspace built-in roles', () => {
     expect(admin).not.toContain('agent:delete:all');
   });
 
-  it('keeps every non-Agent content resource owner-scoped for Admin', () => {
+  // Knowledge-base curation mirrors the Agent rule: `KNOWLEDGE_BASE_UPDATE:all`
+  // powers the resource-permission manage/browse bypass on restricted KBs,
+  // while row-level mutations stay creator/owner-gated by
+  // `assertWorkspaceRowManageable`.
+  it('keeps non-curated content resources owner-scoped for Admin', () => {
     const admin = WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.ADMIN];
 
-    for (const code of ['document:update:all', 'knowledge_base:update:all', 'file:update:all']) {
+    expect(admin).toContain('knowledge_base:update:all');
+    expect(admin).not.toContain('knowledge_base:update:owner');
+    expect(admin).not.toContain('knowledge_base:delete:all');
+
+    for (const code of ['document:update:all', 'file:update:all']) {
       expect(admin).not.toContain(code);
     }
   });

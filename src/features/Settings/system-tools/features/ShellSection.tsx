@@ -95,9 +95,9 @@ const ShellSection = memo(() => {
   );
 });
 
-const GuardedShellSection = memo(() => {
+const GuardedShellSection = () => {
   if (getPlatform() !== 'Windows') return null;
   return <ShellSection />;
-});
+};
 
 export default GuardedShellSection;

@@ -5,7 +5,7 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
@@ -14,13 +14,17 @@ import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import {
+  openAgentArtworkStudio,
+  styleReferencesForArtworkStyle,
+} from '@/features/AgentArtworkStudio';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
 
-import { openFilePicker, resolveAgentBackground } from './utils';
+import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';
 
 const MAX_ARTWORK_SIZE = 1024 * 1024;
 
@@ -106,16 +110,6 @@ const styles = createStaticStyles(({ css }) => ({
   emptyBackgroundHint: css`
     color: ${cssVar.colorTextSecondary};
   `,
-  generatedPreview: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
   generationFeedback: css`
     position: absolute;
     z-index: 3;
@@ -139,9 +133,35 @@ const styles = createStaticStyles(({ css }) => ({
   generationTitle: css`
     font-weight: 500;
   `,
-  previewGenerationFeedback: css`
-    inset: 1px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
+  generatedPreview: css`
+    position: relative;
+
+    overflow: hidden;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  studioBadge: css`
+    position: absolute;
+    z-index: 5;
+    inset-block-end: -6px;
+    inset-inline-end: -6px;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    opacity: 0;
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowTertiary};
+
+    transition: opacity ${cssVar.motionDurationFast};
+
+    .agent-avatar-entry:hover &,
+    .agent-avatar-entry:focus-within & {
+      opacity: 1;
+    }
   `,
   visuallyHiddenInput: css`
     pointer-events: none;
@@ -200,7 +220,6 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
     const backgroundInputRef = useRef<HTMLInputElement>(null);
     const backgroundInputId = useId();
-    const [avatarUploading, setAvatarUploading] = useState(false);
     const [backgroundUploading, setBackgroundUploading] = useState(false);
     const [artworkStyle, setArtworkStyle] = useState<AgentArtworkStyle>(
       DEFAULT_AGENT_ARTWORK_STYLE,
@@ -217,29 +236,29 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       openFilePicker(input);
     }, []);
 
+    // Avatar uploads moved into the studio; only the cover keeps an inline
+    // upload path here.
     const upload = useCallback(
-      async (kind: 'avatar' | 'background', file: File) => {
+      async (file: File) => {
         if (!canEdit) return;
         if (file.size > MAX_ARTWORK_SIZE) {
           toast.error(t('settingAgent.artwork.sizeExceeded'));
           return;
         }
 
-        const setUploading = kind === 'avatar' ? setAvatarUploading : setBackgroundUploading;
-        setUploading(true);
+        setBackgroundUploading(true);
         try {
           const result = await uploadWithProgress({ file });
           if (!result?.url) throw new Error('Upload returned no URL');
-          if (kind === 'avatar') onAvatarChange(result.url);
-          else onBackgroundChange(result.url);
+          onBackgroundChange(result.url);
         } catch (error) {
           console.error('Failed to upload agent artwork:', error);
           toast.error(t('settingAgent.artwork.uploadFailed'));
         } finally {
-          setUploading(false);
+          setBackgroundUploading(false);
         }
       },
-      [canEdit, onAvatarChange, onBackgroundChange, t, uploadWithProgress],
+      [canEdit, onBackgroundChange, t, uploadWithProgress],
     );
 
     const generateArtwork = useCallback(
@@ -254,6 +273,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             name,
             referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
             style,
+            styleReferenceImageUrls: styleReferencesForArtworkStyle(style),
             systemRole,
             title,
           });
@@ -441,12 +461,19 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             </Flexbox>
           ) : null}
         </div>
-        <div className={styles.avatar}>
+        <div className={`${styles.avatar} agent-avatar-entry`}>
+          {/* Uploading an image lives in the studio, so the picker keeps only
+              emoji plus the studio launcher tab; the launcher tab is ordered
+              first and auto-selected on open, preserving the old generate-tab
+              position. */}
+          {/* Keyed by the url for the same reason as the studio preview: the
+              underlying Avatar latches its image-error state, so without a
+              remount a newly generated avatar stays invisible whenever the
+              previous one failed to load. */}
           <EmojiPicker
             allowModelAvatar
             allowDelete={canEdit && !!avatar}
-            allowUpload={canEdit}
-            loading={avatarUploading}
+            key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
             popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
@@ -454,81 +481,39 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             shape={'square'}
             size={72}
             value={avatar || undefined}
-            customTabs={
-              canGenerate
-                ? [
-                    {
-                      label: (
-                        <Tooltip title={t('settingAgent.artwork.avatar.image')}>
-                          <Icon icon={ImageIcon} size={{ size: 20, strokeWidth: 2.5 }} />
-                        </Tooltip>
-                      ),
-                      render: () => (
-                        <Flexbox gap={16} padding={20} width={348}>
-                          <Center className={styles.generatedPreview} height={156}>
-                            <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
-                            {generating === 'avatar' ? (
-                              <Center
-                                className={`${styles.generationFeedback} ${styles.previewGenerationFeedback}`}
-                              >
-                                <Flexbox align={'center'} gap={10}>
-                                  <NeuralNetworkLoading size={32} />
-                                  <Flexbox align={'center'} gap={4}>
-                                    <Text className={styles.generationTitle}>
-                                      {t('settingAgent.artwork.avatar.generating')}
-                                    </Text>
-                                    <Text className={styles.generationHint}>
-                                      {t('settingAgent.artwork.generatingHint')}
-                                    </Text>
-                                    <Button
-                                      className={styles.generationActions}
-                                      size={'small'}
-                                      type={'fill'}
-                                      onClick={() => void cancelAgentArtworkGeneration(agentId)}
-                                    >
-                                      {t('settingAgent.artwork.cancel')}
-                                    </Button>
-                                  </Flexbox>
-                                </Flexbox>
-                              </Center>
-                            ) : null}
-                          </Center>
-                          {generating !== 'avatar' ? (
-                            <Flexbox horizontal gap={8}>
-                              <Button
-                                icon={WandSparkles}
-                                style={{ flex: 1 }}
-                                onClick={() => void generateArtwork('avatar', artworkStyle)}
-                              >
-                                {t('settingAgent.artwork.avatar.generateAction')}
-                              </Button>
-                              <DropdownMenu items={() => buildStyleItems('avatar')}>
-                                <Button
-                                  aria-label={t('settingAgent.artwork.styleMenu')}
-                                  icon={MoreHorizontal}
-                                />
-                              </DropdownMenu>
-                            </Flexbox>
-                          ) : null}
-                          {generationError === 'avatar' ? (
-                            <Alert
-                              showIcon
-                              title={t('settingAgent.artwork.generateFailed')}
-                              type={'error'}
-                            />
-                          ) : null}
-                        </Flexbox>
-                      ),
-                      value: 'generate',
-                    },
-                  ]
-                : undefined
-            }
+            customTabs={[
+              {
+                label: (
+                  <Tooltip title={t('settingAgent.artwork.avatar.image')}>
+                    <Icon icon={ImageIcon} size={{ size: 20, strokeWidth: 2.5 }} />
+                  </Tooltip>
+                ),
+                render: () => (
+                  <Flexbox gap={16} padding={20} width={348}>
+                    <Center className={styles.generatedPreview} height={156}>
+                      <Avatar
+                        avatar={avatar || undefined}
+                        key={avatarRemountKey(avatar)}
+                        shape={'square'}
+                        size={112}
+                      />
+                    </Center>
+                    <Button
+                      icon={WandSparkles}
+                      type={'primary'}
+                      onClick={() => openAgentArtworkStudio(agentId)}
+                    >
+                      {t('settingAgent.artwork.studio.openAction')}
+                    </Button>
+                  </Flexbox>
+                ),
+                value: 'generate',
+              },
+            ]}
             onChange={(value) => onAvatarChange(value)}
             onDelete={() => onAvatarChange(null)}
-            onUpload={(file) => upload('avatar', file)}
             onOpenChange={(open) => {
-              if (!open || !canGenerate) return;
+              if (!open) return;
 
               requestAnimationFrame(() => {
                 const tabs = document.querySelectorAll('.agent-avatar-artwork-picker [role="tab"]');
@@ -540,6 +525,17 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             <Center className={styles.avatarGenerating}>
               <NeuralNetworkLoading size={28} />
             </Center>
+          ) : null}
+          {/* Hover-revealed corner badge as the direct studio entry. */}
+          {canEdit ? (
+            <Tooltip title={t('settingAgent.artwork.studio.open')}>
+              <ActionIcon
+                className={styles.studioBadge}
+                icon={WandSparkles}
+                size={'small'}
+                onClick={() => openAgentArtworkStudio(agentId)}
+              />
+            </Tooltip>
           ) : null}
         </div>
         <input
@@ -553,7 +549,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = '';
-            if (file) void upload('background', file);
+            if (file) void upload(file);
           }}
         />
       </div>

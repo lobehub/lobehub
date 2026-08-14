@@ -100,7 +100,7 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "topicAutoSummary": {
-    "enabled": true,
+    "enabled": false,
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
   },

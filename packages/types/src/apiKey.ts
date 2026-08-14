@@ -17,8 +17,7 @@ export interface ApiKeyItem {
   lastUsedAt?: Date | null;
   name: string;
   // Capability scopes. `null`/absent = full access (legacy keys), `['*']` =
-  // explicit full access, otherwise a restricted scope list. Immutable after
-  // creation — re-issue the key to change its powers.
+  // explicit full access, otherwise a restricted scope list.
   scopes?: string[] | null;
   updatedAt: Date;
   userId: string;
@@ -34,4 +33,7 @@ export interface UpdateApiKeyParams {
   enabled?: boolean;
   expiresAt?: Date | null;
   name?: string;
+  scopes?: string[] | null;
 }
+
+export type WorkspaceApiKeyMemberCreation = 'admins_only' | 'all_members';

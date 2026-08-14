@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "Kiểm tra chương trình",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "Phương pháp xác minh",
   "builtins.lobe-delivery-checker.verifyPlan.required": "Bắt buộc",
+  "builtins.lobe-goal.apiName.createGoal": "Bắt đầu mục tiêu",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Tạo hàng loạt tác nhân",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Tạo tác nhân",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Tạo nhóm",

@@ -53,6 +53,7 @@ describe('AmpAdapter', () => {
       'visible_output_end',
       'agent_runtime_end',
     ]);
+    expect(adapter.validateCompletion()).toEqual([]);
   });
 
   it('keeps tool lifecycle and the post-tool assistant in separate steps', () => {
@@ -191,6 +192,32 @@ describe('AmpAdapter', () => {
       error: 'Invalid JSON input on stdin',
       message: 'Invalid JSON input on stdin',
     });
+  });
+
+  it('emits a protocol error when a successful process exit has no terminal result', () => {
+    const adapter = new AmpAdapter();
+    adapter.adapt(init);
+    adapter.adapt(assistant([{ text: 'partial answer', type: 'text' }]));
+
+    const events = adapter.validateCompletion();
+
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events.at(-1)?.data).toEqual({
+      agentType: 'amp',
+      clearEchoedContent: true,
+      code: 'protocol_error',
+      details: {
+        expectedEventType: 'result',
+        sessionId: 'T-amp-123',
+      },
+      error: 'Amp stream ended without the required terminal `result` event.',
+      message: 'Amp stream ended without the required terminal `result` event.',
+    });
+    expect(adapter.validateCompletion()).toEqual([]);
   });
 
   it('routes subagent events with synthetic turn ids and one-time spawn metadata', () => {

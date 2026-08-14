@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import HeaderActions from './index';
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => <button data-testid={'overflow-menu-button'} />,
+  ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? undefined : 'overflow-menu-button'}
+      onClick={onClick}
+    />
+  ),
   DropdownMenu: ({ children, header }: { children?: ReactNode; header?: ReactNode }) => (
     <div>
       {header}

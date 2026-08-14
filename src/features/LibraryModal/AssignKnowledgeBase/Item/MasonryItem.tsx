@@ -44,13 +44,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const MasonryItem = memo<KnowledgeItem>(
-  ({ id, fileType, name, type, description, enabled, visibility }) => {
+  ({ id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
     return (
       <div className={styles.card}>
         <Flexbox gap={12} style={{ position: 'relative' }}>
           <Flexbox horizontal align={'center'} gap={12}>
             <KnowledgeIcon
               fileType={fileType}
+              locked={memberRestricted}
               name={name}
               size={{ file: 48, repo: 48 }}
               type={type}

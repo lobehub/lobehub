@@ -36,6 +36,7 @@ import {
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
+  chatGroups,
   chatGroupsAgents,
   devices,
   documents,
@@ -54,6 +55,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
+import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
@@ -143,6 +145,44 @@ const AGENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
   Object.values(BUILTIN_AGENT_SLUGS),
 );
+
+/** One chat group an agent belongs to, as surfaced by the transfer guards. */
+export interface AgentGroupMembershipRef {
+  agentId: string;
+  /** `null` when the group is not visible to the caller (see the read below). */
+  groupAvatar: string | null;
+  groupBackgroundColor: string | null;
+  /**
+   * `null` when the group is not visible to the caller. The id is identity
+   * too: the membership still counts toward the guard, but a private group's
+   * identifier is no more the caller's to read than its name.
+   */
+  groupId: string | null;
+  /** `null` when the group is not visible to the caller (see the read below). */
+  groupTitle: string | null;
+  /**
+   * Whether the caller may see this group at all. Carried explicitly because a
+   * `null` title is otherwise ambiguous — a group can simply be untitled — and
+   * telling someone a group of theirs is "one you cannot see" is worse than
+   * saying nothing.
+   */
+  groupVisible: boolean;
+}
+
+export const AGENT_OWNED_BY_GROUP = 'AGENT_OWNED_BY_GROUP';
+
+/**
+ * Refusal to move an agent that belongs to a chat group rather than to the
+ * user. Carries the groups so the caller can say WHICH ones, the way the
+ * existing visibility guards do — "cannot move this agent" with no reason is
+ * a dead end for the person looking at it.
+ */
+export class AgentOwnedByGroupError extends Error {
+  constructor(readonly groups: AgentGroupMembershipRef[]) {
+    super(AGENT_OWNED_BY_GROUP);
+    this.name = 'AgentOwnedByGroupError';
+  }
+}
 
 export class AgentModel {
   private userId: string;
@@ -951,6 +991,26 @@ export class AgentModel {
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
 
+      // The junction records every agent an unfinished job still maps, a
+      // copy's TARGET included — and a group copy's drain writes those ids into
+      // `messages.agent_id`. Deleting one leaves the queue rows behind, so the
+      // drain hits a missing-agent FK and retries forever, stranding the copied
+      // conversations as pending. Distinct from the source guard below: a copy
+      // registers only its target here.
+      if (await AgentTransferJobModel.hasPendingJobForAgents(trx, [agentId])) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
+      // Not covered above: a group transfer that left this agent behind and
+      // took a clone does NOT register it as a covered agent (it never moved).
+      // But its id is still the live value of `messages.agent_id` on every
+      // topic the drain has not reached yet, and that column cascades — so
+      // deleting it now would destroy the moved group history the remap is
+      // partway through rescuing.
+      if (await AgentTransferJobModel.hasPendingRemapForSourceAgents(trx, [agentId])) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
       // A pending copy job still reads this agent's topics — deleting it would
       // cascade them away and the copy would silently complete with empty
       // conversations. Surface the in-progress state instead.
@@ -1370,8 +1430,8 @@ export class AgentModel {
     // The inbox is LobeHub's built-in default cloud agent; it must never be
     // turned into a heterogeneous (external-CLI) agent. Two independent inputs can
     // flip it — a stray `agencyConfig.heterogeneousProvider`, and a legacy hetero
-    // `model` id (amp / claude-code / codex / opencode), which AiAgentService still
-    // treats as heterogeneous on its own even without a provider config. Either one
+    // `model` id, which AiAgentService still treats as heterogeneous on its own even
+    // without a provider config. Either one
     // reroutes the whole chat surface through the device gateway and breaks it with
     // GATEWAY_NOT_CONFIGURED, so sanitize both at this write chokepoint regardless
     // of caller (mirrors AGENT_BUILDER_PROTECTED_FIELDS).
@@ -1833,6 +1893,112 @@ export class AgentModel {
     return !!foreignTask;
   };
 
+  /**
+   * Chat-group memberships of the given agents, split by who owns the
+   * membership.
+   *
+   * Read from the RAW junction rows: whether an agent may move is a fact about
+   * the data, not about what the caller happens to see, and a group hidden
+   * from them would otherwise silently drop out of the guard. Only the TITLE is
+   * gated on visibility — a private group's name is its members' business —
+   * which is why `groupTitle` is nullable.
+   */
+  private queryGroupMemberships = async (
+    executor: Transaction | LobeChatDatabase,
+    agentIds: string[],
+  ): Promise<{ blocked: AgentGroupMembershipRef[]; leaving: AgentGroupMembershipRef[] }> => {
+    if (agentIds.length === 0) return { blocked: [], leaving: [] };
+
+    const rows = await executor
+      .select({
+        agentId: chatGroupsAgents.agentId,
+        avatar: chatGroups.avatar,
+        backgroundColor: chatGroups.backgroundColor,
+        groupId: chatGroups.id,
+        role: chatGroupsAgents.role,
+        slug: agents.slug,
+        title: chatGroups.title,
+        virtual: agents.virtual,
+        visible: sql<boolean>`(${buildWorkspaceWhere(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            userId: chatGroups.userId,
+            visibility: chatGroups.visibility,
+            workspaceId: chatGroups.workspaceId,
+          },
+        )})`,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(inArray(chatGroupsAgents.agentId, agentIds));
+
+    const blocked: AgentGroupMembershipRef[] = [];
+    const leaving: AgentGroupMembershipRef[] = [];
+
+    for (const row of rows) {
+      // Identity is withheld as a unit: a hidden group leaks neither its name
+      // nor its avatar. The membership itself still counts toward the guard.
+      const ref: AgentGroupMembershipRef = {
+        agentId: row.agentId,
+        groupAvatar: row.visible ? row.avatar : null,
+        groupBackgroundColor: row.visible ? row.backgroundColor : null,
+        // Withheld as a unit — id included. This is the one place these refs
+        // are built, so the transfer error's `groups` payload is covered too.
+        groupId: row.visible ? row.groupId : null,
+        groupTitle: row.visible ? row.title : null,
+        groupVisible: !!row.visible,
+      };
+
+      if (resolveGroupMembershipType(row) === 'owned') blocked.push(ref);
+      else leaving.push(ref);
+    }
+
+    return { blocked, leaving };
+  };
+
+  private findOwnedGroupMemberships = async (
+    executor: Transaction | LobeChatDatabase,
+    agentIds: string[],
+  ): Promise<AgentGroupMembershipRef[]> =>
+    (await this.queryGroupMemberships(executor, agentIds)).blocked;
+
+  /**
+   * What moving these agents would do to the chat groups they are in, asked
+   * BEFORE the move so the UI can block or confirm.
+   *
+   * `blocked` refuses the transfer outright (see the guard in
+   * {@link transferAgents}); `leaving` is the silent side effect the user is
+   * entitled to see first — a transfer drops every group link the agent holds,
+   * and until now did so without a word.
+   *
+   * Reports only on agents the caller can already see, so the endpoint cannot
+   * be used to probe which groups an arbitrary agent id sits in. The scoping
+   * lives HERE rather than in the router because {@link queryGroupMemberships}
+   * is deliberately unscoped — the transfer guard has to see a membership even
+   * in a group hidden from the caller — and that difference is too easy to
+   * lose track of one call site away.
+   */
+  getGroupMembershipImpact = async (
+    agentIds: string[],
+  ): Promise<{ blocked: AgentGroupMembershipRef[]; leaving: AgentGroupMembershipRef[] }> => {
+    const uniqueIds = [...new Set(agentIds)];
+    if (uniqueIds.length === 0) return { blocked: [], leaving: [] };
+
+    // One query for the whole batch: the endpoint accepts up to 100 ids, and a
+    // visibility probe per id is 100 round trips for a modal that opens on a
+    // click.
+    const visibleRows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(inArray(agents.id, uniqueIds), this.ownership()));
+
+    return this.queryGroupMemberships(
+      this.db,
+      visibleRows.map((row) => row.id),
+    );
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
@@ -1895,6 +2061,21 @@ export class AgentModel {
       if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, agentIds)) {
         throw new Error(AGENT_COPY_IN_PROGRESS);
       }
+
+      // 1c. A group-owned agent has no existence apart from its group: the
+      // synthetic supervisor, and members built through the group builder.
+      // Step 14 below drops every chat-group link the moved agents hold, which
+      // for an owned member means the group silently loses it — and for a
+      // supervisor means the group is left headless, at which point
+      // `findByIdWithAgents` quietly mints a blank replacement and the
+      // configured systemRole/model are gone for good.
+      //
+      // Refuse instead, naming the groups so the caller can act. Nothing in the
+      // product can reach this: owned implies `virtual`, and `queryAgents`
+      // filters virtual agents out of every transfer surface. It is a guard
+      // against a caller that reaches the model directly.
+      const ownedGroups = await this.findOwnedGroupMemberships(trx, agentIds);
+      if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
       // 2. Resolve slug conflicts in the target scope with a single query:
       //    fetch every existing slug that could collide (exact match or
@@ -2181,7 +2362,11 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
 
-      // 14. Remove chat group associations (groups belong to source workspace context)
+      // 14. Leave every chat group: a group belongs to the source scope, and a
+      // roster row pointing at an agent that now lives elsewhere would render
+      // as a member nobody in either scope can use. Guard 1c above has already
+      // rejected the memberships where leaving would damage the GROUP, so
+      // everything reaching here is a `referenced` link the caller confirmed.
       await trx.delete(chatGroupsAgents).where(inArray(chatGroupsAgents.agentId, agentIds));
 
       return agentIds.map((id) => ({

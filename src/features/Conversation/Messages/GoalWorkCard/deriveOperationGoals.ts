@@ -23,7 +23,8 @@ const nonEmptyString = (value: unknown): string | undefined =>
 export const deriveOperationGoals = (blocks: AssistantContentBlock[] = []): OperationGoal[] => {
   const goals = blocks.flatMap((block) =>
     (block.tools ?? []).flatMap((tool) => {
-      if (tool.identifier !== 'lobe-task' || tool.apiName !== 'createGoal') return [];
+      if (!['lobe-goal', 'lobe-task'].includes(tool.identifier) || tool.apiName !== 'createGoal')
+        return [];
       if (tool.result?.error || !isRecord(tool.result?.state) || tool.result.state.success !== true)
         return [];
 

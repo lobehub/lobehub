@@ -130,7 +130,9 @@ export class PiAdapter implements AgentEventAdapter {
         return this.handleMessageEnd(raw.message);
       }
       case 'agent_end': {
-        return this.handleAgentEnd(raw);
+        // Pi emits agent_end before post-run retry/compaction checks. Only
+        // agent_settled means the whole prompt (including recovery) is done.
+        return [];
       }
       case 'tool_execution_start': {
         return this.startTool({
@@ -162,6 +164,20 @@ export class PiAdapter implements AgentEventAdapter {
             provider: PI_IDENTIFIER,
           }),
         ];
+      }
+      case 'compaction_end': {
+        if (
+          this.pendingAssistantError &&
+          typeof raw.errorMessage === 'string' &&
+          raw.errorMessage
+        ) {
+          this.pendingAssistantError = {
+            ...this.pendingAssistantError,
+            errorMessage: raw.errorMessage,
+            stopReason: 'error',
+          };
+        }
+        return [];
       }
       case 'agent_settled': {
         return this.handleSettled();
@@ -291,6 +307,10 @@ export class PiAdapter implements AgentEventAdapter {
     if (message.stopReason === 'error') {
       return [...snapshotEvents, ...this.deferAssistantError(message)];
     }
+
+    // A later successful assistant response supersedes an error from a prior
+    // low-level run (for example, after Pi compacts and retries an overflow).
+    this.pendingAssistantError = undefined;
 
     const model =
       typeof message.responseModel === 'string'
@@ -424,18 +444,6 @@ export class PiAdapter implements AgentEventAdapter {
     if (this.terminalErrorEmitted || this.settled) return [];
     this.pendingAssistantError = message;
     return [];
-  }
-
-  private handleAgentEnd(event: any): HeterogeneousAgentEvent[] {
-    if (!this.pendingAssistantError) return [];
-    if (event.willRetry === true) {
-      this.pendingAssistantError = undefined;
-      return [];
-    }
-
-    const error = this.pendingAssistantError;
-    this.pendingAssistantError = undefined;
-    return this.emitAssistantError(error);
   }
 
   private emitAssistantError(message: any): HeterogeneousAgentEvent[] {

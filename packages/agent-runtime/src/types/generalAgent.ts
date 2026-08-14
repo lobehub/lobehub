@@ -3,9 +3,11 @@ import {
   type DynamicInterventionResolver,
   type GlobalInterventionAuditConfig,
   type MessageToolCall,
+  type RuntimeAdditionalContextFragment,
 } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
   /**
    * Reuse an existing assistant message instead of creating a new one. Set when

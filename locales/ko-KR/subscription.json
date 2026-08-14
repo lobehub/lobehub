@@ -480,6 +480,8 @@
   "plansModal.default.title": "플랜을 업그레이드하세요",
   "plansModal.fileStorageLimit.desc": "파일 저장소가 가득 찼습니다. 업그레이드하여 파일을 계속 업로드하고 관리하세요.",
   "plansModal.fileStorageLimit.title": "저장 한도에 도달했습니다",
+  "plansModal.messengerWechat.desc": "위챗 시스템 봇은 유료 개인 플랜에서 사용할 수 있습니다. 업그레이드하여 연결하고 사용하세요.",
+  "plansModal.messengerWechat.title": "업그레이드 후 위챗 연결",
   "plansModal.modelAccess.desc": "이 모델은 유료 플랜에서 사용할 수 있습니다. 업그레이드하여 전체 모델 라인업을 사용하세요.",
   "plansModal.modelAccess.title": "모든 모델 잠금 해제",
   "qa.desc": "질문에 대한 답변이 없으신가요? <1>제품 문서</1>에서 더 많은 FAQ를 확인하거나 문의해 주세요.",

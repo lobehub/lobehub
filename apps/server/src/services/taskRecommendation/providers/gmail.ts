@@ -1,9 +1,9 @@
 import { ConnectorDataError } from '@lobechat/connector-data';
 import type { GmailMessage } from '@lobechat/connector-data/gmail';
+import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts';
 import type { OnboardingTaskSource } from '@lobechat/types';
 
 import type { GmailTaskRecommendationProviderConfig } from '../config';
-import { defaultTaskRecommendationConfig } from '../config';
 import type { TaskRecommendationProvider } from '../types';
 
 interface GmailSignal {
@@ -13,9 +13,22 @@ interface GmailSignal {
 
 /** Creates the independent Gmail task recommendation collector. */
 export const createGmailTaskRecommendationProvider = (
-  config: GmailTaskRecommendationProviderConfig = defaultTaskRecommendationConfig.providers.gmail,
+  config: GmailTaskRecommendationProviderConfig = {
+    ...DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.gmail,
+    maxContextLength: 24_000,
+    maxSignals: 32,
+    queries: [
+      { kind: 'actionable', query: 'in:inbox newer_than:30d (is:important OR is:starred)' },
+      { kind: 'follow_up_candidate', query: 'in:sent older_than:7d newer_than:90d' },
+      {
+        kind: 'subscription_cleanup',
+        query: 'newer_than:180d (category:promotions OR unsubscribe)',
+      },
+    ],
+  },
 ): TaskRecommendationProvider => ({
   id: 'gmail',
+  guide: { examples: config.examples, principles: config.principles },
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGmailClient();
     const maxResults = Math.max(1, Math.ceil(config.maxSignals / config.queries.length));

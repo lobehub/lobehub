@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -481,14 +481,14 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.addAgentToGroup('test-group', 'test-agent', {
         order: 5,
-        role: 'moderator',
+        role: 'assistant',
       });
 
       expect(result.chatGroupId).toBe('test-group');
       expect(result.agentId).toBe('test-agent');
       expect(result.userId).toBe(userId);
       expect(result.order).toBe(5);
-      expect(result.role).toBe('moderator');
+      expect(result.role).toBe('assistant');
     });
 
     it('should add agent with default options', async () => {
@@ -515,6 +515,88 @@ describe('ChatGroupModel', () => {
   });
 
   describe('addAgentsToGroup', () => {
+    it('should refuse a group-owned agent joining a second group', async () => {
+      // `resolveGroupMembershipType` treats a virtual member as owned by ITS
+      // group — the delete path takes it down with the group, the transfer
+      // path rehomes it. Both are only sound while it belongs to one group.
+      // The member picker already filters virtual agents, which left this
+      // enforced by a query rather than by the write.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values([
+          { id: 'owner-group', title: 'Owner', userId },
+          { id: 'poacher-group', title: 'Poacher', userId },
+        ]);
+        await trx.insert(agentsTable).values({
+          id: 'group-built-member',
+          title: 'Group Built',
+          userId,
+          virtual: true,
+        });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'group-built-member',
+          chatGroupId: 'owner-group',
+          userId,
+        });
+      });
+
+      await expect(
+        chatGroupModel.addAgentsToGroup('poacher-group', ['group-built-member']),
+      ).rejects.toThrow(/cannot join another group/);
+
+      const rosters = await serverDB
+        .select()
+        .from(chatGroupsAgents)
+        .where(eq(chatGroupsAgents.agentId, 'group-built-member'));
+      expect(rosters).toHaveLength(1);
+      expect(rosters[0].chatGroupId).toBe('owner-group');
+    });
+
+    it('should refuse a builtin agent joining a group', async () => {
+      // Builtins are `virtual` too, so membership rules would classify one as
+      // group-OWNED — and removal deletes owned members. Adding your Inbox to
+      // a group and then leaving would delete the Inbox.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({ id: 'builtin-add-group', title: 'B', userId });
+        await trx.insert(agentsTable).values({
+          id: 'my-inbox',
+          slug: 'inbox',
+          title: 'Inbox',
+          userId,
+          virtual: true,
+        });
+      });
+
+      await expect(
+        chatGroupModel.addAgentsToGroup('builtin-add-group', ['my-inbox']),
+      ).rejects.toThrow(/builtin agent cannot join/);
+
+      const roster = await serverDB
+        .select()
+        .from(chatGroupsAgents)
+        .where(eq(chatGroupsAgents.agentId, 'my-inbox'));
+      expect(roster).toHaveLength(0);
+    });
+
+    it('should let a freshly built virtual agent join its first group', async () => {
+      // The group agent builder creates `virtual: true` and adds it here. The
+      // invariant is "exactly one group", not "never joins one" — rejecting
+      // every virtual agent breaks the builder outright.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({ id: 'builder-group', title: 'Builder', userId });
+        await trx.insert(agentsTable).values({
+          id: 'freshly-built',
+          title: 'Freshly Built',
+          userId,
+          virtual: true,
+        });
+      });
+
+      const result = await chatGroupModel.addAgentsToGroup('builder-group', ['freshly-built']);
+
+      expect(result.added).toHaveLength(1);
+      expect(result.added[0].agentId).toBe('freshly-built');
+    });
+
     it('should add multiple agents to group', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {
@@ -963,11 +1045,11 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.updateAgentInGroup('update-agent-group', 'update-agent', {
         order: 5,
-        role: 'moderator',
+        role: 'assistant',
       });
 
       expect(result.order).toBe(5);
-      expect(result.role).toBe('moderator');
+      expect(result.role).toBe('assistant');
       expect(result.updatedAt).toBeInstanceOf(Date);
     });
   });
@@ -983,7 +1065,8 @@ describe('ChatGroupModel', () => {
 
       const result = await chatGroupModel.delete('delete-test');
 
-      expect(result.id).toBe('delete-test');
+      expect(result.group.id).toBe('delete-test');
+      expect(result.deletedOwnedAgentIds).toEqual([]);
 
       // Verify group was deleted
       const groups = await serverDB
@@ -1023,6 +1106,157 @@ describe('ChatGroupModel', () => {
         .from(chatGroupsAgents)
         .where(eq(chatGroupsAgents.chatGroupId, 'cascade-delete-group'));
       expect(groupAgents).toHaveLength(0);
+    });
+
+    it('should delete group-owned member agents and keep referenced ones', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'owned-cleanup-group', title: 'Owned Cleanup', userId });
+
+        await trx.insert(agentsTable).values([
+          // Group-built members: the supervisor plus a virtual member. Neither
+          // has any existence outside this group.
+          { id: 'owned-supervisor', title: 'Supervisor', userId, virtual: true },
+          { id: 'owned-member', title: 'Owned Member', userId, virtual: true },
+          // Someone's own agent, merely linked in.
+          { id: 'referenced-member', title: 'Referenced Member', userId, virtual: false },
+        ]);
+
+        await trx.insert(chatGroupsAgents).values([
+          {
+            agentId: 'owned-supervisor',
+            chatGroupId: 'owned-cleanup-group',
+            role: 'supervisor',
+            userId,
+          },
+          {
+            agentId: 'owned-member',
+            chatGroupId: 'owned-cleanup-group',
+            userId,
+          },
+          {
+            agentId: 'referenced-member',
+            chatGroupId: 'owned-cleanup-group',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await chatGroupModel.delete('owned-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds.sort()).toEqual(['owned-member', 'owned-supervisor']);
+
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(inArray(agentsTable.id, ['owned-supervisor', 'owned-member', 'referenced-member']));
+      expect(survivors).toEqual([{ id: 'referenced-member' }]);
+    });
+
+    it('should classify members by agents.virtual', async () => {
+      // `agents.virtual` is the whole judgement: it is the only thing keeping
+      // this delete from either leaking or over-deleting.
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'legacy-cleanup-group', title: 'Legacy Cleanup', userId });
+
+        await trx.insert(agentsTable).values([
+          { id: 'legacy-virtual', title: 'Legacy Virtual', userId, virtual: true },
+          { id: 'legacy-real', title: 'Legacy Real', userId, virtual: false },
+        ]);
+
+        await trx.insert(chatGroupsAgents).values([
+          { agentId: 'legacy-virtual', chatGroupId: 'legacy-cleanup-group', userId },
+          { agentId: 'legacy-real', chatGroupId: 'legacy-cleanup-group', userId },
+        ]);
+      });
+
+      const result = await chatGroupModel.delete('legacy-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual(['legacy-virtual']);
+
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(inArray(agentsTable.id, ['legacy-virtual', 'legacy-real']));
+      expect(survivors).toEqual([{ id: 'legacy-real' }]);
+    });
+
+    it('should clean up an owned member another workspace user made private', async () => {
+      // The previous service-level cleanup read the roster through a
+      // visibility-scoped query, so this member was invisible to the deleter
+      // and leaked every time.
+      const wsModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'ws-cleanup-group',
+          title: 'Workspace Cleanup',
+          userId,
+          workspaceId,
+        });
+
+        await trx.insert(agentsTable).values({
+          id: 'ws-private-owned',
+          title: 'Private Owned',
+          userId: otherUserId,
+          virtual: true,
+          visibility: 'private',
+          workspaceId,
+        });
+
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'ws-private-owned',
+          chatGroupId: 'ws-cleanup-group',
+          userId: otherUserId,
+          workspaceId,
+        });
+      });
+
+      const result = await wsModel.delete('ws-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual(['ws-private-owned']);
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, 'ws-private-owned'));
+      expect(survivors).toEqual([]);
+    });
+
+    it('should never delete a builtin agent that ended up on a roster', async () => {
+      // `owned` should be enough on its own; the slug guard is the backstop for
+      // a malformed row, and losing someone's Inbox to a group delete is not a
+      // failure mode worth leaving to one predicate.
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'builtin-cleanup-group', title: 'Builtin Cleanup', userId });
+
+        await trx.insert(agentsTable).values({
+          id: 'builtin-inbox',
+          slug: 'inbox',
+          title: 'Inbox',
+          userId,
+          virtual: true,
+        });
+
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'builtin-inbox',
+          chatGroupId: 'builtin-cleanup-group',
+          userId,
+        });
+      });
+
+      const result = await chatGroupModel.delete('builtin-cleanup-group');
+
+      expect(result.deletedOwnedAgentIds).toEqual([]);
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, 'builtin-inbox'));
+      expect(survivors).toEqual([{ id: 'builtin-inbox' }]);
     });
 
     it('should not delete groups belonging to other users', async () => {

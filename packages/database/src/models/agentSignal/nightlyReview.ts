@@ -5,7 +5,6 @@ import {
   count,
   countDistinct,
   eq,
-  gt,
   gte,
   inArray,
   isNull,
@@ -13,10 +12,14 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+
+/** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
+const cursorUsers = alias(users, 'nightly_review_cursor_users');
 
 /**
  * Normalizes database aggregate timestamps.
@@ -32,9 +35,9 @@ const parseAggregateTimestamp = (value: Date | string) =>
 
 /** Cursor for stable user pagination in AgentSignal nightly review scheduling. */
 export interface ListAgentSignalNightlyReviewUsersCursor {
-  /** User creation time used as the primary cursor key. */
+  /** User creation time retained in the serialized checkpoint for observability. */
   createdAt: Date;
-  /** User id used as the tie-break cursor key. */
+  /** User id used to restore the exact database cursor tuple. */
   id: string;
 }
 
@@ -98,7 +101,7 @@ export interface AgentSignalNightlyReviewTarget {
  * - Nightly review needs active agent targets for a local-day window
  *
  * Expects:
- * - User-level AgentSignal lab preference is stored on `users.preference.lab`
+ * - Global feature gates are checked by the service layer
  * - Agent-level opt-in is stored on `agents.chatConfig.selfIteration.enabled`
  *
  * Returns:
@@ -112,7 +115,7 @@ export class AgentSignalNightlyReviewModel {
   }
 
   /**
-   * Lists users who opted into AgentSignal self-iteration and have a timezone.
+   * Lists candidate users with a timezone for nightly review scheduling.
    *
    * Use when:
    * - The nightly scheduler needs a stable cursor over possible users
@@ -126,21 +129,21 @@ export class AgentSignalNightlyReviewModel {
    * - Users sorted by `createdAt, id` for deterministic pagination
    */
   listEligibleUsers = (options: ListAgentSignalNightlyReviewUsersOptions = {}) => {
+    const cursorTuple = options.cursor
+      ? this.db
+          .select({ createdAt: cursorUsers.createdAt, id: cursorUsers.id })
+          .from(cursorUsers)
+          .where(eq(cursorUsers.id, options.cursor.id))
+          .limit(1)
+      : undefined;
     const cursorCondition = options.cursor
-      ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
-        )
+      ? sql`(${users.createdAt}, ${users.id}) > (${cursorTuple})`
       : undefined;
 
     const whitelistCondition =
       options.whitelist && options.whitelist.length > 0
         ? inArray(users.id, options.whitelist)
         : undefined;
-
-    const selfIterationEnabledCondition = sql`
-      COALESCE((${users.preference}->'lab'->>'enableAgentSelfIteration')::boolean, false) = true
-    `;
 
     const query = this.db
       .select({
@@ -150,7 +153,7 @@ export class AgentSignalNightlyReviewModel {
       })
       .from(users)
       .leftJoin(userSettings, eq(users.id, userSettings.id))
-      .where(and(cursorCondition, whitelistCondition, selfIterationEnabledCondition))
+      .where(and(cursorCondition, whitelistCondition))
       .orderBy(asc(users.createdAt), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;

@@ -1,5 +1,6 @@
 'use client';
 
+import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import type { AgentModelSelectionPolicy } from '@lobechat/types';
 import { resolveAgentModelConfig, resolveAgentModelSelectionPolicy } from '@lobechat/types';
 import { useCallback } from 'react';
@@ -61,8 +62,15 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const sharedProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
+  // Collaborative builtins (the builders, Lobe AI, the Page Copilot) are one
+  // shared row per Workspace with no config page of their own, so managing the
+  // row must not mean picking the model for everyone else — see
+  // `AgentModelConfig.personalModelSelection`.
+  const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
+    !!agent?.workspaceId &&
+    agent.visibility !== 'private' &&
+    (personalModelSelection || !canManageAgent);
 
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
@@ -76,6 +84,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const sharedModelConfig = {
     agencyConfig: sharedAgencyConfig,
     model: sharedModel,
+    personalModelSelection,
     provider: sharedProvider,
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,

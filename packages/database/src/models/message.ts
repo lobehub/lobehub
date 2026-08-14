@@ -30,6 +30,7 @@ import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
   logTimingSink as logTiming,
+  readAudioDurationMs,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
 import { isPlainRecord } from '@lobechat/utils/object';
@@ -48,6 +49,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   not,
   or,
   sql,
@@ -156,10 +158,35 @@ interface MessageRelatedFile {
   fileType: string | null;
   id: string;
   messageId: string;
+  metadata: unknown;
   name: string | null;
   size: number | null;
   url: string;
 }
+
+const materializeChatAudioItem = ({
+  fileType,
+  id,
+  metadata,
+  name,
+  url,
+}: MessageRelatedFile): ChatAudioItem => {
+  const value = isPlainRecord(metadata) ? metadata : {};
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    alt: name!,
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : {}),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    id,
+    ...(typeof value.mimeType === 'string'
+      ? { mimeType: value.mimeType }
+      : fileType
+        ? { mimeType: fileType }
+        : {}),
+    url,
+  };
+};
 
 interface MessageChunkRelation {
   fileId: string;
@@ -390,6 +417,40 @@ export class MessageModel {
   // **************** Query *************** //
 
   /**
+   * The newest user message of each given topic, keyed by topic id. Used to
+   * pre-inject recent same-channel history for IM platforms that can't read
+   * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
+   * non-empty text are considered.
+   */
+  queryLastUserMessageByTopics = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        content: messages.content,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'user'),
+          isNotNull(messages.content),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      const content = (row.content ?? '').trim();
+      if (row.topicId && content) result.set(row.topicId, content);
+    }
+    return result;
+  };
+
+  /**
    * Query messages by params (high-level API)
    *
    * This is the main query method that handles common query patterns.
@@ -448,6 +509,9 @@ export class MessageModel {
         () => this.buildThreadQueryCondition(threadId),
         { hasThreadId: true },
       );
+      // A topic thread may contain replies from delegated agents. When the topic is known,
+      // scope the complete thread to it instead of filtering those replies by the parent agent.
+      const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         current,
         includeFileWorks,
@@ -455,8 +519,8 @@ export class MessageModel {
         postProcessUrl: options.postProcessUrl,
         skipWorks,
         timing,
-        // Thread queries optionally add agent/session scope if provided
-        where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
+        topicId: topicId ?? undefined,
+        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -893,8 +957,7 @@ export class MessageModel {
               works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
-
-                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+                .map<ChatAudioItem>(materializeChatAudioItem),
             } as unknown as UIChatMessage;
           },
         ),
@@ -998,6 +1061,7 @@ export class MessageModel {
             fileType: files.fileType,
             id: messagesFiles.fileId,
             messageId: messagesFiles.messageId,
+            metadata: files.metadata,
             name: files.name,
             size: files.size,
             url: files.url,
@@ -1341,6 +1405,7 @@ export class MessageModel {
           fileType: files.fileType,
           id: messagesFiles.fileId,
           messageId: messagesFiles.messageId,
+          metadata: files.metadata,
           name: files.name,
           size: files.size,
           url: files.url,
@@ -1531,7 +1596,7 @@ export class MessageModel {
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            .map<ChatAudioItem>(materializeChatAudioItem),
         } as unknown as UIChatMessage;
       },
     );
@@ -3049,6 +3114,41 @@ export class MessageModel {
    */
   getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> =>
     this.getLatestSpineMessageId({ topicId, threadId: null });
+
+  /**
+   * Whether `descendantId` belongs to the branch rooted at `ancestorId`.
+   *
+   * Used when reconciling a client-selected conversation tail with the latest
+   * server row: a newer row may be a sibling from a historical callback fork,
+   * not an advancement of the branch the user is viewing.
+   */
+  isMessageDescendantOf = async ({
+    ancestorId,
+    descendantId,
+    topicId,
+  }: {
+    ancestorId: string;
+    descendantId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id) AS (
+        SELECT id, parent_id
+        FROM messages
+        WHERE id = ${descendantId}
+          AND topic_id = ${topicId}
+          AND ${this.ownership()}
+        UNION
+        SELECT parent.id, parent.parent_id
+        FROM messages parent
+        JOIN ancestors child ON parent.id = child.parent_id
+        WHERE parent.topic_id = ${topicId}
+      )
+      SELECT 1 AS hit FROM ancestors WHERE id = ${ancestorId} LIMIT 1
+    `);
+
+    return result.rows.length > 0;
+  };
 
   /**
    * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of

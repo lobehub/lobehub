@@ -33,7 +33,18 @@ interface TabHostProps {
 }
 
 const rootStyle: CSSProperties = { blockSize: '100%', inlineSize: '100%', position: 'relative' };
-const slotStyle: CSSProperties = { inset: 0, position: 'absolute' };
+// Longhands only — no `inset` shorthand. The split styles override `left`/`right`
+// per pane, and React's style diff never re-applies an unchanged shorthand, so a
+// pane leaving the split would keep `right` removed (not restored to 0) and
+// collapse to zero width.
+const slotStyle: CSSProperties = {
+  bottom: 0,
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: 'auto',
+};
 const hiddenSlotStyle: CSSProperties = { ...slotStyle, display: 'none' };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

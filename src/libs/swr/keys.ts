@@ -192,18 +192,22 @@ export const agentLabelKeys = {
 };
 
 // ---- agent builder (opening-suggestion chips) ---------------------------
-// Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
-// `contextSummary` is intentionally NOT part of the key so config autosaves for
-// the same target don't refetch; `nonce` bumps on manual refresh.
+// Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
+// the LLM generation instead of paying a skeleton + a generateJSON call every
+// page load. `contextSummary` is intentionally NOT part of the key so config
+// autosaves for the same target don't refetch; manual refresh revalidates the
+// same key in place (see `useBuilderSuggestions`). `locale` IS part of the key:
+// chips are generated in the UI language, so a persisted entry must not be
+// served after a language switch.
 export const agentBuilderKeys = {
   suggestions: def(
     'agentBuilder:suggestions',
-    (mode: string, builderAgentId: string, targetId: string | undefined, nonce: number) => [
+    (mode: string, builderAgentId: string, targetId: string | undefined, locale?: string) => [
       'agentBuilder:suggestions',
       mode,
       builderAgentId,
       targetId,
-      nonce,
+      locale ?? null,
     ],
   ),
 };
@@ -262,16 +266,44 @@ export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
     'task:groupList',
-    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
-      'task:groupList',
-      agentKey,
-      visibility,
-    ],
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      projectId?: string,
+    ) =>
+      projectId
+        ? ['task:groupList', agentKey, visibility, projectId]
+        : ['task:groupList', agentKey, visibility],
   ),
+  /**
+   * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
+   * other home feeds — goals are workspace rows, so a list left over from the
+   * previous workspace holds ids this one cannot open.
+   */
+  homeGoals: def('task:homeGoals', (scope: string) => ['task:homeGoals', scope]),
   list: def(
     'task:list',
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      // Part of the key, not a detail: Home orders by activity while the Tasks
+      // page orders by creation, and they read the same store field.
+      orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
+      projectId?: string,
+    ) =>
+      projectId
+        ? ['task:list', agentKey, visibility, orderBy, projectId]
+        : ['task:list', agentKey, visibility, orderBy],
+  ),
+  /**
+   * Home's automated-task roll-up: the tasks that fire on a schedule or a
+   * heartbeat. Kept off `list` because it is a different result set entirely —
+   * sharing the key would let one section's fetch overwrite the other's.
+   */
+  scheduledList: def(
+    'task:scheduledList',
     (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
-      'task:list',
+      'task:scheduledList',
       agentKey,
       visibility,
     ],
@@ -871,6 +903,15 @@ export const verifyKeys = {
       'verify:acceptanceBySubject',
       subjectType,
       subjectId,
+    ],
+  ),
+  /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
+  acceptanceStatuses: def(
+    'verify:acceptanceStatuses',
+    (subjectType: string, subjectIds: string[]) => [
+      'verify:acceptanceStatuses',
+      subjectType,
+      [...subjectIds].sort().join(','),
     ],
   ),
   acceptances: def('verify:acceptances', () => ['verify:acceptances']),

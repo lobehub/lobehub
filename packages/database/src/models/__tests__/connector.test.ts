@@ -196,6 +196,44 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('public metadata reads', () => {
+    it('does not select or decrypt credential and private config fields', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'public-mcp',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com',
+        metadata: {
+          customHeaders: { 'X-Private': 'secret' },
+          description: 'Public description',
+        },
+        name: 'Public MCP',
+        oidcConfig: { clientSecret: 'secret', scheme: 'pre_registration' },
+        sourceType: 'custom',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const [listed, found] = await Promise.all([
+        model.queryPublic(),
+        model.findPublicById(created.id),
+      ]);
+
+      expect(listed).toHaveLength(1);
+      expect(found).toEqual(listed[0]);
+      expect(found).toMatchObject({
+        description: 'Public description',
+        hasCredentials: true,
+        id: created.id,
+      });
+      expect(found).not.toHaveProperty('credentials');
+      expect(found).not.toHaveProperty('metadata');
+      expect(found).not.toHaveProperty('oidcConfig');
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
   describe('queryByIdentifiers', () => {
     it('returns an empty array for an empty identifier list', async () => {
       const model = new ConnectorModel(serverDB, userId);

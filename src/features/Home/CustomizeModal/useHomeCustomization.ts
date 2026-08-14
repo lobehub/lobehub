@@ -11,6 +11,7 @@ import {
   type HomePresetKey,
   type HomeWidgetKey,
   isHomeMinimalLayout,
+  isHomeWidgetHidden,
   resolveHomePreset,
 } from './config';
 
@@ -99,7 +100,7 @@ export const useHomeCustomization = (): HomeCustomization => {
   }, [updateSystemStatus]);
 
   const isWidgetHidden = useCallback(
-    (key: HomeWidgetKey) => hiddenWidgets.includes(key),
+    (key: HomeWidgetKey) => isHomeWidgetHidden(key, hiddenWidgets),
     [hiddenWidgets],
   );
 

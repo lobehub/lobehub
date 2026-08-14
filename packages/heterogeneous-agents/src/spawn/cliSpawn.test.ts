@@ -34,8 +34,7 @@ const readFileMock = vi.mocked(fsPromises.readFile);
 const callExecFile = (stdout: string) => {
   execFileMock.mockImplementationOnce(((...args: unknown[]) => {
     const callback = [...args].reverse().find((arg) => typeof arg === 'function') as
-      | ((error: Error | null, stdout: string) => void)
-      | undefined;
+      ((error: Error | null, stdout: string) => void) | undefined;
     callback?.(null, stdout);
     return {} as childProcess.ChildProcess;
   }) as typeof childProcess.execFile);
@@ -225,5 +224,31 @@ describe('cliSpawn', () => {
       args: ['--version'],
       command: shimPath,
     });
+  });
+
+  it('accepts the exact Windows command-line limit and rejects one UTF-16 unit more', async () => {
+    platformMock.mockReturnValue('win32');
+    const command = 'C:\\codex.exe';
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    const exactPrompt = 'a'.repeat(32_767 - command.length - 2);
+
+    await expect(resolveCliSpawnPlan(command, [exactPrompt])).resolves.toEqual({
+      args: [exactPrompt],
+      command,
+    });
+    await expect(resolveCliSpawnPlan(command, [`${exactPrompt}a`])).rejects.toThrow(
+      /Windows command line requires 32768 UTF-16 code units/,
+    );
+  });
+
+  it('counts astral characters as two Windows UTF-16 code units', async () => {
+    platformMock.mockReturnValue('win32');
+    const command = 'C:\\codex.exe';
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    const promptPrefix = 'a'.repeat(32_767 - command.length - 3);
+
+    await expect(resolveCliSpawnPlan(command, [`${promptPrefix}😀`])).rejects.toThrow(
+      /Windows command line requires 32768 UTF-16 code units/,
+    );
   });
 });

@@ -4,8 +4,8 @@ description: >
   Agentic end-to-end testing for any project: backend verification via the
   project CLI, frontend verification via agent-browser (web), and desktop
   verification via CDP (Electron). Drives the real surface, captures visually
-  confirmed evidence, and publishes a structured report to the LobeHub verify
-  platform. Triggers on 'cli test', 'test with cli', 'verify with cli',
+  confirmed evidence, and publishes a structured report to LobeHub Acceptance.
+  Triggers on 'cli test', 'test with cli', 'verify with cli',
   'backend test with cli', 'local test', 'test in electron', 'test desktop',
   'manual test', 'test report', or any local end-to-end verification task.
 ---
@@ -156,6 +156,12 @@ Prepare the proposed surface, cases, expected evidence, assumptions, and report
 deliverable. Do not ask for approval yet: Step 2 must establish the real
 environment state first so the user can approve one complete, evidence-backed plan
 instead of separate plan and environment prompts.
+
+**Case selection gate (hard rule):** every case must be a delivery outcome a
+person can judge. Never plan the repo's own programmatic gates — unit /
+integration tests, coverage, type-check, lint, a clean build — as cases; ingest
+drops them and a gates-only round fails to publish. Full rule:
+[references/plan.md](./references/plan.md#case-selection-gate-hard-rule).
 
 ### Step 2 — Confirm environment state and auth (mandatory)
 
@@ -445,7 +451,7 @@ Hard rules worth front-loading:
   every human-facing string in `result.json` (case `name`/`observation`,
   `summary.conclusion`, scope `focus`/`entry`) in the language the user is
   conversing in. `result.json` keys/status values stay English.
-- **`result.json` is the report; the verify page renders it.** Each tested
+- **`result.json` is the report; the acceptance page renders it.** Each tested
   behavior is one entry in `cases[]` (`{ name, result, observation, evidence }`);
   the page builds the scope header from `scenario`+`context`, the check list from
   `plan[]`+`cases[]`, and the verdict from `summary.conclusion`. Do NOT hand-build
@@ -463,23 +469,35 @@ Hard rules worth front-loading:
   artifacts in the current round; never require a reviewer to join explanation
   from one immutable round with logs from another. See
   [references/report.md](./references/report.md#dual-text-evidence-for-non-visual-behavior).
-- **Final replies link ONLY the published `/acceptance/<id>` page — never a
-  `/verify/<id>` URL. Put no images or local file links in the chat reply.**
+- **Final replies expose ONLY the published `/acceptance/<id>` page. Put no
+  images, local paths, local file links, or internal run-page paths in the chat
+  reply.**
   The acceptance page is the stable cross-round decision surface and renders
   each round's evidence inline. For a fixed this-round snapshot, append
   `?r=<roundIndex>` to the same acceptance URL (the ingest CLI prints it as
-  `round snapshot`) — that deep-links this round's full report. You may mention
-  the local report directory as plain text. Always leave whitespace between a
-  URL and any following text — CJK punctuation glued right after it (`…4c74（本轮`)
+  `round snapshot`) — that deep-links this round's full report. Do not mention
+  any working-artifact location. Always leave whitespace between a URL and any
+  following text — CJK punctuation glued right after it (`…4c74（本轮`)
   gets swallowed into the href by chat autolinkers and breaks the link.
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
+- **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
+  alert tone: attach the clip the feature produced so the page renders a player.
+  Prose about a sound, or a screenshot of a waveform, proves nothing —
+  [references/report.md](./references/report.md).
+- **Programmatic gates are NEVER acceptance checks (hard rule, enforced).**
+  Unit / integration tests, coverage, type-check, lint, and a clean build are
+  preconditions of shipping; they belong in one line of `report.md` →
+  Verification and MUST NOT appear in `plan[]` / `cases[]` under any phrasing.
+  `acceptance run ingest` drops every matching item (matched on title, category,
+  and method) and a gates-only round fails to publish —
+  [references/report.md](./references/report.md#hard-rule--what-is-not-an-acceptance-check).
 
-### Step 6 — Publish to the LobeHub verify platform (mandatory)
+### Step 6 — Publish to LobeHub Acceptance (mandatory)
 
-The local report under `.records/reports/` is the working artifact; the
-**deliverable is the report opened on the verify platform**. Do not stop at local
+The report under `.records/reports/` is a private working artifact; the
+**deliverable is the report opened on the acceptance page**. Do not stop at local
 files — push the session up with the CLI so the user (and later reviewers) can open
 it at a stable URL with the evidence rendered inline.
 
@@ -554,8 +572,8 @@ It prints the `verifyRunId`, `acceptanceId`, `roundIndex`, and the acceptance
 paths. The final reply leads with
 `https://app.lobehub.com/acceptance/<acceptanceId>` as the latest cross-round
 state; for a fixed per-round snapshot use the same URL with `?r=<roundIndex>`
-(printed as `round snapshot`). Never link `/verify/<id>` in the reply — the
-verify run stays the internal immutable record behind the acceptance page.
+(printed as `round snapshot`). Do not expose any other run path in the reply; the
+underlying immutable run is an internal record behind the acceptance page.
 
 #### Every run belongs to a subject acceptance (mandatory)
 
@@ -650,7 +668,7 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 
 #### Every verification run is an immutable snapshot
 
-One call to `acceptance run ingest` creates one immutable `/verify/<id>` snapshot. Never
+One call to `acceptance run ingest` creates one immutable internal run snapshot. Never
 overwrite, replace, prune, or re-ingest into an earlier run. A fix followed by
 re-verification MUST create another run on the same acceptance, preserving the
 earlier plan, results, evidence, and verdict exactly as observed. Use a fresh

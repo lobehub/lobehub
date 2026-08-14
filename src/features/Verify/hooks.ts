@@ -95,6 +95,27 @@ export const useAcceptanceList = (enabled: boolean) =>
   );
 
 /**
+ * Acceptance status for a known subject set — one read for a whole list.
+ *
+ * Not `useAcceptanceList`: that feed is capped at the newest rows across every
+ * subject type, so any subject pushed past the cap would read as having no
+ * acceptance at all. Revalidates on focus like the bundle, because a delivery
+ * that lands while the tab sits open has to show up without a reload.
+ */
+export const useAcceptanceStatuses = (
+  subjectType: AcceptanceSubjectType,
+  subjectIds: string[],
+  enabled = true,
+) =>
+  useClientDataSWR(
+    enabled && subjectIds.length > 0
+      ? verifyKeys.acceptanceStatuses(subjectType, subjectIds)
+      : null,
+    () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  );
+
+/**
  * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
  * server-side title search (spanning the whole history, not just loaded pages);
  * changing it collapses back to the first page.

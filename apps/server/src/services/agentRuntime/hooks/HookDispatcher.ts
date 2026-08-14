@@ -16,6 +16,16 @@ import type {
 
 const log = debug('lobe-server:hook-dispatcher');
 
+export class CriticalHookDeliveryError extends Error {
+  constructor(
+    public readonly hookId: string,
+    public readonly cause: unknown,
+  ) {
+    super(`Critical webhook delivery failed: ${hookId}`, { cause });
+    this.name = 'CriticalHookDeliveryError';
+  }
+}
+
 /**
  * Delivers a webhook via HTTP POST (fetch or QStash)
  */
@@ -67,17 +77,15 @@ export async function deliverWebhook(
 }
 
 async function fetchDeliver(url: string, payload: Record<string, unknown>): Promise<void> {
-  try {
-    const res = await fetch(url, {
-      body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
-    log('Webhook delivered via fetch: %s (status: %d)', url, res.status);
-  } catch (error) {
-    log('Webhook fetch delivery failed: %s %O', url, error);
-    // Hook errors should not affect main flow
+  const res = await fetch(url, {
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  });
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`Webhook delivery failed: ${res.status} ${res.statusText}`);
   }
+  log('Webhook delivered via fetch: %s (status: %d)', url, res.status);
 }
 
 function buildWebhookPayload(
@@ -148,6 +156,7 @@ export class HookDispatcher {
         this.getSerializedHooks(operationId)?.filter((h) => h.type === type) ||
         [];
 
+      let criticalError: CriticalHookDeliveryError | undefined;
       for (const hook of webhookHooks) {
         try {
           log(
@@ -173,6 +182,7 @@ export class HookDispatcher {
               `[HookDispatcher][${operationId}][${type}] Webhook delivery failed with no fallback: ${hook.id} → ${hook.webhook.url}`,
               error,
             );
+            criticalError ??= new CriticalHookDeliveryError(hook.id, error);
           } else {
             log(
               '[%s][%s] Webhook delivery error (non-fatal): %s %O',
@@ -184,6 +194,11 @@ export class HookDispatcher {
           }
         }
       }
+
+      // Finish independent sibling hooks first, then fail the queue execution.
+      // Queue runtimes can retry a lost control-flow handoff instead of
+      // reporting success while stranding its consumer.
+      if (criticalError) throw criticalError;
     }
   }
 

@@ -34,6 +34,7 @@ describe('Project Router Integration', () => {
       visibility: 'private',
     });
     expect(created.data.identifier).toBe('APOLLO');
+    expect(created.data.coordinatorAgentId).toBeTruthy();
     await caller.updateStatus({ id: created.data.id, status: 'active' });
 
     const [agent] = await serverDB.insert(agents).values({ title: 'Lead', userId }).returning();
@@ -50,7 +51,13 @@ describe('Project Router Integration', () => {
       projectId: created.data.id,
     });
     const detail = await caller.detail({ id: created.data.id });
-    expect(detail.data.agents).toHaveLength(1);
+    expect(detail.data.agents).toHaveLength(2);
+    expect(detail.data.agents).toContainEqual(
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: created.data.coordinatorAgentId }),
+        binding: expect.objectContaining({ role: 'coordinator' }),
+      }),
+    );
     expect(detail.data.knowledgeBases).toHaveLength(1);
     expect(detail.data.tasks?.[0].id).toBe(task.data.id);
 

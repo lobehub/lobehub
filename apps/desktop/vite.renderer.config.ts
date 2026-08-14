@@ -11,6 +11,7 @@ import {
   createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
 } from '../../plugins/vite/sharedRendererConfig';
@@ -253,7 +254,7 @@ export default defineConfig(async (env) => {
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
-      dedupe: ['react', 'react-dom'],
+      dedupe: sharedRendererDedupe,
       tsconfigPaths: !isCloudDesktop,
     },
     root: ROOT_DIR,

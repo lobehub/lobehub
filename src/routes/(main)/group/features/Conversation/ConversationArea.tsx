@@ -1,8 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { memo, Suspense, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import {
+  TopicMigrationPlaceholder,
+  useTopicMigrationPending,
+} from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import {
@@ -32,6 +38,7 @@ interface ConversationAreaProps {
  * Uses ChatList from @/features/Conversation and MainChatInput for custom features.
  */
 const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
+  const { t } = useTranslation('chat');
   const context = useGroupContext();
 
   // Get raw dbMessages from ChatStore for this context
@@ -47,6 +54,15 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
   const operationState = useOperationState(context);
 
   const actionsBarConfig = useActionsBarConfig();
+
+  // A topic still awaiting its transfer/copy backfill shows a placeholder
+  // instead of an empty (not-yet-migrated) history, and blocks sending — the
+  // supervisor could not assemble the missing context anyway. Opening it jumps
+  // it to the front of the queue, so the wait is typically a few seconds.
+  const { job: migrationJob, topicPending } = useTopicMigrationPending(
+    { groupId: context.groupId },
+    context.topicId,
+  );
 
   return (
     <ConversationProvider
@@ -68,20 +84,42 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
           position: 'relative',
         }}
       >
-        <ChatList welcome={<WelcomeChatItem />} />
+        {topicPending ? (
+          <TopicMigrationPlaceholder groupId={context.groupId} topicId={context.topicId} />
+        ) : (
+          <ChatList welcome={<WelcomeChatItem />} />
+        )}
       </Flexbox>
-      <MessageForwardFooter>
-        <MainChatInput />
-      </MessageForwardFooter>
+      {topicPending ? (
+        <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={6} paddingInline={16}>
+          <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
+            {t(
+              migrationJob?.type === 'copy'
+                ? 'transferMigration.inputDisabledHintCopy'
+                : 'transferMigration.inputDisabledHint',
+            )}
+          </span>
+        </Flexbox>
+      ) : (
+        <MessageForwardFooter>
+          <MainChatInput />
+        </MessageForwardFooter>
+      )}
       <ChatHydration />
       <ThreadHydration />
       <ForwardMessageDispatcher />
       {!mobile && (
         <>
           <ChatMiniMap />
-          <Suspense>
-            <MessageFromUrl />
-          </Suspense>
+          {/* Held back while the topic is still migrating: the composer above is
+              already disabled, and letting `?message=` through would send into
+              the not-yet-migrated history this screen is waiting for. The param
+              stays in the URL, so the send fires once the backfill lands. */}
+          {!topicPending && (
+            <Suspense>
+              <MessageFromUrl />
+            </Suspense>
+          )}
         </>
       )}
     </ConversationProvider>

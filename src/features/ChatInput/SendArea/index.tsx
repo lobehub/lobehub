@@ -29,22 +29,25 @@ const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
   const { canShowControls } = useChatInputResourceAccess();
   const allowExpand = useChatInputStore((s) => s.allowExpand);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
+  const voiceMessageActive = useChatInputStore((s) => s.activeAudioInputMode === 'voiceMessage');
 
   const items = useMemo(
     () =>
       canShowControls
         ? mapActionsToItems(
-            resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
+            voiceMessageActive
+              ? (['voiceMessage'] as ActionKey[])
+              : resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
           )
         : [],
-    [canShowControls, rightActions, hideContextWindow],
+    [canShowControls, hideContextWindow, rightActions, voiceMessageActive],
   );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-      {canShowControls && allowExpand && <ExpandButton />}
+      {canShowControls && allowExpand && !voiceMessageActive && <ExpandButton />}
       {items}
-      <SendButton />
+      {!voiceMessageActive && <SendButton />}
     </Flexbox>
   );
 });

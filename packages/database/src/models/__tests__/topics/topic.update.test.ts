@@ -125,6 +125,110 @@ describe('TopicModel - Update', () => {
     });
   });
 
+  describe('task callback reservation', () => {
+    it('reserves only an idle topic and releases only the matching owner', async () => {
+      const topicId = 'task-callback-reservation';
+      await serverDB.insert(topics).values({ userId, id: topicId, title: 'Test' });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(true);
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
+
+      await topicModel.releaseTaskCallbackReservation(topicId, 'callback-2');
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
+
+      await topicModel.releaseTaskCallbackReservation(topicId, 'callback-1');
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(true);
+    });
+
+    it('allows the reservation owner to re-enter the same topic-start claim', async () => {
+      const topicId = 'topic-start-reentrant-reservation';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
+    });
+
+    it('waits while a foreground operation is running', async () => {
+      const topicId = 'task-callback-running-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'operation-1',
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(false);
+
+      await topicModel.updateMetadata(topicId, { runningOperation: null });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(true);
+    });
+
+    it('atomically hands a topic from the matching visible-finished operation to a new start', async () => {
+      const topicId = 'topic-start-operation-handoff';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'old-operation',
+          },
+        },
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'different-operation'),
+      ).resolves.toBe(false);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'old-operation'),
+      ).resolves.toBe(true);
+
+      const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
+      expect(topic?.metadata?.runningOperation).toBeNull();
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('new-start');
+    });
+
+    it('recovers a stale reservation left by a crashed delivery worker', async () => {
+      const topicId = 'task-callback-stale-reservation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          taskCallbackReservation: {
+            messageId: 'crashed-callback',
+            reservedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'retry-callback')).resolves.toBe(
+        true,
+      );
+    });
+
+    it('does not reserve another user topic', async () => {
+      await serverDB.insert(users).values({ id: 'task-callback-other-user' });
+      await serverDB.insert(topics).values({
+        userId: 'task-callback-other-user',
+        id: 'task-callback-other-topic',
+        title: 'Test',
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback('task-callback-other-topic', 'callback-1'),
+      ).resolves.toBeNull();
+    });
+  });
+
   describe('recomputeUsage', () => {
     it('rolls the topic assistant messages into the denormalized usage/cost columns', async () => {
       const topicId = 'usage-recompute-1';

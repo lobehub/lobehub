@@ -41,8 +41,8 @@ const OpenAsPageAction = memo(() => {
   );
 });
 
-const PortalHeader = memo(() => (
+const PortalHeader = () => (
   <PortalChromeHeader rightExtra={<OpenAsPageAction />} title={<DocumentTitle />} />
-));
+);
 
 export default PortalHeader;

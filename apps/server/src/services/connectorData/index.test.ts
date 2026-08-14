@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   createGitHubComposioClient: vi.fn(),
   createGitHubOAuthClient: vi.fn(),
   createGmailClient: vi.fn(),
+  createNotionClient: vi.fn(),
+  createTwitterClient: vi.fn(),
   ensureFreshConnectorToken: vi.fn(),
   findById: vi.fn(),
   getAccount: vi.fn(),
@@ -16,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   initWithEnvKey: vi.fn(),
   isComposioLookupNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
+  marketCallTool: vi.fn(),
+  marketGetStatus: vi.fn(),
   queryComposioReferences: vi.fn(),
   queryReferences: vi.fn(),
 }));
@@ -27,6 +31,14 @@ vi.mock('@lobechat/connector-data/github', () => ({
 
 vi.mock('@lobechat/connector-data/gmail', () => ({
   createGmailConnectorClient: mocks.createGmailClient,
+}));
+
+vi.mock('@lobechat/connector-data/notion', () => ({
+  createNotionConnectorClient: mocks.createNotionClient,
+}));
+
+vi.mock('@lobechat/connector-data/twitter', () => ({
+  createTwitterMarketConnectorClient: mocks.createTwitterClient,
 }));
 
 vi.mock('@/database/models/connector', () => ({
@@ -47,6 +59,16 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
   ensureFreshConnectorToken: mocks.ensureFreshConnectorToken,
+}));
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(() => ({
+    market: {
+      skills: {
+        callTool: mocks.marketCallTool,
+        getStatus: mocks.marketGetStatus,
+      },
+    },
+  })),
 }));
 
 const authDb = (
@@ -78,8 +100,12 @@ describe('ConnectorDataService', () => {
     mocks.createGitHubComposioClient.mockReturnValue({ kind: 'github-composio-client' });
     mocks.createGitHubOAuthClient.mockReturnValue({ kind: 'github-client' });
     mocks.markComposioUnavailable.mockResolvedValue(false);
+    mocks.marketCallTool.mockResolvedValue({ data: { data: [] }, success: true });
+    mocks.marketGetStatus.mockResolvedValue({ connected: true, success: true });
     mocks.getAccount.mockResolvedValue({ externalAccountId: 'gmail-account', scopes: [] });
     mocks.createGmailClient.mockReturnValue({ getAccount: mocks.getAccount, kind: 'gmail-client' });
+    mocks.createNotionClient.mockReturnValue({ kind: 'notion-client' });
+    mocks.createTwitterClient.mockReturnValue({ kind: 'twitter-client' });
     mocks.queryReferences.mockResolvedValue([]);
     mocks.queryComposioReferences.mockResolvedValue([]);
   });
@@ -382,6 +408,60 @@ describe('ConnectorDataService', () => {
     expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
   });
 
+  /** @example An ACTIVE Notion connection resolves through the registry-backed provider client. */
+  it('creates Notion from the first active Composio connector', async () => {
+    mocks.queryComposioReferences.mockResolvedValue([
+      {
+        composio: {
+          appSlug: 'notion',
+          connectedAccountId: 'notion-account',
+          ownerUserId: 'notion-owner',
+          status: 'ACTIVE',
+        },
+        id: 'notion-a',
+        isEnabled: true,
+        status: 'connected',
+      },
+    ]);
+
+    await expect(new ConnectorDataService(authDb([]), 'user-1').getNotionClient()).resolves.toEqual(
+      { kind: 'notion-client' },
+    );
+    expect(mocks.createNotionClient).toHaveBeenCalledWith({
+      composio: expect.objectContaining({ kind: 'composio' }),
+      connectedAccountId: 'notion-account',
+      userId: 'notion-owner',
+    });
+  });
+
+  /** @example A connected Market X skill resolves through the registry-backed read-only client. */
+  it('creates Twitter from the active Market connector', async () => {
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').getTwitterClient(),
+    ).resolves.toEqual({ kind: 'twitter-client' });
+    expect(mocks.marketGetStatus).toHaveBeenCalledWith('twitter');
+    expect(mocks.createTwitterClient).toHaveBeenCalledWith({
+      market: { callTool: expect.any(Function) },
+    });
+
+    const [{ market }] = mocks.createTwitterClient.mock.calls[0];
+    await market.callTool('search_tweets', { query: 'from:ada' });
+    expect(mocks.marketCallTool).toHaveBeenCalledWith('twitter', {
+      args: { query: 'from:ada' },
+      tool: 'search_tweets',
+    });
+  });
+
+  /** @example A disconnected Market X skill is not exposed as an available source. */
+  it('rejects Twitter when the Market connector is not connected', async () => {
+    mocks.marketGetStatus.mockResolvedValue({ connected: false, success: true });
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').getTwitterClient(),
+    ).rejects.toMatchObject({ code: 'twitter_authorization_unavailable' });
+    expect(mocks.createTwitterClient).not.toHaveBeenCalled();
+  });
+
   it('lists only providers whose connector client can currently be resolved', async () => {
     /** @example A stale Gmail connection is excluded while GitHub OAuth remains available. */
     const service = new ConnectorDataService(
@@ -389,7 +469,7 @@ describe('ConnectorDataService', () => {
       'user-1',
     );
 
-    await expect(service.listAvailableProviderIds(['github', 'gmail'])).resolves.toEqual([
+    await expect(service.listAvailableProviderIds(['github', 'gmail', 'notion'])).resolves.toEqual([
       'github',
     ]);
   });

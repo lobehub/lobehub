@@ -29,7 +29,7 @@ const operationState = { isInputLoading: false };
 let agentState: AgentState;
 let chatState: ChatState;
 
-vi.mock('@/components/Loading/BrandTextLoading', () => ({
+vi.mock('@/components/Skeleton/Conversation/Segment', () => ({
   default: () => <div data-testid="loading" />,
 }));
 

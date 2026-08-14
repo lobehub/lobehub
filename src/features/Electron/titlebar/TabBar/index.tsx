@@ -63,7 +63,7 @@ const TabBar = () => {
   const { tabs, activeTabId } = useResolvedTabs();
   const splitView = useElectronStore((s) => s.splitView);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
-  const activateTab = useElectronStore((s) => s.activateTab);
+  const switchTab = useElectronStore((s) => s.switchTab);
   const addNewTab = useElectronStore((s) => s.addNewTab);
   const removeTab = useElectronStore((s) => s.removeTab);
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
@@ -148,9 +148,9 @@ const TabBar = () => {
 
   const handleActivate = useCallback(
     (id: string) => {
-      activateTab(id);
+      switchTab(id);
     },
-    [activateTab],
+    [switchTab],
   );
 
   const handleClose = useCallback(

@@ -87,6 +87,45 @@ describe('OpenCodeAdapter', () => {
     expect(adapter.adapt(raw)).toEqual([]);
   });
 
+  it('maps todowrite snapshots into shared todo plugin state', () => {
+    const adapter = new OpenCodeAdapter();
+    const todos = [
+      { content: 'Inspect the pull request', priority: 'high', status: 'completed' },
+      { content: 'Merge the pull request', priority: 'high', status: 'in_progress' },
+      { content: 'Report any blockers', priority: 'medium', status: 'pending' },
+      { content: 'Use the obsolete merge path', priority: 'low', status: 'cancelled' },
+    ];
+
+    const events = adapter.adapt({
+      part: {
+        callID: 'todo-call-1',
+        id: 'todo-part-1',
+        state: {
+          input: { todos },
+          metadata: { todos },
+          output: JSON.stringify(todos),
+          status: 'completed',
+        },
+        tool: 'todowrite',
+        type: 'tool',
+      },
+      sessionID: 'ses-todos',
+      type: 'tool_use',
+    });
+
+    expect(events.find((event) => event.type === 'tool_result')?.data.pluginState).toEqual({
+      todos: {
+        items: [
+          { status: 'completed', text: 'Inspect the pull request' },
+          { status: 'processing', text: 'Merge the pull request' },
+          { status: 'todo', text: 'Report any blockers' },
+          { status: 'todo', text: 'Use the obsolete merge path' },
+        ],
+        updatedAt: expect.any(String),
+      },
+    });
+  });
+
   it('opens a new step for the final answer after a completed tool turn', () => {
     const adapter = new OpenCodeAdapter();
     const firstStart = adapter.adapt({

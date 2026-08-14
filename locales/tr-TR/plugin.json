@@ -228,6 +228,7 @@
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title": "Program kontrolü",
   "builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title": "Doğrulama yöntemi",
   "builtins.lobe-delivery-checker.verifyPlan.required": "Gerekli",
+  "builtins.lobe-goal.apiName.createGoal": "Hedef başlat",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Toplu ajan oluştur",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Ajan oluştur",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Grup oluştur",

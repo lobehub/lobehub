@@ -1,6 +1,5 @@
 'use client';
 
-import { memo } from 'react';
 import { Outlet } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
@@ -8,7 +7,7 @@ import SettingsContextProvider from '@/features/Settings/Layout/ContextProvider'
 
 import Header from './Header';
 
-const MobileSettingsWrapper = memo(() => {
+const MobileSettingsWrapper = () => {
   return (
     <SettingsContextProvider
       value={{
@@ -21,8 +20,6 @@ const MobileSettingsWrapper = memo(() => {
       </MobileContentLayout>
     </SettingsContextProvider>
   );
-});
-
-MobileSettingsWrapper.displayName = 'MobileSettingsWrapper';
+};
 
 export default MobileSettingsWrapper;

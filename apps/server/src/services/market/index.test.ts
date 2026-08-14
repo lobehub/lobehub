@@ -556,9 +556,9 @@ describe('MarketService', () => {
         identifier: 'twitter',
         meta: {
           avatar: '🐦',
-          description: 'LobeHub Skill: X (Twitter)',
+          description: 'LobeHub Skill: X',
           tags: ['lobehub-skill', 'twitter'],
-          title: 'X (Twitter)',
+          title: 'X',
         },
         type: 'builtin',
       });

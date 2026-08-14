@@ -21,56 +21,68 @@ export {
 export const MAX_AGENT_INPUT_LENGTH = 128_000;
 export const MAX_SOURCE_BRIEF_LENGTH = 64_000;
 
-const canonicalErrors: Record<string, { code: string; operation: string }> = {
-  GITHUB_CONTRIBUTORS_FAILED: {
-    code: 'GITHUB_CONTRIBUTORS_FAILED',
-    operation: 'contributors',
-  },
-  GITHUB_ORGANIZATIONS_FAILED: {
-    code: 'GITHUB_ORGANIZATIONS_FAILED',
-    operation: 'organizations',
-  },
-  GITHUB_PINNED_REPOSITORIES_FAILED: {
-    code: 'GITHUB_PINNED_REPOSITORIES_FAILED',
-    operation: 'pinned_repositories',
-  },
-  GITHUB_PROFILE_README_FAILED: {
-    code: 'GITHUB_PROFILE_README_FAILED',
-    operation: 'profile_readme',
-  },
-  GITHUB_RECENT_CONTRIBUTIONS_FAILED: {
-    code: 'GITHUB_RECENT_CONTRIBUTIONS_FAILED',
-    operation: 'recent_contributions',
-  },
-  GITHUB_RECENT_PULL_REQUESTS_FAILED: {
-    code: 'GITHUB_RECENT_PULL_REQUESTS_FAILED',
-    operation: 'recent_pull_requests',
-  },
-  GITHUB_RECENT_REPOSITORIES_FAILED: {
-    code: 'GITHUB_RECENT_REPOSITORIES_FAILED',
-    operation: 'recent_repositories',
-  },
-  GMAIL_SEARCH_FAILED: { code: 'GMAIL_SEARCH_FAILED', operation: 'search' },
-  UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED: {
-    code: 'UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED',
-    operation: 'authorize',
-  },
-  UNDERSTANDING_PROVIDER_COLLECTION_FAILED: {
-    code: 'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
-    operation: 'collect',
-  },
-  UNDERSTANDING_PROVIDER_RESOLUTION_FAILED: {
-    code: 'UNDERSTANDING_PROVIDER_RESOLUTION_FAILED',
-    operation: 'resolve',
-  },
-};
-
 const boundedCount = (value: number) =>
   Number.isFinite(value) ? Math.min(MAX_COLLECTION_COUNT, Math.max(0, Math.floor(value))) : 0;
 
 const trustedProvider = (provider: string) =>
   provider.trim().slice(0, MAX_PROVIDER_ID_LENGTH) || 'provider';
 
+/**
+ * Normalizes a diagnostic identifier without retaining free-form text.
+ *
+ * Before:
+ * - "gmail.search-failed"
+ *
+ * After:
+ * - "GMAIL_SEARCH_FAILED"
+ */
+const normalizeDiagnosticCode = (value: string) =>
+  value
+    .trim()
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
+    .slice(0, MAX_DIAGNOSTIC_CODE_LENGTH);
+
+/**
+ * Normalizes a provider sub-operation without retaining free-form text.
+ *
+ * Before:
+ * - "Recent Messages"
+ *
+ * After:
+ * - "recent_messages"
+ */
+const normalizeDiagnosticOperation = (value: string) =>
+  value
+    .trim()
+    .replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
+    .slice(0, MAX_DIAGNOSTIC_OPERATION_LENGTH) || 'collection';
+
+const sanitizeDiagnosticCode = (provider: string, value: string) => {
+  const normalized = normalizeDiagnosticCode(value);
+  const providerPrefix = `${normalizeDiagnosticCode(provider)}_`;
+  if (normalized.startsWith(providerPrefix) || normalized.startsWith('UNDERSTANDING_')) {
+    return normalized;
+  }
+  return 'PROVIDER_COLLECTION_FAILED';
+};
+
+/**
+ * Sanitizes provider diagnostics for persistence and observability.
+ *
+ * Use when:
+ * - Moving provider collection diagnostics across the service boundary
+ *
+ * Expects:
+ * - Codes are owned by the active provider or the Understanding service
+ *
+ * Returns:
+ * - Bounded counts and identifiers with all free-form messages replaced
+ */
 export const sanitizeProviderDiagnostics = (
   provider: string,
   value: CollectionDiagnostics,
@@ -78,14 +90,12 @@ export const sanitizeProviderDiagnostics = (
   const trusted = trustedProvider(provider);
   return {
     errors: value.errors.slice(0, MAX_COLLECTION_ERRORS).map((error) => {
-      const canonical = canonicalErrors[error.code] ?? {
-        code: 'PROVIDER_COLLECTION_FAILED',
-        operation: 'collection',
-      };
+      const code = sanitizeDiagnosticCode(trusted, error.code);
+      const operation = normalizeDiagnosticOperation(error.operation);
       return {
-        code: canonical.code.slice(0, MAX_DIAGNOSTIC_CODE_LENGTH),
-        message: `${trusted} ${canonical.operation} failed`.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH),
-        operation: canonical.operation.slice(0, MAX_DIAGNOSTIC_OPERATION_LENGTH),
+        code,
+        message: `${trusted} ${operation} failed`.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH),
+        operation,
         provider: trusted,
         retryable: Boolean(error.retryable),
       };
@@ -96,6 +106,18 @@ export const sanitizeProviderDiagnostics = (
   };
 };
 
+/**
+ * Bounds diagnostics that were already sanitized by the service.
+ *
+ * Use when:
+ * - Reading canonical diagnostics from a trusted internal result
+ *
+ * Expects:
+ * - Error identifiers and messages are already canonical and non-sensitive
+ *
+ * Returns:
+ * - Diagnostics with bounded counts and error cardinality
+ */
 export const boundCanonicalDiagnostics = (value: CollectionDiagnostics): CollectionDiagnostics => ({
   errors: value.errors.slice(0, MAX_COLLECTION_ERRORS),
   evidenceCount: boundedCount(value.evidenceCount),
@@ -103,6 +125,18 @@ export const boundCanonicalDiagnostics = (value: CollectionDiagnostics): Collect
   succeededCount: boundedCount(value.succeededCount),
 });
 
+/**
+ * Creates one bounded collection error without retaining free-form messages.
+ *
+ * Use when:
+ * - Converting a structured internal or Connector Data error for persistence
+ *
+ * Expects:
+ * - The code is owned by the provider or the Understanding service
+ *
+ * Returns:
+ * - A canonical collection error safe for storage, metrics, and API projection
+ */
 export const canonicalCollectionError = (
   provider: string,
   operation: string,
@@ -110,9 +144,9 @@ export const canonicalCollectionError = (
   retryable: boolean,
 ): CollectionError => {
   const trusted = trustedProvider(provider);
-  const safeOperation = operation.slice(0, MAX_DIAGNOSTIC_OPERATION_LENGTH);
+  const safeOperation = normalizeDiagnosticOperation(operation);
   return {
-    code: code.slice(0, MAX_DIAGNOSTIC_CODE_LENGTH),
+    code: sanitizeDiagnosticCode(trusted, code),
     message: `${trusted} ${safeOperation} failed`.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH),
     operation: safeOperation,
     provider: trusted,

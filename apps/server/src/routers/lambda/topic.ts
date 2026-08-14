@@ -486,6 +486,13 @@ export const topicRouter = router({
       z.object({
         agentId: z.string().nullish(),
         current: z.number().optional(),
+        /**
+         * Scope an `agentId` query to the builder conversations that configured
+         * one target. Builder panels show their full history on purpose; these
+         * are for callers that want a single agent's / group's builds.
+         */
+        editingAgentId: z.string().nullish(),
+        editingGroupId: z.string().nullish(),
         excludeStatuses: z.array(z.string()).optional(),
         excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullish(),

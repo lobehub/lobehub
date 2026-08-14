@@ -32,6 +32,15 @@ export interface BuildGoalTaskConfigParams {
 }
 
 /**
+ * Seed the review step with a usable criterion even when the user started from
+ * a free-form description instead of an example with a dedicated requirement.
+ */
+export const deriveInitialGoalCriterionTitle = (
+  instruction: string,
+  requirement?: string,
+): string => requirement?.trim() || instruction.trim();
+
+/**
  * Build the `tasks.config` payload that marks a task as a goal root.
  *
  * The two `maxIterations` under this config look alike and mean different

@@ -123,10 +123,10 @@ const TerminalSettings = memo(() => {
   );
 });
 
-const Terminal = memo(() => {
+const Terminal = () => {
   if (!isDesktop) return null;
 
   return <TerminalSettings />;
-});
+};
 
 export default Terminal;

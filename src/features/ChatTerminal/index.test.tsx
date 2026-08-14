@@ -20,6 +20,10 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
+vi.mock('@/hooks/useHotkeys', () => ({
+  useToggleTerminalPanelHotkey: vi.fn(),
+}));
+
 vi.mock('./Content', () => ({
   default: () => <div data-testid="terminal-content" />,
 }));

@@ -1,4 +1,5 @@
 import type { DeviceExecutionTarget, HeterogeneousProviderConfig } from '@lobechat/types';
+import { getHeteroSelectorCapability } from '@lobechat/types';
 
 interface ShouldShowHeteroModelSelectorParams {
   boundDeviceId?: string;
@@ -13,10 +14,10 @@ export const shouldShowHeteroModelSelector = ({
   isDesktopClient,
   providerType,
 }: ShouldShowHeteroModelSelectorParams): boolean => {
-  // OpenCode, Pi, and Qoder have no cloud-side model list — their selectors need
-  // a concrete runtime to discover models from: the desktop itself, or an explicit
+  // Catalog providers have no cloud-side model list — their selectors need a
+  // concrete runtime to discover models from: the desktop itself, or an explicit
   // bound device that answers listHeterogeneousAgentModels.
-  if (providerType === 'opencode' || providerType === 'pi' || providerType === 'qoder') {
+  if (getHeteroSelectorCapability(providerType)?.model?.source === 'catalog') {
     if (executionTarget === 'local') return isDesktopClient;
     return executionTarget === 'device' && !!boundDeviceId;
   }

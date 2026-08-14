@@ -480,6 +480,8 @@
   "plansModal.default.title": "Zmień swój plan",
   "plansModal.fileStorageLimit.desc": "Twoje miejsce na pliki jest pełne. Zmień plan, aby nadal przesyłać i zarządzać plikami.",
   "plansModal.fileStorageLimit.title": "Osiągnięto limit miejsca",
+  "plansModal.messengerWechat.desc": "Systemowy bot WeChat jest dostępny w płatnych planach osobistych. Ulepsz plan, aby się połączyć i z niego korzystać.",
+  "plansModal.messengerWechat.title": "Połącz WeChat po ulepszeniu planu",
   "plansModal.modelAccess.desc": "Ten model jest dostępny w płatnych planach. Zmień plan, aby korzystać z pełnej gamy modeli.",
   "plansModal.modelAccess.title": "Odblokuj wszystkie modele",
   "qa.desc": "Jeśli nie znalazłeś odpowiedzi, sprawdź <1>Dokumentację Produktu</1> lub skontaktuj się z nami.",

@@ -1,8 +1,4 @@
-import {
-  CUSTOM_DOCUMENT_FILE_TYPE,
-  CUSTOM_FOLDER_FILE_TYPE,
-  DERIVED_DOCUMENT_SOURCE_TYPE,
-} from '@lobechat/const';
+import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -28,13 +24,18 @@ import { assertCanPerformResourceAction } from '@/server/services/resourcePermis
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
+import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertFileNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
+  getRestrictedKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
@@ -284,6 +285,11 @@ export const fileRouter = router({
             name: input.name,
             parentId: resolvedParentId,
             size: actualSize,
+            // Attribution the caller supplied (e.g. a page-editor paste). The
+            // wire type is a loose string for older clients, so unknown values
+            // are dropped rather than persisted — `source` drives the resource
+            // library's origin filter and its hidden-source exclusion.
+            source: toFileSource(input.source),
             url: input.url,
             ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
           },
@@ -304,6 +310,8 @@ export const fileRouter = router({
     .query(async ({ ctx, input }) => {
       const item = await ctx.fileModel.findById(input.id);
       if (!item) throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
+
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       return {
         chunkTaskId: item.chunkTaskId,
@@ -335,6 +343,8 @@ export const fileRouter = router({
 
       if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
 
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
       const statusMap = await getKnowledgeItemStatusMap(ctx, [item]);
       const status = statusMap.get(item.id)!;
 
@@ -360,7 +370,13 @@ export const fileRouter = router({
     }),
 
   getFiles: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
-    const fileList = await ctx.fileModel.query(input);
+    if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+    const excludeKnowledgeBaseIds =
+      !input.knowledgeBaseId && input.showFilesInKnowledgeBase
+        ? await getRestrictedKnowledgeBaseIds(ctx)
+        : undefined;
+
+    const fileList = await ctx.fileModel.query({ ...input, excludeKnowledgeBaseIds });
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileList);
 
     const resultFiles = [] as any[];
@@ -398,10 +414,16 @@ export const fileRouter = router({
     }),
 
   getKnowledgeItems: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
+    if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+    const excludeKnowledgeBaseIds = input.knowledgeBaseId
+      ? undefined
+      : await getRestrictedKnowledgeBaseIds(ctx);
+
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
+      excludeKnowledgeBaseIds,
       limit: limit + 1,
     });
 
@@ -453,6 +475,11 @@ export const fileRouter = router({
   resolveKnowledgeItemIds: fileProcedure
     .input(QueryFileListSchema)
     .query(async ({ ctx, input }): Promise<{ ids: string[]; total: number }> => {
+      if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+      const excludeKnowledgeBaseIds = input.knowledgeBaseId
+        ? undefined
+        : await getRestrictedKnowledgeBaseIds(ctx);
+
       const ids: string[] = [];
       const batchSize = 500;
       let offset = 0;
@@ -462,6 +489,7 @@ export const fileRouter = router({
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
           creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
+          excludeKnowledgeBaseIds,
           limit: batchSize + 1,
           offset,
         });
@@ -566,11 +594,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for files only (exclude documents/pages)
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough files after filtering
-      const fileItems = allItems
-        .filter((item) => item.sourceType === 'file' && item.fileType !== CUSTOM_DOCUMENT_FILE_TYPE)
-        .slice(0, limit);
+      // Files only (pages are excluded in SQL, so `limit` can't be eaten by
+      // page rows that are then filtered out).
+      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file');
 
       if (fileItems.length === 0) return [];
 
@@ -626,15 +652,9 @@ export const fileRouter = router({
     .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
-      // Query recent items and filter for pages (documents) only, exclude folders
-      const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough pages after filtering
-      return allItems
-        .filter(
-          (item) =>
-            item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE &&
-            item.fileType !== CUSTOM_FOLDER_FILE_TYPE,
-        )
-        .slice(0, limit);
+      // Pages only (folders and files are excluded in SQL, so `limit` can't be
+      // eaten by rows that are then filtered out).
+      return ctx.knowledgeRepo.queryRecent(limit, 'page');
     }),
 
   removeFile: fileProcedure
@@ -650,6 +670,20 @@ export const fileRouter = router({
       if (!file) return;
 
       // delete the file from S3 if it is not used by other files
+      await ctx.fileService.deleteFile(file.url!);
+    }),
+
+  removeUnreferencedFile: fileProcedure
+    .use(withScopedPermission('file:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.fileModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      if (!file) return;
+
       await ctx.fileService.deleteFile(file.url!);
     }),
 

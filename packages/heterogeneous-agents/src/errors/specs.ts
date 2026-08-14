@@ -34,6 +34,7 @@ export type HeteroErrorKind =
   | 'resume_cwd_mismatch'
   // environment
   | 'cli_not_found'
+  | 'working_directory_not_found'
   // provider
   | 'model_unavailable'
   | 'agent_failed';
@@ -236,6 +237,18 @@ export const HETERO_ERROR_SPECS: Record<HeteroErrorKind, HeteroErrorSpec> = {
     guideCode: 'cli_not_found',
     kind: 'cli_not_found',
     numericId: 8001,
+    retryable: false,
+    severity: 'warning',
+  },
+  working_directory_not_found: {
+    attribution: 'user',
+    category: 'environment',
+    countAsFailure: false,
+    description:
+      'The configured working directory was removed or is otherwise no longer available before the CLI could start.',
+    guideCode: 'working_directory_not_found',
+    kind: 'working_directory_not_found',
+    numericId: 8002,
     retryable: false,
     severity: 'warning',
   },

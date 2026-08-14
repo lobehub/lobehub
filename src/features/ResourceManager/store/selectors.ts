@@ -1,5 +1,5 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem } from '@/types/files';
+import { type FileListItem, FilesTabs, ResourceSourceFilter } from '@/types/files';
 import { SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
@@ -16,6 +16,47 @@ export const getResourceQueryVisibility = (
   if (libraryId) return undefined;
 
   return listVisibility === 'private' ? 'private' : 'public';
+};
+
+/**
+ * Categories where "where did this come from" is a question worth asking: the
+ * media categories, and only those. Generation produces images, video and
+ * audio — so those are the lists where uploads and model output actually mix
+ * and need separating.
+ *
+ * Documents and raw files have no generated counterpart, and the All view is a
+ * cross-category overview rather than a place to narrow by origin; offering the
+ * filter there would be four controls that can only ever partition the list one
+ * way. Pages hold no files and Home is a dashboard.
+ */
+export const SOURCE_FILTER_CATEGORIES: FilesTabs[] = [
+  FilesTabs.Audios,
+  FilesTabs.Images,
+  FilesTabs.Videos,
+];
+
+/**
+ * The images category is dominated by generation output — a few uploaded
+ * screenshots against hundreds of generated images — so it opens on the
+ * generated set. Every other category opens on everything.
+ */
+const DEFAULT_SOURCE_FILTER_BY_CATEGORY: Partial<Record<FilesTabs, ResourceSourceFilter>> = {
+  [FilesTabs.Images]: ResourceSourceFilter.Generated,
+};
+
+export const canFilterResourceSource = ({ category, libraryId }: State): boolean =>
+  !libraryId && SOURCE_FILTER_CATEGORIES.includes(category);
+
+/**
+ * The origin narrowing actually in effect: the user's explicit pick, else the
+ * category default. A library defines its own pool and never narrows by origin.
+ */
+export const getResourceSourceFilter = (s: State): ResourceSourceFilter => {
+  if (!canFilterResourceSource(s)) return ResourceSourceFilter.All;
+
+  return (
+    s.sourceFilter ?? DEFAULT_SOURCE_FILTER_BY_CATEGORY[s.category] ?? ResourceSourceFilter.All
+  );
 };
 
 /**

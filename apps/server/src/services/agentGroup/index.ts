@@ -45,36 +45,24 @@ export class AgentGroupService {
   }
 
   /**
-   * Delete a group and its associated virtual agents.
+   * Delete a group and the agents that belonged to it.
    *
-   * This method:
-   * 1. Gets all agents in the group to identify virtual ones
-   * 2. Deletes the group (CASCADE will delete chatGroupsAgents entries)
-   * 3. Deletes all virtual agents that were members of this group
+   * The roster read + cleanup used to live here, which cost it two things the
+   * model-level version has: it ran OUTSIDE the delete's transaction (an error
+   * between the two steps stranded the agents permanently, invisible because
+   * they are `virtual`), and it classified members through a visibility-scoped
+   * read, so a member another workspace user had flipped back to `private` was
+   * never seen and never cleaned up.
    *
    * @param groupId - The group ID to delete
-   * @returns The deleted group and list of deleted virtual agent IDs
+   * @returns The deleted group and list of deleted group-owned agent IDs
    */
   async deleteGroup(groupId: string) {
-    // 1. Get all agents in the group to identify virtual ones
-    const groupAgents = await this.chatGroupModel.getGroupAgents(groupId);
-    const agentIds = groupAgents.map((ga) => ga.agentId);
-
-    // 2. Check which agents are virtual
-    const { virtualAgents } = await this.agentGroupRepo.checkAgentsBeforeRemoval(groupId, agentIds);
-    const virtualAgentIds = virtualAgents.map((a) => a.id);
-
-    // 3. Delete the group (CASCADE will delete chatGroupsAgents entries)
-    const deletedGroup = await this.chatGroupModel.delete(groupId);
-
-    // 4. Delete virtual agents
-    if (virtualAgentIds.length > 0) {
-      await this.agentModel.batchDelete(virtualAgentIds);
-    }
+    const { deletedOwnedAgentIds, group } = await this.chatGroupModel.delete(groupId);
 
     return {
-      deletedVirtualAgentIds: virtualAgentIds,
-      group: deletedGroup,
+      deletedVirtualAgentIds: deletedOwnedAgentIds,
+      group,
     };
   }
 

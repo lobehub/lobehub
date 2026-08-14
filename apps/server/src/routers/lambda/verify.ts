@@ -83,6 +83,7 @@ const evidenceTypeSchema = z.enum([
   'screenshot',
   'gif',
   'video',
+  'audio',
   'text',
   'markdown',
   'dom_snapshot',

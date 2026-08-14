@@ -506,6 +506,8 @@ export interface TaskDetailData {
     pattern?: string | null;
     timezone?: string | null;
   };
+  /** When the current task execution started; drives live elapsed-time displays. */
+  startedAt?: string;
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;

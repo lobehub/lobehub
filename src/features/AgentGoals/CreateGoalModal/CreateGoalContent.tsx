@@ -1,19 +1,21 @@
 'use client';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
+import { openCriterionEditModal } from '@lobechat/builtin-tool-task/client';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
-  CheckCircle2,
-  CircleDollarSign,
+  CircleDashed,
   Paperclip,
+  Pencil,
+  PencilLine,
   Plus,
-  RotateCcw,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
@@ -30,61 +32,63 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { buildGoalTaskConfig } from './goalConfig';
+import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
+import { deriveGoalTitle } from './goalTitle';
 
 const styles = createStaticStyles(({ css }) => ({
-  budgetCard: css`
-    min-width: 0;
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  budgetGrid: css`
+  budgetField: css`
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 96px 144px minmax(0, 1fr);
     gap: 12px;
+    align-items: center;
+
+    min-width: 0;
 
     @media (width <= 640px) {
       grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
     }
   `,
   body: css`
     overflow-y: auto;
+
     min-height: 0;
+    max-height: min(70vh, 680px);
     padding-block: 8px 24px;
-    padding-inline: 24px;
+    padding-inline: 16px;
+  `,
+  close: css`
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 14px;
   `,
   criteriaList: css`
+    overflow: hidden;
     overflow-y: auto;
-    max-height: 240px;
+    max-height: 320px;
+    padding: 0;
   `,
   criterion: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    cursor: pointer;
+    padding-block: 10px;
 
-    background: ${cssVar.colorBgElevated};
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
   `,
   criterionIndex: css`
-    display: flex;
     flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
+    color: ${cssVar.colorTextTertiary};
   `,
   footer: css`
     padding-block: 8px;
@@ -92,54 +96,100 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   head: css`
+    position: relative;
     padding-block: 16px 8px;
-    padding-inline: 24px;
+    padding-inline: 16px;
   `,
   inputShell: css`
-    padding: 1px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    position: relative;
+
+    overflow: hidden;
+
+    min-height: 208px;
+    border-block: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
+
     background: ${cssVar.colorBgElevated};
   `,
   inputShellLoading: css`
     border-color: transparent;
-    background: linear-gradient(
-      90deg,
-      ${cssVar.colorPrimary},
-      ${cssVar.colorInfo},
-      ${cssVar.colorSuccess},
-      ${cssVar.colorPrimary}
-    );
-    background-size: 300% 100%;
-    animation: goal-input-flow 1.4s linear infinite;
+    background: ${cssVar.colorBgElevated};
+
+    &::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+
+      padding: 2px;
+      border-radius: inherit;
+
+      background: conic-gradient(
+        from var(--goal-border-angle),
+        ${cssVar.colorBorderSecondary} 0deg 210deg,
+        #ff3d8d 238deg,
+        #8b5cf6 258deg,
+        #00c8ff 278deg,
+        #22e6a8 298deg,
+        #ffd43b 318deg,
+        #ff6b35 338deg,
+        ${cssVar.colorBorderSecondary} 360deg
+      );
+
+      mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+
+      animation: goal-input-flow 1.8s linear infinite;
+
+      mask-composite: exclude;
+    }
 
     @keyframes goal-input-flow {
       from {
-        background-position: 0% 50%;
+        --goal-border-angle: 0deg;
       }
 
       to {
-        background-position: 150% 50%;
+        --goal-border-angle: 360deg;
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      animation: none;
+      &::after {
+        animation: none;
+      }
     }
   `,
-  section: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
+  instructionEditor: css`
+    min-height: 36px;
+    padding-block: 0 4px;
+    padding-inline: 12px;
+
+    /* EditorCanvas reserves space for its document footer by default. The
+       compact review summary has no footer, so keeping that space turns a
+       one-line instruction into a conspicuous empty band. */
+    & > div > div > div {
+      padding-block-end: 0 !important;
+    }
   `,
-  sectionIcon: css`
-    flex: none;
+  reviewSection: css`
+    padding-block: 16px;
+
+    &:first-child {
+      padding-block: 0 4px;
+    }
+  `,
+  sectionHint: css`
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`
+    box-sizing: border-box;
     width: 100%;
-    padding-block: 4px;
+    padding-block: 4px 8px;
+    padding-inline-end: 40px;
     border: none;
 
     font-family: inherit;
@@ -151,13 +201,24 @@ const styles = createStaticStyles(({ css }) => ({
     background: transparent;
     outline: none;
   `,
-  titleDescribe: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgElevated};
+  titleStatic: css`
+    padding-block: 4px 8px;
+    padding-inline-end: 40px;
+
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${cssVar.colorText};
   `,
 }));
+
+const GoalBorderFlowStyle = createGlobalStyle`
+  @property --goal-border-angle {
+    inherits: false;
+    initial-value: 0deg;
+    syntax: '<angle>';
+  }
+`;
 
 const criterionRequirement = (drafts: GoalCriterionDraft[]) =>
   drafts
@@ -175,6 +236,7 @@ export interface CreateGoalContentProps {
   initialRoundBudget?: number;
   initialTitle?: string;
   onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  projectId?: string;
 }
 
 /**
@@ -186,7 +248,8 @@ export interface CreateGoalContentProps {
  * hardcoded), so this form asks for them outright.
  */
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
-  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated } = props;
+  const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
+    props;
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -194,6 +257,16 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const model = useAgentStore((s) =>
+    agentId
+      ? agentByIdSelectors.getAgentModelById(agentId)(s)
+      : agentSelectors.currentAgentModel(s),
+  );
+  const provider = useAgentStore((s) =>
+    agentId
+      ? agentByIdSelectors.getAgentModelProviderById(agentId)(s)
+      : agentSelectors.currentAgentModelProvider(s),
+  );
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -214,13 +287,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
-  const prepareTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
-  useEffect(
-    () => () => {
-      if (prepareTimerRef.current) clearTimeout(prepareTimerRef.current);
-    },
-    [],
-  );
   const instructionRef = useRef(plan.instruction);
   const assigneeMeta = useAgentDisplayMeta(agentId);
   const requirement = useMemo(() => criterionRequirement(plan.criteria), [plan.criteria]);
@@ -235,34 +301,62 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
-  const handleNext = useCallback(() => {
-    if (!canCreate || !plan.name.trim()) return;
-    const seededCriterion = initialRequirement?.trim();
+  const handleNext = useCallback(async () => {
+    const instruction = instructionRef.current.trim() || plan.instruction.trim();
+    if (!canCreate || !instruction || !model || !provider) return;
+    const name = plan.name.trim() || deriveGoalTitle(instruction);
+    setPlan((current) => ({
+      ...current,
+      instruction,
+      name,
+    }));
+    instructionRef.current = instruction;
+    setStep('preparing');
+    try {
+      const generated = await generateGoalCriteria({
+        context: name ? `Goal: ${name}` : undefined,
+        goal: initialRequirement?.trim() || instruction,
+        model,
+        provider,
+      });
+      setPlan((current) => ({
+        ...current,
+        criteria: generated,
+      }));
+      setStep('review');
+    } catch (error) {
+      console.error('[CreateGoalContent] generate failed:', error);
+      setPlan((current) => ({
+        ...current,
+        criteria: [createFallbackGoalCriterion(instruction)],
+        instruction,
+        name: instruction,
+      }));
+      setStep('review');
+      toast.warning(t('createGoal.generateFailed'));
+    }
+  }, [canCreate, initialRequirement, model, plan.instruction, plan.name, provider, t]);
+
+  const handleCreateBlank = useCallback(() => {
+    if (!canCreate) return;
+    const instruction = instructionRef.current.trim() || plan.instruction.trim();
     setPlan((current) => ({
       ...current,
       criteria:
         current.criteria.length > 0
           ? current.criteria
-          : [
-              {
-                onFail: 'auto_repair',
-                required: true,
-                title: seededCriterion ?? '',
-                verifierType: 'agent',
-              },
-            ],
-      instruction: current.instruction.trim() || current.name.trim(),
+          : [{ onFail: 'auto_repair', required: true, title: '', verifierType: 'agent' }],
+      instruction,
     }));
-    instructionRef.current = plan.instruction.trim() || plan.name.trim();
-    setStep('preparing');
-    prepareTimerRef.current = setTimeout(() => setStep('review'), 700);
-  }, [canCreate, initialRequirement, plan.instruction, plan.name]);
+    instructionRef.current = instruction;
+    setStep('review');
+  }, [canCreate, plan.instruction]);
 
-  const updateCriterion = useCallback((index: number, value: string) => {
+  const updateCriterion = useCallback((index: number, value: GoalCriterionDraft) => {
     setPlan((current) => ({
       ...current,
       criteria: current.criteria.map((criterion, criterionIndex) =>
-        criterionIndex === index ? { ...criterion, title: value } : criterion,
+        criterionIndex === index ? value : criterion,
       ),
     }));
   }, []);
@@ -275,14 +369,27 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, []);
 
   const addCriterion = useCallback(() => {
-    setPlan((current) => ({
-      ...current,
-      criteria: [
-        ...current.criteria,
-        { onFail: 'auto_repair', required: true, title: '', verifierType: 'agent' },
-      ],
-    }));
-  }, []);
+    openCriterionEditModal({
+      criterion: { onFail: 'auto_repair', required: true, title: '', verifierType: 'agent' },
+      isNew: true,
+      onSubmit: (criterion) =>
+        setPlan((current) => ({ ...current, criteria: [...current.criteria, criterion] })),
+      seq: plan.criteria.length + 1,
+    });
+  }, [plan.criteria.length]);
+
+  const editCriterion = useCallback(
+    (index: number) => {
+      const criterion = plan.criteria[index];
+      if (!criterion) return;
+      openCriterionEditModal({
+        criterion,
+        onSubmit: (next) => updateCriterion(index, next),
+        seq: index + 1,
+      });
+    },
+    [plan.criteria, updateCriterion],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (!canCreate) return;
@@ -309,6 +416,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         editorData,
         instruction,
         name: plan.name.trim() || undefined,
+        projectId,
         visibility: activeWorkspaceId ? visibility : undefined,
       });
 
@@ -333,6 +441,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     editor,
     onCreated,
     plan,
+    projectId,
     requirement,
     t,
     visibility,
@@ -354,7 +463,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, []);
 
   return (
-    <Flexbox height={step === 'review' ? 'min(86vh, 800px)' : undefined} onKeyDown={handleKeyDown}>
+    <Flexbox onKeyDown={handleKeyDown}>
+      <GoalBorderFlowStyle />
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
@@ -371,72 +481,72 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           )}
           {step === 'review' ? (
-            <Text fontSize={20} weight={600}>
-              {plan.name}
-            </Text>
+            <input
+              className={styles.title}
+              disabled={!canCreate}
+              placeholder={t('createGoal.titlePlaceholder')}
+              value={plan.name}
+              onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+            />
           ) : (
-            <div
-              className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-            >
-              <input
-                autoFocus={canCreate}
-                className={`${styles.title} ${styles.titleDescribe}`}
-                disabled={!canCreate || step === 'preparing'}
-                placeholder={t('createGoal.titlePlaceholder')}
-                value={plan.name}
-                onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-              />
-            </div>
+            <div className={styles.titleStatic}>{t('createGoal.describeTitle')}</div>
           )}
-          {step !== 'review' && <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>}
+          {step !== 'review' && (
+            <>
+              <div
+                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
+              >
+                <EditorCanvas
+                  disabled={!canCreate || step === 'preparing'}
+                  editor={editor}
+                  editorData={{ content: plan.instruction }}
+                  entityId={'create-goal-description'}
+                  floatingToolbar={false}
+                  placeholder={t('createGoal.instructionPlaceholder')}
+                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
+                  onContentChange={handleContentChange}
+                />
+              </div>
+              <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>
+            </>
+          )}
         </Flexbox>
-        <ActionIcon icon={X} style={{ flexShrink: 0 }} onClick={close} />
+        <ActionIcon className={styles.close} icon={X} onClick={close} />
       </Flexbox>
 
       {step === 'review' && (
-        <Flexbox className={styles.body} flex={1} gap={12}>
-          <Flexbox className={styles.section} gap={12}>
-            <Flexbox horizontal align={'flex-start'} gap={10}>
-              <Icon className={styles.sectionIcon} icon={Paperclip} size={18} />
-              <Flexbox gap={2}>
-                <Text fontSize={14} weight={600}>
-                  {t('createGoal.contextLabel')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('createGoal.contextHint')}
-                </Text>
-              </Flexbox>
+        <Flexbox className={styles.body}>
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Flexbox className={styles.instructionEditor}>
+              <EditorCanvas
+                disabled={!canCreate}
+                editor={editor}
+                editorData={{ content: plan.instruction }}
+                entityId={'create-goal-instruction'}
+                floatingToolbar={false}
+                placeholder={t('createGoal.instructionPlaceholder')}
+                style={{ fontSize: 13, minHeight: 32 }}
+                onContentChange={handleContentChange}
+              />
             </Flexbox>
-            <EditorCanvas
-              disabled={!canCreate}
-              editor={editor}
-              editorData={{ content: plan.instruction }}
-              entityId={'create-goal-instruction'}
-              floatingToolbar={false}
-              placeholder={t('createGoal.instructionPlaceholder')}
-              style={{ fontSize: 14, minHeight: 120 }}
-              onContentChange={handleContentChange}
-            />
           </Flexbox>
 
-          <Flexbox className={styles.section} gap={12}>
+          <Flexbox className={styles.reviewSection} gap={10}>
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <Flexbox horizontal align={'flex-start'} gap={10}>
-                <Icon className={styles.sectionIcon} icon={CheckCircle2} size={18} />
-                <Flexbox gap={2}>
-                  <Text fontSize={14} weight={600}>
-                    {t('createGoal.criteriaTitle')}
-                  </Text>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('createGoal.criteriaHint')}
-                  </Text>
-                </Flexbox>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
+                <Text fontSize={13} weight={600}>
+                  {t('createGoal.criteriaTitle')}
+                </Text>
+                <Text className={styles.sectionHint} fontSize={12}>
+                  {t('createGoal.criteriaHint')}
+                </Text>
               </Flexbox>
               <Button icon={Plus} size={'small'} type={'text'} onClick={addCriterion}>
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
-            <Flexbox className={styles.criteriaList} gap={8}>
+            <Flexbox className={styles.criteriaList}>
               {plan.criteria.map((criterion, index) => (
                 <Flexbox
                   horizontal
@@ -444,69 +554,105 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   className={styles.criterion}
                   gap={8}
                   key={index}
+                  onClick={() => editCriterion(index)}
                 >
+                  <Icon color={cssVar.colorTextQuaternary} icon={CircleDashed} size={16} />
                   <span className={styles.criterionIndex}>C{index + 1}</span>
-                  <Input
-                    disabled={!canCreate}
-                    placeholder={t('createGoal.criterionPlaceholder')}
-                    value={criterion.title}
-                    variant={'borderless'}
-                    onChange={(e) => updateCriterion(index, e.target.value)}
+                  <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                    {criterion.title || t('createGoal.criterionPlaceholder')}
+                  </Text>
+                  <Tag
+                    color={(criterion.required ?? true) ? 'info' : undefined}
+                    size={'small'}
+                    variant={'filled'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      updateCriterion(index, {
+                        ...criterion,
+                        required: !(criterion.required ?? true),
+                      });
+                    }}
+                  >
+                    {(criterion.required ?? true)
+                      ? t('verifyConfig.required')
+                      : t('verifyConfig.optional')}
+                  </Tag>
+                  <ActionIcon
+                    icon={Pencil}
+                    size={'small'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      editCriterion(index);
+                    }}
                   />
                   <ActionIcon
                     icon={Trash2}
                     size={'small'}
                     title={t('createGoal.removeCriterion')}
-                    onClick={() => removeCriterion(index)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeCriterion(index);
+                    }}
                   />
                 </Flexbox>
               ))}
             </Flexbox>
           </Flexbox>
 
-          <div className={styles.budgetGrid}>
-            <Flexbox className={styles.budgetCard} gap={12}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <Icon className={styles.sectionIcon} icon={RotateCcw} size={16} />
-                <Text fontSize={14} weight={600}>
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Text fontSize={13} weight={600}>
+              {t('createGoal.budgetTitle')}
+            </Text>
+            <Flexbox gap={12}>
+              <div className={styles.budgetField}>
+                <Text fontSize={12} type={'secondary'}>
                   {t('createGoal.roundBudgetLabel')}
                 </Text>
-              </Flexbox>
-              <InputNumber
-                disabled={!canCreate}
-                min={2}
-                suffix={t('createGoal.roundsUnit')}
-                value={plan.maxIterations ?? undefined}
-                variant={'filled'}
-                onChange={(value) => setPlan((current) => ({ ...current, maxIterations: value }))}
-              />
-              <Text fontSize={12} type={'secondary'}>
-                {t('createGoal.roundBudgetHint')}
-              </Text>
-            </Flexbox>
+                <InputNumber
+                  disabled={!canCreate}
+                  min={2}
+                  size={'small'}
+                  style={{ width: '100%' }}
+                  value={plan.maxIterations ?? undefined}
+                  variant={'filled'}
+                  suffix={
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('createGoal.roundsUnit')}
+                    </Text>
+                  }
+                  onChange={(value) => setPlan((current) => ({ ...current, maxIterations: value }))}
+                />
+                <Text className={styles.sectionHint} fontSize={12}>
+                  {t('createGoal.roundBudgetHint')}
+                </Text>
+              </div>
 
-            <Flexbox className={styles.budgetCard} gap={12}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <Icon className={styles.sectionIcon} icon={CircleDollarSign} size={16} />
-                <Text fontSize={14} weight={600}>
+              <div className={styles.budgetField}>
+                <Text fontSize={12} type={'secondary'}>
                   {t('createGoal.costBudgetLabel')}
                 </Text>
-              </Flexbox>
-              <InputNumber
-                controls={false}
-                disabled={!canCreate}
-                min={0}
-                placeholder={t('createGoal.costBudgetPlaceholder')}
-                prefix={'$'}
-                value={plan.maxTotalCost}
-                variant={'filled'}
-                onChange={(value) => setPlan((current) => ({ ...current, maxTotalCost: value }))}
-              />
-              <Text fontSize={12} type={'secondary'}>
-                {t('createGoal.costBudgetHint')}
-              </Text>
+                <InputNumber
+                  controls={false}
+                  disabled={!canCreate}
+                  min={0}
+                  placeholder={t('createGoal.costBudgetPlaceholder')}
+                  size={'small'}
+                  style={{ width: '100%' }}
+                  value={plan.maxTotalCost}
+                  variant={'filled'}
+                  prefix={
+                    <Text fontSize={12} type={'secondary'}>
+                      $
+                    </Text>
+                  }
+                  onChange={(value) => setPlan((current) => ({ ...current, maxTotalCost: value }))}
+                />
+                <Text className={styles.sectionHint} fontSize={12}>
+                  {t('createGoal.costBudgetHint')}
+                </Text>
+              </div>
             </Flexbox>
-          </div>
+          </Flexbox>
         </Flexbox>
       )}
 
@@ -536,27 +682,43 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           )}
         </Flexbox>
 
-        <Button
-          loading={isCreating || step === 'preparing'}
-          shape={'round'}
-          size={'small'}
-          title={canCreate ? undefined : reason}
-          type={'primary'}
-          disabled={
-            !canCreate ||
-            isCreating ||
-            step === 'preparing' ||
-            !plan.name.trim() ||
-            (step === 'review' && plan.criteria.every((criterion) => !criterion.title.trim()))
-          }
-          onClick={step === 'describe' ? handleNext : handleSubmit}
-        >
-          {step === 'preparing'
-            ? t('createGoal.preparing')
-            : step === 'describe'
-              ? t('createGoal.next')
-              : t('createGoal.submit')}
-        </Button>
+        <Flexbox horizontal align={'center'} gap={4}>
+          {step === 'describe' && (
+            <Button
+              disabled={!canCreate || isCreating}
+              icon={PencilLine}
+              size={'small'}
+              style={{ color: cssVar.colorTextTertiary }}
+              title={canCreate ? undefined : reason}
+              type={'text'}
+              onClick={handleCreateBlank}
+            >
+              {t('createModal.createBlank')}
+            </Button>
+          )}
+          <Button
+            loading={isCreating || step === 'preparing'}
+            shape={'round'}
+            size={'small'}
+            title={canCreate ? undefined : reason}
+            type={'primary'}
+            disabled={
+              !canCreate ||
+              isCreating ||
+              step === 'preparing' ||
+              (step === 'describe'
+                ? !plan.instruction.trim()
+                : !plan.name.trim() || plan.criteria.every((criterion) => !criterion.title.trim()))
+            }
+            onClick={step === 'describe' ? handleNext : handleSubmit}
+          >
+            {step === 'preparing'
+              ? t('createGoal.preparing')
+              : step === 'describe'
+                ? t('createGoal.next')
+                : t('createGoal.submit')}
+          </Button>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

@@ -1,2 +1,2 @@
 export * from './GeneralChatAgent';
-export * from './GraphAgent';
+export * from './graph';
