@@ -37,6 +37,8 @@ export interface SpawnAgentOptions {
    * connected client renders live token streaming.
    */
   includePartialMessages?: boolean;
+  /** Initial model selected through the agent protocol after session setup (TRAE ACP only). */
+  initialModel?: string;
   /**
    * Image normalization options (URL fetch + on-disk cache + path
    * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
@@ -762,6 +764,7 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
     commandPath: command,
     cwd,
     env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
     onEvents: (events) => {
       queue.push(...events);
       wake();

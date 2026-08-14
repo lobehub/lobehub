@@ -414,7 +414,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
-  it('dispatches TRAE to a bound device with only its native provider args', async () => {
+  it('dispatches TRAE to a bound device with encoded native args and its ACP model', async () => {
     heteroAgentConfig.model = 'trae';
     heteroAgentConfig.provider = 'trae';
     heteroAgentConfig.agencyConfig = {
@@ -423,7 +423,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       heterogeneousProvider: {
         args: ['--feature', 'test'],
         effort: 'high',
-        model: 'ignored-selector',
+        model: 'gpt-5.4',
         type: 'trae',
       },
     } as any;
@@ -436,7 +436,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
       expect.objectContaining({
         agentType: 'trae',
-        args: ['--agent-arg=--feature', '--agent-arg=test'],
+        args: ['--agent-arg=--feature', '--agent-arg=test', '--model', 'gpt-5.4'],
         deviceId: 'device-1',
       }),
     );

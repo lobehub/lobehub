@@ -141,7 +141,7 @@ describe('buildHeteroSpawnArgs', () => {
     ).toEqual(['--model', 'gpt-5']);
   });
 
-  it('passes TRAE Enterprise args through without inventing selector flags', () => {
+  it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--feature', 'test'],
       effort: 'high',
@@ -150,7 +150,12 @@ describe('buildHeteroSpawnArgs', () => {
     };
 
     expect(buildHeteroSpawnArgs(provider)).toEqual(['--feature', 'test']);
-    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--feature', '--agent-arg=test']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+      '--model',
+      'ignored-selector',
+    ]);
   });
 
   it('forwards Qoder native args, model, and reasoning effort', () => {

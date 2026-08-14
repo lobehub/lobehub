@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { HeterogeneousAgentModel } from '@lobechat/types';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
 import type { HeterogeneousAgentRuntimeStatus } from './claudeAgentSdkSession';
@@ -75,11 +76,13 @@ interface TraeAcpInitializeResult {
   agentCapabilities?: {
     loadSession?: boolean;
     promptCapabilities?: { image?: boolean };
+    sessionCapabilities?: { close?: unknown };
   };
   protocolVersion?: number;
 }
 
 interface TraeAcpSessionResult {
+  configOptions?: unknown;
   models?: {
     availableModels?: unknown;
     currentModelId?: unknown;
@@ -96,10 +99,111 @@ interface TraeAcpModelOption {
   name?: unknown;
 }
 
+interface TraeAcpConfigOption {
+  category?: unknown;
+  currentValue?: unknown;
+  id?: unknown;
+  name?: unknown;
+  options?: unknown;
+  type?: unknown;
+  value?: unknown;
+}
+
+interface TraeAcpSetConfigOptionResult {
+  configOptions?: unknown;
+}
+
 interface TraeAcpPermissionOption {
   kind?: unknown;
   optionId?: unknown;
 }
+
+export interface TraeAcpModelCatalog {
+  configId?: string;
+  currentModelId?: string;
+  models: HeterogeneousAgentModel[];
+  protocol: 'config-option' | 'legacy-model';
+}
+
+export interface ListTraeAcpModelsOptions {
+  args?: string[];
+  clientVersion?: string;
+  commandPath: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+
+const toTraeModel = (id: string, name: unknown): HeterogeneousAgentModel => ({
+  id,
+  ...(typeof name === 'string' && name && name !== id ? { label: name } : {}),
+  modelId: id,
+  providerId: 'trae',
+});
+
+const parseConfigOptionModels = (options: unknown): HeterogeneousAgentModel[] => {
+  if (!Array.isArray(options)) return [];
+
+  const values = options.flatMap((value) => {
+    const option = value as TraeAcpConfigOption | null;
+    return Array.isArray(option?.options) ? option.options : [value];
+  });
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+  for (const value of values) {
+    const option = value as TraeAcpConfigOption | null;
+    if (typeof option?.value !== 'string' || !option.value || seen.has(option.value)) continue;
+    seen.add(option.value);
+    models.push(toTraeModel(option.value, option.name));
+  }
+  return models;
+};
+
+/**
+ * Read model selection from the current stable ACP config-options API, with a
+ * compatibility fallback for the never-stabilized dedicated model API still
+ * exposed by older TRAE CLI builds.
+ */
+export const parseTraeAcpModelCatalog = (
+  result: Pick<TraeAcpSessionResult, 'configOptions' | 'models'> | null | undefined,
+): TraeAcpModelCatalog | undefined => {
+  const configOptions = Array.isArray(result?.configOptions)
+    ? result.configOptions.map((value) => value as TraeAcpConfigOption | null)
+    : [];
+  const selectableOptions = configOptions.filter((option) => option?.type === 'select');
+  const modelConfig =
+    selectableOptions.find((option) => option?.category === 'model') ??
+    selectableOptions.find((option) => option?.id === 'model') ??
+    selectableOptions.find(
+      (option) => typeof option?.name === 'string' && option.name.toLowerCase() === 'model',
+    );
+  if (modelConfig && typeof modelConfig.id === 'string' && modelConfig.id) {
+    return {
+      configId: modelConfig.id,
+      currentModelId:
+        typeof modelConfig.currentValue === 'string' ? modelConfig.currentValue : undefined,
+      models: parseConfigOptionModels(modelConfig.options),
+      protocol: 'config-option',
+    };
+  }
+
+  if (!Array.isArray(result?.models?.availableModels)) return;
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+  for (const value of result.models.availableModels) {
+    const option = value as TraeAcpModelOption | null;
+    if (typeof option?.modelId !== 'string' || !option.modelId || seen.has(option.modelId))
+      continue;
+    seen.add(option.modelId);
+    models.push(toTraeModel(option.modelId, option.name));
+  }
+  return {
+    currentModelId:
+      typeof result.models.currentModelId === 'string' ? result.models.currentModelId : undefined,
+    models,
+    protocol: 'legacy-model',
+  };
+};
 
 export interface TraeAcpSessionOptions {
   args: string[];
@@ -117,6 +221,7 @@ export interface TraeAcpSessionOptions {
   onStderr: (data: string) => Promise<void> | void;
   operationId: string;
   prompt: AgentPromptInput | TraeAcpPromptBlock[];
+  requestTimeoutMs?: number;
   resumeSessionId?: string;
   sessionId: string;
 }
@@ -155,21 +260,7 @@ export class TraeAcpSession {
     this.status('starting');
     try {
       const prompt = await this.resolvePrompt();
-      await this.startProcess();
-      const initialized = await this.request<TraeAcpInitializeResult>('initialize', {
-        clientCapabilities: {},
-        clientInfo: {
-          name: 'lobehub',
-          title: 'LobeHub',
-          version: this.options.clientVersion,
-        },
-        protocolVersion: 1,
-      });
-      if (typeof initialized?.protocolVersion === 'number' && initialized.protocolVersion !== 1) {
-        throw new Error(
-          `TRAE ACP returned unsupported protocol version: ${initialized.protocolVersion}`,
-        );
-      }
+      const initialized = await this.initialize();
       if (
         prompt.some((block) => block.type === 'image') &&
         initialized?.agentCapabilities?.promptCapabilities?.image !== true
@@ -193,13 +284,7 @@ export class TraeAcpSession {
       this.session = sessionId;
       this.options.onSessionId(sessionId);
 
-      const model = this.resolveModel(sessionResult?.models);
-      if (this.options.initialModel) {
-        await this.request('session/set_model', {
-          modelId: model,
-          sessionId,
-        });
-      }
+      const model = await this.applyInitialModel(sessionId, sessionResult);
       if (model) {
         this.pipeline.configureSession({ model });
         this.options.onModel?.(model);
@@ -236,6 +321,29 @@ export class TraeAcpSession {
     }
   }
 
+  /** Create a short-lived ACP session and read its agent-provided model selector. */
+  async discoverModels(): Promise<HeterogeneousAgentModel[]> {
+    try {
+      const initialized = await this.initialize();
+      const sessionResult = await this.request<TraeAcpSessionResult>('session/new', {
+        cwd: this.options.cwd,
+        mcpServers: [],
+      });
+      if (!sessionResult?.sessionId) throw new Error('TRAE ACP returned no session id');
+
+      const catalog = parseTraeAcpModelCatalog(sessionResult);
+      if (!catalog) throw new Error('TRAE ACP did not expose a model configuration option');
+
+      if (initialized?.agentCapabilities?.sessionCapabilities?.close) {
+        await this.request('session/close', { sessionId: sessionResult.sessionId });
+      }
+      this.completed = true;
+      return catalog.models;
+    } finally {
+      this.shutdown('SIGTERM');
+    }
+  }
+
   async interrupt(): Promise<void> {
     if (!this.session) {
       this.close();
@@ -264,6 +372,25 @@ export class TraeAcpSession {
       return prompt as TraeAcpPromptBlock[];
     }
     return buildTraeAcpPrompt(prompt as AgentPromptInput, this.options.inputOptions);
+  }
+
+  private async initialize(): Promise<TraeAcpInitializeResult> {
+    await this.startProcess();
+    const initialized = await this.request<TraeAcpInitializeResult>('initialize', {
+      clientCapabilities: {},
+      clientInfo: {
+        name: 'lobehub',
+        title: 'LobeHub',
+        version: this.options.clientVersion,
+      },
+      protocolVersion: 1,
+    });
+    if (typeof initialized?.protocolVersion === 'number' && initialized.protocolVersion !== 1) {
+      throw new Error(
+        `TRAE ACP returned unsupported protocol version: ${initialized.protocolVersion}`,
+      );
+    }
+    return initialized;
   }
 
   private async startProcess(): Promise<void> {
@@ -328,6 +455,15 @@ export class TraeAcpSession {
           update &&
           typeof update === 'object'
         ) {
+          if ((update as { sessionUpdate?: unknown }).sessionUpdate === 'config_option_update') {
+            const catalog = parseTraeAcpModelCatalog({
+              configOptions: (update as { configOptions?: unknown }).configOptions,
+            });
+            if (catalog?.currentModelId) {
+              this.pipeline.configureSession({ model: catalog.currentModelId });
+              this.options.onModel?.(catalog.currentModelId);
+            }
+          }
           await this.emit(update as Record<string, unknown>);
         }
       });
@@ -384,8 +520,12 @@ export class TraeAcpSession {
       const timeout = timed
         ? setTimeout(() => {
             this.pending.delete(String(id));
-            reject(new Error(`TRAE ACP request timed out: ${method}`));
-          }, RPC_TIMEOUT_MS)
+            reject(
+              Object.assign(new Error(`TRAE ACP request timed out: ${method}`), {
+                code: 'ETIMEDOUT',
+              }),
+            );
+          }, this.options.requestTimeoutMs ?? RPC_TIMEOUT_MS)
         : undefined;
       timeout?.unref?.();
       this.pending.set(String(id), {
@@ -413,19 +553,37 @@ export class TraeAcpSession {
     if (events.length) await this.options.onEvents(events);
   }
 
-  private resolveModel(models: TraeAcpSessionResult['models']): string | undefined {
-    if (!this.options.initialModel) {
-      return typeof models?.currentModelId === 'string' ? models.currentModelId : undefined;
-    }
-    if (!Array.isArray(models?.availableModels)) return this.options.initialModel;
+  private async applyInitialModel(
+    sessionId: string,
+    sessionResult: TraeAcpSessionResult,
+  ): Promise<string | undefined> {
+    const catalog = parseTraeAcpModelCatalog(sessionResult);
+    const requestedModel = this.options.initialModel?.trim();
+    if (!requestedModel || requestedModel === 'default') return catalog?.currentModelId;
+    if (!catalog) throw new Error('TRAE ACP did not expose a model configuration option');
 
-    const selected = models.availableModels
-      .map((value) => value as TraeAcpModelOption | null)
-      .find(
-        (value) =>
-          value?.modelId === this.options.initialModel || value?.name === this.options.initialModel,
+    const selected = catalog.models.find(
+      (model) => model.id === requestedModel || model.label === requestedModel,
+    );
+    if (!selected) throw new Error(`TRAE ACP model is unavailable: ${requestedModel}`);
+
+    if (catalog.protocol === 'config-option') {
+      const response = await this.request<TraeAcpSetConfigOptionResult>(
+        'session/set_config_option',
+        {
+          configId: catalog.configId,
+          sessionId,
+          value: selected.id,
+        },
       );
-    return typeof selected?.modelId === 'string' ? selected.modelId : this.options.initialModel;
+      return (
+        parseTraeAcpModelCatalog({ configOptions: response?.configOptions })?.currentModelId ??
+        selected.id
+      );
+    }
+
+    await this.request('session/set_model', { modelId: selected.id, sessionId });
+    return selected.id;
   }
 
   private async drainNotifications(): Promise<void> {
@@ -479,3 +637,23 @@ export class TraeAcpSession {
     }
   }
 }
+
+export const listTraeAcpModels = async (
+  options: ListTraeAcpModelsOptions,
+): Promise<HeterogeneousAgentModel[]> =>
+  new TraeAcpSession({
+    args: options.args ?? [],
+    clientVersion: options.clientVersion ?? '1.0.0',
+    commandPath: options.commandPath,
+    cwd: options.cwd,
+    env: options.env,
+    onEvents: () => {},
+    onRawMessage: () => {},
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: () => {},
+    operationId: 'trae-model-discovery',
+    prompt: '',
+    requestTimeoutMs: options.timeoutMs,
+    sessionId: 'trae-model-discovery',
+  }).discoverModels();

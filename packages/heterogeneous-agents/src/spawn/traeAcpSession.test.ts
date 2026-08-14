@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildTraeAcpArgs,
   buildTraeAcpPrompt,
+  listTraeAcpModels,
+  parseTraeAcpModelCatalog,
   type TraeAcpPromptBlock,
   TraeAcpSession,
   type TraeAcpSessionOptions,
@@ -78,6 +80,14 @@ const createAcpProcess = (options: FakeAcpProcessOptions = {}) => {
               send({ id: message.id, result: {} });
               return;
             }
+            case 'session/set_config_option': {
+              send({ id: message.id, result: { configOptions: [] } });
+              return;
+            }
+            case 'session/close': {
+              send({ id: message.id, result: {} });
+              return;
+            }
             case 'session/prompt': {
               send({ id: message.id, result: { stopReason: 'end_turn' } });
             }
@@ -136,6 +146,48 @@ describe('TRAE ACP helpers', () => {
 
   it('builds ACP text prompt blocks', async () => {
     await expect(buildTraeAcpPrompt('hello')).resolves.toEqual([{ text: 'hello', type: 'text' }]);
+  });
+
+  it('parses latest ACP model config options, including grouped values', () => {
+    expect(
+      parseTraeAcpModelCatalog({
+        configOptions: [
+          {
+            category: 'model',
+            currentValue: 'seed-2.0-code',
+            id: 'trae-model',
+            name: 'Model',
+            options: [
+              {
+                group: 'builtin',
+                name: 'Built in',
+                options: [
+                  { name: 'Seed 2.0 Code', value: 'seed-2.0-code' },
+                  { name: 'GPT 5.4', value: 'gpt-5.4' },
+                ],
+              },
+            ],
+            type: 'select',
+          },
+        ],
+        models: {
+          availableModels: [{ modelId: 'legacy-model', name: 'Legacy' }],
+        },
+      }),
+    ).toEqual({
+      configId: 'trae-model',
+      currentModelId: 'seed-2.0-code',
+      models: [
+        {
+          id: 'seed-2.0-code',
+          label: 'Seed 2.0 Code',
+          modelId: 'seed-2.0-code',
+          providerId: 'trae',
+        },
+        { id: 'gpt-5.4', label: 'GPT 5.4', modelId: 'gpt-5.4', providerId: 'trae' },
+      ],
+      protocol: 'config-option',
+    });
   });
 });
 
@@ -263,7 +315,62 @@ describe('TraeAcpSession', () => {
     ).toEqual(['live']);
   });
 
-  it('sets a model through the TRAE ACP model catalog', async () => {
+  it('sets a model through the latest ACP config-option API', async () => {
+    const configOptions = [
+      {
+        category: 'model',
+        currentValue: 'seed-2.0-code',
+        id: 'trae-model',
+        name: 'Model',
+        options: [
+          { name: 'Seed 2.0 Code', value: 'seed-2.0-code' },
+          { name: 'GPT 5.4', value: 'gpt-5.4' },
+        ],
+        type: 'select',
+      },
+    ];
+    const { child, requests } = createAcpProcess({
+      onMessage: (message, { send }) => {
+        if (message.method === 'session/new') {
+          send({ id: message.id, result: { configOptions, sessionId: 'trae-session-1' } });
+          return true;
+        }
+        if (message.method === 'session/set_config_option') {
+          send({
+            id: message.id,
+            result: {
+              configOptions: [
+                {
+                  ...configOptions[0],
+                  currentValue: 'gpt-5.4',
+                },
+              ],
+            },
+          });
+          return true;
+        }
+      },
+    });
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const options = createSessionOptions({ initialModel: 'gpt-5.4', onModel: vi.fn() });
+
+    await new TraeAcpSession(options).run();
+
+    expect(requests[2]).toEqual({
+      id: 3,
+      jsonrpc: '2.0',
+      method: 'session/set_config_option',
+      params: {
+        configId: 'trae-model',
+        sessionId: 'trae-session-1',
+        value: 'gpt-5.4',
+      },
+    });
+    expect(options.onModel).toHaveBeenCalledWith('gpt-5.4');
+  });
+
+  it('falls back to the older TRAE ACP model API', async () => {
     const { child, requests } = createAcpProcess({
       onMessage: (message, { send }) => {
         if (message.method === 'session/new') {
@@ -315,6 +422,90 @@ describe('TraeAcpSession', () => {
     expect(events.find((event) => event.type === 'stream_start')?.data).toEqual(
       expect.objectContaining({ model: 'doubao-seed-code' }),
     );
+  });
+
+  it('rejects a selected model that the session catalog does not expose', async () => {
+    const { child, requests } = createAcpProcess({
+      onMessage: (message, { send }) => {
+        if (message.method !== 'session/new') return;
+        send({
+          id: message.id,
+          result: {
+            configOptions: [
+              {
+                category: 'model',
+                currentValue: 'seed-2.0-code',
+                id: 'model',
+                name: 'Model',
+                options: [{ name: 'Seed 2.0 Code', value: 'seed-2.0-code' }],
+                type: 'select',
+              },
+            ],
+            sessionId: 'trae-session-1',
+          },
+        });
+        return true;
+      },
+    });
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await expect(
+      new TraeAcpSession(createSessionOptions({ initialModel: 'removed-model' })).run(),
+    ).rejects.toThrow('TRAE ACP model is unavailable: removed-model');
+    expect(requests.some((request) => request.method === 'session/prompt')).toBe(false);
+  });
+
+  it('discovers models from a short-lived latest ACP session and closes it when supported', async () => {
+    const { child, requests } = createAcpProcess({
+      initializeResult: {
+        agentCapabilities: { sessionCapabilities: { close: {} } },
+        protocolVersion: 1,
+      },
+      onMessage: (message, { send }) => {
+        if (message.method !== 'session/new') return;
+        send({
+          id: message.id,
+          result: {
+            configOptions: [
+              {
+                category: 'model',
+                currentValue: 'seed-2.0-code',
+                id: 'model',
+                name: 'Model',
+                options: [{ name: 'Seed 2.0 Code', value: 'seed-2.0-code' }],
+                type: 'select',
+              },
+            ],
+            sessionId: 'catalog-session',
+          },
+        });
+        return true;
+      },
+    });
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await expect(
+      listTraeAcpModels({
+        args: ['--feature=test'],
+        commandPath: 'traecli',
+        cwd: '/workspace',
+        env: process.env,
+      }),
+    ).resolves.toEqual([
+      {
+        id: 'seed-2.0-code',
+        label: 'Seed 2.0 Code',
+        modelId: 'seed-2.0-code',
+        providerId: 'trae',
+      },
+    ]);
+    expect(requests.map((request) => request.method)).toEqual([
+      'initialize',
+      'session/new',
+      'session/close',
+    ]);
   });
 
   it('rejects resume and image prompts when capabilities are absent', async () => {

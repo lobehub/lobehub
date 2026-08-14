@@ -186,6 +186,8 @@ interface StartSessionParams {
   cwd?: string;
   /** Environment variables */
   env?: Record<string, string>;
+  /** Protocol-native model selected after session setup (TRAE ACP only). */
+  initialModel?: string;
   /** Session ID to resume (for multi-turn) */
   resumeSessionId?: string;
   /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
@@ -1082,6 +1084,7 @@ export default class HeterogeneousAgentCtr {
       command: params.command,
       cwd: params.cwd,
       env: params.env,
+      model: params.initialModel,
       sessionId,
       resumeSessionId: params.resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,

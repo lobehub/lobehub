@@ -258,7 +258,7 @@ describe('hetero exec command', () => {
     );
   });
 
-  it('runs TRAE Enterprise with traecli and only forwards provider arguments', async () => {
+  it('runs TRAE Enterprise with ACP model selection and only native provider arguments', async () => {
     mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'traecli' });
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -269,6 +269,8 @@ describe('hetero exec command', () => {
       'trae',
       '--prompt',
       'do thing',
+      '--model',
+      'gpt-5.4',
       '--agent-arg=--feature',
       '--agent-arg=test',
     ]);
@@ -279,6 +281,7 @@ describe('hetero exec command', () => {
         agentType: 'trae',
         command: 'traecli',
         extraArgs: ['--feature', 'test'],
+        initialModel: 'gpt-5.4',
         prompt: 'do thing',
       }),
     );

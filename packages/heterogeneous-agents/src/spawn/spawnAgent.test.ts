@@ -196,7 +196,26 @@ const createFakeAcpProc = () => {
             return;
           }
           case 'session/new': {
-            send({ id: message.id, result: { sessionId: 'trae-session-1' } });
+            send({
+              id: message.id,
+              result: {
+                configOptions: [
+                  {
+                    category: 'model',
+                    currentValue: 'seed-2.0-code',
+                    id: 'model',
+                    name: 'Model',
+                    options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+                    type: 'select',
+                  },
+                ],
+                sessionId: 'trae-session-1',
+              },
+            });
+            return;
+          }
+          case 'session/set_config_option': {
+            send({ id: message.id, result: {} });
             return;
           }
           case 'session/prompt': {
@@ -485,6 +504,7 @@ describe('spawnAgent', () => {
       const handle = await spawnAgent({
         agentType: 'trae',
         extraArgs: ['--feature=test'],
+        initialModel: 'gpt-5.4',
         operationId: 'op-trae',
         prompt: 'do a thing',
       });
@@ -500,6 +520,7 @@ describe('spawnAgent', () => {
       expect(fake.requests.map((request) => request.method)).toEqual([
         'initialize',
         'session/new',
+        'session/set_config_option',
         'session/prompt',
       ]);
       expect(handle.sessionId).toBe('trae-session-1');

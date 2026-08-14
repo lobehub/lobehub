@@ -2080,6 +2080,7 @@ describe('HeterogeneousAgentCtr', () => {
         agentType: 'trae',
         args: ['--feature=test'],
         command: 'traecli',
+        initialModel: 'gpt-5.4',
         resumeSessionId: 'trae_session_old',
       });
 
@@ -2092,6 +2093,7 @@ describe('HeterogeneousAgentCtr', () => {
           clientVersion: '1.0.0-test',
           commandPath: 'traecli',
           cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'gpt-5.4',
           operationId: 'op-trae',
           prompt: [{ text: 'inspect this repo', type: 'text' }],
           resumeSessionId: 'trae_session_old',
