@@ -152,7 +152,10 @@ export class GrokBuildAdapter implements AgentEventAdapter {
       this.sessionId = raw.result.sessionId;
     }
 
-    if (isRecord(raw.error)) return this.handleRpcError(raw.error);
+    if (isRecord(raw.error)) {
+      const requestMethod = typeof raw.requestMethod === 'string' ? raw.requestMethod : undefined;
+      return this.handleRpcError(raw.error, requestMethod);
+    }
     if (raw.method === 'x.ai/session/prompt_complete') {
       return this.handlePromptComplete(raw.params);
     }
@@ -357,7 +360,10 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     ];
   }
 
-  private handleRpcError(error: Record<string, unknown>): HeterogeneousAgentEvent[] {
+  private handleRpcError(
+    error: Record<string, unknown>,
+    requestMethod?: string,
+  ): HeterogeneousAgentEvent[] {
     if (this.settled) return [];
     this.settled = true;
 
@@ -372,7 +378,11 @@ export class GrokBuildAdapter implements AgentEventAdapter {
         })
       : {
           agentType: GROK_BUILD_IDENTIFIER,
-          details: { code: error.code, data: error.data },
+          details: {
+            code: error.code,
+            data: error.data,
+            ...(requestMethod ? { method: requestMethod } : {}),
+          },
           docsUrl: GROK_BUILD_AUTH_DOCS_URL,
           message: detail,
           stderr: detail,

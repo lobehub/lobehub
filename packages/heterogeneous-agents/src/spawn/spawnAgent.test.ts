@@ -81,7 +81,10 @@ const createFakeProc = ({
   return { proc, start, stdinWrites };
 };
 
-const createGrokAcpProc = ({ loadError = false }: { loadError?: boolean } = {}) => {
+const createGrokAcpProc = ({
+  loadError = false,
+  promptAutoComplete = true,
+}: { loadError?: boolean; promptAutoComplete?: boolean } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -141,6 +144,7 @@ const createGrokAcpProc = ({ loadError = false }: { loadError?: boolean } = {}) 
             return;
           }
           case 'session/prompt': {
+            if (!promptAutoComplete) return;
             send({
               method: 'session/update',
               params: {
@@ -284,6 +288,28 @@ describe('spawnAgent', () => {
     processKill.mockRestore();
   });
 
+  it('preserves SIGKILL when force-stopping a Grok ACP run', async () => {
+    const fake = createGrokAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'grok-build',
+      operationId: 'op-grok-force-stop',
+      prompt: 'keep running',
+    });
+    await vi.waitFor(() => {
+      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    handle.kill('SIGKILL');
+
+    expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
+    await handle.exit;
+    processKill.mockRestore();
+  });
+
   it('ends the Grok event iterable normally after emitting a structured ACP request error', async () => {
     const fake = createGrokAcpProc({ loadError: true });
     nextFakeProc = fake.proc;
@@ -304,7 +330,7 @@ describe('spawnAgent', () => {
     expect(events[0]).toMatchObject({
       data: {
         agentType: 'grok-build',
-        details: { data: { code: 'FS_NOT_FOUND' } },
+        details: { data: { code: 'FS_NOT_FOUND' }, method: 'session/load' },
       },
       type: 'error',
     });

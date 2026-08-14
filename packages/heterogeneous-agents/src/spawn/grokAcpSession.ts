@@ -233,10 +233,10 @@ export class GrokAcpSession {
     this.cancelTimer.unref?.();
   }
 
-  close(): void {
+  close(signal: NodeJS.Signals = 'SIGTERM'): void {
     if (this.closedByHost) return;
     this.closedByHost = true;
-    this.client.close();
+    this.client.close(signal);
     this.emitStatus('closed');
   }
 

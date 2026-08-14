@@ -78,8 +78,9 @@ const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
 
 const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): boolean => {
   if (data?.agentType !== 'grok-build' || !isRecord(data.details)) return false;
-  const rpcData = data.details.data;
-  return isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
+  const { details } = data;
+  const rpcData = details.data;
+  return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
 };
 
 interface ExecOptions {

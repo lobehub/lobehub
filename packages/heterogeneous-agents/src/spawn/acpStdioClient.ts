@@ -17,6 +17,7 @@ export interface AcpRpcMessage {
   jsonrpc?: string;
   method?: string;
   params?: unknown;
+  requestMethod?: string;
   result?: unknown;
 }
 
@@ -216,15 +217,19 @@ export class AcpStdioClient {
   }
 
   private async handleMessage(message: AcpRpcMessage): Promise<void> {
-    await this.options.onMessage(message);
+    const pending =
+      message.method === undefined && message.id !== undefined
+        ? this.pendingRequests.get(String(message.id))
+        : undefined;
+    await this.options.onMessage(
+      message.error && pending ? { ...message, requestMethod: pending.method } : message,
+    );
 
     if (message.method) {
       if (message.id !== undefined) await this.handleServerRequest(message);
       return;
     }
 
-    if (message.id === undefined) return;
-    const pending = this.pendingRequests.get(String(message.id));
     if (!pending) return;
 
     this.pendingRequests.delete(String(message.id));
@@ -278,9 +283,13 @@ export class AcpStdioClient {
 
     if (process.platform === 'win32') {
       try {
-        child.kill(signal);
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
       } catch {
-        // already gone
+        try {
+          child.kill(signal);
+        } catch {
+          // already gone
+        }
       }
       return;
     }

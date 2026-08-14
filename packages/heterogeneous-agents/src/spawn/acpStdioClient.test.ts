@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AcpStdioClient } from './acpStdioClient';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const originalPlatform = process.platform;
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -32,6 +33,7 @@ const createProcess = () => {
 };
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
   vi.restoreAllMocks();
   spawnMock.mockReset();
 });
@@ -80,12 +82,13 @@ describe('AcpStdioClient', () => {
     const { child, stdout, writes } = createProcess();
     spawnMock.mockReturnValue(child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const onMessage = vi.fn();
     const client = new AcpStdioClient({
       args: ['agent', 'stdio'],
       commandPath: 'agent',
       cwd: '/workspace',
       env: { ...process.env },
-      onMessage: vi.fn(),
+      onMessage,
       onRawMessage: vi.fn(),
       onStderr: vi.fn(),
     });
@@ -105,6 +108,32 @@ describe('AcpStdioClient', () => {
     await expect(request).rejects.toThrow(
       'ACP request failed (authenticate): Authentication required',
     );
+    expect(onMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ requestMethod: 'authenticate' }),
+    );
     client.close();
+  });
+
+  it('terminates the child process tree with taskkill on Windows', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: 'C:\\workspace',
+      env: { ...process.env },
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    client.close('SIGKILL');
+
+    expect(spawnMock).toHaveBeenNthCalledWith(2, 'taskkill', ['/pid', '123456', '/T', '/F'], {
+      stdio: 'ignore',
+    });
+    expect(child.kill).not.toHaveBeenCalled();
   });
 });

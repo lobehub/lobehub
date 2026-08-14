@@ -322,4 +322,28 @@ describe('GrokBuildAdapter', () => {
       type: 'error',
     });
   });
+
+  it('preserves the failed ACP request method in structured error details', () => {
+    const adapter = new GrokBuildAdapter();
+    const events = adapter.adapt({
+      error: {
+        code: -32_603,
+        data: { code: 'FS_NOT_FOUND' },
+        message: 'Path not found.',
+      },
+      id: 4,
+      jsonrpc: '2.0',
+      requestMethod: 'session/load',
+    });
+
+    expect(events[0]).toMatchObject({
+      data: {
+        details: {
+          data: { code: 'FS_NOT_FOUND' },
+          method: 'session/load',
+        },
+      },
+      type: 'error',
+    });
+  });
 });

@@ -485,7 +485,7 @@ const spawnGrokAcpAgent = async (
     exit,
     kill: (signal = 'SIGINT') => {
       if (signal === 'SIGINT') session.interrupt();
-      else session.close();
+      else session.close(signal);
     },
     get pid() {
       return session.pid;
