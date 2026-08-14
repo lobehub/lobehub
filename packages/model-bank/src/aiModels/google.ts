@@ -170,16 +170,19 @@ const googleChatModels: AIChatModelCard[] = [
     id: 'gemini-3.7-flash',
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://ai.google.dev/gemini-api/docs/pricing
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
         {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
           name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',
@@ -214,16 +217,19 @@ const googleChatModels: AIChatModelCard[] = [
     id: 'gemini-3.6-flash',
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://ai.google.dev/gemini-api/docs/pricing
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
         {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
           name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',

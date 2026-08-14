@@ -85,7 +85,6 @@ type ThinkingLevelExtendParam =
   'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
-type ThinkingLevel3Value = Extract<ThinkingLevelValue, 'high' | 'low' | 'medium'>;
 
 const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
   thinkingLevel: 'high',
@@ -108,6 +107,7 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
     thinkingLevel: 'medium',
   },
   'gemini-3.7-flash': {
+    thinkingLevel: 'medium',
     thinkingLevel3: 'medium',
   },
   'gemini-3.5-flash': {
@@ -152,21 +152,16 @@ const isThinkingLevelExtendParam = (
   extendParam: ExtendParamsType,
 ): extendParam is ThinkingLevelExtendParam => extendParam in DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM;
 
-export function resolveDefaultThinkingLevelForModel(
-  model: string | undefined,
-  extendParam: 'thinkingLevel3',
-): ThinkingLevel3Value;
-export function resolveDefaultThinkingLevelForModel(
-  model?: string,
-  extendParam?: Exclude<ThinkingLevelExtendParam, 'thinkingLevel3'>,
-): ThinkingLevelValue;
-export function resolveDefaultThinkingLevelForModel(
-  model?: string,
-  extendParam: ThinkingLevelExtendParam = 'thinkingLevel',
-): ThinkingLevelValue {
-  if (!model) return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[extendParam];
+export function resolveDefaultThinkingLevelForModel<
+  T extends ThinkingLevelExtendParam = 'thinkingLevel',
+>(model?: string, extendParam?: T): NonNullable<LobeAgentChatConfig[T]> {
+  const param = (extendParam ?? 'thinkingLevel') as T;
 
-  return resolveThinkingLevelDefault(model, extendParam);
+  if (!model) {
+    return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[param] as NonNullable<LobeAgentChatConfig[T]>;
+  }
+
+  return resolveThinkingLevelDefault(model, param) as NonNullable<LobeAgentChatConfig[T]>;
 }
 
 /**
