@@ -13,9 +13,10 @@ import { TaskAgentProvider } from './TaskAgentProvider';
 
 interface AgentTaskManagerProps {
   preferredAgentId?: string;
+  viewedTaskId?: string;
 }
 
-const AgentTaskManager = memo<AgentTaskManagerProps>(({ preferredAgentId }) => {
+const AgentTaskManager = memo<AgentTaskManagerProps>(({ preferredAgentId, viewedTaskId }) => {
   const [expand, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
     s.toggleTaskAgentPanel,
@@ -36,7 +37,7 @@ const AgentTaskManager = memo<AgentTaskManagerProps>(({ preferredAgentId }) => {
       {showAcceptance ? (
         <PortalContent />
       ) : (
-        <TaskAgentProvider preferredAgentId={preferredAgentId}>
+        <TaskAgentProvider preferredAgentId={preferredAgentId} viewedTaskId={viewedTaskId}>
           <Conversation />
         </TaskAgentProvider>
       )}
