@@ -79,6 +79,8 @@ export interface FloatingChatPanelProps {
   agentDocumentId?: string;
   agentId: string;
   className?: string;
+  /** Whether the panel starts expanded. Defaults to collapsed for floating usages. */
+  defaultOpen?: boolean;
   dismissible?: boolean;
   /**
    * Active document id for the conversation context. Passed through so the
@@ -130,6 +132,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     agentDocumentId,
     actionsBar,
     hooks,
+    defaultOpen = false,
 
     width = '100%',
 
@@ -172,7 +175,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const defaultActionsBar = useActionsBarConfig();
     const resolvedActionsBar = actionsBar ?? defaultActionsBar;
 
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
     const [activeSnapPoint, setActiveSnapPoint] = useState<number>(MID_SNAP_POINT);
 
     const expand = useCallback(() => {

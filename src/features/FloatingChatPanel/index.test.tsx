@@ -264,6 +264,15 @@ describe('FloatingChatPanel', () => {
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('true');
   });
 
+  it('starts expanded when defaultOpen is enabled', () => {
+    const { getByTestId } = render(
+      <FloatingChatPanel defaultOpen agentId="agent-1" topicId="topic-1" />,
+    );
+
+    expect(getByTestId('floating-panel-shell').dataset.open).toBe('true');
+    expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('false');
+  });
+
   it('renders a minimal ChatInput while collapsed (no left/right actions)', () => {
     const { getByTestId } = render(<FloatingChatPanel agentId="a" topicId="t" />);
     const input = getByTestId('chat-input');
