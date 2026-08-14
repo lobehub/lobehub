@@ -145,6 +145,20 @@ describe('TaskAgentProvider', () => {
     expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
   });
 
+  it('uses the route agent as the default in an agent-scoped task detail', async () => {
+    render(
+      <TaskAgentProvider preferredAgentId="agt_current">
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_current');
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenCalledWith('agt_current');
+    expect(mocks.chatState.activeAgentId).toBe('agt_current');
+  });
+
   it('restores and refreshes the Inbox task topic handed off by the home composer', async () => {
     mocks.search = 'agentId=agt_inbox&topicId=tpc_home_task';
     mocks.agentState.activeAgentId = 'agt_inbox';

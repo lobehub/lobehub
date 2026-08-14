@@ -18,13 +18,14 @@ import { resolveTaskHandoffTopic } from './taskHandoff';
 
 interface TaskAgentProviderProps {
   children: ReactNode;
+  preferredAgentId?: string;
 }
 
 const TaskAgentSelectionContext = createContext<(agentId: string) => void>(() => {});
 
 export const useTaskAgentSelection = () => use(TaskAgentSelectionContext);
 
-export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => {
+export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children, preferredAgentId }) => {
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.taskAgent);
 
@@ -37,13 +38,13 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const routedTopicId = searchParams.get('topicId') || undefined;
   const syncedContextRef = useRef<string | undefined>(undefined);
   const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>(
-    routedAgentId,
+    routedAgentId || preferredAgentId,
   );
 
   const detailMatch = useMatch('/task/:taskId');
   const viewedTaskId = detailMatch?.params.taskId;
 
-  const selectedAgentId = scopedSelectedAgentId || taskAgentId;
+  const selectedAgentId = scopedSelectedAgentId || preferredAgentId || taskAgentId;
 
   const selectTaskAgent = useCallback((agentId: string) => {
     if (!agentId || isChatGroupSessionId(agentId)) return;

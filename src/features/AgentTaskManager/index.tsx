@@ -11,7 +11,11 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import Conversation from './Conversation';
 import { TaskAgentProvider } from './TaskAgentProvider';
 
-const AgentTaskManager = memo(() => {
+interface AgentTaskManagerProps {
+  preferredAgentId?: string;
+}
+
+const AgentTaskManager = memo<AgentTaskManagerProps>(({ preferredAgentId }) => {
   const [expand, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
     s.toggleTaskAgentPanel,
@@ -32,7 +36,7 @@ const AgentTaskManager = memo(() => {
       {showAcceptance ? (
         <PortalContent />
       ) : (
-        <TaskAgentProvider>
+        <TaskAgentProvider preferredAgentId={preferredAgentId}>
           <Conversation />
         </TaskAgentProvider>
       )}
