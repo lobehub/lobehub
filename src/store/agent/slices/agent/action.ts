@@ -552,6 +552,22 @@ export class AgentSliceActionImpl {
     );
   };
 
+  /**
+   * Temporary downstream compatibility alias. All writes still enter Projection;
+   * the one-way bridge materializes `agentMap` for legacy business selectors.
+   */
+  internal_dispatchAgentMap = (
+    id: string,
+    config: PartialDeep<LobeAgentConfig>,
+    options?: {
+      commitProjection?: boolean;
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
+    this.internal_dispatchAgentProjection(id, config, options);
+  };
+
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,

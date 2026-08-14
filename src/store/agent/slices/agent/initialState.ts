@@ -1,6 +1,9 @@
 import type { AgentContextDocument } from '@lobechat/context-engine';
+import type { PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { type AvailableAgentItem } from '@/services/agent';
+import { type AgentItem } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 
 import { readAllLocalAgentWorkingDirectories } from '../../utils/localAgentWorkingDirectoryStorage';
@@ -17,7 +20,13 @@ export interface AgentSliceState {
    */
   agentConfigErrorMap: Record<string, string>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
+  /** Temporary downstream compatibility projection. Projection remains canonical. */
+  agentMap: Record<string, PartialDeep<AgentItem>>;
+  /** Settled inaccessible agents materialized for downstream compatibility selectors. */
+  agentNotFoundMap: Record<string, boolean>;
   agentSettingInstance?: AgentSettingsInstance | null;
+  /** Temporary downstream compatibility projection of the available-agent index. */
+  availableAgents?: AvailableAgentItem[];
   /**
    * Whether the agent panel is pinned (UI state)
    */
@@ -63,6 +72,9 @@ export interface AgentSliceState {
 export const initialAgentSliceState: AgentSliceState = {
   agentConfigErrorMap: {},
   agentDocumentsMap: {},
+  agentMap: {},
+  agentNotFoundMap: {},
+  availableAgents: undefined,
   isAgentPinned: false,
   lastUpdatedTime: null,
   localAgentWorkingDirectoryMap: readAllLocalAgentWorkingDirectories(),

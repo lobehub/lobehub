@@ -1,3 +1,22 @@
+import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
+
+/** Temporary downstream compatibility materialization of a Projection topic index. */
+export interface TopicData {
+  currentPage: number;
+  excludeStatuses?: string[];
+  excludeTriggers?: string[];
+  hasMore: boolean;
+  isExpandingPageSize?: boolean;
+  isInbox?: boolean;
+  isLoadingMore?: boolean;
+  items: ChatTopic[];
+  loadMoreError?: unknown;
+  pageSize: number;
+  sortBy?: TopicQuerySortBy;
+  total: number;
+  withDetails?: boolean;
+}
+
 export interface TopicLoadMoreState {
   isLoadingMore?: boolean;
   loadMoreError?: unknown;
@@ -7,6 +26,7 @@ export interface ChatTopicState {
   // TODO: need to add the null to the type
   activeTopicId?: string;
   agentTopicsLoadMoreStateMap: Record<string, TopicLoadMoreState>;
+  agentTopicsViewMap: Record<string, TopicData>;
   /**
    * whether all topics drawer is open
    */
@@ -25,6 +45,9 @@ export interface ChatTopicState {
    */
   creatingTopicIds: string[];
   inSearchingMode?: boolean;
+  isSearchingTopic: boolean;
+  searchTopics: ChatTopic[];
+  topicDataMap: Record<string, TopicData>;
   topicLoadMoreStateMap: Record<string, TopicLoadMoreState>;
   topicRenamingId?: string;
   topicSearchKeywords: string;
@@ -32,10 +55,14 @@ export interface ChatTopicState {
 
 export const initialTopicState: ChatTopicState = {
   activeTopicId: null as any,
+  agentTopicsViewMap: {},
   agentTopicsLoadMoreStateMap: {},
   creatingTopicIds: [],
   allTopicsDrawerOpen: false,
   creatingTopic: false,
+  isSearchingTopic: false,
+  searchTopics: [],
+  topicDataMap: {},
   topicLoadMoreStateMap: {},
   topicSearchKeywords: '',
 };

@@ -17,17 +17,28 @@ export type TaskViewMode = 'kanban' | 'list';
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
 
 export interface TaskListSliceState {
+  /** Temporary downstream compatibility projections. Projection remains canonical. */
+  isTaskGroupListInit: boolean;
+  isTaskListInit: boolean;
   listAgentId?: string;
   /** Effective visibility of the currently selected task-list Projection. */
   listQueryVisibility: TaskListVisibilityFilter;
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
+  taskGroups: TaskGroupItem[];
+  tasks: TaskListItem[];
+  tasksTotal: number;
   viewMode: TaskViewMode;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
+  isTaskGroupListInit: false,
+  isTaskListInit: false,
   listQueryVisibility: 'all',
   listVisibility: 'all',
+  taskGroups: [],
+  tasks: [],
+  tasksTotal: 0,
   viewMode: 'list',
 };

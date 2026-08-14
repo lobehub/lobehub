@@ -1,3 +1,5 @@
+import type { TaskDetailData } from '@lobechat/types';
+
 import { type SaveStatus } from '@/types/saveState';
 
 export interface TaskDetailSliceState {
@@ -12,6 +14,8 @@ export interface TaskDetailSliceState {
   activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;
   isDeletingTask: boolean;
+  /** Temporary downstream compatibility projection. Projection remains canonical. */
+  taskDetailMap: Record<string, TaskDetailData>;
   /**
    * Increments only when an authoritative source outside the mounted task editor
    * changes its persisted instruction snapshot. The editor uses this as an
@@ -27,6 +31,7 @@ export interface TaskDetailSliceState {
 export const initialTaskDetailSliceState: TaskDetailSliceState = {
   isCreatingTask: false,
   isDeletingTask: false,
+  taskDetailMap: {},
   taskInstructionRevisionMap: {},
   taskSaveStatusMap: {},
 };
