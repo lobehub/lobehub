@@ -129,7 +129,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    const link = screen.getByRole('button', { name: 'Review delivery' });
+    const link = screen.getByRole('button', { name: 'Review acceptance' });
     expect(link).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
     expect(fireEvent.click(link)).toBe(true);
   });

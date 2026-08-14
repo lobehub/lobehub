@@ -224,6 +224,11 @@ export type HeteroCliEncoding =
   { flags: readonly string[]; kind: 'flag' } | { key: string; kind: 'config' };
 
 export interface HeteroSelectorModelCapability {
+  /**
+   * Native argv/config spellings for providers selected before process start.
+   * Protocol-native agents such as TRAE apply the persisted value after ACP
+   * session setup and therefore intentionally expose no CLI encoding.
+   */
   encodings: readonly HeteroCliEncoding[];
   /**
    * Flags cleared together with the model but never read back as its value.
@@ -339,6 +344,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       resolve: resolveQoderReasoningEffort,
     },
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
+  'trae': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
 } satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
 

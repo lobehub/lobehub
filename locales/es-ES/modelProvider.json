@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Para Claude Opus 4.6; activa o desactiva el pensamiento adaptativo.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Para Claude, DeepSeek y otros modelos de razonamiento; permite un pensamiento más profundo.",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "Para GLM-5.2; controla el esfuerzo de razonamiento con niveles Alto y Máximo.",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "Para GLM-5.3; controla el esfuerzo de razonamiento con niveles Bajo, Alto y Máximo. El pensamiento no se puede desactivar.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Para la serie GPT-5; controla la intensidad del razonamiento.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Para la serie GPT-5.1; controla la intensidad del razonamiento.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Para la serie GPT-5.2 Pro; controla la intensidad del razonamiento.",

@@ -732,6 +732,20 @@ describe('thinking configuration', () => {
       expect(result.thinkingLevel).toBe('medium');
     });
 
+    it('should default Gemini 3.7 Flash to medium via thinkingLevel3', () => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'thinkingLevel3',
+      ]);
+
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.7-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
     it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
       const result = resolveModelExtendParams({
         chatConfig: {

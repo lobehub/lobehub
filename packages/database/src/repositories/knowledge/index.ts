@@ -183,6 +183,12 @@ export type RecentItemKind = 'file' | 'page';
 interface KnowledgeQueryParams extends QueryFileListParams {
   /** Restrict the result set to rows created by a specific workspace member. */
   creatorUserId?: string;
+  /**
+   * Server-derived list of restricted knowledge bases the caller may not
+   * browse (resource-permission `use` level). Content linked to these KBs is
+   * dropped from cross-KB listings; never populated from client input.
+   */
+  excludeKnowledgeBaseIds?: string[];
 }
 
 /**
@@ -337,6 +343,7 @@ export class KnowledgeRepo {
     q,
     sortType,
     sorter,
+    excludeKnowledgeBaseIds,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
@@ -378,6 +385,9 @@ export class KnowledgeRepo {
         this.fileSourceFilter(sourceFilter),
         // Exclude files in knowledge base if needed
         !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
       ],
       knowledgeBaseId,
       sourceFilter,
@@ -397,6 +407,9 @@ export class KnowledgeRepo {
       // already come back through the file arm.
       knowledgeBaseId ? isNull(d.fileId) : undefined,
       knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+      !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+        ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+        : undefined,
     ]);
 
     const rows = await unionAll(fileArm, documentArm)
@@ -508,6 +521,24 @@ export class KnowledgeRepo {
 
   private notInAnyKnowledgeBase = () =>
     notExists(this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, f.id)));
+
+  /**
+   * Drop files linked to any of the given knowledge bases. A file that also
+   * belongs to an open KB is still dropped — hiding slightly more beats
+   * leaking a restricted KB's content through a shared membership.
+   */
+  private notInKnowledgeBases = (knowledgeBaseIds: string[]) =>
+    notExists(
+      this.db
+        .select()
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.fileId, f.id),
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+          ),
+        ),
+    );
 
   private fileCategoryFilter = (category?: string): SQL | undefined => {
     if (!category || category === FilesTabs.All) return undefined;

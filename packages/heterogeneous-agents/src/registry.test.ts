@@ -11,6 +11,7 @@ import {
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
+  TraeAcpAdapter,
 } from './adapters';
 import { HETEROGENEOUS_AGENT_CONFIGS } from './config';
 import { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
@@ -58,6 +59,10 @@ describe('registry', () => {
 
     it('creates a QoderAdapter for "qoder"', () => {
       expect(createAdapter('qoder')).toBeInstanceOf(QoderAdapter);
+    });
+
+    it('creates a TraeAcpAdapter for "trae"', () => {
+      expect(createAdapter('trae')).toBeInstanceOf(TraeAcpAdapter);
     });
 
     it('throws for unknown agent type', () => {

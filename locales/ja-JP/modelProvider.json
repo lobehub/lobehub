@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Claude Opus 4.6 用：アダプティブシンキングのオン／オフを切り替えます。",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Claude、DeepSeekなどの推論モデル向け；より深い思考を可能にします。",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "GLM-5.2の場合、高および最大レベルで推論の努力を制御します。",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "GLM-5.3の場合、推論の努力を低、中、高、最大のレベルで制御します。思考を無効にすることはできません。",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "GPT-5シリーズ向け；推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "GPT-5.1シリーズ向け；推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "GPT-5.2 Proシリーズ向け；推論の強度を制御します。",

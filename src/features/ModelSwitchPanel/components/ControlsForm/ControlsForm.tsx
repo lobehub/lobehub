@@ -25,6 +25,7 @@ import ContextCachingSwitch from './ContextCachingSwitch';
 import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GLM52ReasoningEffortSlider from './GLM52ReasoningEffortSlider';
+import GLM53ReasoningEffortSlider from './GLM53ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
@@ -154,6 +155,7 @@ const ControlsForm = memo<ControlsFormProps>(
 
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
+    const thinkingLevel3DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel3');
 
     // Show descriptions as a question-mark tooltip beside the label, matching
     // the ControlRow items rendered above this form in the params panel.
@@ -361,6 +363,16 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <GLM53ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'glm5_3ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <Grok420ReasoningEffortSlider />,
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
@@ -512,7 +524,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <ThinkingLevel3Slider />,
+        children: <ThinkingLevel3Slider defaultValue={thinkingLevel3DefaultValue} />,
         label: t('extendParams.thinkingLevel.title'),
         layout: 'vertical',
         minWidth: undefined,

@@ -302,6 +302,8 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     setLatestAssistant: (value: typeof latestAssistant) => (latestAssistant = value),
     setAssistantMetadata: (id: string, value: OnboardingUnderstandingMessageMetadata) =>
       assistantMetadata.set(id, value),
+    setProvider: (providerId: string, provider: UnderstandingProvider) =>
+      providers.set(providerId, provider),
     setSession: (value: OnboardingUnderstandingSession) => (session = value),
     sourceStore,
     sourceStoreFactory,
@@ -626,6 +628,61 @@ describe('UnderstandingService', () => {
     expect(harness.githubCollect).toHaveBeenCalledOnce();
     expect(harness.sourceStore.put).toHaveBeenCalledOnce();
     expect(harness.repository.completeProvider).toHaveBeenCalledOnce();
+  });
+
+  /** @example A missing Gmail scope remains an actionable failed-provider diagnostic. */
+  it('persists a provider-owned failure code without its free-form message', async () => {
+    const harness = createHarness(createSession({ gmail: providerState('running', 1) }));
+    harness.setProvider('gmail', {
+      collect: vi.fn(async () => ({
+        context: '',
+        diagnostics: {
+          errors: [
+            {
+              code: 'GMAIL_READ_PERMISSION_REQUIRED',
+              message: 'raw account-specific details must not be persisted',
+              operation: 'permission',
+              provider: 'gmail',
+              retryable: false,
+            },
+          ],
+          evidenceCount: 0,
+          failedCount: 1,
+          succeededCount: 0,
+        },
+        sourceCount: 0,
+      })),
+      connectionSource: 'composio',
+      id: 'gmail',
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'gmail',
+        revision: 1,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ providerId: 'gmail', status: 'failed' });
+
+    /** @example expect(failProvider).toHaveBeenCalledWith({ errors: [...] }); */
+    expect(harness.repository.failProvider).toHaveBeenCalledWith({
+      errors: [
+        {
+          code: 'GMAIL_READ_PERMISSION_REQUIRED',
+          message: 'gmail permission failed',
+          operation: 'permission',
+          provider: 'gmail',
+          retryable: false,
+        },
+      ],
+      failedCount: 1,
+      providerId: 'gmail',
+      revision: 1,
+      sessionId: 'session-1',
+      succeededCount: 0,
+      topicId: 'topic-1',
+    });
   });
 
   it('generates the proposal with the native JSON schema', async () => {

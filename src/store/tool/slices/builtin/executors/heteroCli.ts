@@ -10,7 +10,7 @@ import {
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
  * (`amp` / `claude-code` / `codebuddy` / `codex` / `cursor` / `grok-build` / `kimi-code` /
- * `opencode` / `pi` / `qoder` — set by the adapters in
+ * `opencode` / `pi` / `qoder` / `trae` — set by the adapters in
  * `packages/heterogeneous-agents/src/adapters/*`). These agents run their OWN
  * tools, so this executor is NEVER invoked: `apiEnum` is empty → `hasApi()` is
  * always false → the client-tool dispatch (`hasExecutor`) never routes to
@@ -112,3 +112,4 @@ export const kimiCodeExecutor = new HeteroCliExecutor('kimi-code', new Set(['She
 export const openCodeExecutor = new HeteroCliExecutor('opencode', new Set(['bash']));
 export const piExecutor = new HeteroCliExecutor('pi', new Set(['bash']));
 export const qoderExecutor = new HeteroCliExecutor('qoder', new Set(['Bash']));
+export const traeExecutor = new HeteroCliExecutor('trae', new Set());

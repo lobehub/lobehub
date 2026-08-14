@@ -366,9 +366,16 @@ export class FileModel {
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     callerAgentVisibility,
+    excludeKnowledgeBaseIds,
     visibility,
   }: QueryFileListParams & {
     callerAgentVisibility?: 'private' | 'public' | null;
+    /**
+     * Server-derived list of restricted knowledge bases the caller may not
+     * browse. Files linked to these KBs are dropped from cross-KB listings;
+     * never populated from client input.
+     */
+    excludeKnowledgeBaseIds?: string[];
     visibility?: 'private' | 'public';
   } = {}) => {
     // 1. Build where clause
@@ -450,6 +457,25 @@ export class FileModel {
         whereClause,
         notExists(
           this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, files.id)),
+        ),
+      );
+    }
+    // Cross-KB listing: drop files linked to restricted knowledge bases. A file
+    // that also belongs to an open KB is still dropped — over-hiding beats
+    // leaking a restricted KB's content through a shared membership.
+    else if (excludeKnowledgeBaseIds?.length) {
+      whereClause = and(
+        whereClause,
+        notExists(
+          this.db
+            .select()
+            .from(knowledgeBaseFiles)
+            .where(
+              and(
+                eq(knowledgeBaseFiles.fileId, files.id),
+                inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds),
+              ),
+            ),
         ),
       );
     }

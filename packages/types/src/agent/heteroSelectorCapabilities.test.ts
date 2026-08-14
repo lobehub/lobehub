@@ -18,6 +18,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
+    expect(isHeteroSelectorAvailable('trae')).toBe(true);
 
     expect(isHeteroSelectorAvailable('amp')).toBe(false);
     expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
@@ -34,6 +35,7 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('static');
     expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('trae')?.model?.source).toBe('catalog');
   });
 
   it('reports codex effort levels per model', () => {

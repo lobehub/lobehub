@@ -8,10 +8,42 @@ import type { AgentSignalWorkflowRunPayload } from '@/server/workflows/agentSign
 import { qstashAuth } from '../middlewares/qstashAuth';
 import { createWorkflowQstashClient } from '../qstashClient';
 import { scheduleNightlyReview } from './handlers/scheduleNightlyReview';
+import {
+  executeNightlyReviewUser,
+  executeNightlyReviewUserOptions,
+  paginateNightlyReviewUsers,
+  paginateNightlyReviewUsersOptions,
+} from './workflows/nightlyReview';
 
 const app = new Hono();
 
 app.post('/cron-hourly-nightly-self-review', qstashAuth(), scheduleNightlyReview);
+
+app.post(
+  '/paginate-nightly-review-users',
+  serve(
+    withOtelMetricsForUpstashWorkflows(paginateNightlyReviewUsers, {
+      url: '/api/workflows/agent-signal/paginate-nightly-review-users',
+    }),
+    {
+      ...paginateNightlyReviewUsersOptions,
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
+);
+
+app.post(
+  '/execute-nightly-review-user',
+  serve(
+    withOtelMetricsForUpstashWorkflows(executeNightlyReviewUser, {
+      url: '/api/workflows/agent-signal/execute-nightly-review-user',
+    }),
+    {
+      ...executeNightlyReviewUserOptions,
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
+);
 
 app.post(
   '/run',

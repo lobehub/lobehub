@@ -927,6 +927,15 @@ export default {
   'kimiCodeInstallGuide.menuNotification.title': 'Kimi Code CLI not found',
   'kimiCodeInstallGuide.reason': 'LobeHub could not start Kimi Code: {{message}}',
   'kimiCodeInstallGuide.title': 'Install Kimi Code CLI',
+  'traeInstallGuide.actions.openDocs': 'Open official docs',
+  'traeInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'traeInstallGuide.afterInstall':
+    'After installing and authorizing TRAE CLI, make sure the traecli command is available in PATH, then retry your message or click Re-detect in System Tools.',
+  'traeInstallGuide.desc':
+    'TRAE CLI requires the TRAE Enterprise (TraeCode) command-line tool. Follow the official documentation to install or enable it for your account.',
+  'traeInstallGuide.menuNotification.title': 'TRAE CLI not found',
+  'traeInstallGuide.reason': 'LobeHub could not start TRAE CLI: {{message}}',
+  'traeInstallGuide.title': 'Install TRAE CLI',
   'addAgent': 'Add Agent',
   'addAgentFromList': 'Add from Agent list',
   'addAgentFromMarket': 'Add from Market',
@@ -941,6 +950,7 @@ export default {
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
   'newQoderAgent': 'Add Qoder',
+  'newTraeAgent': 'Add TRAE CLI',
   'newPlatformAgent': 'Connect External Agents',
   'newPlatformAgentDesc': 'Connect Claude Code, OpenClaw, and other agents',
   'newGroupChat': 'Create Group',
@@ -1031,6 +1041,7 @@ export default {
   'connectAgent.providerDesc.opencode': 'Open-source coding agent CLI',
   'connectAgent.providerDesc.pi': 'Minimal coding agent CLI',
   'connectAgent.providerDesc.qoder': 'Qoder coding agent CLI',
+  'connectAgent.providerDesc.trae': 'TRAE Enterprise coding agent CLI',
   'connectAgent.providerDesc.openclaw': 'Personal agent platform',
   'connectAgent.providerDesc.hermes': 'Personal agent platform',
 

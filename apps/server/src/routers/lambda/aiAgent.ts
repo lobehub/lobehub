@@ -577,6 +577,7 @@ const HeteroIngestSchema = z.object({
     'opencode',
     'pi',
     'qoder',
+    'trae',
   ]),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
@@ -604,6 +605,7 @@ const HeteroFinishSchema = z.object({
     'opencode',
     'pi',
     'qoder',
+    'trae',
   ]),
   /** Initial assistant placeholder forwarded by the producer. Unlike the live
    * ingest path, finish may arrive after gateway session completion has already

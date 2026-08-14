@@ -5,7 +5,13 @@ import { eq } from 'drizzle-orm';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
-import { agents, chatGroups, documents, isResourceAccessLevelAllowed } from '@/database/schemas';
+import {
+  agents,
+  chatGroups,
+  documents,
+  isResourceAccessLevelAllowed,
+  knowledgeBases,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -61,6 +67,11 @@ const RESOURCE_ACTIONS: Record<
   agent: { delete: 'AGENT_DELETE', edit: 'AGENT_UPDATE', view: 'AGENT_READ' },
   agentGroup: { delete: 'AGENT_DELETE', edit: 'AGENT_UPDATE', view: 'AGENT_READ' },
   document: { delete: 'DOCUMENT_DELETE', edit: 'DOCUMENT_UPDATE', view: 'DOCUMENT_READ' },
+  knowledgeBase: {
+    delete: 'KNOWLEDGE_BASE_DELETE',
+    edit: 'KNOWLEDGE_BASE_UPDATE',
+    view: 'KNOWLEDGE_BASE_READ',
+  },
 };
 
 const ACCESS_LEVEL_RANK: Record<ResourceAccessLevel, number> = {
@@ -101,7 +112,9 @@ export const getResourceMeta = async (
     return row ?? null;
   }
 
-  const table = { agentGroup: chatGroups, document: documents }[resourceType];
+  const table = { agentGroup: chatGroups, document: documents, knowledgeBase: knowledgeBases }[
+    resourceType
+  ];
 
   const [row] = await db
     .select({ userId: table.userId, visibility: table.visibility, workspaceId: table.workspaceId })
@@ -177,9 +190,17 @@ const getRbacAction = (
   return RESOURCE_ACTIONS[resourceType].edit;
 };
 
-const getRequiredAccessLevel = (action: ResourceAccessAction): ResourceAccessLevel => {
+const getRequiredAccessLevel = (
+  action: ResourceAccessAction,
+  resourceType: PermissionResourceType,
+): ResourceAccessLevel => {
   if (action === 'edit') return 'edit';
   if (action === 'use') return 'use';
+  // Knowledge bases have no `view` level: browsing the internal file list is
+  // the privileged act (mount/retrieval stays available at `use`), so `view`
+  // maps to the `edit` grade. Creators and `UPDATE:all` curators bypass this
+  // comparison upstream.
+  if (resourceType === 'knowledgeBase') return 'edit';
   return 'view';
 };
 
@@ -307,7 +328,7 @@ export const canPerformResourceAction = async (params: {
           resourceType,
           resourceId,
         );
-  const requiredAccessLevel = getRequiredAccessLevel(action);
+  const requiredAccessLevel = getRequiredAccessLevel(action, resourceType);
   return ACCESS_LEVEL_RANK[accessLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel];
 };
 

@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "За Claude Opus 4.6; включва или изключва адаптивното мислене.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "За Claude, DeepSeek и други модели с логическо мислене; отключва по-задълбочено разсъждение.",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "За GLM-5.2; контролира усилието за разсъждение с високи и максимални нива.",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "За GLM-5.3; контролира усилието за разсъждение с нива Ниско, Високо и Максимално. Мисленето не може да бъде деактивирано.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "За серията GPT-5; контролира интензивността на разсъждението.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "За серията GPT-5.1; контролира интензивността на разсъждението.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "За серията GPT-5.2 Pro; контролира интензивността на разсъждението.",

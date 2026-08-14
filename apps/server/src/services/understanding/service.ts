@@ -11,7 +11,10 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import { observeOnboardingUnderstandingOperation } from '@lobechat/observability-otel/modules/onboarding-understanding';
+import {
+  observeOnboardingUnderstandingOperation,
+  observeOnboardingUnderstandingProviderCollection,
+} from '@lobechat/observability-otel/modules/onboarding-understanding';
 import {
   chainUnderstandingDetailedPersona,
   chainUnderstandingPersona,
@@ -615,28 +618,68 @@ export class UnderstandingService {
           return stale();
         }
 
-        let collected;
+        let collection;
         try {
-          collected = await observeOnboardingUnderstandingOperation(
-            { ...operationAttributes, operation: 'provider.collect' },
-            () =>
-              provider.collect({
+          collection = await observeOnboardingUnderstandingProviderCollection(
+            operationAttributes,
+            async () => {
+              const collected = await provider.collect({
                 connectorData: this.dependencies.connectorData,
                 userId: this.dependencies.userId,
-              }),
+              });
+              const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
+              const diagnostics = sanitizeProviderDiagnostics(
+                input.providerId,
+                collected.diagnostics,
+              );
+              const usable =
+                Boolean(context) &&
+                collected.sourceCount > 0 &&
+                diagnostics.evidenceCount > 0 &&
+                diagnostics.succeededCount > 0;
+              const outcome = !usable
+                ? ('failed' as const)
+                : diagnostics.failedCount > 0 || diagnostics.errors.length > 0
+                  ? ('partial' as const)
+                  : ('completed' as const);
+
+              return {
+                diagnostics: diagnostics.errors,
+                evidenceCount: diagnostics.evidenceCount,
+                failedCount: diagnostics.failedCount,
+                outcome,
+                result: { context, diagnostics, sourceCount: collected.sourceCount, usable },
+                sourceCount: collected.sourceCount,
+                succeededCount: diagnostics.succeededCount,
+              };
+            },
+            (error) => {
+              if (!(error instanceof ConnectorDataError)) return;
+              return canonicalCollectionError(
+                input.providerId,
+                error.operation,
+                error.code,
+                error.retryable,
+              );
+            },
           );
         } catch (error) {
           if (!(error instanceof ConnectorDataError) || error.retryable) throw error;
-          return this.recordProviderFailure(input, 0);
+          const diagnostic = canonicalCollectionError(
+            input.providerId,
+            error.operation,
+            error.code,
+            error.retryable,
+          );
+          return this.recordProviderFailure(input, 0, {
+            errors: [diagnostic],
+            evidenceCount: 0,
+            failedCount: 1,
+            succeededCount: 0,
+          });
         }
 
-        const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-        const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
-        const usable =
-          Boolean(context) &&
-          collected.sourceCount > 0 &&
-          diagnostics.evidenceCount > 0 &&
-          diagnostics.succeededCount > 0;
+        const { context, diagnostics, sourceCount, usable } = collection;
         if (!usable)
           return this.recordProviderFailure(input, diagnostics.succeededCount, diagnostics);
 
@@ -646,7 +689,7 @@ export class UnderstandingService {
           providerId: input.providerId,
           revision: input.revision,
           sessionId: input.sessionId,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           userId: this.dependencies.userId,
         };
         await observeOnboardingUnderstandingOperation(
@@ -672,7 +715,7 @@ export class UnderstandingService {
           failedCount: diagnostics.failedCount,
           providerId: input.providerId,
           revision: input.revision,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           sourceFingerprint,
           status: 'completed' as const,
           succeededCount: diagnostics.succeededCount,

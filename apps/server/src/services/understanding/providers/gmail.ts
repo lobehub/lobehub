@@ -25,6 +25,9 @@ const hasGmailReadPermission = (scopes: readonly string[]) =>
     ),
   );
 
+const getGmailCollectionErrorCode = (reason: unknown) =>
+  reason instanceof ConnectorDataError ? reason.code : 'GMAIL_SEARCH_FAILED';
+
 const evidencePriority = ({ labels }: GmailMessage) => {
   const normalized = new Set(labels.map((label) => label.toUpperCase()));
   if (normalized.has('CATEGORY_PROMOTIONS')) return 2;
@@ -117,7 +120,7 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
       result.status === 'rejected'
         ? [
             {
-              code: 'GMAIL_SEARCH_FAILED',
+              code: getGmailCollectionErrorCode(result.reason),
               message: 'Gmail search category failed',
               operation: GMAIL_PROFILE_SEARCHES[index].operation,
               provider: 'gmail',

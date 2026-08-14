@@ -270,6 +270,12 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     if (!tool) return [];
 
     this.completedToolCallIds.add(toolCallId);
+    // ACP providers do not consistently report `tool_use` on the preceding
+    // response_completed update. A model chunk emitted after a completed tool
+    // necessarily belongs to the next model round, so keep that boundary here
+    // as well. `ensureStream(false)` leaves it pending through the remaining
+    // parallel tool updates; the next text/thought chunk consumes it.
+    this.pendingStepBoundary = true;
     const isError = update.status === 'failed';
     const content = toolResultContent(resultState);
     const result: ToolResultData = { content, isError, toolCallId };

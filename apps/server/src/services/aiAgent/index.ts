@@ -46,7 +46,11 @@ import {
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  getHeterogeneousAgentConfig,
+  isLocalHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
   AgentModelOverride,
@@ -196,6 +200,12 @@ import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
+  type === 'claude-code' || type === 'codex';
+
+const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
+  getHeterogeneousAgentConfig(type)?.title ?? type;
 
 /**
  * Content written onto a tool row that the user stopped before it ran. Mirrors
@@ -2359,22 +2369,13 @@ export class AiAgentService {
         runAttachments.imageList && runAttachments.imageList.length > 0
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
-      const heteroExecArgs =
-        heteroType === 'amp' ||
-        heteroType === 'claude-code' ||
-        heteroType === 'codebuddy' ||
-        heteroType === 'codex' ||
-        heteroType === 'cursor' ||
-        heteroType === 'kimi-code' ||
-        heteroType === 'opencode' ||
-        heteroType === 'pi' ||
-        heteroType === 'qoder'
-          ? buildHeteroExecArgs(
-              agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
-                ? agentConfig.agencyConfig.heterogeneousProvider
-                : { type: heteroType },
-            )
-          : undefined;
+      const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+        ? buildHeteroExecArgs(
+            agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
+              ? agentConfig.agencyConfig.heterogeneousProvider
+              : { type: heteroType },
+          )
+        : undefined;
 
       const heteroParams = {
         agentType: heteroType,
@@ -2637,7 +2638,7 @@ export class AiAgentService {
           isHetero: true,
           clientExecutionAvailable: false,
           requestedDeviceId,
-          sandboxExecutionAvailable: heteroType === 'claude-code' || heteroType === 'codex',
+          sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
           trigger: requestTriggerMetadata?.trigger,
         });
 
@@ -2648,16 +2649,9 @@ export class AiAgentService {
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
-              detail:
-                heteroType === 'amp' ||
-                heteroType === 'codebuddy' ||
-                heteroType === 'cursor' ||
-                heteroType === 'kimi-code' ||
-                heteroType === 'opencode' ||
-                heteroType === 'pi' ||
-                heteroType === 'qoder'
-                  ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
-                  : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
+              detail: !supportsCloudHeterogeneousSandbox(heteroType)
+                ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
+                : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
               operationId,
               topicId,
@@ -2761,8 +2755,8 @@ export class AiAgentService {
             };
           }
         } else {
-          if (heteroType === 'amp' || heteroType === 'opencode') {
-            const message = `${heteroType === 'amp' ? 'Amp' : 'OpenCode'} requires a local or connected device; cloud sandbox execution is not supported.`;
+          if (!supportsCloudHeterogeneousSandbox(heteroType)) {
+            const message = `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`;
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,

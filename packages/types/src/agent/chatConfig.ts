@@ -94,6 +94,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   enableStreaming?: boolean;
   glm5_2ReasoningEffort?: 'high' | 'max';
+  glm5_3ReasoningEffort?: 'low' | 'high' | 'max';
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -263,6 +264,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
     glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
+    glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),

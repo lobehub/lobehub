@@ -17,12 +17,19 @@ const routerMocks = vi.hoisted(() => {
     businessFileTransferStorageCheck: vi.fn(),
     hasWorkspaceScopedPermission: vi.fn(),
     serverDB: {
+      // `where` doubles as an awaitable empty result (restricted-KB lookups)
+      // and as a `.limit()` chain (workspace-role lookups).
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
       transaction: vi.fn(async (callback: (trx: unknown) => unknown) =>
         callback(transactionClient),
@@ -83,12 +90,18 @@ function createCallerWithCtx(partialCtx: any = {}) {
 
   const ctx = {
     serverDB: {
+      // Same dual-shape `where` as the module-level mock above.
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
     } as any,
     userId: 'test-user',
@@ -1016,6 +1029,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: 'test-user',
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
@@ -1029,6 +1043,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: undefined,
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,

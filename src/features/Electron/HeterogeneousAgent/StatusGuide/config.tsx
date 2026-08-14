@@ -11,6 +11,7 @@ import {
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 import {
@@ -59,6 +60,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'qoder': {
     icon: Qoder,
     translationPrefix: 'qoderInstallGuide',
+  },
+  'trae': {
+    icon: Trae,
+    translationPrefix: 'traeInstallGuide',
   },
 } as const satisfies Record<
   LocalHeterogeneousAgentType,
