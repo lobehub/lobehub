@@ -23,9 +23,9 @@ export interface RuntimeOperationContext {
  * Operation-lifecycle bookkeeping port. Server adapter wraps the topic /
  * operation-state models; the client adapter can be a no-op.
  *
- * Starts minimal — only `clearRunningMark` (used by `finish` to drop the
- * topic's `runningOperation` so a reconnect doesn't re-trigger). `loadState`
- * (interruption guard) joins here when call_tool / call_llm migrate.
+ * Starts minimal — `loadState` supports executor interruption guards.
+ * `clearRunningMark` is retained for the server lifecycle, which must only
+ * drop the reconnect anchor after terminal state persistence and delivery.
  */
 export interface OperationStore {
   /**
