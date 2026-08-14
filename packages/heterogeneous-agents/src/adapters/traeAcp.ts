@@ -223,11 +223,13 @@ export class TraeAcpAdapter implements AgentEventAdapter {
   private complete(stopReason: unknown): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
+    const runtimeEndData =
+      stopReason === 'cancelled' ? { reason: 'interrupted', stopReason } : { stopReason };
     return [
       ...this.closePending(),
       ...(this.started ? [this.event('stream_end', { stopReason })] : []),
       this.event('visible_output_end', {}),
-      this.event('agent_runtime_end', { stopReason }),
+      this.event('agent_runtime_end', runtimeEndData),
     ];
   }
 

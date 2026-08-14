@@ -1656,6 +1656,7 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: tracePayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+    const stderrChunks: string[] = [];
 
     const traeAcpSession = new TraeAcpSession({
       args: session.args,
@@ -1678,7 +1679,10 @@ export default class HeterogeneousAgentCtr {
       onSessionId: (agentSessionId) => {
         session.agentSessionId = agentSessionId;
       },
-      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
       operationId: params.operationId,
       prompt,
       resumeSessionId: session.agentSessionId,
@@ -1704,7 +1708,13 @@ export default class HeterogeneousAgentCtr {
         this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
         return;
       }
-      const sessionError = this.getSessionErrorPayload(error, session);
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = stderr
+        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+            cause: error,
+          })
+        : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
       this.broadcast('heteroAgentSessionError', {
         error: sessionError,
         sessionId: session.sessionId,

@@ -1,16 +1,14 @@
-import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
-
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeterogeneousAgentModel } from '@lobechat/types';
 
+import type { AcpRpcMessage } from './acpStdioClient';
+import { AcpServerRequestError, AcpStdioClient } from './acpStdioClient';
 import { AgentStreamPipeline } from './agentStreamPipeline';
 import type { HeterogeneousAgentRuntimeStatus } from './claudeAgentSdkSession';
-import { resolveCliSpawnPlan } from './cliSpawn';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { normalizeImage } from './input';
 
-const RPC_TIMEOUT_MS = 30_000;
+const ACP_PROTOCOL_VERSION = 1;
 const NOTIFICATION_DRAIN_QUIET_MS = 250;
 const NOTIFICATION_DRAIN_TIMEOUT_MS = 2000;
 const TRANSPORT = 'trae-acp' as const;
@@ -57,20 +55,6 @@ export const buildTraeAcpPrompt = async (
   }
   return result;
 };
-
-interface RpcMessage {
-  error?: { code?: number; data?: unknown; message?: string };
-  id?: number | string;
-  method?: string;
-  params?: Record<string, unknown>;
-  result?: unknown;
-}
-
-interface PendingRequest {
-  reject: (error: Error) => void;
-  resolve: (result: unknown) => void;
-  timeout?: ReturnType<typeof setTimeout>;
-}
 
 interface TraeAcpInitializeResult {
   agentCapabilities?: {
@@ -227,24 +211,31 @@ export interface TraeAcpSessionOptions {
 }
 
 export class TraeAcpSession {
-  private child?: ChildProcess;
+  private readonly client: AcpStdioClient;
+  private readonly pipeline: AgentStreamPipeline;
   private acceptUpdates = false;
   private closedByHost = false;
-  private completed = false;
-  private fatalError?: Error;
   private interruptTimer?: ReturnType<typeof setTimeout>;
   private lastSessionUpdateAt = 0;
-  private notificationQueue = Promise.resolve();
-  private readonly pending = new Map<string, PendingRequest>();
-  private readonly pipeline: AgentStreamPipeline;
-  private requestId = 0;
+  private modelDiscovery?: TraeAcpSession;
   private session?: string;
-  private stdoutBuffer = '';
 
   constructor(private readonly options: TraeAcpSessionOptions) {
     this.pipeline = new AgentStreamPipeline({
       agentType: 'trae',
       operationId: options.operationId,
+    });
+    this.client = new AcpStdioClient({
+      args: buildTraeAcpArgs(options.args),
+      commandPath: options.commandPath,
+      cwd: options.cwd,
+      env: options.env,
+      onMessage: (message) => this.handleRpcMessage(message),
+      onRawMessage: options.onRawMessage,
+      onServerRequest: (message) => this.handleServerRequest(message),
+      onStderr: options.onStderr,
+      processLabel: 'TRAE ACP',
+      requestTimeoutMs: options.requestTimeoutMs,
     });
   }
 
@@ -253,7 +244,7 @@ export class TraeAcpSession {
   }
 
   get pid(): number | undefined {
-    return this.child?.pid;
+    return this.client.pid;
   }
 
   async run(): Promise<void> {
@@ -271,7 +262,7 @@ export class TraeAcpSession {
         throw new Error('TRAE ACP agent does not support loading sessions');
       }
 
-      const sessionResult = await this.request<TraeAcpSessionResult>(
+      const sessionResult = await this.client.request<TraeAcpSessionResult>(
         this.options.resumeSessionId ? 'session/load' : 'session/new',
         {
           cwd: this.options.cwd,
@@ -298,16 +289,15 @@ export class TraeAcpSession {
       // session/load may replay historical updates before returning. Keep setup
       // notifications gated until the new prompt is about to start.
       this.acceptUpdates = true;
-      const response = await this.request<TraeAcpPromptResult>(
+      const response = await this.client.request<TraeAcpPromptResult>(
         'session/prompt',
         { prompt, sessionId },
         false,
       );
       await this.drainNotifications();
-      if (this.fatalError) throw this.fatalError;
+      await this.client.drain();
       await this.emit({ stopReason: response?.stopReason, type: 'trae_prompt_completed' });
       await this.emitEvents(await this.pipeline.flush());
-      this.completed = true;
       this.status('idle');
     } catch (cause) {
       if (this.closedByHost) return;
@@ -316,16 +306,21 @@ export class TraeAcpSession {
       await this.emitEvents(await this.pipeline.flush());
       throw error;
     } finally {
-      this.shutdown('SIGTERM');
+      if (this.interruptTimer) clearTimeout(this.interruptTimer);
+      this.client.close();
       this.status('closed');
     }
   }
 
   /** Create a short-lived ACP session and read its agent-provided model selector. */
   async discoverModels(): Promise<HeterogeneousAgentModel[]> {
+    return (await this.discoverModelCatalog()).models;
+  }
+
+  private async discoverModelCatalog(): Promise<TraeAcpModelCatalog> {
     try {
       const initialized = await this.initialize();
-      const sessionResult = await this.request<TraeAcpSessionResult>('session/new', {
+      const sessionResult = await this.client.request<TraeAcpSessionResult>('session/new', {
         cwd: this.options.cwd,
         mcpServers: [],
       });
@@ -335,12 +330,11 @@ export class TraeAcpSession {
       if (!catalog) throw new Error('TRAE ACP did not expose a model configuration option');
 
       if (initialized?.agentCapabilities?.sessionCapabilities?.close) {
-        await this.request('session/close', { sessionId: sessionResult.sessionId });
+        await this.client.request('session/close', { sessionId: sessionResult.sessionId });
       }
-      this.completed = true;
-      return catalog.models;
+      return catalog;
     } finally {
-      this.shutdown('SIGTERM');
+      this.client.close();
     }
   }
 
@@ -349,15 +343,15 @@ export class TraeAcpSession {
       this.close();
       return;
     }
-    this.notify('session/cancel', { sessionId: this.session });
+    this.client.notify('session/cancel', { sessionId: this.session });
     this.interruptTimer = setTimeout(() => this.close(), 2000);
     this.interruptTimer.unref?.();
   }
 
   close(): void {
     this.closedByHost = true;
-    this.rejectPending(new Error('TRAE ACP session closed by host'));
-    this.shutdown('SIGTERM');
+    this.modelDiscovery?.close();
+    this.client.close();
   }
 
   private async resolvePrompt(): Promise<TraeAcpPromptBlock[]> {
@@ -375,17 +369,20 @@ export class TraeAcpSession {
   }
 
   private async initialize(): Promise<TraeAcpInitializeResult> {
-    await this.startProcess();
-    const initialized = await this.request<TraeAcpInitializeResult>('initialize', {
+    await this.client.start();
+    const initialized = await this.client.request<TraeAcpInitializeResult>('initialize', {
       clientCapabilities: {},
       clientInfo: {
         name: 'lobehub',
         title: 'LobeHub',
         version: this.options.clientVersion,
       },
-      protocolVersion: 1,
+      protocolVersion: ACP_PROTOCOL_VERSION,
     });
-    if (typeof initialized?.protocolVersion === 'number' && initialized.protocolVersion !== 1) {
+    if (
+      typeof initialized?.protocolVersion === 'number' &&
+      initialized.protocolVersion !== ACP_PROTOCOL_VERSION
+    ) {
       throw new Error(
         `TRAE ACP returned unsupported protocol version: ${initialized.protocolVersion}`,
       );
@@ -393,96 +390,32 @@ export class TraeAcpSession {
     return initialized;
   }
 
-  private async startProcess(): Promise<void> {
-    const plan = await resolveCliSpawnPlan(
-      this.options.commandPath,
-      buildTraeAcpArgs(this.options.args),
-    );
-    const child = spawn(plan.command, plan.args, {
-      cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
-      env: this.options.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    this.child = child;
-    child.stdin?.on('error', () => {});
-    child.stdout?.on('data', (chunk: Buffer) => this.consume(chunk));
-    child.stderr?.on('data', (chunk: Buffer) => void this.options.onStderr(chunk.toString()));
-    child.once('error', (error) => this.fail(error));
-    child.once('exit', (code, signal) => {
-      if (!this.closedByHost && !this.completed) {
-        this.fail(
-          new Error(
-            `TRAE ACP exited prematurely (code ${code ?? 'null'}, signal ${signal ?? 'null'})`,
-          ),
-        );
-      }
-    });
-  }
+  private async handleRpcMessage(message: AcpRpcMessage): Promise<void> {
+    if (message.method !== 'session/update') return;
+    const suppress = !this.acceptUpdates;
+    if (suppress) return;
 
-  private consume(chunk: Buffer): void {
-    this.stdoutBuffer += chunk.toString('utf8');
-    let index: number;
-    while ((index = this.stdoutBuffer.indexOf('\n')) >= 0) {
-      const line = this.stdoutBuffer.slice(0, index).trim();
-      this.stdoutBuffer = this.stdoutBuffer.slice(index + 1);
-      if (!line) continue;
-      void this.options.onRawMessage(`${line}\n`);
-      try {
-        const message: unknown = JSON.parse(line);
-        if (!message || typeof message !== 'object') {
-          throw new Error('TRAE ACP returned a non-object JSON-RPC message');
-        }
-        this.handle(message as RpcMessage);
-      } catch (cause) {
-        this.fail(cause instanceof Error ? cause : new Error(String(cause)));
-      }
-    }
-  }
+    this.lastSessionUpdateAt = Date.now();
+    const update = (message.params as { update?: unknown } | undefined)?.update;
+    if (!update || typeof update !== 'object') return;
 
-  private handle(message: RpcMessage): void {
-    if (message.method) {
-      if (message.id !== undefined) return this.serverRequest(message);
-      const suppress = !this.acceptUpdates && message.method === 'session/update';
-      if (!suppress && message.method === 'session/update') {
-        this.lastSessionUpdateAt = Date.now();
-      }
-      this.notificationQueue = this.notificationQueue.then(async () => {
-        const update = message.params?.update;
-        if (
-          !suppress &&
-          message.method === 'session/update' &&
-          update &&
-          typeof update === 'object'
-        ) {
-          if ((update as { sessionUpdate?: unknown }).sessionUpdate === 'config_option_update') {
-            const catalog = parseTraeAcpModelCatalog({
-              configOptions: (update as { configOptions?: unknown }).configOptions,
-            });
-            if (catalog?.currentModelId) {
-              this.pipeline.configureSession({ model: catalog.currentModelId });
-              this.options.onModel?.(catalog.currentModelId);
-            }
-          }
-          await this.emit(update as Record<string, unknown>);
-        }
+    if ((update as { sessionUpdate?: unknown }).sessionUpdate === 'config_option_update') {
+      const catalog = parseTraeAcpModelCatalog({
+        configOptions: (update as { configOptions?: unknown }).configOptions,
       });
-      return;
+      if (catalog?.currentModelId) {
+        this.pipeline.configureSession({ model: catalog.currentModelId });
+        this.options.onModel?.(catalog.currentModelId);
+      }
     }
-    if (message.id === undefined) return;
-    const pending = this.pending.get(String(message.id));
-    if (!pending) return;
-    this.pending.delete(String(message.id));
-    if (pending.timeout) clearTimeout(pending.timeout);
-    message.error
-      ? pending.reject(new Error(message.error.message ?? 'TRAE ACP request failed'))
-      : pending.resolve(message.result);
+    await this.emit(update as Record<string, unknown>);
   }
 
-  private serverRequest(message: RpcMessage): void {
+  private handleServerRequest(message: AcpRpcMessage): unknown {
     if (message.method === 'session/request_permission') {
-      const options = Array.isArray(message.params?.options)
-        ? message.params.options.map((value) => value as TraeAcpPermissionOption | null)
+      const params = message.params as { options?: unknown } | undefined;
+      const options = Array.isArray(params?.options)
+        ? params.options.map((value) => value as TraeAcpPermissionOption | null)
         : [];
       const selected =
         options.find(
@@ -492,57 +425,11 @@ export class TraeAcpSession {
         options.find((option) => option?.kind === 'allow_once') ??
         options.find((option) => option?.kind === 'reject_once');
       if (typeof selected?.optionId === 'string') {
-        this.write({
-          id: message.id,
-          result: { outcome: { optionId: selected.optionId, outcome: 'selected' } },
-        });
-      } else {
-        this.write({
-          error: { code: -32603, message: 'No safe permission option was offered' },
-          id: message.id,
-        });
+        return { outcome: { optionId: selected.optionId, outcome: 'selected' } };
       }
-      return;
+      throw new AcpServerRequestError(-32_603, 'No safe permission option was offered');
     }
-    this.write({ error: { code: -32601, message: 'Method not found' }, id: message.id });
-  }
-
-  private request<TResult = unknown>(
-    method: string,
-    params: unknown,
-    timed = true,
-  ): Promise<TResult> {
-    if (this.fatalError) return Promise.reject(this.fatalError);
-    if (!this.child?.stdin) return Promise.reject(new Error('TRAE ACP stdin is unavailable'));
-
-    const id = ++this.requestId;
-    return new Promise<TResult>((resolve, reject) => {
-      const timeout = timed
-        ? setTimeout(() => {
-            this.pending.delete(String(id));
-            reject(
-              Object.assign(new Error(`TRAE ACP request timed out: ${method}`), {
-                code: 'ETIMEDOUT',
-              }),
-            );
-          }, this.options.requestTimeoutMs ?? RPC_TIMEOUT_MS)
-        : undefined;
-      timeout?.unref?.();
-      this.pending.set(String(id), {
-        reject,
-        resolve: (result) => resolve(result as TResult),
-        timeout,
-      });
-      this.write({ id, method, params });
-    });
-  }
-
-  private notify(method: string, params: unknown): void {
-    this.write({ method, params });
-  }
-
-  private write(message: Record<string, unknown>): void {
-    this.child?.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+    throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
   }
 
   private async emit(payload: Record<string, unknown>): Promise<void> {
@@ -557,9 +444,12 @@ export class TraeAcpSession {
     sessionId: string,
     sessionResult: TraeAcpSessionResult,
   ): Promise<string | undefined> {
-    const catalog = parseTraeAcpModelCatalog(sessionResult);
+    let catalog = parseTraeAcpModelCatalog(sessionResult);
     const requestedModel = this.options.initialModel?.trim();
     if (!requestedModel || requestedModel === 'default') return catalog?.currentModelId;
+    if (!catalog && this.options.resumeSessionId) {
+      catalog = await this.discoverResumeModelCatalog();
+    }
     if (!catalog) throw new Error('TRAE ACP did not expose a model configuration option');
 
     const selected = catalog.models.find(
@@ -568,7 +458,7 @@ export class TraeAcpSession {
     if (!selected) throw new Error(`TRAE ACP model is unavailable: ${requestedModel}`);
 
     if (catalog.protocol === 'config-option') {
-      const response = await this.request<TraeAcpSetConfigOptionResult>(
+      const response = await this.client.request<TraeAcpSetConfigOptionResult>(
         'session/set_config_option',
         {
           configId: catalog.configId,
@@ -582,8 +472,30 @@ export class TraeAcpSession {
       );
     }
 
-    await this.request('session/set_model', { modelId: selected.id, sessionId });
+    await this.client.request('session/set_model', { modelId: selected.id, sessionId });
     return selected.id;
+  }
+
+  private async discoverResumeModelCatalog(): Promise<TraeAcpModelCatalog> {
+    const discovery = new TraeAcpSession({
+      ...this.options,
+      initialModel: undefined,
+      onEvents: () => {},
+      onModel: undefined,
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      operationId: `${this.options.operationId}-model-discovery`,
+      prompt: '',
+      resumeSessionId: undefined,
+      sessionId: `${this.options.sessionId}-model-discovery`,
+    });
+    this.modelDiscovery = discovery;
+    try {
+      return await discovery.discoverModelCatalog();
+    } finally {
+      discovery.close();
+      if (this.modelDiscovery === discovery) this.modelDiscovery = undefined;
+    }
   }
 
   private async drainNotifications(): Promise<void> {
@@ -592,7 +504,7 @@ export class TraeAcpSession {
 
     while (Date.now() < deadline) {
       await sleep(Math.min(NOTIFICATION_DRAIN_QUIET_MS, deadline - Date.now()));
-      await this.notificationQueue;
+      await this.client.drain();
       if (this.lastSessionUpdateAt > quietSince) {
         quietSince = this.lastSessionUpdateAt;
         continue;
@@ -610,31 +522,6 @@ export class TraeAcpSession {
       state,
       transport: TRANSPORT,
     });
-  }
-
-  private rejectPending(error: Error): void {
-    for (const pending of this.pending.values()) {
-      if (pending.timeout) clearTimeout(pending.timeout);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
-
-  private fail(error: Error): void {
-    this.fatalError ??= error;
-    this.rejectPending(error);
-  }
-
-  private shutdown(signal: NodeJS.Signals): void {
-    if (this.interruptTimer) clearTimeout(this.interruptTimer);
-    const child = this.child;
-    this.child = undefined;
-    if (!child?.pid || child.killed) return;
-    try {
-      process.platform === 'win32' ? child.kill(signal) : process.kill(-child.pid, signal);
-    } catch {
-      child.kill(signal);
-    }
   }
 }
 

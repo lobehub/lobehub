@@ -152,4 +152,14 @@ describe('TraeAcpAdapter', () => {
     expect(adapter.adapt({ message: 'duplicate', type: 'trae_error' })).toEqual([]);
     expect(adapter.flush()).toEqual([]);
   });
+
+  it('maps a cancelled ACP prompt to an interrupted runtime', () => {
+    const adapter = new TraeAcpAdapter();
+
+    const events = adapter.adapt({ stopReason: 'cancelled', type: 'trae_prompt_completed' });
+
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([
+      { reason: 'interrupted', stopReason: 'cancelled' },
+    ]);
+  });
 });

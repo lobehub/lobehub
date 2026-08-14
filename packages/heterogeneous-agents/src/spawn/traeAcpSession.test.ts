@@ -51,7 +51,7 @@ const createAcpProcess = (options: FakeAcpProcessOptions = {}) => {
     pid: 987_654,
     stderr,
     stdin: {
-      on: vi.fn(),
+      once: vi.fn(),
       write: vi.fn((chunk: string) => {
         const message = JSON.parse(chunk.trim()) as RpcMessage;
         requests.push(message);
@@ -314,6 +314,86 @@ describe('TraeAcpSession', () => {
         .map((event) => event.data.content),
     ).toEqual(['live']);
   });
+
+  it.each([
+    {
+      catalog: {
+        configOptions: [
+          {
+            category: 'model',
+            currentValue: 'seed-2.0-code',
+            id: 'trae-model',
+            name: 'Model',
+            options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+            type: 'select',
+          },
+        ],
+      },
+      expectedParams: {
+        configId: 'trae-model',
+        sessionId: 'resume-session',
+        value: 'gpt-5.4',
+      },
+      setMethod: 'session/set_config_option',
+    },
+    {
+      catalog: {
+        models: {
+          availableModels: [{ modelId: 'gpt-5.4', name: 'GPT 5.4' }],
+          currentModelId: 'seed-2.0-code',
+        },
+      },
+      expectedParams: { modelId: 'gpt-5.4', sessionId: 'resume-session' },
+      setMethod: 'session/set_model',
+    },
+  ])(
+    'discovers a missing resume catalog and applies the model through $setMethod',
+    async ({ catalog, expectedParams, setMethod }) => {
+      const primary = createAcpProcess({
+        onMessage: (message, { send }) => {
+          if (message.method !== 'session/load') return;
+          send({ id: message.id, result: {} });
+          return true;
+        },
+      });
+      const discovery = createAcpProcess({
+        initializeResult: {
+          agentCapabilities: { sessionCapabilities: { close: {} } },
+          protocolVersion: 1,
+        },
+        onMessage: (message, { send }) => {
+          if (message.method !== 'session/new') return;
+          send({
+            id: message.id,
+            result: { ...catalog, sessionId: 'catalog-session' },
+          });
+          return true;
+        },
+      });
+      spawnMock.mockReturnValueOnce(primary.child).mockReturnValueOnce(discovery.child);
+      vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      await new TraeAcpSession(
+        createSessionOptions({
+          initialModel: 'gpt-5.4',
+          resumeSessionId: 'resume-session',
+        }),
+      ).run();
+
+      expect(discovery.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/close',
+      ]);
+      expect(primary.requests.find((request) => request.method === setMethod)).toEqual({
+        id: 3,
+        jsonrpc: '2.0',
+        method: setMethod,
+        params: expectedParams,
+      });
+      expect(primary.requests.at(-1)?.method).toBe('session/prompt');
+    },
+  );
 
   it('sets a model through the latest ACP config-option API', async () => {
     const configOptions = [
@@ -652,28 +732,35 @@ describe('TraeAcpSession', () => {
     ).toEqual(['late final text']);
   });
 
-  it('fails pending requests on malformed output or premature exit', async () => {
+  it('ignores diagnostic stdout and fails pending requests on premature exit', async () => {
     const malformed = createAcpProcess({
-      onMessage: (message) => {
+      onMessage: (message, { send }) => {
         if (message.method !== 'initialize') return;
         malformed.stdout.write('not-json\n');
+        send({
+          id: message.id,
+          result: {
+            agentCapabilities: { loadSession: true, promptCapabilities: { image: true } },
+            protocolVersion: 1,
+          },
+        });
         return true;
       },
     });
     spawnMock.mockReturnValueOnce(malformed.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    await expect(new TraeAcpSession(createSessionOptions()).run()).rejects.toThrow();
+    await expect(new TraeAcpSession(createSessionOptions()).run()).resolves.toBeUndefined();
 
     const exited = createAcpProcess({
       onMessage: (message, { child }) => {
         if (message.method !== 'initialize') return;
-        child.emit('exit', 17, null);
+        child.emit('close', 17, null);
         return true;
       },
     });
     spawnMock.mockReturnValueOnce(exited.child);
     await expect(new TraeAcpSession(createSessionOptions()).run()).rejects.toThrow(
-      'exited prematurely (code 17, signal null)',
+      'exited unexpectedly (code 17, signal null)',
     );
   });
 });

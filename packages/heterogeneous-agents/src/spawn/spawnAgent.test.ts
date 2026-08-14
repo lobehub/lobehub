@@ -179,7 +179,7 @@ const createFakeAcpProc = () => {
   proc.killed = false;
   proc.kill = vi.fn(() => true);
   proc.stdin = {
-    on: vi.fn(),
+    once: vi.fn(),
     write: vi.fn((chunk: string) => {
       const message = JSON.parse(chunk.trim()) as { id?: number; method?: string };
       requests.push(message);
