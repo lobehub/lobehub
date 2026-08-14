@@ -60,10 +60,6 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image.description':
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
-  'lobehub.gemini-3.1-flash-image-preview:image.description':
-    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
-  'lobehub.gemini-3.1-flash-image-preview.description':
-    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-lite-image:image.description':
     "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
   'lobehub.gemini-3.1-flash-lite-image.description':
@@ -76,6 +72,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
   'lobehub.gemini-3.6-flash.description':
     'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
+  'lobehub.gemini-3.7-flash.description':
+    "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
   'lobehub.glm-5.1.description':
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
