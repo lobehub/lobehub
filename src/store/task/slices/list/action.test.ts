@@ -93,7 +93,7 @@ describe('TaskListSliceAction', () => {
       useTaskStore.getState().useFetchTaskList({ projectId: 'project-1', visibility: 'all' });
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__project__:project-1', 'all', 'project-1'],
+        ['task:list', '__project__:project-1', 'all', 'createdAt', 'project-1'],
         expect.any(Function),
         expect.any(Object),
       );

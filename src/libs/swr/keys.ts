@@ -290,7 +290,10 @@ export const taskKeys = {
       // page orders by creation, and they read the same store field.
       orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
       projectId?: string,
-    ) => ['task:list', agentKey, visibility, orderBy, projectId],
+    ) =>
+      projectId
+        ? ['task:list', agentKey, visibility, orderBy, projectId]
+        : ['task:list', agentKey, visibility, orderBy],
   ),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a
