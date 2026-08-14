@@ -5,20 +5,15 @@ import type { AgentEvent, AgentInstruction, InstructionExecutor } from '../types
  * `finish` executor — terminates the operation.
  *
  * First executor migrated from the server into this package as part of the
- * agent-runtime IO transport port abstraction: it depends only on
- * the `StreamSink` + `OperationStore` transports and the operation context, so
- * the server just provides those adapters. Behavior mirrors the previous
- * server-local implementation exactly.
+ * agent-runtime IO transport port abstraction: it depends only on the
+ * `StreamSink` transport and the operation context, so the server just provides
+ * those adapters.
  */
 export const finish =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { reason, reasonDetail } = instruction as Extract<AgentInstruction, { type: 'finish' }>;
     const { operation, transports } = host;
-
-    // Clear the topic's running-operation mark so a reconnect doesn't
-    // re-trigger after completion. Best-effort — the adapter swallows failures.
-    await transports.operationStore?.clearRunningMark();
 
     // Publish the execution-complete stream event. `finalState.messages` +
     // tool-set fields are stripped centrally inside the sink adapter, so this
