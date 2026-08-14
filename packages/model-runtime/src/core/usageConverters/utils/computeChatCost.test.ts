@@ -254,9 +254,9 @@ describe('computeChatPricing', () => {
       expect(pricing).toEqual({
         currency: 'CNY',
         units: [
-          { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
         ],
       });
     });

@@ -54,6 +54,26 @@ describe('applyModelExtendParams', () => {
     expect(result.thinkingLevel).toBe('medium');
   });
 
+  it('defaults Gemini 3.7 Flash thinkingLevel to medium (thinkingLevel3)', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({}),
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      model: 'gemini-3.7-flash',
+    });
+
+    expect(result.thinkingLevel).toBe('medium');
+  });
+
+  it('honors an explicit Gemini 3.7 Flash thinkingLevel3 value', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ thinkingLevel3: 'high' }),
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      model: 'gemini-3.7-flash',
+    });
+
+    expect(result.thinkingLevel).toBe('high');
+  });
+
   it('defaults Gemini 3.6 Flash thinkingLevel to medium', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),
@@ -247,6 +267,83 @@ describe('applyModelExtendParams', () => {
     });
   });
 
+  it('enables thinking and sets reasoning_effort for deepseekV4GAReasoningEffort low', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'low',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('low');
+    expect(result.thinking).toEqual({
+      type: 'enabled',
+    });
+  });
+
+  it('disables thinking when deepseekV4GAReasoningEffort is none', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'none',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+    expect(result.thinking).toEqual({
+      type: 'disabled',
+    });
+  });
+
+  it('prefers deepseekV4GAReasoningEffort when both DeepSeek V4 params are declared', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'low',
+        deepseekV4ReasoningEffort: 'max',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort', 'deepseekV4ReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('low');
+    expect(result.thinking).toEqual({
+      type: 'enabled',
+    });
+  });
+
+  /**
+   * Official DeepSeek 400s only when a thinking-mode tool-call turn omits the
+   * thinking block entirely. A leftover preview `none` on a GA-only card must
+   * not flip thinking to disabled — the payload builder then keeps the
+   * whitespace placeholder instead of dropping the field.
+   */
+  it('ignores leftover preview none when the card only declares the GA effort param', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ deepseekV4ReasoningEffort: 'none' }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.thinking).toBeUndefined();
+    expect(result.reasoning_effort).toBeUndefined();
+  });
+
+  it('keeps GA thinking on when leftover preview none is stored beside a GA high', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'high',
+        deepseekV4ReasoningEffort: 'none',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('high');
+    expect(result.thinking).toEqual({ type: 'enabled' });
+  });
+
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),
@@ -294,10 +391,19 @@ describe('resolveDefaultEnableAdaptiveThinkingForModel', () => {
 describe('resolveDefaultThinkingLevelForModel', () => {
   it('falls back to high without a model', () => {
     expect(resolveDefaultThinkingLevelForModel()).toBe('high');
+    expect(resolveDefaultThinkingLevelForModel(undefined, 'thinkingLevel3')).toBe('high');
+    expect(resolveDefaultThinkingLevelForModel(undefined, 'thinkingLevel4')).toBe('minimal');
   });
 
   it('uses per-model defaults', () => {
     expect(resolveDefaultThinkingLevelForModel('gemini-flash-latest')).toBe('medium');
+    expect(resolveDefaultThinkingLevelForModel('gemini-flash-latest', 'thinkingLevel3')).toBe(
+      'medium',
+    );
+    expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash')).toBe('medium');
+    expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash', 'thinkingLevel3')).toBe(
+      'medium',
+    );
     expect(resolveDefaultThinkingLevelForModel('gemini-flash-lite-latest')).toBe('minimal');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.6-flash')).toBe('medium');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash', 'thinkingLevel3')).toBe(

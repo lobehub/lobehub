@@ -85,7 +85,6 @@ type ThinkingLevelExtendParam =
   'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
-type ThinkingLevel3Value = Extract<ThinkingLevelValue, 'high' | 'low' | 'medium'>;
 
 const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
   thinkingLevel: 'high',
@@ -99,6 +98,7 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
 > = {
   'gemini-flash-latest': {
     thinkingLevel: 'medium',
+    thinkingLevel3: 'medium',
   },
   'gemini-flash-lite-latest': {
     thinkingLevel: 'minimal',
@@ -107,6 +107,7 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
     thinkingLevel: 'medium',
   },
   'gemini-3.7-flash': {
+    thinkingLevel: 'medium',
     thinkingLevel3: 'medium',
   },
   'gemini-3.5-flash': {
@@ -151,21 +152,16 @@ const isThinkingLevelExtendParam = (
   extendParam: ExtendParamsType,
 ): extendParam is ThinkingLevelExtendParam => extendParam in DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM;
 
-export function resolveDefaultThinkingLevelForModel(
-  model: string | undefined,
-  extendParam: 'thinkingLevel3',
-): ThinkingLevel3Value;
-export function resolveDefaultThinkingLevelForModel(
-  model?: string,
-  extendParam?: Exclude<ThinkingLevelExtendParam, 'thinkingLevel3'>,
-): ThinkingLevelValue;
-export function resolveDefaultThinkingLevelForModel(
-  model?: string,
-  extendParam: ThinkingLevelExtendParam = 'thinkingLevel',
-): ThinkingLevelValue {
-  if (!model) return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[extendParam];
+export function resolveDefaultThinkingLevelForModel<
+  T extends ThinkingLevelExtendParam = 'thinkingLevel',
+>(model?: string, extendParam?: T): NonNullable<LobeAgentChatConfig[T]> {
+  const param = (extendParam ?? 'thinkingLevel') as T;
 
-  return resolveThinkingLevelDefault(model, extendParam);
+  if (!model) {
+    return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[param] as NonNullable<LobeAgentChatConfig[T]>;
+  }
+
+  return resolveThinkingLevelDefault(model, param) as NonNullable<LobeAgentChatConfig[T]>;
 }
 
 /**
@@ -359,23 +355,25 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
   }
 
   // DeepSeek reasoning effort is reconciled last to avoid invalid combinations.
-  if (modelExtendParams.includes('deepseekV4ReasoningEffort')) {
-    const deepseekV4ReasoningEffort = chatConfig.deepseekV4ReasoningEffort;
+  const deepseekV4ReasoningEffort = modelExtendParams.includes('deepseekV4GAReasoningEffort')
+    ? chatConfig.deepseekV4GAReasoningEffort
+    : modelExtendParams.includes('deepseekV4ReasoningEffort')
+      ? chatConfig.deepseekV4ReasoningEffort
+      : undefined;
 
-    if (typeof deepseekV4ReasoningEffort === 'string') {
-      if (deepseekV4ReasoningEffort === 'none') {
-        delete extendParams.reasoning_effort;
-        extendParams.thinking = {
-          ...extendParams.thinking,
-          type: 'disabled',
-        };
-      } else {
-        extendParams.reasoning_effort = deepseekV4ReasoningEffort;
-        extendParams.thinking = {
-          ...extendParams.thinking,
-          type: 'enabled',
-        };
-      }
+  if (typeof deepseekV4ReasoningEffort === 'string') {
+    if (deepseekV4ReasoningEffort === 'none') {
+      delete extendParams.reasoning_effort;
+      extendParams.thinking = {
+        ...extendParams.thinking,
+        type: 'disabled',
+      };
+    } else {
+      extendParams.reasoning_effort = deepseekV4ReasoningEffort;
+      extendParams.thinking = {
+        ...extendParams.thinking,
+        type: 'enabled',
+      };
     }
   }
 

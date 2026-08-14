@@ -330,6 +330,7 @@ export const isAiModelVisible = (model: { visible?: boolean }) => model.visible 
  */
 export interface AiModelReasoningConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
   deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
   effort?: 'low' | 'medium' | 'high' | 'max';
   glm5_2ReasoningEffort?: 'high' | 'max';
@@ -354,6 +355,7 @@ export interface AiModelReasoningConfig {
 
 export const AiModelReasoningConfigSchema = z.object({
   codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
   deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
   effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
   glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
@@ -394,6 +396,7 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   [K in keyof AiModelReasoningConfig]-?: readonly NonNullable<AiModelReasoningConfig[K]>[];
 } = {
   codexMaxReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
+  deepseekV4GAReasoningEffort: ['none', 'low', 'high', 'max'],
   deepseekV4ReasoningEffort: ['none', 'high', 'max'],
   effort: ['low', 'medium', 'high', 'max'],
   glm5_2ReasoningEffort: ['high', 'max'],
@@ -425,6 +428,7 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   [K in keyof AiModelReasoningConfig]-?: NonNullable<AiModelReasoningConfig[K]>;
 } = {
   codexMaxReasoningEffort: 'medium',
+  deepseekV4GAReasoningEffort: 'high',
   deepseekV4ReasoningEffort: 'high',
   effort: 'high',
   glm5_2ReasoningEffort: 'max',
@@ -476,6 +480,7 @@ export type ExtendParamsType =
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
   | 'effort'
+  | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
   | 'reasoningMode'
@@ -535,6 +540,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'enableAdaptiveThinking',
   'disableContextCaching',
   'effort',
+  'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',
   'reasoningEffort',
   'reasoningMode',

@@ -87,6 +87,7 @@ describe('ExtendParamsSelect', () => {
     it('should return the alias key when available', () => {
       expect(getTitleKey('gpt5ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('glm5_2ReasoningEffort')).toBe('reasoningEffort');
+      expect(getTitleKey('glm5_3ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('thinkingLevel2')).toBe('thinkingLevel');
     });
 

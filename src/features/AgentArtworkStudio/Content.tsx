@@ -6,8 +6,8 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { Alert, Avatar, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Avatar, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Alert, Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, SettingsIcon, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
