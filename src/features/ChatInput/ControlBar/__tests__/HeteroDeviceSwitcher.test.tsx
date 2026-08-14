@@ -16,6 +16,7 @@ const testState = vi.hoisted(() => ({
   // simulate an older device client that predates the agent type.
   scanResults: {} as Record<string, { available: boolean; version?: string } | undefined>,
   scanned: {} as Record<string, boolean>,
+  sandboxAvailable: false,
   selectExecutionTarget: vi.fn(),
 }));
 
@@ -96,7 +97,10 @@ vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useLocalSandboxCapability', () => ({
-  useLocalSandboxCapability: () => ({ data: undefined, mutate: vi.fn() }),
+  useLocalSandboxCapability: () => ({
+    data: testState.sandboxAvailable ? { available: true } : undefined,
+    mutate: vi.fn(),
+  }),
 }));
 
 vi.mock('@/features/ChatInput/hooks/useSelectExecutionTarget', () => ({
@@ -225,6 +229,7 @@ describe('HeteroDeviceSwitcher', () => {
       'device-no-cli': true,
       'device-with-cli': true,
     };
+    testState.sandboxAvailable = false;
     testState.selectExecutionTarget.mockReset();
   });
 
@@ -299,8 +304,9 @@ describe('HeteroDeviceSwitcher', () => {
 
     // The device row reports the local IPC verdict, and so does the
     // always-rendered desktop Local row — a machine without the CLI cannot be
-    // picked either way.
-    expect(screen.getAllByText('heteroAgent.executionTarget.cliNotInstalled')).toHaveLength(2);
+    // picked either way (the fenced Local sandbox row reports the same reason:
+    // it too would run this machine's CLI).
+    expect(screen.getAllByText('heteroAgent.executionTarget.cliNotInstalled')).toHaveLength(3);
     fireEvent.click(screen.getByText('This Mac'));
     expect(testState.selectExecutionTarget).not.toHaveBeenCalled();
   });
@@ -330,11 +336,37 @@ describe('HeteroDeviceSwitcher', () => {
 
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    // The row explains why this machine cannot be picked, …
-    expect(screen.getByText('heteroAgent.executionTarget.cliNotInstalled')).toBeInTheDocument();
+    // The row explains why this machine cannot be picked, … (the fenced Local
+    // sandbox row shows the same reason — it would also run this machine's CLI)
+    expect(screen.getAllByText('heteroAgent.executionTarget.cliNotInstalled')).toHaveLength(2);
 
     // …and clicking it must not select the local target.
     fireEvent.click(screen.getByText('heteroAgent.executionTarget.local'));
+    expect(testState.selectExecutionTarget).not.toHaveBeenCalled();
+  });
+
+  it('disables the desktop Local sandbox row when the local CLI is absent', () => {
+    testState.isDesktop = true;
+    // The sandbox backend IS available — the fence still runs the agent's CLI
+    // on this machine, so a missing CLI must win over the present backend and
+    // disable the row instead of letting it route runs to a machine that
+    // cannot run the agent.
+    testState.sandboxAvailable = true;
+    testState.agencyConfig = {
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'claude-code' },
+    };
+    // No connected devices — only the always-rendered desktop rows are in play.
+    testState.devices = [];
+    testState.localStatus = { available: false };
+
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    // Both the plain Local row and its fenced sibling report the missing CLI, …
+    expect(screen.getAllByText('heteroAgent.executionTarget.cliNotInstalled')).toHaveLength(2);
+
+    // …and clicking the sandbox row must not select the local target either.
+    fireEvent.click(screen.getByText('heteroAgent.executionTarget.localSandbox'));
     expect(testState.selectExecutionTarget).not.toHaveBeenCalled();
   });
 

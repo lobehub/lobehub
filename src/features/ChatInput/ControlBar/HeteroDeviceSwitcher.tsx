@@ -504,6 +504,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isHetero && localCli.status !== undefined && !localCli.status.available;
   const localCliName = heteroType ? (HETEROGENEOUS_TYPE_LABELS[heteroType] ?? heteroType) : '';
   const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heteroType);
+  // Shared by the plain and the fenced local rows: a probing / missing CLI
+  // outranks the generic "run on this machine" description.
+  const localRowDesc = localCliChecking
+    ? t('heteroAgent.executionTarget.cliChecking', { name: localCliName })
+    : localCliUnavailable
+      ? t('heteroAgent.executionTarget.cliNotInstalled', { name: localCliName })
+      : t('heteroAgent.executionTarget.localDesc');
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
@@ -836,16 +843,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
-          desc={
-            localCliChecking
-              ? t('heteroAgent.executionTarget.cliChecking', { name: localCliName })
-              : localCliUnavailable
-                ? t('heteroAgent.executionTarget.cliNotInstalled', { name: localCliName })
-                : t('heteroAgent.executionTarget.localDesc')
-          }
+          desc={localRowDesc}
           disabled={localCliUnavailable}
           icon={<ExecutionTargetIcon target={'local'} />}
-          // 本机统一显示「本地设备」，不再带具体设备名称
           label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local', undefined, false)}
         />
@@ -855,29 +855,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
           "not installed yet" and silently hiding the feature would strand the
-          user with no way to find out why. */}
+          user with no way to find out why. A missing CLI wins over a present
+          sandbox backend: the fence still runs the agent's CLI on this machine,
+          so without it the row would be a selectable dead end — the same
+          non-runnable target the plain Local row above is guarded against. */}
       {isDesktop ? (
         <OptionRow
           active={executionTarget === 'local' && localSandboxEnabled}
-          disabled={!canUseLocalSandbox}
+          disabled={localCliUnavailable || !canUseLocalSandbox}
           icon={<Icon icon={ShieldCheckIcon} size={14} />}
           label={t('heteroAgent.executionTarget.localSandbox')}
           desc={
-            canUseLocalSandbox
-              ? t(
-                  localSandboxNetwork
-                    ? 'heteroAgent.executionTarget.localSandboxDescNetwork'
-                    : 'heteroAgent.executionTarget.localSandboxDesc',
-                )
-              : // Prefer the actionable instruction (Linux's "install this
-                // package") over the backend's raw diagnostic when we have one.
-                (sandboxCapability?.instructions ??
-                t('heteroAgent.executionTarget.localSandboxUnavailable', {
-                  reason: sandboxCapability?.reason ?? '',
-                }))
+            localCliUnavailable
+              ? t('heteroAgent.executionTarget.cliNotInstalled', { name: localCliName })
+              : canUseLocalSandbox
+                ? t(
+                    localSandboxNetwork
+                      ? 'heteroAgent.executionTarget.localSandboxDescNetwork'
+                      : 'heteroAgent.executionTarget.localSandboxDesc',
+                  )
+                : // Prefer the actionable instruction (Linux's "install this
+                  // package") over the backend's raw diagnostic when we have one.
+                  (sandboxCapability?.instructions ??
+                  t('heteroAgent.executionTarget.localSandboxUnavailable', {
+                    reason: sandboxCapability?.reason ?? '',
+                  }))
           }
           extra={
-            canUseLocalSandbox ? (
+            localCliUnavailable ? undefined : canUseLocalSandbox ? (
               <>
                 <InstantSwitch
                   enabled={localSandboxNetwork}
