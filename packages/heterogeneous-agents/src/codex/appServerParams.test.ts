@@ -4,6 +4,7 @@ import {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  getCodexAppServerUnsupportedArgs,
 } from './appServerParams';
 
 describe('Codex app-server payload builders', () => {
@@ -59,6 +60,41 @@ describe('Codex app-server payload builders', () => {
     expect(
       buildCodexAppServerThreadParams(['--dangerously-bypass-approvals-and-sandbox'], '/workspace'),
     ).toMatchObject({ approvalPolicy: 'never', sandbox: 'danger-full-access' });
+  });
+
+  it('keeps unsupported and interactive CLI arguments on the exec transport', () => {
+    expect(getCodexAppServerUnsupportedArgs(['--profile', 'work'])).toEqual(['--profile']);
+    expect(getCodexAppServerUnsupportedArgs(['--ignore-user-config'])).toEqual([
+      '--ignore-user-config',
+    ]);
+    expect(getCodexAppServerUnsupportedArgs(['--full-auto'])).toEqual(['--full-auto']);
+    expect(getCodexAppServerUnsupportedArgs(['-a', 'on-request'])).toEqual(['-a']);
+    expect(getCodexAppServerUnsupportedArgs(['-c', 'approval_policy="untrusted"'])).toEqual(['-c']);
+    expect(getCodexAppServerUnsupportedArgs(['--search'])).toEqual(['--search']);
+    expect(getCodexAppServerUnsupportedArgs(['--model', '--ephemeral'])).toEqual(['--model']);
+    expect(getCodexAppServerUnsupportedArgs(['--sandbox', 'invalid'])).toEqual(['--sandbox']);
+    expect(
+      getCodexAppServerUnsupportedArgs([
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--sandbox',
+        'read-only',
+      ]),
+    ).toEqual(['--dangerously-bypass-approvals-and-sandbox']);
+    expect(getCodexAppServerUnsupportedArgs(['--ephemeral'], { resume: true })).toEqual([
+      '--ephemeral',
+    ]);
+    expect(
+      getCodexAppServerUnsupportedArgs([
+        '--model',
+        'gpt-5.5-codex',
+        '-a',
+        'never',
+        '-c',
+        'service_tier="fast"',
+        '--cd=src',
+        '--ephemeral',
+      ]),
+    ).toEqual([]);
   });
 
   it('converts Codex text and --image args into v2 turn inputs', () => {

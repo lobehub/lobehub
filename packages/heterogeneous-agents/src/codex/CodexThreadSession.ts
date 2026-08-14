@@ -47,7 +47,6 @@ interface ActiveTurn {
 export interface CodexThreadTurnOptions {
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
-  onStderr: (data: string) => Promise<void> | void;
   operationId: string;
 }
 
@@ -102,14 +101,14 @@ export class CodexThreadSession {
     this.interruptRequested = false;
     this.lastOperationId = options.operationId;
     this.emitStatus('starting', options.operationId);
-    const traceUnsubscribers = [
-      this.options.client.onRawMessage(options.onRawMessage),
-      this.options.client.onStderr(options.onStderr),
-    ];
+    const traceUnsubscribers: Array<() => void> = [];
 
     try {
       await this.ensureThread();
       if (this.closedByHost) return;
+      const threadId = this.threadId;
+      if (!threadId) throw new Error('Codex thread is not attached');
+      traceUnsubscribers.push(this.options.client.onRawMessage(threadId, options.onRawMessage));
 
       const adapter = new CodexAppServerAdapter({
         initialCumulativeUsage: this.cumulativeUsage,
@@ -130,9 +129,6 @@ export class CodexThreadSession {
         transportInterrupted: false,
       };
       this.activeTurn = activeTurn;
-
-      const threadId = this.threadId;
-      if (!threadId) throw new Error('Codex thread is not attached');
 
       const turnParams: TurnStartParams = { input: options.input, threadId };
       this.canFallback = false;

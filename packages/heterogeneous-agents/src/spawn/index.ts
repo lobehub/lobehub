@@ -22,6 +22,7 @@ export {
   CodexAppServerRpcError,
   CodexThreadSession,
   type CodexThreadSessionOptions,
+  getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
 } from '../codex';
 export type { UsageData } from '../types';

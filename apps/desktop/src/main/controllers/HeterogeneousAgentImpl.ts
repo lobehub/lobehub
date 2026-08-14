@@ -53,6 +53,7 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   ensureClaudeCodeResumeTranscript,
+  getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
@@ -296,6 +297,7 @@ interface AgentSession {
    * intentional, not agent failures.
    */
   cancelledByUs?: boolean;
+  codexAppServerFallback?: boolean;
   command: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -1115,10 +1117,26 @@ export default class HeterogeneousAgentCtr {
 
     if (
       session.agentType === 'codex' &&
-      (session.useCodexAppServer || this.isCodexAppServerLabEnabled) &&
-      (await this.sendPromptWithCodexAppServer(params, session))
-    )
-      return;
+      !session.codexAppServerFallback &&
+      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+    ) {
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        if (await this.sendPromptWithCodexAppServer(params, session)) return;
+      } else if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      } else {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+          sessionId: session.sessionId,
+          unsupportedArgs,
+        });
+      }
+    }
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
@@ -1473,7 +1491,6 @@ export default class HeterogeneousAgentCtr {
       await appServerSession.run({
         input,
         onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-        onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
         operationId: params.operationId,
       });
       void this.writeCliTraceJson(traceSession, 'exit.json', {
@@ -1485,6 +1502,7 @@ export default class HeterogeneousAgentCtr {
       return true;
     } catch (error) {
       if (appServerSession.canFallbackToExec && isCodexAppServerCompatibilityError(error)) {
+        session.codexAppServerFallback = true;
         logger.warn('Falling back to codex exec because native app-server is unavailable:', {
           message: this.getErrorMessage(error),
           sessionId: session.sessionId,

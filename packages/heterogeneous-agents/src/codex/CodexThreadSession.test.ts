@@ -183,7 +183,6 @@ const createSession = (
     session.run({
       input: [{ text, text_elements: [], type: 'text' }],
       onRawMessage: vi.fn(),
-      onStderr: vi.fn(),
       operationId,
     });
   return { events, onSessionId, run, session, statuses };
@@ -203,6 +202,7 @@ describe('CodexThreadSession', () => {
       'turn/start',
       'turn/start',
     ]);
+    expect(harness.client.onRawMessage).toHaveBeenCalledWith('thread-1', expect.any(Function));
     expect(onSessionId).toHaveBeenCalledOnce();
     expect(statuses).toEqual([
       'starting',

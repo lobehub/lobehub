@@ -2,6 +2,7 @@ export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  getCodexAppServerUnsupportedArgs,
 } from './appServerParams';
 export {
   CodexAppServerClient,

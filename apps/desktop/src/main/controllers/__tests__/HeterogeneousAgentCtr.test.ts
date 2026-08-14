@@ -1494,7 +1494,6 @@ describe('HeterogeneousAgentCtr', () => {
       codexAppServerCanReuse.value = false;
       const second = await ctr.startSession({
         agentType: 'codex',
-        args: ['--profile', 'other'],
         command: 'codex',
         useCodexAppServer: true,
       });
@@ -1505,7 +1504,32 @@ describe('HeterogeneousAgentCtr', () => {
       expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
     });
 
-    it('keeps Labs sessions on the native transport while CLI args migration is pending', async () => {
+    it.each([
+      { args: ['--profile', 'work'], label: 'profile' },
+      { args: ['-a', 'on-request'], label: 'interactive approval policy' },
+    ])('keeps unsupported Codex $label arguments on exec', async ({ args }) => {
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args,
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve CLI semantics', sessionId });
+
+      expect(codexAppServerClientConstructMock).not.toHaveBeenCalled();
+      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(1);
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(args));
+    });
+
+    it('does not replay an existing thread through exec when its arguments are unsupported', async () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -1514,13 +1538,16 @@ describe('HeterogeneousAgentCtr', () => {
         agentType: 'codex',
         args: ['--profile', 'work'],
         command: 'codex',
+        resumeSessionId: 'thread-existing',
         useCodexAppServer: true,
       });
 
-      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve profile', sessionId });
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve CLI semantics', sessionId }),
+      ).rejects.toThrow('cannot safely resume this session');
 
-      expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
-      expect(codexAppServerConstructMock).toHaveBeenCalledTimes(1);
+      expect(codexAppServerClientConstructMock).not.toHaveBeenCalled();
+      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -1559,6 +1586,14 @@ describe('HeterogeneousAgentCtr', () => {
         }),
         sessionId,
       });
+
+      codexAppServerShouldFallback.value = false;
+      const { proc: retryProc } = createFakeProc();
+      nextFakeProc = retryProc;
+      await ctr.sendPrompt({ operationId: 'op-retry', prompt: 'stay on exec', sessionId });
+
+      expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
+      expect(spawnCalls).toHaveLength(2);
     });
 
     it('does not fall back to exec after the native thread is established', async () => {

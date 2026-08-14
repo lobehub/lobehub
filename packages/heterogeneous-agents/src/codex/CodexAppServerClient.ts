@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 import { isRecord, pickString } from '@lobechat/utils/object';
 
@@ -27,6 +28,7 @@ interface PendingRequest {
   method: string;
   reject: (error: Error) => void;
   resolve: (result: unknown) => void;
+  threadId?: string;
   timeout: ReturnType<typeof setTimeout>;
 }
 
@@ -115,7 +117,7 @@ export class CodexAppServerClient {
   private readonly notificationHandlers = new Map<string, Set<NotificationHandler>>();
   private readonly serverRequestHandlers = new Map<string, Set<ServerRequestHandler>>();
   private readonly disconnectHandlers = new Set<(error: Error) => void>();
-  private readonly rawMessageHandlers = new Set<TextHandler>();
+  private readonly rawMessageHandlers = new Map<string, Set<TextHandler>>();
   private readonly stderrHandlers = new Set<TextHandler>();
   private readonly threadRegistrations = new Map<string, ThreadRegistrationGroup>();
   private processGeneration?: ProcessGeneration;
@@ -148,11 +150,17 @@ export class CodexAppServerClient {
   }
 
   /** Process-global options must stay identical while this long-lived client is reused. */
-  canReuseFor(options: Pick<CodexAppServerClientOptions, 'args' | 'commandPath' | 'env'>): boolean {
+  canReuseFor(
+    options: Pick<CodexAppServerClientOptions, 'args' | 'commandPath' | 'cwd' | 'env'>,
+  ): boolean {
     const currentArgs = this.options.args ?? [];
     const nextArgs = options.args ?? [];
+    const commandIsRelativePath =
+      !path.isAbsolute(this.options.commandPath) &&
+      (this.options.commandPath.includes('/') || this.options.commandPath.includes('\\'));
     if (
       this.options.commandPath !== options.commandPath ||
+      (commandIsRelativePath && this.options.cwd !== options.cwd) ||
       currentArgs.length !== nextArgs.length ||
       currentArgs.some((arg, index) => arg !== nextArgs[index])
     ) {
@@ -234,9 +242,11 @@ export class CodexAppServerClient {
     return () => this.disconnectHandlers.delete(handler);
   }
 
-  onRawMessage(handler: TextHandler): () => void {
-    this.rawMessageHandlers.add(handler);
-    return () => this.rawMessageHandlers.delete(handler);
+  onRawMessage(threadId: string, handler: TextHandler): () => void {
+    const handlers = this.rawMessageHandlers.get(threadId) ?? new Set();
+    handlers.add(handler);
+    this.rawMessageHandlers.set(threadId, handlers);
+    return () => this.removeHandler(this.rawMessageHandlers, threadId, handler);
   }
 
   onStderr(handler: TextHandler): () => void {
@@ -426,6 +436,7 @@ export class CodexAppServerClient {
         method,
         reject,
         resolve: (result) => resolve(result as T),
+        threadId: isRecord(params) ? pickString(params.threadId) : undefined,
         timeout,
       };
       this.pendingRequests.set(key, pending);
@@ -453,9 +464,12 @@ export class CodexAppServerClient {
       processGeneration.stdoutBuffer = processGeneration.stdoutBuffer.slice(newlineIndex + 1);
       if (!line) continue;
 
-      this.emitText(this.rawMessageHandlers, `${line}\n`);
       try {
-        this.routeMessage(processGeneration.generation, JSON.parse(line));
+        const message = JSON.parse(line);
+        const threadId = this.getMessageThreadId(processGeneration.generation, message);
+        const rawHandlers = threadId ? this.rawMessageHandlers.get(threadId) : undefined;
+        if (rawHandlers) this.emitText(rawHandlers, `${line}\n`);
+        this.routeMessage(processGeneration.generation, message);
       } catch (error) {
         this.fail(
           new CodexAppServerConnectionError('Codex app-server emitted invalid NDJSON', {
@@ -466,6 +480,19 @@ export class CodexAppServerClient {
         return;
       }
     }
+  }
+
+  private getMessageThreadId(generation: number, message: unknown): string | undefined {
+    if (!isRecord(message)) return;
+    if (isRecord(message.params)) {
+      const threadId = pickString(message.params.threadId);
+      if (threadId) return threadId;
+    }
+
+    const id = message.id as RequestId | undefined;
+    if (id === undefined) return;
+    const pending = this.pendingRequests.get(String(id));
+    return pending?.generation === generation ? pending.threadId : undefined;
   }
 
   private routeMessage(generation: number, message: unknown): void {

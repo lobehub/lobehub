@@ -149,6 +149,7 @@ describe('CodexAppServerClient', () => {
     const launchOptions = {
       args: ['--config', 'model_provider="openai"'],
       commandPath: '/usr/local/bin/codex',
+      cwd: '/second-workspace',
       env: { ...process.env, CODEX_HOME: '/tmp/codex' },
     };
 
@@ -161,6 +162,23 @@ describe('CodexAppServerClient', () => {
         env: { ...process.env, CODEX_HOME: '/other' },
       }),
     ).toBe(false);
+  });
+
+  it('does not reuse a relative custom command across working directories', () => {
+    const client = new CodexAppServerClient({
+      clientVersion: '1.0.0',
+      commandPath: './bin/codex',
+      cwd: '/first-workspace',
+      env: process.env,
+    });
+    const launchOptions = {
+      commandPath: './bin/codex',
+      cwd: '/first-workspace',
+      env: process.env,
+    };
+
+    expect(client.canReuseFor(launchOptions)).toBe(true);
+    expect(client.canReuseFor({ ...launchOptions, cwd: '/second-workspace' })).toBe(false);
   });
 
   it('tracks client consumers independently from attached thread registrations', () => {
@@ -227,6 +245,38 @@ describe('CodexAppServerClient', () => {
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
     );
 
+    client.close();
+  });
+
+  it('routes raw messages only to the matching thread trace', async () => {
+    const process = createProcess();
+    spawnMock.mockReturnValue(process.child);
+    vi.spyOn(globalThis.process, 'kill').mockImplementation(() => true);
+    const client = createClient();
+    const firstThreadLines: string[] = [];
+    const secondThreadLines: string[] = [];
+    client.onRawMessage('thread-1', (line) => {
+      firstThreadLines.push(line);
+    });
+    client.onRawMessage('thread-2', (line) => {
+      secondThreadLines.push(line);
+    });
+    await client.connect();
+
+    process.send({ method: 'item/started', params: { item: {}, threadId: 'thread-1' } });
+    process.send({ method: 'item/started', params: { item: {}, threadId: 'thread-2' } });
+    await vi.waitFor(() => {
+      expect(firstThreadLines).toHaveLength(1);
+      expect(secondThreadLines).toHaveLength(1);
+    });
+    await client.request('thread/resume', { threadId: 'thread-1' });
+
+    expect(firstThreadLines[0]).toContain('"threadId":"thread-1"');
+    expect(firstThreadLines[0]).not.toContain('"threadId":"thread-2"');
+    expect(firstThreadLines[1]).toContain('"result"');
+    expect(secondThreadLines[0]).toContain('"threadId":"thread-2"');
+    expect(secondThreadLines[0]).not.toContain('"threadId":"thread-1"');
+    expect(secondThreadLines).toHaveLength(1);
     client.close();
   });
 
