@@ -267,6 +267,52 @@ describe('applyModelExtendParams', () => {
     });
   });
 
+  it('enables thinking and sets reasoning_effort for deepseekV4GAReasoningEffort low', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'low',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('low');
+    expect(result.thinking).toEqual({
+      type: 'enabled',
+    });
+  });
+
+  it('disables thinking when deepseekV4GAReasoningEffort is none', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'none',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+    expect(result.thinking).toEqual({
+      type: 'disabled',
+    });
+  });
+
+  it('prefers deepseekV4GAReasoningEffort when both DeepSeek V4 params are declared', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4GAReasoningEffort: 'low',
+        deepseekV4ReasoningEffort: 'max',
+      }),
+      extendParams: ['deepseekV4GAReasoningEffort', 'deepseekV4ReasoningEffort'],
+      model: 'deepseek-v4-flash',
+    });
+
+    expect(result.reasoning_effort).toBe('low');
+    expect(result.thinking).toEqual({
+      type: 'enabled',
+    });
+  });
+
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),

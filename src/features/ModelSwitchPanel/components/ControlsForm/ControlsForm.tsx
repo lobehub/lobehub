@@ -22,7 +22,9 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
-import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
+import DeepSeekReasoningEffortSlider, {
+  DeepSeekV4GAReasoningEffortSlider,
+} from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GLM52ReasoningEffortSlider from './GLM52ReasoningEffortSlider';
 import GLM53ReasoningEffortSlider from './GLM53ReasoningEffortSlider';
@@ -245,6 +247,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'reasoningBudgetToken80k',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <DeepSeekV4GAReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'deepseekV4GAReasoningEffort',
         style: {
           paddingBottom: 0,
         },

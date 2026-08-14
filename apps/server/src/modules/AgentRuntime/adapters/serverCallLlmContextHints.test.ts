@@ -53,6 +53,13 @@ beforeEach(() => {
     },
     {
       abilities: {},
+      displayName: 'DeepSeek V4 Flash',
+      id: 'deepseek-v4-flash',
+      providerId: 'deepseek',
+      settings: { extendParams: ['deepseekV4GAReasoningEffort'] },
+    },
+    {
+      abilities: {},
       displayName: 'GPT-4o Mini',
       id: 'gpt-4o-mini',
       providerId: 'openai',
@@ -193,6 +200,20 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
       ctx: createCtx({ chatConfig: { deepseekV4ReasoningEffort: 'high' } }),
       llmPayload,
       model: 'deepseek-v4-pro',
+      provider: 'deepseek',
+    });
+
+    expect(hints.shouldReplayAssistantReasoning).toBe(false);
+    expect(hints.resolvedExtendParams).toEqual({ thinking: { type: 'disabled' } });
+  });
+
+  it('should derive the DeepSeek V4 GA thinking opt-out from the instance config', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4GAReasoningEffort: 'none' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: { deepseekV4GAReasoningEffort: 'high' } }),
+      llmPayload,
+      model: 'deepseek-v4-flash',
       provider: 'deepseek',
     });
 

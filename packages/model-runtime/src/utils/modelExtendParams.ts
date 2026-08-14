@@ -355,23 +355,25 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
   }
 
   // DeepSeek reasoning effort is reconciled last to avoid invalid combinations.
-  if (modelExtendParams.includes('deepseekV4ReasoningEffort')) {
-    const deepseekV4ReasoningEffort = chatConfig.deepseekV4ReasoningEffort;
+  const deepseekV4ReasoningEffort = modelExtendParams.includes('deepseekV4GAReasoningEffort')
+    ? chatConfig.deepseekV4GAReasoningEffort
+    : modelExtendParams.includes('deepseekV4ReasoningEffort')
+      ? chatConfig.deepseekV4ReasoningEffort
+      : undefined;
 
-    if (typeof deepseekV4ReasoningEffort === 'string') {
-      if (deepseekV4ReasoningEffort === 'none') {
-        delete extendParams.reasoning_effort;
-        extendParams.thinking = {
-          ...extendParams.thinking,
-          type: 'disabled',
-        };
-      } else {
-        extendParams.reasoning_effort = deepseekV4ReasoningEffort;
-        extendParams.thinking = {
-          ...extendParams.thinking,
-          type: 'enabled',
-        };
-      }
+  if (typeof deepseekV4ReasoningEffort === 'string') {
+    if (deepseekV4ReasoningEffort === 'none') {
+      delete extendParams.reasoning_effort;
+      extendParams.thinking = {
+        ...extendParams.thinking,
+        type: 'disabled',
+      };
+    } else {
+      extendParams.reasoning_effort = deepseekV4ReasoningEffort;
+      extendParams.thinking = {
+        ...extendParams.thinking,
+        type: 'enabled',
+      };
     }
   }
 
