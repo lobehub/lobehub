@@ -46,6 +46,8 @@ export interface CliCommandStatus {
 
 interface ValidateOptions {
   validateFlag?: string;
+  /** Capability-probe argv. Defaults to `--help`. */
+  validateHelpArgs?: string[];
   /** Additional `--help` markers that must all be present after version validation. */
   validateHelpKeywords?: string[];
   validateKeywords?: string[];
@@ -385,6 +387,7 @@ export const detectValidatedCommand = async (
 
   const {
     validateFlag = '--version',
+    validateHelpArgs = ['--help'],
     validateHelpKeywords,
     validateKeywords,
     validatePattern,
@@ -432,7 +435,7 @@ export const detectValidatedCommand = async (
     if (validateHelpKeywords?.length) {
       let helpResult;
       try {
-        helpResult = await execProbe(resolvedPath, ['--help'], env, viaShell);
+        helpResult = await execProbe(resolvedPath, validateHelpArgs, env, viaShell);
       } catch {
         return { available: false };
       }
@@ -521,6 +524,13 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
+  },
+  'grok-build': {
+    validateHelpArgs: ['agent', '--help'],
+    validateHelpKeywords: ['agent', 'stdio'],
+    validateKeywords: ['grok'],
+    validatePattern:
+      /^grok\s+v?\d+\.\d+\.\d+(?:[-+][\dA-Z.-]+)?(?:\s+\([^)]+\))?(?:\s+\[[^\]]+\])?$/i,
   },
   'kimi-code': {
     validateHelpKeywords: ['--prompt', '--output-format'],
@@ -626,6 +636,13 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         // alias as a fallback when another CLI shadows the generic `agent`.
         path.join(homedir(), '.local', 'bin', 'cursor-agent'),
       ];
+    }
+    case 'grok-build': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), '.grok', 'bin', 'grok.exe')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.grok', 'bin', 'grok')];
     }
     case 'kimi-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];

@@ -10,6 +10,7 @@
   "brief.action.feedback": "フィードバック",
   "brief.action.ignore": "無視する",
   "brief.action.retry": "再試行",
+  "brief.action.review": "配達を確認",
   "brief.action.upgrade": "プランをアップグレード",
   "brief.actionFailed": "送信できませんでした。もう一度お試しください。",
   "brief.addFeedback": "フィードバックを共有",

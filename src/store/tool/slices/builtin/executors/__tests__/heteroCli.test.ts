@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claudeCodeExecutor,
   codexExecutor,
+  grokBuildExecutor,
   kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
@@ -36,6 +37,7 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(grokBuildExecutor.identifier).toBe('grok-build');
     expect(kimiCodeExecutor.identifier).toBe('kimi-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
     expect(piExecutor.identifier).toBe('pi');
@@ -43,6 +45,8 @@ describe('heteroCli executors', () => {
     // Empty apiEnum → never treated as an invokable client tool.
     expect(claudeCodeExecutor.hasApi('Bash')).toBe(false);
     expect(claudeCodeExecutor.getApiNames()).toEqual([]);
+    expect(grokBuildExecutor.hasApi('execute')).toBe(false);
+    expect(grokBuildExecutor.getApiNames()).toEqual([]);
   });
 
   it('records the worktree for a successful shell call, keyed by the run topic', async () => {
@@ -64,6 +68,22 @@ describe('heteroCli executors', () => {
     );
     expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: ['git', 'worktree', 'add', '/tmp/my wt'],
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Grok Build execute calls for worktree side effects', async () => {
+    await grokBuildExecutor.onAfterCall!(
+      call({
+        apiName: 'execute',
+        identifier: 'grok-build',
+        params: { command: 'git worktree add /tmp/grok-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/grok-wt',
       resultContent: '',
       topicId: 't1',
     });

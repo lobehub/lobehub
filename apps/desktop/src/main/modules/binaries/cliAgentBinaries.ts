@@ -93,6 +93,14 @@ export const cursorBinary: BinarySpec = {
   priority: 3,
 };
 
+/** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
+export const grokBuildBinary: BinarySpec = {
+  description: 'Grok Build - xAI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('grok-build', 'grok'),
+  name: 'grok',
+  priority: 3,
+};
+
 /**
  * Amp CLI
  * @see https://ampcode.com/manual
@@ -188,6 +196,7 @@ export const heterogeneousCliAgentBinaries = {
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
   'cursor': cursorBinary,
+  'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,
   'pi': piBinary,

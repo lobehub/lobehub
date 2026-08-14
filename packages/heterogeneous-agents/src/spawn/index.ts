@@ -27,6 +27,14 @@ export {
 } from '../codex';
 export type { UsageData } from '../types';
 export {
+  type AcpRpcErrorData,
+  type AcpRpcMessage,
+  AcpRpcResponseError,
+  AcpServerRequestError,
+  AcpStdioClient,
+  type AcpStdioClientOptions,
+} from './acpStdioClient';
+export {
   AgentStreamPipeline,
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
@@ -62,6 +70,13 @@ export {
   type FileStoreCreateFileInput,
   type FileStorePort,
 } from './fileStoreImageUploader';
+export {
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  type GrokAcpContentBlock,
+  GrokAcpSession,
+  type GrokAcpSessionOptions,
+} from './grokAcpSession';
 export {
   type AgentContentBlock,
   type AgentImageBlock,

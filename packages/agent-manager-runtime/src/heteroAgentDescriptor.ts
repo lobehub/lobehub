@@ -76,6 +76,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Cursor',
     kind: 'cli',
   },
+  'grok-build': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Grok Build — xAI's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Grok Build',
+    kind: 'cli',
+  },
   'hermes': {
     capabilities: CODING_CAPABILITIES,
     description:

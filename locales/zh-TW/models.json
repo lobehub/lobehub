@@ -860,6 +860,7 @@
   "lobehub.grok-4.20-beta-0309-reasoning.description": "智能且極速的模型，在回應前進行推理",
   "lobehub.grok-4.3.description": "世界上最追求真理的大型語言模型",
   "lobehub.grok-4.5.description": "Grok 4.5 的性能接近 Claude Opus 4.8，響應速度極快。",
+  "lobehub.grok-4.6.description": "Grok 4.6 在 Grok 4.5 的基礎上進一步提升，特別專注於長時間運行的代理以及更具挑戰性的互動和視覺化工作。",
   "lobehub.imagen-4.0-fast-generate-001.description": "Imagen 第四代文本生成圖像模型系列",
   "lobehub.imagen-4.0-generate-001.description": "Imagen 第四代文字轉圖像模型系列",
   "lobehub.imagen-4.0-ultra-generate-001.description": "Imagen 第四代文字轉圖像模型系列的超高版本",

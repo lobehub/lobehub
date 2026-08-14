@@ -867,6 +867,17 @@ export default {
   'cursorInstallGuide.menuNotification.title': 'Cursor CLI not found',
   'cursorInstallGuide.reason': 'LobeHub could not start Cursor: {{message}}',
   'cursorInstallGuide.title': 'Install Cursor CLI',
+  'grokBuildInstallGuide.actions.openDocs': 'Open Install Guide',
+  'grokBuildInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'grokBuildInstallGuide.afterInstall':
+    'After installing, run `grok login`, then retry your message or click Re-detect in System Tools.',
+  'grokBuildInstallGuide.desc':
+    'Grok Build needs the Grok CLI to run locally. Install it and make sure the `grok` command is available in your PATH.',
+  'grokBuildInstallGuide.installWithBrew': 'Windows PowerShell',
+  'grokBuildInstallGuide.installWithNpm': 'macOS / Linux',
+  'grokBuildInstallGuide.menuNotification.title': 'Grok Build CLI not found',
+  'grokBuildInstallGuide.reason': 'LobeHub could not start Grok Build: {{message}}',
+  'grokBuildInstallGuide.title': 'Install Grok Build CLI',
   'workingDirectoryGuide.actions.retry': 'Retry',
   'workingDirectoryGuide.desc':
     'The working directory saved for this conversation no longer exists.',
@@ -925,6 +936,7 @@ export default {
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
   'newCursorAgent': 'Add Cursor',
+  'newGrokBuildAgent': 'Add Grok Build',
   'newKimiCodeAgent': 'Add Kimi Code',
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
@@ -1013,6 +1025,7 @@ export default {
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
+  'connectAgent.providerDesc.grok-build': 'xAI coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.kimi-code': 'Moonshot AI coding agent CLI',
   'connectAgent.providerDesc.opencode': 'Open-source coding agent CLI',

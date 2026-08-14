@@ -13,6 +13,8 @@ export {
   CODEX_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
   OPENCODE_CLI_INSTALL_COMMANDS,
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_COMMANDS,
@@ -141,5 +143,5 @@ export interface HeterogeneousAgentRuntimeStatus {
   sessionId: string;
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
-  transport: 'claude-sdk' | 'cli-spawn' | 'codex-app-server';
+  transport: 'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server';
 }

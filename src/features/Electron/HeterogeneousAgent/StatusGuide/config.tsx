@@ -6,6 +6,7 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Grok,
   Kimi,
   OpenCode,
   Pi,
@@ -38,6 +39,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'cursor': {
     icon: Cursor,
     translationPrefix: 'cursorInstallGuide',
+  },
+  'grok-build': {
+    icon: Grok,
+    translationPrefix: 'grokBuildInstallGuide',
   },
   'kimi-code': {
     icon: Kimi,
