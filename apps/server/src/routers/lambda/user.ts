@@ -125,7 +125,7 @@ const confirmOnboardingUnderstandingInputSchema = z
   .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
 const reviseOnboardingUnderstandingInputSchema = z
   .object({
-    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).optional(),
     feedback: z.string().trim().min(1).max(MAX_UNDERSTANDING_FEEDBACK_LENGTH).optional(),
     providerIds: z
       .array(

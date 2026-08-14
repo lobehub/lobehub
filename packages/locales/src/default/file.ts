@@ -79,6 +79,7 @@ export default {
   'library.list.transferTitle': 'Transfer library',
   'library.list.transferTo': 'Transfer to…',
   'library.new': 'New Library',
+  'library.backToResources': 'Back to Resources',
   'library.publish': 'Publish to workspace',
   'library.publishConfirm.title': 'Publish knowledge base to workspace?',
   'library.title': 'Library',

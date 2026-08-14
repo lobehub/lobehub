@@ -2,7 +2,6 @@
 
 import {
   BrainCircuit,
-  Download,
   FilePenIcon,
   FilesIcon,
   FileText,
@@ -570,6 +569,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/resource/library/permission'),
+              'Desktop > Resource > Library > Permission',
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            path: 'permission',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/resource/library/[slug]'),
               'Desktop > Resource > Library > Slug',
             ),
@@ -813,6 +822,38 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
+        element: redirectElement('tasks'),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/tasks'),
+          'Desktop > Project Tasks',
+        ),
+        handle: { meta: tasksRouteMeta },
+        path: 'tasks',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/goals'),
+          'Desktop > Project Goals',
+        ),
+        handle: { meta: goalsRouteMeta },
+        path: 'goals',
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/project/_layout'),
+      'Desktop > Project Workspace > Layout',
+      { preloadId: 'project' },
+    ),
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'project/:projectId',
+  },
+
+  {
+    children: [
+      {
         children: [
           {
             element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks', {
@@ -867,6 +908,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: pageRouteMeta },
         path: ':id',
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/page/[id]/permission'),
+          'Desktop > Page > Permission',
+        ),
+        handle: { meta: pageRouteMeta },
+        path: ':id/permission',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/page/_layout'),
@@ -880,14 +929,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
-
-  // Downloads page (personal-only — never mirrored under /:workspaceSlug)
-  {
-    element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
-    path: 'downloads',
-  },
 
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
@@ -1205,7 +1246,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     handle: {
       meta: routeMeta({
         icon: MessageSquarePlus,
-        tabTitleKey: 'navigation.newChat',
+        tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),
     },

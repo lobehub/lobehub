@@ -34,6 +34,7 @@ export interface CreateTaskContentProps {
    */
   lockAssignee?: boolean;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  projectId?: string;
   /**
    * Whether to show the "minimize to inline entry" button. Only the list view has an
    * inline entry target, so contexts like the Kanban board pass `false` to hide it.
@@ -42,7 +43,7 @@ export interface CreateTaskContentProps {
 }
 
 const CreateTaskContent = memo<CreateTaskContentProps>(
-  ({ agentId, lockAssignee, onCreated, showInlineToggle = true }) => {
+  ({ agentId, lockAssignee, onCreated, projectId, showInlineToggle = true }) => {
     const { t } = useTranslation('chat');
     const { close } = useModalContext();
     const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -106,6 +107,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
           priority: priority || undefined,
+          projectId,
           // Only send visibility in workspace mode; personal mode ignores it.
           visibility: activeWorkspaceId ? visibility : undefined,
         });
@@ -129,6 +131,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       editor,
       onCreated,
       priority,
+      projectId,
       t,
       title,
       visibility,

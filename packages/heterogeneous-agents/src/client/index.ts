@@ -6,10 +6,12 @@ import {
   Codex,
   Cursor,
   getLobeIconCDN,
+  Grok,
   Kimi,
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 import {
@@ -31,10 +33,12 @@ const heterogeneousAgentIcons = {
   'codebuddy': CodeBuddy,
   'codex': Codex,
   'cursor': Cursor,
+  'grok-build': Grok,
   'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
+  'trae': Trae,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>

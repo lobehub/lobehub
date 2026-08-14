@@ -1345,12 +1345,17 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // A late close of a finished op must NOT wipe the marker of a NEWER operation
-    // that a racing retry/send already wrote — that would break reconnect-after-reload
-    // for the live run. Only a marker matching the completed op's id gets cleared.
-    it('does not clear the local marker when it already belongs to a newer operation', async () => {
+    // A late close of a finished op must NOT retire a NEWER operation that a
+    // racing retry/send already wrote — that would break reconnect-after-reload
+    // for the live run AND flip its topic out of the running state. None of the
+    // three writes (local marker, server marker, topic status) may fire when the
+    // topic has moved on. Reachable whenever a follow-up starts before the
+    // previous session closes: the terminal queue drain does it 100ms after the
+    // terminal, and a send right after `visible_output_end` does it sooner still.
+    it('does not retire the topic when its marker already belongs to a newer operation', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const updateTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1385,7 +1390,7 @@ describe('GatewayActionImpl', () => {
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
-        updateTopicStatus: vi.fn(),
+        updateTopicStatus,
       })) as any;
 
       (globalThis as any).window = {
@@ -1418,13 +1423,17 @@ describe('GatewayActionImpl', () => {
       });
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
-      // Ignore any dispatches from the optimistic-update path during setup.
+      // Ignore any dispatches / writes from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
+      updateTopicStatus.mockClear();
+      vi.mocked(topicService.updateTopicMetadata).mockClear();
       vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
+      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 
     // When the desktop runs against 本机 (effective runtime mode 'local'), the

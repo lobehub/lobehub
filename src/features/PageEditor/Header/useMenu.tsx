@@ -19,8 +19,9 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
-import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
+import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
@@ -38,7 +39,7 @@ import { usePageEditorStore, useStoreApi } from '../store';
  * Action menu for the page editor.
  */
 export const useMenu = (): { menuItems: any[] } => {
-  const { i18n, t } = useTranslation(['file', 'common', 'chat']);
+  const { i18n, t } = useTranslation(['file', 'common', 'chat', 'setting']);
 
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
@@ -80,11 +81,28 @@ export const useMenu = (): { menuItems: any[] } => {
   const canMakePrivate = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'public' && canEditPage,
   );
-  const memberPermissionMenuItem = useResourcePermissionMenuItem(
+  // Member Permissions moved to its own page (same shape as Agent's). Private
+  // pages are included — the creator configures what members get the moment
+  // the page is published; the server stores the level ahead of publishing.
+  const wsNavigate = useWorkspaceAwareNavigate();
+  const { data: pagePermission } = useResourcePermission(
     'document',
-    activeWorkspaceId && pageDocument?.visibility === 'public' ? documentId : undefined,
-    { showReadOnly: true },
-  ) as DropdownItem | null;
+    activeWorkspaceId ? documentId : undefined,
+  );
+  const memberPermissionMenuItem: DropdownItem | null = useMemo(
+    () =>
+      activeWorkspaceId && pagePermission?.canManage && documentId
+        ? {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'member-permissions',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: () => {
+              wsNavigate(`/page/${documentId}/permission`);
+            },
+          }
+        : null,
+    [activeWorkspaceId, pagePermission?.canManage, documentId, t, wsNavigate],
+  );
 
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,

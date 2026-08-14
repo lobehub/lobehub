@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { topics, workspaces } from '../../../schemas';
+import { topics, works, workspaces } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -126,6 +127,39 @@ describe('WorkModel · listByWorkspace', () => {
     expect(items).toHaveLength(1);
     expect(items[0].id).toBe(docWork!.id);
     expect(items[0].type).toBe('document');
+  });
+
+  it('narrows to Works produced by one agent', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const firstTask = await taskModel.create({ instruction: 'First', name: 'First task' });
+    const secondTask = await taskModel.create({ instruction: 'Second', name: 'Second task' });
+    const firstWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-agent-filter-1',
+      toolCallId: 'tool-call-agent-filter-1',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      taskId: firstTask.id,
+      topicId,
+    });
+    await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-agent-filter-2',
+      toolCallId: 'tool-call-agent-filter-2',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      taskId: secondTask.id,
+      topicId,
+    });
+
+    await serverDB.update(works).set({ originAgentId: agentId }).where(eq(works.id, firstWork!.id));
+
+    const { items } = await workModel.listByWorkspace({
+      originAgentId: agentId,
+    });
+
+    expect(items.map((item) => item.id)).toEqual([firstWork!.id]);
   });
 
   it('pages over the keyset cursor without gaps or overlaps', async () => {

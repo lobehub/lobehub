@@ -45,7 +45,10 @@ export interface CliCommandStatus {
 }
 
 interface ValidateOptions {
+  rejectPattern?: RegExp;
   validateFlag?: string;
+  /** Capability-probe argv. Defaults to `--help`. */
+  validateHelpArgs?: string[];
   /** Additional `--help` markers that must all be present after version validation. */
   validateHelpKeywords?: string[];
   validateKeywords?: string[];
@@ -384,7 +387,9 @@ export const detectValidatedCommand = async (
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
   const {
+    rejectPattern,
     validateFlag = '--version',
+    validateHelpArgs = ['--help'],
     validateHelpKeywords,
     validateKeywords,
     validatePattern,
@@ -412,6 +417,9 @@ export const detectValidatedCommand = async (
     const output = `${result.stdout}\n${result.stderr}`.trim();
     const firstLine = output.split(/\r?\n/)[0]!.trim();
     const loweredOutput = output.toLowerCase();
+    if (rejectPattern?.test(firstLine) || rejectPattern?.test(output)) {
+      return { available: false };
+    }
     const matchesKeyword = validateKeywords?.some((keyword) =>
       loweredOutput.includes(keyword.toLowerCase()),
     );
@@ -432,7 +440,7 @@ export const detectValidatedCommand = async (
     if (validateHelpKeywords?.length) {
       let helpResult;
       try {
-        helpResult = await execProbe(resolvedPath, ['--help'], env, viaShell);
+        helpResult = await execProbe(resolvedPath, validateHelpArgs, env, viaShell);
       } catch {
         return { available: false };
       }
@@ -522,6 +530,13 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
   },
+  'grok-build': {
+    validateHelpArgs: ['agent', '--help'],
+    validateHelpKeywords: ['agent', 'stdio'],
+    validateKeywords: ['grok'],
+    validatePattern:
+      /^grok\s+v?\d+\.\d+\.\d+(?:[-+][\dA-Z.-]+)?(?:\s+\([^)]+\))?(?:\s+\[[^\]]+\])?$/i,
+  },
   'kimi-code': {
     validateHelpKeywords: ['--prompt', '--output-format'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
@@ -537,6 +552,14 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'qoder': {
     // Qoder prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'trae': {
+    // TRAE Enterprise releases may print either a product-prefixed version or
+    // a bare semver. Reject the unrelated open-source trajectory runner even
+    // when its executable has been renamed.
+    rejectPattern: /^trae-cli\b/i,
+    validateKeywords: ['trae', 'traecode'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
@@ -627,6 +650,13 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.local', 'bin', 'cursor-agent'),
       ];
     }
+    case 'grok-build': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), '.grok', 'bin', 'grok.exe')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.grok', 'bin', 'grok')];
+    }
     case 'kimi-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
       return [
@@ -667,6 +697,11 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), 'Library', 'pnpm', 'qodercli'),
       ];
     }
+    case 'trae': {
+      // TRAE CLI is distributed through TRAE Enterprise and has no verified
+      // cross-platform standalone install location. Resolve it from PATH only.
+      return [];
+    }
     default: {
       return [];
     }
@@ -677,6 +712,17 @@ export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
 ): Promise<CliCommandStatus> => {
+  const commandName = command
+    .trim()
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
+  // `trae-cli` belongs to the unrelated open-source trajectory runner. LobeHub
+  // integrates only the TRAE Enterprise `traecli acp serve` runtime.
+  if (agentType === 'trae' && commandName?.toLowerCase() === 'trae-cli') {
+    return { available: false };
+  }
+
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 

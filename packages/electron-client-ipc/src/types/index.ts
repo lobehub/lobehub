@@ -4,6 +4,7 @@ export * from './browserControl';
 export * from './browserSidebar';
 export * from './contextMenu';
 export * from './dataSync';
+export * from './devtools';
 export * from './git';
 export * from './heterogeneousAgent';
 export * from './imessageBridge';

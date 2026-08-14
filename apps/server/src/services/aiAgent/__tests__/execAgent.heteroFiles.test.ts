@@ -414,6 +414,35 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  it('dispatches TRAE to a bound device with encoded native args and its ACP model', async () => {
+    heteroAgentConfig.model = 'trae';
+    heteroAgentConfig.provider = 'trae';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        args: ['--feature', 'test'],
+        effort: 'high',
+        model: 'gpt-5.4',
+        type: 'trae',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use TRAE on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'trae',
+        args: ['--agent-arg=--feature', '--agent-arg=test', '--model', 'gpt-5.4'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('does not reinject the device workspace note when resuming a native session', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
     heteroAgentConfig.agencyConfig = {
@@ -566,6 +595,24 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Do not run CodeBuddy in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound TRAE', async () => {
+    heteroAgentConfig.model = 'trae';
+    heteroAgentConfig.provider = 'trae';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'trae' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run TRAE in cloud',
     });
 
     expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));

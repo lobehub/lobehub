@@ -1,4 +1,5 @@
-import { Avatar, Center, Checkbox, ContextMenuTrigger, Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar, Center, ContextMenuTrigger, Flexbox, Tooltip } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback } from 'react';

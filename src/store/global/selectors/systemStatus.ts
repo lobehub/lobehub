@@ -176,6 +176,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'resource',
   'recents',
+  'project',
   'private',
   'agent',
   SIDEBAR_SPACER_ID,
@@ -188,7 +189,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
 /** Items that must stay contiguous in the sidebar list (accordion block).
  * `private` sits above `agent` so workspace users see their personal items
  * first, with the workspace-shared agents right below. */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'private', 'agent']);
+export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'project', 'private', 'agent']);
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -229,7 +230,16 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
 // default added in a future version would silently appear in the bottom group
 // for existing users.
 const withAllKnownKeys = (order: string[]): string[] => {
-  const present = new Set(order);
+  let nextOrder = order;
+  if (!order.includes('project')) {
+    const recentsIndex = order.indexOf('recents');
+    const firstAgentIndex = order.findIndex((key) => key === 'private' || key === 'agent');
+    const insertAt =
+      recentsIndex >= 0 ? recentsIndex + 1 : firstAgentIndex >= 0 ? firstAgentIndex : 0;
+    nextOrder = [...order.slice(0, insertAt), 'project', ...order.slice(insertAt)];
+  }
+
+  const present = new Set(nextOrder);
   const missingTop: string[] = [];
   const missingBottom: string[] = [];
   for (const k of DEFAULT_SIDEBAR_ITEMS) {
@@ -237,7 +247,7 @@ const withAllKnownKeys = (order: string[]): string[] => {
     (DEFAULT_BOTTOM_KEYS.has(k) ? missingBottom : missingTop).push(k);
   }
 
-  const withSpacer = normalizeSpacerPosition(order);
+  const withSpacer = normalizeSpacerPosition(nextOrder);
   if (missingTop.length === 0 && missingBottom.length === 0) return withSpacer;
 
   const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);

@@ -49,6 +49,7 @@
   "home.recentPages": "Pages récentes",
   "home.uploadEntries.library.title": "Créer une nouvelle bibliothèque",
   "home.viewAll": "Voir tout",
+  "library.backToResources": "Retour aux ressources",
   "library.hierarchy.empty.desc": "Ajoutez des fichiers ou créez un dossier pour commencer",
   "library.hierarchy.empty.title": "Rien ici pour le moment",
   "library.import.action": "Importer dans l'espace de travail…",

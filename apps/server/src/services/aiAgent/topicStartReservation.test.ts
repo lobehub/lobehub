@@ -41,4 +41,18 @@ describe('acquireTopicStartReservation', () => {
       }),
     ).resolves.toBe(false);
   });
+
+  it('forwards the operation id used for an atomic topic handoff', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await acquireTopicStartReservation({
+      replacesOperationId: 'old-operation',
+      reservationId: 'new-start',
+      topicId: 'topic-1',
+      topicModel,
+    });
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', 'old-operation');
+  });
 });

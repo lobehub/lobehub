@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 
 import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
 import { app as electronAppMock } from 'electron';
@@ -102,12 +103,28 @@ const {
   codexAppServerCloseMock,
   codexAppServerConstructMock,
   codexAppServerInterruptMock,
+  grokAcpSessionCloseMock,
+  grokAcpSessionConstructMock,
+  grokAcpSessionInterruptMock,
+  grokAcpSessionRunMock,
+  traeAcpSessionCloseMock,
+  traeAcpSessionConstructMock,
+  traeAcpSessionInterruptMock,
+  traeAcpSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
   codexAppServerCloseMock: vi.fn(),
   codexAppServerConstructMock: vi.fn(),
   codexAppServerInterruptMock: vi.fn(),
+  grokAcpSessionCloseMock: vi.fn(),
+  grokAcpSessionConstructMock: vi.fn(),
+  grokAcpSessionInterruptMock: vi.fn(),
+  grokAcpSessionRunMock: vi.fn(),
+  traeAcpSessionCloseMock: vi.fn(),
+  traeAcpSessionConstructMock: vi.fn(),
+  traeAcpSessionInterruptMock: vi.fn(),
+  traeAcpSessionRunMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -201,10 +218,77 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockGrokAcpSession {
+    constructor(private readonly options: any) {
+      grokAcpSessionConstructMock(options);
+    }
+
+    close() {
+      grokAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      grokAcpSessionInterruptMock();
+    }
+
+    run() {
+      return grokAcpSessionRunMock(this.options);
+    }
+  }
+
+  class MockTraeAcpSession {
+    constructor(private readonly options: any) {
+      traeAcpSessionConstructMock(options);
+    }
+
+    close() {
+      traeAcpSessionCloseMock();
+    }
+
+    async interrupt() {
+      traeAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (traeAcpSessionRunMock.getMockImplementation()) {
+        return traeAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'trae-acp',
+      });
+      this.options.onSessionId('trae_session_1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'trae-acp',
+      });
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerSession: MockCodexAppServerSession,
+    GrokAcpSession: MockGrokAcpSession,
+    TraeAcpSession: MockTraeAcpSession,
   };
 });
 
@@ -306,7 +390,44 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerCloseMock.mockReset();
     codexAppServerConstructMock.mockReset();
     codexAppServerInterruptMock.mockReset();
+    grokAcpSessionCloseMock.mockReset();
+    grokAcpSessionConstructMock.mockReset();
+    grokAcpSessionInterruptMock.mockReset();
+    grokAcpSessionRunMock.mockReset();
+    grokAcpSessionRunMock.mockImplementation(async (options) => {
+      const now = Date.now();
+      options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: options.operationId,
+        sessionId: options.sessionId,
+        state: 'running',
+        transport: 'acp-stdio',
+      });
+      options.onSessionId('grok-native-session');
+      await options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'acp-stdio' },
+          operationId: options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: options.operationId,
+        sessionId: options.sessionId,
+        state: 'closed',
+        transport: 'acp-stdio',
+      });
+    });
     loggerInfoMock.mockReset();
+    traeAcpSessionCloseMock.mockReset();
+    traeAcpSessionConstructMock.mockReset();
+    traeAcpSessionInterruptMock.mockReset();
+    traeAcpSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
@@ -961,6 +1082,237 @@ describe('HeterogeneousAgentCtr', () => {
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
       }
+    });
+  });
+
+  describe('sendPrompt (grok-build ACP)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+    });
+
+    it('uses the ACP runtime, persists the native session id, and broadcasts its lifecycle', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        args: ['--model', 'grok-build'],
+        command: 'grok',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-grok',
+        prompt: 'implement this',
+        sessionId,
+        systemContext: 'selected context',
+      });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(grokAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'grok-build'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'grok',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-grok',
+          prompt: [
+            { text: 'selected context', type: 'text' },
+            { text: 'implement this', type: 'text' },
+          ],
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'grok-native-session',
+      });
+
+      const statusPayloads = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentRuntimeStatus')
+        .map(([, payload]) => payload);
+      expect(statusPayloads).toEqual([
+        expect.objectContaining({ state: 'running', transport: 'acp-stdio' }),
+        expect.objectContaining({ state: 'closed', transport: 'acp-stdio' }),
+      ]);
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentEvent',
+        expect.objectContaining({
+          event: expect.objectContaining({ type: 'agent_runtime_end' }),
+          sessionId,
+        }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each([
+      ['cancelSession', grokAcpSessionInterruptMock],
+      ['stopSession', grokAcpSessionCloseMock],
+    ] as const)('%s delegates to the active ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      grokAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+      });
+      const promptRun = ctr.sendPrompt({ operationId: 'op-grok', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(grokAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await promptRun;
+    });
+
+    it('classifies ACP authentication failures for the existing sign-in guide', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      grokAcpSessionRunMock.mockRejectedValue(
+        new Error('Authentication required. Run `grok login`, then retry.'),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-grok', prompt: 'work', sessionId }),
+      ).rejects.toThrow('Grok Build could not authenticate');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'grok-build',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command: 'grok',
+        }),
+        sessionId,
+      });
+    });
+
+    it('classifies a missing resumed ACP session after broadcasting its terminal error', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_603,
+        data: { code: 'FS_NOT_FOUND', detail: '/sessions/missing-grok-session' },
+        message: 'Path not found.',
+      });
+      grokAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onEvents([
+          {
+            data: {
+              agentType: 'grok-build',
+              details: {
+                code: missingSessionError.rpcError.code,
+                data: missingSessionError.rpcError.data,
+              },
+              message: missingSessionError.message,
+            },
+            operationId: options.operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'error',
+          },
+        ]);
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        command: 'grok',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-grok-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-grok-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Grok Build session could not be found, so it can no longer be resumed.',
+      );
+
+      expect(grokAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({ resumeSessionId: 'missing-grok-session' }),
+      );
+      const eventIndex = send.mock.calls.findIndex(([channel]) => channel === 'heteroAgentEvent');
+      const errorIndex = send.mock.calls.findIndex(
+        ([channel]) => channel === 'heteroAgentSessionError',
+      );
+      expect(eventIndex).toBeGreaterThanOrEqual(0);
+      expect(errorIndex).toBeGreaterThan(eventIndex);
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'grok-build',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'grok',
+          details: {
+            code: -32_603,
+            data: { code: 'FS_NOT_FOUND', detail: '/sessions/missing-grok-session' },
+          },
+          message:
+            'The saved Grok Build session could not be found, so it can no longer be resumed.',
+          resumeSessionId: 'missing-grok-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('does not classify a non-load ACP filesystem error as a stale resume session', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const promptError = new AcpRpcResponseError('session/prompt', {
+        code: -32_603,
+        data: { code: 'FS_NOT_FOUND', detail: '/workspace/missing-file' },
+        message: 'Path not found.',
+      });
+
+      const payload = (ctr as any).getSessionErrorPayload(promptError, {
+        agentSessionId: 'grok-session',
+        agentType: 'grok-build',
+        args: [],
+        command: 'grok',
+        resumeSessionId: 'grok-session',
+        sessionId: 'session-1',
+      });
+
+      expect(payload).toBe(promptError.message);
     });
   });
 
@@ -1717,6 +2069,93 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (trae)', () => {
+    it('routes TRAE through ACP and persists the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        args: ['--feature=test'],
+        command: 'traecli',
+        initialModel: 'gpt-5.4',
+        resumeSessionId: 'trae_session_old',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-trae', prompt: 'inspect this repo', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(traeAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--feature=test'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'traecli',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'gpt-5.4',
+          operationId: 'op-trae',
+          prompt: [{ text: 'inspect this repo', type: 'text' }],
+          resumeSessionId: 'trae_session_old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'trae_session_1',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentRuntimeStatus', {
+        activeTasks: [],
+        lastEventAt: expect.any(Number),
+        operationId: 'op-trae',
+        sessionId,
+        state: 'running',
+        transport: 'trae-acp',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      traeAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Please sign in through TRAE Enterprise\n');
+        throw new Error('TRAE ACP exited unexpectedly (code 1, signal null)');
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-trae-auth', prompt: 'work', sessionId }),
+      ).rejects.toThrow('TRAE CLI could not authenticate');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'trae',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command: 'traecli',
+          stderr: expect.stringContaining('Please sign in through TRAE Enterprise'),
+        }),
+        sessionId,
+      });
+    });
+  });
+
   describe('spawnLhHeteroExec', () => {
     const params = {
       agentType: 'opencode',
@@ -2203,6 +2642,26 @@ describe('HeterogeneousAgentCtr', () => {
       if (!match) throw new Error(`no handler registered for "${eventName}"`);
       return match[1];
     };
+
+    it('before-quit closes a running TRAE ACP session', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'trae', command: 'traecli' });
+      const session = (ctr as any).sessions.get(sessionId);
+      session.traeAcpSession = { close: traeAcpSessionCloseMock };
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit();
+
+      expect(traeAcpSessionCloseMock).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      expect((ctr as any).sessions.has(sessionId)).toBe(false);
+    });
 
     it('before-quit synchronously unlinks every pending intervention temp config', async () => {
       const electron = (await import('electron')) as any;

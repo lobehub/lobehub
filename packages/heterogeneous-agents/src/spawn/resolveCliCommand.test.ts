@@ -148,6 +148,22 @@ describe('resolveCliCommand', () => {
       expect(execMock).not.toHaveBeenCalled();
     });
 
+    it('validates Grok Build with its ACP agent-mode capability probe', async () => {
+      callExecFile('grok 1.0.3 (ea094a8) [stable]');
+      callExecFile('Usage: grok agent [OPTIONS] <stdio|leader>');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('grok-build', '/Users/x/.grok/bin/grok');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.grok/bin/grok',
+        version: '1.0.3',
+      });
+      expect(execFileMock.mock.calls[0]![1]).toEqual(['--version']);
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['agent', '--help']);
+    });
+
     it('resolves and validates OpenCode using its bare semver output', async () => {
       callExecFile('/Users/x/.opencode/bin/opencode\n');
       callExecFile('1.18.3');
@@ -266,6 +282,51 @@ describe('resolveCliCommand', () => {
         if (originalShell === undefined) delete process.env.SHELL;
         else process.env.SHELL = originalShell;
       }
+    });
+
+    it('resolves and validates the TRAE Enterprise CLI', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('TraeCode CLI 1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('trae', 'traecli')).resolves.toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('rejects the unrelated open-source trae-cli trajectory runner', async () => {
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', '/usr/local/bin/trae-cli');
+
+      expect(status.available).toBe(false);
+      expect(execFileMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects the unrelated trae-cli banner even when the executable was renamed', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('trae-cli 0.1.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toEqual({ available: false });
     });
 
     it('finds OpenCode in its well-known user-local install path', async () => {
@@ -780,6 +841,11 @@ describe('resolveCliCommand', () => {
       expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
     });
 
+    it('defines grok as the default Grok Build command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND['grok-build']).toBe('grok');
+    });
+
     it('defines pi as the default Pi command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
@@ -788,6 +854,11 @@ describe('resolveCliCommand', () => {
     it('defines qodercli as the default Qoder command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
+    });
+
+    it('defines traecli as the default TRAE command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

@@ -20,9 +20,10 @@ import {
   CircleStop,
   Copy,
   ExternalLink,
+  MessageCircle,
   MoreHorizontal,
-  SquarePen,
 } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,6 +39,7 @@ import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
 import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
+import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -96,8 +98,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
+  const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
   const hasBody = Boolean(
-    activity.summary || activity.content || canFollowUp || activity.verify?.total,
+    activity.summary || activity.content || showRunFollowUp || activity.verify?.total,
   );
   // A verdict with no results behind it has nothing to move down to, so it
   // stays in the header no matter what the body is doing.
@@ -121,8 +124,22 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   }, [isRunning, activity.time]);
 
   const handleOpen = useCallback(() => {
-    if (activity.id) openTopicDrawer(activity.id);
-  }, [activity.id, openTopicDrawer]);
+    if (!activity.id) return;
+    openTopicDrawer(activity.id, {
+      agentId:
+        activity.author?.type === 'agent' ? activity.author.id : activity.agentId || undefined,
+      title: activity.title,
+    });
+  }, [activity.agentId, activity.author, activity.id, activity.title, openTopicDrawer]);
+
+  const handleTitleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      handleOpen();
+    },
+    [handleOpen],
+  );
 
   const handleCopyId = useCallback(() => {
     if (activity.id) void navigator.clipboard.writeText(activity.id);
@@ -236,7 +253,16 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               {activity.sourceTaskIdentifier}
             </Tag>
           )}
-          <Text ellipsis weight={500}>
+          <Text
+            ellipsis
+            aria-disabled={activity.id ? undefined : true}
+            role={activity.id ? 'button' : undefined}
+            style={{ cursor: activity.id ? 'pointer' : undefined }}
+            tabIndex={activity.id ? 0 : -1}
+            weight={500}
+            onClick={handleOpen}
+            onKeyDown={handleTitleKeyDown}
+          >
             {activity.title}
           </Text>
           {activity.seq != null && (
@@ -310,7 +336,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               />
             </Flexbox>
           )}
-          {canFollowUp &&
+          {showRunFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>
                 <RunReplyEditor
@@ -324,7 +350,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
             ) : (
               <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
                 <ActionIcon
-                  icon={SquarePen}
+                  icon={MessageCircle}
                   size={'small'}
                   title={t('taskDetail.runFollowUp')}
                   onClick={() => setCommenting(true)}

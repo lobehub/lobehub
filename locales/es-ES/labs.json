@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "Acciones de Selección de Texto en Mensajes",
   "features.oauthApps.desc": "Mostrar la gestión de aplicaciones OAuth en la configuración personal y del espacio de trabajo. Esta función está oculta por defecto.",
   "features.oauthApps.title": "Aplicaciones OAuth",
+  "features.projects.desc": "Organiza objetivos a largo plazo en espacios de trabajo dedicados con sus propios agentes, bases de conocimiento y tareas.",
+  "features.projects.title": "Espacios de Trabajo de Proyectos",
   "features.taskVerify.desc": "Agrega una sección de aceptación de entrega a los detalles de la tarea: describe la aceptación en una frase y permite que la IA genere criterios de verificación editables.",
   "features.taskVerify.title": "Aceptación de Entrega de Tarea",
   "features.topicAcceptance.desc": "Crea una lista de verificación de entrega para el tema actual justo encima del compositor, para que la conversación cumpla con los estándares que puedes editar en cualquier momento.",

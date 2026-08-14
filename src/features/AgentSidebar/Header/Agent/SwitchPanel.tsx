@@ -1,6 +1,6 @@
-import { Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,21 +9,17 @@ import AgentListContent from '@/features/HomeSidebar/Body/Agent/List/AgentListCo
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import PrivateList from '@/features/HomeSidebar/Body/Private/List';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { SidebarHeaderSelectPopover } from '@/features/NavPanel/SidebarHeaderSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
-const styles = createStaticStyles(({ cssVar, css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   sectionHeader: css`
     padding-block: 4px;
     padding-inline: 8px;
     line-height: 20px;
-  `,
-  trigger: css`
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
 }));
 
@@ -82,23 +78,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
     [handleMoreClick, showPrivateSection, t],
   );
 
-  return (
-    <Popover
-      classNames={{ trigger: styles.trigger }}
-      content={content}
-      nativeButton={false}
-      placement="bottomLeft"
-      trigger="click"
-      styles={{
-        content: {
-          padding: 0,
-          width: 240,
-        },
-      }}
-    >
-      {children}
-    </Popover>
-  );
+  return <SidebarHeaderSelectPopover content={content}>{children}</SidebarHeaderSelectPopover>;
 });
 
 export default SwitchPanel;

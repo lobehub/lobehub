@@ -4,6 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { listTraeAcpModelsMock } = vi.hoisted(() => ({
+  listTraeAcpModelsMock: vi.fn(),
+}));
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'darwin') };
@@ -12,6 +16,10 @@ vi.mock('node:os', async () => {
 vi.mock('node:child_process', () => ({
   exec: vi.fn(),
   execFile: vi.fn(),
+}));
+
+vi.mock('../spawn/traeAcpSession', () => ({
+  listTraeAcpModels: listTraeAcpModelsMock,
 }));
 
 const execFileMock = vi.mocked(childProcess.execFile);
@@ -35,6 +43,7 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    listTraeAcpModelsMock.mockReset();
   });
 
   afterEach(() => {
@@ -469,5 +478,34 @@ describe('heterogeneous agent model discovery', () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it('discovers TRAE models through ACP and forwards provider arguments', async () => {
+    listTraeAcpModelsMock.mockResolvedValue([
+      { id: 'seed-2.0-code', modelId: 'seed-2.0-code', providerId: 'trae' },
+    ]);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--feature=test'],
+        command: '/custom/traecli',
+        cwd: '/repo',
+        env: { TRAE_CONFIG_DIR: '/config' },
+        type: 'trae',
+      }),
+    ).resolves.toMatchObject({
+      models: [{ id: 'seed-2.0-code', modelId: 'seed-2.0-code', providerId: 'trae' }],
+      status: 'success',
+    });
+    expect(listTraeAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--feature=test'],
+        commandPath: '/custom/traecli',
+        cwd: '/repo',
+        env: { TRAE_CONFIG_DIR: '/config' },
+      }),
+    );
+    expect(execFileMock).not.toHaveBeenCalled();
   });
 });

@@ -38,12 +38,13 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
-  const { hideAchieved = false, task } = props;
+  const { hideAchieved = false, projectId, task } = props;
   const config = task.config as { goal?: { maxIterations?: number | null } } | null;
   const title = task.name?.trim() || task.instruction.trim() || task.identifier;
   const description = getGoalDescription(task);
   const handleClick = () => {
-    if (aid) navigate(`/agent/${aid}/goal/${task.identifier}`);
+    if (projectId) navigate(`/task/${task.identifier}`);
+    else if (aid) navigate(`/agent/${aid}/goal/${task.identifier}`);
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;

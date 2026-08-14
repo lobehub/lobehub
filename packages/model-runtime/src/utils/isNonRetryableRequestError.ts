@@ -5,6 +5,7 @@ import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
 const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
   AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.InvalidRequestFormat,
   AgentRuntimeErrorType.ProviderContentPolicyViolation,
   AgentRuntimeErrorType.ProviderNoImageGenerated,
 ]);

@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "消息文本选择操作",
   "features.oauthApps.desc": "在个人和工作区设置中显示 OAuth 应用管理入口。此功能默认隐藏。",
   "features.oauthApps.title": "OAuth 应用",
+  "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",
+  "features.projects.title": "项目工作空间",
   "features.taskVerify.desc": "在任务详情里增加「交付验收」模块：一句话描述验收要求，AI 自动生成可编辑的验收项。",
   "features.taskVerify.title": "任务交付验收",
   "features.topicAcceptance.desc": "在输入框上方为当前话题编写一份交付验收清单，让对话对照你随时可编辑的标准来交付。",
