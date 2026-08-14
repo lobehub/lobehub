@@ -20,8 +20,8 @@ import {
   CircleStop,
   Copy,
   ExternalLink,
+  MessageCircle,
   MoreHorizontal,
-  SquarePen,
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -39,6 +39,7 @@ import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
 import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
+import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -97,8 +98,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
+  const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
   const hasBody = Boolean(
-    activity.summary || activity.content || canFollowUp || activity.verify?.total,
+    activity.summary || activity.content || showRunFollowUp || activity.verify?.total,
   );
   // A verdict with no results behind it has nothing to move down to, so it
   // stays in the header no matter what the body is doing.
@@ -334,7 +336,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               />
             </Flexbox>
           )}
-          {canFollowUp &&
+          {showRunFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>
                 <RunReplyEditor
@@ -348,7 +350,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
             ) : (
               <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
                 <ActionIcon
-                  icon={SquarePen}
+                  icon={MessageCircle}
                   size={'small'}
                   title={t('taskDetail.runFollowUp')}
                   onClick={() => setCommenting(true)}
