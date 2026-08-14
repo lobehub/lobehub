@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "訊息文字選取操作",
   "features.oauthApps.desc": "在個人和工作區設定中顯示 OAuth 應用程式管理。此功能預設為隱藏。",
   "features.oauthApps.title": "OAuth 應用程式",
+  "features.projects.desc": "將長期目標組織到專屬工作空間中，這些空間擁有自己的代理、知識庫和任務。",
+  "features.projects.title": "專案工作空間",
   "features.taskVerify.desc": "在任務詳情中新增交付驗收部分：用一句話描述驗收內容，並讓 AI 生成可編輯的驗收標準。",
   "features.taskVerify.title": "任務交付驗收",
   "features.topicAcceptance.desc": "在編輯器上方為當前主題撰寫交付清單，以確保對話符合標準，您可以隨時進行編輯。",

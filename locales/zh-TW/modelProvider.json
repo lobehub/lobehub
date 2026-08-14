@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "適用於 Claude Opus 4.6；切換是否啟用自適應思考。",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "適用於 Claude、DeepSeek 及其他推理模型；啟用更深入的思考能力。",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "適用於 GLM-5.2；以高級和最大級別控制推理努力。",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "適用於 GLM-5.3；透過低、高和最大等級控制推理努力。思考無法被禁用。",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "適用於 GPT-5 系列；控制推理強度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "適用於 GPT-5.1 系列；控制推理強度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "適用於 GPT-5.2 Pro 系列；控制推理強度。",

@@ -278,6 +278,8 @@ export default {
     'For GPT-5.6 series; controls reasoning intensity from None through Max.',
   'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
     'For GLM-5.2; controls reasoning effort with High and Max levels.',
+  'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint':
+    'For GLM-5.3; controls reasoning effort with Low, High, and Max levels. Thinking cannot be disabled.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':

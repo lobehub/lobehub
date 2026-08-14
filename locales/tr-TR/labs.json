@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "Mesaj Metni Seçim Eylemleri",
   "features.oauthApps.desc": "Kişisel ve çalışma alanı ayarlarında OAuth uygulama yönetimini göster. Bu özellik varsayılan olarak gizlidir.",
   "features.oauthApps.title": "OAuth Uygulamaları",
+  "features.projects.desc": "Uzun vadeli hedefleri, kendi ajanları, bilgi tabanları ve görevleriyle özel çalışma alanlarında organize edin.",
+  "features.projects.title": "Proje Çalışma Alanları",
   "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",
   "features.taskVerify.title": "Görev Teslimat Kabulü",
   "features.topicAcceptance.desc": "Mevcut konu için bir teslimat kontrol listesi oluşturun ve bunu düzenleyiciye hemen üstüne yerleştirin, böylece konuşma her zaman düzenleyebileceğiniz standartlara uygun şekilde yapılır.",

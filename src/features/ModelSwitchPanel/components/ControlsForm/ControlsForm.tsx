@@ -25,6 +25,7 @@ import ContextCachingSwitch from './ContextCachingSwitch';
 import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GLM52ReasoningEffortSlider from './GLM52ReasoningEffortSlider';
+import GLM53ReasoningEffortSlider from './GLM53ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
@@ -357,6 +358,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'glm5_2ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <GLM53ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'glm5_3ReasoningEffort',
         style: {
           paddingBottom: 0,
         },

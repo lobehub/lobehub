@@ -9,6 +9,7 @@ import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/component
 import DeepSeekReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/DeepSeekReasoningEffortSlider';
 import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
 import GLM52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GLM52ReasoningEffortSlider';
+import GLM53ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GLM53ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
@@ -119,6 +120,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'glm5_2ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint',
+    key: 'glm5_3ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint',
     key: 'grok4_20ReasoningEffort',
   },
@@ -215,6 +220,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ReasoningEffort: 'reasoningEffort',
   gpt5_6ReasoningEffort: 'reasoningEffort',
   glm5_2ReasoningEffort: 'reasoningEffort',
+  glm5_3ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
   grok4_3ReasoningEffort: 'reasoningEffort',
   grok4_5ReasoningEffort: 'reasoningEffort',
@@ -269,6 +275,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_6ReasoningEffort: { labelSuffix: ' (GPT-5.6)', previewWidth: 340, tag: 'reasoning_effort' },
   glm5_2ReasoningEffort: { labelSuffix: ' (GLM-5.2)', previewWidth: 240, tag: 'reasoning_effort' },
+  glm5_3ReasoningEffort: { labelSuffix: ' (GLM-5.3)', previewWidth: 240, tag: 'reasoning_effort' },
   grok4_20ReasoningEffort: {
     labelSuffix: ' (Grok 4.20)',
     previewWidth: 300,
@@ -464,6 +471,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
       gpt5_6ReasoningEffort: <GPT56ReasoningEffortSlider value="medium" />,
       glm5_2ReasoningEffort: <GLM52ReasoningEffortSlider value="max" />,
+      glm5_3ReasoningEffort: <GLM53ReasoningEffortSlider value="max" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
       grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
       grok4_5ReasoningEffort: <Grok45ReasoningEffortSlider value="high" />,

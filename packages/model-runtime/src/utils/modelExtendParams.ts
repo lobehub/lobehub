@@ -322,6 +322,14 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
     extendParams.reasoning_effort = chatConfig.glm5_2ReasoningEffort;
   }
 
+  if (modelExtendParams.includes('glm5_3ReasoningEffort')) {
+    // GLM-5.3 rejects thinking.type=disabled; always send enabled and only vary effort.
+    extendParams.thinking = { type: 'enabled' };
+    if (chatConfig.glm5_3ReasoningEffort) {
+      extendParams.reasoning_effort = chatConfig.glm5_3ReasoningEffort;
+    }
+  }
+
   if (modelExtendParams.includes('grok4_20ReasoningEffort') && chatConfig.grok4_20ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
   }
