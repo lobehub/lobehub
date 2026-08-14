@@ -59,6 +59,7 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -1458,6 +1459,7 @@ export default class HeterogeneousAgentCtr {
         initialCumulativeUsage,
         initialModel: session.model,
         initialThreadId: session.agentSessionId,
+        threadName: truncateTitle(params.prompt),
         onEvents: async (events) => {
           for (const event of events) {
             this.broadcast('heteroAgentEvent', {

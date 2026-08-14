@@ -41,6 +41,7 @@ const createClientHarness = (
     initialThreadId?: string;
     interruptError?: Error;
     malformedThreadStart?: boolean;
+    threadNameError?: Error;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
@@ -98,6 +99,10 @@ const createClientHarness = (
           model: 'gpt-5.5-codex',
           thread: { id: options.initialThreadId ?? 'thread-1' },
         };
+      }
+      if (method === 'thread/name/set') {
+        if (options.threadNameError) throw options.threadNameError;
+        return {};
       }
       if (method === 'turn/start') {
         await turnStartGate;
@@ -158,7 +163,7 @@ const createClientHarness = (
 
 const createSession = (
   harness: ClientHarness,
-  options: { initialThreadId?: string; onEventsError?: Error } = {},
+  options: { initialThreadId?: string; onEventsError?: Error; threadName?: string } = {},
 ) => {
   const events: any[] = [];
   const statuses: string[] = [];
@@ -166,6 +171,7 @@ const createSession = (
   const session = new CodexThreadSession({
     client: harness.client,
     initialThreadId: options.initialThreadId,
+    threadName: options.threadName,
     onEvents: (batch) => {
       if (options.onEventsError) throw options.onEventsError;
       events.push(...batch);
@@ -189,6 +195,54 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  it('sets the original prompt as the name of a new persisted thread', async () => {
+    const harness = createClientHarness();
+    const { run, session } = createSession(harness, { threadName: 'Original prompt title' });
+
+    await run('operation-1', 'workspace-enriched input');
+    session.close();
+
+    expect(harness.requests.slice(0, 3)).toEqual([
+      {
+        method: 'thread/start',
+        params: {
+          approvalPolicy: 'never',
+          cwd: '/workspace',
+          sandbox: 'danger-full-access',
+        },
+      },
+      {
+        method: 'thread/name/set',
+        params: { name: 'Original prompt title', threadId: 'thread-1' },
+      },
+      {
+        method: 'turn/start',
+        params: {
+          input: [{ text: 'workspace-enriched input', text_elements: [], type: 'text' }],
+          threadId: 'thread-1',
+        },
+      },
+    ]);
+  });
+
+  it('does not block the first turn when thread naming is unsupported', async () => {
+    const harness = createClientHarness({ threadNameError: new Error('Method not found') });
+    const { run, session } = createSession(harness, { threadName: 'Original prompt title' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      await expect(run('operation-1', 'workspace-enriched input')).resolves.toBeUndefined();
+      expect(harness.requests.map(({ method }) => method)).toEqual([
+        'thread/start',
+        'thread/name/set',
+        'turn/start',
+      ]);
+    } finally {
+      warn.mockRestore();
+      session.close();
+    }
+  });
+
   it('reuses one native thread across multiple turns', async () => {
     const harness = createClientHarness();
     const { events, onSessionId, run, session, statuses } = createSession(harness);
@@ -227,6 +281,7 @@ describe('CodexThreadSession', () => {
     const harness = createClientHarness({ initialThreadId: 'thread-existing' });
     const { onSessionId, run, session } = createSession(harness, {
       initialThreadId: 'thread-existing',
+      threadName: 'Do not rename existing thread',
     });
 
     await run('operation-1', 'continue');

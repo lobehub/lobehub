@@ -44,6 +44,11 @@ interface ActiveTurn {
   turnId?: string;
 }
 
+interface ThreadNameSetParams {
+  name: string;
+  threadId: string;
+}
+
 export interface CodexThreadTurnOptions {
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
@@ -60,6 +65,8 @@ export interface CodexThreadSessionOptions {
   onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
   onSessionId: (sessionId: string) => void;
   sessionId: string;
+  /** A short title derived from the original user prompt, before injected context. */
+  threadName?: string;
   threadParams: ThreadStartParams;
 }
 
@@ -245,7 +252,22 @@ export class CodexThreadSession {
     }
 
     await this.attachThread(threadId, response.model);
-    if (!this.options.threadParams.ephemeral) this.options.onSessionId(threadId);
+    if (!this.options.threadParams.ephemeral) {
+      await this.setThreadName(threadId);
+      this.options.onSessionId(threadId);
+    }
+  }
+
+  private async setThreadName(threadId: string): Promise<void> {
+    const name = this.options.threadName?.trim();
+    if (!name) return;
+
+    try {
+      const params: ThreadNameSetParams = { name, threadId };
+      await this.options.client.request<Record<string, never>>('thread/name/set', params);
+    } catch (error) {
+      console.warn('Failed to set Codex thread name:', { error, threadId });
+    }
   }
 
   private async attachThread(threadId: string, model?: string): Promise<void> {

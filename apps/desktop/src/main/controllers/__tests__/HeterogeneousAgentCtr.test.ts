@@ -1384,6 +1384,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       expect(codexAppServerConstructMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          threadName: 'stream this',
           threadParams: expect.objectContaining({
             cwd: FAKE_DESKTOP_PATH,
             model: 'gpt-5.5-codex',
