@@ -45,12 +45,16 @@ const createState = (stepCount = 0) =>
     },
   }) satisfies AgentState;
 
-const createHost = (stepIndex: number, publishEvent = vi.fn()) =>
+const createHost = (
+  stepIndex: number,
+  publishEvent = vi.fn(),
+  clearRunningMark = vi.fn(),
+) =>
   ({
     operation: { operationId: 'operation-1', stepIndex },
     transports: {
       messages: {},
-      operationStore: { clearRunningMark: vi.fn() },
+      operationStore: { clearRunningMark },
       stream: { publishError: vi.fn(), publishEvent },
     },
   }) as unknown as AgentRuntimeHost;
@@ -78,5 +82,14 @@ describe('createAgentRuntimeExecutors', () => {
 
     expect(resolveHost).toHaveBeenCalledWith(instruction, state, undefined);
     expect(publishEvent).toHaveBeenCalledWith(expect.objectContaining({ stepIndex: 7 }));
+  });
+
+  it('leaves running-mark cleanup to the server terminal lifecycle', async () => {
+    const clearRunningMark = vi.fn();
+    const executors = createAgentRuntimeExecutors(createHost(0, vi.fn(), clearRunningMark));
+
+    await executors.finish!({ reason: 'completed', type: 'finish' }, createState());
+
+    expect(clearRunningMark).not.toHaveBeenCalled();
   });
 });
