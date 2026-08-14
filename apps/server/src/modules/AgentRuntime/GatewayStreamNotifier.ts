@@ -17,7 +17,7 @@ const MAX_INFLIGHT = 20; // bounded concurrency
 
 /**
  * Decorator that wraps an IStreamEventManager and additionally
- * pushes events to the Agent Gateway via HTTP (fire-and-forget).
+ * pushes events to the Agent Gateway via HTTP.
  *
  * Redis SSE remains the primary event storage / subscription mechanism.
  * The Gateway is an additional push channel for WebSocket delivery.
@@ -88,7 +88,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     chunkData: StreamChunkData,
   ): Promise<string> {
     const result = await this.inner.publishStreamChunk(operationId, stepIndex, chunkData);
-    void this.pushEvent(operationId, {
+    await this.pushEvent(operationId, {
       data: chunkData,
       operationId,
       stepIndex,
