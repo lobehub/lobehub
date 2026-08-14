@@ -99,6 +99,7 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
 > = {
   'gemini-flash-latest': {
     thinkingLevel: 'medium',
+    thinkingLevel3: 'medium',
   },
   'gemini-flash-lite-latest': {
     thinkingLevel: 'minimal',
