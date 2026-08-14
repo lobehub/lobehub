@@ -162,6 +162,34 @@ describe('GatewayStreamNotifier', () => {
   });
 
   describe('publishAgentRuntimeEnd', () => {
+    it('waits for the terminal gateway push before resolving', async () => {
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      const result = notifier.publishAgentRuntimeEnd({
+        finalState: { status: 'done' },
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 2,
+      });
+      let resolved = false;
+      void result.then(() => {
+        resolved = true;
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      resolveFetch();
+      await expect(result).resolves.toBe('publishAgentRuntimeEnd-result');
+    });
+
     it('delegates to inner and returns its result', async () => {
       const finalState = { status: 'done' };
 
