@@ -118,7 +118,9 @@ describe('BriefCardActions', () => {
         briefType="decision"
         actions={[
           {
-            key: 'review',
+            // A key with no `brief.action.*` locale entry, so the
+            // server-provided label renders as-is (locale copy wins otherwise).
+            key: 'reviewAcceptance',
             label: 'Review acceptance',
             type: 'link',
             url: '/acceptance/acceptance-1',
