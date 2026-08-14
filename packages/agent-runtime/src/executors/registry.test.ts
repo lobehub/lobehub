@@ -45,11 +45,7 @@ const createState = (stepCount = 0) =>
     },
   }) satisfies AgentState;
 
-const createHost = (
-  stepIndex: number,
-  publishEvent = vi.fn(),
-  clearRunningMark = vi.fn(),
-) =>
+const createHost = (stepIndex: number, publishEvent = vi.fn(), clearRunningMark = vi.fn()) =>
   ({
     operation: { operationId: 'operation-1', stepIndex },
     transports: {
