@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "메시지 텍스트 선택 작업",
   "features.oauthApps.desc": "개인 및 워크스페이스 설정에서 OAuth 앱 관리를 표시합니다. 이 기능은 기본적으로 숨겨져 있습니다.",
   "features.oauthApps.title": "OAuth 앱",
+  "features.projects.desc": "장기적인 목표를 전용 작업 공간으로 구성하여 고유한 에이전트, 지식 베이스 및 작업을 관리하세요.",
+  "features.projects.title": "프로젝트 작업 공간",
   "features.taskVerify.desc": "작업 세부 정보에 배송 수락 섹션을 추가하세요: 수락을 한 문장으로 설명하고 AI가 편집 가능한 검증 기준을 생성하도록 합니다.",
   "features.taskVerify.title": "작업 배송 수락",
   "features.topicAcceptance.desc": "현재 주제에 대한 전달 체크리스트를 작성하여 작곡기 바로 위에 배치하면 대화를 언제든지 편집 가능한 표준에 맞출 수 있습니다.",

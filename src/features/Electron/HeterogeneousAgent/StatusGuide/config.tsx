@@ -6,10 +6,12 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Grok,
   Kimi,
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 import {
@@ -39,6 +41,10 @@ const GUIDE_PRESENTATION_CONFIG = {
     icon: Cursor,
     translationPrefix: 'cursorInstallGuide',
   },
+  'grok-build': {
+    icon: Grok,
+    translationPrefix: 'grokBuildInstallGuide',
+  },
   'kimi-code': {
     icon: Kimi,
     translationPrefix: 'kimiCodeInstallGuide',
@@ -54,6 +60,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'qoder': {
     icon: Qoder,
     translationPrefix: 'qoderInstallGuide',
+  },
+  'trae': {
+    icon: Trae,
+    translationPrefix: 'traeInstallGuide',
   },
 } as const satisfies Record<
   LocalHeterogeneousAgentType,

@@ -65,6 +65,16 @@ describe('refineErrorCode', () => {
   });
 
   describe('message-pattern pass', () => {
+    it('classifies media download failures as InvalidRequestFormat', () => {
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          httpStatus: 400,
+          message: 'failed to download or process media content',
+        }),
+      ).toBe(AgentRuntimeErrorType.InvalidRequestFormat);
+    });
+
     it('reclassifies a rate-limit message into RateLimitExceeded', () => {
       expect(
         refineErrorCode({

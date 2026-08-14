@@ -118,7 +118,9 @@ describe('BriefCardActions', () => {
         briefType="decision"
         actions={[
           {
-            key: 'review',
+            // A key with no `brief.action.*` locale entry, so the
+            // server-provided label renders as-is (locale copy wins otherwise).
+            key: 'reviewAcceptance',
             label: 'Review acceptance',
             type: 'link',
             url: '/acceptance/acceptance-1',
@@ -127,7 +129,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    const link = screen.getByRole('button', { name: 'Review delivery' });
+    const link = screen.getByRole('button', { name: 'Review acceptance' });
     expect(link).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
     expect(fireEvent.click(link)).toBe(true);
   });

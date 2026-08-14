@@ -28,7 +28,7 @@ export interface NightlyReviewAgentTarget {
 /** User candidate returned by the nightly review scheduler data boundary. */
 export interface NightlyReviewEligibleUser {
   /** User creation time used by stable scheduler pagination. */
-  createdAt?: Date;
+  createdAt: Date;
   /** Stable user id. */
   id: string;
   /** IANA timezone for local night-window evaluation. */
@@ -83,18 +83,30 @@ export interface NightlyReviewScheduleAdapters {
   listEligibleUsers: (
     input?: ListNightlyReviewEligibleUsersInput,
   ) => Promise<NightlyReviewEligibleUser[]>;
-  /**
-   * Supplies the scheduler dispatch time.
-   *
-   * @default Uses the current wall-clock time when omitted.
-   */
-  now?: () => Date;
 }
 
-/** Options for one nightly review dispatch pass. */
-export interface DispatchNightlyReviewRequestsOptions extends ListNightlyReviewEligibleUsersInput {
-  /** Maximum active agents to enqueue for each eligible in-window user. */
+/** Options for listing exactly one page of nightly review user candidates. */
+export interface ListNightlyReviewEligibleUsersPageOptions extends ListNightlyReviewEligibleUsersInput {
+  /** Maximum eligible users returned by this page. */
+  limit: number;
+}
+
+/** One cursor-paginated page of nightly review user candidates. */
+export interface NightlyReviewEligibleUsersPage {
+  /** Cursor to pass to the next pagination workflow, when another page may exist. */
+  nextCursor?: NightlyReviewScheduleCursor;
+  /** Users in this bounded page. */
+  users: NightlyReviewEligibleUser[];
+}
+
+/** Options for dispatching nightly review sources for exactly one user. */
+export interface DispatchNightlyReviewForUserOptions {
+  /** UTC instant shared by every user execution started from the same schedule run. */
+  requestedAt: Date;
+  /** Maximum active agents to enqueue for this user. */
   targetLimit?: number;
+  /** One user candidate owned by this execution. */
+  user: NightlyReviewEligibleUser;
 }
 
 /** Summary returned by one nightly review dispatch pass. */
@@ -108,22 +120,40 @@ export interface NightlyReviewScheduleSummary {
 /** Nightly review scheduler service API. */
 export interface NightlyReviewScheduleService {
   /**
-   * Dispatches nightly review request sources for users currently in their local night window.
+   * Dispatches nightly review request sources for exactly one user.
    *
    * Use when:
-   * - A shared cron or QStash schedule performs one central dispatch pass
-   * - Cron should only produce source events and leave review execution to AgentSignal handlers
+   * - The execution workflow owns one user from a paginated scheduler page
+   * - Review execution should remain bounded by the per-user target limit
    *
    * Expects:
-   * - Adapters return users and targets without side effects except `enqueueSource`
-   * - `now` is a UTC instant shared by all users in the pass
+   * - `requestedAt` is shared by every user execution from the same schedule run
+   * - The user came from {@link listEligibleUsersPage}
    *
    * Returns:
-   * - A summary with enqueue and skip counts for observability
+   * - A summary with enqueue and skip counts for this user
    */
-  dispatchNightlyReviewRequests: (
-    options?: DispatchNightlyReviewRequestsOptions,
+  dispatchNightlyReviewForUser: (
+    options: DispatchNightlyReviewForUserOptions,
   ) => Promise<NightlyReviewScheduleSummary>;
+
+  /**
+   * Lists exactly one stable cursor page of users.
+   *
+   * Use when:
+   * - The pagination workflow needs one bounded page before fan-out
+   * - A next workflow invocation will continue from the returned cursor
+   *
+   * Expects:
+   * - `limit` is a positive, externally bounded page size
+   * - The adapter sorts users by `createdAt, id`
+   *
+   * Returns:
+   * - The current users and a next cursor only when the page is full
+   */
+  listEligibleUsersPage: (
+    options: ListNightlyReviewEligibleUsersPageOptions,
+  ) => Promise<NightlyReviewEligibleUsersPage>;
 }
 
 interface LocalNightWindow {
@@ -176,96 +206,65 @@ const getLocalNightWindow = (now: Date, timezone: string | null | undefined): Lo
  * - Invalid timezone values can be safely normalized to UTC
  *
  * Returns:
- * - A scheduler service with one dispatch method
+ * - A scheduler service with bounded page-listing and single-user dispatch methods
  */
 export const createSelfReviewScheduleService = (
   adapters: NightlyReviewScheduleAdapters,
 ): NightlyReviewScheduleService => {
   return {
-    dispatchNightlyReviewRequests: async (options = {}) => {
+    dispatchNightlyReviewForUser: async (options) => {
       return tracer.startActiveSpan(
-        'agent_signal.nightly_review.schedule.dispatch',
+        'agent_signal.nightly_review.schedule.execute_user',
         {
           attributes: {
-            'agent.signal.nightly.limit': options.limit ?? 0,
             'agent.signal.nightly.target_limit': options.targetLimit ?? 0,
-            'agent.signal.nightly.whitelist_count': options.whitelist?.length ?? 0,
+            'agent.signal.nightly.user_id': options.user.id,
           },
         },
         async (span) => {
           try {
-            const now = adapters.now?.() ?? new Date();
+            const now = options.requestedAt;
             let enqueued = 0;
             let skipped = 0;
             let targetCount = 0;
-            let userCount = 0;
 
-            // Traverse every page of eligible users. `listEligibleUsers` is
-            // keyset-paginated (createdAt, id); without a cursor the caller
-            // would repeatedly scan the same oldest `limit` users and never
-            // reach users beyond row `limit` (e.g. when the lab filter was
-            // removed and all users are candidates).
-            let cursor = options.cursor;
-            while (true) {
-              const users = await adapters.listEligibleUsers({
-                cursor,
-                limit: options.limit,
-                whitelist: options.whitelist,
+            const localWindow = getLocalNightWindow(now, options.user.timezone);
+
+            if (!localWindow.withinWindow) {
+              skipped = 1;
+            } else {
+              const targets = await adapters.listActiveAgentTargets({
+                limit: options.targetLimit,
+                userId: options.user.id,
+                windowEnd: localWindow.reviewWindowEnd,
+                windowStart: localWindow.reviewWindowStart,
               });
 
-              if (users.length === 0) break;
-              userCount += users.length;
+              targetCount = targets.length;
 
-              for (const user of users) {
-                const localWindow = getLocalNightWindow(now, user.timezone);
-
-                if (!localWindow.withinWindow) {
-                  skipped += 1;
-                  continue;
-                }
-
-                const targets = await adapters.listActiveAgentTargets({
-                  limit: options.targetLimit,
-                  userId: user.id,
-                  windowEnd: localWindow.reviewWindowEnd,
-                  windowStart: localWindow.reviewWindowStart,
+              for (const target of targets) {
+                await adapters.enqueueSource({
+                  payload: {
+                    agentId: target.agentId,
+                    localDate: localWindow.localDate,
+                    requestedAt: now.toISOString(),
+                    reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
+                    reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
+                    timezone: localWindow.timezone,
+                    userId: options.user.id,
+                  },
+                  sourceId: buildNightlyReviewSourceId({
+                    agentId: target.agentId,
+                    localDate: localWindow.localDate,
+                    userId: options.user.id,
+                  }),
+                  sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+                  timestamp: now.getTime(),
                 });
-
-                targetCount += targets.length;
-
-                for (const target of targets) {
-                  await adapters.enqueueSource({
-                    payload: {
-                      agentId: target.agentId,
-                      localDate: localWindow.localDate,
-                      requestedAt: now.toISOString(),
-                      reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
-                      reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
-                      timezone: localWindow.timezone,
-                      userId: user.id,
-                    },
-                    sourceId: buildNightlyReviewSourceId({
-                      agentId: target.agentId,
-                      localDate: localWindow.localDate,
-                      userId: user.id,
-                    }),
-                    sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
-                    timestamp: now.getTime(),
-                  });
-                  enqueued += 1;
-                }
+                enqueued += 1;
               }
-
-              // Stop when the last page returned fewer rows than the page
-              // size (or when no limit is set and the query is unbounded).
-              if (options.limit === undefined || users.length < options.limit) break;
-
-              const lastUser = users[users.length - 1];
-              if (!lastUser.createdAt) break;
-              cursor = { createdAt: lastUser.createdAt, id: lastUser.id };
             }
 
-            span.setAttribute('agent.signal.nightly.user_count', userCount);
             span.setAttribute('agent.signal.nightly.target_count', targetCount);
             span.setAttribute('agent.signal.nightly.enqueued', enqueued);
             span.setAttribute('agent.signal.nightly.skipped', skipped);
@@ -279,6 +278,46 @@ export const createSelfReviewScheduleService = (
                 error instanceof Error
                   ? error.message
                   : 'AgentSignal nightly review schedule dispatch failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      );
+    },
+    listEligibleUsersPage: async (options) => {
+      return tracer.startActiveSpan(
+        'agent_signal.nightly_review.schedule.list_user_page',
+        {
+          attributes: {
+            'agent.signal.nightly.limit': options.limit,
+            'agent.signal.nightly.whitelist_count': options.whitelist?.length ?? 0,
+          },
+        },
+        async (span) => {
+          try {
+            const users = await adapters.listEligibleUsers(options);
+            const lastUser = users.at(-1);
+            const nextCursor =
+              users.length === options.limit && lastUser
+                ? { createdAt: lastUser.createdAt, id: lastUser.id }
+                : undefined;
+
+            span.setAttribute('agent.signal.nightly.user_count', users.length);
+            span.setAttribute('agent.signal.nightly.has_next_page', Boolean(nextCursor));
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return { nextCursor, users };
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly review user pagination failed',
             });
             span.recordException(error as Error);
 

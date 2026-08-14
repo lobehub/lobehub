@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Checkbox, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Button, Checkbox } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type UIEvent } from 'react';

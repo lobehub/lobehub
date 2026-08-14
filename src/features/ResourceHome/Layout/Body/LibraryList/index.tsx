@@ -84,9 +84,11 @@ const LibraryList = memo(() => {
             description={item.description}
             id={item.id}
             key={item.id}
+            memberRestricted={(item as { memberRestricted?: boolean }).memberRestricted}
             name={item.name}
             userId={item.userId}
             visibility={item.visibility}
+            permissionManageable={(item as { permissionManageable?: boolean }).permissionManageable}
           />
         ))}
       </Flexbox>

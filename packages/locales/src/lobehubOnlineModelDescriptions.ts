@@ -60,10 +60,6 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image.description':
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
-  'lobehub.gemini-3.1-flash-image-preview:image.description':
-    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
-  'lobehub.gemini-3.1-flash-image-preview.description':
-    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-lite-image:image.description':
     "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
   'lobehub.gemini-3.1-flash-lite-image.description':
@@ -76,10 +72,14 @@ export const lobeHubOnlineModelDescriptions = {
     "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
   'lobehub.gemini-3.6-flash.description':
     'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
+  'lobehub.gemini-3.7-flash.description':
+    "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
   'lobehub.glm-5.1.description':
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
     'GLM-5.2 is the first open-source model to approach the performance of the latest-generation Claude Opus released in the same period.',
+  'lobehub.glm-5.3.description':
+    "Z.ai's latest flagship. Same base as GLM-5.2 with scaled post-training — 50% stronger coding, open-source SOTA on Terminal Bench 3.0, and a large jump in cyber capability. Thinking is always on.",
   'lobehub.gpt-4-turbo.description':
     'GPT-4 Turbo is a cost-effective multimodal model that balances accuracy and efficiency for real-time tasks.',
   'lobehub.gpt-4.1-mini.description':

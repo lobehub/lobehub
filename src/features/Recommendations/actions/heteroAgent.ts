@@ -5,10 +5,12 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Grok,
   Kimi,
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 import { createElement } from 'react';
 
@@ -20,10 +22,12 @@ const avatarIcons = {
   'codebuddy': CodeBuddy.Avatar,
   'codex': Codex.Avatar,
   'cursor': Cursor.Avatar,
+  'grok-build': Grok.Avatar,
   'kimi-code': Kimi.Avatar,
   'opencode': OpenCode.Avatar,
   'pi': Pi.Avatar,
   'qoder': Qoder.Avatar,
+  'trae': Trae.Avatar,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**

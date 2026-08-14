@@ -178,6 +178,36 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.x.ai/build/overview',
+      errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'no cached auth token found',
+        'session expired',
+        'run `grok login`',
+      ],
+      signInCommand: 'grok login',
+    },
+    defaultCommand: 'grok',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Grok',
+    install: {
+      commands: [
+        'curl -fsSL https://x.ai/cli/install.sh | bash',
+        'irm https://x.ai/cli/install.ps1 | iex',
+      ],
+      docsUrl: 'https://docs.x.ai/build/overview',
+    },
+    kind: 'local-cli',
+    menuKey: 'newGrokBuildAgent',
+    menuLabelKey: 'newGrokBuildAgent',
+    resume: { supported: true },
+    title: 'Grok Build',
+    type: 'grok-build',
+  },
+  {
+    auth: {
       docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
       errorMessage: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
       patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'no model configured'],
@@ -273,6 +303,32 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     resume: { supported: true },
     title: 'Qoder',
     type: 'qoder',
+  },
+  {
+    auth: {
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+      errorMessage: 'TRAE CLI could not authenticate. Sign in through TRAE Enterprise, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'please (?:log|sign) in',
+      ],
+      signInCommand: 'traecli',
+    },
+    defaultCommand: 'traecli',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Trae',
+    install: {
+      commands: [],
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+    },
+    kind: 'local-cli',
+    menuKey: 'newTraeAgent',
+    menuLabelKey: 'newTraeAgent',
+    resume: { supported: true },
+    title: 'TRAE CLI',
+    type: 'trae',
   },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
 

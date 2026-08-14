@@ -1,5 +1,5 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
+import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import type { ItemType } from 'antd/es/menu/interface';
 import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
@@ -110,9 +110,9 @@ export const useMenu = () => {
       icon: <Icon icon={Download} />,
       key: 'get-app',
       label: (
-        <WorkspaceLink escape to="/downloads">
+        <a href={DOWNLOAD_URL.default} rel="noopener noreferrer" target="_blank">
           {t('getApp')}
-        </WorkspaceLink>
+        </a>
       ),
     },
   ];

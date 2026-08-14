@@ -76,6 +76,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Cursor',
     kind: 'cli',
   },
+  'grok-build': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Grok Build — xAI's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Grok Build',
+    kind: 'cli',
+  },
   'hermes': {
     capabilities: CODING_CAPABILITIES,
     description:
@@ -116,6 +123,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       'Qoder — an autonomous terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
     displayName: 'Qoder',
+    kind: 'cli',
+  },
+  'trae': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'TRAE CLI — the TRAE Enterprise coding agent CLI. It can read and edit files, run commands, and complete multi-step software-engineering tasks in a working directory.',
+    displayName: 'TRAE CLI',
     kind: 'cli',
   },
 };
