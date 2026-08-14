@@ -88,7 +88,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     chunkData: StreamChunkData,
   ): Promise<string> {
     const result = await this.inner.publishStreamChunk(operationId, stepIndex, chunkData);
-    await this.pushEvent(operationId, {
+    void this.pushEvent(operationId, {
       data: chunkData,
       operationId,
       stepIndex,
@@ -133,7 +133,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
     const errorType = finalState?.error?.type || finalState?.error?.errorType;
 
-    void this.pushEvent(operationId, {
+    await this.pushEvent(operationId, {
       // Forward `uiMessages` to the gateway push channel so terminal-state
       // clients consuming /push-event get the canonical UIChatMessage[]
       // snapshot — the final step has no later step_start to carry a fresh
