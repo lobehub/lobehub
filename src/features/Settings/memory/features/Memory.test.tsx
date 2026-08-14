@@ -91,11 +91,7 @@ vi.mock('@lobehub/ui', async () => {
             if (!item.name) return [];
 
             return [
-              <AntdForm.Item
-                key={item.name}
-                name={item.name}
-                valuePropName={item.valuePropName}
-              >
+              <AntdForm.Item key={item.name} name={item.name} valuePropName={item.valuePropName}>
                 {item.children}
               </AntdForm.Item>,
             ];
