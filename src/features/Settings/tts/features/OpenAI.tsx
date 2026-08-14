@@ -21,7 +21,7 @@ const OpenAI = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
-  const { tts } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const tts = useUserStore(settingsSelectors.currentTTS, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 

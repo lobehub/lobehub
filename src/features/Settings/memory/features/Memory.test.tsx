@@ -31,16 +31,11 @@ vi.mock('@/hooks/useSaveState', () => ({
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
+      defaultSettings: {},
       isUserStateInit: true,
       setSettings: setSettingsMock,
       settings: { memory: memorySettingsMock.value },
     }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  settingsSelectors: {
-    currentSettings: (state: { settings: unknown }) => state.settings,
-  },
 }));
 
 vi.mock('@/components/Editor/AutoSaveHint', () => ({ default: () => null }));
