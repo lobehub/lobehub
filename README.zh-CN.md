@@ -96,8 +96,8 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 
 <details><summary><kbd>Star History</kbd></summary>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
-    <img src="https://api.star-history.com/svg?repos=lobehub%2Flobehub&type=Date">
+    <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
+    <img src="https://star-history.dera.page/svg?repos=lobehub%2Flobehub&type=Date">
   </picture>
 </details>
 
