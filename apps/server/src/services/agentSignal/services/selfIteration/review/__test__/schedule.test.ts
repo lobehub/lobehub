@@ -33,7 +33,7 @@ vi.mock('@/server/services/agentSignal/emitter', () => ({
   enqueueAgentSignalSourceEvent: mocks.enqueueAgentSignalSourceEvent,
 }));
 
-const createDeps = (now: Date) => ({
+const createDeps = () => ({
   enqueueSource: vi
     .fn<
       (input: AgentSignalSourceEventInput<'agent.nightly_review.requested'>) => Promise<unknown>
@@ -51,7 +51,6 @@ const createDeps = (now: Date) => ({
         timezone: 'Asia/Shanghai',
       },
     ]),
-  now: () => now,
 });
 
 beforeEach(() => {
@@ -63,12 +62,23 @@ afterEach(() => {
 });
 
 describe('nightlyReviewScheduleService', () => {
-  describe('dispatchNightlyReviewRequests', () => {
+  describe('dispatchNightlyReviewForUser', () => {
     it('enqueues Shanghai user nightly review sources with previous full local day window', async () => {
-      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
+      /**
+       * @example
+       * expect(summary).toEqual({ enqueued: 1, skipped: 0 });
+       */
+      const deps = createDeps();
       const service = createSelfReviewScheduleService(deps);
 
-      const summary = await service.dispatchNightlyReviewRequests();
+      const summary = await service.dispatchNightlyReviewForUser({
+        requestedAt: new Date('2026-05-03T18:30:00.000Z'),
+        user: {
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'user-1',
+          timezone: 'Asia/Shanghai',
+        },
+      });
 
       expect(summary).toEqual({ enqueued: 1, skipped: 0 });
       expect(deps.listActiveAgentTargets).toHaveBeenCalledWith({
@@ -94,92 +104,45 @@ describe('nightlyReviewScheduleService', () => {
     });
 
     it('skips users outside the local night window without enqueueing', async () => {
-      const deps = createDeps(new Date('2026-05-03T20:30:00.000Z'));
+      /**
+       * @example
+       * expect(summary.skipped).toBe(1);
+       */
+      const deps = createDeps();
       const service = createSelfReviewScheduleService(deps);
 
-      const summary = await service.dispatchNightlyReviewRequests();
+      const summary = await service.dispatchNightlyReviewForUser({
+        requestedAt: new Date('2026-05-03T20:30:00.000Z'),
+        user: {
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'user-1',
+          timezone: 'Asia/Shanghai',
+        },
+      });
 
       expect(summary).toEqual({ enqueued: 0, skipped: 1 });
       expect(deps.listActiveAgentTargets).not.toHaveBeenCalled();
       expect(deps.enqueueSource).not.toHaveBeenCalled();
     });
 
-    it('traverses every page of eligible users with a keyset cursor', async () => {
-      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
-      deps.listEligibleUsers
-        .mockResolvedValueOnce([
-          {
+    it('falls back to UTC for invalid timezone values without throwing', async () => {
+      /**
+       * @example
+       * expect(source.payload.timezone).toBe('UTC');
+       */
+      const deps = createDeps();
+      const service = createSelfReviewScheduleService(deps);
+
+      await expect(
+        service.dispatchNightlyReviewForUser({
+          requestedAt: new Date('2026-05-04T02:30:00.000Z'),
+          user: {
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             id: 'user-1',
-            timezone: 'Asia/Shanghai',
+            timezone: 'Invalid/Zone',
           },
-          {
-            createdAt: new Date('2026-02-01T00:00:00.000Z'),
-            id: 'user-2',
-            timezone: 'Asia/Shanghai',
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            createdAt: new Date('2026-03-01T00:00:00.000Z'),
-            id: 'user-3',
-            timezone: 'Asia/Shanghai',
-          },
-          {
-            createdAt: new Date('2026-04-01T00:00:00.000Z'),
-            id: 'user-4',
-            timezone: 'Asia/Shanghai',
-          },
-        ])
-        .mockResolvedValueOnce([]);
-      const service = createSelfReviewScheduleService(deps);
-
-      const summary = await service.dispatchNightlyReviewRequests({ limit: 2 });
-
-      expect(summary).toEqual({ enqueued: 4, skipped: 0 });
-      expect(deps.listEligibleUsers).toHaveBeenCalledTimes(3);
-      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(1, {
-        cursor: undefined,
-        limit: 2,
-        whitelist: undefined,
-      });
-      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(2, {
-        cursor: { createdAt: new Date('2026-02-01T00:00:00.000Z'), id: 'user-2' },
-        limit: 2,
-        whitelist: undefined,
-      });
-      expect(deps.listEligibleUsers).toHaveBeenNthCalledWith(3, {
-        cursor: { createdAt: new Date('2026-04-01T00:00:00.000Z'), id: 'user-4' },
-        limit: 2,
-        whitelist: undefined,
-      });
-      expect(deps.enqueueSource).toHaveBeenCalledTimes(4);
-    });
-
-    it('stops paginating after the first page when no limit is provided', async () => {
-      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
-      const service = createSelfReviewScheduleService(deps);
-
-      await service.dispatchNightlyReviewRequests();
-
-      expect(deps.listEligibleUsers).toHaveBeenCalledTimes(1);
-    });
-
-    it('falls back to UTC for invalid timezone values without throwing', async () => {
-      const deps = createDeps(new Date('2026-05-04T02:30:00.000Z'));
-      deps.listEligibleUsers.mockResolvedValue([
-        {
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          id: 'user-1',
-          timezone: 'Invalid/Zone',
-        },
-      ]);
-      const service = createSelfReviewScheduleService(deps);
-
-      await expect(service.dispatchNightlyReviewRequests()).resolves.toEqual({
-        enqueued: 1,
-        skipped: 0,
-      });
+        }),
+      ).resolves.toEqual({ enqueued: 1, skipped: 0 });
       expect(deps.enqueueSource).toHaveBeenCalledWith(
         expect.objectContaining<
           Partial<AgentSignalSourceEventInput<'agent.nightly_review.requested'>>
@@ -196,8 +159,60 @@ describe('nightlyReviewScheduleService', () => {
     });
   });
 
+  describe('listEligibleUsersPage', () => {
+    it('returns one page and a stable cursor without scanning the next page inline', async () => {
+      /**
+       * ROOT CAUSE:
+       *
+       * The old service treated `limit` as a page size inside `while (true)`, retaining one cron
+       * request while it traversed the complete user table and enqueued every target.
+       *
+       * Before: one call consumed page 1, page 2, and the terminal empty page.
+       * After: one call consumes page 1 only; a durable workflow owns the returned cursor.
+       *
+       * @example
+       * expect(deps.listEligibleUsers).toHaveBeenCalledOnce();
+       */
+      const deps = createDeps();
+      deps.listEligibleUsers.mockResolvedValue([
+        {
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'user-1',
+          timezone: 'Asia/Shanghai',
+        },
+        {
+          createdAt: new Date('2026-02-01T00:00:00.000Z'),
+          id: 'user-2',
+          timezone: 'Asia/Shanghai',
+        },
+      ]);
+      const service = createSelfReviewScheduleService(deps);
+
+      const page = await service.listEligibleUsersPage({ limit: 2 });
+
+      expect(page).toEqual({
+        nextCursor: {
+          createdAt: new Date('2026-02-01T00:00:00.000Z'),
+          id: 'user-2',
+        },
+        users: expect.arrayContaining([
+          expect.objectContaining({ id: 'user-1' }),
+          expect.objectContaining({ id: 'user-2' }),
+        ]),
+      });
+      expect(deps.listEligibleUsers).toHaveBeenCalledOnce();
+      expect(deps.listEligibleUsers).toHaveBeenCalledWith({ limit: 2 });
+      expect(deps.listActiveAgentTargets).not.toHaveBeenCalled();
+      expect(deps.enqueueSource).not.toHaveBeenCalled();
+    });
+  });
+
   describe('buildNightlyReviewSourceId', () => {
     it('produces a stable nightly review source id', () => {
+      /**
+       * @example
+       * expect(sourceId).toBe('nightly-review:user-1:agent-1:2026-05-04');
+       */
       expect(
         buildNightlyReviewSourceId({
           agentId: 'agent-1',
@@ -210,8 +225,10 @@ describe('nightlyReviewScheduleService', () => {
 
   describe('createServerNightlyReviewScheduleService', () => {
     it('calls the model methods and enqueues source payloads through the server adapter', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-05-03T18:30:00.000Z'));
+      /**
+       * @example
+       * expect(summary.enqueued).toBe(1);
+       */
       mocks.listEligibleUsers.mockResolvedValue([
         {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -228,14 +245,19 @@ describe('nightlyReviewScheduleService', () => {
       const db = {} as unknown as LobeChatDatabase;
       const service = createServerNightlyReviewScheduleService(db);
 
-      const summary = await service.dispatchNightlyReviewRequests({
+      const page = await service.listEligibleUsersPage({
         cursor: { createdAt: new Date('2026-01-01T00:00:00.000Z'), id: 'cursor-user' },
         limit: 10,
-        targetLimit: 3,
         whitelist: ['user-1'],
+      });
+      const summary = await service.dispatchNightlyReviewForUser({
+        requestedAt: new Date('2026-05-03T18:30:00.000Z'),
+        targetLimit: 3,
+        user: page.users[0]!,
       });
 
       expect(summary).toEqual({ enqueued: 1, skipped: 0 });
+      expect(page.nextCursor).toBeUndefined();
       expect(mocks.modelConstructor).toHaveBeenCalledWith(db);
       expect(mocks.listEligibleUsers).toHaveBeenCalledWith({
         cursor: { createdAt: new Date('2026-01-01T00:00:00.000Z'), id: 'cursor-user' },
