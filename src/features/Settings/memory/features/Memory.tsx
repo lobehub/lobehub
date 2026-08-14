@@ -33,10 +33,11 @@ const MemorySetting = memo(() => {
       {
         children: <Switch disabled={!canManageMemory} />,
         desc: t('memory.enabled.desc'),
-        label: <Tooltip title={reason}>{t('memory.enabled.title')}</Tooltip>,
+        label: t('memory.enabled.title'),
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enabled',
+        tooltip: reason,
         valuePropName: 'checked',
       },
       {
