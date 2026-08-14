@@ -1506,9 +1506,12 @@ export default {
   'taskDetail.runAll.loading': 'Loading subtask plan...',
   'taskDetail.reassignDisabled': 'Cannot reassign agent while task is running',
   'taskDetail.titlePlaceholder': 'Task title',
+  'taskDetail.topicDrawer.collapse': 'Restore conversation panel',
+  'taskDetail.topicDrawer.expand': 'Expand conversation panel',
   'taskDetail.topicDrawer.untitled': 'Untitled',
   'taskDetail.topicMenu.copyId': 'Copy Topic ID',
   'taskDetail.topicMenu.copyOperationId': 'Copy Operation ID',
+  'taskDetail.topicMenu.openAgentTopic': 'Go to Agent conversation',
   'taskDetail.topicMenu.open': 'Open Run',
   'taskDetail.topicMenu.stop': 'Stop Run',
   'taskDetail.topicMenu.stopConfirm.content':
