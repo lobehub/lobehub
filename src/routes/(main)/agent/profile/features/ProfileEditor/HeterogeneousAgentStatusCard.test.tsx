@@ -17,36 +17,50 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   getHeterogeneousAgentClientConfig: (type: string) =>
-    type === 'claude-code'
+    type === 'deepseek-harness'
       ? {
-          defaultCommand: 'claude',
-          icon: () => <span>Claude Code Icon</span>,
-          title: 'Claude Code',
+          icon: () => <span>DeepSeek Icon</span>,
+          title: 'DeepSeek Harness',
         }
-      : type === 'kimi-code'
+      : type === 'claude-code'
         ? {
-            defaultCommand: 'kimi',
-            icon: () => <span>Kimi Code Icon</span>,
-            title: 'Kimi Code',
+            defaultCommand: 'claude',
+            icon: () => <span>Claude Code Icon</span>,
+            title: 'Claude Code',
           }
-        : type === 'opencode'
+        : type === 'kimi-code'
           ? {
-              defaultCommand: 'opencode',
-              icon: () => <span>OpenCode Icon</span>,
-              title: 'OpenCode',
+              defaultCommand: 'kimi',
+              icon: () => <span>Kimi Code Icon</span>,
+              title: 'Kimi Code',
             }
-          : type === 'pi'
+          : type === 'opencode'
             ? {
-                defaultCommand: 'pi',
-                icon: () => <span>Pi Icon</span>,
-                title: 'Pi',
+                defaultCommand: 'opencode',
+                icon: () => <span>OpenCode Icon</span>,
+                title: 'OpenCode',
               }
-            : {
-                defaultCommand: 'codex',
-                icon: () => <span>Codex Icon</span>,
-                title: 'Codex',
-              },
+            : type === 'pi'
+              ? {
+                  defaultCommand: 'pi',
+                  icon: () => <span>Pi Icon</span>,
+                  title: 'Pi',
+                }
+              : {
+                  defaultCommand: 'codex',
+                  icon: () => <span>Codex Icon</span>,
+                  title: 'Codex',
+                },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
+  isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -110,6 +124,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('lucide-react', () => ({
   CheckCircle2: () => null,
+  KeyRound: () => null,
   Loader2Icon: () => null,
   PencilLine: () => null,
   RefreshCw: () => null,
@@ -150,7 +165,27 @@ vi.mock('@/services/electron/binary', () => ({
   },
 }));
 
+vi.mock('@/store/aiInfra', () => ({
+  useAiInfraStore: (selector: (state: object) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/aiInfra/slices/aiProvider/selectors', () => ({
+  aiProviderSelectors: { providerKeyVaults: () => () => ({ apiKey: 'configured' }) },
+}));
+
 describe('HeterogeneousAgentStatusCard', () => {
+  it('shows the bundled runtime and provider-key state without probing a CLI', () => {
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={{ type: 'deepseek-harness' }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('DeepSeek Harness')).toBeInTheDocument();
+    expect(screen.getByText('heterogeneousStatus.runtime.keyReady')).toBeInTheDocument();
+    expect(detectHeterogeneousAgentCommand).not.toHaveBeenCalled();
+  });
+
   it('shows the embedded Codex install guide when the CLI is unavailable', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
     getClaudeAuthStatus.mockResolvedValue(null);

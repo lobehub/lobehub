@@ -225,6 +225,7 @@
   "connectAgent.providerDesc.codebuddy": "腾讯编码助理 CLI",
   "connectAgent.providerDesc.codex": "OpenAI 编码助理 CLI",
   "connectAgent.providerDesc.cursor": "Cursor 编码助理 CLI",
+  "connectAgent.providerDesc.deepseek-harness": "内置的 DeepSeek Agent Runtime，支持工具调用和子 Agent",
   "connectAgent.providerDesc.grok-build": "xAI 编码助理 CLI",
   "connectAgent.providerDesc.hermes": "个人助理平台",
   "connectAgent.providerDesc.kimi-code": "Moonshot AI 编码助理 CLI",

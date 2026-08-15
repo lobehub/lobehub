@@ -351,6 +351,11 @@ export default {
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',
   'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
+  'heterogeneousStatus.runtime.bundled': 'Built in',
+  'heterogeneousStatus.runtime.description': 'Runs locally with LobeHub Desktop',
+  'heterogeneousStatus.runtime.keyReady': 'DeepSeek API key configured',
+  'heterogeneousStatus.runtime.keyMissing': 'DeepSeek API key required',
+  'heterogeneousStatus.runtime.configure': 'Provider Settings',
 
   // Heterogeneous agent — Cloud tab (web environment config)
   'heterogeneousStatus.cloud.tabLabel': 'Cloud',

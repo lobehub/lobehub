@@ -20,7 +20,9 @@ import {
   buildHeterogeneousAgentAuthRequiredError,
   buildHeterogeneousAgentCliNotFoundError,
   getHeterogeneousAgentConfigOrThrow,
+  type HeterogeneousAgentType,
   isHeterogeneousAgentAuthRequired,
+  isLocalRuntimeHeterogeneousType,
   resolveHeterogeneousAgentCommand,
 } from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
@@ -41,7 +43,11 @@ import {
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
-import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentStreamEvent,
+  DshSdkSessionHandle,
+  UsageData,
+} from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
   AgentStreamPipeline,
@@ -64,6 +70,8 @@ import {
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
+  spawnDshSdkSession,
+  toStreamEvent,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
@@ -181,7 +189,7 @@ export const redactPromptArgs = (
 
 interface StartSessionParams {
   /** Agent type key (e.g., 'claude-code'). Defaults to 'claude-code'. */
-  agentType?: HeterogeneousCliAgentType;
+  agentType?: HeterogeneousAgentType;
   /** Additional CLI arguments */
   args?: string[];
   /** Command to execute */
@@ -297,7 +305,7 @@ export interface SessionInfo {
 
 interface AgentSession {
   agentSessionId?: string;
-  agentType: HeterogeneousCliAgentType;
+  agentType: HeterogeneousAgentType;
   appServerSession?: CodexThreadSession;
   args: string[];
   /**
@@ -311,6 +319,7 @@ interface AgentSession {
   codexAppServerFallback?: boolean;
   command: string;
   cwd?: string;
+  dshSession?: DshSdkSessionHandle;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   model?: string;
@@ -438,6 +447,7 @@ export default class HeterogeneousAgentCtr {
   );
 
   private resolveSessionCommand(session: AgentSession): string {
+    if (isLocalRuntimeHeterogeneousType(session.agentType)) return 'DeepSeek Harness';
     return resolveHeterogeneousAgentCommand(session.agentType, session.command);
   }
 
@@ -652,6 +662,8 @@ export default class HeterogeneousAgentCtr {
     if (!existsSync(workingDirectory)) {
       return this.buildWorkingDirectoryMissingError(session, workingDirectory);
     }
+
+    if (isLocalRuntimeHeterogeneousType(session.agentType)) return;
 
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
@@ -1081,7 +1093,7 @@ export default class HeterogeneousAgentCtr {
   async startSession(params: StartSessionParams): Promise<StartSessionResult> {
     const sessionId = randomUUID();
     const agentType = params.agentType || 'claude-code';
-    getHeterogeneousAgentDriver(agentType);
+    if (!isLocalRuntimeHeterogeneousType(agentType)) getHeterogeneousAgentDriver(agentType);
 
     this.sessions.set(sessionId, {
       // If resuming, pre-set the agent session ID so sendPrompt adds --resume
@@ -1158,6 +1170,10 @@ export default class HeterogeneousAgentCtr {
       (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
     ) {
       return this.sendPromptWithClaudeSdk(params, session);
+    }
+
+    if (session.agentType === 'deepseek-harness') {
+      return this.sendPromptWithDsh(params, session);
     }
 
     if (
@@ -1332,6 +1348,66 @@ export default class HeterogeneousAgentCtr {
         spawnPlan,
       });
     });
+  }
+
+  private async sendPromptWithDsh(params: SendPromptParams, session: AgentSession): Promise<void> {
+    if (params.imageList?.length) {
+      throw new Error('DeepSeek Harness currently supports text prompts only.');
+    }
+
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const env = this.buildSessionSpawnEnv(session) as Record<string, string>;
+    const prompt = params.systemContext
+      ? `${params.systemContext}\n\n${params.prompt}`
+      : params.prompt;
+
+    try {
+      const dshSession = await spawnDshSdkSession({
+        cwd,
+        env,
+        model: session.model || 'deepseek-chat',
+        provider: 'deepseek-official',
+        sessionId: session.agentSessionId || session.sessionId,
+      });
+      session.dshSession = dshSession;
+      session.agentSessionId ||= session.sessionId;
+
+      for await (const event of dshSession.prompt(prompt)) {
+        this.broadcast('heteroAgentEvent', {
+          event: toStreamEvent(event, params.operationId),
+          sessionId: session.sessionId,
+        });
+      }
+
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const message = this.getErrorMessage(error) || 'DeepSeek Harness execution failed';
+      const sessionError: HeterogeneousAgentSessionError = {
+        agentType: 'deepseek-harness',
+        code: /DEEPSEEK_API_KEY|api key|401|unauthorized/i.test(message)
+          ? HeterogeneousAgentSessionErrorCode.AuthRequired
+          : undefined,
+        docsUrl: 'https://platform.deepseek.com/api_keys',
+        message: /DEEPSEEK_API_KEY|api key|401|unauthorized/i.test(message)
+          ? 'DeepSeek Harness could not authenticate. Configure the DeepSeek API key in Provider Settings, then retry.'
+          : message,
+        stderr: message,
+      };
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(sessionError.message, { cause: error });
+    } finally {
+      const dshSession = session.dshSession;
+      session.dshSession = undefined;
+      await dshSession?.dispose().catch(() => {});
+    }
   }
 
   private async sendPromptWithClaudeSdk(
@@ -2237,6 +2313,10 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.dshSession) {
+      await session.dshSession.dispose();
+      return;
+    }
     if (session.grokAcpSession) {
       session.grokAcpSession.interrupt();
       return;
@@ -2279,6 +2359,12 @@ export default class HeterogeneousAgentCtr {
   async stopSession(params: StopSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
+
+    if (session.dshSession) {
+      session.cancelledByUs = true;
+      await session.dshSession.dispose();
+      session.dshSession = undefined;
+    }
 
     if (session.grokAcpSession) {
       session.cancelledByUs = true;

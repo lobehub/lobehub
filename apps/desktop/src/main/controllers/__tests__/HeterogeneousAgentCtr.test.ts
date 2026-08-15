@@ -111,6 +111,9 @@ const {
   codexAppServerShouldFailAfterThread,
   codexAppServerShouldFailResume,
   codexAppServerShouldFallback,
+  dshDisposeMock,
+  dshPromptMock,
+  dshSpawnMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -133,6 +136,9 @@ const {
   codexAppServerShouldFailAfterThread: { value: false },
   codexAppServerShouldFailResume: { value: false },
   codexAppServerShouldFallback: { value: false },
+  dshDisposeMock: vi.fn(),
+  dshPromptMock: vi.fn(),
+  dshSpawnMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -349,6 +355,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
+    spawnDshSdkSession: dshSpawnMock,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -462,6 +469,15 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerShouldFailAfterThread.value = false;
     codexAppServerShouldFailResume.value = false;
     codexAppServerShouldFallback.value = false;
+    dshDisposeMock.mockReset();
+    dshDisposeMock.mockResolvedValue(undefined);
+    dshPromptMock.mockReset();
+    dshSpawnMock.mockReset();
+    dshSpawnMock.mockResolvedValue({ dispose: dshDisposeMock, prompt: dshPromptMock });
+    dshPromptMock.mockImplementation(async function* () {
+      yield { data: { text: 'DSH UI OK' }, type: 'content_delta' };
+      yield { data: { reason: 'complete' }, type: 'agent_runtime_end' };
+    });
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -809,6 +825,50 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(staleRequest).resolves.toEqual(staleQuota);
       await expect(ctr.getCodexQuota(source)).resolves.toEqual(refreshedQuota);
       expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('sendPrompt (deepseek-harness)', () => {
+    it('runs the bundled JSON-RPC runtime and broadcasts unified stream events', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        env: { DEEPSEEK_API_KEY: 'test-key' },
+        initialModel: 'deepseek-chat',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-dsh',
+        prompt: 'hello',
+        sessionId,
+        systemContext: 'follow project rules',
+      });
+
+      expect(dshSpawnMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/workspace',
+          env: expect.objectContaining({ DEEPSEEK_API_KEY: 'test-key' }),
+          model: 'deepseek-chat',
+          provider: 'deepseek-official',
+        }),
+      );
+      expect(dshPromptMock).toHaveBeenCalledWith('follow project rules\n\nhello');
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentEvent',
+        expect.objectContaining({
+          event: expect.objectContaining({ operationId: 'op-dsh', type: 'content_delta' }),
+          sessionId,
+        }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+      expect(dshDisposeMock).toHaveBeenCalledOnce();
     });
   });
 

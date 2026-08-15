@@ -26,6 +26,10 @@ describe('scanLocal', () => {
 
     const agents = await scanLocal();
 
+    expect(agents['deepseek-harness']).toEqual({ available: true });
+    expect(detectHeterogeneousAgentCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({ agentType: 'deepseek-harness' }),
+    );
     expect(agents.openclaw).toEqual({ available: true, version: 'openclaw-version' });
     expect(agents.hermes).toEqual({ available: true, version: 'hermes-version' });
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
@@ -58,6 +62,16 @@ describe('buildPlatformAgencyConfig', () => {
 });
 
 describe('buildConnectAgentConfig', () => {
+  it('creates the bundled DeepSeek runtime without a fake CLI command', () => {
+    const provider = getConnectableProvider('deepseek-harness')!;
+
+    expect(buildConnectAgentConfig({ provider, target: { kind: 'local' } })).toMatchObject({
+      agencyConfig: { heterogeneousProvider: { type: 'deepseek-harness' } },
+      provider: 'deepseek-harness',
+      title: 'DeepSeek Harness',
+    });
+  });
+
   it('stores a customized label as the personal name without overwriting the platform profile', () => {
     const provider = getConnectableProvider('hermes')!;
 

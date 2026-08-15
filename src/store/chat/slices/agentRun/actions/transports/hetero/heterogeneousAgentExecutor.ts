@@ -50,6 +50,7 @@ import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
+import { createPayloadWithKeyVaults } from '@/services/_auth';
 import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import {
@@ -1828,16 +1829,23 @@ export const executeHeterogeneousAgent = async (
       // over both provenance and account routing.
       ...heterogeneousProvider.env,
     };
+    if (adapterType === 'deepseek-harness' && !sessionEnv.DEEPSEEK_API_KEY) {
+      const deepSeekAuth = createPayloadWithKeyVaults('deepseek');
+      if (deepSeekAuth.apiKey) sessionEnv.DEEPSEEK_API_KEY = deepSeekAuth.apiKey;
+    }
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: buildHeteroSpawnArgs(heterogeneousProvider),
-      command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+      command:
+        adapterType === 'deepseek-harness'
+          ? ''
+          : resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        adapterType === 'trae' &&
+        (adapterType === 'trae' || adapterType === 'deepseek-harness') &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model
