@@ -201,7 +201,11 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     expect(userMessageCall()![0]).toMatchObject({ parentId: 'spine-head-1', role: 'user' });
     // No spine candidate is missing, so the fallback must not be queried.
     expect(mockGetLatestNonToolMessageId).not.toHaveBeenCalled();
-    expect(mockTryReserve).toHaveBeenCalledWith('topic-1', expect.stringMatching(/^agent-start-/));
+    expect(mockTryReserve).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^agent-start-/),
+      undefined,
+    );
     expect(mockReleaseReservation).toHaveBeenCalledWith(
       'topic-1',
       expect.stringMatching(/^agent-start-/),

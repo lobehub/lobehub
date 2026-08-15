@@ -6,10 +6,14 @@ import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 interface RenderHomeOptions {
   isLogin?: boolean;
   portalViewType?: PortalViewType;
+  search?: string;
   showHomePortrait?: boolean;
 }
 
 const stub = (testId: string) => ({ default: () => <div data-testid={testId} /> });
+const modeStub = (testId: string) => ({
+  default: ({ mode }: { mode?: string }) => <div data-mode={mode} data-testid={testId} />,
+});
 
 function translate() {
   return { i18n: { language: 'en-US' }, t: (key: string) => key };
@@ -18,15 +22,17 @@ function translate() {
 const renderHome = async ({
   isLogin = true,
   portalViewType,
+  search = '',
   showHomePortrait,
 }: RenderHomeOptions = {}) => {
   vi.resetModules();
+  window.history.replaceState(null, '', `/${search}`);
 
   vi.doMock('react-i18next', () => ({ useTranslation: translate }));
   vi.doMock('../HomeHeader', () => stub('home-header'));
-  vi.doMock('../HomeModeContent', () => stub('home-mode-content'));
+  vi.doMock('../HomeModeContent', () => modeStub('home-mode-content'));
   vi.doMock('../HomePortrait', () => stub('home-portrait'));
-  vi.doMock('../InputArea', () => stub('home-input-area'));
+  vi.doMock('../InputArea', () => modeStub('home-input-area'));
   vi.doMock('../PortraitBubble', () => stub('portrait-bubble'));
   vi.doMock('../AcceptancePortalDrawer', () => stub('acceptance-portal-drawer'));
   vi.doMock('@/features/HomeInbox', () => stub('home-inbox'));
@@ -57,6 +63,7 @@ const renderHome = async ({
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, '', '/');
   vi.doUnmock('react-i18next');
   vi.doUnmock('../HomeHeader');
   vi.doUnmock('../HomeModeContent');
@@ -99,6 +106,21 @@ describe('Home portrait visibility', () => {
     expect(screen.getByTestId('home-header')).toBeInTheDocument();
     expect(screen.getByTestId('home-main')).toBeInTheDocument();
     expect(screen.getByTestId('home-rail')).toBeInTheDocument();
+  }, 20000);
+
+  it('opens the home dashboard in chat mode by default', async () => {
+    await renderHome();
+
+    expect(screen.getByTestId('home-input-area')).toHaveAttribute('data-mode', 'chat');
+    expect(screen.getByTestId('home-mode-content')).toHaveAttribute('data-mode', 'chat');
+  }, 20000);
+
+  it('opens the home dashboard in task mode for the post-onboarding entry', async () => {
+    await renderHome({ search: '?onboarding=task' });
+
+    expect(screen.getByTestId('home-input-area')).toHaveAttribute('data-mode', 'task');
+    expect(screen.getByTestId('home-mode-content')).toHaveAttribute('data-mode', 'task');
+    expect(window.location.search).toBe('');
   }, 20000);
 
   it('shows no portrait to a signed-out visitor even with the preference on', async () => {

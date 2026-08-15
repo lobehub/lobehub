@@ -11,7 +11,7 @@ import {
 } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 
-import { getEffortLabelKeys, getModelLabel, getTriggerText } from './labels';
+import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerText } from './labels';
 import { getStaticModelOptions } from './modelOptions';
 
 type Translate = TFunction<'chat'>;
@@ -27,7 +27,7 @@ export interface SelectorDimensionOption {
 
 export interface SelectorDimension {
   current: string;
-  key: 'model' | 'reasoning' | 'speed';
+  key: 'mode' | 'model' | 'reasoning' | 'speed';
   label: string;
   options: SelectorDimensionOption[];
   valueLabel: string;
@@ -43,7 +43,9 @@ export interface SelectorView {
 }
 
 export type SelectorShape =
-  { capability: ModelCapability; kind: 'catalog' | 'menu' } | { kind: 'none' };
+  | { capability: HeteroSelectorCapability; kind: 'menu' }
+  | { capability: ModelCapability; kind: 'catalog' }
+  | { kind: 'none' };
 
 /**
  * Which of the three selector presentations a provider gets: nothing, the bare
@@ -55,15 +57,17 @@ export const resolveSelectorShape = (
   enabled: boolean,
 ): SelectorShape => {
   const capability = getHeteroSelectorCapability(provider?.type);
-  if (!provider || !enabled || !capability?.model) return { kind: 'none' };
+  if (!provider || !enabled || !capability || Object.keys(capability).length === 0) {
+    return { kind: 'none' };
+  }
 
-  const modelCapability = { ...capability, model: capability.model };
-  const hasOtherDimensions = !!capability.effort || !!capability.speed;
+  const hasOtherDimensions = !!capability.effort || !!capability.mode || !!capability.speed;
 
-  return {
-    capability: modelCapability,
-    kind: capability.model.source === 'catalog' && !hasOtherDimensions ? 'catalog' : 'menu',
-  };
+  if (capability.model?.source === 'catalog' && !hasOtherDimensions) {
+    return { capability: { ...capability, model: capability.model }, kind: 'catalog' };
+  }
+
+  return { capability, kind: 'menu' };
 };
 
 /**
@@ -101,12 +105,13 @@ export const buildSelectorView = ({
   provider,
   t,
 }: {
-  capability: ModelCapability;
+  capability: HeteroSelectorCapability;
   provider: HeterogeneousProviderConfig;
   t: Translate;
 }): SelectorView => {
-  const model = capability.model.resolve(provider);
+  const model = capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   const effort = capability.effort?.resolve(provider);
+  const mode = capability.mode?.resolve(provider);
   const speedSupported = capability.speed?.supported(model) ?? false;
   const speed: HeterogeneousSpeedMode = speedSupported
     ? capability.speed!.resolve(provider)
@@ -117,11 +122,14 @@ export const buildSelectorView = ({
   const modelLabel = getModelLabel(model, defaultLabel);
   const effortLabelKeys = getEffortLabelKeys(provider.type);
   const effortLabel = effort ? t(effortLabelKeys[effort]) : undefined;
-  const isCatalogModel = capability.model.source === 'catalog';
+  const modeLabel = mode ? t(getModeLabelKey(mode)) : undefined;
+  const isCatalogModel = capability.model?.source === 'catalog';
+  const isModeOnly =
+    !!capability.mode && !capability.model && !capability.effort && !capability.speed;
 
   const dimensions: SelectorDimension[] = [];
 
-  if (!isCatalogModel) {
+  if (capability.model && !isCatalogModel) {
     const baseOptions: SelectorDimensionOption[] = [
       { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
       ...getStaticModelOptions(provider.type),
@@ -135,6 +143,22 @@ export const buildSelectorView = ({
         ? baseOptions
         : [{ label: model, value: model }, ...baseOptions],
       valueLabel: modelLabel,
+    });
+  }
+
+  if (capability.mode && mode) {
+    dimensions.push({
+      current: mode,
+      key: 'mode',
+      label: t('heteroAgent.modelSelector.mode.label'),
+      options: [
+        { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
+        ...capability.mode.levels.map((level) => ({
+          label: t(getModeLabelKey(level)),
+          value: level,
+        })),
+      ],
+      valueLabel: modeLabel ?? defaultLabel,
     });
   }
 
@@ -180,22 +204,28 @@ export const buildSelectorView = ({
   }
 
   return {
-    ariaLabel: t('heteroAgent.modelSelector.ariaLabel', {
-      model: modelLabel,
-      reasoning: effortLabel ?? defaultLabel,
-    }),
+    ariaLabel: isModeOnly
+      ? t('heteroAgent.modelSelector.mode.ariaLabel', { mode: modeLabel ?? defaultLabel })
+      : t('heteroAgent.modelSelector.ariaLabel', {
+          model: modelLabel,
+          reasoning: effortLabel ?? defaultLabel,
+        }),
     dimensions,
     isCatalogModel,
     isFastSpeed,
     model,
-    triggerText: getTriggerText({
-      defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
-      defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
-      defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
-      effort,
-      effortLabel,
-      model,
-      modelLabel,
-    }),
+    triggerText: isModeOnly
+      ? mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? t('heteroAgent.modelSelector.defaultConfig')
+        : (modeLabel ?? defaultLabel)
+      : getTriggerText({
+          defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
+          defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
+          defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
+          effort,
+          effortLabel,
+          model,
+          modelLabel,
+        }),
   };
 };

@@ -22,6 +22,15 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
 }));
 
+const mockPermissionRemoveAll = vi.fn();
+const mockPermissionSetAccessLevel = vi.fn();
+vi.mock('@/database/models/resourcePermission', () => ({
+  ResourcePermissionModel: vi.fn(() => ({
+    removeAll: mockPermissionRemoveAll,
+    setAccessLevel: mockPermissionSetAccessLevel,
+  })),
+}));
+
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(() => ({
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
@@ -87,6 +96,34 @@ describe('knowledgeBaseRouter', () => {
           },
         },
       });
+    });
+  });
+
+  describe('transferKnowledgeBase permission rows', () => {
+    it('removes the source-workspace row and seeds the default level in a public target', async () => {
+      await caller.transferKnowledgeBase({
+        id: 'kb-1',
+        targetVisibility: 'public',
+        targetWorkspaceId: 'workspace-target',
+      });
+
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).toHaveBeenCalledWith(
+        'knowledgeBase',
+        'kb-1',
+        'edit',
+        'test-user',
+      );
+    });
+
+    it('only clears the source row when moving to personal scope', async () => {
+      await caller.transferKnowledgeBase({
+        id: 'kb-1',
+        targetWorkspaceId: null,
+      });
+
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
     });
   });
 

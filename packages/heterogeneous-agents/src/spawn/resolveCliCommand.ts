@@ -8,8 +8,7 @@ import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code /
- * CodeBuddy / Codex / OpenCode / Pi / Qoder).
+ * Shared resolver for external CLI-agent binaries.
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -46,7 +45,12 @@ export interface CliCommandStatus {
 }
 
 interface ValidateOptions {
+  rejectPattern?: RegExp;
   validateFlag?: string;
+  /** Capability-probe argv. Defaults to `--help`. */
+  validateHelpArgs?: string[];
+  /** Additional `--help` markers that must all be present after version validation. */
+  validateHelpKeywords?: string[];
   validateKeywords?: string[];
   validatePattern?: RegExp;
   versionFlag?: string;
@@ -382,7 +386,15 @@ export const detectValidatedCommand = async (
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
-  const { validateFlag = '--version', validateKeywords, validatePattern, versionFlag } = options;
+  const {
+    rejectPattern,
+    validateFlag = '--version',
+    validateHelpArgs = ['--help'],
+    validateHelpKeywords,
+    validateKeywords,
+    validatePattern,
+    versionFlag,
+  } = options;
 
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
@@ -405,19 +417,39 @@ export const detectValidatedCommand = async (
     const output = `${result.stdout}\n${result.stderr}`.trim();
     const firstLine = output.split(/\r?\n/)[0]!.trim();
     const loweredOutput = output.toLowerCase();
+    if (rejectPattern?.test(firstLine) || rejectPattern?.test(output)) {
+      return { available: false };
+    }
     const matchesKeyword = validateKeywords?.some((keyword) =>
       loweredOutput.includes(keyword.toLowerCase()),
     );
-    // Anchored patterns describe a one-line version banner, so test the first
-    // line — the same line reported as `version` below. `output` also carries
-    // stderr plus whatever the CLI decided to print today (upgrade notices,
-    // auth warnings, Node's own `ExperimentalWarning`), and a `^…$` test
-    // against all of it flips a working CLI to "not installed" the moment any
-    // of that appears.
-    const matchesPattern = validatePattern?.test(firstLine);
+    // Anchored patterns usually describe a one-line version banner, so test the
+    // first line — the same line reported as `version` below. Also test the full
+    // output for CLIs such as Cursor whose product signature spans help lines.
+    // One-line `^…$` patterns remain insulated from stderr notices because they
+    // cannot match multi-line output without the multiline flag.
+    const matchesPattern = validatePattern?.test(firstLine) || validatePattern?.test(output);
 
     if (!matchesKeyword && !matchesPattern) {
       return { available: false };
+    }
+
+    // Kimi Code shares the `kimi` executable name with the retired Python
+    // kimi-cli. Both can print a valid version, so capability-probe the exact
+    // resolved binary before accepting it as the stream-json runtime.
+    if (validateHelpKeywords?.length) {
+      let helpResult;
+      try {
+        helpResult = await execProbe(resolvedPath, validateHelpArgs, env, viaShell);
+      } catch {
+        return { available: false };
+      }
+      if (helpResult === UNRESOLVED_SHIM) return UNRESOLVED_SHIM;
+
+      const helpOutput = `${helpResult.stdout}\n${helpResult.stderr}`.toLowerCase();
+      if (!validateHelpKeywords.every((keyword) => helpOutput.includes(keyword.toLowerCase()))) {
+        return { available: false };
+      }
     }
 
     let versionBanner = firstLine;
@@ -494,6 +526,21 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'codex': {
     validateKeywords: ['codex'],
   },
+  'cursor': {
+    validateFlag: '--help',
+    validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
+  },
+  'grok-build': {
+    validateHelpArgs: ['agent', '--help'],
+    validateHelpKeywords: ['agent', 'stdio'],
+    validateKeywords: ['grok'],
+    validatePattern:
+      /^grok\s+v?\d+\.\d+\.\d+(?:[-+][\dA-Z.-]+)?(?:\s+\([^)]+\))?(?:\s+\[[^\]]+\])?$/i,
+  },
+  'kimi-code': {
+    validateHelpKeywords: ['--prompt', '--output-format'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'opencode': {
     // OpenCode prints only a bare version (for example `1.18.3`) for
     // `--version`, without a product-name prefix.
@@ -505,6 +552,14 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'qoder': {
     // Qoder prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'trae': {
+    // TRAE Enterprise releases may print either a product-prefixed version or
+    // a bare semver. Reject the unrelated open-source trajectory runner even
+    // when its executable has been renamed.
+    rejectPattern: /^trae-cli\b/i,
+    validateKeywords: ['trae', 'traecode'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
@@ -586,6 +641,32 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         ];
       });
     }
+    case 'cursor': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [
+        path.join(homedir(), '.local', 'bin', 'agent'),
+        // Cursor's installer creates both names. Keep the unambiguous legacy
+        // alias as a fallback when another CLI shadows the generic `agent`.
+        path.join(homedir(), '.local', 'bin', 'cursor-agent'),
+      ];
+    }
+    case 'grok-build': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), '.grok', 'bin', 'grok.exe')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.grok', 'bin', 'grok')];
+    }
+    case 'kimi-code': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [
+        path.join(homedir(), '.kimi-code', 'bin', 'kimi'),
+        path.join(homedir(), '.local', 'bin', 'kimi'),
+        path.join(homedir(), '.bun', 'bin', 'kimi'),
+        path.join(homedir(), '.npm-global', 'bin', 'kimi'),
+        path.join(homedir(), 'Library', 'pnpm', 'kimi'),
+      ];
+    }
     case 'opencode': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
@@ -616,6 +697,11 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), 'Library', 'pnpm', 'qodercli'),
       ];
     }
+    case 'trae': {
+      // TRAE CLI is distributed through TRAE Enterprise and has no verified
+      // cross-platform standalone install location. Resolve it from PATH only.
+      return [];
+    }
     default: {
       return [];
     }
@@ -626,6 +712,17 @@ export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
 ): Promise<CliCommandStatus> => {
+  const commandName = command
+    .trim()
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
+  // `trae-cli` belongs to the unrelated open-source trajectory runner. LobeHub
+  // integrates only the TRAE Enterprise `traecli acp serve` runtime.
+  if (agentType === 'trae' && commandName?.toLowerCase() === 'trae-cli') {
+    return { available: false };
+  }
+
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 

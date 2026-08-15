@@ -65,15 +65,17 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface AgentGoalsPageProps {
-  agentId: string;
+  agentId?: string;
+  projectId?: string;
 }
 
-const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
+const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const goals = useGoalStore(goalSelectors.goalList(agentId));
-  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(agentId));
+  const goals = useGoalStore(goalSelectors.goalList(scopeId));
+  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
@@ -82,7 +84,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
   const acceptanceBySubjectMap = useVerifyStore((s) => s.acceptanceBySubjectMap);
   const acceptanceBundleMap = useVerifyStore((s) => s.acceptanceBundleMap);
-  const { error, isLoading } = useFetchGoals(agentId);
+  const { error, isLoading } = useFetchGoals(agentId, projectId);
   const summary = useMemo(() => {
     const delivered = goals.filter((goal) => goal.status === 'completed').length;
 
@@ -114,14 +116,21 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
       initialRequirement: seed?.requirement,
       initialRoundBudget: seed?.roundBudget,
       initialTitle: seed?.title,
-      onCreated: () => void refreshGoals(agentId),
+      projectId,
+      onCreated: () => void refreshGoals(scopeId),
     });
   };
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />}
+        left={
+          agentId ? (
+            <AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />
+          ) : (
+            <Text weight={600}>{t('goalList.title')}</Text>
+          )
+        }
         right={
           <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
             {t('goalPage.create')}
@@ -148,7 +157,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
               <Button
                 icon={RefreshCwIcon}
                 size={'small'}
-                onClick={() => void refreshGoals(agentId)}
+                onClick={() => void refreshGoals(scopeId)}
               >
                 {t('goalList.retry')}
               </Button>
@@ -248,7 +257,12 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
                   filteredGoals
                     .slice(0, visibleLimit)
                     .map((goal) => (
-                      <GoalItem hideAchieved={filter === 'active'} key={goal.id} task={goal} />
+                      <GoalItem
+                        hideAchieved={filter === 'active'}
+                        key={goal.id}
+                        projectId={projectId}
+                        task={goal}
+                      />
                     ))
                 )}
               </div>

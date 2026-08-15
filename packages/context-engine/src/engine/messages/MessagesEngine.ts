@@ -231,7 +231,7 @@ export class MessagesEngine {
     // (enable flags + FC support + the shared select predicates) so
     // ActivationResultTrimProcessor only trims activation tool results whose full
     // documentation is confirmed to be injected into the system prompt for this
-    // request — see LOBE-5684.
+    // request.
     const canUseFC = capabilities?.isCanUseFC || (() => true);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0

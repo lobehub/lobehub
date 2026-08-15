@@ -62,7 +62,7 @@ export interface ActivationResultTrimConfig {
  * injected into the system prompt, so each activated tool/skill document
  * reaches the LLM payload exactly once.
  *
- * Background (LOBE-5684): `activateTools` used to write the manifest
+ * Background: `activateTools` used to write the manifest
  * systemRole + API descriptions into its `role=tool` result, and once
  * activated the same manifest enters ToolSystemRoleProvider's system-prompt
  * injection on every subsequent request — permanently double-carrying the

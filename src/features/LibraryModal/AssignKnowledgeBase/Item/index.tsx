@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const PluginItem = memo<KnowledgeItem>(
-  ({ id, fileType, name, type, description, enabled, visibility }) => {
+  ({ id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
     return (
       <Flexbox
         horizontal
@@ -47,6 +47,7 @@ const PluginItem = memo<KnowledgeItem>(
         >
           <KnowledgeIcon
             fileType={fileType}
+            locked={memberRestricted}
             name={name}
             size={{ file: 40, repo: 40 }}
             type={type}

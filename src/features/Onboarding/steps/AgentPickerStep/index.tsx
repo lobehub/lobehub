@@ -23,7 +23,7 @@ import {
 } from '@/services/onboardingMetrics';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
+import { resolvePostOnboardingTargetUrl } from '@/utils/onboardingRedirect';
 
 import LobeMessage from '../../components/LobeMessage';
 import { interestsToCategoryHints } from '../../interestCategoryMap';
@@ -112,7 +112,7 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
         stepIndex: 4,
       });
       // Restore the original signup target (threaded through onboarding), if any
-      const targetUrl = consumeOnboardingCallbackUrl() || '/';
+      const targetUrl = resolvePostOnboardingTargetUrl();
       trackOnboardingCompleted({ flow: completionFlow, targetUrl });
       navigate(targetUrl);
     },

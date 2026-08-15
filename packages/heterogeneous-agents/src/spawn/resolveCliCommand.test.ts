@@ -148,6 +148,22 @@ describe('resolveCliCommand', () => {
       expect(execMock).not.toHaveBeenCalled();
     });
 
+    it('validates Grok Build with its ACP agent-mode capability probe', async () => {
+      callExecFile('grok 1.0.3 (ea094a8) [stable]');
+      callExecFile('Usage: grok agent [OPTIONS] <stdio|leader>');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('grok-build', '/Users/x/.grok/bin/grok');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.grok/bin/grok',
+        version: '1.0.3',
+      });
+      expect(execFileMock.mock.calls[0]![1]).toEqual(['--version']);
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['agent', '--help']);
+    });
+
     it('resolves and validates OpenCode using its bare semver output', async () => {
       callExecFile('/Users/x/.opencode/bin/opencode\n');
       callExecFile('1.18.3');
@@ -160,6 +176,33 @@ describe('resolveCliCommand', () => {
         path: '/Users/x/.opencode/bin/opencode',
         version: '1.18.3',
       });
+    });
+
+    it('validates Kimi Code using its bare semver and stream-json capabilities', async () => {
+      callExecFile('/Users/x/.kimi-code/bin/kimi\n');
+      callExecFile('1.8.0');
+      callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.kimi-code/bin/kimi',
+        version: '1.8.0',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
+    });
+
+    it('rejects the retired kimi-cli when stream-json capabilities are missing', async () => {
+      callExecFile('0.1.0');
+      callExecFile('Usage: kimi chat [options]');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(
+        detectHeterogeneousCliCommand('kimi-code', '/Users/x/.local/bin/kimi'),
+      ).resolves.toMatchObject({ available: false });
     });
 
     it('resolves and validates Qoder using its bare semver output', async () => {
@@ -190,6 +233,102 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it("falls back to Cursor's unambiguous alias when another CLI owns `agent`", async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFile('/Users/x/.grok/bin/agent\n');
+        callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFile('Usage: agent [options] [command] [prompt...]\nStart the Cursor Agent');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('cursor', 'agent');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.local', 'bin', 'cursor-agent'),
+          version: undefined,
+        });
+        expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
+        expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
+        expect(execFileMock.mock.calls[3]![1]).toEqual(['--help']);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('requires both the Cursor product banner and agent command signature', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFile('/Users/x/bin/cursor-agent-custom\n');
+        callExecFile('Start the Cursor Agent');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('cursor', 'cursor-agent-custom');
+
+        expect(status.available).toBe(false);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('resolves and validates the TRAE Enterprise CLI', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('TraeCode CLI 1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('trae', 'traecli')).resolves.toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('rejects the unrelated open-source trae-cli trajectory runner', async () => {
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', '/usr/local/bin/trae-cli');
+
+      expect(status.available).toBe(false);
+      expect(execFileMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects the unrelated trae-cli banner even when the executable was renamed', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('trae-cli 0.1.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toEqual({ available: false });
+    });
+
     it('finds OpenCode in its well-known user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -207,6 +346,32 @@ describe('resolveCliCommand', () => {
           available: true,
           path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
           version: '1.18.3',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('finds Kimi Code in its official user-local install path', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which kimi
+        callExecFile('1.8.0'); // ~/.kimi-code/bin/kimi --version
+        callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.kimi-code', 'bin', 'kimi'),
+          version: '1.8.0',
         });
       } finally {
         process.env.PATH = originalPath;
@@ -562,6 +727,32 @@ describe('resolveCliCommand', () => {
       }
     });
 
+    it('capability-probes a Kimi .cmd shim without constructing a shell command', async () => {
+      const commandPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\kimi.cmd';
+      const scriptPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\kimi-code\\cli.js';
+      existingFiles({
+        [`${NPM_DIR}\\node.exe`]: true,
+        [commandPath]: npmShim('node_modules\\kimi-code\\cli.js'),
+        [scriptPath]: true,
+      });
+      callExecFile(`${commandPath}\r\n`);
+      callExecFile('1.8.0');
+      callExecFile('Usage: kimi --prompt <text> --output-format <format>');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('kimi', {
+        validateHelpKeywords: ['--prompt', '--output-format'],
+        validatePattern: /^\d+\.\d+\.\d+$/,
+      });
+
+      expect(status.available).toBe(true);
+      expect(execFileMock.mock.calls[1]![0]).toBe(`${NPM_DIR}\\node.exe`);
+      expect(execFileMock.mock.calls[1]![1]).toEqual([scriptPath, '--version']);
+      expect(execFileMock.mock.calls[2]![0]).toBe(`${NPM_DIR}\\node.exe`);
+      expect(execFileMock.mock.calls[2]![1]).toEqual([scriptPath, '--help']);
+      expect(execMock).not.toHaveBeenCalled();
+    });
+
     it('rejects a command containing shell metacharacters', async () => {
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex & calc.exe', {
@@ -645,6 +836,16 @@ describe('resolveCliCommand', () => {
       expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
     });
 
+    it('defines agent as the default Cursor command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
+    });
+
+    it('defines grok as the default Grok Build command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND['grok-build']).toBe('grok');
+    });
+
     it('defines pi as the default Pi command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
@@ -653,6 +854,11 @@ describe('resolveCliCommand', () => {
     it('defines qodercli as the default Qoder command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
+    });
+
+    it('defines traecli as the default TRAE command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

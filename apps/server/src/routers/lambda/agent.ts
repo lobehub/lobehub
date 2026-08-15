@@ -49,6 +49,10 @@ import {
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import {
+  getRestrictedKnowledgeBaseIds,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
 
 const protectAgentConfig = async <T extends Record<string, any>>(
@@ -651,6 +655,23 @@ export const agentRouter = router({
 
       const knowledge = await ctx.agentModel.getAgentAssignedKnowledge(input.agentId);
 
+      // Member-restricted (No-access) KBs disappear from the picker for
+      // non-privileged members, except ones already attached to this agent —
+      // an invisible-but-attached row would be impossible to unmount. Managers
+      // keep seeing them, with a flag so the client can badge the icon.
+      const [restrictedForCaller, useLevelIds] = ctx.workspaceId
+        ? await Promise.all([
+            getRestrictedKnowledgeBaseIds(ctx),
+            getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          ])
+        : [[], []];
+      const restrictedSet = new Set(restrictedForCaller);
+      const memberRestrictedSet = new Set(useLevelIds);
+      const visibleKnowledgeBases = knowledgeBases.filter(
+        (kb) =>
+          !restrictedSet.has(kb.id) || knowledge.knowledgeBases.some((item) => item.id === kb.id),
+      );
+
       return [
         ...files
           // Filter out all images
@@ -664,11 +685,12 @@ export const agentRouter = router({
             type: KnowledgeType.File,
             visibility: file.visibility as 'private' | 'public',
           })),
-        ...knowledgeBases.map((knowledgeBase) => ({
+        ...visibleKnowledgeBases.map((knowledgeBase) => ({
           avatar: knowledgeBase.avatar,
           description: knowledgeBase.description,
           enabled: knowledge.knowledgeBases.some((item) => item.id === knowledgeBase.id),
           id: knowledgeBase.id,
+          memberRestricted: memberRestrictedSet.has(knowledgeBase.id),
           name: knowledgeBase.name,
           ownerUserId: knowledgeBase.userId,
           type: KnowledgeType.KnowledgeBase,

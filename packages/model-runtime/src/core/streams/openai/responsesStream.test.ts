@@ -578,6 +578,29 @@ describe('OpenAIResponsesStream', () => {
     expect(chunks.some((c) => c.includes(' the problem...'))).toBe(true);
   });
 
+  it('should handle xAI response.reasoning_text.delta', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.created',
+        response: {
+          id: 'resp_reasoning_text_delta',
+          status: 'in_progress',
+        },
+      },
+      {
+        type: 'response.reasoning_text.delta',
+        item_id: 'reasoning_123',
+        output_index: 0,
+        delta: 'Continued reasoning',
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('Continued reasoning'))).toBe(true);
+  });
+
   it('should handle response.output_text.annotation.added', async () => {
     const mockOpenAIStream = createReadableStream([
       {

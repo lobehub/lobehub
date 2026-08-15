@@ -69,12 +69,33 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Codex',
     kind: 'cli',
   },
+  'cursor': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Cursor',
+    kind: 'cli',
+  },
+  'grok-build': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Grok Build — xAI's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Grok Build',
+    kind: 'cli',
+  },
   'hermes': {
     capabilities: CODING_CAPABILITIES,
     description:
       'Hermes — a remote autonomous agent runtime that runs on a connected device and can read, edit and write files and run commands in its workspace.',
     displayName: 'Hermes',
     kind: 'remote',
+  },
+  'kimi-code': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Kimi Code — Moonshot AI’s autonomous terminal coding agent with filesystem and shell access.',
+    displayName: 'Kimi Code',
+    kind: 'cli',
   },
   'opencode': {
     capabilities: CODING_CAPABILITIES,
@@ -102,6 +123,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       'Qoder — an autonomous terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
     displayName: 'Qoder',
+    kind: 'cli',
+  },
+  'trae': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'TRAE CLI — the TRAE Enterprise coding agent CLI. It can read and edit files, run commands, and complete multi-step software-engineering tasks in a working directory.',
+    displayName: 'TRAE CLI',
     kind: 'cli',
   },
 };

@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Alert, Flexbox, Form, Skeleton, Tag, Tooltip } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Skeleton, Tag, Tooltip } from '@lobehub/ui';
+import { Alert, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -68,6 +68,7 @@ const LabsForm = memo(() => {
     enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
+    enableProjects,
     enableInAppBrowser,
     enableArtifactDeployment,
     enableTopicAcceptance,
@@ -86,6 +87,7 @@ const LabsForm = memo(() => {
     labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
+    labPreferSelectors.enableProjects(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
     labPreferSelectors.enableTopicAcceptance(s),
@@ -154,6 +156,13 @@ const LabsForm = memo(() => {
       flag: 'enableTopicAcceptance',
       stage: 'alpha',
       title: tLabs('features.topicAcceptance.title'),
+    },
+    {
+      checked: enableProjects,
+      desc: tLabs('features.projects.desc'),
+      flag: 'enableProjects',
+      stage: 'alpha',
+      title: tLabs('features.projects.title'),
     },
     {
       checked: enableOAuthApps,

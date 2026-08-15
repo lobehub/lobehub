@@ -23,6 +23,14 @@ const codeBuddyCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgenc
   heterogeneousProvider: { command: 'codebuddy', type: 'codebuddy' },
   ...over,
 });
+const cursorCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'agent', type: 'cursor' },
+  ...over,
+});
+const kimiCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'kimi', type: 'kimi-code' },
+  ...over,
+});
 const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'opencode', type: 'opencode' },
   ...over,
@@ -46,8 +54,13 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
   });
 
-  it('keeps Qoder on local or connected devices', () => {
+  it('keeps local-only CLIs on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
+  });
+
+  it('keeps Cursor on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('cursor')).toBe(false);
   });
 });
 
@@ -188,6 +201,8 @@ describe('resolveExecutionTarget', () => {
     it.each([
       ['Amp', ampCfg],
       ['CodeBuddy', codeBuddyCfg],
+      ['Cursor', cursorCfg],
+      ['Kimi Code', kimiCodeCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],
       ['Qoder', qoderCfg],
@@ -212,6 +227,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(ampCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Kimi Code sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(kimiCodeCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),
@@ -1068,6 +1094,7 @@ describe('resolveExecutionPlan', () => {
 
     it.each([
       ['Amp', ampCfg],
+      ['Cursor', cursorCfg],
       ['OpenCode', openCodeCfg],
     ] as const)(
       'keeps %s non-device targets pending instead of constructing a sandbox plan',

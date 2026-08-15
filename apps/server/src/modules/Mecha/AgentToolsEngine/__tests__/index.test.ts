@@ -185,7 +185,7 @@ describe('createServerToolsEngine', () => {
     expect(availablePlugins).toContain('test-plugin');
   });
 
-  it('drops manifests without an api array instead of crashing the tools build (LOBE-12528)', () => {
+  it('drops manifests without an api array instead of crashing the tools build', () => {
     // A DB plugin row whose manifest jsonb lacks `api` used to crash
     // ToolsEngine.convertManifestsToTools (`manifest.api.map`) and with it
     // every execAgent call of the affected user.

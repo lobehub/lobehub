@@ -77,6 +77,7 @@ export const buildHeterogeneousAgentCliNotFoundError = ({
 }: BuildHeterogeneousAgentCliErrorOptions): HeterogeneousAgentCliError => {
   const descriptor = getHeterogeneousAgentConfigOrThrow(agentType);
   const resolvedCommand = resolveHeterogeneousAgentCommand(agentType, command);
+  const cliTitle = /\bcli$/i.test(descriptor.title) ? descriptor.title : `${descriptor.title} CLI`;
 
   return {
     agentType: descriptor.type,
@@ -84,7 +85,7 @@ export const buildHeterogeneousAgentCliNotFoundError = ({
     command: resolvedCommand,
     docsUrl: descriptor.install.docsUrl,
     installCommands: descriptor.install.commands,
-    message: `${descriptor.title} CLI was not found. Install it and make sure \`${resolvedCommand}\` can be executed.`,
+    message: `${cliTitle} was not found. Install it and make sure \`${resolvedCommand}\` can be executed.`,
     ...(stderr ? { stderr } : {}),
   };
 };
@@ -127,6 +128,8 @@ const ampDescriptor = getHeterogeneousAgentConfigOrThrow('amp');
 const claudeCodeDescriptor = getHeterogeneousAgentConfigOrThrow('claude-code');
 const codeBuddyDescriptor = getHeterogeneousAgentConfigOrThrow('codebuddy');
 const codexDescriptor = getHeterogeneousAgentConfigOrThrow('codex');
+const cursorDescriptor = getHeterogeneousAgentConfigOrThrow('cursor');
+const grokBuildDescriptor = getHeterogeneousAgentConfigOrThrow('grok-build');
 const openCodeDescriptor = getHeterogeneousAgentConfigOrThrow('opencode');
 const piDescriptor = getHeterogeneousAgentConfigOrThrow('pi');
 const qoderDescriptor = getHeterogeneousAgentConfigOrThrow('qoder');
@@ -139,6 +142,10 @@ export const CODEBUDDY_CLI_INSTALL_COMMANDS = codeBuddyDescriptor.install.comman
 export const CODEBUDDY_CLI_INSTALL_DOCS_URL = codeBuddyDescriptor.install.docsUrl;
 export const CODEX_CLI_INSTALL_COMMANDS = codexDescriptor.install.commands;
 export const CODEX_CLI_INSTALL_DOCS_URL = codexDescriptor.install.docsUrl;
+export const CURSOR_CLI_INSTALL_COMMANDS = cursorDescriptor.install.commands;
+export const CURSOR_CLI_INSTALL_DOCS_URL = cursorDescriptor.install.docsUrl;
+export const GROK_BUILD_CLI_INSTALL_COMMANDS = grokBuildDescriptor.install.commands;
+export const GROK_BUILD_CLI_INSTALL_DOCS_URL = grokBuildDescriptor.install.docsUrl;
 export const OPENCODE_CLI_INSTALL_COMMANDS = openCodeDescriptor.install.commands;
 export const OPENCODE_CLI_INSTALL_DOCS_URL = openCodeDescriptor.install.docsUrl;
 export const PI_CLI_INSTALL_COMMANDS = piDescriptor.install.commands;

@@ -85,6 +85,22 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
+export const cursorBinary: BinarySpec = {
+  description: 'Cursor - Cursor agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('cursor', 'agent'),
+  name: 'agent',
+  priority: 3,
+};
+
+/** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
+export const grokBuildBinary: BinarySpec = {
+  description: 'Grok Build - xAI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('grok-build', 'grok'),
+  name: 'grok',
+  priority: 3,
+};
+
 /**
  * Amp CLI
  * @see https://ampcode.com/manual
@@ -126,6 +142,14 @@ export const qoderBinary: BinarySpec = {
   priority: 6,
 };
 
+/** TRAE Enterprise CLI (TraeCode CLI), not the unrelated open-source `trae-cli`. */
+export const traeBinary: BinarySpec = {
+  description: 'TRAE CLI - ByteDance enterprise agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('trae', 'traecli'),
+  name: 'traecli',
+  priority: 7,
+};
+
 /**
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
@@ -134,7 +158,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
-  priority: 7,
+  priority: 8,
   validateKeywords: ['gemini'],
 });
 
@@ -146,21 +170,20 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
-  priority: 8,
+  priority: 9,
   validateKeywords: ['qwen'],
 });
 
 /**
- * Kimi CLI (Moonshot)
- * @see https://github.com/MoonshotAI/kimi-cli
+ * Kimi Code (Moonshot AI)
+ * @see https://github.com/MoonshotAI/kimi-code
  */
-export const kimiCliBinary: BinarySpec = defineValidatedBinary({
-  candidates: ['kimi'],
-  description: 'Kimi CLI - Moonshot AI agentic coding CLI',
+export const kimiCliBinary: BinarySpec = {
+  description: 'Kimi Code - Moonshot AI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('kimi-code', 'kimi'),
   name: 'kimi',
-  priority: 9,
-  validateKeywords: ['kimi'],
-});
+  priority: 10,
+};
 
 /**
  * Aider - AI pair programming CLI
@@ -169,7 +192,7 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
  */
 export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
-  priority: 10,
+  priority: 11,
 });
 
 /**
@@ -180,16 +203,19 @@ export const heterogeneousCliAgentBinaries = {
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'cursor': cursorBinary,
+  'grok-build': grokBuildBinary,
+  'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,
   'pi': piBinary,
   'qoder': qoderBinary,
+  'trae': traeBinary,
 } satisfies Record<LocalHeterogeneousAgentType, BinarySpec>;
 
 export const cliAgentBinaries: BinarySpec[] = [
   ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
-  kimiCliBinary,
   aiderBinary,
 ];
 

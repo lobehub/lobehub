@@ -43,6 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   statusIcon: css`
+    flex-shrink: 0;
     margin-inline-start: 4px;
   `,
   terminalIcon: css`

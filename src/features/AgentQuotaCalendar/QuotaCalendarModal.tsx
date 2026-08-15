@@ -1,6 +1,7 @@
 'use client';
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
+import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
 import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { createModal, type ModalInstance, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -293,7 +294,16 @@ interface NormalizedWindow extends QuotaWindowSpan {
   seriesId: string;
 }
 
-const normalizeWindows = (rows: WindowRow[]): NormalizedWindow[] =>
+interface WindowLike {
+  limitType: string;
+  peakUtilization: number;
+  rateLimitedAt: Date | number | string | null;
+  resetsAt: Date | number | string;
+  scopeKey: string;
+  windowStartAt: Date | number | string;
+}
+
+const normalizeWindows = (rows: WindowLike[]): NormalizedWindow[] =>
   rows.map((row) => ({
     peakUtilization: row.peakUtilization,
     rateLimitedAt: toMs(row.rateLimitedAt),
@@ -756,20 +766,27 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     [dailyBurn, dailySpend],
   );
 
+  // Re-project the persisted snapshot series so historical windows remain
+  // available even when legacy millisecond-jitter rows exhaust getWindows' limit.
+  const historicalWindows = useMemo(
+    () => [...windows, ...normalizeWindows(projectWindows(readings))],
+    [readings, windows],
+  );
+
   const chartWindow = useMemo(() => {
     const live = currentWindow(readings, series, now);
     if (live) return live;
-    const past = windows.filter((w) => w.seriesId === seriesId(series));
+    const past = historicalWindows.filter((w) => w.seriesId === seriesId(series));
     return past.length > 0 ? past.reduce((a, b) => (a.resetsAt > b.resetsAt ? a : b)) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readings, series, windows]);
+  }, [historicalWindows, readings, series]);
 
   const windowStats = useMemo(() => {
-    const history = windows.filter((window) => window.seriesId === seriesId(series));
+    const history = historicalWindows.filter((window) => window.seriesId === seriesId(series));
     return buildWindowStats(history, chartWindow, turns, now, series.type === 'session' ? 40 : 8);
     // `now` is intentionally captured when the modal opens, matching chartWindow.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windows, chartWindow, turns, series]);
+  }, [historicalWindows, chartWindow, turns, series]);
 
   // A 5-hour window resets several times a day, so a per-day reset badge would
   // fire on every cell — only the weekly windows get one.

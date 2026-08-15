@@ -97,6 +97,31 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(false);
   });
 
+  it('shows Cursor models only on a concrete runtime that can query its CLI', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'cursor',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'cursor',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'cursor',
+      }),
+    ).toBe(false);
+  });
+
   it('shows Pi models for desktop-local execution and an explicit bound device', () => {
     expect(
       shouldShowHeteroModelSelector({

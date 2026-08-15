@@ -516,7 +516,7 @@ describe('AgentService', () => {
 
     // Builtin agent rows are provisioned without avatar; the client replaces its
     // cached entry with this snapshot, so the snapshot must carry the builtin
-    // avatar or the UI degrades to the default robot avatar (LOBE-12876)
+    // avatar or the UI degrades to the default robot avatar
     it('should fall back to the builtin avatar when a builtin agent row has none', async () => {
       const mockAgent = {
         avatar: null,

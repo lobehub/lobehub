@@ -116,11 +116,14 @@ export interface ResolveExecutionTargetOptions {
 export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
   type !== 'amp' &&
   type !== 'codebuddy' &&
+  type !== 'cursor' &&
+  type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
   type !== 'openclaw' &&
   type !== 'pi' &&
-  type !== 'qoder';
+  type !== 'qoder' &&
+  type !== 'trae';
 
 /**
  * Single source of truth for where an agent executes — one global

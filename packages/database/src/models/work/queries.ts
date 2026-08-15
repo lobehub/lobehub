@@ -260,6 +260,8 @@ export interface ListByWorkspaceParams {
   /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
   includeFileWorks?: boolean;
   limit?: number;
+  /** Narrow results to Works first produced by one agent. */
+  originAgentId?: string | null;
   /** Narrow the `external` type to a single skill provider's resource types. */
   provider?: WorkSkillProvider | null;
   type?: WorkType | null;
@@ -316,6 +318,7 @@ export const listByWorkspace = async (
     inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
   ];
   if (params.type) filters.push(eq(works.type, params.type));
+  if (params.originAgentId) filters.push(eq(works.originAgentId, params.originAgentId));
   // User-visible gallery tabs stay per-provider (Linear / GitHub) but filter by
   // provider — its resource types — over the unified `external` Work type.
   if (params.provider) {

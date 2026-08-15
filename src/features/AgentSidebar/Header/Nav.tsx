@@ -2,7 +2,13 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, MessagesSquareIcon, SearchIcon, TargetIcon } from 'lucide-react';
+import {
+  ListTodoIcon,
+  MessageSquarePlusIcon,
+  MessagesSquareIcon,
+  SearchIcon,
+  TargetIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -36,6 +42,7 @@ const Nav = memo(() => {
     pathname.includes('/channel') ||
     pathname.endsWith('/statistics');
   const isGoalsActive = pathname.endsWith('/goals');
+  const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
   const isTopicsActive = pathname.endsWith('/topics');
@@ -109,6 +116,15 @@ const Nav = memo(() => {
           }}
         />
       )}
+      <NavItem
+        active={isTasksActive}
+        icon={ListTodoIcon}
+        title={t('tab.tasks')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'tasks'));
+        }}
+      />
     </Flexbox>
   );
 });

@@ -62,6 +62,7 @@ export const useModelCatalog = ({
       : null,
     async () => {
       const result = await heterogeneousAgentCatalogService.listModels({
+        args: provider?.args,
         command: provider?.command,
         cwd,
         deviceId,

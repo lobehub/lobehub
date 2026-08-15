@@ -5,6 +5,7 @@ import {
   Cpu,
   Flag,
   Gauge,
+  Gpu,
   GraduationCap,
   Languages,
   LayoutGrid,
@@ -156,6 +157,22 @@ export const registerBuiltinDevDockItems = () => {
 
   if (isDesktop) {
     items.push(
+      {
+        defaultPinned: true,
+        icon: Gpu,
+        id: 'gpu-process',
+        label: 'GPU proc',
+        load: () => import('./widgets/GpuProcessWidget'),
+        slot: 'right',
+        type: 'readout',
+      },
+      {
+        icon: Gpu,
+        id: 'gpu-status',
+        label: 'GPU Status',
+        load: () => import('@/features/DevPanel/GpuStatus'),
+        type: 'panel',
+      },
       {
         defaultPinned: true,
         icon: AppWindow,

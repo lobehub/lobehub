@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MESSAGE_OPERATION_STATE, DEFAULT_OPERATION_STATE } from '../types/operation';
 import { type State } from './initialState';
-import { conversationSelectors } from './selectors';
+import { conversationSelectors, dataSelectors } from './selectors';
 
 // Helper to create a mock state
 const createMockState = (overrides: Partial<State> = {}): State => ({
@@ -316,6 +316,39 @@ describe('conversationSelectors', () => {
 
         expect(conversationSelectors.isAssistantGroupItemGenerating('block-2')(store)).toBe(true);
       });
+    });
+  });
+});
+
+describe('dataSelectors', () => {
+  describe('getToolMessageCreatedAt', () => {
+    const createToolMessage = (createdAt: Date | number | string) =>
+      ({
+        createdAt,
+        id: 'tool-message-1',
+        role: 'tool',
+        tool_call_id: 'tool-call-1',
+      }) as unknown as State['dbMessages'][number];
+
+    it.each([
+      ['number', 2000, 2000],
+      ['Date', new Date(2000), 2000],
+    ])('normalizes a %s createdAt to epoch milliseconds', (_, createdAt, expected) => {
+      const store = createMockState({ dbMessages: [createToolMessage(createdAt)] });
+
+      expect(dataSelectors.getToolMessageCreatedAt('tool-call-1')(store)).toBe(expected);
+    });
+
+    it('returns undefined when the tool message is absent', () => {
+      expect(
+        dataSelectors.getToolMessageCreatedAt('tool-call-1')(createMockState()),
+      ).toBeUndefined();
+    });
+
+    it('returns undefined for an invalid createdAt', () => {
+      const store = createMockState({ dbMessages: [createToolMessage('not-a-date')] });
+
+      expect(dataSelectors.getToolMessageCreatedAt('tool-call-1')(store)).toBeUndefined();
     });
   });
 });

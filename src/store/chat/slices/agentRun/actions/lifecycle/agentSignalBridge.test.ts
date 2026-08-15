@@ -35,7 +35,6 @@ describe('emitClientAgentSignalSourceEvent', () => {
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
-      preference: { lab: { enableAgentSelfIteration: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -76,7 +75,6 @@ describe('emitClientAgentSignalSourceEvent', () => {
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
-      preference: { lab: { enableAgentSelfIteration: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -127,7 +125,6 @@ describe('emitClientAgentSignalSourceEvent', () => {
     });
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
-      preference: { lab: { enableAgentSelfIteration: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -145,14 +142,13 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
   });
 
-  it('emits when the feature flag is enabled even if the lab toggle is disabled', async () => {
+  it('emits when the feature flag is enabled and user state is initialized', async () => {
     const { agentSignalService } = await import('@/services/agentSignal');
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
-      preference: { lab: { enableAgentSelfIteration: false } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -185,7 +181,6 @@ describe('emitClientAgentSignalSourceEvent', () => {
     });
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: false,
-      preference: { lab: { enableAgentSelfIteration: false } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({

@@ -1,7 +1,7 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
+import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
@@ -174,9 +174,9 @@ const Footer = memo(() => {
               icon: <Icon icon={Download} />,
               key: 'get-app',
               label: (
-                <WorkspaceLink escape to="/downloads">
+                <a href={DOWNLOAD_URL.default} rel="noopener noreferrer" target="_blank">
                   {t('getApp')}
-                </WorkspaceLink>
+                </a>
               ),
             },
           ]

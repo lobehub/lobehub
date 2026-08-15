@@ -266,11 +266,14 @@ export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
     'task:groupList',
-    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
-      'task:groupList',
-      agentKey,
-      visibility,
-    ],
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      projectId?: string,
+    ) =>
+      projectId
+        ? ['task:groupList', agentKey, visibility, projectId]
+        : ['task:groupList', agentKey, visibility],
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
@@ -286,7 +289,11 @@ export const taskKeys = {
       // Part of the key, not a detail: Home orders by activity while the Tasks
       // page orders by creation, and they read the same store field.
       orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
-    ) => ['task:list', agentKey, visibility, orderBy],
+      projectId?: string,
+    ) =>
+      projectId
+        ? ['task:list', agentKey, visibility, orderBy, projectId]
+        : ['task:list', agentKey, visibility, orderBy],
   ),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a

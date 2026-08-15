@@ -81,6 +81,22 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
+// The serverDatabase middleware replaces ctx.serverDB with this. The chain is
+// awaitable-empty so the restricted-KB lookups resolve to "no restrictions".
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(() => ({
+    select: vi.fn(() => ({
+      from: vi.fn(() => {
+        const whereResult = () => Promise.resolve([]);
+        return {
+          innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+          where: vi.fn(whereResult),
+        };
+      }),
+    })),
+  })),
+}));
+
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanEditResource: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
@@ -329,6 +345,7 @@ describe('agentRouter', () => {
           description: 'desc 1',
           enabled: true,
           id: 'kb1',
+          memberRestricted: false,
           name: 'KB 1',
           ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,
@@ -339,6 +356,7 @@ describe('agentRouter', () => {
           description: 'desc 2',
           enabled: false,
           id: 'kb2',
+          memberRestricted: false,
           name: 'KB 2',
           ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,

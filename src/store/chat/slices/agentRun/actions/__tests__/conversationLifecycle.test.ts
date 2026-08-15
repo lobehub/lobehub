@@ -2366,6 +2366,178 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should NOT enqueue once the run finished its visible output', async () => {
+        // Regression: the enqueue check only asked `status === 'running'`, while the
+        // composer flips back to Send on `visibleLoadingDone`. The answer is complete
+        // on screen and the button says Send, so the next message must start a fresh
+        // turn — not park in a tray the user has no reason to expect, and one that
+        // never empties at all when `agent_runtime_end` is lost over a still-open WS
+        // (neither the run lifecycle nor onSessionComplete's fallback fires, and the
+        // queue drains on success only).
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-visible-done': {
+                childOperationIds: [],
+                context,
+                id: 'op-visible-done',
+                metadata: { visibleLoadingDone: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-visible-done'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'follow-up after the run visibly ended',
+          });
+        });
+
+        expect(enqueueMessageSpy).not.toHaveBeenCalled();
+      });
+
+      it('should NOT enqueue behind an aborting op (Stop already pressed)', async () => {
+        // Stop flips the composer back to Send immediately via `isAborting`. The
+        // queue drains on success only, so queueing behind an aborting run would
+        // strand the message with no run left to send it.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-aborting': {
+                childOperationIds: [],
+                context,
+                id: 'op-aborting',
+                metadata: { isAborting: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-aborting'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'send after stop' });
+        });
+
+        expect(enqueueMessageSpy).not.toHaveBeenCalled();
+      });
+
+      it('should restart the existing queue in FIFO order when Stop already cancelled its owner', async () => {
+        vi.useFakeTimers();
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-cancelled': {
+                childOperationIds: [],
+                context,
+                id: 'op-cancelled',
+                metadata: { isAborting: true },
+                status: 'cancelled',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: { [contextKey]: ['op-cancelled'] },
+            queuedMessages: {
+              [contextKey]: [
+                {
+                  content: 'queued A',
+                  createdAt: Date.now(),
+                  id: 'queued-1',
+                  interruptMode: 'soft',
+                },
+              ],
+            },
+          });
+        });
+
+        const sendMessageSpy = vi.spyOn(result.current, 'sendMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'new B' });
+          await vi.runAllTimersAsync();
+        });
+
+        expect(sendMessageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ message: expect.stringMatching(/queued A[\s\S]*new B/) }),
+        );
+        expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([]);
+        vi.useRealTimers();
+      });
+
+      it('should still enqueue past visible end when follow-ups are already queued', async () => {
+        // Order beats latency: those queued items belong to the terminal drain, so a
+        // newer send must join the queue instead of jumping it — otherwise the drain
+        // fires a second, older turn right behind this one.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-finishing': {
+                childOperationIds: [],
+                context,
+                id: 'op-finishing',
+                metadata: { visibleLoadingDone: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-finishing'],
+            },
+            queuedMessages: {
+              [contextKey]: [
+                {
+                  content: 'queued before the visible end',
+                  createdAt: Date.now(),
+                  id: 'queued-1',
+                  interruptMode: 'soft',
+                },
+              ],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'follow-up mid-terminal' });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({ content: 'follow-up mid-terminal' }),
+          'op-finishing',
+        );
+      });
+
       it('should enqueue behind a running interim approve/retry op (preflight window)', async () => {
         // Interim ops (approve/submit/skip/regenerate) show input loading the
         // instant the user clicks, but the real runtime op is only created 2–4

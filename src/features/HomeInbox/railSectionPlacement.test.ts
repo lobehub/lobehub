@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ownsRailSections } from './railSectionPlacement';
 
 describe('ownsRailSections', () => {
-  it('leaves running and news to the rail while it is open', () => {
+  it('leaves goals and news to the rail while it is open', () => {
     expect(ownsRailSections({ variant: 'main' })).toBe(false);
     expect(ownsRailSections({ inlineRail: false, variant: 'main' })).toBe(false);
   });

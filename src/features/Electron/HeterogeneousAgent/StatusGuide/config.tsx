@@ -1,6 +1,18 @@
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
-import { Amp, ClaudeCode, CodeBuddy, Codex, OpenCode, Pi, Qoder } from '@lobehub/icons';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  Grok,
+  Kimi,
+  OpenCode,
+  Pi,
+  Qoder,
+  Trae,
+} from '@lobehub/icons';
 
 import {
   type HeterogeneousAgentGuideConfig,
@@ -25,6 +37,18 @@ const GUIDE_PRESENTATION_CONFIG = {
     icon: Codex,
     translationPrefix: 'codexInstallGuide',
   },
+  'cursor': {
+    icon: Cursor,
+    translationPrefix: 'cursorInstallGuide',
+  },
+  'grok-build': {
+    icon: Grok,
+    translationPrefix: 'grokBuildInstallGuide',
+  },
+  'kimi-code': {
+    icon: Kimi,
+    translationPrefix: 'kimiCodeInstallGuide',
+  },
   'opencode': {
     icon: OpenCode,
     translationPrefix: 'opencodeInstallGuide',
@@ -36,6 +60,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'qoder': {
     icon: Qoder,
     translationPrefix: 'qoderInstallGuide',
+  },
+  'trae': {
+    icon: Trae,
+    translationPrefix: 'traeInstallGuide',
   },
 } as const satisfies Record<
   LocalHeterogeneousAgentType,

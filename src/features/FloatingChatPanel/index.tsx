@@ -53,6 +53,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: transparent;
     }
   `,
+  panelEmbedded: css`
+    flex: 1;
+    min-height: 0;
+    border-block-start: none;
+  `,
   sheetSeamless: css`
     border: none;
     border-radius: 0;
@@ -79,6 +84,8 @@ export interface FloatingChatPanelProps {
   agentDocumentId?: string;
   agentId: string;
   className?: string;
+  /** Whether the panel starts expanded. Defaults to collapsed for floating usages. */
+  defaultOpen?: boolean;
   dismissible?: boolean;
   /**
    * Active document id for the conversation context. Passed through so the
@@ -130,6 +137,8 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     agentDocumentId,
     actionsBar,
     hooks,
+    defaultOpen = false,
+    mode = 'overlay',
 
     width = '100%',
 
@@ -171,8 +180,9 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const operationState = useOperationState(context);
     const defaultActionsBar = useActionsBarConfig();
     const resolvedActionsBar = actionsBar ?? defaultActionsBar;
+    const isEmbedded = mode === 'embedded';
 
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
     const [activeSnapPoint, setActiveSnapPoint] = useState<number>(MID_SNAP_POINT);
 
     const expand = useCallback(() => {
@@ -262,14 +272,24 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         onMessagesChange={handleMessagesChange}
       >
         <div
-          className={styles.panel}
-          data-collapsed={isCollapsed}
+          className={`${styles.panel} ${isEmbedded ? styles.panelEmbedded : ''}`}
+          data-collapsed={isEmbedded ? false : isCollapsed}
+          data-mode={mode}
           data-testid="floating-chat-panel"
         >
-          <FloatingSheet {...sheetProps}>
-            <ChatBody />
-          </FloatingSheet>
-          <InputRow isCollapsed={isCollapsed} onExpand={expand} />
+          {isEmbedded ? (
+            <>
+              <ChatBody />
+              <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />
+            </>
+          ) : (
+            <>
+              <FloatingSheet {...sheetProps}>
+                <ChatBody />
+              </FloatingSheet>
+              <InputRow isCollapsed={isCollapsed} onExpand={expand} />
+            </>
+          )}
         </div>
       </ConversationProvider>
     );

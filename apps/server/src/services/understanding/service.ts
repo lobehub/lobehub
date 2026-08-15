@@ -11,7 +11,10 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import { observeOnboardingUnderstandingOperation } from '@lobechat/observability-otel/modules/onboarding-understanding';
+import {
+  observeOnboardingUnderstandingOperation,
+  observeOnboardingUnderstandingProviderCollection,
+} from '@lobechat/observability-otel/modules/onboarding-understanding';
 import {
   chainUnderstandingDetailedPersona,
   chainUnderstandingPersona,
@@ -339,26 +342,25 @@ export class UnderstandingService {
     const { OnboardingUnderstandingWorkflow } =
       await import('@/server/workflows/onboardingUnderstanding');
     OnboardingUnderstandingWorkflow.assertAvailable();
-    const current = await this.activeSession(input.topicId, input.sessionId);
+    await this.activeSession(input.topicId, input.sessionId);
     const requestedProviderIds = [...new Set(input.providerIds)].sort();
     if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
       throw new UnderstandingResourceNotFoundError('session');
     }
     const availableProviderIds = new Set(await this.listSourceProviderIds());
-    const providerIds = requestedProviderIds.filter(
-      (providerId) => current.sources[providerId] || availableProviderIds.has(providerId),
+    const providerIds = requestedProviderIds.filter((providerId) =>
+      availableProviderIds.has(providerId),
     );
 
-    const next = await this.dependencies.repository.extend({
-      expectedFeedbackRevision: input.expectedFeedbackRevision,
-      feedback: input.feedback,
-      providerIds,
-      sessionId: input.sessionId,
-      topicId: input.topicId,
-    });
-    const addedProviders = providerIds
-      .filter((providerId) => !current.sources[providerId])
-      .map((id) => ({ id, revision: 1 }));
+    const { attempts: providerAttempts, session: next } = await this.dependencies.repository.extend(
+      {
+        expectedFeedbackRevision: input.expectedFeedbackRevision,
+        feedback: input.feedback,
+        providerIds,
+        sessionId: input.sessionId,
+        topicId: input.topicId,
+      },
+    );
     const completedProviders = Object.entries(next.sources).filter(
       ([, state]) => state.status === 'completed',
     );
@@ -398,23 +400,37 @@ export class UnderstandingService {
         )),
       })),
     );
-    const providerAttempts = [...addedProviders, ...recollectedProviders].sort((left, right) =>
+    const attempts = [...providerAttempts, ...recollectedProviders].sort((left, right) =>
       left.id.localeCompare(right.id),
     );
-    if (providerAttempts.length > 0) {
-      await OnboardingUnderstandingWorkflow.triggerProviders(
-        {
-          providers: providerAttempts,
-          responseLanguage: input.responseLanguage,
-          sessionId: input.sessionId,
-          startedAt: Date.now(),
-          topicId: input.topicId,
-          userId: this.dependencies.userId,
-        },
-        {
-          workflowRunId: `onboarding-understanding-extend-${input.sessionId}-${next.feedback?.revision ?? 0}-${providerAttempts.map(({ id, revision }) => `${id}-${revision}`).join('-')}`,
-        },
-      );
+    if (attempts.length > 0) {
+      try {
+        await OnboardingUnderstandingWorkflow.triggerProviders(
+          {
+            providers: attempts,
+            responseLanguage: input.responseLanguage,
+            sessionId: input.sessionId,
+            startedAt: Date.now(),
+            topicId: input.topicId,
+            userId: this.dependencies.userId,
+          },
+          {
+            workflowRunId: `onboarding-understanding-extend-${input.sessionId}-${next.feedback?.revision ?? 0}-${attempts.map(({ id, revision }) => `${id}-${revision}`).join('-')}`,
+          },
+        );
+      } catch (triggerError) {
+        await Promise.allSettled(
+          attempts.map(({ id, revision }) =>
+            this.failProvider({
+              providerId: id,
+              revision,
+              sessionId: input.sessionId,
+              topicId: input.topicId,
+            }),
+          ),
+        );
+        throw triggerError;
+      }
     }
 
     const sourceFingerprint = getUnderstandingSourceFingerprint(availableSession);
@@ -479,6 +495,7 @@ export class UnderstandingService {
     if (state.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
+    if (!state.errors.some(({ retryable }) => retryable)) return this.get(input.topicId);
     const availableProviderIds = await this.dependencies.connectorData.listAvailableProviderIds([
       input.providerId,
     ]);
@@ -601,28 +618,68 @@ export class UnderstandingService {
           return stale();
         }
 
-        let collected;
+        let collection;
         try {
-          collected = await observeOnboardingUnderstandingOperation(
-            { ...operationAttributes, operation: 'provider.collect' },
-            () =>
-              provider.collect({
+          collection = await observeOnboardingUnderstandingProviderCollection(
+            operationAttributes,
+            async () => {
+              const collected = await provider.collect({
                 connectorData: this.dependencies.connectorData,
                 userId: this.dependencies.userId,
-              }),
+              });
+              const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
+              const diagnostics = sanitizeProviderDiagnostics(
+                input.providerId,
+                collected.diagnostics,
+              );
+              const usable =
+                Boolean(context) &&
+                collected.sourceCount > 0 &&
+                diagnostics.evidenceCount > 0 &&
+                diagnostics.succeededCount > 0;
+              const outcome = !usable
+                ? ('failed' as const)
+                : diagnostics.failedCount > 0 || diagnostics.errors.length > 0
+                  ? ('partial' as const)
+                  : ('completed' as const);
+
+              return {
+                diagnostics: diagnostics.errors,
+                evidenceCount: diagnostics.evidenceCount,
+                failedCount: diagnostics.failedCount,
+                outcome,
+                result: { context, diagnostics, sourceCount: collected.sourceCount, usable },
+                sourceCount: collected.sourceCount,
+                succeededCount: diagnostics.succeededCount,
+              };
+            },
+            (error) => {
+              if (!(error instanceof ConnectorDataError)) return;
+              return canonicalCollectionError(
+                input.providerId,
+                error.operation,
+                error.code,
+                error.retryable,
+              );
+            },
           );
         } catch (error) {
           if (!(error instanceof ConnectorDataError) || error.retryable) throw error;
-          return this.recordProviderFailure(input, 0);
+          const diagnostic = canonicalCollectionError(
+            input.providerId,
+            error.operation,
+            error.code,
+            error.retryable,
+          );
+          return this.recordProviderFailure(input, 0, {
+            errors: [diagnostic],
+            evidenceCount: 0,
+            failedCount: 1,
+            succeededCount: 0,
+          });
         }
 
-        const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-        const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
-        const usable =
-          Boolean(context) &&
-          collected.sourceCount > 0 &&
-          diagnostics.evidenceCount > 0 &&
-          diagnostics.succeededCount > 0;
+        const { context, diagnostics, sourceCount, usable } = collection;
         if (!usable)
           return this.recordProviderFailure(input, diagnostics.succeededCount, diagnostics);
 
@@ -632,7 +689,7 @@ export class UnderstandingService {
           providerId: input.providerId,
           revision: input.revision,
           sessionId: input.sessionId,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           userId: this.dependencies.userId,
         };
         await observeOnboardingUnderstandingOperation(
@@ -658,7 +715,7 @@ export class UnderstandingService {
           failedCount: diagnostics.failedCount,
           providerId: input.providerId,
           revision: input.revision,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           sourceFingerprint,
           status: 'completed' as const,
           succeededCount: diagnostics.succeededCount,

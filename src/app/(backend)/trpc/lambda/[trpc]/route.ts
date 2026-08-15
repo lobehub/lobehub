@@ -13,6 +13,10 @@ const handler = (req: NextRequest) => {
   const preparedReq = prepareRequestForTRPC(req);
 
   return fetchRequestHandler({
+    // Large-input queries (see the client's LARGE_INPUT_QUERY_PROCEDURES) are
+    // sent as POST to dodge the GET URL length budget — let tRPC accept them.
+    allowMethodOverride: true,
+
     /**
      * @link https://trpc.io/docs/v11/context
      */

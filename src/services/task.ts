@@ -19,6 +19,7 @@ class TaskService {
     parentIdentifier?: string;
     parentTaskId?: string | null;
     priorities?: number[];
+    projectId?: string;
     statuses?: TaskStatus[];
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);
@@ -33,6 +34,7 @@ class TaskService {
     }>;
     hasGoal?: boolean;
     parentTaskId?: string | null;
+    projectId?: string;
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
 
@@ -67,6 +69,7 @@ class TaskService {
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';

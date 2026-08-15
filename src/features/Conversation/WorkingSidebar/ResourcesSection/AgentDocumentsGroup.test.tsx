@@ -24,6 +24,12 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 const documentExplorerShouldThrow = vi.hoisted(() => ({ current: false }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
+    <div role="alert">
+      <div>{title}</div>
+      <div>{message}</div>
+    </div>
+  ),
   confirmModal: modalConfirm,
   toast: { error: messageError, success: messageSuccess },
 }));
@@ -48,12 +54,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       <button aria-label={title} onClick={onClick}>
         {title}
       </button>
-    ),
-    Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
-      <div role="alert">
-        <div>{title}</div>
-        <div>{message}</div>
-      </div>
     ),
     Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
     Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
@@ -120,7 +120,7 @@ vi.mock('@/features/AgentDocumentsExplorer', () => ({
   }: {
     data: { documentId: string; id: string; title?: string }[];
     onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
-  }) => (
+  }) =>
     documentExplorerShouldThrow.current ? (
       (() => {
         throw new Error('document tree render failed');
@@ -137,8 +137,7 @@ vi.mock('@/features/AgentDocumentsExplorer', () => ({
           </button>
         ))}
       </div>
-    )
-  ),
+    ),
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({

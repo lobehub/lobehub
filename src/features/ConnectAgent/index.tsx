@@ -9,9 +9,17 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Alert, CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { Checkbox, Typography } from 'antd';
+import { CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  createModal,
+  type ModalInstance,
+  ScrollArea,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import {
@@ -42,6 +50,18 @@ import type { ScanTarget } from './useAgentScan';
 import { useAgentScan } from './useAgentScan';
 
 const styles = createStaticStyles(({ css }) => ({
+  agentListScrollbar: css`
+    width: 2px;
+    margin-block: 12px;
+    margin-inline-end: 4px;
+  `,
+  agentListThumb: css`
+    background: ${cssVar.colorFill};
+  `,
+  agentListViewport: css`
+    overscroll-behavior: contain;
+    max-height: min(50dvh, 400px);
+  `,
   cmd: css`
     user-select: all;
 
@@ -266,6 +286,22 @@ const SkeletonRow = memo<{ width: number }>(({ width }) => (
     </Flexbox>
   </div>
 ));
+
+const ScrollableAgentList = memo<{ children: ReactNode }>(({ children }) => (
+  <ScrollArea
+    disableContentFit
+    scrollFade
+    className={styles.groupList}
+    contentProps={{ style: { display: 'block' } }}
+    scrollbarProps={{ className: styles.agentListScrollbar }}
+    thumbProps={{ className: styles.agentListThumb }}
+    viewportProps={{ className: styles.agentListViewport }}
+  >
+    {children}
+  </ScrollArea>
+));
+
+ScrollableAgentList.displayName = 'ScrollableAgentList';
 
 const DeviceRow = memo<{
   icon: ReactNode;
@@ -743,13 +779,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
           {scanning && (
             <Flexbox gap={6}>
               <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
-              <div className={styles.groupList}>
+              <ScrollableAgentList>
                 {[90, 70, 110, 80, 100, 75, 95]
                   .slice(0, CONNECTABLE_PROVIDERS.length)
                   .map((width, i) => (
                     <SkeletonRow key={i} width={width} />
                   ))}
-              </div>
+              </ScrollableAgentList>
             </Flexbox>
           )}
 
@@ -790,7 +826,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <SectionLabel>
                 {t('connectAgent.create.detectedCount', { total: detectedCount })}
               </SectionLabel>
-              <div className={styles.groupList}>
+              <ScrollableAgentList>
                 {inventory.map(({ provider, status }) => (
                   <AgentScanRow
                     key={provider.type}
@@ -802,7 +838,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     onToggle={() => toggleType(provider)}
                   />
                 ))}
-              </div>
+              </ScrollableAgentList>
             </Flexbox>
           )}
 
