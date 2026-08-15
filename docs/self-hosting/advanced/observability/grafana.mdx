@@ -35,6 +35,8 @@ This guide will help you set up and use these tools to monitor your LobeHub inst
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/docker-compose.yml
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/.env.example
 mv .env.example .env
+sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env
+rm .env.bak
 ```
 
 1. Update the password & secrets in the `.env` file as needed.

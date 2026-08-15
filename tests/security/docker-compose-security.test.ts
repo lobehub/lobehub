@@ -57,6 +57,9 @@ describe('docker-compose security defaults', () => {
     expect(read('docs/self-hosting/platform/docker-compose.mdx')).toContain(
       'sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env',
     );
+    expect(read('docs/self-hosting/advanced/observability/grafana.mdx')).toContain(
+      'sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env',
+    );
   });
 
   it('prepares the required development secret before every Compose command', () => {
