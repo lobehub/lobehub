@@ -25,6 +25,7 @@ interface CheckAuthOptions {
 export type RequestHandler = (
   req: Request,
   options: RequestOptions & {
+    apiKeyScopes?: string[] | null;
     jwtPayload: ClientSecretPayload;
     serverDB: LobeChatDatabase;
     userId: string;
@@ -90,6 +91,7 @@ export const checkAuth =
 
     let userId: string;
     let workspaceId: string | null | undefined;
+    let apiKeyScopes: string[] | null | undefined;
 
     try {
       const apiKeyToken = checkAuthOptions.allowApiKey && req.headers.get('X-API-Key')?.trim();
@@ -103,6 +105,7 @@ export const checkAuth =
         }
         userId = apiKeyContext.userId;
         workspaceId = apiKeyContext.workspaceId;
+        apiKeyScopes = apiKeyContext.apiKeyScopes;
       } else if (req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)) {
         // OIDC authentication (CLI)
         const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)!;
@@ -173,7 +176,7 @@ export const checkAuth =
     const extractedContext = extractTraceContext(req.headers);
 
     const res = await otContext.with(extractedContext, () =>
-      handler(clonedReq, { ...options, jwtPayload, serverDB, userId, workspaceId }),
+      handler(clonedReq, { ...options, apiKeyScopes, jwtPayload, serverDB, userId, workspaceId }),
     );
 
     // Only inject trace headers when the handler returns a Response

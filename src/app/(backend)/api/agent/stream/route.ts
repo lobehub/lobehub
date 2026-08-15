@@ -1,3 +1,4 @@
+import { hasApiKeyScope } from '@lobechat/const/apiKeyScope';
 import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
 import { NextResponse } from 'next/server';
@@ -17,7 +18,10 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-const handler: RequestHandler = async (request, { serverDB, userId, workspaceId }) => {
+const handler: RequestHandler = async (
+  request,
+  { apiKeyScopes, serverDB, userId, workspaceId },
+) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
 
@@ -35,6 +39,14 @@ const handler: RequestHandler = async (request, { serverDB, userId, workspaceId 
     );
   }
 
+  const isApiKeyRequest = apiKeyScopes !== undefined;
+  if (isApiKeyRequest && !hasApiKeyScope(apiKeyScopes, 'chat:read')) {
+    return NextResponse.json(
+      { error: "Forbidden: API key is missing required scope 'chat:read'" },
+      { status: 403 },
+    );
+  }
+
   // Prefer the durable audit row, but runtime startup deliberately tolerates a
   // failed audit insert. The stream backend keeps the same minimal scope as a
   // trusted live-operation fallback (shared through Redis in distributed mode).
@@ -49,7 +61,6 @@ const handler: RequestHandler = async (request, { serverDB, userId, workspaceId 
   // A workspace API key represents the validated workspace, not only the user
   // who created it, so any operation in that workspace is in scope. Personal
   // keys remain restricted to the caller's personal operations.
-  const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
   const apiKeyWorkspaceId = workspaceId?.trim() || null;
   let isAuthorized: boolean;
   if (isApiKeyRequest) {

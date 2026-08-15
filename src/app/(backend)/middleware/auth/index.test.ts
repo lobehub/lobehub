@@ -111,6 +111,7 @@ describe('checkAuth', () => {
       },
     });
     vi.mocked(createLambdaContext).mockResolvedValueOnce({
+      apiKeyScopes: ['chat:read'],
       userId: 'api-key-user',
       workspaceId: 'workspace-1',
     });
@@ -122,6 +123,7 @@ describe('checkAuth', () => {
     expect(mockHandler).toHaveBeenCalledWith(
       expect.any(Request),
       expect.objectContaining({
+        apiKeyScopes: ['chat:read'],
         jwtPayload: { userId: 'api-key-user' },
         userId: 'api-key-user',
         workspaceId: 'workspace-1',

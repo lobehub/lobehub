@@ -17,6 +17,7 @@ const mockStreamEventManager = {
 };
 const mockGetWorkspaceMember = vi.hoisted(() => vi.fn());
 const mockAuthScope = vi.hoisted(() => ({
+  apiKeyScopes: null as string[] | null,
   workspaceId: undefined as string | undefined,
 }));
 
@@ -42,6 +43,7 @@ vi.mock('@/app/(backend)/middleware/auth', () => ({
     (request: Request, options = { params: Promise.resolve({}) }): Promise<Response> =>
       handler(request, {
         ...options,
+        apiKeyScopes: request.headers.get('X-API-Key') ? mockAuthScope.apiKeyScopes : undefined,
         jwtPayload: { userId: 'test-user' },
         serverDB: {},
         userId: 'test-user',
@@ -61,6 +63,7 @@ describe('/api/agent/stream route', () => {
     });
     mockStreamEventManager.getOperationAuthScope.mockResolvedValue(null);
     mockGetWorkspaceMember.mockResolvedValue({ userId: 'test-user' });
+    mockAuthScope.apiKeyScopes = null;
     mockAuthScope.workspaceId = undefined;
     // Mock Date.now to return consistent timestamp
     vi.spyOn(Date, 'now').mockReturnValue(MOCK_TIMESTAMP);
@@ -145,6 +148,25 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
     });
 
+    it('should reject a restricted API key without chat read scope', async () => {
+      mockAuthScope.apiKeyScopes = ['knowledge:read'];
+      mockAuthScope.workspaceId = 'workspace-a';
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        { headers: { 'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa' } },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        error: "Forbidden: API key is missing required scope 'chat:read'",
+      });
+      expect(AgentOperationModel.findOwnerScope).not.toHaveBeenCalled();
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
+    });
+
     it('should reject an API key when the operation belongs to another workspace', async () => {
       vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
         userId: 'test-user',
@@ -172,6 +194,7 @@ describe('/api/agent/stream route', () => {
         userId: 'workspace-member',
         workspaceId: 'workspace-a',
       });
+      mockAuthScope.apiKeyScopes = ['chat:read'];
       mockAuthScope.workspaceId = 'workspace-a';
       const request = new NextRequest(
         'https://test.com/api/agent/stream?operationId=test-operation',
