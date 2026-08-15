@@ -82,6 +82,9 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
 
   return (
     <Flexbox gap={12} padding={'8px 20px 20px'}>
+      <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
+        {loading ? t('create.generating') : t('create.briefHelp')}
+      </Text>
       <TextArea
         autoFocus
         className={loading ? styles.generating : undefined}
@@ -91,9 +94,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
         value={brief}
         onChange={(e) => setBrief(e.target.value)}
       />
-      <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
-        {loading ? t('create.generating') : t('create.briefHelp')}
-      </Text>
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
         <Button disabled={loading} onClick={close}>
           {t('create.cancel')}

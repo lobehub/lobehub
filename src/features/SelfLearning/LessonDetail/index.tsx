@@ -181,24 +181,10 @@ const LessonDetail = memo(() => {
                         padding={14}
                         variant={'outlined'}
                       >
-                        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+                        <Flexbox horizontal align={'center'} gap={8}>
                           <Tag color={hit.outcome === 'pass' ? 'green' : 'red'}>
                             {t(`rules.detail.outcome.${hit.outcome}`)}
                           </Tag>
-                          {hit.subjectType === 'topic' && activeAgentId ? (
-                            <Link to={urlJoin('/agent', activeAgentId, hit.subjectId)}>
-                              <Flexbox horizontal align={'center'} gap={5}>
-                                <Icon icon={MessageSquareText} size={13} />
-                                <Text fontSize={12} type={'info'}>
-                                  {hit.runTitle ?? `#${hit.runIndex}`}
-                                </Text>
-                              </Flexbox>
-                            </Link>
-                          ) : (
-                            <Text fontSize={11} type={'secondary'}>
-                              {hit.runTitle ?? `#${hit.runIndex}`}
-                            </Text>
-                          )}
                         </Flexbox>
                         <Text fontSize={13} lineHeight={1.65}>
                           {hit.example}
@@ -206,6 +192,20 @@ const LessonDetail = memo(() => {
                         {hit.note && (
                           <Text fontSize={12} type={'secondary'}>
                             {hit.note}
+                          </Text>
+                        )}
+                        {hit.subjectType === 'topic' && activeAgentId ? (
+                          <Link to={urlJoin('/agent', activeAgentId, hit.subjectId)}>
+                            <Flexbox horizontal align={'center'} gap={5}>
+                              <Icon icon={MessageSquareText} size={13} />
+                              <Text fontSize={12} type={'info'}>
+                                {hit.runTitle ?? `#${hit.runIndex}`}
+                              </Text>
+                            </Flexbox>
+                          </Link>
+                        ) : (
+                          <Text fontSize={11} type={'secondary'}>
+                            {hit.runTitle ?? `#${hit.runIndex}`}
                           </Text>
                         )}
                       </Block>
