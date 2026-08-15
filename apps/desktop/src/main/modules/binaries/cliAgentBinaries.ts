@@ -1,7 +1,7 @@
-import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { homedir, platform } from 'node:os';
 import path from 'node:path';
 
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
