@@ -19,6 +19,10 @@ export const usePanelHandlers = ({
     (modelId: string, providerId: string) => {
       // Defer store update so the panel close animation completes
       // before React re-renders with new data (prevents detail panel flash).
+      // Intentionally NOT cleared on unmount: selection closes the panel in
+      // the same event (selectModel calls onClose() first), so the popup
+      // unmounts before this fires. The update is a committed user action
+      // targeting the zustand store, which is safe after unmount.
       setTimeout(() => {
         if (!canCreateContent) return;
 

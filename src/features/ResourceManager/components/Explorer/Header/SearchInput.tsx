@@ -15,6 +15,7 @@ const SearchInput = memo(() => {
   const [showIcon, setShowIcon] = useState(true);
   const [localQuery, setLocalQuery] = useState('');
   const inputRef = useRef<any>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setSearchQuery = useResourceManagerStore((s) => s.setSearchQuery);
 
   const debouncedQuery = useDebounce(localQuery, { wait: 350 });
@@ -24,10 +25,21 @@ const SearchInput = memo(() => {
     setSearchQuery(debouncedQuery || null);
   }, [debouncedQuery, expanded, setSearchQuery]);
 
+  useEffect(
+    () => () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    },
+    [],
+  );
+
   const handleExpand = useCallback(() => {
     setShowIcon(false);
     setExpanded(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      focusTimerRef.current = null;
+      inputRef.current?.focus();
+    }, 0);
   }, []);
 
   const handleCollapse = useCallback(() => {
