@@ -51,15 +51,11 @@ export class PiRpcPool {
   register(key: string, session: PiRpcSession): void {
     const existing = this.entries.get(key);
     if (existing && existing.session !== session) {
-      // Replace: reap the old entry unless it is mid-run (never kill a run).
-      if (existing.session.isRunning) {
-        this.bySession.delete(existing.session);
-        existing.session.close().catch(() => {
-          /* best-effort */
-        });
-      } else {
-        this.reap(existing, 'replaced');
-      }
+      // A replacement under the same key only happens after the previous
+      // process was reaped (idle) or failed. Runs of one conversation are
+      // strictly serial on a single device, so the old process is never busy
+      // here; reap it unconditionally for consistency.
+      this.reap(existing, 'replaced');
     }
     const entry: PiRpcPoolEntry = { key, lastUsedAt: Date.now(), session };
     this.entries.set(key, entry);
