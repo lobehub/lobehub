@@ -338,7 +338,7 @@ describe('AgentCopyJobModel', () => {
     await expect(agentModel.delete(source.id)).rejects.toThrow(AGENT_COPY_IN_PROGRESS);
   });
 
-  // LOBE-12922: copy sits on the ordinary user path, so a pending copy job
+  // Copy sits on the ordinary user path, so a pending copy job
   // must never wedge an owner's workspace/account deletion the way a pending
   // transfer does — the cloud delete flows cancel Stripe and wipe the billing
   // rows BEFORE they reach these guards.
@@ -379,10 +379,10 @@ describe('AgentCopyJobModel', () => {
     expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeUndefined();
   });
 
-  // LOBE-12935: a copy drives the SAME migration UI as a transfer (progress
+  // A copy drives the SAME migration UI as a transfer (progress
   // badge, topic gray-out, open-to-prioritize) and shares the same crash-
   // recovery net. Every query behind those must stay type-agnostic; only the
-  // owner-delete guards (LOBE-12922) and the per-type drains filter by type.
+  // owner-delete guards and the per-type drains filter by type.
   it('stays visible to the shared migration queries while pending', async () => {
     const source = await seedSourceAgent();
     const { jobId, newAgent, topicPairs } = await seedTargetShells(source.id);

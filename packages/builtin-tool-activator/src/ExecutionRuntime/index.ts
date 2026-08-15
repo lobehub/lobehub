@@ -109,7 +109,7 @@ export class ActivatorExecutionRuntime {
         // manifest (systemRole + API schemas) injected into the system prompt
         // from the next LLM call onwards, so the result only needs to list the
         // newly callable APIs — returning the full docs here would double-carry
-        // them in every subsequent payload (LOBE-5684).
+        // them in every subsequent payload.
         const apiNames = manifests.flatMap((manifest) =>
           manifest.apiDescriptions.length > 0
             ? manifest.apiDescriptions.map((api) => `${manifest.identifier}.${api.name}`)

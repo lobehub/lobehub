@@ -387,7 +387,7 @@ describe('RbacModel — back-compat: no workspaceId', () => {
   });
 });
 
-describe('RbacModel — personal mode implicit baseline (LOBE-12892)', () => {
+describe('RbacModel — personal mode implicit baseline', () => {
   it('grants the :owner content baseline to a user with NO rbac_user_roles rows', async () => {
     const rbac = new RbacModel(serverDB, userId);
 

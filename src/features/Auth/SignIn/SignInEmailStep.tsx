@@ -1,6 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Alert, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';

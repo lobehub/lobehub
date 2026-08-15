@@ -64,6 +64,13 @@ describe('parseInternalLink', () => {
       type: 'acceptance',
       workspaceSlug: 'lobe-team',
     });
+    expect(
+      parseInternalLink('https://lobehub.com/acceptance/acceptance-3', 'https://app.lobehub.com'),
+    ).toEqual({
+      acceptanceId: 'acceptance-3',
+      pathname: '/acceptance/acceptance-3',
+      type: 'acceptance',
+    });
   });
 
   it('parses workspace-prefixed entity paths', () => {
@@ -96,6 +103,13 @@ describe('parseInternalLink', () => {
       pathname: '/task/T-201',
       taskId: 'T-201',
       type: 'task',
+    });
+    expect(
+      parseInternalLink('https://lobehub.com/acceptance/acceptance-4', 'app://renderer'),
+    ).toEqual({
+      acceptanceId: 'acceptance-4',
+      pathname: '/acceptance/acceptance-4',
+      type: 'acceptance',
     });
   });
 

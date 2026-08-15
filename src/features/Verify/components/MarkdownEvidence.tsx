@@ -79,7 +79,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   docViewer: css`
     overflow: auto;
-    height: 100%;
+    flex: 1;
+
+    min-height: 0;
     padding-block: 12px;
     padding-inline: 16px;
   `,

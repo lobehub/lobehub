@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Alert, Flexbox, Form, Skeleton, Tag, Tooltip } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Skeleton, Tag, Tooltip } from '@lobehub/ui';
+import { Alert, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';

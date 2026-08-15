@@ -221,7 +221,7 @@ export interface ReviewPredictPromptInput {
 }
 
 /**
- * The offline baseline (LOBE-13035, 187 real samples across kimi-k3,
+ * The offline baseline (187 real samples across kimi-k3,
  * gemini-3.6-flash and gemini-3.1-pro) shaped every rule below. Two findings did
  * most of the shaping:
  *

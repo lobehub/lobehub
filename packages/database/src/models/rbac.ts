@@ -233,7 +233,7 @@ export class RbacModel {
       );
 
     // Personal mode: every authenticated user implicitly holds the `:owner`
-    // baseline over their own data (LOBE-12892) — ordinary accounts have no
+    // baseline over their own data — ordinary accounts have no
     // `rbac_user_roles` rows, and resource queries are `user_id`-isolated
     // anyway. DB grants (super_admin etc.) union on top.
     // De-dupe — the same code can come from multiple roles (e.g. owner +
@@ -315,7 +315,7 @@ export class RbacModel {
     }
 
     // Personal mode: the implicit `:owner` baseline settles most checks with
-    // zero DB queries (LOBE-12892). Workspace mode above is untouched — the
+    // zero DB queries. Workspace mode above is untouched — the
     // membership-role matrix stays the single source of truth there.
     if (permissionCodes.some((code) => PERSONAL_DEFAULT_PERMISSIONS.includes(code))) {
       return true;

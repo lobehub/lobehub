@@ -42,7 +42,7 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
           >
             <div />
             <Flexbox horizontal align={'center'}>
-              <LangButton placement={'bottomRight'} size={18} />
+              <LangButton compact placement={'bottomRight'} />
               <Divider className={styles.divider} orientation={'vertical'} />
               <ThemeButton placement={'bottomRight'} size={18} />
             </Flexbox>

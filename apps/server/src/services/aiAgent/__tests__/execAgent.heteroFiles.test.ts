@@ -301,6 +301,33 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toBeUndefined();
   });
 
+  it('should pass the resolved Amp mode to device dispatch', async () => {
+    heteroAgentConfig.model = 'amp';
+    heteroAgentConfig.provider = 'amp';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        mode: 'high',
+        type: 'amp',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Amp high mode',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        args: ['--agent-arg=--mode', '--agent-arg=high'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('should pass resolved Claude Code model and effort args to sandbox dispatch', async () => {
     heteroAgentConfig.agencyConfig.heterogeneousProvider = {
       effort: 'high',

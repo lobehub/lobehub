@@ -111,9 +111,23 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const resultLabelKey =
       taskStatus === 'scheduled' ? 'brief.action.confirm' : 'brief.action.confirmDone';
 
-    const actions: BriefAction[] = isResult
+    const configuredActions: BriefAction[] = isResult
       ? [{ key: 'approve', label: t(resultLabelKey), type: 'resolve' }]
       : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
+    // A link only navigates; it does not resolve the brief. Goal-delivery
+    // decisions intentionally point at the acceptance workspace, but older and
+    // current rows would otherwise have no way to leave the "Needs you" queue
+    // without completing that separate workflow. Keep the link primary and add
+    // an explicit neutral escape hatch for any link-only decision payload.
+    const actions =
+      briefType === 'decision' &&
+      configuredActions.some((action) => action.type === 'link') &&
+      configuredActions.every((action) => action.type === 'link')
+        ? [
+            ...configuredActions,
+            { key: 'ignore', label: t('brief.action.ignore'), type: 'resolve' as const },
+          ]
+        : configuredActions;
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
