@@ -54,12 +54,10 @@ const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 const spawnRuntimeRegistry: Partial<
   Record<
     LocalHeterogeneousAgentType,
-    (
-      spawnOpts: Parameters<typeof spawnAgent>[0],
-    ) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
+    (spawnOpts: Parameters<typeof spawnAgent>[0]) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
   >
 > = {
-  'pi': async (spawnOpts) =>
+  pi: async (spawnOpts) =>
     createPiRpcAgentHandle({
       args: spawnOpts.extraArgs ?? [],
       commandPath: spawnOpts.command!,
@@ -81,9 +79,7 @@ const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
-  const runtimeFactory = spawnRuntimeRegistry[
-    spawnOpts.agentType as LocalHeterogeneousAgentType
-  ];
+  const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
   if (runtimeFactory) return runtimeFactory(spawnOpts);
   return spawnAgent({ ...spawnOpts, onRawStdout });
 };

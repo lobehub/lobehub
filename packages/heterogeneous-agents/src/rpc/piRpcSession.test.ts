@@ -1,9 +1,8 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-
-import { PiRpcSession } from './piRpcSession';
 import type { PiRpcEvent } from './piRpcProtocol';
+import { PiRpcSession } from './piRpcSession';
 
 const mocks = vi.hoisted(() => ({
   clientInstances: [] as any[],
@@ -15,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./piRpcClient', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./piRpcClient')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     PiRpcClient: class MockPiRpcClient {
@@ -42,7 +41,7 @@ vi.mock('./piRpcClient', async (importOriginal) => {
   };
 });
 
-const createSession = (overrides: Partial<Parameters<typeof PiRpcSession>[0]> = {}) => {
+const createSession = (overrides: Partial<ConstructorParameters<typeof PiRpcSession>[0]> = {}) => {
   const events: AgentStreamEvent[] = [];
   const statuses: string[] = [];
   const sessionIds: string[] = [];
@@ -83,8 +82,10 @@ describe('PiRpcSession', () => {
     mocks.clientSessionId.value = 'pi-sess-1';
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state') return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
-      if (command.type === 'prompt') return Promise.resolve({ success: true, type: 'response', command: 'prompt', id: '1' });
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      if (command.type === 'prompt')
+        return Promise.resolve({ success: true, type: 'response', command: 'prompt', id: '1' });
       return Promise.resolve({ success: true, type: 'response', command: command.type });
     });
     mocks.close.mockResolvedValue(undefined);
@@ -108,7 +109,9 @@ describe('PiRpcSession', () => {
     await expect(runPromise).resolves.toEqual({ aborted: false });
     expect(sessionIds).toContain('pi-sess-1');
     // text deltas flowed through the real PiAdapter → AgentStreamEvent stream.
-    const textChunks = events.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'text');
+    const textChunks = events.filter(
+      (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+    );
     expect(textChunks.map((e) => e.data.content).join('')).toBe('Hi there');
     // agent_runtime_end terminal event emitted by the adapter on settled.
     expect(events.some((e) => e.type === 'agent_runtime_end')).toBe(true);
@@ -120,7 +123,8 @@ describe('PiRpcSession', () => {
     const { session } = createSession();
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state') return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
       return Promise.resolve({ success: true, type: 'response', command: command.type });
     });
     mocks.close.mockResolvedValue(undefined);
@@ -137,7 +141,8 @@ describe('PiRpcSession', () => {
     const { events, session } = createSession();
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state') return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
       return Promise.resolve({ success: true, type: 'response', command: command.type });
     });
     mocks.close.mockResolvedValue(undefined);
@@ -259,7 +264,8 @@ describe('PiRpcSession', () => {
     const { session } = createSession({ onExtensionUiRequest: handler });
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state') return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
       return Promise.resolve({ success: true, type: 'response', command: command.type });
     });
     mocks.close.mockResolvedValue(undefined);

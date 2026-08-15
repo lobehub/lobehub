@@ -38,18 +38,14 @@ interface PendingRequest {
 }
 
 export interface RpcStdioClientOptions {
-  /** Absolute (or resolved) path to the executable. */
-  commandPath: string;
   /** CLI args (protocol-specific flags included). */
   args: string[];
+  /** How long to wait for a clean exit after `stdin.end()` before escalating. */
+  closeGraceMs?: number;
+  /** Absolute (or resolved) path to the executable. */
+  commandPath: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
-  /**
-   * Invoked for every parsed message that is NOT the response to a pending
-   * request — i.e. notifications, events, and server-initiated requests.
-   */
-  onMessage: (message: Record<string, unknown>) => void | Promise<void>;
-  onStderr: (data: string) => void | Promise<void>;
   /**
    * Discriminates a response to a client request from a notification/event.
    * A message passing this predicate whose `id` matches a pending request
@@ -57,10 +53,14 @@ export interface RpcStdioClientOptions {
    * `method`); pi passes `(m) => m?.type === 'response'`.
    */
   isResponse?: (message: Record<string, unknown>) => boolean;
+  /**
+   * Invoked for every parsed message that is NOT the response to a pending
+   * request — i.e. notifications, events, and server-initiated requests.
+   */
+  onMessage: (message: Record<string, unknown>) => void | Promise<void>;
+  onStderr: (data: string) => void | Promise<void>;
   /** Default per-request timeout. `false` disables it. */
   requestTimeoutMs?: number | false;
-  /** How long to wait for a clean exit after `stdin.end()` before escalating. */
-  closeGraceMs?: number;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;

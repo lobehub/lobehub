@@ -69,9 +69,7 @@ describe('RpcStdioClient (generic transport)', () => {
     const firstId = writes.at(-2)!.id;
     const secondId = writes.at(-1)!.id;
 
-    stdout.write(
-      `${JSON.stringify({ id: secondId, jsonrpc: '2.0', result: { value: 'two' } })}\n`,
-    );
+    stdout.write(`${JSON.stringify({ id: secondId, jsonrpc: '2.0', result: { value: 'two' } })}\n`);
     const firstLine = `${JSON.stringify({
       id: firstId,
       jsonrpc: '2.0',
@@ -107,7 +105,7 @@ describe('RpcStdioClient (generic transport)', () => {
 
     const request = client.request({ method: 'authenticate' });
     // `first` never gets its response — the process dies instead.
-    writes[0]; // (id already written)
+    expect(writes).toHaveLength(1); // request id already written
     stdout.end();
     child.emit('close', 1, null);
 
@@ -118,7 +116,7 @@ describe('RpcStdioClient (generic transport)', () => {
 
   it('rejects pending requests on host close so callers never hang', async () => {
     const { child, client } = (() => {
-      const { child, stdout, writes } = createProcess();
+      const { child } = createProcess();
       spawnMock.mockReturnValue(child);
       const messages: unknown[] = [];
       const c = new RpcStdioClient({
@@ -129,7 +127,7 @@ describe('RpcStdioClient (generic transport)', () => {
         onMessage: (message) => void messages.push(message),
         onStderr: vi.fn(),
       });
-      return { child, client: c, stdout, writes };
+      return { child, client: c };
     })();
     await client.start();
 

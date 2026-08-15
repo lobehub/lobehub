@@ -4,7 +4,6 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from '../spawn/age
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
 import {
-  type PiAgentSettledEvent,
   type PiExtensionUiRequest,
   type PiExtensionUiResponse,
   type PiMessageEndEvent,
@@ -17,36 +16,13 @@ import {
 
 /** Text + base64 image content for a single prompt. */
 export interface PiRpcPromptInput {
-  text: string;
   images?: PiRpcImage[];
+  text: string;
 }
 
 export interface PiRpcSessionOptions {
   /** Extra CLI args (user/provider-configured), e.g. `--provider`, `--model`. */
   args: string[];
-  /** Absolute (or resolved) path to the `pi` executable. */
-  commandPath: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  /** Renderer-side operation id stamped onto every emitted event. */
-  operationId: string;
-  /** LobeHub session id — used for runtime status and diagnostics only. */
-  sessionId: string;
-  /** Native pi session id to resume (`--session-id <id>` at spawn). */
-  resumeSessionId?: string;
-  /** Uploader for base64 tool_result images (see `AgentStreamPipelineOptions`). */
-  uploadImage?: UploadHeterogeneousImage;
-  onEvents: (events: AgentStreamEvent[]) => void | Promise<void>;
-  onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
-  /** Freshest native pi session id (RPC mode: from the get_state handshake). */
-  onSessionId: (sessionId: string) => void;
-  onStderr: (data: string) => void | Promise<void>;
-  /** Extension UI dialogs — return a response to answer, or `undefined` to cancel. */
-  onExtensionUiRequest?: (
-    request: PiExtensionUiRequest,
-  ) => Promise<PiExtensionUiResponse | undefined> | PiExtensionUiResponse | undefined;
-  /** How long a run may go without any event before it is considered stale. */
-  inactivityTimeoutMs?: number;
   /**
    * When true (default), `run()` recycles its process once the run settles
    * (per-run lifecycle — one run owns one process). When false, the process
@@ -55,6 +31,29 @@ export interface PiRpcSessionOptions {
    * again for the next turn on the same session.
    */
   autoCloseOnSettle?: boolean;
+  /** Absolute (or resolved) path to the `pi` executable. */
+  commandPath: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  /** How long a run may go without any event before it is considered stale. */
+  inactivityTimeoutMs?: number;
+  onEvents: (events: AgentStreamEvent[]) => void | Promise<void>;
+  /** Extension UI dialogs — return a response to answer, or `undefined` to cancel. */
+  onExtensionUiRequest?: (
+    request: PiExtensionUiRequest,
+  ) => Promise<PiExtensionUiResponse | undefined> | PiExtensionUiResponse | undefined;
+  onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
+  /** Freshest native pi session id (RPC mode: from the get_state handshake). */
+  onSessionId: (sessionId: string) => void;
+  onStderr: (data: string) => void | Promise<void>;
+  /** Renderer-side operation id stamped onto every emitted event. */
+  operationId: string;
+  /** Native pi session id to resume (`--session-id <id>` at spawn). */
+  resumeSessionId?: string;
+  /** LobeHub session id — used for runtime status and diagnostics only. */
+  sessionId: string;
+  /** Uploader for base64 tool_result images (see `AgentStreamPipelineOptions`). */
+  uploadImage?: UploadHeterogeneousImage;
 }
 
 /** Host callbacks a pooled process can be rebound to between runs. */
@@ -274,7 +273,11 @@ export class PiRpcSession {
 
   /** Send a follow-up message while the process is (briefly) alive. */
   async followUp(message: string, images?: PiRpcImage[]): Promise<void> {
-    await this.client.command({ type: 'follow_up', message, ...(images?.length ? { images } : {}) });
+    await this.client.command({
+      type: 'follow_up',
+      message,
+      ...(images?.length ? { images } : {}),
+    });
   }
 
   /** Send a steering message while the process is (briefly) alive. */

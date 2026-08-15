@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
+import type { PiRpcEvent } from './piRpcProtocol';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
@@ -11,6 +12,8 @@ vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, spawn: spawnMock };
 });
+
+const originalPlatform = process.platform;
 
 const createProcess = () => {
   const child = new EventEmitter() as any;
@@ -38,7 +41,9 @@ const createProcess = () => {
 };
 
 /** Fixture: an RPC process that answers the startup `get_state` handshake. */
-const createReadyClient = async (options: Partial<Parameters<typeof PiRpcClient.prototype['constructor']>[0]> = {}) => {
+const createReadyClient = async (
+  options: Partial<ConstructorParameters<typeof PiRpcClient>[0]> = {},
+) => {
   const { child, stdout, writes } = createProcess();
   spawnMock.mockReturnValue(child);
   const events: unknown[] = [];
@@ -47,7 +52,7 @@ const createReadyClient = async (options: Partial<Parameters<typeof PiRpcClient.
     commandPath: 'pi',
     cwd: '/workspace',
     env: { ...process.env },
-    onEvent: (event) => void events.push(event),
+    onEvent: (event: PiRpcEvent) => void events.push(event),
     onStderr: vi.fn(),
     ...options,
   } as any);
@@ -68,6 +73,7 @@ const createReadyClient = async (options: Partial<Parameters<typeof PiRpcClient.
 afterEach(() => {
   vi.restoreAllMocks();
   spawnMock.mockReset();
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
 });
 
 describe('PiRpcClient', () => {
@@ -103,11 +109,12 @@ describe('PiRpcClient', () => {
       expect.objectContaining({ data: { value: 'one' }, success: true }),
       expect.objectContaining({ data: { value: 'two' }, success: true }),
     ]);
-    // Spawn argv must carry `--mode rpc` (the command may resolve to a
-    // node shim path on Windows, so assert on the args, not the command).
-    const spawnArgs = spawnMock.mock.calls[0]?.[1] as string[];
+    // The spawned target must be pi: the bare `pi` binary on Unix, or a
+    // resolved node shim (node.exe + script path) on Windows — assert on the
+    // command + first argv together so both platforms hold.
+    const [spawnCommand, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+    expect(`${spawnCommand} ${spawnArgs[0] ?? ''}`.toLowerCase()).toContain('pi');
     expect(spawnArgs).toEqual(expect.arrayContaining(['--mode', 'rpc']));
-    expect(spawnArgs.join(' ')).toContain('pi');
     await client.close();
     expect(child.stdin.end).toHaveBeenCalled();
   });
@@ -138,7 +145,9 @@ describe('PiRpcClient', () => {
   it('answers extension UI dialogs and cancels them without a handler', async () => {
     const { client, stdout, writes } = await createReadyClient({
       onExtensionUiRequest: (request) =>
-        request.method === 'select' ? { cancelled: false, id: request.id, value: 'Allow', type: 'extension_ui_response' } : undefined,
+        request.method === 'select'
+          ? { cancelled: false, id: request.id, value: 'Allow', type: 'extension_ui_response' }
+          : undefined,
     });
     stdout.write(
       `${JSON.stringify({ id: 'ext-1', method: 'select', options: ['Allow', 'Block'], title: 'Allow?', type: 'extension_ui_request' })}\n`,
@@ -148,7 +157,11 @@ describe('PiRpcClient', () => {
     );
     await vi.waitFor(() => {
       expect(writes.some((w) => w.type === 'extension_ui_response' && w.id === 'ext-1')).toBe(true);
-      expect(writes.some((w) => w.type === 'extension_ui_response' && w.id === 'ext-2' && w.cancelled === true)).toBe(true);
+      expect(
+        writes.some(
+          (w) => w.type === 'extension_ui_response' && w.id === 'ext-2' && w.cancelled === true,
+        ),
+      ).toBe(true);
     });
     await client.close();
   });

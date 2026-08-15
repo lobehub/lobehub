@@ -41,6 +41,11 @@ import {
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
+import {
+  type PiRpcImage,
+  PiRpcSession,
+  type PiRpcSessionCallbacks,
+} from '@lobechat/heterogeneous-agents/rpc';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
@@ -68,7 +73,6 @@ import {
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
-import { PiRpcSession, type PiRpcImage, type PiRpcSessionCallbacks } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -82,7 +86,6 @@ import type { App } from '@/core/App';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
-import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
   fetchCodexQuota,
@@ -91,6 +94,7 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -342,9 +346,9 @@ interface AgentSession {
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
-  process?: ChildProcess;
   /** Active pi RPC run (per-run process; cleared when the run settles). */
   piRpcSession?: PiRpcSession;
+  process?: ChildProcess;
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
    * when the configured command is bare: detection can find the CLI through
@@ -421,9 +425,11 @@ export default class HeterogeneousAgentCtr {
     };
     this.piRpcPool = new PiRpcPool({
       // Read per-construction so tests can inject a tiny idle window.
-      idleTimeoutMs: readPositiveEnvMs('LOBE_PI_RPC_IDLE_TIMEOUT_MS', PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS),
-      onReap: (key, reason) =>
-        logger.info('Reaped pooled Pi RPC process:', { key, reason }),
+      idleTimeoutMs: readPositiveEnvMs(
+        'LOBE_PI_RPC_IDLE_TIMEOUT_MS',
+        PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS,
+      ),
+      onReap: (key, reason) => logger.info('Reaped pooled Pi RPC process:', { key, reason }),
     });
   }
 
@@ -1250,12 +1256,9 @@ export default class HeterogeneousAgentCtr {
     // SDK) select themselves via the runtime registry. A dispatcher that
     // returns `true` handled the prompt; `false` falls through to the generic
     // CLI spawn below.
-    const runtimeDispatcher = this.runtimeDispatchers[
-      session.agentType as HeterogeneousCliAgentType
-    ];
-    if (runtimeDispatcher) {
-      if (await runtimeDispatcher(params, session)) return;
-    }
+    const runtimeDispatcher =
+      this.runtimeDispatchers[session.agentType as HeterogeneousCliAgentType];
+    if (runtimeDispatcher && (await runtimeDispatcher(params, session))) return;
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
@@ -1970,22 +1973,22 @@ export default class HeterogeneousAgentCtr {
       JSON.stringify(session.args ?? []),
       JSON.stringify(Object.entries(spawnEnv).sort()),
     ].join('::');
-    const pooledSession = poolKey
-      ? this.piRpcPool.acquire(poolKey, spawnFingerprint)
-      : undefined;
-    const rpcSession = pooledSession ?? new PiRpcSession({
-      args: session.args,
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      operationId: params.operationId,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-      // The pool owns the process lifecycle — never auto-close on settle.
-      autoCloseOnSettle: false,
-      uploadImage: this.uploadResultImage,
-      ...this.buildPiRpcCallbacks(session, traceSession),
-    });
+    const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey, spawnFingerprint) : undefined;
+    const rpcSession =
+      pooledSession ??
+      new PiRpcSession({
+        args: session.args,
+        commandPath,
+        cwd,
+        env: spawnEnv,
+        operationId: params.operationId,
+        resumeSessionId: session.agentSessionId,
+        sessionId: session.sessionId,
+        // The pool owns the process lifecycle — never auto-close on settle.
+        autoCloseOnSettle: false,
+        uploadImage: this.uploadResultImage,
+        ...this.buildPiRpcCallbacks(session, traceSession),
+      });
     // A pooled process carries the callbacks of the run that spawned it —
     // rebind to THIS run's IPC session / trace or events would broadcast to
     // a stale sessionId.

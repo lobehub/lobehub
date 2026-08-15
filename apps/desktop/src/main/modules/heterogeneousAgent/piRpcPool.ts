@@ -94,7 +94,7 @@ export class PiRpcPool {
 
   /** Close every pooled process (before-quit). */
   closeAll(): void {
-    for (const entry of [...this.entries.values()]) this.reap(entry, 'shutdown');
+    for (const entry of this.entries.values()) this.reap(entry, 'shutdown');
   }
 
   private reap(entry: PiRpcPoolEntry, reason: 'idle' | 'replaced' | 'removed' | 'shutdown'): void {

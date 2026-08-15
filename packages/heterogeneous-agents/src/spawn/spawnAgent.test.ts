@@ -12,6 +12,7 @@ let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
+const originalPlatform = process.platform;
 const execFileMock = vi.mocked(childProcess.execFile);
 
 const callExecFile = (stdout: string) => {
@@ -263,10 +264,15 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    // ACP/stdio sessions read `process.platform` directly (unlike the CLI
+    // spawn plan which uses `os.platform()`), so pin it too — otherwise the
+    // signal-path tests exercise the win32 taskkill branch on Windows hosts.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
   });
 
   afterEach(async () => {
     nextFakeProc = null;
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 

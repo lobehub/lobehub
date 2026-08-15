@@ -12,11 +12,11 @@
 
 /** Base64-encoded image attachment for a prompt / steer / follow_up command. */
 export interface PiRpcImage {
-  type: 'image';
   /** Base64-encoded image bytes. */
   data: string;
   /** IANA media type, e.g. `image/png`. */
   mimeType: string;
+  type: 'image';
 }
 
 /** How a prompt is delivered while the agent is already streaming. */
@@ -24,7 +24,13 @@ export type PiStreamingBehavior = 'steer' | 'followUp';
 
 /** Commands the host can send to a `pi --mode rpc` process. */
 export type PiRpcCommand =
-  | { id?: string; type: 'prompt'; message: string; images?: PiRpcImage[]; streamingBehavior?: PiStreamingBehavior }
+  | {
+      id?: string;
+      type: 'prompt';
+      message: string;
+      images?: PiRpcImage[];
+      streamingBehavior?: PiStreamingBehavior;
+    }
   | { id?: string; type: 'steer'; message: string; images?: PiRpcImage[] }
   | { id?: string; type: 'follow_up'; message: string; images?: PiRpcImage[] }
   | { id?: string; type: 'abort' }
@@ -52,18 +58,18 @@ export type PiRpcCommand =
 
 /** Response to a command. `success: false` carries a human-readable `error`. */
 export interface PiRpcResponse<T = any> {
-  id?: string;
-  type: 'response';
   command: string;
-  success: boolean;
   data?: T;
   error?: string;
+  id?: string;
+  success: boolean;
+  type: 'response';
 }
 
 /** Subset of `get_state` data the host uses for handshake / diagnostics. */
 export interface PiRpcStateData {
-  isStreaming?: boolean;
   isCompacting?: boolean;
+  isStreaming?: boolean;
   messageCount?: number;
   model?: { id?: string; name?: string } | null;
   pendingMessageCount?: number;
@@ -77,11 +83,7 @@ export interface PiRpcStateData {
 export type PiExtensionUiDialogMethod = 'select' | 'confirm' | 'input' | 'editor';
 /** Fire-and-forget methods — the host may display or ignore them. */
 export type PiExtensionUiFireAndForgetMethod =
-  | 'notify'
-  | 'setStatus'
-  | 'setWidget'
-  | 'setTitle'
-  | 'set_editor_text';
+  'notify' | 'setStatus' | 'setWidget' | 'setTitle' | 'set_editor_text';
 
 /**
  * A request emitted by an extension via the extension UI protocol. Dialog
@@ -89,20 +91,20 @@ export type PiExtensionUiFireAndForgetMethod =
  * `extension_ui_response` on stdin; fire-and-forget methods never get one.
  */
 export interface PiExtensionUiRequest {
-  type: 'extension_ui_request';
   /** Correlation id — must be echoed by the response. */
   id: string;
-  method: PiExtensionUiDialogMethod | PiExtensionUiFireAndForgetMethod;
-  title?: string;
   message?: string;
+  method: PiExtensionUiDialogMethod | PiExtensionUiFireAndForgetMethod;
+  notifyType?: 'info' | 'warning' | 'error';
   options?: string[];
-  /** Dialog methods may auto-resolve server-side when this elapses. */
-  timeout?: number;
   placeholder?: string;
   prefill?: string;
-  notifyType?: 'info' | 'warning' | 'error';
   statusKey?: string;
   statusText?: string;
+  /** Dialog methods may auto-resolve server-side when this elapses. */
+  timeout?: number;
+  title?: string;
+  type: 'extension_ui_request';
   widgetKey?: string;
   widgetLines?: string[];
   widgetPlacement?: 'aboveEditor' | 'belowEditor';
@@ -110,26 +112,26 @@ export interface PiExtensionUiRequest {
 
 /** The host's answer to a dialog `extension_ui_request`. */
 export interface PiExtensionUiResponse {
-  type: 'extension_ui_response';
-  id: string;
-  /** Value answer (select / input / editor). */
-  value?: string;
-  /** Confirmation answer (confirm). */
-  confirmed?: boolean;
   /** Cancel — pi resolves the extension with `undefined` / `false`. */
   cancelled?: boolean;
+  /** Confirmation answer (confirm). */
+  confirmed?: boolean;
+  id: string;
+  type: 'extension_ui_response';
+  /** Value answer (select / input / editor). */
+  value?: string;
 }
 
 /** A raw agent event emitted by the RPC process (subset used by the host). */
 export interface PiRpcEvent {
-  type: string;
   [key: string]: any;
+  type: string;
 }
 
 /** The `session` event that reports the native pi session id at startup. */
 export interface PiSessionEvent extends PiRpcEvent {
-  type: 'session';
   id: string;
+  type: 'session';
 }
 
 /** The `agent_settled` event — the whole prompt (incl. recovery) is done. */
@@ -139,7 +141,6 @@ export interface PiAgentSettledEvent extends PiRpcEvent {
 
 /** A `message_update` event (delta stream). */
 export interface PiMessageUpdateEvent extends PiRpcEvent {
-  type: 'message_update';
   assistantMessageEvent?: {
     type: string;
     /** Present on `type: 'error'` updates: the failure detail. */
@@ -154,16 +155,17 @@ export interface PiMessageUpdateEvent extends PiRpcEvent {
     reason?: string;
     [key: string]: any;
   };
+  type: 'message_update';
 }
 
 /** A `message_end` event (authoritative message snapshot). */
 export interface PiMessageEndEvent extends PiRpcEvent {
-  type: 'message_end';
   message?: {
     role?: string;
     stopReason?: string;
     [key: string]: any;
   };
+  type: 'message_end';
 }
 
 /** pi RPC protocol version floor the client is built against. */

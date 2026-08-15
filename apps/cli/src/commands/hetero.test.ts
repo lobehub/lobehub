@@ -11,11 +11,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
-  mockCreatePiRpcAgentHandle: vi.fn(),
-  mockResolveHeteroSpawnCommand: vi.fn(),
-  mockSpawnAgent: vi.fn(),
-}));
+const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
+  () => ({
+    mockCreatePiRpcAgentHandle: vi.fn(),
+    mockResolveHeteroSpawnCommand: vi.fn(),
+    mockSpawnAgent: vi.fn(),
+  }),
+);
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),

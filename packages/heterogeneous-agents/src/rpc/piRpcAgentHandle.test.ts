@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createPiRpcAgentHandle } from './piRpcAgentHandle';
-import { toPiRpcPrompt } from './piRpcAgentHandle';
+import { createPiRpcAgentHandle, toPiRpcPrompt } from './piRpcAgentHandle';
 import type { PiRpcEvent } from './piRpcProtocol';
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./piRpcClient', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./piRpcClient')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     PiRpcClient: class MockPiRpcClient {
@@ -55,7 +54,10 @@ describe('toPiRpcPrompt', () => {
   it('joins text blocks and leaves image-less prompts image-free', async () => {
     await expect(toPiRpcPrompt('hello')).resolves.toEqual({ text: 'hello' });
     await expect(
-      toPiRpcPrompt([{ text: 'one', type: 'text' }, { text: 'two', type: 'text' }]),
+      toPiRpcPrompt([
+        { text: 'one', type: 'text' },
+        { text: 'two', type: 'text' },
+      ]),
     ).resolves.toEqual({ text: 'one\n\ntwo' });
   });
 });

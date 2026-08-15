@@ -5,20 +5,13 @@
  * a long-lived bidirectional process with command/response correlation, the
  * extension UI sub-protocol, and graceful EOF-based shutdown.
  */
-export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
-export { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';
 export {
   createPiRpcAgentHandle,
-  toPiRpcPrompt,
   type PiRpcAgentHandle,
   type PiRpcAgentHandleOptions,
+  toPiRpcPrompt,
 } from './piRpcAgentHandle';
-export {
-  PiRpcSession,
-  type PiRpcPromptInput,
-  type PiRpcSessionCallbacks,
-  type PiRpcSessionOptions,
-} from './piRpcSession';
+export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
 export {
   PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS,
   PI_RPC_HANDSHAKE_TIMEOUT_MS,
@@ -38,3 +31,10 @@ export {
   type PiSessionEvent,
   type PiStreamingBehavior,
 } from './piRpcProtocol';
+export {
+  type PiRpcPromptInput,
+  PiRpcSession,
+  type PiRpcSessionCallbacks,
+  type PiRpcSessionOptions,
+} from './piRpcSession';
+export { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';

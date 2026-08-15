@@ -2604,9 +2604,10 @@ describe('HeterogeneousAgentCtr', () => {
       ]);
       let resolveRun: ((result: { aborted: boolean }) => void) | undefined;
       piRpcSessionRunMock.mockImplementation(
-        () => new Promise<{ aborted: boolean }>((resolve) => {
-          resolveRun = resolve;
-        }),
+        () =>
+          new Promise<{ aborted: boolean }>((resolve) => {
+            resolveRun = resolve;
+          }),
       );
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
@@ -2659,7 +2660,9 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.stopSession({ sessionId: second.sessionId });
 
       expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
-      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId: first.sessionId });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: first.sessionId,
+      });
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
         sessionId: second.sessionId,
       });
@@ -2792,7 +2795,7 @@ describe('HeterogeneousAgentCtr', () => {
       const [spawnCall] = spawnCalls;
       expect(spawnCall.command).toBe(process.execPath);
       expect(spawnCall.args.slice(0, 7)).toEqual([
-        '/fake/cli/dist/index.js',
+        path.normalize('/fake/cli/dist/index.js'),
         'hetero',
         'exec',
         '--type',
@@ -2840,7 +2843,7 @@ describe('HeterogeneousAgentCtr', () => {
       } as any);
 
       await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
-        reason: 'Embedded CLI not found at /fake/cli/dist/index.js',
+        reason: `Embedded CLI not found at ${path.normalize('/fake/cli/dist/index.js')}`,
         status: 'rejected',
       });
       expect(spawnCalls).toHaveLength(0);

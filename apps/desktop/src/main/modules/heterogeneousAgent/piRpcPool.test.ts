@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiRpcPool } from './piRpcPool';
 

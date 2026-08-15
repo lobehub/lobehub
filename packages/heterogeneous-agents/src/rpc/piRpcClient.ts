@@ -34,10 +34,14 @@ export class PiRpcConnectionError extends Error {
 export interface PiRpcClientOptions {
   /** Extra CLI args after `--mode rpc` (e.g. `--session-id <id>`, `--provider`). */
   args: string[];
+  /** How long to wait for a clean exit after `stdin.end()` before escalating. */
+  closeGraceMs?: number;
   /** Absolute (or resolved) path to the `pi` executable. */
   commandPath: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /** Startup handshake timeout (`get_state`). */
+  handshakeTimeoutMs?: number;
   /**
    * Invoked for every parsed agent event from stdout. Events never carry an
    * `id`; the host correlates them to the active run itself.
@@ -57,17 +61,10 @@ export interface PiRpcClientOptions {
   onStderr: (data: string) => void | Promise<void>;
   /** Default response timeout per command. `false` disables the timeout. */
   requestTimeoutMs?: number | false;
-  /** How long to wait for a clean exit after `stdin.end()` before escalating. */
-  closeGraceMs?: number;
-  /** Startup handshake timeout (`get_state`). */
-  handshakeTimeoutMs?: number;
 }
 
 const DEFAULT_CLOSE_GRACE_MS = 3_000;
 const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 /**
  * Protocol layer for `pi --mode rpc`, built on the generic
@@ -264,7 +261,10 @@ export class PiRpcClient {
   }
 
   private toConnectionError(error: unknown): PiRpcConnectionError {
-    const phase = error instanceof RpcStdioConnectionError && error.options?.phase === 'spawn' ? 'spawn' : 'run';
+    const phase =
+      error instanceof RpcStdioConnectionError && error.options?.phase === 'spawn'
+        ? 'spawn'
+        : 'run';
     const message = error instanceof Error ? error.message : String(error);
     const stderr = error instanceof RpcStdioConnectionError ? error.options?.stderr : undefined;
     return new PiRpcConnectionError(message, {

@@ -2,11 +2,11 @@ import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
+import type { AgentPromptInput } from '../protocol';
 import type { UploadHeterogeneousImage } from '../spawn/agentStreamPipeline';
 import { normalizeImage } from '../spawn/input/normalizeImage';
-import type { AgentPromptInput } from '../protocol';
-import { PiRpcSession } from './piRpcSession';
 import type { PiRpcImage } from './piRpcProtocol';
+import { PiRpcSession } from './piRpcSession';
 
 /** Options mirroring the `spawnAgent` shape the CLI passes for one agent run. */
 export interface PiRpcAgentHandleOptions {
@@ -36,9 +36,9 @@ export interface PiRpcAgentHandle {
 }
 
 interface EventQueue {
-  push: (batch: AgentStreamEvent[]) => void;
+  [Symbol.asyncIterator]: () => AsyncIterator<AgentStreamEvent>;
   close: () => void;
-  [Symbol.asyncIterator](): AsyncIterator<AgentStreamEvent>;
+  push: (batch: AgentStreamEvent[]) => void;
 }
 
 /** Buffered async iterator with a close signal — bridges push to pull. */
