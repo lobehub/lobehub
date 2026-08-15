@@ -1,4 +1,5 @@
 export {
+  AgentScopedTaskDetailPage,
   TaskDetailPage,
   TaskDetailSections,
   TopicChatDrawer,

@@ -9,17 +9,27 @@ import { workspaces } from './workspace';
  * polymorphic on purpose: adding permission support to a new entity only
  * requires a new literal here, not a new table.
  */
-export const PERMISSION_RESOURCE_TYPES = ['agent', 'agentGroup', 'document'] as const;
+export const PERMISSION_RESOURCE_TYPES = [
+  'agent',
+  'agentGroup',
+  'document',
+  'knowledgeBase',
+] as const;
 export type PermissionResourceType = (typeof PERMISSION_RESOURCE_TYPES)[number];
 
 /**
  * Workspace-wide access levels for a public resource:
  * - Agent / Agent Group: `view`, `use`, or `edit`
  * - Document: `view` or `edit`
+ * - Knowledge Base: `use` or `edit`
  *
  * `use` grants chat execution without configuration access. `view` is the
  * read-only state. `edit` grants collaborative content/configuration editing
  * but never resource ownership or permission management.
+ *
+ * Knowledge bases invert the usual view/use ordering: `use` means "mountable
+ * on agents for retrieval" while browsing the internal file list is the
+ * privileged act, so browsing requires `edit` and there is no `view` level.
  * Permission management is deliberately not an access level: it is derived
  * from creator ownership or a workspace-scoped `:all` RBAC capability.
  */
@@ -30,6 +40,7 @@ export const RESOURCE_ACCESS_LEVELS_BY_TYPE = {
   agent: ['view', 'use', 'edit'],
   agentGroup: ['view', 'use', 'edit'],
   document: ['view', 'edit'],
+  knowledgeBase: ['use', 'edit'],
 } as const satisfies Record<PermissionResourceType, readonly ResourceAccessLevel[]>;
 
 /**
@@ -48,6 +59,9 @@ export const DEFAULT_RESOURCE_ACCESS_LEVELS = {
   agent: 'edit',
   agentGroup: 'edit',
   document: 'view',
+  // `edit` keeps the pre-feature behavior: every member may browse the file
+  // list until an admin/creator explicitly restricts the knowledge base.
+  knowledgeBase: 'edit',
 } as const satisfies Record<PermissionResourceType, ResourceAccessLevel>;
 
 export const getDefaultResourceAccessLevel = (
@@ -67,6 +81,7 @@ export const LEGACY_VIEWER_ACCESS_LEVELS = {
   agent: 'use',
   agentGroup: 'use',
   document: 'view',
+  knowledgeBase: 'use',
 } as const satisfies Record<PermissionResourceType, ResourceAccessLevel>;
 
 export const getLegacyViewerAccessLevel = (

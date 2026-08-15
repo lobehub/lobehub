@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
-import { Checkbox } from 'antd';
+import { Checkbox, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check } from 'lucide-react';
 import type { FC } from 'react';
@@ -217,7 +216,7 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                   <Checkbox
                     checked={selectedSet.has(group.read)}
                     disabled={fullAccess}
-                    onChange={(e) => toggle(group.read, e.target.checked)}
+                    onChange={(checked) => toggle(group.read, checked)}
                   >
                     {t('apikey.scopes.read')}
                   </Checkbox>
@@ -225,7 +224,7 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                     <Checkbox
                       checked={selectedSet.has(group.write)}
                       disabled={fullAccess}
-                      onChange={(e) => group.write && toggle(group.write, e.target.checked)}
+                      onChange={(checked) => group.write && toggle(group.write, checked)}
                     >
                       {t('apikey.scopes.write')}
                     </Checkbox>
@@ -234,7 +233,7 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                     <Checkbox
                       checked={selectedSet.has('model:invoke')}
                       disabled={fullAccess}
-                      onChange={(e) => toggle('model:invoke', e.target.checked)}
+                      onChange={(checked) => toggle('model:invoke', checked)}
                     >
                       {t('apikey.scopes.modelInvoke')}
                     </Checkbox>

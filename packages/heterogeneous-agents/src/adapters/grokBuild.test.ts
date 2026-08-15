@@ -66,6 +66,8 @@ describe('GrokBuildAdapter', () => {
       'tool_start',
       'tool_result',
       'tool_end',
+      'stream_end',
+      'stream_start',
       'stream_chunk',
     ]);
     expect(events.find(({ type }) => type === 'tool_start')?.data).toMatchObject({
@@ -295,6 +297,45 @@ describe('GrokBuildAdapter', () => {
     expect(adapter.adapt(secondResponse)).toEqual([]);
     expect(secondTool[0]).toMatchObject({
       data: { toolsCalling: [{ id: 'call-b' }] },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
+  });
+
+  it('opens a new step for post-tool text when response completion omits tool_use', () => {
+    const adapter = new GrokBuildAdapter();
+    adapter.adapt(
+      update({
+        rawInput: { path: 'README.md' },
+        sessionUpdate: 'tool_call',
+        title: 'Read',
+        toolCallId: 'call-1',
+      }),
+    );
+    adapter.adapt(
+      update({
+        content: [{ text: 'file body', type: 'text' }],
+        sessionUpdate: 'tool_call_update',
+        status: 'completed',
+        toolCallId: 'call-1',
+      }),
+    );
+
+    const events = adapter.adapt(
+      update({
+        content: { text: 'Final answer', type: 'text' },
+        sessionUpdate: 'agent_message_chunk',
+      }),
+    );
+
+    expect(events.map(({ type }) => type)).toEqual(['stream_end', 'stream_start', 'stream_chunk']);
+    expect(events[1]).toMatchObject({
+      data: { newStep: true },
+      stepIndex: 1,
+      type: 'stream_start',
+    });
+    expect(events[2]).toMatchObject({
+      data: { chunkType: 'text', content: 'Final answer' },
       stepIndex: 1,
       type: 'stream_chunk',
     });

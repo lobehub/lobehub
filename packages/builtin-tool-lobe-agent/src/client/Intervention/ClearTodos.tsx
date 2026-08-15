@@ -2,8 +2,7 @@
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import type { RadioChangeEvent } from 'antd';
-import { Radio } from 'antd';
+import { RadioGroup } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -43,8 +42,8 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
     const [mode, setMode] = useState<ClearTodosParams['mode']>(args?.mode || 'completed');
 
     const handleModeChange = useCallback(
-      async (e: RadioChangeEvent) => {
-        const newMode = e.target.value as ClearTodosParams['mode'];
+      async (value: string) => {
+        const newMode = value as ClearTodosParams['mode'];
         setMode(newMode);
         await onArgsChange?.({ mode: newMode });
       },
@@ -60,18 +59,28 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
 
         <Flexbox className={styles.container} gap={8}>
           <span className={styles.label}>{t('lobe-agent.clearTodos.label')}</span>
-          <Radio.Group value={mode} onChange={handleModeChange}>
-            <Flexbox gap={8}>
-              <Radio value="completed">
-                <span className={styles.normalText}>
-                  {t('lobe-agent.clearTodos.option.completed')}
-                </span>
-              </Radio>
-              <Radio value="all">
-                <span className={styles.dangerText}>{t('lobe-agent.clearTodos.option.all')}</span>
-              </Radio>
-            </Flexbox>
-          </Radio.Group>
+          <RadioGroup
+            gap={8}
+            horizontal={false}
+            value={mode}
+            options={[
+              {
+                label: (
+                  <span className={styles.normalText}>
+                    {t('lobe-agent.clearTodos.option.completed')}
+                  </span>
+                ),
+                value: 'completed',
+              },
+              {
+                label: (
+                  <span className={styles.dangerText}>{t('lobe-agent.clearTodos.option.all')}</span>
+                ),
+                value: 'all',
+              },
+            ]}
+            onChange={handleModeChange}
+          />
         </Flexbox>
       </Flexbox>
     );

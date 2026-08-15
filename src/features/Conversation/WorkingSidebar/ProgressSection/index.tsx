@@ -1,4 +1,5 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';

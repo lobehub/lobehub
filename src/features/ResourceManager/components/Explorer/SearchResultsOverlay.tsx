@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';

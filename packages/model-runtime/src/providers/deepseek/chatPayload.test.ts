@@ -54,6 +54,38 @@ describe('buildDeepSeekAnthropicPayload — thinking history normalization', () 
   // context-engine thinking part whose `thinking` key vanishes on JSON
   // serialization. DeepSeek's strict deserializer rejects it, so the part must
   // be dropped and replaced by the proven `' '` placeholder.
+  /**
+   * Official API 400s only when the thinking block is missing. Replay-off /
+   * leftover preview `none` still go through this builder, which must keep a
+   * whitespace thinking field rather than omit the part.
+   */
+  it('emits a whitespace thinking block for tool-call history when reasoning was stripped', async () => {
+    const payload = await buildDeepSeekAnthropicPayload({
+      messages: [
+        { content: 'Search weather', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: { arguments: '{"city":"Beijing"}', name: 'get_weather' },
+              id: 'call_1',
+              type: 'function',
+            },
+          ],
+        },
+        { content: '{"temp":20}', role: 'tool', tool_call_id: 'call_1' },
+      ],
+      model: 'deepseek-v4-flash',
+      thinking: { type: 'enabled' },
+    } as any);
+
+    const [assistant] = getAssistantMessages(payload);
+    const thinkingParts = assistant.content.filter((p: any) => p.type === 'thinking');
+    expect(thinkingParts).toEqual([{ thinking: ' ', type: 'thinking' }]);
+    expect(payload.thinking).toMatchObject({ type: 'enabled' });
+  });
+
   it('drops signature-only thinking parts and falls back to the placeholder block', async () => {
     const payload = await buildDeepSeekAnthropicPayload({
       messages: [

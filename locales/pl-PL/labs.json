@@ -28,6 +28,8 @@
   "features.messageTextSelectionActions.title": "Akcje zaznaczania tekstu wiadomości",
   "features.oauthApps.desc": "Pokaż zarządzanie aplikacjami OAuth w ustawieniach osobistych i przestrzeni roboczej. Ta funkcja jest domyślnie ukryta.",
   "features.oauthApps.title": "Aplikacje OAuth",
+  "features.projects.desc": "Organizuj długoterminowe cele w dedykowanych przestrzeniach roboczych z własnymi agentami, bazami wiedzy i zadaniami.",
+  "features.projects.title": "Przestrzenie Robocze Projektów",
   "features.taskVerify.desc": "Dodaj sekcję akceptacji dostawy do szczegółów zadania: opisz akceptację w jednym zdaniu i pozwól AI wygenerować edytowalne kryteria weryfikacji.",
   "features.taskVerify.title": "Akceptacja Dostawy Zadania",
   "features.topicAcceptance.desc": "Utwórz listę kontrolną dostawy dla bieżącego tematu tuż nad edytorem, aby rozmowa była zgodna ze standardami, które możesz edytować w dowolnym momencie.",

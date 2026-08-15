@@ -1,13 +1,15 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash } from 'lucide-react';
-import { useCallback } from 'react';
+import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash, UsersIcon } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -19,6 +21,8 @@ interface ActionProps {
   description?: string | null;
   id: string;
   name: string;
+  /** Server-computed on the list payload: creator or KNOWLEDGE_BASE_UPDATE:all. */
+  permissionManageable?: boolean;
   toggleEditing: (visible?: boolean) => void;
   userId?: string;
   visibility?: 'private' | 'public';
@@ -28,11 +32,12 @@ export const useDropdownMenu = ({
   id,
   name,
   description,
+  permissionManageable,
   toggleEditing,
   userId,
   visibility,
 }: ActionProps): (() => MenuProps['items']) => {
-  const { t } = useTranslation(['file', 'common', 'chat']);
+  const { t } = useTranslation(['file', 'common', 'chat', 'setting']);
 
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
   const publishKnowledgeBaseToWorkspace = useKnowledgeBaseStore(
@@ -51,6 +56,29 @@ export const useDropdownMenu = ({
   // pulled back to private via the same guarded server path.
   const isOwnPublicKb =
     visibility === 'public' && !!currentUserId && !!userId && userId === currentUserId;
+
+  // Member Permissions entry: navigates to the standalone permission page,
+  // same as Agent. Private KBs are included — the creator configures what
+  // members get the moment the KB is published. The manage flag rides the
+  // list payload (creator or `KNOWLEDGE_BASE_UPDATE:all` curators), so no
+  // per-row permission request is issued while rendering the sidebar.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const wsNavigate = useWorkspaceAwareNavigate();
+  const memberPermissionMenuItem = useMemo(
+    () =>
+      activeWorkspaceId && permissionManageable
+        ? {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'member-permissions',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: (info: any) => {
+              info.domEvent?.stopPropagation();
+              wsNavigate(`/resource/library/${id}/permission`);
+            },
+          }
+        : null,
+    [activeWorkspaceId, permissionManageable, id, t, wsNavigate],
+  );
 
   // Row-level ownership: only the creator or a workspace owner may edit or
   // delete a shared knowledge base — mirrors the server-side enforcement.
@@ -192,6 +220,8 @@ export const useDropdownMenu = ({
             },
           },
         canEdit && isOwnPublicKb && { type: 'divider' },
+        memberPermissionMenuItem,
+        memberPermissionMenuItem && { type: 'divider' },
         ...(canEdit ? (transferMenuItems ?? []) : []),
         { type: 'divider' },
         {
@@ -221,6 +251,7 @@ export const useDropdownMenu = ({
       handleMakePrivate,
       isOwnPrivateKb,
       isOwnPublicKb,
+      memberPermissionMenuItem,
       transferMenuItems,
     ],
   );

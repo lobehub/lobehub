@@ -49,6 +49,7 @@
   "home.recentPages": "最近文件",
   "home.uploadEntries.library.title": "新增資源庫",
   "home.viewAll": "查看全部",
+  "library.backToResources": "返回資源",
   "library.hierarchy.empty.desc": "新增檔案或建立資料夾以開始使用",
   "library.hierarchy.empty.title": "這裡還沒有任何內容",
   "library.import.action": "匯入至工作區…",

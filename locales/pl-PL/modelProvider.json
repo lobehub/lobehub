@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Dla Claude Opus 4.6; przełącza adaptacyjne myślenie włączone/wyłączone.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Dla modeli Claude, DeepSeek i innych wspierających rozumowanie; odblokowuje głębsze myślenie.",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "Dla GLM-5.2; kontroluje wysiłek rozumowania na poziomach Wysokim i Maksymalnym.",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "Dla GLM-5.3; kontroluje wysiłek rozumowania na poziomach Niskim, Wysokim i Maksymalnym. Myślenie nie może być wyłączone.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Dla serii GPT-5; kontroluje intensywność rozumowania.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Dla serii GPT-5.1; kontroluje intensywność rozumowania.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Dla serii GPT-5.2 Pro; kontroluje intensywność rozumowania.",
