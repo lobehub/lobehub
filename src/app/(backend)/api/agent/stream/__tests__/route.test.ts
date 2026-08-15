@@ -189,9 +189,32 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
     });
 
-    it('should allow a workspace API key when another member created the operation', async () => {
+    it('should reject a workspace API key when another member created the operation', async () => {
       vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
         userId: 'workspace-member',
+        workspaceId: 'workspace-a',
+      });
+      mockAuthScope.apiKeyScopes = ['chat:read'];
+      mockAuthScope.workspaceId = 'workspace-a';
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        {
+          headers: {
+            'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+          },
+        },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      expect(mockGetWorkspaceMember).not.toHaveBeenCalled();
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
+    });
+
+    it("should allow a workspace API key for its issuer's operation", async () => {
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
+        userId: 'test-user',
         workspaceId: 'workspace-a',
       });
       mockAuthScope.apiKeyScopes = ['chat:read'];

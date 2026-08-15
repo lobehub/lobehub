@@ -58,15 +58,17 @@ const handler: RequestHandler = async (
   }
   operation ??= await streamManager.getOperationAuthScope(operationId);
 
-  // A workspace API key represents the validated workspace, not only the user
-  // who created it, so any operation in that workspace is in scope. Personal
-  // keys remain restricted to the caller's personal operations.
+  // API keys stay bound to both their issuer and, when present, their workspace.
+  // The owner scope does not carry enough agent/group context to safely authorize
+  // cross-member private resources, so fail closed unless the issuer owns the run.
   const apiKeyWorkspaceId = workspaceId?.trim() || null;
   let isAuthorized: boolean;
   if (isApiKeyRequest) {
-    isAuthorized = apiKeyWorkspaceId
-      ? operation?.workspaceId === apiKeyWorkspaceId
-      : operation?.workspaceId === null && operation.userId === userId;
+    isAuthorized =
+      operation?.userId === userId &&
+      (apiKeyWorkspaceId
+        ? operation.workspaceId === apiKeyWorkspaceId
+        : operation.workspaceId === null);
   } else if (operation?.userId !== userId) {
     isAuthorized = false;
   } else if (!operation.workspaceId) {
