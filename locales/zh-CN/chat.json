@@ -1756,6 +1756,7 @@
   "verifyConfig.fromTemplate": "从模板选择",
   "verifyConfig.generate": "生成验收方案",
   "verifyConfig.generateFailed": "生成验收方案失败",
+  "verifyConfig.generateInvalidProviderAPIKey": "{{provider}} 的 API 密钥无效或缺失，请检查 {{model}} 的服务商设置后重试。",
   "verifyConfig.generating": "正在拆解验收项…",
   "verifyConfig.manualAdd": "手动添加",
   "verifyConfig.moreActions": "更多操作",

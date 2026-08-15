@@ -7,13 +7,20 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectStore } from '@/store/project';
 
-import { getCreateProjectInput, isProjectSlugValid } from './createProjectForm';
+import {
+  getCreateProjectInput,
+  getProjectFieldSuggestions,
+  isProjectIdentifierValid,
+  isProjectSlugValid,
+} from './createProjectForm';
 
 interface CreateProjectFormState {
   identifier: string;
+  identifierEdited: boolean;
   loading: boolean;
   name: string;
   slug: string;
+  slugEdited: boolean;
 }
 
 const CreateProjectContent = memo(() => {
@@ -23,15 +30,30 @@ const CreateProjectContent = memo(() => {
   const createProject = useProjectStore((s) => s.createProject);
   const [form, setForm] = useState<CreateProjectFormState>({
     identifier: '',
+    identifierEdited: false,
     loading: false,
     name: '',
     slug: '',
+    slugEdited: false,
   });
   const createInput = getCreateProjectInput(form);
+  const identifierValid = isProjectIdentifierValid(form.identifier);
+  const identifierInvalid =
+    (form.identifierEdited || Boolean(form.name.trim())) && !identifierValid;
   const slugValid = isProjectSlugValid(form.slug);
 
   const updateForm = (patch: Partial<CreateProjectFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
+  };
+
+  const updateName = (name: string) => {
+    const suggestions = getProjectFieldSuggestions(name);
+    setForm((current) => ({
+      ...current,
+      identifier: current.identifierEdited ? current.identifier : suggestions.identifier,
+      name,
+      slug: current.slugEdited ? current.slug : suggestions.slug,
+    }));
   };
 
   const handleCreate = async () => {
@@ -61,7 +83,7 @@ const CreateProjectContent = memo(() => {
             maxLength={255}
             placeholder={t('create.namePlaceholder')}
             value={form.name}
-            onChange={(event) => updateForm({ name: event.target.value })}
+            onChange={(event) => updateName(event.target.value)}
             onPressEnter={handleCreate}
           />
         </Flexbox>
@@ -72,12 +94,15 @@ const CreateProjectContent = memo(() => {
           <Input
             maxLength={6}
             placeholder={t('create.identifierPlaceholder')}
+            status={identifierInvalid ? 'error' : undefined}
             value={form.identifier}
-            onChange={(event) => updateForm({ identifier: event.target.value.toUpperCase() })}
             onPressEnter={handleCreate}
+            onChange={(event) =>
+              updateForm({ identifier: event.target.value.toUpperCase(), identifierEdited: true })
+            }
           />
-          <Text fontSize={12} type="secondary">
-            {t('create.identifierDescription')}
+          <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
+            {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
           </Text>
         </Flexbox>
         <Flexbox gap={6}>
@@ -89,8 +114,10 @@ const CreateProjectContent = memo(() => {
             placeholder={t('create.slugPlaceholder')}
             status={slugValid ? undefined : 'error'}
             value={form.slug}
-            onChange={(event) => updateForm({ slug: event.target.value.toLowerCase() })}
             onPressEnter={handleCreate}
+            onChange={(event) =>
+              updateForm({ slug: event.target.value.toLowerCase(), slugEdited: true })
+            }
           />
           <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
             {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}

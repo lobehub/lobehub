@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { PlusIcon, SquareKanbanIcon } from 'lucide-react';
+import { ArrowRightIcon, PlusIcon, SquareKanbanIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,10 +34,10 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
       paddingInline="8px 4px"
       action={
         <ActionIcon
-          icon={PlusIcon}
+          icon={ArrowRightIcon}
           size="small"
-          title={t('create.title')}
-          onClick={openCreateProjectModal}
+          title={t('list.viewAll')}
+          onClick={() => navigate('/projects')}
         />
       }
       title={

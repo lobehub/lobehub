@@ -302,7 +302,7 @@ table agent_eval_runs {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    
+
     dataset_id [name: 'agent_eval_runs_dataset_id_idx']
     experiment_id [name: 'agent_eval_runs_experiment_id_idx']
     parent_run_id [name: 'agent_eval_runs_parent_run_id_idx']
@@ -1090,6 +1090,250 @@ table document_shares {
   }
 }
 
+table expertise_bindings {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  domain_id varchar(255) [not null]
+  agent_id text
+  project_id text
+  bound_workspace_id text
+  bound_user_id text
+  contribution_mode text [not null, default: 'derive']
+  added_by_user_id text
+  workspace_id text
+  enabled boolean [not null, default: true]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+
+    (agent_id, domain_id) [name: 'expertise_bindings_agent_domain_unique', unique]
+    (project_id, domain_id) [name: 'expertise_bindings_project_domain_unique', unique]
+    (bound_workspace_id, domain_id) [name: 'expertise_bindings_workspace_domain_unique', unique]
+    (bound_user_id, domain_id) [name: 'expertise_bindings_user_domain_unique', unique]
+    domain_id [name: 'expertise_bindings_domain_idx']
+    workspace_id [name: 'expertise_bindings_workspace_id_idx']
+  }
+}
+
+table expertise_domain_snapshots {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  domain_id varchar(255) [not null]
+  run_id uuid
+  run_index integer [not null]
+  learned_total integer [not null]
+  retired_total integer [not null, default: 0]
+  active_count integer [not null]
+  compiled_count integer [not null, default: 0]
+  layer_counts jsonb [not null, default: `{}`]
+  p_inf numeric
+  tau numeric
+  maturity numeric
+  fit_sample_size integer
+  fit_r2 numeric
+  fit_confidence text
+  fit_computed_at "timestamp with time zone"
+  tau_pinned boolean [not null, default: false]
+  observed_span numeric
+  plateau_kind text
+  layer_coverage numeric
+  canon_coverage numeric
+  active_rate numeric
+  captured_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+
+    (domain_id, run_index) [name: 'expertise_domain_snapshots_domain_run_index_unique', unique]
+    (domain_id, captured_at) [name: 'expertise_domain_snapshots_domain_captured_idx']
+    domain_id [name: 'expertise_domain_snapshots_pending_fit_idx']
+  }
+}
+
+table expertise_domains {
+  id varchar(255) [pk, not null]
+  slug varchar(255) [not null]
+  title text [not null]
+  description text
+  user_id text [not null]
+  workspace_id text
+  visibility text [not null, default: 'private']
+  source text [not null, default: 'user']
+  parent_domain_id varchar(255)
+  domain_filter text [not null]
+  out_of_scope text
+  layers jsonb [not null, default: `[]`]
+  layer_source text [not null, default: 'invented']
+  canon_entries jsonb [not null, default: `[]`]
+  canon_document_id varchar(255)
+  flow jsonb [not null, default: `[]`]
+  evidence_spec jsonb [not null, default: `[]`]
+  lesson_base_document_id varchar(255)
+  anchor_candidates jsonb
+  anchor_chosen_at "timestamp with time zone"
+  anchor_chosen_by_user_id text
+  seed_state text [not null, default: 'seeding']
+  seed_run_id uuid
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (slug, user_id) [name: 'expertise_domains_slug_user_unique', unique]
+    (workspace_id, slug) [name: 'expertise_domains_slug_workspace_unique', unique]
+    user_id [name: 'expertise_domains_user_id_idx']
+    (workspace_id, visibility) [name: 'expertise_domains_workspace_visibility_idx']
+    parent_domain_id [name: 'expertise_domains_parent_idx']
+  }
+}
+
+table expertise_hits {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  run_id uuid [not null]
+  lesson_id uuid [not null]
+  domain_id varchar(255) [not null]
+  outcome text [not null]
+  where text
+  note text
+  example text
+  severity text
+  evidence_id uuid
+  operation_id text
+  user_decision text
+  user_decision_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+
+
+    (lesson_id, created_at) [name: 'expertise_hits_lesson_created_idx']
+    run_id [name: 'expertise_hits_run_idx']
+    (domain_id, outcome) [name: 'expertise_hits_domain_outcome_idx']
+    operation_id [name: 'expertise_hits_operation_idx']
+  }
+}
+
+table expertise_insights {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  domain_id varchar(255)
+  user_id text
+  workspace_id text
+  kind varchar(255) [not null]
+  headline text [not null]
+  body text [not null]
+  action_label text
+  action_target jsonb
+  evidence jsonb [not null, default: `[]`]
+  confidence real
+  status text [not null, default: 'active']
+  dismiss_reason text
+  stale_after_run_index integer
+  generated_by_operation_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (domain_id, status) [name: 'expertise_insights_domain_status_idx']
+    (user_id, status) [name: 'expertise_insights_user_status_idx']
+    workspace_id [name: 'expertise_insights_workspace_idx']
+  }
+}
+
+table expertise_lesson_revisions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  lesson_id uuid [not null]
+  revision integer [not null]
+  sections jsonb [not null]
+  feedback text
+  changed_by text [not null]
+  kind text [not null, default: 'user-feedback']
+  prev_title text
+  changed_by_user_id text
+  source_run_id uuid
+  operation_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (lesson_id, revision) [name: 'expertise_lesson_revisions_lesson_revision_unique', unique]
+    lesson_id [name: 'expertise_lesson_revisions_lesson_idx']
+  }
+}
+
+table expertise_lessons {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  domain_id varchar(255) [not null]
+  created_by_user_id text
+  code varchar(20) [not null]
+  polarity text [not null]
+  title text [not null]
+  sections jsonb [not null]
+  layer varchar(255)
+  tags text[]
+  canon_anchor text
+  origin_run_id uuid
+  origin_hit_id uuid
+  status text [not null, default: 'active']
+  rejected_reason text
+  salvaged_from_id uuid
+  retired_at "timestamp with time zone"
+  compilability text [not null, default: 'compilable']
+  compiled_criterion_id uuid
+  hit_count integer [not null, default: 0]
+  hit_run_count integer [not null, default: 0]
+  false_positive_count integer [not null, default: 0]
+  last_hit_at "timestamp with time zone"
+  last_hit_run_id uuid
+  generalized_from_ids jsonb
+  specificity text
+  example_count integer [not null, default: 0]
+  current_revision integer [not null, default: 1]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (domain_id, code) [name: 'expertise_lessons_domain_code_unique', unique]
+    (id, domain_id) [name: 'expertise_lessons_id_domain_unique', unique]
+    (domain_id, status, hit_count) [name: 'expertise_lessons_domain_status_hits_idx']
+    (domain_id, layer) [name: 'expertise_lessons_domain_layer_idx']
+    compiled_criterion_id [name: 'expertise_lessons_compiled_criterion_idx']
+  }
+}
+
+table expertise_runs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  domain_id varchar(255) [not null]
+  run_index integer [not null]
+  is_seed_run boolean [not null, default: false]
+  actor_type text [not null]
+  actor_id text [not null]
+  subject_type text [not null]
+  subject_id text [not null]
+  window_start "timestamp with time zone"
+  window_end "timestamp with time zone"
+  reflection_key varchar(255)
+  had_human_in_loop boolean [not null, default: false]
+  user_id text
+  workspace_id text
+  instance_count integer [not null, default: 0]
+  refine_count integer [not null, default: 0]
+  new_count integer [not null, default: 0]
+  started_at "timestamp with time zone" [not null, default: `now()`]
+  completed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (domain_id, run_index) [name: 'expertise_runs_domain_run_index_unique', unique]
+    (id, domain_id) [name: 'expertise_runs_id_domain_unique', unique]
+    (domain_id, reflection_key) [name: 'expertise_runs_domain_reflection_key_unique', unique]
+    (domain_id, started_at) [name: 'expertise_runs_domain_started_idx']
+    (actor_type, actor_id) [name: 'expertise_runs_actor_idx']
+    (subject_type, subject_id) [name: 'expertise_runs_subject_idx']
+  }
+}
+
 table documents {
   id varchar(255) [pk, not null]
   title text
@@ -1279,6 +1523,34 @@ table generations {
     generation_batch_id [name: 'generations_batch_id_idx']
     file_id [name: 'generations_file_id_idx']
     workspace_id [name: 'generations_workspace_id_idx']
+  }
+}
+
+table goals {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  agent_id text
+  project_id text
+  title text [not null]
+  requirement text
+  max_rounds integer
+  max_total_cost "numeric(20, 6)"
+  status text [not null, default: 'planning']
+  subject_type text
+  subject_id text
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'goals_user_id_idx']
+    workspace_id [name: 'goals_workspace_id_idx']
+    agent_id [name: 'goals_agent_id_idx']
+    project_id [name: 'goals_project_id_idx']
+    status [name: 'goals_status_idx']
+    (subject_type, subject_id) [name: 'goals_subject_idx']
   }
 }
 
@@ -1900,7 +2172,7 @@ table project_completion_reviews {
     (project_id, created_at) [name: 'project_completion_reviews_project_id_created_at_idx']
     reviewer_user_id [name: 'project_completion_reviews_reviewer_user_id_idx']
     workspace_id [name: 'project_completion_reviews_workspace_id_idx']
-    
+
   }
 }
 
@@ -1954,7 +2226,7 @@ table projects {
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
     coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
-    
+
   }
 }
 
@@ -2504,7 +2776,7 @@ table tasks {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    
+
     (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
     created_by_user_id [name: 'tasks_created_by_user_id_idx']
     created_by_agent_id [name: 'tasks_created_by_agent_id_idx']
@@ -2674,10 +2946,10 @@ table topic_comments {
 
   indexes {
     (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
-    
-    
-    
-    
+
+
+
+
     (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
     (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
     (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']
@@ -3199,7 +3471,7 @@ table verify_runs {
     workspace_id [name: 'verify_runs_workspace_id_idx']
     acceptance_id [name: 'verify_runs_acceptance_id_idx']
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
-    
+
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
     user_decision [name: 'verify_runs_user_decision_idx']

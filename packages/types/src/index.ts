@@ -18,6 +18,7 @@ export * from './discover';
 export * from './document';
 export * from './entityId';
 export * from './eval';
+export * from './expertise';
 export * from './export';
 export * from './fetch';
 export * from './files';

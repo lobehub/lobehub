@@ -37,6 +37,25 @@ const getDbMessageByToolCallId = (id: string) => (s: State) =>
   s.dbMessages.find((m) => m.tool_call_id === id);
 
 /**
+ * `createdAt` is typed as a number but arrives as a `Date` after a DB rehydrate
+ * (superjson keeps `timestamptz` as `Date`), so normalize before comparing.
+ */
+const toEpochMs = (value: Date | number | string | null | undefined): number | undefined => {
+  if (value === null || value === undefined) return undefined;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? undefined : time;
+};
+
+/**
+ * `createdAt` of a tool call's result row, normalized to epoch ms.
+ *
+ * The row is written when the call is issued, so it provides a durable baseline
+ * for the elapsed time shown by the tool call.
+ */
+const getToolMessageCreatedAt = (toolCallId: string) => (s: State) =>
+  toEpochMs(getDbMessageByToolCallId(toolCallId)(s)?.createdAt);
+
+/**
  * Helper to find last message ID in an AssistantContentBlock
  */
 const findLastBlockId = (block: AssistantContentBlock | undefined): string | undefined => {
@@ -266,6 +285,7 @@ export const dataSelectors = {
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
   getToolInBlock,
+  getToolMessageCreatedAt,
   getToolsInBlock,
   hasNoRenderedReply,
   isSecondLastMessageFromUser,

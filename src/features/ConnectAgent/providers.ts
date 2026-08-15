@@ -130,6 +130,10 @@ export const buildConnectAgentConfig = ({
       avatar: profile?.avatar || undefined,
       description: (overrides?.description ?? profile?.description)?.trim() || undefined,
       name,
+      // Same stamp as the CLI branch below: readers that attribute a run by the
+      // agent's provider (topic model snapshot, agent list, message tags) must
+      // see `openclaw`/`hermes`, not the inherited default chat provider.
+      provider: provider.type,
       title: profile?.title || provider.title,
     };
   }
