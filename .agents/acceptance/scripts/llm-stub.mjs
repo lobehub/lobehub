@@ -86,13 +86,51 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    let payload = {};
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      // Keep defaults for malformed probe requests.
+    }
+
     if (isResponses) {
+      const rid = 'resp_stub_' + Math.random().toString(36).slice(2, 8);
+      if (payload.stream !== true) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            created_at: Math.floor(Date.now() / 1000),
+            error: null,
+            id: rid,
+            incomplete_details: null,
+            instructions: null,
+            model: payload.model || 'stub-model',
+            object: 'response',
+            output: [
+              {
+                content: [{ annotations: [], text: TEXT, type: 'output_text' }],
+                id: 'msg_stub',
+                role: 'assistant',
+                status: 'completed',
+                type: 'message',
+              },
+            ],
+            output_text: TEXT,
+            status: 'completed',
+            usage: {
+              input_tokens: 10,
+              output_tokens: words.length,
+              total_tokens: 10 + words.length,
+            },
+          }),
+        );
+        return;
+      }
       res.writeHead(200, {
         'cache-control': 'no-cache',
         'connection': 'keep-alive',
         'content-type': 'text/event-stream',
       });
-      const rid = 'resp_stub_' + Math.random().toString(36).slice(2, 8);
       const ev = (type, extra) => `event: ${type}\ndata: ${JSON.stringify({ type, ...extra })}\n\n`;
       res.write(ev('response.created', { response: { id: rid, status: 'in_progress' } }));
       let i = 0;
@@ -123,15 +161,8 @@ const server = http.createServer((req, res) => {
     // chat/completions
     const id = 'chatcmpl-stub-' + Math.random().toString(36).slice(2, 8);
     const created = Math.floor(Date.now() / 1000);
-    let model = 'stub-model';
-    let stream = true;
-    try {
-      const payload = JSON.parse(body);
-      model = payload.model || model;
-      stream = payload.stream !== false && !payload.response_format;
-    } catch {
-      // Keep the defaults for malformed probe requests.
-    }
+    const model = payload.model || 'stub-model';
+    const stream = payload.stream !== false && !payload.response_format;
     if (!stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
