@@ -27,6 +27,10 @@ const styles = createStaticStyles(({ css }) => ({
     width: min(100%, 760px);
   `,
   sectionItem: css`
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 16px;
+
     padding-block: 14px;
     padding-inline: 16px;
 
@@ -37,6 +41,9 @@ const styles = createStaticStyles(({ css }) => ({
   title: css`
     max-width: 880px;
     text-wrap: balance;
+  `,
+  hitTitle: css`
+    min-width: 0;
   `,
 }));
 
@@ -135,14 +142,12 @@ const LessonDetail = memo(() => {
                 <Block className={styles.sections} padding={0} variant={'outlined'}>
                   {sections?.map((section) => (
                     <div className={styles.sectionItem} key={section.key}>
-                      <Flexbox gap={6}>
-                        <Text fontSize={12} type={'secondary'} weight={600}>
-                          {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
-                        </Text>
-                        <Text fontSize={14} lineHeight={1.75}>
-                          {section.body}
-                        </Text>
-                      </Flexbox>
+                      <Text fontSize={12} type={'secondary'} weight={600}>
+                        {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
+                      </Text>
+                      <Text fontSize={14} lineHeight={1.65}>
+                        {section.body}
+                      </Text>
                     </div>
                   ))}
                 </Block>
@@ -164,14 +169,14 @@ const LessonDetail = memo(() => {
                         padding={14}
                         variant={'outlined'}
                       >
-                        <Flexbox horizontal align={'center'} gap={8}>
+                        <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
+                          <Text className={styles.hitTitle} fontSize={13} lineHeight={1.65}>
+                            {hit.example}
+                          </Text>
                           <Tag color={hit.outcome === 'pass' ? 'green' : 'red'}>
                             {t(`rules.detail.outcome.${hit.outcome}`)}
                           </Tag>
                         </Flexbox>
-                        <Text fontSize={13} lineHeight={1.65}>
-                          {hit.example}
-                        </Text>
                         {hit.note && (
                           <Text fontSize={12} type={'secondary'}>
                             {hit.note}
