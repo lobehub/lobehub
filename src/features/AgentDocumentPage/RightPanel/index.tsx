@@ -24,26 +24,27 @@ import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   backLink: css`
     display: flex;
-    gap: 6px;
+    gap: 2px;
     align-items: center;
 
     width: fit-content;
-    padding-block: 6px;
-    padding-inline: 10px 14px;
-    border-radius: 999px;
+    padding-block: 3px;
+    padding-inline: 4px 6px;
+    border-radius: 6px;
 
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
     text-decoration: none;
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
 
-    transition: background 150ms ease;
+    transition:
+      color 150ms ease,
+      background 150ms ease;
 
     &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   body: css`
@@ -99,7 +100,7 @@ const AgentDocumentSidebarContent = memo(() => {
       padding={'8px 6px'}
     >
       <a className={styles.backLink} href={agentPath} onClick={handleBack}>
-        <Icon icon={ChevronLeftIcon} size={16} />
+        <Icon icon={ChevronLeftIcon} size={14} />
         {t('agentDocument.backToAgent', { name: agentTitle })}
       </a>
       <ToggleLeftPanelButton />
