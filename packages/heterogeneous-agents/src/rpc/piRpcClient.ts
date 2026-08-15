@@ -84,6 +84,7 @@ export class PiRpcClient {
   private readonly transport: RpcStdioClient;
   private readonly options: PiRpcClientOptions;
   private handshakeResolved = false;
+  private handshakeSessionId?: string;
   private started = false;
 
   constructor(options: PiRpcClientOptions) {
@@ -112,6 +113,17 @@ export class PiRpcClient {
   /** True once the startup handshake succeeded (`get_state` answered). */
   get isReady(): boolean {
     return this.handshakeResolved && !this.transport.isClosed;
+  }
+
+  /**
+   * The native pi session id reported by the `get_state` handshake.
+   *
+   * Note: RPC mode never emits the `{type:'session'}` header that the legacy
+   * `--mode json` stream starts with — the session id only exists in the
+   * `get_state` response — so this is the ONLY reliable source for it.
+   */
+  get sessionId(): string | undefined {
+    return this.handshakeSessionId;
   }
 
   /**
@@ -210,6 +222,9 @@ export class PiRpcClient {
         );
       }
       this.handshakeResolved = true;
+      if (typeof response.data?.sessionId === 'string') {
+        this.handshakeSessionId = response.data.sessionId;
+      }
     } catch (error) {
       clearTimeout(timeout);
       throw error;

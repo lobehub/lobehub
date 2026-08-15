@@ -26,6 +26,9 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       get pid() {
         return 123_456;
       }
+      get sessionId() {
+        return undefined;
+      }
       start = mocks.start;
       command = mocks.command;
       close = mocks.close;

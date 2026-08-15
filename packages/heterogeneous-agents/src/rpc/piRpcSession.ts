@@ -158,6 +158,11 @@ export class PiRpcSession {
     if (this.started) return;
     this.started = true;
     await this.client.start();
+    // RPC mode does not emit the json-mode `{type:'session'}` header — the
+    // native session id comes from the get_state handshake. Report it so the
+    // host can key the pool / persist the resume id.
+    const sessionId = this.client.sessionId;
+    if (sessionId) this.options.onSessionId(sessionId);
     this.emitStatus('idle');
   }
 

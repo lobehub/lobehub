@@ -112,6 +112,12 @@ describe('PiRpcClient', () => {
     expect(child.stdin.end).toHaveBeenCalled();
   });
 
+  it('exposes the native session id from the get_state handshake (RPC has no session event)', async () => {
+    const { client } = await createReadyClient();
+    expect(client.sessionId).toBe('sess-1');
+    await client.close();
+  });
+
   it('rejects on `success: false` responses with the command name', async () => {
     const { client, stdout, writes } = await createReadyClient();
     const request = client.command({ type: 'set_model', provider: 'x', modelId: 'y' });

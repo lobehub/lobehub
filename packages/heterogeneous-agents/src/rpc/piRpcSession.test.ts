@@ -7,6 +7,7 @@ import type { PiRpcEvent } from './piRpcProtocol';
 
 const mocks = vi.hoisted(() => ({
   clientInstances: [] as any[],
+  clientSessionId: { value: undefined as string | undefined },
   command: vi.fn(),
   start: vi.fn(),
   close: vi.fn(),
@@ -29,6 +30,9 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       }
       get isClosed() {
         return false;
+      }
+      get sessionId() {
+        return mocks.clientSessionId.value;
       }
       start = mocks.start;
       command = mocks.command;
@@ -66,6 +70,7 @@ const emit = (session: PiRpcSession, event: PiRpcEvent) => {
 afterEach(() => {
   vi.restoreAllMocks();
   mocks.clientInstances.length = 0;
+  mocks.clientSessionId.value = undefined;
   mocks.start.mockReset();
   mocks.command.mockReset();
   mocks.close.mockReset();
@@ -75,6 +80,7 @@ afterEach(() => {
 describe('PiRpcSession', () => {
   it('runs a prompt and resolves on agent_settled, broadcasting stream events', async () => {
     const { events, session, sessionIds } = createSession();
+    mocks.clientSessionId.value = 'pi-sess-1';
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
       if (command.type === 'get_state') return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
@@ -87,7 +93,8 @@ describe('PiRpcSession', () => {
     const client = mocks.clientInstances.at(-1)!;
     expect(client).toBeTruthy();
 
-    await emit(session, { type: 'session', id: 'pi-sess-1' });
+    // RPC mode reports the native session id via the get_state handshake,
+    // not a `{type:'session'}` event.
     await emit(session, {
       assistantMessageEvent: { contentIndex: 0, delta: 'Hi ', type: 'text_delta' },
       type: 'message_update',
