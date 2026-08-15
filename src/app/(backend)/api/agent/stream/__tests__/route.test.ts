@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
-import { GET as getHandler } from '../route';
+import { GET as getHandler, OPTIONS } from '../route';
 
 const GET = (request: NextRequest) => getHandler(request, { params: Promise.resolve({}) });
 
@@ -317,11 +317,23 @@ describe('/api/agent/stream route', () => {
       expect(response.headers.get('Cache-Control')).toBe('no-cache, no-transform');
       expect(response.headers.get('Connection')).toBe('keep-alive');
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
-      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, OPTIONS');
       expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
-        'Cache-Control, Last-Event-ID',
+        'Cache-Control, Last-Event-ID, Oidc-Auth, X-API-Key, X-Workspace-Id',
       );
       expect(response.headers.get('X-Accel-Buffering')).toBe('no');
+    });
+
+    it('should allow preflight requests for supported authentication headers', () => {
+      const response = OPTIONS();
+
+      expect(response.status).toBe(204);
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
+        'Cache-Control, Last-Event-ID, Oidc-Auth, X-API-Key, X-Workspace-Id',
+      );
+      expect(response.headers.get('Content-Type')).toBeNull();
     });
   });
 

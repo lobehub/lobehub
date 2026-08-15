@@ -9,6 +9,27 @@ import { AgentStreamAuthorizationService } from '@/server/services/agentRuntime'
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
 
+const AGENT_STREAM_ALLOWED_HEADERS = [
+  'Cache-Control',
+  'Last-Event-ID',
+  'Oidc-Auth',
+  'X-API-Key',
+  'X-Workspace-Id',
+].join(', ');
+
+const createAgentStreamHeaders = (includeSSEHeaders = true) => {
+  const headers = new Headers(includeSSEHeaders ? createSSEHeaders() : undefined);
+
+  // Wildcard origin is intentional for header-authenticated CLI/integration
+  // clients. Browser session cookies remain same-origin and are not exposed
+  // cross-origin with credentials.
+  headers.set('Access-Control-Allow-Headers', AGENT_STREAM_ALLOWED_HEADERS);
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  headers.set('Access-Control-Allow-Origin', '*');
+
+  return headers;
+};
+
 /**
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
@@ -225,8 +246,11 @@ const handler: RequestHandler = async (
 
   // Set SSE response headers
   return new Response(stream, {
-    headers: createSSEHeaders(),
+    headers: createAgentStreamHeaders(),
   });
 };
 
 export const GET = checkAuth(handler, { allowApiKey: true });
+
+export const OPTIONS = () =>
+  new Response(null, { headers: createAgentStreamHeaders(false), status: 204 });
