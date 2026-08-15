@@ -154,7 +154,15 @@ export class PiRpcSession {
    * rejects on error / process death. Always closes the process afterwards.
    */
   async run(prompt: PiRpcPromptInput): Promise<{ aborted: boolean }> {
-    await this.start();
+    try {
+      await this.start();
+    } catch (error) {
+      // start() failure (spawn / handshake) must still recycle the process.
+      await this.close().catch(() => {
+        /* best-effort */
+      });
+      throw error;
+    }
     if (this.runPromise) throw new Error('PiRpcSession already has an active run');
 
     this.runStarted = true;

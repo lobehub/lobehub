@@ -266,6 +266,8 @@ export class PiRpcClient {
     } catch (error) {
       clearTimeout(timeout);
       if (!this.closed && !this.fatalError) this.fail(this.toError(error));
+      // The process never reached a usable state — do not leave it running.
+      if (this.child && !this.closed) this.terminateChild(this.child, 'SIGTERM');
       throw error;
     }
   }
