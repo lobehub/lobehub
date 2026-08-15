@@ -732,6 +732,17 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
   });
 
+  it('preserves an in-group member role in synthesized completion state', () => {
+    const lifecycle = buildLifecycle();
+
+    const state = (lifecycle as any).buildStateFromInput({
+      operationId: 'op-member',
+      orchestrationRole: 'member',
+    });
+
+    expect(state.metadata.orchestrationRole).toBe('member');
+  });
+
   it.each(['max_steps', 'cost_limit'])(
     'notifies on the success-like capped terminal %s (still produced a deliverable)',
     async (reason) => {

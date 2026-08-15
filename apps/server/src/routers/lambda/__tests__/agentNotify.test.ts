@@ -17,6 +17,7 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 
 const mockTopicFindById = vi.fn();
 const mockTopicUpdateMetadata = vi.fn();
+const mockTopicRemoveRunningOperationChild = vi.fn();
 const mockMessageFindById = vi.fn();
 const mockMessageUpdate = vi.fn();
 const mockMessageCreate = vi.fn();
@@ -37,6 +38,7 @@ vi.mock('@/server/services/verify', async (orig) => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
     findById: mockTopicFindById,
+    removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
     updateMetadata: mockTopicUpdateMetadata,
   })),
 }));
@@ -62,6 +64,7 @@ vi.mock('@/server/modules/AgentRuntime/factory', async (orig) => ({
 }));
 
 // Imported after the mocks above are registered.
+const { CompletionLifecycle } = await import('@/server/services/agentRuntime/CompletionLifecycle');
 const { agentNotifyRouter } = await import('../agentNotify');
 
 const OP = 'op-remote-1';
@@ -101,6 +104,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // by earlier `lh notify` calls).
     mockMessageFindById.mockResolvedValue({ content: 'the final reply', topicId: TOPIC });
     mockTopicUpdateMetadata.mockResolvedValue(undefined);
+    mockTopicRemoveRunningOperationChild.mockResolvedValue(undefined);
     // Default: a non-task op so the plan-instantiation guard no-ops unless a
     // test opts into a task-bound op.
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
@@ -199,5 +203,118 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       reason: 'error',
     });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes a child operation without clearing the supervisor marker', async () => {
+    const childOperationId = 'op-child-1';
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          childOperations: [{ operationId: childOperationId, orchestrationRole: 'member' }],
+          operationId: OP,
+        },
+      },
+    });
+
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: childOperationId,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(mockPublishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: childOperationId, reason: 'success' }),
+    );
+    await vi.waitFor(() =>
+      expect(mockTopicRemoveRunningOperationChild).toHaveBeenCalledWith(TOPIC, childOperationId),
+    );
+    expect(completeOperationSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: childOperationId, orchestrationRole: 'member' }),
+      'done',
+      expect.anything(),
+    );
+    expect(mockTopicUpdateMetadata).not.toHaveBeenCalledWith(TOPIC, { runningOperation: null });
+    completeOperationSpy.mockRestore();
+  });
+
+  it('ignores a repeated child terminal callback after its marker was removed', async () => {
+    const childOperationId = 'op-child-1';
+    const activeTopic = {
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          childOperations: [{ operationId: childOperationId, orchestrationRole: 'member' }],
+          operationId: OP,
+        },
+      },
+    };
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
+    mockTopicFindById
+      .mockResolvedValueOnce(activeTopic)
+      .mockResolvedValueOnce(activeTopic)
+      .mockResolvedValueOnce({
+        agentId: 'agent-1',
+        metadata: { runningOperation: { operationId: OP } },
+      });
+
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: childOperationId,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+    await vi.waitFor(() => expect(completeOperationSpy).toHaveBeenCalledTimes(1));
+
+    const duplicate = await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: childOperationId,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(duplicate).toEqual({ messageId: undefined, operationId: undefined, topicId: TOPIC });
+    expect(completeOperationSpy).toHaveBeenCalledTimes(1);
+    completeOperationSpy.mockRestore();
+  });
+
+  it('writes a child notification to its own placeholder message', async () => {
+    const childOperationId = 'op-child-1';
+    const childMessageId = 'msg-child';
+    const supervisorMessageId = 'msg-supervisor';
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          assistantMessageId: supervisorMessageId,
+          childOperations: [{ assistantMessageId: childMessageId, operationId: childOperationId }],
+          operationId: OP,
+        },
+      },
+    });
+    mockMessageFindById.mockResolvedValue({ content: '', topicId: TOPIC });
+
+    await createCaller().notify({
+      content: 'child response',
+      operationId: childOperationId,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(mockMessageUpdate).toHaveBeenCalledWith(childMessageId, { content: 'child response' });
+    expect(mockMessageUpdate).not.toHaveBeenCalledWith(supervisorMessageId, expect.anything());
+    expect(mockPublishStreamEvent).toHaveBeenCalledWith(
+      childOperationId,
+      expect.objectContaining({ type: 'notify_update' }),
+    );
   });
 });

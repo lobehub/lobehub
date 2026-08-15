@@ -348,6 +348,7 @@ describe('runHeteroTask (openclaw)', () => {
       string[],
       { env: NodeJS.ProcessEnv },
     ];
+    expect(spawnOpts.env.LOBEHUB_OPERATION_ID).toBe('op-ws');
     expect(spawnOpts.env.LOBEHUB_WORKSPACE_ID).toBe('ws-42');
   });
 

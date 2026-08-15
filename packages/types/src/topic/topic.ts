@@ -222,6 +222,7 @@ export interface ChatTopicMetadata {
       heteroType?: string;
       hooks?: SerializedAgentHook[];
       operationId: string;
+      orchestrationRole?: 'supervisor' | 'member';
       scope?: string;
       threadId?: string | null;
     }>;
@@ -249,6 +250,7 @@ export interface ChatTopicMetadata {
      */
     hooks?: SerializedAgentHook[];
     operationId: string;
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string;
     threadId?: string | null;
   } | null;
@@ -497,6 +499,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
             heteroType: z.string().optional(),
             hooks: z.array(serializedAgentHookSchema).optional(),
             operationId: z.string(),
+            orchestrationRole: z.enum(['supervisor', 'member']).optional(),
             scope: z.string().optional(),
             threadId: z.string().nullish(),
           }),
@@ -508,6 +511,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
       heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
+      orchestrationRole: z.enum(['supervisor', 'member']).optional(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
     })

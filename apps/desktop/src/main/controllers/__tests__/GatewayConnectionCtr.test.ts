@@ -1073,9 +1073,34 @@ describe('GatewayConnectionCtr', () => {
       ];
       expect(spawnCommand).toBe('/resolved/bin/openclaw');
       expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
+      expect(spawnOptions.env.LOBEHUB_OPERATION_ID).toBe('op-1');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
+    });
+
+    it('reports a failed child process as a terminal error', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-failed-child',
+        prompt: 'hello',
+        taskId: 'task-failed-child',
+        topicId: 'topic-failed-child',
+      });
+      child._emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          done: true,
+          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          operationId: 'op-failed-child',
+        }),
+      );
     });
 
     it.each([
@@ -1383,6 +1408,7 @@ describe('GatewayConnectionCtr', () => {
         expect(notifySpy).toHaveBeenCalledWith(
           expect.objectContaining({
             content: 'session_id: part of the final answer\nHello from Hermes',
+            operationId: 'op-hermes-1',
             topicId: 'topic-hermes',
           }),
         );

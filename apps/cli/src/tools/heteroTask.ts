@@ -86,6 +86,7 @@ async function sendAutoNotify(
   taskId: string,
   text: string,
   agentId?: string,
+  operationId?: string,
   workspaceId?: string,
 ): Promise<void> {
   try {
@@ -93,6 +94,7 @@ async function sendAutoNotify(
     await client.agentNotify.notify.mutate({
       agentId,
       content: text,
+      operationId,
       role: 'assistant',
       topicId,
     });
@@ -113,6 +115,7 @@ async function sendAutoNotify(
 async function sendTerminalSignal(
   topicId: string,
   agentId?: string,
+  operationId?: string,
   workspaceId?: string,
   error?: { message: string; type?: string },
 ): Promise<void> {
@@ -122,6 +125,7 @@ async function sendTerminalSignal(
       agentId,
       content: '',
       done: true,
+      operationId,
       ...(error ? { error } : {}),
       role: 'assistant',
       topicId,
@@ -180,9 +184,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   // Propagate workspace scope into the spawned child so its own `lh notify`
   // invocations (and any grandchildren it shells out) inherit the same scope
   // via getTrpcClient → resolveWorkspaceId.
-  const childEnv: NodeJS.ProcessEnv = workspaceId
-    ? { ...process.env, LOBEHUB_WORKSPACE_ID: workspaceId }
-    : { ...process.env };
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    LOBEHUB_OPERATION_ID: operationId,
+    ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
+  };
 
   if (agentType === 'openclaw') {
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
@@ -263,17 +269,18 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
           : `Task failed (exit code: ${code})`;
         // Write the notice bubble first, THEN signal terminal (sequential).
         // Fire-and-forget both, but ensure the terminal signal is always sent.
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, taskId, text, agentId, operationId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
             agentId,
+            operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
           ),
         );
       } else {
         // Clean exit — openclaw already sent its final message; just signal done.
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, operationId, workspaceId);
       }
     });
 
@@ -342,10 +349,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         const text = cancelled
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, taskId, text, agentId, operationId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
             agentId,
+            operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
           ),
@@ -361,11 +369,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       if (sessionId) saveHermesSessionId(topicId, sessionId);
 
       if (response) {
-        void sendAutoNotify(topicId, taskId, response, agentId, workspaceId).finally(() =>
-          sendTerminalSignal(topicId, agentId, workspaceId),
+        void sendAutoNotify(topicId, taskId, response, agentId, operationId, workspaceId).finally(() =>
+          sendTerminalSignal(topicId, agentId, operationId, workspaceId),
         );
       } else {
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, operationId, workspaceId);
       }
     });
 
@@ -397,6 +405,7 @@ export async function cancelHeteroTask(params: CancelHeteroTaskParams): Promise<
       taskId,
       'Task already completed or cancelled',
       entry.agentId,
+      entry.operationId,
       entry.workspaceId,
     );
   }

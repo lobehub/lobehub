@@ -2467,6 +2467,7 @@ export class AiAgentService {
             }
           : {}),
         operationId,
+        orchestrationRole: appContext?.orchestrationRole,
         scope: appContext?.scope ?? undefined,
         threadId: appContext?.threadId ?? undefined,
       };

@@ -141,8 +141,13 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const marker = (topic.metadata as any)?.runningOperation;
-    const remoteOperationId =
-      input.operationId ?? marker?.operationId ?? marker?.childOperations?.[0]?.operationId;
+    const remoteOperationId = input.operationId ?? marker?.operationId;
+    const activeOperation =
+      remoteOperationId && marker
+        ? marker.operationId === remoteOperationId
+          ? marker
+          : marker.childOperations?.find((child: any) => child.operationId === remoteOperationId)
+        : marker;
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -161,6 +166,14 @@ export const agentNotifyRouter = router({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+
+    // A platform child can retry its terminal callback after the first delivery
+    // has removed its running-operation marker. Do not recreate lifecycle side
+    // effects from a stale, caller-supplied operation id.
+    if (isTerminal && input.operationId && !activeOperation) {
+      log('notify: ignoring stale terminal callback for operationId=%s', input.operationId);
+      return { messageId: undefined, operationId: undefined, topicId };
+    }
 
     /**
      * Publish a stream event for remote hetero agents (openclaw / hermes).
@@ -260,6 +273,7 @@ export const agentNotifyRouter = router({
               error: terminalError ?? undefined,
               goal,
               operationId: remoteOperationId,
+              orchestrationRole: activeOperation?.orchestrationRole,
               serializedHooks,
               topicId,
               userId: ctx.userId,
@@ -306,8 +320,7 @@ export const agentNotifyRouter = router({
         // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
         // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
         // Using the placeholder avoids creating a second empty bubble in the UI.
-        const placeholderMessageId = (topic.metadata as any)?.runningOperation
-          ?.assistantMessageId as string | undefined;
+        const placeholderMessageId = activeOperation?.assistantMessageId as string | undefined;
         const resolvedMessageId = messageId ?? placeholderMessageId;
 
         // Update existing message if we have a resolved target
