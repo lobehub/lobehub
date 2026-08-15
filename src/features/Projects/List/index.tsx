@@ -29,16 +29,6 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 
-const STATUS_ORDER: ProjectStatus[] = [
-  'active',
-  'reviewing',
-  'backlog',
-  'paused',
-  'completed',
-  'canceled',
-  'archived',
-];
-
 const STATUS_ICON: Record<ProjectStatus, typeof CircleDashedIcon> = {
   active: CirclePlayIcon,
   archived: ArchiveIcon,
@@ -119,20 +109,15 @@ const ProjectListPage = memo(() => {
   const projects = useCurrentProjectList();
   const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(true);
 
-  const groups = useMemo(() => {
+  const filteredProjects = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
-    const filtered = normalizedKeyword
+    return normalizedKeyword
       ? projects.filter((project) =>
           [project.name, project.identifier, project.description]
             .filter(Boolean)
             .some((value) => value!.toLocaleLowerCase().includes(normalizedKeyword)),
         )
       : projects;
-
-    return STATUS_ORDER.map((status) => ({
-      items: filtered.filter((project) => project.status === status),
-      status,
-    })).filter((group) => group.items.length > 0);
   }, [keyword, projects]);
 
   return (
@@ -161,7 +146,7 @@ const ProjectListPage = memo(() => {
           <AsyncError error={error} onRetry={() => mutate()} />
         ) : isLoading && projects.length === 0 ? (
           <SkeletonList rows={8} />
-        ) : groups.length === 0 ? (
+        ) : filteredProjects.length === 0 ? (
           <Center flex={1} padding={48}>
             <Empty
               description={keyword.trim() ? t('list.searchEmpty') : t('list.emptyDescription')}
@@ -169,22 +154,9 @@ const ProjectListPage = memo(() => {
             />
           </Center>
         ) : (
-          <Flexbox gap={20}>
-            {groups.map(({ items, status }) => (
-              <Flexbox gap={4} key={status}>
-                <Flexbox horizontal align={'center'} gap={8} paddingInline={12}>
-                  <Icon color={cssVar.colorTextSecondary} icon={STATUS_ICON[status]} size={15} />
-                  <Text fontSize={13} weight={500}>
-                    {t(`acceptance.status.${status}`)}
-                  </Text>
-                  <Text fontSize={12} type={'secondary'}>
-                    {items.length}
-                  </Text>
-                </Flexbox>
-                {items.map((project) => (
-                  <ProjectRow key={project.id} project={project} />
-                ))}
-              </Flexbox>
+          <Flexbox gap={4}>
+            {filteredProjects.map((project) => (
+              <ProjectRow key={project.id} project={project} />
             ))}
           </Flexbox>
         )}
