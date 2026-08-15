@@ -8,11 +8,14 @@ import { PlusIcon, SearchXIcon, SquareKanbanIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
+import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
@@ -24,9 +27,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 72px;
     color: ${cssVar.colorTextTertiary};
   `,
+  owner: css`
+    flex: none;
+    width: 20px;
+  `,
   row: css`
-    padding-block: 9px;
-    padding-inline: 12px;
+    padding-block: 7px;
+    padding-inline: 4px 12px;
     border-radius: ${cssVar.borderRadiusLG};
     color: inherit;
 
@@ -45,6 +52,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const ProjectOwnerAvatar = memo<{ userId: string }>(({ userId }) => {
+  const activeWorkspaceId = useActiveWorkspaceId();
+
+  return (
+    <span className={styles.owner}>
+      {activeWorkspaceId ? (
+        <TopicCreatorAvatar size={20} userId={userId} />
+      ) : (
+        <UserAvatar size={20} />
+      )}
+    </span>
+  );
+});
+
+ProjectOwnerAvatar.displayName = 'ProjectOwnerAvatar';
+
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation('project');
   const statusVisual = PROJECT_STATUS_VISUALS[project.status];
@@ -59,15 +82,11 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           <Text ellipsis weight={500}>
             {project.name}
           </Text>
-          {project.description ? (
-            <Text ellipsis fontSize={12} type={'secondary'}>
-              {project.description}
-            </Text>
-          ) : null}
         </Flexbox>
         <Text className={styles.identifier} fontSize={12}>
           {project.identifier}
         </Text>
+        <ProjectOwnerAvatar userId={project.userId} />
         <Text
           className={styles.updatedAt}
           fontSize={12}
