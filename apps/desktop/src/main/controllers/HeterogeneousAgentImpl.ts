@@ -273,6 +273,18 @@ interface GetSessionInfoParams {
   sessionId: string;
 }
 
+/**
+ * A runtime dispatcher decides whether it handles a prompt for its agent
+ * type. Returns `true` when handled (the caller returns early); `false` when
+ * the caller should fall through to the generic CLI spawn. Entries live in
+ * the `runtimeDispatchers` registry so long-lived runtimes (pi RPC, codex
+ * app-server, ACP sessions, Claude SDK) select themselves by agent type.
+ */
+type HeterogeneousRuntimeDispatcher = (
+  params: SendPromptParams,
+  session: AgentSession,
+) => Promise<boolean>;
+
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
@@ -399,6 +411,64 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+
+  /**
+   * Runtime selection registry — the heterogeneous-agent counterpart of the
+   * adapter registry. Each entry decides whether it handles a prompt for its
+   * agent type and returns `true` when it did (the caller then returns early
+   * instead of falling through to the generic CLI spawn). Long-lived runtimes
+   * (pi RPC, codex app-server, ACP sessions, Claude SDK) register here so a
+   * future agent adopting an RPC mode only adds one entry — no dispatch edit.
+   */
+  private readonly runtimeDispatchers: Partial<
+    Record<HeterogeneousCliAgentType, HeterogeneousRuntimeDispatcher>
+  > = {
+    'claude-code': async (params, session) => {
+      if (!(session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)) return false;
+      await this.sendPromptWithClaudeSdk(params, session);
+      return true;
+    },
+    'codex': async (params, session) => {
+      if (
+        session.codexAppServerFallback ||
+        !(session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+      ) {
+        return false;
+      }
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        // `true` = app-server handled the prompt; `false` = fall through to
+        // the generic `codex exec` spawn.
+        return this.sendPromptWithCodexAppServer(params, session);
+      }
+      if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      }
+      session.codexAppServerFallback = true;
+      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+        sessionId: session.sessionId,
+        unsupportedArgs,
+      });
+      return false;
+    },
+    'grok-build': async (params, session) => {
+      await this.sendPromptWithGrokAcp(params, session);
+      return true;
+    },
+    'trae': async (params, session) => {
+      await this.sendPromptWithTraeAcp(params, session);
+      return true;
+    },
+    // Pi runs exclusively over the RPC transport — there is no json fallback.
+    'pi': async (params, session) => {
+      await this.sendPromptWithPiRpc(params, session);
+      return true;
+    },
+  };
   /**
    * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
    * `submitIntervention` IPC can route an answer to the right pending MCP
@@ -1157,47 +1227,15 @@ export default class HeterogeneousAgentCtr {
       }
     }
 
-    if (
-      session.agentType === 'claude-code' &&
-      (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
-    ) {
-      return this.sendPromptWithClaudeSdk(params, session);
-    }
-
-    if (
-      session.agentType === 'codex' &&
-      !session.codexAppServerFallback &&
-      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
-    ) {
-      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
-        resume: !!session.agentSessionId,
-      });
-      if (unsupportedArgs.length === 0) {
-        if (await this.sendPromptWithCodexAppServer(params, session)) return;
-      } else if (session.agentSessionId) {
-        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
-        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
-        throw new Error(message);
-      } else {
-        session.codexAppServerFallback = true;
-        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-          sessionId: session.sessionId,
-          unsupportedArgs,
-        });
-      }
-    }
-
-    if (session.agentType === 'grok-build') {
-      return this.sendPromptWithGrokAcp(params, session);
-    }
-
-    if (session.agentType === 'trae') {
-      return this.sendPromptWithTraeAcp(params, session);
-    }
-
-    // Pi runs exclusively over the RPC transport — there is no json fallback.
-    if (session.agentType === 'pi') {
-      return this.sendPromptWithPiRpc(params, session);
+    // Long-lived runtimes (pi RPC, codex app-server, ACP sessions, Claude
+    // SDK) select themselves via the runtime registry. A dispatcher that
+    // returns `true` handled the prompt; `false` falls through to the generic
+    // CLI spawn below.
+    const runtimeDispatcher = this.runtimeDispatchers[
+      session.agentType as HeterogeneousCliAgentType
+    ];
+    if (runtimeDispatcher) {
+      if (await runtimeDispatcher(params, session)) return;
     }
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
