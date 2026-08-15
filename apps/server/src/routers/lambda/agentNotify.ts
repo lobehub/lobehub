@@ -141,6 +141,13 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const marker = (topic.metadata as any)?.runningOperation;
+    const hasChildOperations = (marker?.childOperations?.length ?? 0) > 0;
+    // A legacy sender cannot identify which child it belongs to. Never fall
+    // back to the supervisor marker: doing so would settle the wrong operation.
+    if (hasChildOperations && !input.operationId) {
+      log('notify: rejecting ambiguous legacy child callback for topic=%s', topicId);
+      return { messageId: undefined, operationId: undefined, topicId };
+    }
     const remoteOperationId = input.operationId ?? marker?.operationId;
     const activeOperation =
       remoteOperationId && marker
@@ -175,21 +182,8 @@ export const agentNotifyRouter = router({
       return { messageId: undefined, operationId: undefined, topicId };
     }
 
-    // Claim the matching operation before any asynchronous terminal side effects.
-    // This gives exactly one retried/concurrent terminal callback ownership of the
-    // lifecycle hooks and preserves the marker snapshot after it is removed.
-    const claimedOperation =
-      isTerminal && remoteOperationId
-        ? await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId)
-        : undefined;
-    if (isTerminal && remoteOperationId && !claimedOperation) {
-      log(
-        'notify: ignoring already-settled terminal callback for operationId=%s',
-        remoteOperationId,
-      );
-      return { messageId: undefined, operationId: undefined, topicId };
-    }
-    const terminalOperation = claimedOperation?.operation ?? activeOperation;
+    let claimedOperation: Awaited<ReturnType<typeof ctx.topicModel.takeRunningOperation>>;
+    const terminalOperation = activeOperation;
 
     /**
      * Publish a stream event for remote hetero agents (openclaw / hermes).
@@ -197,7 +191,28 @@ export const agentNotifyRouter = router({
      */
     const publishRemoteHeteroEvent = async (writtenMessageId?: string) => {
       if (!remoteOperationId) return;
+      let lifecycleCompleted = false;
+      let claimHeartbeat: ReturnType<typeof setInterval> | undefined;
       try {
+        claimedOperation =
+          isTerminal && remoteOperationId
+            ? await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId)
+            : undefined;
+        if (isTerminal && remoteOperationId && !claimedOperation) {
+          log(
+            'notify: ignoring already-settled terminal callback for operationId=%s',
+            remoteOperationId,
+          );
+          return;
+        }
+        if (claimedOperation) {
+          claimHeartbeat = setInterval(() => {
+            void ctx.topicModel
+              .refreshRunningOperationClaim(topicId, remoteOperationId, claimedOperation.claimToken)
+              .catch(() => {});
+          }, 60_000);
+        }
+        const claimedTerminalOperation = claimedOperation?.operation ?? terminalOperation;
         const stream = getStreamManager();
         if (isTerminal) {
           // Signal task completion — frontend gateway WS subscription closes.
@@ -222,7 +237,7 @@ export const agentNotifyRouter = router({
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
           // Use the terminal claim snapshot. Publishing the end event lets a
           // connected client clear the live marker before this continuation runs.
-          const serializedHooks = terminalOperation?.hooks as SerializedHook[] | undefined;
+          const serializedHooks = claimedTerminalOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
@@ -282,7 +297,7 @@ export const agentNotifyRouter = router({
               error: terminalError ?? undefined,
               goal,
               operationId: remoteOperationId,
-              orchestrationRole: terminalOperation?.orchestrationRole,
+              orchestrationRole: claimedTerminalOperation?.orchestrationRole,
               serializedHooks,
               topicId,
               userId: ctx.userId,
@@ -293,6 +308,15 @@ export const agentNotifyRouter = router({
             // write — keep that prior behavior on the error path.
             { skipErrorMessageWrite: true },
           );
+          const completed = await ctx.topicModel.completeRunningOperation(
+            topicId,
+            remoteOperationId,
+            claimedOperation!.claimToken,
+          );
+          if (!completed) {
+            throw new Error(`Lost terminal claim for operation ${remoteOperationId}`);
+          }
+          lifecycleCompleted = completed;
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -302,11 +326,19 @@ export const agentNotifyRouter = router({
           });
         }
       } catch (err) {
+        if (claimedOperation && !lifecycleCompleted) {
+          await ctx.topicModel
+            .releaseRunningOperationClaim(topicId, remoteOperationId, claimedOperation.claimToken)
+            .catch(() => {});
+        }
         log(
           'notify: failed to publish stream event for operationId=%s: %O',
           remoteOperationId,
           err,
         );
+        if (isTerminal) throw err;
+      } finally {
+        if (claimHeartbeat) clearInterval(claimHeartbeat);
       }
     };
 
@@ -340,11 +372,15 @@ export const agentNotifyRouter = router({
           // `lastAssistantContent` — bot completion callbacks and the task
           // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
           if (isTerminal && !content) {
-            void publishRemoteHeteroEvent(resolvedMessageId);
+            await publishRemoteHeteroEvent(resolvedMessageId);
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
           await ctx.messageModel.update(resolvedMessageId, { content });
-          void publishRemoteHeteroEvent(resolvedMessageId);
+          if (isTerminal) {
+            await publishRemoteHeteroEvent(resolvedMessageId);
+          } else {
+            void publishRemoteHeteroEvent(resolvedMessageId);
+          }
           if (shouldContinue) {
             const result = await ctx.aiAgentService.execAgent({
               agentId,
@@ -362,7 +398,7 @@ export const agentNotifyRouter = router({
         // Terminal signal (done or error) with no messageId and empty content →
         // just finalize the run, no DB write.
         if (isTerminal && !content) {
-          void publishRemoteHeteroEvent();
+          await publishRemoteHeteroEvent();
           return { messageId: undefined, operationId: undefined, topicId };
         }
 
@@ -374,7 +410,7 @@ export const agentNotifyRouter = router({
           topicId,
         });
 
-        void publishRemoteHeteroEvent(msg.id);
+        await publishRemoteHeteroEvent(msg.id);
 
         // Optionally trigger a follow-up agent turn.
         // Use resume=true + parentMessageId so execAgent skips creating an
