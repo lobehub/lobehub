@@ -635,6 +635,7 @@ describe('ElectronIpcClient', () => {
     it('should close the connection when the IPC response buffer is too large', async () => {
       let connectionCallback: Function | undefined;
       let dataCallback: Function | undefined;
+      let closeCallback: Function | undefined;
 
       vi.mocked(net.createConnection).mockImplementation((path, callback) => {
         connectionCallback = callback as Function;
@@ -645,6 +646,14 @@ describe('ElectronIpcClient', () => {
         if (event === 'data') {
           dataCallback = callback as Function;
         }
+        if (event === 'close') {
+          closeCallback = callback as Function;
+        }
+        return mockSocket;
+      });
+
+      mockSocket.destroy.mockImplementation(() => {
+        closeCallback?.();
         return mockSocket;
       });
 
@@ -661,6 +670,7 @@ describe('ElectronIpcClient', () => {
       }
 
       expect(mockSocket.destroy).toHaveBeenCalledTimes(1);
+      expect((client as any).connectionAttempts).toBe(1);
       await expect(requestPromise).rejects.toThrow('Connection to Electron IPC server lost');
     });
 

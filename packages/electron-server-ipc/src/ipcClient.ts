@@ -87,7 +87,6 @@ export class ElectronIpcClient {
           if (Buffer.byteLength(this.dataBuffer, 'utf8') > MAX_IPC_MESSAGE_BUFFER_BYTES) {
             console.error('IPC response buffer exceeded maximum size; closing connection');
             this.socket?.destroy();
-            this.handleDisconnect();
             return;
           }
 
