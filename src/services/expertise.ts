@@ -34,6 +34,9 @@ class ExpertiseService {
     title?: string;
   }) => lambdaClient.expertise.createDomain.mutate(params);
 
+  ingestHistory = async (agentId: string) =>
+    lambdaClient.expertise.ingestHistory.mutate({ agentId });
+
   dismissInsight = async (insightId: string, reason?: string) =>
     lambdaClient.expertise.dismissInsight.mutate({ insightId, reason });
 }

@@ -1,9 +1,15 @@
 'use client';
 
 import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { ChevronRightIcon, GraduationCapIcon, PlusIcon, SparklesIcon } from 'lucide-react';
+import {
+  ChevronRightIcon,
+  GraduationCapIcon,
+  HistoryIcon,
+  PlusIcon,
+  SparklesIcon,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -15,6 +21,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ExpertiseDomainItem } from '@/services/expertise';
+import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
 import { openCreateDomainModal } from './CreateDomainModal';
@@ -96,6 +103,7 @@ const SelfLearning = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { data, error, isLoading, mutate } = useExpertiseOverview(activeAgentId ?? undefined);
   const [hoverId, setHoverId] = useState<string>();
+  const [isImportingHistory, setIsImportingHistory] = useState(false);
   const shapes = useShapeLabels();
 
   const domains = useMemo(() => data?.domains ?? [], [data]);
@@ -105,6 +113,23 @@ const SelfLearning = memo(() => {
   const openDomain = (domainId: string) => {
     if (!activeAgentId) return;
     navigate(urlJoin('/agent', activeAgentId, 'self-learning', domainId));
+  };
+
+  const importHistory = async () => {
+    if (!activeAgentId || isImportingHistory) return;
+    setIsImportingHistory(true);
+    try {
+      const result = await expertiseService.ingestHistory(activeAgentId);
+      if (result.candidateCount === 0) {
+        toast.info(t('history.empty'));
+      } else {
+        toast.success(t('history.started', { count: result.candidateCount }));
+      }
+    } catch {
+      toast.error(t('history.failed'));
+    } finally {
+      setIsImportingHistory(false);
+    }
   };
 
   /**
@@ -153,14 +178,21 @@ const SelfLearning = memo(() => {
         styles={{ left: { paddingInlineStart: 24 } }}
         right={
           activeAgentId ? (
-            <Button
-              icon={PlusIcon}
-              onClick={() =>
-                openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() })
-              }
-            >
-              {t('create.entry')}
-            </Button>
+            <Flexbox horizontal gap={8}>
+              {domains.length > 0 && (
+                <Button icon={HistoryIcon} loading={isImportingHistory} onClick={importHistory}>
+                  {t('history.entry')}
+                </Button>
+              )}
+              <Button
+                icon={PlusIcon}
+                onClick={() =>
+                  openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() })
+                }
+              >
+                {t('create.entry')}
+              </Button>
+            </Flexbox>
           ) : null
         }
       />

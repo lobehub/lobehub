@@ -58,6 +58,12 @@ export default {
   'headline.none': 'None of them has flattened yet.',
   'headline.rising': '{{name}} is still climbing steeply.',
 
+  'history.empty': 'There are no existing conversations to import.',
+  'history.entry': 'Learn from history',
+  'history.failed': 'Historical learning could not be started. Try again.',
+  'history.started':
+    'Started learning from {{count}} existing conversations. New experience will appear here as it is distilled.',
+
   'insights.title': 'What it noticed across all these practices',
 
   'layers.blank': 'nothing yet',
