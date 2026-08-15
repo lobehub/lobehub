@@ -161,12 +161,10 @@ const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position:
       [analytics, billboardSlug, item.id, position],
     );
 
-    const handleActionClick = useCallback(() => {
+    const handleActionClick = useCallback(async () => {
       if (!action) return;
       trackCtaClick({ action });
-      // handlers may be async (e.g. resetOnboarding persists before navigating);
-      // a failed action must never surface as an unhandled rejection on the card
-      void Promise.resolve(runBillboardAction(action)).catch(() => {});
+      await Promise.resolve(runBillboardAction(action)).catch(() => {});
     }, [action, trackCtaClick]);
 
     const handleLinkClick = useCallback(() => {

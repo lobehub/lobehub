@@ -987,6 +987,20 @@
       "when": 1786545606298,
       "tag": "0140_productive_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786766455568,
+      "tag": "0141_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786791246437,
+      "tag": "0142_expertise_domain_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

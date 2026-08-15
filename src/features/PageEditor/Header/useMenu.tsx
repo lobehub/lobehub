@@ -38,7 +38,14 @@ import { usePageEditorStore, useStoreApi } from '../store';
 /**
  * Action menu for the page editor.
  */
-export const useMenu = (): { menuItems: any[] } => {
+interface UseMenuOptions {
+  onCopyLink?: () => void;
+  onDeleted?: () => void;
+  onOpenHistory?: () => void;
+}
+
+export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
+  const { onCopyLink, onDeleted, onOpenHistory } = options;
   const { i18n, t } = useTranslation(['file', 'common', 'chat', 'setting']);
 
   const storeApi = useStoreApi();
@@ -243,6 +250,10 @@ export const useMenu = (): { menuItems: any[] } => {
         key: 'copy-link',
         label: t('pageEditor.menu.copyLink'),
         onClick: () => {
+          if (onCopyLink) {
+            onCopyLink();
+            return;
+          }
           const state = storeApi.getState();
           state.handleCopyLink(t as any);
         },
@@ -253,7 +264,11 @@ export const useMenu = (): { menuItems: any[] } => {
         label: t('pageEditor.history.title'),
         onClick: () => {
           setRightPanelMode('history');
-          togglePageAgentPanel(true);
+          if (onOpenHistory) {
+            onOpenHistory();
+          } else {
+            togglePageAgentPanel(true);
+          }
         },
       },
       {
@@ -265,7 +280,7 @@ export const useMenu = (): { menuItems: any[] } => {
         onClick: async () => {
           if (!canEditPage) return;
           const state = storeApi.getState();
-          await state.handleDelete(t as any, state.onDelete);
+          await state.handleDelete(t as any, onDeleted ?? state.onDelete);
         },
       },
       {
@@ -343,6 +358,9 @@ export const useMenu = (): { menuItems: any[] } => {
     handleExportMarkdown,
     memberPermissionMenuItem,
     transferMenuItems,
+    onCopyLink,
+    onDeleted,
+    onOpenHistory,
   ]);
 
   return { menuItems };

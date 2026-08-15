@@ -5,6 +5,7 @@ import {
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type {
   VerifyCheckItem,
   VerifyCheckResultMetadata,
@@ -489,7 +490,22 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.planGenerator.generateCriteria(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          throw new TRPCError({
+            cause: error,
+            code: 'UNAUTHORIZED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+        }
+
+        throw error;
+      }
+    }),
 
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure

@@ -16,6 +16,7 @@ describe('shouldDeferOnboardingRedirect', () => {
   it('does not defer on personal app routes', () => {
     expect(shouldDeferOnboardingRedirect('/')).toBe(false);
     expect(shouldDeferOnboardingRedirect('/agent')).toBe(false);
+    expect(shouldDeferOnboardingRedirect('/projects')).toBe(false);
     expect(shouldDeferOnboardingRedirect('/settings/profile')).toBe(false);
   });
 });
