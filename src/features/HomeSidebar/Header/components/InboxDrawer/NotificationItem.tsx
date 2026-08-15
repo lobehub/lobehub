@@ -133,14 +133,14 @@ const NotificationItem = memo<NotificationItemProps>(
               <Text ellipsis={{ rows: 3 }} title={preview} wordBreak="break-word">
                 {preview}
               </Text>
-              {context && (
-                <Text ellipsis fontSize={12} title={context} type="secondary">
-                  {context}
-                </Text>
-              )}
               <Flexbox horizontal align="center" gap={4}>
+                {context && (
+                  <Text ellipsis fontSize={12} title={context} type="secondary">
+                    {context}
+                  </Text>
+                )}
                 <Icon color={cssVar.colorTextDescription} icon={TypeIcon} size={12} />
-                <Text fontSize={12} type="secondary">
+                <Text fontSize={12} style={{ flexShrink: 0 }} type="secondary">
                   {formatNotificationRelativeTime(createdAt, dateLocale)}
                 </Text>
               </Flexbox>
