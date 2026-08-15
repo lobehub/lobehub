@@ -6,6 +6,7 @@
  * extension UI sub-protocol, and graceful EOF-based shutdown.
  */
 export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
+export { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';
 export {
   createPiRpcAgentHandle,
   toPiRpcPrompt,
