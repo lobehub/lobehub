@@ -1,0 +1,198 @@
+'use client';
+
+import type { ProjectStatus } from '@lobechat/types';
+import { Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import dayjs from 'dayjs';
+import {
+  ArchiveIcon,
+  CheckCircle2Icon,
+  CircleDashedIcon,
+  CirclePauseIcon,
+  CirclePlayIcon,
+  CircleXIcon,
+  PlusIcon,
+  RotateCwIcon,
+  SearchXIcon,
+  SquareKanbanIcon,
+} from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AsyncError from '@/components/AsyncError';
+import NavHeader from '@/features/NavHeader';
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import WideScreenContainer from '@/features/WideScreenContainer';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
+import type { ProjectListItem } from '@/store/project/store';
+
+const STATUS_ORDER: ProjectStatus[] = [
+  'active',
+  'reviewing',
+  'backlog',
+  'paused',
+  'completed',
+  'canceled',
+  'archived',
+];
+
+const STATUS_ICON: Record<ProjectStatus, typeof CircleDashedIcon> = {
+  active: CirclePlayIcon,
+  archived: ArchiveIcon,
+  backlog: CircleDashedIcon,
+  canceled: CircleXIcon,
+  completed: CheckCircle2Icon,
+  paused: CirclePauseIcon,
+  reviewing: RotateCwIcon,
+};
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  identifier: css`
+    flex: none;
+    min-width: 72px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  row: css`
+    padding-block: 9px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+    color: inherit;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  updatedAt: css`
+    flex: none;
+
+    min-width: 88px;
+
+    color: ${cssVar.colorTextQuaternary};
+    text-align: end;
+    white-space: nowrap;
+  `,
+}));
+
+const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
+  const { t } = useTranslation('project');
+
+  return (
+    <WorkspaceLink to={`/project/${project.id}`}>
+      <Flexbox horizontal align={'center'} className={styles.row} gap={12}>
+        <Icon icon={project.avatar || SquareKanbanIcon} size={20} />
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          <Text ellipsis weight={500}>
+            {project.name}
+          </Text>
+          {project.description ? (
+            <Text ellipsis fontSize={12} type={'secondary'}>
+              {project.description}
+            </Text>
+          ) : null}
+        </Flexbox>
+        <Text className={styles.identifier} fontSize={12}>
+          {project.identifier}
+        </Text>
+        <Text
+          className={styles.updatedAt}
+          fontSize={12}
+          title={dayjs(project.updatedAt).format('YYYY-MM-DD HH:mm')}
+        >
+          {dayjs(project.updatedAt).fromNow()}
+        </Text>
+        <Tooltip title={t(`acceptance.status.${project.status}`)}>
+          <Icon color={cssVar.colorTextSecondary} icon={STATUS_ICON[project.status]} size={16} />
+        </Tooltip>
+      </Flexbox>
+    </WorkspaceLink>
+  );
+});
+
+ProjectRow.displayName = 'ProjectRow';
+
+const ProjectListPage = memo(() => {
+  const { t } = useTranslation('project');
+  const [keyword, setKeyword] = useState('');
+  const projects = useCurrentProjectList();
+  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(true);
+
+  const groups = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLocaleLowerCase();
+    const filtered = normalizedKeyword
+      ? projects.filter((project) =>
+          [project.name, project.identifier, project.description]
+            .filter(Boolean)
+            .some((value) => value!.toLocaleLowerCase().includes(normalizedKeyword)),
+        )
+      : projects;
+
+    return STATUS_ORDER.map((status) => ({
+      items: filtered.filter((project) => project.status === status),
+      status,
+    })).filter((group) => group.items.length > 0);
+  }, [keyword, projects]);
+
+  return (
+    <Flexbox flex={1} height={'100%'}>
+      <NavHeader
+        left={
+          <Text style={{ paddingInlineStart: 4 }} weight={500}>
+            {t('list.title')}
+          </Text>
+        }
+      />
+      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <SearchBar
+            allowClear
+            placeholder={t('list.searchPlaceholder')}
+            style={{ maxWidth: 280 }}
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
+          <Button icon={PlusIcon} onClick={openCreateProjectModal}>
+            {t('create.action')}
+          </Button>
+        </Flexbox>
+        {error ? (
+          <AsyncError error={error} onRetry={() => mutate()} />
+        ) : isLoading && projects.length === 0 ? (
+          <SkeletonList rows={8} />
+        ) : groups.length === 0 ? (
+          <Center flex={1} padding={48}>
+            <Empty
+              description={keyword.trim() ? t('list.searchEmpty') : t('list.emptyDescription')}
+              icon={keyword.trim() ? SearchXIcon : SquareKanbanIcon}
+            />
+          </Center>
+        ) : (
+          <Flexbox gap={20}>
+            {groups.map(({ items, status }) => (
+              <Flexbox gap={4} key={status}>
+                <Flexbox horizontal align={'center'} gap={8} paddingInline={12}>
+                  <Icon color={cssVar.colorTextSecondary} icon={STATUS_ICON[status]} size={15} />
+                  <Text fontSize={13} weight={500}>
+                    {t(`acceptance.status.${status}`)}
+                  </Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {items.length}
+                  </Text>
+                </Flexbox>
+                {items.map((project) => (
+                  <ProjectRow key={project.id} project={project} />
+                ))}
+              </Flexbox>
+            ))}
+          </Flexbox>
+        )}
+      </WideScreenContainer>
+    </Flexbox>
+  );
+});
+
+ProjectListPage.displayName = 'ProjectListPage';
+
+export default ProjectListPage;

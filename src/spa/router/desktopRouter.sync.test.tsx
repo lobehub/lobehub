@@ -145,6 +145,13 @@ describe('desktop router shared definition', () => {
     },
   );
 
+  it.each(mainAreaVariants)('%s exposes the projects view-all route', (_, factory) => {
+    const matches = matchRoutes(createMainAreaRoutes(factory), '/projects');
+
+    expect(matches?.at(-1)?.route.index).toBe(true);
+    expect(matches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+  });
+
   it.each(mainAreaVariants)(
     '%s personal memory settings are not shadowed by workspace memory routes',
     (_, factory) => {
