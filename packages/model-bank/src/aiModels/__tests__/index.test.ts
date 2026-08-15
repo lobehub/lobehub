@@ -254,13 +254,13 @@ describe('Google Gemini 3.1 Flash Image models', () => {
         expect.objectContaining({
           enabled: false,
           id: 'gemini-3.1-flash-image-preview',
-          releasedAt: '2026-02-26',
+          releasedAt: '2026-05-28',
           type: 'chat',
         }),
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image-preview:image',
-          releasedAt: '2026-02-26',
+          releasedAt: '2026-05-28',
           type: 'image',
         }),
       ]),
@@ -277,7 +277,7 @@ describe('Google Gemini 3.1 Flash Image models', () => {
 });
 
 describe('latest provider model cards', () => {
-  it('registers stable Gemini Pro image IDs without removing preview compatibility cards', () => {
+  it('registers stable Gemini Pro image IDs', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
       (model) => model.providerId === ModelProvider.Google,
     );
@@ -286,8 +286,6 @@ describe('latest provider model cards', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'gemini-3-pro-image', type: 'chat' }),
         expect.objectContaining({ id: 'gemini-3-pro-image:image', type: 'image' }),
-        expect.objectContaining({ id: 'gemini-3-pro-image-preview', type: 'chat' }),
-        expect.objectContaining({ id: 'gemini-3-pro-image-preview:image', type: 'image' }),
       ]),
     );
   });
