@@ -3,7 +3,11 @@ import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isHeterogeneousVerifyProvider, resolveVerifyModelConfig } from '../modelConfig';
+import {
+  isHeterogeneousVerifyProvider,
+  resolveVerifyModelConfig,
+  REVIEW_PREDICT_MODEL_CONFIG,
+} from '../modelConfig';
 
 const { getAgentModelConfigMock, getBuiltinAgentMock } = vi.hoisted(() => ({
   getAgentModelConfigMock: vi.fn(),
@@ -120,5 +124,27 @@ describe('resolveVerifyModelConfig', () => {
         parentProvider: null,
       }),
     ).resolves.toEqual({ model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
+  });
+});
+
+describe('REVIEW_PREDICT_MODEL_CONFIG', () => {
+  /**
+   * Regression: in production the predictor once inherited the verifier's text
+   * model (deepseek-v4-pro). The channel stripped the screenshots, the model
+   * "accepted on missing evidence" for every check, and no proposal ever
+   * surfaced. The pinned model must be able to actually see the frames.
+   */
+  it('pins a model that model-bank says can read images', async () => {
+    const { google } = await import('model-bank');
+
+    const card = google.find(
+      (model) => model.id === REVIEW_PREDICT_MODEL_CONFIG.model && model.type === 'chat',
+    );
+    expect(REVIEW_PREDICT_MODEL_CONFIG.provider).toBe('google');
+    expect(
+      card,
+      `${REVIEW_PREDICT_MODEL_CONFIG.model} is not in model-bank's google chat list`,
+    ).toBeDefined();
+    expect(card!.type === 'chat' && card!.abilities?.vision).toBe(true);
   });
 });
