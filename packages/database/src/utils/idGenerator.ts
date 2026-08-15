@@ -25,6 +25,7 @@ const prefixes = {
   generationBatches: 'gb',
   generationTopics: 'gt',
   generations: 'gen',
+  goals: 'goal',
   knowledgeBases: 'kb',
   memory: 'mem',
   messageGroups: 'mg',
