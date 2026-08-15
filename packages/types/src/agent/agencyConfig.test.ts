@@ -10,9 +10,11 @@ import {
   resolveAgentAgencyConfig,
 } from './agencyConfig';
 import {
+  AMP_AGENT_MODES,
   codexModelSupportsFastSpeed,
   getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  resolveAmpAgentMode,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
@@ -106,7 +108,33 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
-  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+  it('resolves Amp mode from native args before the structured field', () => {
+    expect(resolveAmpAgentMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveAmpAgentMode({ mode: 'high' })).toBe('high');
+    expect(resolveAmpAgentMode({ args: ['--mode=ultra'], mode: 'low' })).toBe('ultra');
+  });
+
+  it.each(AMP_AGENT_MODES)(
+    'forwards structured Amp mode %s through direct and legacy-compatible device paths',
+    (mode) => {
+      const provider: HeterogeneousProviderConfig = { mode, type: 'amp' };
+
+      expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', mode]);
+      expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', `--agent-arg=${mode}`]);
+    },
+  );
+
+  it('does not override Amp mode when Default is selected', () => {
+    const provider: HeterogeneousProviderConfig = {
+      mode: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      type: 'amp',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toBeUndefined();
+    expect(buildHeteroExecArgs(provider)).toBeUndefined();
+  });
+
+  it('keeps raw Amp args compatible with direct spawns and lh hetero exec', () => {
     const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
 
     expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);

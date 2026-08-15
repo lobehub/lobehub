@@ -17,6 +17,13 @@ export const HETEROGENEOUS_AGENT_DEFAULT_SELECTION = 'default' as const;
 
 export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
+/** Amp agent modes, mirrored 1:1 with the CLI's `--mode <mode>` flag. */
+export const AMP_AGENT_MODES = ['low', 'medium', 'high', 'ultra'] as const;
+
+export type AmpAgentMode = (typeof AMP_AGENT_MODES)[number];
+
+export type HeterogeneousAgentMode = AmpAgentMode | HeterogeneousAgentDefaultSelection;
+
 /**
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--effort <level>` flag.
@@ -98,6 +105,9 @@ const CODEX_FAST_SPEED_MODELS = [
  */
 const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
 
+export const isAmpAgentMode = (value: string | undefined): value is AmpAgentMode =>
+  !!value && AMP_AGENT_MODES.includes(value as AmpAgentMode);
+
 export const isClaudeCodeReasoningEffort = (
   value: string | undefined,
 ): value is ClaudeCodeReasoningEffort =>
@@ -144,9 +154,17 @@ export const codexModelSupportsFastSpeed = (model: string): boolean =>
 export interface HeteroSelectionSource {
   args?: string[];
   effort?: string | null;
+  mode?: string | null;
   model?: string | null;
   speed?: string | null;
 }
+
+export const resolveAmpAgentMode = (
+  source: HeteroSelectionSource | null | undefined,
+): HeterogeneousAgentMode => {
+  const mode = (getCliFlagValue(source?.args, '--mode') ?? source?.mode)?.trim();
+  return isAmpAgentMode(mode) ? mode : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
 
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 
@@ -257,8 +275,15 @@ export interface HeteroSelectorSpeedCapability {
   supported: (model: string) => boolean;
 }
 
+export interface HeteroSelectorModeCapability {
+  encodings: readonly HeteroCliEncoding[];
+  levels: readonly AmpAgentMode[];
+  resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousAgentMode;
+}
+
 export interface HeteroSelectorCapability {
   effort?: HeteroSelectorEffortCapability;
+  mode?: HeteroSelectorModeCapability;
   model?: HeteroSelectorModelCapability;
   speed?: HeteroSelectorSpeedCapability;
 }
@@ -275,7 +300,13 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
-  'amp': {},
+  'amp': {
+    mode: {
+      encodings: [{ flags: ['--mode'], kind: 'flag' }],
+      levels: AMP_AGENT_MODES,
+      resolve: resolveAmpAgentMode,
+    },
+  },
   'claude-code': {
     effort: {
       encodings: [{ flags: ['--effort'], kind: 'flag' }],
@@ -356,10 +387,11 @@ export const getHeteroSelectorCapability = (
   HETERO_SELECTOR_CAPABILITIES[type as LocalHeterogeneousAgentType];
 
 export const isHeteroSelectorAvailable = (type: string | undefined): boolean =>
-  !!getHeteroSelectorCapability(type)?.model;
+  Object.keys(getHeteroSelectorCapability(type) ?? {}).length > 0;
 
 export interface HeteroSelection {
   effort?: HeterogeneousReasoningEffort;
+  mode?: HeterogeneousAgentMode;
   model?: string;
   speed?: HeterogeneousSpeedMode;
 }
@@ -416,6 +448,11 @@ export const applyHeteroSelection = (
 
   if ('effort' in selection && capability.effort) {
     args = clearEncodings(args, capability.effort.encodings);
+    cleared = true;
+  }
+
+  if ('mode' in selection && capability.mode) {
+    args = clearEncodings(args, capability.mode.encodings);
     cleared = true;
   }
 

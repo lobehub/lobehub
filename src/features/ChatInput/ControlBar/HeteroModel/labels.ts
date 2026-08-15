@@ -1,4 +1,4 @@
-import type { HeterogeneousReasoningEffort } from '@lobechat/types';
+import type { HeterogeneousAgentMode, HeterogeneousReasoningEffort } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
 
 import { MODEL_LABELS } from './modelOptions';
@@ -22,6 +22,14 @@ const CODEX_EFFORT_LABEL_KEYS = {
   low: 'heteroAgent.modelSelector.reasoning.light',
 } as const satisfies Record<HeterogeneousReasoningEffort, string>;
 
+const MODE_LABEL_KEYS = {
+  [HETEROGENEOUS_AGENT_DEFAULT_SELECTION]: 'heteroAgent.modelSelector.default',
+  high: 'heteroAgent.modelSelector.mode.high',
+  low: 'heteroAgent.modelSelector.mode.low',
+  medium: 'heteroAgent.modelSelector.mode.medium',
+  ultra: 'heteroAgent.modelSelector.mode.ultra',
+} as const satisfies Record<HeterogeneousAgentMode, string>;
+
 type EffortLabelKey =
   | (typeof CODEX_EFFORT_LABEL_KEYS)[HeterogeneousReasoningEffort]
   | (typeof EFFORT_LABEL_KEYS)[HeterogeneousReasoningEffort];
@@ -30,6 +38,8 @@ export const getEffortLabelKeys = (
   type: string | undefined,
 ): Record<HeterogeneousReasoningEffort, EffortLabelKey> =>
   type === 'codex' ? CODEX_EFFORT_LABEL_KEYS : EFFORT_LABEL_KEYS;
+
+export const getModeLabelKey = (mode: HeterogeneousAgentMode) => MODE_LABEL_KEYS[mode];
 
 export const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;

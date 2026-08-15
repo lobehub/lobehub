@@ -141,6 +141,22 @@ describe('BriefCardActions', () => {
     expect(screen.getByText('Approve')).toBeInTheDocument();
   });
 
+  it('adds an ignore action to a link-only decision so it can leave Needs you', async () => {
+    mockResolveBrief.mockResolvedValueOnce(undefined);
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'review', label: 'Review delivery', type: 'link', url: '/acceptance/1' }]}
+        briefId="brief-goal"
+        briefType="decision"
+      />,
+    );
+
+    expect(screen.getByText('Review delivery')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('brief.action.ignore'));
+
+    await waitFor(() => expect(mockResolveBrief).toHaveBeenCalledWith('brief-goal', 'ignore'));
+  });
+
   it('should render comment action button', () => {
     const { container } = renderWithRouter(
       <BriefCardActions

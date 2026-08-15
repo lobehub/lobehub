@@ -3,7 +3,7 @@
  * the local-system system role, so the model only ever sees instructions for
  * the shell `runCommand` actually spawns. The previous prompt always carried
  * the PowerShell 5.1 guidance, which anchored models into emitting PowerShell
- * commands even when the user had selected Git Bash (LOBE-12692).
+ * commands even when the user had selected Git Bash.
  *
  * Matching is by the human-readable shell names produced by `getShellInfo()`
  * in `@lobechat/local-file-shell` ("Git Bash", "PowerShell 7+ (pwsh)",

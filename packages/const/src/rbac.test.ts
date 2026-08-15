@@ -64,7 +64,7 @@ describe('workspace built-in roles', () => {
   });
 });
 
-describe('personal default permissions (LOBE-12892)', () => {
+describe('personal default permissions', () => {
   it('grants only :owner codes plus the shared-registry :all resources', () => {
     for (const code of PERSONAL_DEFAULT_PERMISSIONS) {
       const [resource, , scope] = [code.split(':')[0], code.split(':')[1], code.split(':')[2]];

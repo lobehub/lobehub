@@ -449,6 +449,20 @@ describe('hetero exec command', () => {
     });
   });
 
+  it('translates the Amp mode selector into its native --mode flag', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'amp', '--prompt', 'do thing', '--mode', 'ultra']);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        command: 'amp',
+        extraArgs: ['--mode', 'ultra'],
+      }),
+    );
+  });
+
   it('runs AMP and forwards only native agent args', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

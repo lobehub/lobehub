@@ -12,7 +12,7 @@ describe('systemRole templates', () => {
    * `.desktop` variant is a client-only vite module swap. Keep the environment
    * facts in sync: a placeholder present only in the desktop variant means
    * gateway prompts silently lose information the local prompt has (this is
-   * how gateway runs ended up without the known-locations list, LOBE-12692).
+   * how gateway runs ended up without the known-locations list).
    */
   it('generic template carries every placeholder the desktop variant has', () => {
     const generic = extractPlaceholders(genericPrompt);

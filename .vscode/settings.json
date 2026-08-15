@@ -20,6 +20,18 @@
     // support mdx
     "mdx"
   ],
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.next/**": true,
+    "**/coverage/**": true,
+    "**/dist/**": true,
+    "**/logs/**": true,
+    "**/node_modules/*/**": true,
+    "**/public/_spa-auth/**": true,
+    "**/public/_spa-workbench/**": true,
+    "**/public/_spa/**": true
+  },
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "npm.packageManager": "pnpm",
   "search.exclude": {

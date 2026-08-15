@@ -1,14 +1,16 @@
 'use client';
 
 import { ActionIcon, Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { DropdownMenu, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { XIcon } from 'lucide-react';
+import { MoreHorizontal, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import ShareButton from '@/business/client/features/PageShare/ShareButton';
+import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
+import { useMenu } from '@/features/PageEditor/Header/useMenu';
 import { usePageAgentPanelControl } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { usePageEditorStore } from '@/features/PageEditor/store';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
@@ -24,6 +26,7 @@ const DocumentModalHeader = memo(() => {
   const [documentId, emoji, title] = usePageEditorStore((s) => [s.documentId, s.emoji, s.title]);
   const isDocumentLoading = useDocumentStore(editorSelectors.isDocumentLoading(documentId));
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
+  const { menuItems } = useMenu();
 
   return (
     <Flexbox
@@ -54,6 +57,15 @@ const DocumentModalHeader = memo(() => {
         )}
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
+        {documentId && <ShareButton documentId={documentId} />}
+        <DropdownMenu
+          iconSpaceMode={'group'}
+          items={menuItems}
+          placement={'bottomRight'}
+          popupProps={{ style: { minWidth: 200 } }}
+        >
+          <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+        </DropdownMenu>
         <ToggleRightPanelButton
           expand={showPageAgentPanel}
           showActive={false}

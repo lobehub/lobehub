@@ -48,21 +48,25 @@ import {
   buildAgentInput,
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
   buildGrokAcpArgs,
   buildGrokAcpPrompt,
   buildTraeAcpArgs,
   buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
-  CodexAppServerSession,
+  CodexAppServerClient,
+  CodexThreadSession,
   createFileStoreImageUploader,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
+  isCodexAppServerCompatibilityError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -294,7 +298,7 @@ export interface SessionInfo {
 interface AgentSession {
   agentSessionId?: string;
   agentType: HeterogeneousCliAgentType;
-  appServerSession?: CodexAppServerSession;
+  appServerSession?: CodexThreadSession;
   args: string[];
   /**
    * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
@@ -304,6 +308,7 @@ interface AgentSession {
    * intentional, not agent failures.
    */
   cancelledByUs?: boolean;
+  codexAppServerFallback?: boolean;
   command: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -406,6 +411,8 @@ export default class HeterogeneousAgentCtr {
   /** Lazy single MCP server, started on first claude-code prompt. */
   private builtinMcpServer?: LobeBuiltinMcpServer;
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
+  private codexAppServerClient?: CodexAppServerClient;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
@@ -1155,18 +1162,25 @@ export default class HeterogeneousAgentCtr {
 
     if (
       session.agentType === 'codex' &&
+      !session.codexAppServerFallback &&
       (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
     ) {
       const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
         resume: !!session.agentSessionId,
       });
       if (unsupportedArgs.length === 0) {
-        return this.sendPromptWithCodexAppServer(params, session);
+        if (await this.sendPromptWithCodexAppServer(params, session)) return;
+      } else if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      } else {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+          sessionId: session.sessionId,
+          unsupportedArgs,
+        });
       }
-      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-        sessionId: session.sessionId,
-        unsupportedArgs,
-      });
     }
 
     if (session.agentType === 'grok-build') {
@@ -1416,7 +1430,7 @@ export default class HeterogeneousAgentCtr {
   private async sendPromptWithCodexAppServer(
     params: SendPromptParams,
     session: AgentSession,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const cwd = session.cwd || electronApp.getPath('desktop');
     const spawnEnv = this.buildSessionSpawnEnv(session);
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
@@ -1456,39 +1470,69 @@ export default class HeterogeneousAgentCtr {
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
 
-    const appServerSession = new CodexAppServerSession({
-      args: session.args,
+    const clientOptions = {
+      args: appServerArgs.slice(0, -1),
       clientVersion: electronApp.getVersion(),
       commandPath,
       cwd,
       env: spawnEnv,
-      initialCumulativeUsage,
-      initialModel: session.model,
-      input,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', {
-            event,
-            sessionId: session.sessionId,
-          });
-        }
-      },
-      onModel: (model) => {
-        session.model = model;
-        session.modelSource = 'codex-app-server';
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => {
-        this.broadcast('heteroAgentRuntimeStatus', status);
-      },
-      onSessionId: (agentSessionId) => {
-        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
-      operationId: params.operationId,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
+    };
+    const existingClient = this.codexAppServerClient;
+    if (existingClient && !existingClient.canReuseFor(clientOptions)) {
+      if (!existingClient.hasConsumers) {
+        existingClient.close();
+        if (this.codexAppServerClient === existingClient) this.codexAppServerClient = undefined;
+      } else {
+        const message =
+          'The running Codex app-server uses a different binary, global configuration, or environment';
+        logger.error('Cannot reuse the native Codex app-server client:', {
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'process-error.json', {
+          message,
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentSessionError', {
+          error: message,
+          sessionId: session.sessionId,
+        });
+        throw new Error(message);
+      }
+    }
+
+    const client =
+      this.codexAppServerClient ??
+      (this.codexAppServerClient = new CodexAppServerClient(clientOptions));
+    const appServerSession =
+      session.appServerSession ??
+      new CodexThreadSession({
+        client,
+        initialCumulativeUsage,
+        initialModel: session.model,
+        initialThreadId: session.agentSessionId,
+        threadName: truncateTitle(params.prompt),
+        onEvents: async (events) => {
+          for (const event of events) {
+            this.broadcast('heteroAgentEvent', {
+              event,
+              sessionId: session.sessionId,
+            });
+          }
+        },
+        onModel: (model) => {
+          session.model = model;
+          session.modelSource = 'codex-app-server';
+        },
+        onRuntimeStatus: (status) => {
+          this.broadcast('heteroAgentRuntimeStatus', status);
+        },
+        onSessionId: (agentSessionId) => {
+          if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+        },
+        sessionId: session.sessionId,
+        threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
+      });
     session.appServerSession = appServerSession;
 
     logger.info('Starting Codex app-server session:', {
@@ -1498,15 +1542,55 @@ export default class HeterogeneousAgentCtr {
     });
 
     try {
-      await appServerSession.run();
+      await appServerSession.run({
+        input,
+        onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+        operationId: params.operationId,
+      });
       void this.writeCliTraceJson(traceSession, 'exit.json', {
         finishedAt: new Date().toISOString(),
         transport: 'codex-app-server',
       });
       await this.flushCliTrace(traceSession);
       this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+      return true;
     } catch (error) {
+      if (appServerSession.canFallbackToExec && isCodexAppServerCompatibilityError(error)) {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because native app-server is unavailable:', {
+          message: this.getErrorMessage(error),
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'fallback.json', {
+          message: this.getErrorMessage(error),
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentEvent', {
+          event: {
+            data: {
+              message:
+                'Codex app-server is unavailable or incompatible. Upgrade Codex to use the Labs transport; continuing with codex exec.',
+            },
+            operationId: params.operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'stream_retry',
+          } satisfies AgentStreamEvent,
+          sessionId: session.sessionId,
+        });
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+        if (!client.hasConsumers) {
+          client.close();
+          if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+        }
+        return false;
+      }
+
       logger.error('Codex app-server session error:', error);
+      appServerSession.close();
+      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
       void this.writeCliTraceJson(traceSession, 'process-error.json', {
         message: error instanceof Error ? error.message : String(error),
         name: error instanceof Error ? error.name : 'Error',
@@ -1516,7 +1600,7 @@ export default class HeterogeneousAgentCtr {
 
       if (session.cancelledByUs) {
         this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
+        return true;
       }
 
       const sessionError = this.getSessionErrorPayload(error, session);
@@ -1527,8 +1611,6 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
-    } finally {
-      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
     }
   }
 
@@ -2160,11 +2242,13 @@ export default class HeterogeneousAgentCtr {
       return;
     }
     if (session.appServerSession) {
+      const appServerSession = session.appServerSession;
       try {
-        await session.appServerSession.interrupt();
+        await appServerSession.interrupt();
       } catch (error) {
         logger.warn('Codex app-server interrupt failed; closing session:', error);
-        session.appServerSession.close();
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
       }
       return;
     }
@@ -2203,6 +2287,11 @@ export default class HeterogeneousAgentCtr {
 
     if (session.appServerSession) {
       session.cancelledByUs = true;
+      try {
+        await session.appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed while stopping the session:', error);
+      }
       session.appServerSession.close();
     }
 
@@ -2304,6 +2393,8 @@ export default class HeterogeneousAgentCtr {
           this.killProcessTree(session.process, 'SIGTERM');
         }
       }
+      this.codexAppServerClient?.close();
+      this.codexAppServerClient = undefined;
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to

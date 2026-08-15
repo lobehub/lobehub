@@ -279,6 +279,30 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
 
+  it('should pin the runtime type — not the agent chat model — on a server-created topic', async () => {
+    // regression: the topic-scoped model snapshot pinned the agent's chat
+    // model/provider, so a Gateway-created hetero topic came back from the
+    // server tagged with the default chat provider instead of the CLI runtime.
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: undefined, provider: 'claude-code' }),
+      undefined,
+    );
+  });
+
+  it('should pin the runtime type of a remote platform agent on a server-created topic', async () => {
+    heteroAgentConfig.agencyConfig = { heterogeneousProvider: { type: 'openclaw' } } as any;
+    heteroAgentConfig.provider = 'lobehub';
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: undefined, provider: 'openclaw' }),
+      undefined,
+    );
+  });
+
   it('should leave files undefined when no fileIds are provided', async () => {
     await service.execAgent({
       agentId: 'agent-1',
@@ -299,6 +323,33 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     const userCall = findUserMessageCreate();
     expect(userCall![0].files).toBeUndefined();
+  });
+
+  it('should pass the resolved Amp mode to device dispatch', async () => {
+    heteroAgentConfig.model = 'amp';
+    heteroAgentConfig.provider = 'amp';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        mode: 'high',
+        type: 'amp',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use Amp high mode',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        args: ['--agent-arg=--mode', '--agent-arg=high'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
   it('should pass resolved Claude Code model and effort args to sandbox dispatch', async () => {
