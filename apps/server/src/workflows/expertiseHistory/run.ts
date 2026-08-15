@@ -4,6 +4,7 @@ import { getServerDB } from '@/database/server';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { runStep } from '@/server/workflows/step';
 
+import { ExpertiseHistoryWorkflow } from '.';
 import type { ExpertiseHistoryWorkflowPayload } from './types';
 
 export const runExpertiseHistoryWorkflow = async (
@@ -16,21 +17,37 @@ export const runExpertiseHistoryWorkflow = async (
       db,
       payload.userId,
       payload.workspaceId,
-    ).listHistoricalTopics(payload.agentId);
+    ).listHistoricalTopics(payload.agentId, {
+      cursor: payload.cursor
+        ? {
+            lastActivityAt: new Date(payload.cursor.lastActivityAt),
+            topicId: payload.cursor.topicId,
+          }
+        : undefined,
+      limit: 50,
+    });
   });
 
-  let ingested = 0;
   for (const topic of topics) {
-    const result = await runStep(context, `expertise-history:topic:${topic.topicId}`, async () => {
-      const db = await getServerDB();
-      return new ExpertiseIngestionService(
-        db,
-        payload.userId,
-        payload.workspaceId,
-      ).ingestHistoricalTopic(payload.agentId, topic.topicId);
-    });
-    ingested += result.ingested;
+    await runStep(context, `expertise-history:schedule:${topic.topicId}`, () =>
+      ExpertiseHistoryWorkflow.triggerTopic({
+        agentId: payload.agentId,
+        topicId: topic.topicId,
+        userId: payload.userId,
+        workspaceId: payload.workspaceId,
+      }),
+    );
   }
 
-  return { ingested, scanned: topics.length };
+  const last = topics.at(-1);
+  if (topics.length === 50 && last?.lastActivityAt) {
+    await runStep(context, `expertise-history:next:${last.topicId}`, () =>
+      ExpertiseHistoryWorkflow.trigger({
+        ...payload,
+        cursor: { lastActivityAt: String(last.lastActivityAt), topicId: last.topicId },
+      }),
+    );
+  }
+
+  return { scanned: topics.length };
 };

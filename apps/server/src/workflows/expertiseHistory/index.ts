@@ -3,7 +3,10 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 
 import { runExpertiseHistoryWorkflow } from './run';
-import type { ExpertiseHistoryWorkflowPayload } from './types';
+import type {
+  ExpertiseHistoryTopicWorkflowPayload,
+  ExpertiseHistoryWorkflowPayload,
+} from './types';
 
 const log = debug('lobe-server:workflows:expertise-history');
 const localRuns = new Map<string, Promise<void>>();
@@ -49,7 +52,18 @@ export class ExpertiseHistoryWorkflow {
       url: new URL('/api/workflows/expertise-history/run', baseUrl).toString(),
     });
   }
+
+  static async triggerTopic(payload: ExpertiseHistoryTopicWorkflowPayload) {
+    const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+    if (!baseUrl) throw new Error('INTERNAL_APP_URL or APP_URL is required');
+    const { workflowClient } = await import('@/libs/qstash');
+    return workflowClient.trigger({
+      body: payload,
+      flowControl: { key: 'expertise-history-topics', parallelism: 5 },
+      url: new URL('/api/workflows/expertise-history/topic', baseUrl).toString(),
+    });
+  }
 }
 
 export { runExpertiseHistoryWorkflow };
-export type { ExpertiseHistoryWorkflowPayload };
+export type { ExpertiseHistoryTopicWorkflowPayload, ExpertiseHistoryWorkflowPayload };

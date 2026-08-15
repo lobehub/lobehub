@@ -96,12 +96,20 @@ describe('ExpertiseIngestionService historical ingestion', () => {
 describe('ExpertiseIngestionService.persistDomainRun', () => {
   it('uses the persisted run id for the lesson hit', async () => {
     const inserted = new Map<unknown, Record<string, unknown>[]>();
-    const selectResults = [[], [{ value: 0 }], [{ active: 1, compiled: 0, retired: 0 }], []];
+    const selectResults = [
+      [],
+      [],
+      [{ value: 0 }],
+      [],
+      [{ active: 1, compiled: 0, retired: 0 }],
+      [],
+    ];
     let selectIndex = 0;
     const selectChain = () => {
       const result = selectResults[selectIndex++];
       const chain = {
         from: () => chain,
+        for: () => chain,
         groupBy: () => chain,
         limit: () => chain,
         orderBy: () => chain,

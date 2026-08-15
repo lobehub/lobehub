@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
+  expertiseDomains,
   expertiseDomainSnapshots,
   expertiseHits,
   expertiseLessons,
@@ -10,7 +11,19 @@ import {
   topics,
 } from '@lobechat/database/schemas';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import { and, asc, countDistinct, desc, eq, isNotNull, isNull, max, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  countDistinct,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  max,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
@@ -87,6 +100,7 @@ const ANALYSIS_JSON_SCHEMA: GenerateObjectSchema = {
 
 interface ExpertiseCompletionInput {
   agentId: string;
+  hadHumanInLoop?: boolean;
   ingestionKey?: string;
   operationId?: string;
   serializedContext?: string;
@@ -136,17 +150,17 @@ export class ExpertiseIngestionService {
       windowEnd: new Date(marker.reviewWindowEnd),
       windowStart: new Date(marker.reviewWindowStart),
     });
-    const results = await Promise.all(
-      topics
-        .filter((topic): topic is typeof topic & { topicId: string } => Boolean(topic.topicId))
-        .map((topic) =>
-          this.ingestCompletion({
-            agentId,
-            operationId: input.operationId,
-            topicId: topic.topicId,
-          }),
-        ),
-    );
+    const results = [];
+    for (const topic of topics) {
+      if (!topic.topicId) continue;
+      results.push(
+        await this.ingestCompletion({
+          agentId,
+          operationId: input.operationId,
+          topicId: topic.topicId,
+        }),
+      );
+    }
     return {
       ingested: results.reduce((sum, result) => sum + result.ingested, 0),
       reason: 'nightly-review',
@@ -154,12 +168,16 @@ export class ExpertiseIngestionService {
   };
 
   /** Lists existing conversations owned by this agent for an explicit historical backfill. */
-  listHistoricalTopics = async (agentId: string) => {
+  listHistoricalTopics = async (
+    agentId: string,
+    options: { cursor?: { lastActivityAt: Date; topicId: string }; limit?: number } = {},
+  ) => {
     const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
     const scope = this.workspaceId
       ? eq(messages.workspaceId, this.workspaceId)
       : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
 
+    const lastActivity = max(messages.createdAt);
     return this.db
       .select({
         lastActivityAt: max(messages.createdAt),
@@ -169,6 +187,18 @@ export class ExpertiseIngestionService {
       .leftJoin(topics, eq(topics.id, messages.topicId))
       .where(and(scope, eq(effectiveAgentId, agentId), isNotNull(messages.topicId)))
       .groupBy(messages.topicId)
+      .having(
+        options.cursor
+          ? or(
+              gt(lastActivity, options.cursor.lastActivityAt),
+              and(
+                eq(lastActivity, options.cursor.lastActivityAt),
+                gt(messages.topicId, options.cursor.topicId),
+              ),
+            )
+          : undefined,
+      )
+      .limit(options.limit ?? 50)
       .orderBy(asc(max(messages.createdAt)), asc(messages.topicId));
   };
 
@@ -197,13 +227,21 @@ export class ExpertiseIngestionService {
 
   /** Local-runtime fallback for the durable workflow used in queue deployments. */
   ingestHistory = async (agentId: string) => {
-    const topicRows = await this.listHistoricalTopics(agentId);
     let ingested = 0;
-    for (const topic of topicRows) {
-      const result = await this.ingestHistoricalTopic(agentId, topic.topicId);
-      ingested += result.ingested;
+    let scanned = 0;
+    let cursor: { lastActivityAt: Date; topicId: string } | undefined;
+    while (true) {
+      const topicRows = await this.listHistoricalTopics(agentId, { cursor, limit: 50 });
+      for (const topic of topicRows) {
+        const result = await this.ingestHistoricalTopic(agentId, topic.topicId);
+        ingested += result.ingested;
+        scanned += 1;
+      }
+      const last = topicRows.at(-1);
+      if (!last || topicRows.length < 50 || !last.lastActivityAt) break;
+      cursor = { lastActivityAt: last.lastActivityAt, topicId: last.topicId };
     }
-    return { ingested, scanned: topicRows.length };
+    return { ingested, scanned };
   };
 
   ingestCompletion = async (input: ExpertiseCompletionInput) => {
@@ -211,9 +249,13 @@ export class ExpertiseIngestionService {
     const bound = await expertiseModel.listDomainsForAgent(input.agentId);
     if (bound.length === 0) return { ingested: 0, reason: 'no-domains' } as const;
 
-    const context = (input.serializedContext ?? (await this.readTopicContext(input.topicId))).slice(
-      -MAX_CONTEXT_CHARS,
-    );
+    const topicContext = input.serializedContext
+      ? {
+          hadHumanInLoop: input.hadHumanInLoop ?? /^\[user\]/m.test(input.serializedContext),
+          serializedContext: input.serializedContext,
+        }
+      : await this.readTopicContext(input.topicId);
+    const context = topicContext.serializedContext.slice(-MAX_CONTEXT_CHARS);
     if (!context.trim()) return { ingested: 0, reason: 'empty-context' } as const;
 
     const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
@@ -269,7 +311,12 @@ export class ExpertiseIngestionService {
     for (const result of analysis.domains) {
       const domain = domains.find((item) => item.id === result.domainId);
       if (!domain || !result.matches) continue;
-      await this.persistDomainRun({ ...input, domain, observations: result.observations });
+      await this.persistDomainRun({
+        ...input,
+        domain,
+        hadHumanInLoop: topicContext.hadHumanInLoop,
+        observations: result.observations,
+      });
       ingested += 1;
     }
 
@@ -289,10 +336,13 @@ export class ExpertiseIngestionService {
         isNull(messages.threadId),
       ),
     });
-    return rows
-      .reverse()
-      .map((row) => `[${row.role}] ${row.content ?? ''}`)
-      .join('\n\n');
+    return {
+      hadHumanInLoop: rows.some((row) => row.role === 'user'),
+      serializedContext: rows
+        .reverse()
+        .map((row) => `[${row.role}] ${row.content ?? ''}`)
+        .join('\n\n'),
+    };
   };
 
   private persistDomainRun = async (
@@ -305,6 +355,11 @@ export class ExpertiseIngestionService {
       ? `topic:${input.topicId}:${input.ingestionKey}`
       : `topic:${input.topicId}:operation:${input.operationId}`;
     await this.db.transaction(async (tx) => {
+      await tx
+        .select({ id: expertiseDomains.id })
+        .from(expertiseDomains)
+        .where(eq(expertiseDomains.id, input.domain.id))
+        .for('update');
       const [existingRun] = await tx
         .select({ id: expertiseRuns.id })
         .from(expertiseRuns)
@@ -331,6 +386,7 @@ export class ExpertiseIngestionService {
         actorType: 'agent',
         completedAt: new Date(),
         domainId: input.domain.id,
+        hadHumanInLoop: input.hadHumanInLoop ?? false,
         id: runId,
         reflectionKey,
         runIndex,
@@ -340,6 +396,15 @@ export class ExpertiseIngestionService {
         workspaceId: this.workspaceId,
       });
 
+      const persistedCodes = await tx
+        .select({ code: expertiseLessons.code })
+        .from(expertiseLessons)
+        .where(eq(expertiseLessons.domainId, input.domain.id));
+      let nextCodeNumber =
+        Math.max(0, ...persistedCodes.map(({ code }) => Number(/^P-(\d+)$/.exec(code)?.[1] ?? 0))) +
+        1;
+      const countedLessonIds = new Set<string>();
+
       for (const observation of input.observations) {
         let lesson = observation.existingCode
           ? input.domain.lessons.find((item) => item.code === observation.existingCode)
@@ -347,7 +412,7 @@ export class ExpertiseIngestionService {
         if (!lesson) {
           newCount += 1;
           const lessonId = randomUUID();
-          const code = `P-${String(input.domain.lessons.length + newCount).padStart(2, '0')}`;
+          const code = `P-${String(nextCodeNumber++).padStart(2, '0')}`;
           await tx.insert(expertiseLessons).values({
             code,
             createdByUserId: this.userId,
@@ -369,6 +434,7 @@ export class ExpertiseIngestionService {
             title: observation.title,
           });
           lesson = { code, title: observation.title };
+          countedLessonIds.add(lessonId);
           input.domain.lessons.push(lesson);
           await tx.insert(expertiseHits).values({
             domainId: input.domain.id,
@@ -401,12 +467,16 @@ export class ExpertiseIngestionService {
             outcome: observation.outcome,
             runId,
           });
+          const firstHitThisRun = !countedLessonIds.has(row.id);
+          countedLessonIds.add(row.id);
           await tx
             .update(expertiseLessons)
             .set({
               exampleCount: sql`${expertiseLessons.exampleCount} + 1`,
               hitCount: sql`${expertiseLessons.hitCount} + 1`,
-              hitRunCount: sql`${expertiseLessons.hitRunCount} + 1`,
+              hitRunCount: firstHitThisRun
+                ? sql`${expertiseLessons.hitRunCount} + 1`
+                : expertiseLessons.hitRunCount,
               lastHitAt: new Date(),
               lastHitRunId: runId,
             })

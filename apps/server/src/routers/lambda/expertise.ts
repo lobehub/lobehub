@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ExpertiseModel } from '@/database/models/expertise';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { ExpertiseDomainService } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
@@ -13,6 +14,11 @@ const expertiseProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
   return opts.next({
     ctx: {
       expertiseModel: new ExpertiseModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      expertiseDomainService: new ExpertiseDomainService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
       expertiseIngestionService: new ExpertiseIngestionService(
         ctx.serverDB,
         ctx.userId,
@@ -22,15 +28,7 @@ const expertiseProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
   });
 });
 
-/**
- * 拟合结果只有在可信时才交给界面。
- *
- * 有三种「没有成熟度」，界面文案各不相同：
- *   fitComputedAt 为空       → 还在算
- *   fitConfidence 非 ok      → 样本太少 / 噪声 / 拟合失败，算不出
- *   tauPinned                → τ 撞了搜索上界，pInf 是边界伪影
- * 任何一种都不能给出百分比 —— 9 组回测里 6 组撞界，旧版把它们全报成了 ok。
- */
+/** Exposes fitted maturity only when the model has enough trustworthy evidence. */
 const toMaturity = (s?: {
   fitComputedAt: Date | null;
   fitConfidence: string | null;
@@ -57,7 +55,7 @@ const toMaturity = (s?: {
     fitR2: s.fitR2,
     fitSampleSize: s.fitSampleSize,
     maturity: s.maturity,
-    /** < 1 表示还没观测满一个时间常数，渐近线没被数据约束住，外推只是猜测。 */
+    /** Values below one mean the observed data does not yet constrain the asymptote. */
     observedSpan: s.observedSpan,
     pInf: s.pInf,
     plateauKind: s.plateauKind,
@@ -68,7 +66,7 @@ const toMaturity = (s?: {
 };
 
 export const expertiseRouter = router({
-  /** L0 —— 一个 agent 能用到的全部专长 + 各自最新状态。 */
+  /** L0: all expertise available to an agent and its latest state. */
   listByAgent: expertiseProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -96,7 +94,7 @@ export const expertiseRouter = router({
       const domains = bound.map(({ binding, domain }) => {
         const snap = snapByDomain.get(domain.id);
         const points = seriesByDomain.get(domain.id) ?? [];
-        // 最近 5 次的净变化：涨=在长，跌=规则被退休（能力在退），0=练了没学到
+        // Net change over the latest five runs distinguishes growth, retirement, and no learning.
         const delta = recentLessonDelta(points);
         return {
           activeRate: snap?.activeRate ?? null,
@@ -105,7 +103,7 @@ export const expertiseRouter = router({
           contributionMode: binding.contributionMode,
           delta,
           id: domain.id,
-          /** 最近一次实践的时间 —— 用来判断这个专长是不是闲置了。 */
+          /** Timestamp of the latest practice run. */
           lastPracticedAt: snap?.capturedAt ?? null,
           layerCounts: snap?.layerCounts ?? {},
           layerCoverage: snap?.layerCoverage ?? null,
@@ -114,7 +112,7 @@ export const expertiseRouter = router({
           lessonCount: snap?.activeCount ?? 0,
           maturity: toMaturity(snap),
           runCount: snap?.runIndex ?? 0,
-          /** 叠图用的曲线；纵轴是成熟度比例，所以 pInf 也要一起给。 */
+          /** Series used by the overlaid maturity chart. */
           series: points,
           slug: domain.slug,
           title: domain.title,
@@ -131,7 +129,7 @@ export const expertiseRouter = router({
       };
     }),
 
-  /** L1 —— 一个专长的完整状态：SCLPT 五要素 + 时间序列。 */
+  /** L1: the complete SCLPT domain state and time series. */
   getDomain: expertiseProcedure
     .input(z.object({ domainId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -148,7 +146,7 @@ export const expertiseRouter = router({
       ]);
       const humanByRun = new Map(humanFlags.map((r) => [r.runIndex, r.hadHumanInLoop]));
       const latest = snapshots.at(-1);
-      // 后段还在涨多少：最后五次的净增。plateauKind 说的是形状，这个说的是量。
+      // Tail gain measures recent quantity while plateauKind describes the curve shape.
       const tail = snapshots.slice(-6);
       const tailGain = tail.length > 1 ? tail.at(-1)!.activeCount - tail[0].activeCount : 0;
 
@@ -159,11 +157,11 @@ export const expertiseRouter = router({
         lessonStats,
         maturity: toMaturity(latest),
         runCount,
-        /** 曲线只需要这几列，别把整行快照塞给前端。 */
+        /** The chart receives only the snapshot fields it renders. */
         series: snapshots.map((s) => ({
           activeCount: s.activeCount,
           compiledCount: s.compiledCount,
-          /** 那一次有没有人在对话里 —— 图上柱子的颜色。 */
+          /** Controls whether the chart marks this run as human-assisted. */
           hadHumanInLoop: humanByRun.get(s.runIndex) ?? false,
           runIndex: s.runIndex,
         })),
@@ -172,7 +170,7 @@ export const expertiseRouter = router({
       };
     }),
 
-  /** L2 —— 规则库，按命中排，梯队在服务端算好。 */
+  /** L2: lessons ordered by hits with server-computed usage tiers. */
   listLessons: expertiseProcedure
     .input(
       z.object({
@@ -181,14 +179,16 @@ export const expertiseRouter = router({
         search: z.string().optional(),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      ctx.expertiseModel.listLessons(input.domainId, {
+    .query(async ({ ctx, input }) => {
+      const domain = await ctx.expertiseModel.findDomain(input.domainId);
+      if (!domain) return [];
+      return ctx.expertiseModel.listLessons(input.domainId, {
         layer: input.layer,
         search: input.search,
-      }),
-    ),
+      });
+    }),
 
-  /** L3 —— 单条规则，带上它的 ✅❌ 例子。 */
+  /** L3: one lesson together with its supporting and violating examples. */
   getLesson: expertiseProcedure
     .input(z.object({ lessonId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -198,17 +198,15 @@ export const expertiseRouter = router({
       return { hits, lesson };
     }),
 
-  /** 人手建一个专长 —— 空态那个按钮打进来的。 */
+  /** Creates an expertise domain from a natural-language brief. */
   createDomain: expertiseProcedure
     .input(
       z.object({
         agentId: z.string(),
         brief: z.string().min(1),
-        domainFilter: z.string().min(1).optional(),
-        title: z.string().min(1).optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.expertiseModel.createDomain(input)),
+    .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.createFromBrief(input)),
 
   /** Explicitly bootstraps expertise from conversations that existed before the domain did. */
   ingestHistory: expertiseProcedure
@@ -227,7 +225,7 @@ export const expertiseRouter = router({
       return { candidateCount, workflowRunId };
     }),
 
-  /** 洞察是分析产物，会出错 —— 必须能被否掉。 */
+  /** Dismisses an incorrect generated insight. */
   dismissInsight: expertiseProcedure
     .input(z.object({ insightId: z.string(), reason: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
