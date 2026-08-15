@@ -282,6 +282,35 @@ export class HeterogeneousAgentService {
       topicId,
     });
 
+    let serializedHooks: SerializedHook[] | undefined;
+    let assistantMessageId: string | undefined;
+    let isolationThreadId: string | undefined;
+    let orchestrationRole: 'member' | 'supervisor' | undefined;
+
+    // `cancelled` is only an intermediate process signal. Keep the marker for
+    // the following success/error terminal callback, which owns completion.
+    if (result !== 'cancelled') {
+      const claimed = await this.topicModel.takeRunningOperation(topicId, operationId);
+      if (!claimed) {
+        log('heteroFinish: ignoring already-settled terminal callback for op=%s', operationId);
+        return;
+      }
+
+      const running = claimed.operation;
+      serializedHooks = running.hooks as SerializedHook[] | undefined;
+      isolationThreadId = running.threadId ?? undefined;
+      orchestrationRole = running.orchestrationRole;
+
+      // The per-step pointer is independent from the running marker, so it
+      // remains available after the atomic claim removes that marker.
+      const currentMsgRef = (await this.topicModel.findById(topicId))?.metadata?.heteroCurrentMsgId;
+      assistantMessageId =
+        currentMsgRef?.operationId === operationId
+          ? currentMsgRef.msgId
+          : running.assistantMessageId;
+      if (claimed.isRoot) await this.topicModel.settleRunningStatus(topicId);
+    }
+
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,
     // network drop on last batch). Idempotent on the renderer side: the
@@ -313,44 +342,6 @@ export class HeterogeneousAgentService {
     // branch — and suppresses a spurious bot "stopped" message before the real
     // result lands.)
     if (result === 'cancelled') return;
-
-    let serializedHooks: SerializedHook[] | undefined;
-    let assistantMessageId: string | undefined;
-    let isolationThreadId: string | undefined;
-    try {
-      const topic = await this.topicModel.findById(topicId);
-      const marker = topic?.metadata?.runningOperation;
-      const running =
-        marker?.operationId === operationId
-          ? marker
-          : marker?.childOperations?.find((child) => child.operationId === operationId);
-      serializedHooks = running?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = running?.threadId ?? undefined;
-      // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
-      // on every step boundary, so it refers to the LAST assistant message with
-      // the complete final content.  Fall back to the initial placeholder id
-      // recorded in runningOperation if the pointer is absent or belongs to a
-      // different operation (shouldn't happen, but defensive).
-      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
-      assistantMessageId =
-        currentMsgRef?.operationId === operationId
-          ? currentMsgRef.msgId
-          : running?.assistantMessageId;
-      if (marker?.operationId === operationId) {
-        await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      } else if (marker?.childOperations) {
-        await this.topicModel.removeRunningOperationChild(topicId, operationId);
-      }
-      if (marker?.operationId === operationId) {
-        // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-        // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-        // topic off `running`. Guarded in the model: an attached client's own
-        // terminal write ('active'/'unread') is never clobbered.
-        await this.topicModel.settleRunningStatus(topicId);
-      }
-    } catch (err) {
-      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
-    }
 
     // The owning agentId is authoritatively encoded in the operationId
     // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
@@ -487,6 +478,7 @@ export class HeterogeneousAgentService {
         // Backfilled executed model/provider — the verify gate bails when absent.
         model: totals?.model,
         operationId,
+        orchestrationRole,
         provider: totals?.provider,
         serializedHooks,
         stepCount: totals?.stepCount ?? null,

@@ -79,11 +79,20 @@ const buildEvent = (
 const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const topicModel = {
+    findById: vi.fn(async () => undefined),
+    settleRunningStatus: vi.fn(async () => {}),
+    takeRunningOperation: vi.fn(async (_topicId: string, operationId: string) => ({
+      isRoot: true,
+      operation: { assistantMessageId: 'asst-1', operationId },
+    })),
+  };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
+    topicModel: topicModel as any,
   });
-  return { manager, persistenceHandler, published, service };
+  return { manager, persistenceHandler, published, service, topicModel };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -576,6 +585,34 @@ describe('HeterogeneousAgentService', () => {
       dispatchSpy.mockRestore();
     });
 
+    it('forwards a group member role to the completion lifecycle', async () => {
+      const { service, topicModel } = createService();
+      topicModel.takeRunningOperation.mockResolvedValue({
+        isRoot: false,
+        operation: {
+          assistantMessageId: 'asst-member',
+          operationId: 'op-member',
+          orchestrationRole: 'member',
+        },
+      });
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue(undefined);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-member',
+        result: 'success',
+        topicId: 'topic-member',
+      });
+
+      expect(completeOperationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-member', orchestrationRole: 'member' }),
+        'done',
+      );
+      completeOperationSpy.mockRestore();
+    });
+
     // Cross-instance race guard: recordStart's in-memory verify-plan promise lives
     // on a DIFFERENT CompletionLifecycle (execAgent), so heteroFinish can't await
     // it. A fast run could reach the gate before the plan persists. heteroFinish
@@ -699,6 +736,11 @@ describe('HeterogeneousAgentService', () => {
           id: 'topic-q',
           metadata: { runningOperation: { hooks, operationId: 'op-q' } },
         })),
+        settleRunningStatus: vi.fn(async () => {}),
+        takeRunningOperation: vi.fn(async () => ({
+          isRoot: true,
+          operation: { assistantMessageId: 'asst-q', hooks, operationId: 'op-q' },
+        })),
         updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
@@ -795,6 +837,28 @@ describe('HeterogeneousAgentService', () => {
       let meta: Record<string, any> = {};
       const topicModel = {
         findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
+        settleRunningStatus: vi.fn(async () => {}),
+        takeRunningOperation: vi.fn(async (_id: string, operationId: string) => {
+          const running = meta.runningOperation;
+          if (running?.operationId === operationId) {
+            meta = { ...meta, runningOperation: null };
+            return { isRoot: true, operation: running };
+          }
+          const child = running?.childOperations?.find(
+            (candidate: any) => candidate.operationId === operationId,
+          );
+          if (!child) return undefined;
+          meta = {
+            ...meta,
+            runningOperation: {
+              ...running,
+              childOperations: running.childOperations.filter(
+                (candidate: any) => candidate.operationId !== operationId,
+              ),
+            },
+          };
+          return { isRoot: false, operation: child };
+        }),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };
         }),

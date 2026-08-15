@@ -873,6 +873,27 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
 
+    it('does not dispatch a member after its supervisor marker was cleared', async () => {
+      topicMock.appendRunningOperationChild.mockResolvedValue(false);
+
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          isolationThread: false,
+          orchestrationRole: 'member',
+          topicId: 'topic-1',
+        },
+        parentOperationId: 'parent-operation',
+        prompt: 'speak as member',
+        topicStartOwnerOperationId: 'parent-operation',
+      } as any);
+
+      expect(result).toMatchObject({ status: 'error', success: false });
+      expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
+    });
+
     it('serializes the onComplete webhook hook onto runningOperation (sandbox dispatch)', async () => {
       await service.execAgent({
         agentId: 'agent-1',

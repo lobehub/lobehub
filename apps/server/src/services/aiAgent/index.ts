@@ -2472,11 +2472,41 @@ export class AiAgentService {
         threadId: appContext?.threadId ?? undefined,
       };
       if (params.topicStartOwnerOperationId) {
-        await this.topicModel.appendRunningOperationChild(
+        const attached = await this.topicModel.appendRunningOperationChild(
           topicId,
           params.topicStartOwnerOperationId,
           childOperation,
         );
+        if (!attached) {
+          const message = 'Group supervisor finished before this member could start.';
+          await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+            {
+              agentId: persistAgentId,
+              assistantMessageId: assistantMessageRecord.id,
+              error: { message, type: 'AgentRuntimeError' },
+              operationId,
+              orchestrationRole: appContext?.orchestrationRole,
+              serializedHooks,
+              topicId,
+              userId: this.userId,
+            },
+            'error',
+          );
+          return {
+            agentId: resolvedAgentId,
+            assistantMessageId: assistantMessageRecord.id,
+            autoStarted: false,
+            createdAt: new Date().toISOString(),
+            error: message,
+            message,
+            operationId,
+            status: 'error',
+            success: false,
+            timestamp: new Date().toISOString(),
+            topicId,
+            userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+          };
+        }
       } else {
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }

@@ -1477,6 +1477,57 @@ export class TopicModel {
       return true;
     });
 
+  takeRunningOperation = async (
+    id: string,
+    operationId: string,
+  ): Promise<
+    | {
+        isRoot: boolean;
+        operation: NonNullable<ChatTopicMetadata['runningOperation']>;
+      }
+    | undefined
+  > =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return undefined;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: { ...existing.metadata, runningOperation: null },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return { isRoot: true, operation: runningOperation };
+      }
+
+      const child = runningOperation.childOperations?.find(
+        (candidate) => candidate.operationId === operationId,
+      );
+      if (!child) return undefined;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.filter(
+                (candidate) => candidate.operationId !== operationId,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { isRoot: false, operation: child };
+    });
+
   /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *

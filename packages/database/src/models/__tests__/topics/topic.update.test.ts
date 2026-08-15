@@ -258,6 +258,38 @@ describe('TopicModel - Update', () => {
         ]),
       );
     });
+
+    it('atomically takes a child running operation once', async () => {
+      const topicId = 'task-callback-take-child-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      const claims = await Promise.all([
+        topicModel.takeRunningOperation(topicId, 'child-operation'),
+        topicModel.takeRunningOperation(topicId, 'child-operation'),
+      ]);
+
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      expect(claims.find(Boolean)).toMatchObject({
+        isRoot: false,
+        operation: { operationId: 'child-operation' },
+      });
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({ operationId: 'parent-operation' });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([]);
+    });
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
       await serverDB.insert(topics).values({

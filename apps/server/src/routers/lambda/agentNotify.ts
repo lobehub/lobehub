@@ -175,6 +175,22 @@ export const agentNotifyRouter = router({
       return { messageId: undefined, operationId: undefined, topicId };
     }
 
+    // Claim the matching operation before any asynchronous terminal side effects.
+    // This gives exactly one retried/concurrent terminal callback ownership of the
+    // lifecycle hooks and preserves the marker snapshot after it is removed.
+    const claimedOperation =
+      isTerminal && remoteOperationId
+        ? await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId)
+        : undefined;
+    if (isTerminal && remoteOperationId && !claimedOperation) {
+      log(
+        'notify: ignoring already-settled terminal callback for operationId=%s',
+        remoteOperationId,
+      );
+      return { messageId: undefined, operationId: undefined, topicId };
+    }
+    const terminalOperation = claimedOperation?.operation ?? activeOperation;
+
     /**
      * Publish a stream event for remote hetero agents (openclaw / hermes).
      * Fire-and-forget — stream publish failures must not break the notify response.
@@ -204,16 +220,9 @@ export const agentNotifyRouter = router({
           // success the delivery-checker verify gate runs against the task's plan.
           // (Previously this fired the stripped-down dispatchTerminalHooks, which
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
-          // Hooks were serialized onto runningOperation at dispatch time.
-          const currentMarker = (await ctx.topicModel.findById(topicId))?.metadata
-            ?.runningOperation as any;
-          const activeOperation =
-            currentMarker?.operationId === remoteOperationId
-              ? currentMarker
-              : currentMarker?.childOperations?.find(
-                  (child: any) => child.operationId === remoteOperationId,
-                );
-          const serializedHooks = activeOperation?.hooks as SerializedHook[] | undefined;
+          // Use the terminal claim snapshot. Publishing the end event lets a
+          // connected client clear the live marker before this continuation runs.
+          const serializedHooks = terminalOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
@@ -273,7 +282,7 @@ export const agentNotifyRouter = router({
               error: terminalError ?? undefined,
               goal,
               operationId: remoteOperationId,
-              orchestrationRole: activeOperation?.orchestrationRole,
+              orchestrationRole: terminalOperation?.orchestrationRole,
               serializedHooks,
               topicId,
               userId: ctx.userId,
@@ -284,18 +293,6 @@ export const agentNotifyRouter = router({
             // write — keep that prior behavior on the error path.
             { skipErrorMessageWrite: true },
           );
-
-          // The operation is finished — drop the running marker so a duplicate
-          // terminal signal / reconnect doesn't re-fire the hooks.
-          if (currentMarker?.operationId === remoteOperationId) {
-            await ctx.topicModel
-              .updateMetadata(topicId, { runningOperation: null })
-              .catch(() => {});
-          } else {
-            await ctx.topicModel
-              .removeRunningOperationChild(topicId, remoteOperationId)
-              .catch(() => {});
-          }
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -320,7 +317,7 @@ export const agentNotifyRouter = router({
         // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
         // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
         // Using the placeholder avoids creating a second empty bubble in the UI.
-        const placeholderMessageId = activeOperation?.assistantMessageId as string | undefined;
+        const placeholderMessageId = terminalOperation?.assistantMessageId as string | undefined;
         const resolvedMessageId = messageId ?? placeholderMessageId;
 
         // Update existing message if we have a resolved target

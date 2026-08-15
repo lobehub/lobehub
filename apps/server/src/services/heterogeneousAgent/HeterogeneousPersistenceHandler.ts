@@ -809,7 +809,7 @@ export class HeterogeneousPersistenceHandler {
 
     if (!running) {
       throw new StaleHeteroOperationError(
-        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${running.operationId}`,
+        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
       );
     }
 
