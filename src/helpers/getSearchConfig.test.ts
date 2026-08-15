@@ -174,4 +174,28 @@ describe('getSearchConfig', () => {
       useApplicationBuiltinSearchTool: false,
     });
   });
+
+  it('should use xAI tool Live Search without the builtin toggle', () => {
+    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
+      () =>
+        ({
+          searchMode: 'auto',
+          useModelBuiltinSearch: false,
+        }) as any,
+    );
+
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => 'tool',
+    );
+
+    const result = getSearchConfig('grok-4.20-multi-agent-0309', 'xai');
+
+    expect(result).toEqual({
+      enabledSearch: true,
+      isProviderHasBuiltinSearch: false,
+      isModelHasBuiltinSearch: true,
+      useModelSearch: true,
+      useApplicationBuiltinSearchTool: false,
+    });
+  });
 });

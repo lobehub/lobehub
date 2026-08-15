@@ -26,7 +26,7 @@ const superGrokChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-08',
     settings: {
       extendParams: ['grok4_5ReasoningEffort'],
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },

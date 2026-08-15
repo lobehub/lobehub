@@ -10,7 +10,7 @@ describe('resolveServerSearchDecision', () => {
           abilities: { search: true },
           id: 'grok-4.3',
           providerId: 'xai',
-          settings: { searchImpl: 'params' },
+          settings: { searchImpl: 'tool' },
         },
       ],
       chatConfig: { searchMode: 'on', useModelBuiltinSearch: true },
@@ -20,6 +20,38 @@ describe('resolveServerSearchDecision', () => {
 
     expect(result.useModelSearch).toBe(false);
     expect(result.useApplicationBuiltinSearchTool).toBe(true);
+  });
+
+  it('uses xAI Live Search for multi-agent Grok without the builtin toggle', () => {
+    const result = resolveServerSearchDecision({
+      builtinModels: [
+        {
+          abilities: { search: true },
+          id: 'grok-4.20-multi-agent-0309',
+          providerId: 'xai',
+          settings: { searchImpl: 'tool' },
+        },
+      ],
+      chatConfig: { searchMode: 'auto', useModelBuiltinSearch: false },
+      model: 'grok-4.20-multi-agent-0309',
+      provider: 'xai',
+    });
+
+    expect(result.useModelSearch).toBe(true);
+    expect(result.useApplicationBuiltinSearchTool).toBe(false);
+  });
+
+  it('infers tool search for a remotely discovered xAI model', () => {
+    const result = resolveServerSearchDecision({
+      builtinModels: [],
+      chatConfig: { searchMode: 'on', useModelBuiltinSearch: false },
+      model: 'grok-new-remote',
+      modelSearchAbility: true,
+      provider: 'xai',
+    });
+
+    expect(result.useModelSearch).toBe(true);
+    expect(result.useApplicationBuiltinSearchTool).toBe(false);
   });
 
   it('honors a stored abilities override that omits builtin search', () => {
@@ -46,7 +78,11 @@ describe('resolveServerSearchDecision', () => {
     (provider) => {
       const result = resolveServerSearchDecision({
         builtinModels: [],
-        chatConfig: { searchMode: 'on', useModelBuiltinSearch: true },
+        chatConfig: {
+          searchMode: 'on',
+          // SuperGrok uses tool search (no toggle); OpenRouter still needs params toggle.
+          useModelBuiltinSearch: provider === 'openrouter' ? true : false,
+        },
         model: 'new-remote-model',
         provider,
       });

@@ -684,6 +684,56 @@ describe('OpenAIResponsesStream', () => {
     expect(chunks.some((c) => c.includes('citations'))).toBe(true);
   });
 
+  it('should filter out empty url_citation annotations on the Responses path', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.created',
+        response: {
+          id: 'resp_empty_citation',
+          status: 'in_progress',
+        },
+      },
+      {
+        type: 'response.output_text.annotation.added',
+        item_id: 'msg_empty',
+        annotation: {
+          type: 'url_citation',
+          title: 'Broken',
+          // empty / missing url must not reach grounding consumers
+        },
+      },
+      {
+        type: 'response.output_text.annotation.added',
+        item_id: 'msg_empty',
+        annotation: {
+          type: 'url_citation',
+          title: 'Valid',
+          url: 'https://valid.example',
+          start_index: 0,
+          end_index: 4,
+        },
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          id: 'msg_empty',
+          type: 'message',
+          status: 'completed',
+        },
+      },
+    ]);
+
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
+    const chunks = await readStreamChunk(protocolStream);
+
+    const grounding = chunks.find((c) => c.includes('event: grounding'));
+    expect(grounding).toBeDefined();
+    expect(chunks.some((c) => c.includes('https://valid.example'))).toBe(true);
+    expect(chunks.some((c) => c.includes('"Broken"'))).toBe(false);
+    expect(chunks.filter((c) => c.includes('"url"')).length).toBeGreaterThan(0);
+  });
+
   it('should handle response.output_item.done without citations', async () => {
     const mockOpenAIStream = createReadableStream([
       {

@@ -28,7 +28,7 @@ const xaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-08',
     settings: {
       extendParams: ['grok4_5ReasoningEffort'],
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },
@@ -81,7 +81,7 @@ const xaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-05-01',
     settings: {
       extendParams: ['grok4_3ReasoningEffort'],
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },
@@ -132,7 +132,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },
@@ -184,7 +184,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },
@@ -237,7 +237,7 @@ const xaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-09',
     settings: {
       extendParams: ['grok4_20ReasoningEffort'],
-      searchImpl: 'params',
+      searchImpl: 'tool',
     },
     type: 'chat',
   },

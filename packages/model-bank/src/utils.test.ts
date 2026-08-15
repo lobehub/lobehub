@@ -39,6 +39,24 @@ describe('resolveSearchDecision', () => {
     },
     {
       expected: { application: false, model: true },
+      input: {
+        modelSearchImpl: 'tool' as const,
+        searchMode: 'on' as const,
+        useModelBuiltinSearch: false,
+      },
+      name: 'uses tool-based native search without requiring the builtin toggle',
+    },
+    {
+      expected: { application: false, model: true },
+      input: {
+        providerSearchMode: 'tool' as const,
+        searchMode: 'auto' as const,
+        useModelBuiltinSearch: false,
+      },
+      name: 'uses provider tool search (e.g. SuperGrok) without the builtin toggle',
+    },
+    {
+      expected: { application: false, model: true },
       input: { providerSearchMode: 'internal' as const, searchMode: 'on' as const },
       name: 'always uses internal provider search while search is enabled',
     },
@@ -61,6 +79,12 @@ describe('resolveModelSearchDefaultSettings', () => {
   it('falls back to params for unknown providers', () => {
     expect(resolveModelSearchDefaultSettings('custom-provider', 'remote-model')).toEqual({
       searchImpl: 'params',
+    });
+  });
+
+  it('defaults xAI remote models to tool-based Live Search', () => {
+    expect(resolveModelSearchDefaultSettings('xai', 'grok-remote')).toEqual({
+      searchImpl: 'tool',
     });
   });
 });

@@ -22,6 +22,14 @@ import {
 } from '../protocol';
 import type { OpenAIStreamOptions } from './openai';
 
+/**
+ * Drop citations without a valid url. Some providers emit empty citation objects
+ * which would otherwise break downstream rendering and persistence.
+ * See https://github.com/lobehub/lobehub/issues/15043
+ */
+const filterValidCitations = (citations: ChatCitationItem[]): ChatCitationItem[] =>
+  citations.filter((citation) => !!citation?.url);
+
 const transformOpenAIStream = (
   chunk:
     | OpenAI.Responses.ResponseStreamEvent
@@ -136,11 +144,11 @@ const transformOpenAIStream = (
         // OpenAI SDK v6 types the annotation payload as `unknown`; narrow to the URL-citation shape we read.
         const citations = chunk.annotation as { title?: string; url?: string };
 
-        if (streamContext.returnedCitationArray) {
+        if (streamContext.returnedCitationArray && citations.url) {
           streamContext.returnedCitationArray.push({
             title: citations.title,
             url: citations.url,
-          } as ChatCitationItem);
+          });
         }
 
         return { data: null, id: chunk.item_id, type: 'text' };
@@ -188,9 +196,10 @@ const transformOpenAIStream = (
           return chunks;
         }
 
-        if (streamContext.returnedCitationArray?.length) {
+        const validCitations = filterValidCitations(streamContext.returnedCitationArray ?? []);
+        if (validCitations.length) {
           return {
-            data: { citations: streamContext.returnedCitationArray },
+            data: { citations: validCitations },
             id: chunk.item.id,
             type: 'grounding',
           };
