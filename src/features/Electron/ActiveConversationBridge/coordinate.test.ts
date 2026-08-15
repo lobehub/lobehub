@@ -67,6 +67,18 @@ describe('active conversation coordinate', () => {
     });
   });
 
+  it('retains the group id on a group subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a' },
+      url: '/group/group-a/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupId: 'group-a',
+      isConversation: false,
+    });
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},

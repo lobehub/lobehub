@@ -47,7 +47,7 @@ export const resolveActiveConversationCoordinate = ({
     agentBasePath,
     agentId: params.aid ? resolvedAgentId || params.aid : undefined,
     groupBasePath,
-    groupId: groupConversation ? params.gid : undefined,
+    groupId: groupSegmentIndex >= 0 ? params.gid : undefined,
     hash: location.hash,
     isConversation,
     pathname: location.pathname,
