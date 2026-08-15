@@ -229,6 +229,15 @@ describe('defineConfig', () => {
     expect(options.advanced.crossSubDomainCookies).toBeUndefined();
   });
 
+  it('should namespace every Better Auth cookie with the configured prefix', async () => {
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ cookiePrefix: 'example-app', plugins: [] });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+
+    expect(options.advanced.cookiePrefix).toBe('example-app');
+  });
+
   it.each([['https://app.example.com'], ['https://example.com']])(
     'should share auth cookies across subdomains when APP_URL %s is under the cookie domain',
     async (appUrl) => {
