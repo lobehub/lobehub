@@ -49,10 +49,8 @@ const toEpochMs = (value: Date | number | string | null | undefined): number | u
 /**
  * `createdAt` of a tool call's result row, normalized to epoch ms.
  *
- * The row is written when the call is *issued* on both the client-runtime and
- * heterogeneous-agent paths, so it is a durable start marker for the execution
- * timer — unlike the in-memory operation's `startTime`, which heterogeneous
- * agents never create and which is lost on reload.
+ * The row is written when the call is issued, so it provides a durable baseline
+ * for the elapsed time shown by the tool call.
  */
 const getToolMessageCreatedAt = (toolCallId: string) => (s: State) =>
   toEpochMs(getDbMessageByToolCallId(toolCallId)(s)?.createdAt);
