@@ -30,6 +30,18 @@ const createAgentStreamHeaders = (includeSSEHeaders = true) => {
   return headers;
 };
 
+const withAgentStreamCorsHeaders = (response: Response) => {
+  const headers = new Headers(response.headers);
+  const corsHeaders = createAgentStreamHeaders(false);
+  corsHeaders.forEach((value, key) => headers.set(key, value));
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
+
 /**
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
@@ -250,7 +262,10 @@ const handler: RequestHandler = async (
   });
 };
 
-export const GET = checkAuth(handler, { allowApiKey: true });
+const authenticatedHandler = checkAuth(handler, { allowApiKey: true });
+
+export const GET: typeof authenticatedHandler = async (request, options) =>
+  withAgentStreamCorsHeaders(await authenticatedHandler(request, options));
 
 export const OPTIONS = () =>
   new Response(null, { headers: createAgentStreamHeaders(false), status: 204 });

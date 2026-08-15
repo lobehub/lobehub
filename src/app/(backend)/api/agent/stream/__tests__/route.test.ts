@@ -40,15 +40,20 @@ vi.mock('@/database/models/workspaceMember', () => ({
 vi.mock('@/app/(backend)/middleware/auth', () => ({
   checkAuth:
     (handler: (...args: any[]) => Promise<Response>) =>
-    (request: Request, options = { params: Promise.resolve({}) }): Promise<Response> =>
-      handler(request, {
+    (request: Request, options = { params: Promise.resolve({}) }): Promise<Response> => {
+      if (request.headers.get('X-Mock-Auth-Error')) {
+        return Promise.resolve(Response.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      return handler(request, {
         ...options,
         apiKeyScopes: request.headers.get('X-API-Key') ? mockAuthScope.apiKeyScopes : undefined,
         jwtPayload: { userId: 'test-user' },
         serverDB: {},
         userId: 'test-user',
         workspaceId: mockAuthScope.workspaceId,
-      }),
+      });
+    },
 }));
 
 describe('/api/agent/stream route', () => {
@@ -81,6 +86,25 @@ describe('/api/agent/stream route', () => {
       expect(response.status).toBe(400);
       const data = await response.json();
       expect(data.error).toBe('operationId parameter is required');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toContain('Oidc-Auth');
+    });
+
+    it('should add CORS headers to authentication failures', async () => {
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        { headers: { 'X-Mock-Auth-Error': 'true' } },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
+        'Cache-Control, Last-Event-ID, Oidc-Auth, X-API-Key, X-Workspace-Id',
+      );
     });
 
     it("should reject another user's durable operation", async () => {
