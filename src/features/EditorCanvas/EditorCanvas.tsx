@@ -37,6 +37,13 @@ interface UnsavedChangesGuardOptions {
 
 export interface EditorCanvasProps {
   /**
+   * Allow block plugins to render outside the editor's normal text column.
+   * Keep disabled for compact editor surfaces; PageEditor enables it for wide
+   * table scroll areas and their resize controls.
+   */
+  allowContentBleed?: boolean;
+
+  /**
    * Whether to enable auto-save in DocumentStore. Defaults to true.
    * Only applies when documentId is provided.
    */
@@ -72,6 +79,13 @@ export interface EditorCanvasProps {
     content?: string;
     editorData?: unknown;
   };
+
+  /**
+   * Convert `$...$` input and Markdown inline-math tokens into formula nodes.
+   * Defaults to true. PageEditor disables this because business documents use
+   * dollar signs far more often than inline formulas.
+   */
+  enableInlineMath?: boolean;
 
   /**
    * Entity ID (e.g., agentId, groupId) to track which entity is being edited.

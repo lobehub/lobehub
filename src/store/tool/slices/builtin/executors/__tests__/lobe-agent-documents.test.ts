@@ -1,3 +1,4 @@
+import { AgentDocumentsApiName } from '@lobechat/builtin-tool-agent-documents';
 import type { BuiltinToolContext } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   copyDocument: vi.fn(),
   createDocument: vi.fn(),
   createForTopic: vi.fn(),
+  invalidateDocumentMutation: vi.fn(),
   listDocuments: vi.fn(),
   modifyNodes: vi.fn(),
   readDocument: vi.fn(),
@@ -38,6 +40,10 @@ vi.mock('@/services/agentDocument', () => ({
   },
 }));
 
+vi.mock('@/services/document/invalidation', () => ({
+  invalidateDocumentMutation: mocks.invalidateDocumentMutation,
+}));
+
 vi.mock('@/services/work', () => ({
   workService: {
     refreshConversation: mocks.refreshConversation,
@@ -61,6 +67,7 @@ describe('agentDocumentsExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.refreshConversation.mockResolvedValue(undefined);
+    mocks.invalidateDocumentMutation.mockResolvedValue(undefined);
     // Drain any leftover so the shared per-toolCallId stash starts clean.
     takeWorkIntent('tool-call-1');
   });
@@ -117,5 +124,30 @@ describe('agentDocumentsExecutor', () => {
         type: 'document',
       }),
     );
+  });
+
+  it('refreshes an open document after a server-side content mutation completes', async () => {
+    await agentDocumentsExecutor.onAfterCall({
+      apiName: AgentDocumentsApiName.modifyNodes,
+      identifier: 'lobe-agent-documents',
+      params: {},
+      result: {
+        state: {
+          agentDocumentId: 'agent-document-1',
+          agentId: 'agent-1',
+          documentId: 'document-1',
+        },
+        success: true,
+      },
+      toolCallId: 'tool-call-1',
+      topicId: 'topic-1',
+    });
+
+    expect(mocks.invalidateDocumentMutation).toHaveBeenCalledWith({
+      agentDocumentId: 'agent-document-1',
+      agentId: 'agent-1',
+      cause: 'agent-document',
+      documentId: 'document-1',
+    });
   });
 });

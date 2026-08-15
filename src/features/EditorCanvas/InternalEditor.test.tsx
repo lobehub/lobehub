@@ -108,6 +108,45 @@ describe('InternalEditor', () => {
       // The style should include paddingBottom: 32 (default) merged with custom styles
       expect(editorContainer).toBeTruthy();
     });
+
+    it('should allow wide block controls to bleed outside the text column when enabled', async () => {
+      const { container, rerender } = render(<MinimalTestWrapper />);
+
+      await act(async () => {
+        await moment();
+      });
+
+      expect(container.firstElementChild).toHaveStyle({ overflow: 'hidden' });
+
+      rerender(<MinimalTestWrapper allowContentBleed />);
+
+      expect(container.firstElementChild).toHaveStyle({ overflow: 'visible' });
+    });
+
+    it('should keep inline LaTeX as plain text when inline math is disabled', async () => {
+      let editorInstance: IEditor | undefined;
+
+      render(
+        <TestWrapper
+          enableInlineMath={false}
+          onEditorReady={(editor) => {
+            editorInstance = editor;
+          }}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(editorInstance).toBeDefined();
+      });
+
+      await act(async () => {
+        editorInstance!.setDocument('markdown', 'Budget variable: $x$');
+        await moment();
+      });
+
+      expect(editorInstance!.getDocument('text')).toBe('Budget variable: $x$');
+      expect(JSON.stringify(editorInstance!.getDocument('json'))).not.toContain('"type":"math"');
+    });
   });
 
   describe('onInit callback', () => {

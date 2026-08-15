@@ -301,7 +301,7 @@
     "@lobehub/analytics": "^1.6.4",
     "@lobehub/charts": "^5.4.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "^4.23.1",
+    "@lobehub/editor": "https://pkg.pr.new/@lobehub/editor@cb7405f",
     "@lobehub/icons": "^5.15.0",
     "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",

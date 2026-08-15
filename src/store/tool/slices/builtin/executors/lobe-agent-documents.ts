@@ -3,6 +3,7 @@ import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { AgentDocumentsExecutor } from '@lobechat/builtin-tool-agent-documents/executor';
 import { isDesktop } from '@lobechat/const';
+import { pickString, toRecord } from '@lobechat/utils/object';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { agentDocumentService } from '@/services/agentDocument';
@@ -269,10 +270,16 @@ const runtime = new AgentDocumentsExecutionRuntime(
     // carries no agentId, so resolve the active chat agent — the one whose run
     // just produced the tool call. Covers the server-runtime path where the
     // client service layer never invalidates.
-    onDocumentsMutated: async () => {
-      const agentId = useAgentStore.getState().activeAgentId;
+    onDocumentsMutated: async (result) => {
+      const state = toRecord(result.state);
+      const agentId = pickString(state?.agentId) ?? useAgentStore.getState().activeAgentId;
       if (!agentId) return;
-      await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
+      await invalidateDocumentMutation({
+        agentDocumentId: pickString(state?.agentDocumentId),
+        agentId,
+        cause: 'agent-document',
+        documentId: pickString(state?.documentId),
+      });
     },
   },
 );

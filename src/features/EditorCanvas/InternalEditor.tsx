@@ -6,6 +6,7 @@ import {
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
+  ReactMathPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
 } from '@lobehub/editor';
@@ -44,7 +45,7 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
  */
 const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
-  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
+  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin, mathPlugin: false }),
   ReactTablePlugin,
 ];
 
@@ -98,10 +99,12 @@ export interface InternalEditorProps extends EditorCanvasProps {
  */
 const InternalEditor = memo<InternalEditorProps>(
   ({
+    allowContentBleed,
     contentChangeLockRef,
     disabled,
     editable = true,
     editor,
+    enableInlineMath = true,
     extraPlugins,
     floatingToolbar = true,
     onContentChange,
@@ -137,11 +140,11 @@ const InternalEditor = memo<InternalEditorProps>(
         maxWidth: '100%',
         minWidth: 0,
         opacity: disabled ? 0.65 : undefined,
-        overflow: 'hidden',
+        overflow: allowContentBleed ? 'visible' : 'hidden',
         pointerEvents: disabled ? 'none' : undefined,
         width: '100%',
       }),
-      [disabled],
+      [allowContentBleed, disabled],
     );
 
     // Build plugins array
@@ -160,10 +163,12 @@ const InternalEditor = memo<InternalEditorProps>(
         theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
+      const mathPlugin = Editor.withProps(ReactMathPlugin, { enableInlineMath });
+
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin]
+        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin];
 
       // Add toolbar only when the editor is actually editable — a locked /
       // read-only page must not surface the floating formatting toolbar on
@@ -191,6 +196,7 @@ const InternalEditor = memo<InternalEditorProps>(
       editable,
       editor,
       editorState,
+      enableInlineMath,
       extraPlugins,
       floatingToolbar,
       handleFileUpload,
