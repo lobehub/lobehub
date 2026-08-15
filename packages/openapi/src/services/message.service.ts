@@ -88,7 +88,7 @@ export class MessageService extends BaseService {
    * @returns Message count result
    */
   async countMessagesByUserId(targetUserId: string): ServiceResult<MessageCountResult> {
-    this.log('info', '根据用户ID统计消息数量', { targetUserId });
+    this.log('info', 'count messages by user ID', { targetUserId });
 
     try {
       // Permission check
@@ -97,7 +97,7 @@ export class MessageService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此用户的消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this user\'s messages');
       }
 
       const result = await this.db
@@ -106,11 +106,11 @@ export class MessageService extends BaseService {
         .where(this.buildPermissionWhere(messages, { userId: targetUserId }));
 
       const messageCount = result[0]?.count || 0;
-      this.log('info', '用户消息统计完成', { count: messageCount });
+      this.log('info', 'user message count completed', { count: messageCount });
 
       return { count: messageCount };
     } catch (error) {
-      this.handleServiceError(error, '根据用户ID统计消息数量');
+      this.handleServiceError(error, 'count messages by user ID');
     }
   }
 
@@ -120,7 +120,7 @@ export class MessageService extends BaseService {
    * @returns Message count result
    */
   async countMessagesByTopicIds(topicIds: string[]): ServiceResult<MessageCountResult> {
-    this.log('info', '根据话题ID数组统计消息数量', { topicIds, userId: this.userId });
+    this.log('info', 'count messages by topic ID array', { topicIds, userId: this.userId });
 
     try {
       // Permission check
@@ -129,7 +129,7 @@ export class MessageService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此话题的消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this topic\'s messages');
       }
 
       const result = await this.db
@@ -138,11 +138,11 @@ export class MessageService extends BaseService {
         .where(and(inArray(messages.topicId, topicIds), this.buildWorkspaceWhere(messages)));
 
       const messageCount = result[0]?.count || 0;
-      this.log('info', '话题消息统计完成', { count: messageCount });
+      this.log('info', 'topic message count completed', { count: messageCount });
 
       return { count: messageCount };
     } catch (error) {
-      this.handleServiceError(error, '根据话题ID数组统计消息数量');
+      this.handleServiceError(error, 'count messages by topic ID array');
     }
   }
 
@@ -152,7 +152,7 @@ export class MessageService extends BaseService {
    * @returns Message count result
    */
   async countMessages(query: MessagesCountQuery): ServiceResult<MessageCountResult> {
-    this.log('info', '统计消息数量', { query, userId: this.userId });
+    this.log('info', 'count messages', { query, userId: this.userId });
 
     try {
       // Count by user ID (requires special permission check)
@@ -172,11 +172,11 @@ export class MessageService extends BaseService {
         .where(this.buildWorkspaceWhere(messages));
 
       const messageCount = result[0]?.count || 0;
-      this.log('info', '当前用户消息统计完成', { count: messageCount });
+      this.log('info', 'current user message count completed', { count: messageCount });
 
       return { count: messageCount };
     } catch (error) {
-      this.handleServiceError(error, '统计消息数量');
+      this.handleServiceError(error, 'count messages');
     }
   }
 
@@ -188,7 +188,7 @@ export class MessageService extends BaseService {
   async searchMessagesByKeyword(
     searchRequest: SearchMessagesByKeywordRequest,
   ): ServiceResult<MessageResponse[]> {
-    this.log('info', '根据关键词搜索消息', {
+    this.log('info', 'search messages by keyword', {
       ...searchRequest,
       userId: this.userId,
     });
@@ -198,7 +198,7 @@ export class MessageService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('MESSAGE_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权搜索消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to search messages');
       }
 
       const { keyword, limit = 20, offset = 0 } = searchRequest;
@@ -212,7 +212,7 @@ export class MessageService extends BaseService {
         .where(and(ilike(messages.content, `%${keyword}%`), ...conditions));
 
       if (contentMatchedMessages.length === 0) {
-        this.log('info', '关键词搜索消息完成', { keyword, resultCount: 0 });
+        this.log('info', 'keyword message search completed', { keyword, resultCount: 0 });
         return [];
       }
 
@@ -237,14 +237,14 @@ export class MessageService extends BaseService {
         },
       })) as MessageResponseFromDatabase[];
 
-      this.log('info', '关键词搜索消息完成', {
+      this.log('info', 'keyword message search completed', {
         keyword,
         resultCount: result.length,
       });
 
       return this.formatMessages(result);
     } catch (error) {
-      this.handleServiceError(error, '关键词搜索消息');
+      this.handleServiceError(error, 'search messages by keyword');
     }
   }
 
@@ -254,11 +254,11 @@ export class MessageService extends BaseService {
    * @returns Message list
    */
   async getMessages(request: MessagesListQuery): ServiceResult<MessageListResponse> {
-    this.log('info', '获取消息列表', { request, userId: this.userId });
+    this.log('info', 'get message list', { request, userId: this.userId });
 
     try {
       if (!request.userId && !request.topicId) {
-        throw this.createValidationError('获取消息列表时必须提供 userId 或 topicId');
+        throw this.createValidationError('Either userId or topicId must be provided when getting message list');
       }
 
       // Build query conditions
@@ -271,7 +271,7 @@ export class MessageService extends BaseService {
         });
 
         if (!permissionResult.isPermitted) {
-          throw this.createAuthorizationError(permissionResult.message || '无权访问消息列表');
+          throw this.createAuthorizationError(permissionResult.message || 'No permission to access message list');
         }
 
         conditions.push(this.buildPermissionWhere(messages, { userId: request.userId })!);
@@ -284,7 +284,7 @@ export class MessageService extends BaseService {
         });
 
         if (!permissionResult.isPermitted) {
-          throw this.createAuthorizationError(permissionResult.message || '无权访问消息列表');
+          throw this.createAuthorizationError(permissionResult.message || 'No permission to access message list');
         }
 
         conditions.push(eq(messages.topicId, request.topicId));
@@ -330,14 +330,14 @@ export class MessageService extends BaseService {
         messageList as MessageResponseFromDatabase[],
       );
 
-      this.log('info', '获取消息列表完成', { count: messageListWithFiles.length });
+      this.log('info', 'get message list completed', { count: messageListWithFiles.length });
 
       return {
         messages: messageListWithFiles,
         total: countResult[0]?.count || 0,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取消息列表');
+      this.handleServiceError(error, 'get message list');
     }
   }
 
@@ -347,7 +347,7 @@ export class MessageService extends BaseService {
    * @returns Message details
    */
   async getMessageById(messageId: string): ServiceResult<MessageResponse | null> {
-    this.log('info', '根据消息ID获取消息详情', { messageId, userId: this.userId });
+    this.log('info', 'get message detail by ID', { messageId, userId: this.userId });
 
     try {
       // Permission check
@@ -356,7 +356,7 @@ export class MessageService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this message');
       }
 
       // Build query conditions
@@ -379,17 +379,17 @@ export class MessageService extends BaseService {
       })) as MessageResponseFromDatabase;
 
       if (!message) {
-        this.log('info', '消息不存在或无权限访问', { messageId });
+        this.log('info', 'message not found or no permission to access', { messageId });
         return null;
       }
 
-      this.log('info', '获取消息详情完成', { messageId });
+      this.log('info', 'get message detail completed', { messageId });
 
       const messageWithFiles = await this.formatMessages([message]);
 
       return messageWithFiles[0];
     } catch (error) {
-      this.handleServiceError(error, '获取消息详情');
+      this.handleServiceError(error, 'get message detail');
     }
   }
 
@@ -399,7 +399,7 @@ export class MessageService extends BaseService {
    * @returns Created message (includes session and user information)
    */
   async createMessage(messageData: MessagesCreateRequest): ServiceResult<MessageResponse> {
-    this.log('info', '创建新消息', {
+    this.log('info', 'create new message', {
       role: messageData.role,
       topicId: messageData.topicId,
       userId: this.userId,
@@ -413,7 +413,7 @@ export class MessageService extends BaseService {
       );
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to create message');
       }
 
       const [newMessage] = await this.db
@@ -446,7 +446,7 @@ export class MessageService extends BaseService {
 
       // Handle file attachments
       if (messageData.files && messageData.files.length > 0) {
-        this.log('info', '消息包含文件附件', {
+        this.log('info', 'message contains file attachments', {
           files: messageData.files,
           messageId: newMessage.id,
         });
@@ -477,16 +477,16 @@ export class MessageService extends BaseService {
       })) as MessageResponseFromDatabase;
 
       if (!completeMessage) {
-        throw new Error('无法查询到刚创建的消息');
+        throw new Error('Failed to query the newly created message');
       }
 
-      this.log('info', '创建消息完成', { messageId: newMessage.id });
+      this.log('info', 'create message completed', { messageId: newMessage.id });
 
       const completeMessageWithFiles = await this.formatMessages([completeMessage]);
 
       return completeMessageWithFiles[0];
     } catch (error) {
-      this.handleServiceError(error, '创建消息');
+      this.handleServiceError(error, 'create message');
     }
   }
 
@@ -498,7 +498,7 @@ export class MessageService extends BaseService {
   async createMessageWithAIReply(
     messageData: MessagesCreateRequest,
   ): ServiceResult<MessageResponse | null | undefined> {
-    this.log('info', '创建消息并生成AI回复', {
+    this.log('info', 'create message and generate AI reply', {
       role: messageData.role,
       topicId: messageData.topicId,
       userId: this.userId,
@@ -511,7 +511,7 @@ export class MessageService extends BaseService {
         messageData.topicId ? { targetTopicId: messageData.topicId } : undefined,
       );
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to create message');
       }
 
       // 1. Create user message
@@ -519,13 +519,13 @@ export class MessageService extends BaseService {
 
       // 2. If it is a user message, generate an AI reply
       if (messageData.role === 'user') {
-        this.log('info', '开始获取对话历史');
+        this.log('info', 'starting to fetch conversation history');
         // Get conversation history
         const conversationHistory = await this.getConversationHistory(messageData.topicId);
-        this.log('info', '对话历史获取完成', { historyLength: conversationHistory.length });
+        this.log('info', 'conversation history fetched', { historyLength: conversationHistory.length });
 
         // Use ChatService to generate reply
-        this.log('info', '开始生成AI回复', {
+        this.log('info', 'starting to generate AI reply', {
           model: messageData.model,
           provider: messageData.provider,
           userId: this.userId,
@@ -542,12 +542,12 @@ export class MessageService extends BaseService {
             sessionId: null,
             userMessage: messageData.content,
           });
-          this.log('info', 'AI回复生成完成', { replyLength: aiReplyContent.length });
+          this.log('info', 'AI reply generated', { replyLength: aiReplyContent.length });
         } catch (replyError) {
-          this.log('error', 'AI回复生成失败，使用默认回复', {
+          this.log('error', 'AI reply generation failed, using default reply', {
             error: replyError instanceof Error ? replyError.message : String(replyError),
           });
-          aiReplyContent = '抱歉，AI 服务暂时不可用，请稍后再试。';
+          aiReplyContent = 'Sorry, the AI service is temporarily unavailable, please try again later.';
         }
 
         // 3. Create AI reply message
@@ -559,11 +559,11 @@ export class MessageService extends BaseService {
           topicId: messageData.topicId,
         };
 
-        this.log('info', '开始创建AI回复消息');
+        this.log('info', 'starting to create AI reply message');
         const aiReply = await this.createMessage(aiReplyData);
-        this.log('info', 'AI回复消息创建完成', { aiReplyId: aiReply.id });
+        this.log('info', 'AI reply message created', { aiReplyId: aiReply.id });
 
-        this.log('info', '创建消息和AI回复完成', {
+        this.log('info', 'create message and AI reply completed', {
           aiReplyId: aiReply.id,
           userMessageId: userMessage.id,
         });
@@ -574,7 +574,7 @@ export class MessageService extends BaseService {
       // If it is not a user message, return empty
       return;
     } catch (error) {
-      this.handleServiceError(error, '创建消息并生成AI回复');
+      this.handleServiceError(error, 'create message and generate AI reply');
     }
   }
 
@@ -611,7 +611,7 @@ export class MessageService extends BaseService {
           role: msg.role as 'user' | 'assistant',
         }));
     } catch (error) {
-      this.log('error', '获取对话历史失败', {
+      this.log('error', 'failed to get conversation history', {
         error: error instanceof Error ? error.message : String(error),
         topicId,
       });
@@ -632,7 +632,7 @@ export class MessageService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限删除该消息');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to delete this message');
       }
 
       // Build delete conditions
@@ -648,9 +648,9 @@ export class MessageService extends BaseService {
         await trx.delete(messagesFiles).where(eq(messagesFiles.messageId, messageId));
       });
 
-      this.log('info', '消息删除成功', { messageId });
+      this.log('info', 'message deleted successfully', { messageId });
     } catch (error) {
-      return this.handleServiceError(error, '删除消息');
+      return this.handleServiceError(error, 'delete message');
     }
   }
 
@@ -684,7 +684,7 @@ export class MessageService extends BaseService {
         }
       }
 
-      this.log('info', '批量删除消息完成', {
+      this.log('info', 'batch delete messages completed', {
         failed: result.failed,
         success: result.success,
         total: messageIds.length,
@@ -692,7 +692,7 @@ export class MessageService extends BaseService {
 
       return result;
     } catch (error) {
-      return this.handleServiceError(error, '批量删除消息');
+      return this.handleServiceError(error, 'batch delete messages');
     }
   }
 }
