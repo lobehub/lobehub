@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveDshRuntimeLaunch, spawnDshSdkSession } from './dshSdkSession';
+import {
+  resolveDshRuntimeCommand,
+  resolveDshRuntimeLaunch,
+  spawnDshSdkSession,
+} from './dshSdkSession';
 
 /**
  * A stand-in harness runtime: answers the handshake and the prompt, then
@@ -70,6 +74,18 @@ describe('spawnDshSdkSession', () => {
     expect(launch.command).toBe(process.execPath);
     expect(launch.args.at(-1)).toMatch(/dshRuntimeEntry\.(?:js|ts)$/);
     expect(launch.args.join(' ')).not.toContain('dsh-sdk-jsonrpc-demo');
+  });
+
+  it('launches the DSH runtime with Node when the parent CLI runs under Bun', () => {
+    expect(
+      resolveDshRuntimeCommand({ bun: '1.3.11' } as unknown as NodeJS.ProcessVersions, '/bun'),
+    ).toBe('node');
+    expect(
+      resolveDshRuntimeCommand(
+        { bun: '1.3.11', electron: '40.0.0' } as unknown as NodeJS.ProcessVersions,
+        '/Electron',
+      ),
+    ).toBe('/Electron');
   });
 
   it('boots the bundled composition and completes the JSON-RPC handshake', async () => {

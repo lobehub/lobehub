@@ -11,10 +11,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
-  mockResolveHeteroSpawnCommand: vi.fn(),
-  mockSpawnAgent: vi.fn(),
-}));
+const { mockResolveHeteroSpawnCommand, mockSpawnAgent, mockSpawnDshSdkSession } = vi.hoisted(
+  () => ({
+    mockResolveHeteroSpawnCommand: vi.fn(),
+    mockSpawnAgent: vi.fn(),
+    mockSpawnDshSdkSession: vi.fn(),
+  }),
+);
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -26,6 +29,7 @@ const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof HeteroSpawn>()),
   spawnAgent: mockSpawnAgent,
+  spawnDshSdkSession: mockSpawnDshSdkSession,
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
@@ -113,6 +117,7 @@ describe('hetero exec command', () => {
       },
     );
     mockSpawnAgent.mockReset();
+    mockSpawnDshSdkSession.mockReset();
     mockHeteroIngestMutate.mockReset();
     mockHeteroFinishMutate.mockReset();
     mockGetTrpcClient.mockReset();
@@ -155,9 +160,9 @@ describe('hetero exec command', () => {
     }
   };
 
-  it('supports exactly the local agent descriptor types', () => {
+  it('supports every local descriptor type plus the bundled DeepSeek Harness runtime', () => {
     expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
-      HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+      [...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type), 'deepseek-harness'].toSorted(),
     );
   });
 
@@ -229,6 +234,49 @@ describe('hetero exec command', () => {
         prompt: 'do thing',
       }),
     );
+  });
+
+  it('runs DeepSeek Harness through its bundled JSON-RPC session', async () => {
+    const dispose = vi.fn().mockResolvedValue(undefined);
+    const prompt = vi.fn(async function* () {
+      yield {
+        data: { model: 'deepseek-chat', provider: 'deepseek-harness' },
+        operationId: 'op-dsh',
+        type: 'stream_start',
+      };
+      yield {
+        data: { finishReason: 'stop' },
+        operationId: 'op-dsh',
+        type: 'agent_runtime_end',
+      };
+    });
+    mockSpawnDshSdkSession.mockResolvedValue({ dispose, prompt });
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'deepseek-harness',
+      '--prompt',
+      'say hi',
+      '--cwd',
+      '/tmp/work',
+      '--model',
+      'deepseek-chat',
+    ]);
+
+    expect(mockSpawnDshSdkSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/work',
+        model: 'deepseek-chat',
+        provider: 'deepseek-official',
+        sessionId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      }),
+    );
+    expect(prompt).toHaveBeenCalledWith('say hi');
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('runs Kimi Code with its default command and forwards model but not effort', async () => {

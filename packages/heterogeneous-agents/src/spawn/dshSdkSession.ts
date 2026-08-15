@@ -51,6 +51,11 @@ export interface DshRuntimeLaunch {
   env?: Record<string, string>;
 }
 
+export const resolveDshRuntimeCommand = (
+  versions: NodeJS.ProcessVersions,
+  execPath: string,
+): string => ('bun' in versions && !versions.electron ? 'node' : execPath);
+
 /** Resolve the source entry through tsx in development and compiled JS in production. */
 export const resolveDshRuntimeLaunch = (): DshRuntimeLaunch => {
   const currentPath = fileURLToPath(import.meta.url);
@@ -60,12 +65,16 @@ export const resolveDshRuntimeLaunch = (): DshRuntimeLaunch => {
     import.meta.url,
   );
   const env = process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : undefined;
+  // `lh` is commonly launched through Bun in development. DSH and tsx are
+  // Node runtimes; reusing Bun's `process.execPath` makes the loader resolve
+  // CommonJS internals through Bun and fail before JSON-RPC initialization.
+  const command = resolveDshRuntimeCommand(process.versions, process.execPath);
 
-  if (!sourceMode) return { args: [fileURLToPath(entryUrl)], command: process.execPath, env };
+  if (!sourceMode) return { args: [fileURLToPath(entryUrl)], command, env };
 
   return {
     args: ['--import', createRequire(import.meta.url).resolve('tsx'), fileURLToPath(entryUrl)],
-    command: process.execPath,
+    command,
     env,
   };
 };
