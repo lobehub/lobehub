@@ -12,6 +12,19 @@
  * `@lobechat/agent-gateway-client` (which is a browser-side WebSocket client
  * that producers have no business pulling in).
  */
+export {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  CodexAppServerClient,
+  type CodexAppServerClientOptions,
+  CodexAppServerConnectionError,
+  CodexAppServerRpcError,
+  CodexThreadSession,
+  type CodexThreadSessionOptions,
+  getCodexAppServerUnsupportedArgs,
+  isCodexAppServerCompatibilityError,
+} from '../codex';
 export type { UsageData } from '../types';
 export {
   type AcpRpcErrorData,
@@ -41,16 +54,6 @@ export {
   type HeterogeneousAgentRuntimeTask,
 } from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
-export {
-  buildCodexAppServerArgs,
-  buildCodexAppServerInput,
-  buildCodexAppServerThreadParams,
-  CodexAppServerSession,
-  type CodexAppServerSessionOptions,
-  type CodexAppServerThreadParams,
-  type CodexAppServerUserInput,
-  getCodexAppServerUnsupportedArgs,
-} from './codexAppServerSession';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
   type CodexInitialModelResolution,

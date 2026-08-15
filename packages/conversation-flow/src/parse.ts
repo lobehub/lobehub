@@ -143,7 +143,7 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
     return next;
   });
 
-  // Historical LOBE-12497 data can contain a taskCallback and a tool result as
+  // Historical data can contain a taskCallback and a tool result as
   // sibling branches under the same assistant tool-use shell. Normal branch
   // resolution must keep choosing one conversational continuation, but hiding
   // the inactive callback also hides the only user-visible record that a task

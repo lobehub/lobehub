@@ -5,11 +5,11 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
+  HomeIcon,
   Image,
   ImageIcon,
   LayoutPanelTopIcon,
   LibraryBigIcon,
-  MessageSquarePlus,
   Mic2,
   Settings,
   ShapesIcon,
@@ -33,6 +33,7 @@ import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
@@ -818,6 +819,21 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'agents',
   },
 
+  // Projects view-all route
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/projects'), 'Desktop > Projects', {
+          preloadId: 'projects',
+        }),
+        handle: { meta: projectsRouteMeta },
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'projects',
+  },
+
   // Task workspace routes (cross-agent)
   {
     children: [
@@ -1245,7 +1261,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     element: deferPlatformElement(options.createHomeElement),
     handle: {
       meta: routeMeta({
-        icon: MessageSquarePlus,
+        icon: HomeIcon,
         tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),

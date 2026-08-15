@@ -282,7 +282,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * retrieval/indexing infrastructure owned by their domain scope, their
  * per-call cost is marginal, and file-upload pipelines trigger the same
  * embedding work outside this guard anyway. Whether embeddings deserve their
- * own scope (e.g. `model:embed`) is tracked in LOBE-12910.
+ * own scope (e.g. `model:embed`) is still an open product decision.
  */
 const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
 

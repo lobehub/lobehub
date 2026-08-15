@@ -1328,7 +1328,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
     });
   });
 
-  // Regression guard for LOBE-12379: the BM25 scans were split into an inner
+  // Regression guard: the BM25 scans were split into an inner
   // single-table subquery (so ParadeDB can pick its TopN custom scan) with the
   // joins and — in personal mode — the `workspace_id IS NULL` check moved above
   // it. These tests pin the two things that split could break: rows leaking
@@ -1545,7 +1545,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       if (hit?.type === 'file') expect(hit.knowledgeBaseId).toBe(base.id);
     });
   });
-  // Regression guard for LOBE-12575: the agent filter on topics/messages moved
+  // Regression guard: the agent filter on topics/messages moved
   // from inside the BM25 scan to above it (over-fetching through a deep
   // candidate pool). These tests pin the result semantics that move could
   // break: rows leaking across agents, and the filter being lost entirely.
@@ -1629,7 +1629,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
 
   // The workspace-scoping tests above pin *results*, and this change is
   // deliberately result-neutral — they pass against the pre-fix implementation
-  // too. What actually fixes LOBE-12379 is the *shape* of the emitted SQL, so
+  // too. What actually fixes the regression is the *shape* of the emitted SQL, so
   // it needs its own guard: ParadeDB only picks `TopNScanExecState` when the
   // scan node itself carries the whole `ORDER BY paradedb.score() LIMIT n`.
   //
@@ -1768,7 +1768,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       }
     });
 
-    // Guard for LOBE-12575: `agent_id` is not a BM25 field either — inside the
+    // Guard: `agent_id` is not a BM25 field either — inside the
     // scan it costs TopN and, on production pg_search 0.15.26, NULLs out every
     // score (arbitrary order, flat relevance 3). The agent filter must sit
     // above the scan, backed by a deepened candidate pool.

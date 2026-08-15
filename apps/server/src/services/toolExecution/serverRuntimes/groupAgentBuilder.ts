@@ -7,7 +7,7 @@
  * `toolExecution/builtin.ts` throws `Builtin tool "lobe-group-agent-builder" is
  * not implemented` and *every* member/config mutation fails — the model then
  * falls back to generic agent creation, which spawns standalone agents outside
- * the group (LOBE-12941).
+ * the group — built-in group agents were missing from the member list.
  *
  * The edited group rides on `ctx.editingGroupId` (see `ExecAgentAppContext`),
  * NOT `ctx.groupId`: the builder conversation is owned by the builtin builder

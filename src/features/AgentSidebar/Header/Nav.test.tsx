@@ -33,6 +33,7 @@ vi.mock('@lobehub/ui/icons', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
+  ListTodoIcon: () => null,
   MessageSquarePlusIcon: () => null,
   MessagesSquareIcon: () => null,
   SearchIcon: () => null,
@@ -229,7 +230,31 @@ describe('Agent sidebar header nav', () => {
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
   });
 
-  it('places topics above profile and goals in the agent navigation', () => {
+  it('navigates to the agent tasks page', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    fireEvent.click(screen.getByRole('button', { name: 'tab.tasks' }));
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
+  });
+
+  it.each(['/agent/agt_eH4zL98zBx5u/tasks', '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA'])(
+    'keeps the tasks entry active on %s',
+    (pathname) => {
+      usePathnameMock.mockReturnValue(pathname);
+
+      render(<Nav />);
+
+      expect(screen.getByRole('button', { name: 'tab.tasks' })).toHaveAttribute(
+        'data-active',
+        'true',
+      );
+    },
+  );
+
+  it('places topics above profile, goals, and tasks in the agent navigation', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -237,5 +262,6 @@ describe('Agent sidebar header nav', () => {
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
     expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
     expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
+    expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
   });
 });

@@ -16,6 +16,12 @@ const resourcePermissionMock = vi.hoisted(() => ({
   workspaceId: undefined as string | undefined,
 }));
 const wsNavigateMock = vi.hoisted(() => vi.fn());
+const menuActionMocks = vi.hoisted(() => ({
+  handleCopyLink: vi.fn(),
+  handleDelete: vi.fn(),
+  setRightPanelMode: vi.fn(),
+  togglePageAgentPanel: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -141,7 +147,7 @@ vi.mock('@/store/file', () => ({
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      togglePageAgentPanel: vi.fn(),
+      togglePageAgentPanel: menuActionMocks.togglePageAgentPanel,
       toggleWideScreen: vi.fn(),
       wideScreen: false,
     }),
@@ -157,15 +163,15 @@ vi.mock('../store', () => ({
   usePageEditorStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       documentId: 'doc-1',
-      setRightPanelMode: vi.fn(),
+      setRightPanelMode: menuActionMocks.setRightPanelMode,
     }),
   useStoreApi: () => ({
     getState: () => ({
       editor: {
         getDocument: () => '# Hello',
       },
-      handleCopyLink: vi.fn(),
-      handleDelete: vi.fn(),
+      handleCopyLink: menuActionMocks.handleCopyLink,
+      handleDelete: menuActionMocks.handleDelete,
       title: 'Hello',
     }),
   }),
@@ -180,7 +186,7 @@ describe('PageEditor header menu', () => {
     permissionMock.edit_own_content = true;
     resourcePermissionMock.canManage = false;
     resourcePermissionMock.workspaceId = undefined;
-    wsNavigateMock.mockClear();
+    vi.clearAllMocks();
   });
 
   it('places the member-permission page entry in the overflow menu for managers', () => {
@@ -218,5 +224,25 @@ describe('PageEditor header menu', () => {
     expect(getMenuItem(items, 'copy-link')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'version-history')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'export')).not.toMatchObject({ disabled: true });
+  });
+
+  it('uses surface-specific actions when provided', async () => {
+    const onCopyLink = vi.fn();
+    const onDeleted = vi.fn();
+    const onOpenHistory = vi.fn();
+    const { result } = renderHook(() => useMenu({ onCopyLink, onDeleted, onOpenHistory }));
+
+    (getMenuItem(result.current.menuItems, 'copy-link') as { onClick: () => void }).onClick();
+    (getMenuItem(result.current.menuItems, 'version-history') as { onClick: () => void }).onClick();
+    await (
+      getMenuItem(result.current.menuItems, 'delete') as { onClick: () => Promise<void> }
+    ).onClick();
+
+    expect(onCopyLink).toHaveBeenCalledOnce();
+    expect(menuActionMocks.handleCopyLink).not.toHaveBeenCalled();
+    expect(menuActionMocks.setRightPanelMode).toHaveBeenCalledWith('history');
+    expect(onOpenHistory).toHaveBeenCalledOnce();
+    expect(menuActionMocks.togglePageAgentPanel).not.toHaveBeenCalled();
+    expect(menuActionMocks.handleDelete).toHaveBeenCalledWith(expect.any(Function), onDeleted);
   });
 });

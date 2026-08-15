@@ -424,7 +424,7 @@ describe('createAnthropicCompatibleRuntime', () => {
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
     // The prefill strip inside handlePayload sees the logical id; when the
     // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must
-    // re-strip against the model actually sent (LOBE-12572).
+    // re-strip against the model actually sent.
     const messagesCreate = vi.fn().mockResolvedValue({ content: [] });
     const Runtime = createAnthropicCompatibleRuntime({
       chatCompletion: {

@@ -174,6 +174,17 @@ describe('projectWindows', () => {
     expect(fable.limitType).toBe('weekly_scoped');
   });
 
+  it('folds sub-second reset jitter around a minute boundary into one window', () => {
+    const windows = projectWindows([
+      mk({ resetsAt: reset - 483, utilization: 20 }),
+      mk({ resetsAt: reset + 43, utilization: 40 }),
+      mk({ resetsAt: reset + 938, utilization: 60 }),
+    ]);
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({ peakUtilization: 60, resetsAt: reset });
+  });
+
   it('ignores readings without a resetsAt', () => {
     expect(projectWindows([mk({ resetsAt: null })])).toHaveLength(0);
   });

@@ -1988,6 +1988,16 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
+      // A heterogeneous agent has no chat model to snapshot: the external CLI
+      // owns model selection, so `model` here is a stale agent default and
+      // `provider` is NULL (defaulted to the platform chat provider) on every
+      // agent created before the runtime type was stamped on the agent row.
+      // Pin the runtime type and leave the model to the per-run backfill — the
+      // same rule the assistant placeholder below and the client's
+      // `snapshotAgentModel` follow. Detection mirrors the hetero early exit.
+      const heteroSnapshotType =
+        agentConfig.agencyConfig?.heterogeneousProvider?.type ??
+        (isHeterogeneousAgentModelId(model) ? model : undefined);
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopic = await this.topicModel.create(
@@ -2003,8 +2013,8 @@ export class AiAgentService {
           groupId: appContext?.groupId,
           metadata,
           // Snapshot the effective model as the topic's pinned model (config).
-          model,
-          provider,
+          model: heteroSnapshotType ? undefined : model,
+          provider: heteroSnapshotType ?? provider,
           title:
             title !== undefined
               ? title

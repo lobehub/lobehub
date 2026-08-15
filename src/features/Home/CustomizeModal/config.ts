@@ -1,7 +1,6 @@
-// The sections the inbox owns, which is also what the rail can host. Kept apart
-// from the full key list because the main column's own blocks (recents, tasks)
-// never appear in the rail — folding them in would keep the rail alive on the
-// strength of a section it cannot show.
+// The sections HomeInbox owns. Kept apart from the full key list because the
+// main column's standalone blocks (recents, tasks) are rendered by
+// HomeModeContent rather than HomeInbox.
 export const HOME_INBOX_WIDGET_KEYS = [
   'goals',
   'needsYou',
@@ -30,7 +29,7 @@ export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
  *
  * That makes membership a fact about the page, not a taste call: the main
  * column carries the agent feeds and the two task blocks, and the rail carries
- * goals, running, news and suggestions (`RAIL_INBOX_PROPS` hides needs-you and
+ * goals, news and suggestions (`RAIL_INBOX_PROPS` hides needs-you, running and
  * unread from the rail; `ownsRailSections` decides the rest). A widget that
  * moves columns must move groups with it.
  *
@@ -38,9 +37,9 @@ export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
  * and scanning Home walk the same path.
  */
 export const HOME_WIDGET_GROUPS = [
-  { key: 'agent', widgets: ['recents', 'unread', 'needsYou'] },
+  { key: 'agent', widgets: ['unread', 'needsYou', 'running', 'recents'] },
   { key: 'task', widgets: ['tasks', 'scheduledTasks'] },
-  { key: 'rail', widgets: ['goals', 'running', 'news', 'suggestions'] },
+  { key: 'rail', widgets: ['goals', 'news', 'suggestions'] },
 ] as const satisfies ReadonlyArray<{ key: string; widgets: readonly HomeWidgetKey[] }>;
 
 export type HomeWidgetGroupKey = (typeof HOME_WIDGET_GROUPS)[number]['key'];

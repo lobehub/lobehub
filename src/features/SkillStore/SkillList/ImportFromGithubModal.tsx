@@ -1,8 +1,14 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createModal,
+  type ModalInstance,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
