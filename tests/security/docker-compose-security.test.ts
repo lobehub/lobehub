@@ -40,12 +40,22 @@ describe('docker-compose security defaults', () => {
       expect(read(file), file).not.toContain(knownSharedSecret);
     }
 
-    expect(read('docker-compose/setup.sh')).toContain('SEARXNG_SECRET=$(openssl rand -hex 32)');
-    expect(read('docker-compose/setup.sh')).toMatch(
+    const setupScript = read('docker-compose/setup.sh');
+    expect(setupScript).toContain('SEARXNG_SECRET=$(openssl rand -hex 32)');
+    expect(setupScript).toMatch(
+      /if \[ -d "data" \] \|\| \[ -d "s3_data" \]; then\s+# Existing deployments[\s\S]+?if \[ -f "\.env" \]; then\s+ensure_searxng_secret\s+fi\s+show_message "tips_already_installed"/,
+    );
+    expect(setupScript.indexOf('ensure_searxng_secret() {')).toBeLessThan(
+      setupScript.indexOf('# If the folder `data` or `s3_data` exists'),
+    );
+    expect(setupScript).toMatch(
       /if \[\[ "\$ask_result" == "y" \]\]; then[\s\S]+?fi\s+# Compose now requires this value[\s\S]+?ensure_searxng_secret/,
     );
     expect(read('docker-compose/deploy/docker-compose.yml')).toContain(
       '${SEARXNG_SECRET:?SEARXNG_SECRET must be set}',
+    );
+    expect(read('docs/self-hosting/platform/docker-compose.mdx')).toContain(
+      'sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env',
     );
   });
 

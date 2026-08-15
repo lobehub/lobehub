@@ -533,8 +533,36 @@ section_download_files(){
         download_file "$SOURCE_URL/${ENV_EXAMPLES[1]}" ".env"
     fi
 }
+
+ensure_searxng_secret() {
+    if grep -Eq '^SEARXNG_SECRET=.+$' .env; then
+        return 0
+    fi
+
+    SEARXNG_SECRET=$(openssl rand -hex 32)
+    if [ $? -ne 0 ] || [ -z "$SEARXNG_SECRET" ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET"
+        exit 1
+    fi
+
+    if grep -q '^SEARXNG_SECRET=' .env; then
+        if ! sed "${SED_INPLACE_ARGS[@]}" "s#^SEARXNG_SECRET=.*#SEARXNG_SECRET=${SEARXNG_SECRET}#" .env; then
+            echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET in \`.env\`"
+            exit 1
+        fi
+    elif ! echo "SEARXNG_SECRET=${SEARXNG_SECRET}" >> .env; then
+        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET in \`.env\`"
+        exit 1
+    fi
+}
+
 # If the folder `data` or `s3_data` exists, warn the user
 if [ -d "data" ] || [ -d "s3_data" ]; then
+    # Existing deployments may predate SEARXNG_SECRET. Backfill it before
+    # returning so the updated Compose file can still be interpolated.
+    if [ -f ".env" ]; then
+        ensure_searxng_secret
+    fi
     show_message "tips_already_installed"
     exit 0
 else
@@ -705,24 +733,6 @@ section_regenerate_secrets() {
         if [ $? -ne 0 ]; then
             echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET in \`.env\`"
         fi
-    fi
-}
-
-ensure_searxng_secret() {
-    if grep -Eq '^SEARXNG_SECRET=.+$' .env; then
-        return 0
-    fi
-
-    SEARXNG_SECRET=$(openssl rand -hex 32)
-    if [ $? -ne 0 ] || [ -z "$SEARXNG_SECRET" ]; then
-        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET"
-        exit 1
-    fi
-
-    if grep -q '^SEARXNG_SECRET=' .env; then
-        sed "${SED_INPLACE_ARGS[@]}" "s#^SEARXNG_SECRET=.*#SEARXNG_SECRET=${SEARXNG_SECRET}#" .env
-    else
-        echo "SEARXNG_SECRET=${SEARXNG_SECRET}" >> .env
     fi
 }
 
