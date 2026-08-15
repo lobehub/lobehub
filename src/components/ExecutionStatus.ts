@@ -1,4 +1,4 @@
-import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
+import type { ChatTopicStatus, ProjectStatus, TaskStatus } from '@lobechat/types';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
   CircleX,
   Clock,
   HandIcon,
+  PauseCircle,
   StarIcon,
   TriangleAlert,
 } from 'lucide-react';
@@ -50,6 +51,16 @@ export const TASK_STATUS_VISUALS: Record<TaskStatus, ExecutionStatusVisual> = {
   paused: VISUALS.waitingForHuman,
   running: VISUALS.running,
   scheduled: VISUALS.scheduled,
+};
+
+export const PROJECT_STATUS_VISUALS: Record<ProjectStatus, ExecutionStatusVisual> = {
+  active: VISUALS.running,
+  archived: VISUALS.archived,
+  backlog: VISUALS.backlog,
+  canceled: VISUALS.canceled,
+  completed: VISUALS.completed,
+  paused: { color: cssVar.colorTextSecondary, icon: PauseCircle },
+  reviewing: VISUALS.waitingForHuman,
 };
 
 export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual> = {

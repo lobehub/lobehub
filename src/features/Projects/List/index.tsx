@@ -1,26 +1,15 @@
 'use client';
 
-import type { ProjectStatus } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import {
-  ArchiveIcon,
-  CheckCircle2Icon,
-  CircleDashedIcon,
-  CirclePauseIcon,
-  CirclePlayIcon,
-  CircleXIcon,
-  PlusIcon,
-  RotateCwIcon,
-  SearchXIcon,
-  SquareKanbanIcon,
-} from 'lucide-react';
+import { PlusIcon, SearchXIcon, SquareKanbanIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { PROJECT_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
@@ -28,16 +17,6 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
-
-const STATUS_ICON: Record<ProjectStatus, typeof CircleDashedIcon> = {
-  active: CirclePlayIcon,
-  archived: ArchiveIcon,
-  backlog: CircleDashedIcon,
-  canceled: CircleXIcon,
-  completed: CheckCircle2Icon,
-  paused: CirclePauseIcon,
-  reviewing: RotateCwIcon,
-};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   identifier: css`
@@ -68,10 +47,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation('project');
+  const statusVisual = PROJECT_STATUS_VISUALS[project.status];
 
   return (
     <WorkspaceLink to={`/project/${project.id}`}>
       <Flexbox horizontal align={'center'} className={styles.row} gap={12}>
+        <Tooltip title={t(`acceptance.status.${project.status}`)}>
+          <Icon color={statusVisual.color} icon={statusVisual.icon} size={16} />
+        </Tooltip>
         <Icon icon={project.avatar || SquareKanbanIcon} size={20} />
         <Flexbox flex={1} style={{ minWidth: 0 }}>
           <Text ellipsis weight={500}>
@@ -93,9 +76,6 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
         >
           {dayjs(project.updatedAt).fromNow()}
         </Text>
-        <Tooltip title={t(`acceptance.status.${project.status}`)}>
-          <Icon color={cssVar.colorTextSecondary} icon={STATUS_ICON[project.status]} size={16} />
-        </Tooltip>
       </Flexbox>
     </WorkspaceLink>
   );
