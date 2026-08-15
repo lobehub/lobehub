@@ -1,4 +1,4 @@
-import { ImageIcon, MessageSquarePlus } from 'lucide-react';
+import { HomeIcon, ImageIcon } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
@@ -14,7 +14,7 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
   it('uses Home for the personal Home tab and document title', () => {
     const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/');
 
-    expect(staticMeta.icon).toBe(MessageSquarePlus);
+    expect(staticMeta.icon).toBe(HomeIcon);
     expect(staticMeta.tabTitleKey).toBe('navigation.home');
     expect(staticMeta.titleKey).toBe('navigation.home');
   });

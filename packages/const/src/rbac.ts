@@ -633,7 +633,7 @@ export const getWorkspaceRolePermissionCodes = (role: string): readonly string[]
  * Default permission codes every authenticated user holds over their OWN data
  * in personal (non-workspace) context.
  *
- * Why this exists (LOBE-12892): ordinary accounts have no `rbac_user_roles`
+ * Why this exists: ordinary accounts have no `rbac_user_roles`
  * rows — roles are only assigned via the admin backend — so any personal-mode
  * check that consulted the DB alone returned 403 for every registered user,
  * making the OpenAPI surface admin-only in practice. Personal data is already

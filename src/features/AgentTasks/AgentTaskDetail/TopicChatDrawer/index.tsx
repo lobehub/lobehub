@@ -1,12 +1,13 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
 import { FloatingPanel } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2 } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChatList from '@/features/Conversation/ChatList';
@@ -15,6 +16,7 @@ import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/
 import MessageItem from '@/features/Conversation/Messages';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { usePermission } from '@/hooks/usePermission';
@@ -32,6 +34,10 @@ import AssigneeAvatar from '../../features/AssigneeAvatar';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
+const DEFAULT_PANEL_HEIGHT = 'min(640px, calc(100dvh - 16px))';
+const DEFAULT_PANEL_WIDTH = 640;
+const EXPANDED_PANEL_HEIGHT = 'calc(100dvh - 16px)';
+const EXPANDED_PANEL_WIDTH = 'min(960px, calc(100vw - 16px))';
 
 export interface TopicChatDrawerBodyProps {
   agentId: string;
@@ -114,6 +120,8 @@ TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 
 const TopicChatDrawer = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
+  const navigate = useWorkspaceAwareNavigate();
+  const [expanded, setExpanded] = useState(false);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
@@ -144,8 +152,22 @@ const TopicChatDrawer = memo(() => {
     if (activity?.operationId) void copyToClipboard(activity.operationId);
   }, [activity?.operationId]);
 
+  const handleOpenAgentTopic = useCallback(() => {
+    if (!agentId || !topicId) return;
+    closeTopicDrawer();
+    navigate(AGENT_CHAT_TOPIC_URL(agentId, topicId));
+  }, [agentId, closeTopicDrawer, navigate, topicId]);
+
   const menuItems = useMemo<DropdownItem[]>(
     () => [
+      {
+        disabled: !agentId || !topicId,
+        icon: ExternalLink,
+        key: 'openAgentTopic',
+        label: t('taskDetail.topicMenu.openAgentTopic'),
+        onClick: handleOpenAgentTopic,
+      },
+      { type: 'divider' },
       {
         disabled: !topicId,
         icon: Copy,
@@ -161,7 +183,15 @@ const TopicChatDrawer = memo(() => {
         onClick: handleCopyOperationId,
       },
     ],
-    [t, topicId, activity?.operationId, handleCopyTopicId, handleCopyOperationId],
+    [
+      activity?.operationId,
+      agentId,
+      handleCopyOperationId,
+      handleCopyTopicId,
+      handleOpenAgentTopic,
+      t,
+      topicId,
+    ],
   );
 
   const title = (
@@ -208,12 +238,22 @@ const TopicChatDrawer = memo(() => {
     />
   );
 
-  const actions = !topicId ? null : enableTopicLinkShare && canShare ? (
-    <SharePopover topicId={topicId} onOpenModal={openShareModal}>
-      {shareIcon}
-    </SharePopover>
-  ) : (
-    shareIcon
+  const actions = !topicId ? null : (
+    <Flexbox horizontal align={'center'} gap={4}>
+      <ActionIcon
+        icon={expanded ? Minimize2 : Maximize2}
+        size={SHARE_ICON_SIZE}
+        title={t(expanded ? 'taskDetail.topicDrawer.collapse' : 'taskDetail.topicDrawer.expand')}
+        onClick={() => setExpanded((value) => !value)}
+      />
+      {enableTopicLinkShare && canShare ? (
+        <SharePopover topicId={topicId} onOpenModal={openShareModal}>
+          {shareIcon}
+        </SharePopover>
+      ) : (
+        shareIcon
+      )}
+    </Flexbox>
   );
 
   // Freeze title/actions/body during the close animation so the panel keeps
@@ -223,14 +263,14 @@ const TopicChatDrawer = memo(() => {
     <FloatingPanel
       actions={<Freeze frozen={!open}>{actions}</Freeze>}
       getContainer={false}
-      height={'min(640px, calc(100dvh - 16px))'}
+      height={expanded ? EXPANDED_PANEL_HEIGHT : DEFAULT_PANEL_HEIGHT}
       mask={false}
       minHeight={320}
       minWidth={360}
       open={open}
       placement={'bottomRight'}
       title={<Freeze frozen={!open}>{title}</Freeze>}
-      width={640}
+      width={expanded ? EXPANDED_PANEL_WIDTH : DEFAULT_PANEL_WIDTH}
       styles={{
         body: { padding: 0 },
         panel: {

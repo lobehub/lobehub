@@ -103,9 +103,11 @@ interface InboxSection {
  */
 interface HomeInboxProps {
   hideNeedsYou?: boolean;
+  /** Running activity belongs in the main column above recent topics. */
+  hideRunning?: boolean;
   hideUnread?: boolean;
   /**
-   * Main column only: the rail is collapsed, so the sections it owns (running,
+   * Main column only: the rail is collapsed, so the sections it owns (goals,
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
@@ -118,6 +120,7 @@ interface HomeInboxProps {
 const HomeInbox = memo<HomeInboxProps>((props) => {
   const {
     hideNeedsYou,
+    hideRunning,
     hideUnread,
     inlineRail,
     onScopeChange,
@@ -399,8 +402,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     }
   }
 
-  // No title: the card already says "3 tasks running" on its own head.
-  if (showRailSections && runningTopics.length > 0)
+  // No title: the card already says "3 tasks running" on its own head. Keep
+  // this in the main flow immediately before Recent topics; the rail is for
+  // glanceable reports, not live work the user may want to open.
+  if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
       node: (

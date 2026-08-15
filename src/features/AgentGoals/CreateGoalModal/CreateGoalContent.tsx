@@ -106,13 +106,11 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     min-height: 208px;
-    border-block: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
 
     background: ${cssVar.colorBgElevated};
   `,
   inputShellLoading: css`
-    border-color: transparent;
     background: ${cssVar.colorBgElevated};
 
     &::after {

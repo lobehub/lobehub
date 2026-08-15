@@ -101,9 +101,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface HomeModeContentProps {
   /**
-   * The rail is folded away, so this column carries the sections it owns: what
-   * is in flight and what happened stay above the recent topics, and the
-   * suggestions — nothing that happened, only what you could do — land after.
+   * The rail is folded away, so this column carries the sections it owns: goals
+   * and reports stay visible, while suggestions — nothing that happened, only
+   * what you could do — land after the recent topics.
    */
   inlineRail?: boolean;
   mode: HomeMode;
@@ -573,8 +573,8 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     if (!inlineRail) return <Flexbox gap={32}>{taskBlocks}</Flexbox>;
 
     // The rail's sections sit beside task mode while it is open, so a folded
-    // rail must not take them away here either: in flight and what happened
-    // above the task list, suggestions after it. Unread and needs-you stay
+    // rail must not take them away here either: goals and reports above the
+    // task list, suggestions after it. Unread and needs-you stay
     // hidden — task mode never surfaces them, folded or not.
     return (
       <Flexbox gap={32}>
