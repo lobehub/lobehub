@@ -7,7 +7,9 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import Agent from '@/features/AgentSidebar/Header/Agent';
 import AgentDocumentsGroup from '@/features/Conversation/WorkingSidebar/ResourcesSection/AgentDocumentsGroup';
+import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -130,20 +132,23 @@ const AgentDocumentSidebarContent = memo(() => {
       : 'documents');
 
   const header = (
-    <Flexbox horizontal align={'center'} className={styles.header} height={44} paddingInline={8}>
-      <div className={styles.tabs}>
-        {TABS.map((tab) => (
-          <button
-            className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-            key={tab.key}
-            type="button"
-            onClick={() => setPickedTab(tab.key)}
-          >
-            {t(tab.labelKey)}
-          </button>
-        ))}
-      </div>
-    </Flexbox>
+    <>
+      <SideBarHeaderLayout left={<Agent />} />
+      <Flexbox horizontal align={'center'} className={styles.header} height={36} paddingInline={8}>
+        <div className={styles.tabs}>
+          {TABS.map((tab) => (
+            <button
+              className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
+              key={tab.key}
+              type="button"
+              onClick={() => setPickedTab(tab.key)}
+            >
+              {t(tab.labelKey)}
+            </button>
+          ))}
+        </div>
+      </Flexbox>
+    </>
   );
 
   const body = (
