@@ -119,6 +119,10 @@ const {
   traeAcpSessionConstructMock,
   traeAcpSessionInterruptMock,
   traeAcpSessionRunMock,
+  piRpcSessionAbortMock,
+  piRpcSessionCloseMock,
+  piRpcSessionConstructMock,
+  piRpcSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
@@ -141,6 +145,10 @@ const {
   traeAcpSessionConstructMock: vi.fn(),
   traeAcpSessionInterruptMock: vi.fn(),
   traeAcpSessionRunMock: vi.fn(),
+  piRpcSessionAbortMock: vi.fn(),
+  piRpcSessionCloseMock: vi.fn(),
+  piRpcSessionConstructMock: vi.fn(),
+  piRpcSessionRunMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -356,6 +364,41 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   };
 });
 
+vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
+  class MockPiRpcSession {
+    constructor(private readonly options: any) {
+      piRpcSessionConstructMock(options);
+    }
+
+    async abort() {
+      piRpcSessionAbortMock();
+    }
+
+    async close() {
+      piRpcSessionCloseMock();
+    }
+
+    async run() {
+      if (piRpcSessionRunMock.getMockImplementation()) {
+        return piRpcSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onSessionId('pi_sess_1');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'pi-rpc' },
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      return { aborted: false };
+    }
+  }
+
+  return { PiRpcSession: MockPiRpcSession };
+});
+
 const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
   consumeCodexRateLimitResetCreditMock: vi.fn(),
   fetchCodexQuotaMock: vi.fn(),
@@ -500,6 +543,10 @@ describe('HeterogeneousAgentCtr', () => {
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
     traeAcpSessionRunMock.mockReset();
+    piRpcSessionAbortMock.mockReset();
+    piRpcSessionCloseMock.mockReset();
+    piRpcSessionConstructMock.mockReset();
+    piRpcSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
@@ -2498,6 +2545,110 @@ describe('HeterogeneousAgentCtr', () => {
         }),
         sessionId,
       });
+    });
+  });
+
+  describe('sendPrompt (pi rpc)', () => {
+    it('routes pi prompts through the RPC transport with resume args and captures the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        args: ['--provider', 'anthropic'],
+        command: 'pi',
+        resumeSessionId: 'prev_sess',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-pi', prompt: 'hello pi', sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--provider', 'anthropic'],
+          commandPath: 'pi',
+          operationId: 'op-pi',
+          resumeSessionId: 'prev_sess',
+          uploadImage: expect.any(Function),
+        }),
+      );
+      expect(spawnCalls).toHaveLength(0);
+      // Native session id captured for the next turn's resume.
+      const sessionInfo = await ctr.getSessionInfo({ sessionId });
+      expect(sessionInfo.agentSessionId).toBe('pi_sess_1');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('aborts the RPC session instead of killing the process tree', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let resolveRun: ((result: { aborted: boolean }) => void) | undefined;
+      piRpcSessionRunMock.mockImplementation(
+        () => new Promise<{ aborted: boolean }>((resolve) => {
+          resolveRun = resolve;
+        }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      const sendPromise = ctr.sendPrompt({ operationId: 'op-pi-abort', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(piRpcSessionConstructMock).toHaveBeenCalled());
+
+      await ctr.cancelSession({ sessionId });
+
+      expect(piRpcSessionAbortMock).toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(0);
+      // The run resolves as aborted → the session completes, not errors.
+      resolveRun?.({ aborted: true });
+      await sendPromise;
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('surfaces pi RPC failures as session errors without a json fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      piRpcSessionRunMock.mockRejectedValue(new Error('pi RPC exited unexpectedly (code 1)'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-pi-err', prompt: 'x', sessionId }),
+      ).rejects.toThrow('pi RPC exited unexpectedly');
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentSessionError',
+        expect.objectContaining({ sessionId }),
+      );
+      // No spawn of `pi --mode json` happened — pi is RPC-only.
+      expect(spawnCalls).toHaveLength(0);
     });
   });
 

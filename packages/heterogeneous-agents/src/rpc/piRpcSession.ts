@@ -118,7 +118,12 @@ export class PiRpcSession {
       uploadImage: options.uploadImage,
     });
     this.client = new PiRpcClient({
-      args: options.args,
+      // Resume the native pi session when one is known — mirrors the legacy
+      // `--session-id` resume of the json path.
+      args: [
+        ...(options.resumeSessionId ? ['--session-id', options.resumeSessionId] : []),
+        ...options.args,
+      ],
       commandPath: options.commandPath,
       cwd: options.cwd,
       env: options.env,

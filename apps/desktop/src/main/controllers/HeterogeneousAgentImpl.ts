@@ -61,12 +61,14 @@ import {
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
+  normalizeImage,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
+import { PiRpcSession, type PiRpcImage } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -318,6 +320,8 @@ interface AgentSession {
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
   process?: ChildProcess;
+  /** Active pi RPC run (per-run process; cleared when the run settles). */
+  piRpcSession?: PiRpcSession;
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
    * when the configured command is bare: detection can find the CLI through
@@ -1191,6 +1195,11 @@ export default class HeterogeneousAgentCtr {
       return this.sendPromptWithTraeAcp(params, session);
     }
 
+    // Pi runs exclusively over the RPC transport — there is no json fallback.
+    if (session.agentType === 'pi') {
+      return this.sendPromptWithPiRpc(params, session);
+    }
+
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
     // into `--mcp-config`. Other agents skip this entirely.
@@ -1809,6 +1818,125 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  /**
+   * Pi over the RPC transport — the only pi execution path (no json fallback).
+   *
+   * One run owns one `pi --mode rpc` process: the session spawns on the first
+   * prompt, streams events through the shared `AgentStreamPipeline` (PiAdapter)
+   * exactly like the legacy json path, and recycles the process (EOF) when the
+   * run settles. Follow-up turns resume the native session via `--session-id`.
+   */
+  private async sendPromptWithPiRpc(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+
+    // Text + base64 images for the RPC `prompt` command (no `@path` temp files).
+    const promptBlocks = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const text: string[] = [];
+    const images: PiRpcImage[] = [];
+    for (const block of promptBlocks) {
+      if (block.type === 'text') {
+        if (block.text) text.push(block.text);
+        continue;
+      }
+      try {
+        const image = await normalizeImage(block.source, { cacheDir: this.fileCacheDir });
+        images.push({
+          data: image.buffer.toString('base64'),
+          mimeType: image.mediaType,
+          type: 'image',
+        });
+      } catch (error) {
+        logger.warn('Failed to attach image to Pi RPC prompt:', error);
+      }
+    }
+
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: ['--mode', 'rpc', ...session.args],
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: '',
+    });
+    void this.writeCliTraceFile(traceSession, 'prompt.txt', params.prompt);
+
+    const rpcSession = new PiRpcSession({
+      args: session.args,
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      operationId: params.operationId,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+      uploadImage: this.uploadResultImage,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+    });
+    session.piRpcSession = rpcSession;
+
+    logger.info('Starting Pi RPC session:', { commandPath, cwd, sessionId: session.sessionId });
+
+    try {
+      const { aborted } = await rpcSession.run({
+        text: text.join('\n\n'),
+        ...(images.length > 0 ? { images } : {}),
+      });
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        aborted,
+        finishedAt: new Date().toISOString(),
+        transport: 'pi-rpc',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      logger.error('Pi RPC session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'pi-rpc',
+      });
+      await this.flushCliTrace(traceSession);
+
+      // A user-initiated cancel resolves the run as `aborted`, so reaching the
+      // catch means a genuine failure — unless we tore the process down.
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    }
+  }
+
   private async verifyCodexSessionModel({
     env,
     pipeline,
@@ -2256,6 +2384,14 @@ export default class HeterogeneousAgentCtr {
       await session.traeAcpSession.interrupt();
       return;
     }
+    if (session.piRpcSession) {
+      // Graceful abort: pi cancels the run, persists state, then the session
+      // recycles the process via EOF. No SIGINT/SIGKILL tree kill needed.
+      await session.piRpcSession.abort().catch((error) => {
+        logger.warn('Pi RPC abort failed:', error);
+      });
+      return;
+    }
     if (session.sdkSession) {
       session.sdkSession.close();
       return;
@@ -2298,6 +2434,13 @@ export default class HeterogeneousAgentCtr {
     if (session.traeAcpSession) {
       session.cancelledByUs = true;
       session.traeAcpSession.close();
+    }
+
+    if (session.piRpcSession) {
+      session.cancelledByUs = true;
+      await session.piRpcSession.close().catch((error) => {
+        logger.warn('Pi RPC close failed while stopping the session:', error);
+      });
     }
 
     if (session.sdkSession) {
@@ -2383,6 +2526,10 @@ export default class HeterogeneousAgentCtr {
         if (session.traeAcpSession) {
           session.cancelledByUs = true;
           session.traeAcpSession.close();
+        }
+        if (session.piRpcSession) {
+          session.cancelledByUs = true;
+          session.piRpcSession.close();
         }
         if (session.sdkSession) {
           session.cancelledByUs = true;
