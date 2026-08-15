@@ -34,7 +34,12 @@ RUN mkdir -p /tmp/migrate-deps \
   && mkdir -p /app/node_modules \
   && cp -a /tmp/migrate-deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm \
   && (test -e /app/node_modules/pg || cp -a /tmp/migrate-deps/node_modules/pg /app/node_modules/pg) \
-  && rm -rf /tmp/migrate-deps
+  && rm -rf /tmp/migrate-deps \
+  && groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid nodejs --home-dir /app --no-create-home nextjs \
+  && chown -R nextjs:nodejs /app
+
+USER nextjs
 
 EXPOSE 3210
 CMD ["node", "startServer.js"]

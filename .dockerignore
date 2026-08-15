@@ -6,4 +6,8 @@ npm-debug.log
 .git
 .github
 *.md
+.env
+.env.*
+!.env.example
+!.env.example.*
 .env.example
