@@ -251,7 +251,7 @@ const AiProviderSettingsSchema = z.object({
     .or(ResponseAnimationType)
     .optional(),
   sdkType: z.enum(AiProviderSdkTypes).optional(),
-  searchMode: z.enum(['params', 'internal']).optional(),
+  searchMode: z.enum(['params', 'internal', 'tool']).optional(),
   showAddNewModel: z.boolean().optional(),
   showApiKey: z.boolean().optional(),
   showChecker: z.boolean().optional(),

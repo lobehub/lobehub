@@ -13,7 +13,8 @@ export enum ModelSearchImplement {
    */
   Params = 'params',
   /**
-   * Uses tool calling approach
+   * Uses provider-native server tools (e.g. xAI Live Search via web_search / x_search).
+   * Prefer this path whenever search is enabled — no optional "use model builtin" toggle.
    */
   Tool = 'tool',
 }

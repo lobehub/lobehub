@@ -119,7 +119,8 @@ export const handleXAIResponsesPayload = (payload: ChatStreamPayload) => {
   const sanitizedTools = sanitizeXAITools(tools);
 
   const xaiTools = enabledSearch
-    ? [...(sanitizedTools || []), { type: 'web_search' }, { type: 'x_search' }]
+    ? // Live Search: inject xAI server-side web_search + x_search tools (Responses API).
+      [...(sanitizedTools || []), { type: 'web_search' }, { type: 'x_search' }]
     : sanitizedTools;
 
   return {

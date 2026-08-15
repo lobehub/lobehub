@@ -22,6 +22,9 @@ export interface SearchDecision {
 
 /**
  * Resolves the mutually exclusive search route shared by client and server runtimes.
+ *
+ * `internal` and `tool` always prefer the model's native search while search is on
+ * (no second "use model builtin search" toggle). `params` still requires that toggle.
  */
 export const resolveSearchDecision = ({
   modelSearchImpl,
@@ -32,11 +35,17 @@ export const resolveSearchDecision = ({
   const enabledSearch = searchMode !== 'off';
   const isModelHasBuiltinSearch = !!modelSearchImpl;
   const isProviderHasBuiltinSearch = !!providerSearchMode;
-  const isBuiltinSearchInternal =
-    modelSearchImpl === 'internal' || providerSearchMode === 'internal';
+  // `internal` = always-on native search (Perplexity, Jina, …).
+  // `tool` = provider server tools (e.g. xAI web_search / x_search) — prefer native
+  // whenever search is enabled so Live Search is not skipped for the app helper.
+  const prefersNativeBuiltinSearch =
+    modelSearchImpl === 'internal' ||
+    modelSearchImpl === 'tool' ||
+    providerSearchMode === 'internal' ||
+    providerSearchMode === 'tool';
   const useModelSearch =
     enabledSearch &&
-    (isBuiltinSearchInternal ||
+    (prefersNativeBuiltinSearch ||
       ((isModelHasBuiltinSearch || isProviderHasBuiltinSearch) && !!useModelBuiltinSearch));
 
   return {
@@ -67,7 +76,7 @@ const PROVIDER_SEARCH_DEFAULTS: Record<string, ModelSearchSettings> = {
   stepfun: { searchImpl: 'params' },
   vertexai: { searchImpl: 'params', searchProvider: 'google' },
   wenxin: { searchImpl: 'params' },
-  xai: { searchImpl: 'params' },
+  xai: { searchImpl: 'tool' },
   zhipu: { searchImpl: 'params' },
 };
 

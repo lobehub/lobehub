@@ -276,6 +276,34 @@ describe('aiProviderSelectors', () => {
         false,
       );
     });
+
+    it('should return false if search mode is tool (no user toggle)', () => {
+      const state = {
+        ...mockState,
+        aiProviderRuntimeConfig: {
+          ...mockState.aiProviderRuntimeConfig,
+          xai: {
+            keyVaults: {},
+            settings: { searchMode: 'tool' },
+          },
+        },
+      };
+      expect(aiProviderSelectors.isProviderHasBuiltinSearchConfig('xai')(state)).toBe(false);
+    });
+
+    it('should return true if search mode is params', () => {
+      const state = {
+        ...mockState,
+        aiProviderRuntimeConfig: {
+          ...mockState.aiProviderRuntimeConfig,
+          openrouter: {
+            keyVaults: {},
+            settings: { searchMode: 'params' },
+          },
+        },
+      };
+      expect(aiProviderSelectors.isProviderHasBuiltinSearchConfig('openrouter')(state)).toBe(true);
+    });
   });
 
   describe('isProviderEnableResponseApi', () => {

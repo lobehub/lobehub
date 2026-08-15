@@ -164,9 +164,14 @@ const Controls = memo(() => {
     !isModelBuiltinSearchInternal &&
     (isModelHasBuiltinSearchConfig || isProviderHasBuiltinSearchConfig);
 
+  // `tool` (e.g. xAI Live Search) always uses model-native search while search is on —
+  // same as `internal` for routing — so do not offer the app FC search-model picker.
+  const prefersNativeBuiltinSearch =
+    isModelBuiltinSearchInternal || modelBuiltinSearchImpl === 'tool';
+
   const showFCSearchModel =
     !supportFC &&
-    (!modelBuiltinSearchImpl || (!isModelBuiltinSearchInternal && !useModelBuiltinSearch));
+    (!modelBuiltinSearchImpl || (!prefersNativeBuiltinSearch && !useModelBuiltinSearch));
 
   const showDivider = showModelBuiltinSearch || showFCSearchModel;
 

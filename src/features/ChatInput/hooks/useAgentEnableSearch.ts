@@ -21,7 +21,7 @@ export const useAgentEnableSearch = () => {
   const searchImpl = useAiInfraStore(aiModelSelectors.modelBuiltinSearchImpl(model, provider));
 
   // If using a built-in search implementation, web search is always available
-  if (searchImpl === 'internal') return true;
+  if (searchImpl === 'internal' || searchImpl === 'tool') return true;
 
   // If the search mode is off, web search is never available
   return agentSearchMode !== 'off';

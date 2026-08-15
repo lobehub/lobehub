@@ -139,16 +139,16 @@ const isModelBuiltinSearchInternal =
     return searchImpl === ModelSearchImplement.Internal;
   };
 
+/**
+ * True when the user can choose between app search and model-native search
+ * (`params` only). `internal` / `tool` always use native search while search is on,
+ * so they do not show the "use model builtin search" toggle.
+ */
 const isModelHasBuiltinSearchConfig =
   (id: string, provider: string) => (s: AIProviderStoreState) => {
     const searchImpl = modelBuiltinSearchImpl(id, provider)(s);
 
-    return (
-      !!searchImpl &&
-      [ModelSearchImplement.Tool, ModelSearchImplement.Params].includes(
-        searchImpl as ModelSearchImplement,
-      )
-    );
+    return searchImpl === ModelSearchImplement.Params;
   };
 
 export const aiModelSelectors = {

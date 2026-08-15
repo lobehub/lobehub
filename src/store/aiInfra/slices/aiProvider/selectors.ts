@@ -120,8 +120,11 @@ const isProviderHasBuiltinSearch = (provider: string) => (s: AIProviderStoreStat
 
 const isProviderHasBuiltinSearchConfig = (id: string) => (s: AIProviderStoreState) => {
   const providerCfg = providerConfigById(id)(s);
+  const searchMode = providerCfg?.settings.searchMode;
 
-  return !!providerCfg?.settings.searchMode && providerCfg?.settings.searchMode !== 'internal';
+  // Only `params` exposes a user toggle between app vs model-native search.
+  // `internal` / `tool` always prefer native search while search is enabled.
+  return searchMode === 'params';
 };
 
 const isProviderEnableResponseApi = (id: string) => (s: AIProviderStoreState) => {

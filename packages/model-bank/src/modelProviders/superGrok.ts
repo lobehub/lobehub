@@ -32,7 +32,8 @@ const SuperGrok: ModelProviderCard = {
       tokenEndpoint: 'https://auth.x.ai/oauth2/token',
     },
     sdkType: 'openai',
-    searchMode: 'params',
+    // xAI Live Search is injected as server tools (web_search / x_search), not params.
+    searchMode: 'tool',
     showApiKey: false,
     showChecker: true,
   },
