@@ -122,6 +122,7 @@ const {
   piRpcSessionAbortMock,
   piRpcSessionCloseMock,
   piRpcSessionConstructMock,
+  piRpcSessionRebindMock,
   piRpcSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
@@ -148,6 +149,7 @@ const {
   piRpcSessionAbortMock: vi.fn(),
   piRpcSessionCloseMock: vi.fn(),
   piRpcSessionConstructMock: vi.fn(),
+  piRpcSessionRebindMock: vi.fn(),
   piRpcSessionRunMock: vi.fn(),
 }));
 
@@ -378,6 +380,10 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
       piRpcSessionCloseMock();
     }
 
+    rebind(callbacks: any) {
+      piRpcSessionRebindMock(callbacks);
+    }
+
     async run() {
       if (piRpcSessionRunMock.getMockImplementation()) {
         return piRpcSessionRunMock(this.options);
@@ -546,6 +552,7 @@ describe('HeterogeneousAgentCtr', () => {
     piRpcSessionAbortMock.mockReset();
     piRpcSessionCloseMock.mockReset();
     piRpcSessionConstructMock.mockReset();
+    piRpcSessionRebindMock.mockReset();
     piRpcSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');

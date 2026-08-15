@@ -68,7 +68,7 @@ import {
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
-import { PiRpcSession, type PiRpcImage } from '@lobechat/heterogeneous-agents/rpc';
+import { PiRpcSession, type PiRpcImage, type PiRpcSessionCallbacks } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -1876,6 +1876,33 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
+   * Pi RPC host callbacks for one run. Built per run (not per process) so a
+   * pooled process can be rebound to the current IPC session and trace.
+   */
+  private buildPiRpcCallbacks(
+    session: AgentSession,
+    traceSession: CliTraceSession | undefined,
+  ): PiRpcSessionCallbacks {
+    return {
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+    };
+  }
+
+  /**
    * Pi over the RPC transport — the only pi execution path (no json fallback).
    *
    * One run owns one `pi --mode rpc` process: the session spawns on the first
@@ -1941,22 +1968,12 @@ export default class HeterogeneousAgentCtr {
       // The pool owns the process lifecycle — never auto-close on settle.
       autoCloseOnSettle: false,
       uploadImage: this.uploadResultImage,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', {
-            event,
-            sessionId: session.sessionId,
-          });
-        }
-      },
-      onRuntimeStatus: (status) => {
-        this.broadcast('heteroAgentRuntimeStatus', status);
-      },
-      onSessionId: (agentSessionId) => {
-        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      ...this.buildPiRpcCallbacks(session, traceSession),
     });
+    // A pooled process carries the callbacks of the run that spawned it —
+    // rebind to THIS run's IPC session / trace or events would broadcast to
+    // a stale sessionId.
+    if (pooledSession) pooledSession.rebind(this.buildPiRpcCallbacks(session, traceSession));
     session.piRpcSession = rpcSession;
 
     logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {

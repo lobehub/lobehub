@@ -155,6 +155,73 @@ describe('PiRpcSession', () => {
     expect(events.some((e) => e.type === 'error')).toBe(true);
   });
 
+  it('streams events on EVERY run of a reused process (fresh adapter per run)', async () => {
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runTextChunks = async () => {
+      const runPromise = session.run({ text: 'x' });
+      await vi.waitFor(() => expect(session.isRunning).toBe(true));
+      await emit(session, {
+        assistantMessageEvent: { contentIndex: 0, delta: 'reply', type: 'text_delta' },
+        type: 'message_update',
+      });
+      await emit(session, { type: 'agent_settled' });
+      await runPromise;
+    };
+
+    // Turn 1 streams normally.
+    await runTextChunks();
+    // Turn 2 reuses the SAME process — the stateful PiAdapter is replaced
+    // per run, so its text must still reach the host.
+    await runTextChunks();
+
+    const textChunks = events.filter(
+      (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+    );
+    expect(textChunks.map((e) => e.data.content)).toEqual(['reply', 'reply']);
+    expect(mocks.close).not.toHaveBeenCalled();
+    await session.close();
+  });
+
+  it('rebinds host callbacks so a pooled process targets a new IPC session', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const rebound: string[] = [];
+    session.rebind({
+      onEvents: (batch) => void rebound.push(...batch.map((e) => e.type)),
+      onRuntimeStatus: vi.fn(),
+      onSessionId: vi.fn(),
+      onStderr: vi.fn(),
+    });
+
+    const runPromise = session.run({ text: 'x' });
+    await emit(session, {
+      assistantMessageEvent: { contentIndex: 0, delta: 'hi', type: 'text_delta' },
+      type: 'message_update',
+    });
+    await emit(session, { type: 'agent_settled' });
+    await runPromise;
+
+    // Events flow to the rebound callback, not the original one.
+    expect(rebound).toContain('stream_chunk');
+  });
+
   it('keeps the process alive across runs when autoCloseOnSettle is false', async () => {
     const { session } = createSession({ autoCloseOnSettle: false });
     mocks.start.mockResolvedValue(undefined);

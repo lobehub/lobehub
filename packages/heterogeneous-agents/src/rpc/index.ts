@@ -16,6 +16,7 @@ export {
 export {
   PiRpcSession,
   type PiRpcPromptInput,
+  type PiRpcSessionCallbacks,
   type PiRpcSessionOptions,
 } from './piRpcSession';
 export {

@@ -38,7 +38,7 @@ export interface PiRpcSessionOptions {
   uploadImage?: UploadHeterogeneousImage;
   onEvents: (events: AgentStreamEvent[]) => void | Promise<void>;
   onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
-  /** Freshest native pi session id, extracted from the `session` event. */
+  /** Freshest native pi session id (RPC mode: from the get_state handshake). */
   onSessionId: (sessionId: string) => void;
   onStderr: (data: string) => void | Promise<void>;
   /** Extension UI dialogs — return a response to answer, or `undefined` to cancel. */
@@ -55,6 +55,14 @@ export interface PiRpcSessionOptions {
    * again for the next turn on the same session.
    */
   autoCloseOnSettle?: boolean;
+}
+
+/** Host callbacks a pooled process can be rebound to between runs. */
+export interface PiRpcSessionCallbacks {
+  onEvents: (events: AgentStreamEvent[]) => void | Promise<void>;
+  onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
+  onSessionId: (sessionId: string) => void;
+  onStderr: (data: string) => void | Promise<void>;
 }
 
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -105,8 +113,9 @@ const getTerminalErrorMessage = (event: PiRpcEvent): string | undefined => {
  * with a classified error — there is no silent degradation.
  */
 export class PiRpcSession {
+  private callbacks: PiRpcSessionCallbacks;
   private readonly client: PiRpcClient;
-  private readonly pipeline: AgentStreamPipeline;
+  private pipeline: AgentStreamPipeline;
   private readonly inactivityTimeoutMs: number;
   private aborted = false;
   private lastEventAt = Date.now();
@@ -118,13 +127,9 @@ export class PiRpcSession {
   private started = false;
 
   constructor(private readonly options: PiRpcSessionOptions) {
+    this.callbacks = options;
     this.inactivityTimeoutMs = options.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
-    this.pipeline = new AgentStreamPipeline({
-      agentType: 'pi',
-      cwd: options.cwd,
-      operationId: options.operationId,
-      uploadImage: options.uploadImage,
-    });
+    this.pipeline = this.createPipeline();
     this.client = new PiRpcClient({
       // Resume the native pi session when one is known — mirrors the legacy
       // `--session-id` resume of the json path.
@@ -137,12 +142,30 @@ export class PiRpcSession {
       env: options.env,
       onEvent: (event) => this.handleEvent(event),
       onExtensionUiRequest: options.onExtensionUiRequest,
-      onStderr: options.onStderr,
+      onStderr: (data) => this.callbacks.onStderr(data),
     });
   }
 
   get pid(): number | undefined {
     return this.client.pid;
+  }
+
+  /**
+   * Rebind the host callbacks — required when a pooled process is reused by
+   * a later run whose IPC session (and trace) differs from the run that
+   * spawned the process.
+   */
+  rebind(callbacks: PiRpcSessionCallbacks): void {
+    this.callbacks = callbacks;
+  }
+
+  private createPipeline(): AgentStreamPipeline {
+    return new AgentStreamPipeline({
+      agentType: 'pi',
+      cwd: this.options.cwd,
+      operationId: this.options.operationId,
+      uploadImage: this.options.uploadImage,
+    });
   }
 
   /** True while a prompt run is in flight — the pool won't reuse a busy session. */
@@ -162,7 +185,7 @@ export class PiRpcSession {
     // native session id comes from the get_state handshake. Report it so the
     // host can key the pool / persist the resume id.
     const sessionId = this.client.sessionId;
-    if (sessionId) this.options.onSessionId(sessionId);
+    if (sessionId) this.callbacks.onSessionId(sessionId);
     this.emitStatus('idle');
   }
 
@@ -183,6 +206,10 @@ export class PiRpcSession {
     }
     if (this.runPromise) throw new Error('PiRpcSession already has an active run');
 
+    // The PiAdapter is a state machine that settles after one run — a reused
+    // process must start each run with a fresh pipeline (new adapter), or
+    // every second-turn event would be dropped.
+    this.pipeline = this.createPipeline();
     this.runStarted = true;
     this.aborted = false;
     this.runPromise = new Promise<{ aborted: boolean }>((resolve, reject) => {
@@ -267,47 +294,53 @@ export class PiRpcSession {
     this.lastEventAt = Date.now();
     this.armInactivityTimer();
 
+    // Capture the pipeline for THIS event — `run()` swaps in a fresh pipeline
+    // (new PiAdapter per run) after start(), and push + flush must stay on
+    // the same instance or a deferred adapter error would be flushed against
+    // an empty state.
+    const pipeline = this.pipeline;
+
     if (event.type === 'session') {
       const sessionEvent = event as PiSessionEvent;
-      if (typeof sessionEvent.id === 'string') this.options.onSessionId(sessionEvent.id);
+      if (typeof sessionEvent.id === 'string') this.callbacks.onSessionId(sessionEvent.id);
       return;
     }
 
     if (event.type === 'agent_settled') {
       // The whole prompt (incl. retry/compaction/queued continuations) is
       // done — the run is complete.
-      await this.pushEvent(event);
+      await this.pushEvent(event, pipeline);
       this.settleRun({ aborted: this.aborted });
       return;
     }
 
     if (isTerminalAbortedEvent(event)) {
       this.aborted = true;
-      await this.pushEvent(event);
+      await this.pushEvent(event, pipeline);
       this.settleRun({ aborted: true });
       return;
     }
 
     if (isTerminalErrorEvent(event)) {
-      await this.pushEvent(event);
+      await this.pushEvent(event, pipeline);
       // PiAdapter defers terminal errors until flush — materialize the error
       // + runtime-end events so the renderer can render the failure.
-      const flushed = await this.pipeline.flush();
-      await this.options.onEvents(flushed);
+      const flushed = await pipeline.flush();
+      await this.callbacks.onEvents(flushed);
       this.failRun(new Error(getTerminalErrorMessage(event) ?? 'Pi run failed'));
       return;
     }
 
-    await this.pushEvent(event);
+    await this.pushEvent(event, pipeline);
   }
 
-  private async pushEvent(event: PiRpcEvent): Promise<void> {
+  private async pushEvent(event: PiRpcEvent, pipeline: AgentStreamPipeline): Promise<void> {
     // Serialize back to a JSONL line and reuse the same pipeline the legacy
     // CLI path uses — PiAdapter consumes the identical event shapes.
     const line = `${JSON.stringify(event)}\n`;
-    const events = await this.pipeline.push(line);
-    if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
-    await this.options.onEvents(events);
+    const events = await pipeline.push(line);
+    if (pipeline.sessionId) this.callbacks.onSessionId(pipeline.sessionId);
+    await this.callbacks.onEvents(events);
   }
 
   private settleRun(result: { aborted: boolean }): void {
@@ -350,7 +383,7 @@ export class PiRpcSession {
   }
 
   private emitStatus(state: HeterogeneousAgentRuntimeStatus['state']): void {
-    this.options.onRuntimeStatus({
+    this.callbacks.onRuntimeStatus({
       activeTasks: [],
       lastEventAt: this.lastEventAt,
       operationId: this.options.operationId,
