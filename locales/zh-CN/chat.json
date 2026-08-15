@@ -2058,6 +2058,7 @@
   "workingPanel.resources.renameError": "重命名失败",
   "workingPanel.resources.renameSuccess": "重命名成功",
   "workingPanel.resources.tree.convertToSkill": "转换为技能",
+  "workingPanel.resources.tree.create": "新建",
   "workingPanel.resources.tree.createError": "创建失败",
   "workingPanel.resources.tree.deleteSelected": "删除所选（{{count}}）",
   "workingPanel.resources.tree.moveError": "移动失败",

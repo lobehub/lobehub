@@ -2191,6 +2191,7 @@ export default {
   'workingPanel.resources.tree.deleteSelected': 'Delete selected ({{count}})',
   'workingPanel.resources.tree.moveError': 'Failed to move',
   'workingPanel.resources.tree.parentMissing': 'Parent folder is unavailable',
+  'workingPanel.resources.tree.create': 'Create',
   'workingPanel.resources.tree.newDocument': 'New document',
   'workingPanel.resources.tree.newFolder': 'New folder',
   'workingPanel.resources.tree.rename': 'Rename',
