@@ -51,11 +51,10 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
 
   return (
     <WorkspaceLink to={`/project/${project.id}`}>
-      <Flexbox horizontal align={'center'} className={styles.row} gap={12}>
+      <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
         <Tooltip title={t(`acceptance.status.${project.status}`)}>
           <Icon color={statusVisual.color} icon={statusVisual.icon} size={16} />
         </Tooltip>
-        <Icon icon={project.avatar || SquareKanbanIcon} size={20} />
         <Flexbox flex={1} style={{ minWidth: 0 }}>
           <Text ellipsis weight={500}>
             {project.name}
