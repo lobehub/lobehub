@@ -148,6 +148,38 @@ describe('PiRpcSession', () => {
     expect(events.some((e) => e.type === 'error')).toBe(true);
   });
 
+  it('keeps the process alive across runs when autoCloseOnSettle is false', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    // Turn 1 settles without closing the process.
+    const first = session.run({ text: 'first' });
+    await vi.waitFor(() => expect(session.isRunning).toBe(true));
+    await emit(session, { type: 'agent_settled' });
+    await expect(first).resolves.toEqual({ aborted: false });
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).not.toHaveBeenCalled();
+
+    // Turn 2 reuses the same session/process.
+    const second = session.run({ text: 'second' });
+    await vi.waitFor(() => expect(session.isRunning).toBe(true));
+    await emit(session, { type: 'agent_settled' });
+    await expect(second).resolves.toEqual({ aborted: false });
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).not.toHaveBeenCalled();
+
+    // The host owns close() in pooled mode.
+    await session.close();
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
   it('forwards extension UI requests to the host', async () => {
     const handler = vi.fn().mockReturnValue(undefined);
     const { session } = createSession({ onExtensionUiRequest: handler });

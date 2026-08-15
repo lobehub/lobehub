@@ -552,6 +552,7 @@ describe('HeterogeneousAgentCtr', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
+    delete process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS;
   });
 
   afterEach(async () => {
@@ -2620,6 +2621,62 @@ describe('HeterogeneousAgentCtr', () => {
       resolveRun?.({ aborted: true });
       await sendPromise;
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('reuses the pooled process across turns of the same conversation', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      // Turn 1: no native id yet → spawn a fresh process.
+      const first = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+      await ctr.stopSession({ sessionId: first.sessionId });
+
+      // Turn 2: resumes with the native id captured on turn 1 → the pool
+      // returns the SAME PiRpcSession instead of constructing a new one.
+      const second = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        resumeSessionId: 'pi_sess_1',
+      });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
+      await ctr.stopSession({ sessionId: second.sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId: first.sessionId });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: second.sessionId,
+      });
+    });
+
+    it('reaps an idle pooled pi process after the grace window', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS = '60';
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      await ctr.sendPrompt({ operationId: 'op-idle', prompt: 'x', sessionId });
+
+      // The process is released to the pool; after the idle window it is
+      // closed (graceful EOF) even though no IPC session references it.
+      await vi.waitFor(() => expect(piRpcSessionCloseMock).toHaveBeenCalled(), { timeout: 2_000 });
     });
 
     it('surfaces pi RPC failures as session errors without a json fallback', async () => {

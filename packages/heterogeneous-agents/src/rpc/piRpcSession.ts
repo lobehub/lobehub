@@ -47,6 +47,14 @@ export interface PiRpcSessionOptions {
   ) => Promise<PiExtensionUiResponse | undefined> | PiExtensionUiResponse | undefined;
   /** How long a run may go without any event before it is considered stale. */
   inactivityTimeoutMs?: number;
+  /**
+   * When true (default), `run()` recycles its process once the run settles
+   * (per-run lifecycle — one run owns one process). When false, the process
+   * survives the run so the host can reuse it for follow-up turns; the host
+   * owns `close()` (e.g. an idle reaper). `run()` stays re-entrant: call it
+   * again for the next turn on the same session.
+   */
+  autoCloseOnSettle?: boolean;
 }
 
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -137,6 +145,11 @@ export class PiRpcSession {
     return this.client.pid;
   }
 
+  /** True while a prompt run is in flight — the pool won't reuse a busy session. */
+  get isRunning(): boolean {
+    return this.runStarted;
+  }
+
   /**
    * Start the RPC process and handshake. Idempotent. Rejects with a
    * `PiRpcConnectionError` on spawn/handshake failure (hard-fail).
@@ -196,11 +209,15 @@ export class PiRpcSession {
     try {
       return await this.runPromise;
     } finally {
-      // Always recycle the process — a run owns its process.
+      // A run is done once it settles; the process lifecycle depends on the
+      // host: per-run recycles here, pooled sessions survive for reuse.
       this.clearInactivityTimer();
-      await this.close().catch(() => {
-        /* best-effort cleanup */
-      });
+      this.runStarted = false;
+      if (this.options.autoCloseOnSettle !== false) {
+        await this.close().catch(() => {
+          /* best-effort cleanup */
+        });
+      }
     }
   }
 
@@ -220,7 +237,6 @@ export class PiRpcSession {
     this.clearInactivityTimer();
     await this.client.close();
     this.settleRun({ aborted: this.aborted });
-    this.runStarted = false;
     this.emitStatus('closed');
   }
 

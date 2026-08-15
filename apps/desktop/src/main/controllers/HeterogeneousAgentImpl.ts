@@ -82,6 +82,7 @@ import type { App } from '@/core/App';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
   fetchCodexQuota,
@@ -150,6 +151,16 @@ const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WA
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
 const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+const readPositiveEnvMs = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+/** Default idle grace before a pooled pi RPC process is closed (5 min). */
+const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
@@ -408,6 +419,12 @@ export default class HeterogeneousAgentCtr {
       getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
       getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
     };
+    this.piRpcPool = new PiRpcPool({
+      // Read per-construction so tests can inject a tiny idle window.
+      idleTimeoutMs: readPositiveEnvMs('LOBE_PI_RPC_IDLE_TIMEOUT_MS', PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS),
+      onReap: (key, reason) =>
+        logger.info('Reaped pooled Pi RPC process:', { key, reason }),
+    });
   }
 
   private sessions = new Map<string, AgentSession>();
@@ -487,6 +504,8 @@ export default class HeterogeneousAgentCtr {
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
   /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
   private codexAppServerClient?: CodexAppServerClient;
+  /** Cross-turn pi RPC process pool (reuse + idle reaping). */
+  private readonly piRpcPool: PiRpcPool;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
@@ -1906,7 +1925,12 @@ export default class HeterogeneousAgentCtr {
     });
     void this.writeCliTraceFile(traceSession, 'prompt.txt', params.prompt);
 
-    const rpcSession = new PiRpcSession({
+    // Cross-turn reuse: the pool keeps one `pi --mode rpc` process alive per
+    // `cwd::nativeSessionId`. The first turn spawns (no native id yet); later
+    // turns resume with `--session-id` and hit the pool instead of respawning.
+    const poolKey = session.agentSessionId ? `${cwd}::${session.agentSessionId}` : undefined;
+    const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey) : undefined;
+    const rpcSession = pooledSession ?? new PiRpcSession({
       args: session.args,
       commandPath,
       cwd,
@@ -1914,6 +1938,8 @@ export default class HeterogeneousAgentCtr {
       operationId: params.operationId,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
+      // The pool owns the process lifecycle — never auto-close on settle.
+      autoCloseOnSettle: false,
       uploadImage: this.uploadResultImage,
       onEvents: async (events) => {
         for (const event of events) {
@@ -1933,7 +1959,12 @@ export default class HeterogeneousAgentCtr {
     });
     session.piRpcSession = rpcSession;
 
-    logger.info('Starting Pi RPC session:', { commandPath, cwd, sessionId: session.sessionId });
+    logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {
+      commandPath,
+      cwd,
+      pooled: !!pooledSession,
+      sessionId: session.sessionId,
+    });
 
     try {
       const { aborted } = await rpcSession.run({
@@ -1941,15 +1972,29 @@ export default class HeterogeneousAgentCtr {
         ...(images.length > 0 ? { images } : {}),
       });
       if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // Hand the process to the pool for the next turn (native id known now).
+      // A fresh process without a native id cannot be keyed — recycle it.
+      if (session.agentSessionId) {
+        const key = `${cwd}::${session.agentSessionId}`;
+        if (!pooledSession) this.piRpcPool.register(key, rpcSession);
+        this.piRpcPool.release(rpcSession);
+      } else if (!pooledSession) {
+        await rpcSession.close().catch(() => {
+          /* best-effort */
+        });
+      }
       void this.writeCliTraceJson(traceSession, 'exit.json', {
         aborted,
         finishedAt: new Date().toISOString(),
+        pooled: !!pooledSession,
         transport: 'pi-rpc',
       });
       await this.flushCliTrace(traceSession);
       this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
     } catch (error) {
       if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // The run failed — the process is not reusable; close and drop it.
+      this.piRpcPool.remove(rpcSession);
       logger.error('Pi RPC session error:', error);
       void this.writeCliTraceJson(traceSession, 'process-error.json', {
         message: this.getErrorMessage(error),
@@ -2476,8 +2521,10 @@ export default class HeterogeneousAgentCtr {
 
     if (session.piRpcSession) {
       session.cancelledByUs = true;
-      await session.piRpcSession.close().catch((error) => {
-        logger.warn('Pi RPC close failed while stopping the session:', error);
+      // Gracefully interrupt any in-flight run; the process is owned by the
+      // cross-turn pool and reaped on idle — not closed here.
+      await session.piRpcSession.abort().catch((error) => {
+        logger.warn('Pi RPC abort failed while stopping the session:', error);
       });
     }
 
@@ -2565,10 +2612,6 @@ export default class HeterogeneousAgentCtr {
           session.cancelledByUs = true;
           session.traeAcpSession.close();
         }
-        if (session.piRpcSession) {
-          session.cancelledByUs = true;
-          session.piRpcSession.close();
-        }
         if (session.sdkSession) {
           session.cancelledByUs = true;
           session.sdkSession.close();
@@ -2580,6 +2623,8 @@ export default class HeterogeneousAgentCtr {
       }
       this.codexAppServerClient?.close();
       this.codexAppServerClient = undefined;
+      // Pooled pi processes outlive their IPC sessions — reap them on quit.
+      this.piRpcPool.closeAll();
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to
