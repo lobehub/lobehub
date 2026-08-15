@@ -61,6 +61,7 @@ function ExplorerTreeInner<TData>(
   ref: ForwardedRef<ExplorerTreeHandle>,
 ) {
   const propsRef = useRef(props);
+  const initialPropsRef = useRef(props);
   propsRef.current = props;
 
   const adapterRef = useSingleton(() => ({
@@ -75,13 +76,14 @@ function ExplorerTreeInner<TData>(
   const renamingRef = useRef(false);
 
   const initialOptions = useMemo((): FileTreeOptions => {
+    const initialProps = initialPropsRef.current;
     const initial = adapterRef.current;
     const initialExpandedPaths = remapIdsToPaths(
-      props.defaultExpandedIds ?? props.defaultExpanded,
+      initialProps.defaultExpandedIds ?? initialProps.defaultExpanded,
       initial.pathById,
     );
     const initialSelectedPaths = remapIdsToPaths(
-      props.defaultSelectedIds ?? props.defaultSelected,
+      initialProps.defaultSelectedIds ?? initialProps.defaultSelected,
       initial.pathById,
     );
 
@@ -91,7 +93,7 @@ function ExplorerTreeInner<TData>(
         : (adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '') ?? null);
 
     return {
-      density: props.density,
+      density: initialProps.density,
       dragAndDrop: {
         canDrag: (paths) => {
           const fn = propsRef.current.canDrag;
@@ -155,13 +157,13 @@ function ExplorerTreeInner<TData>(
         },
       },
       icons: {
-        colored: props.iconsColored ?? true,
-        set: props.iconSet ?? 'standard',
+        colored: initialProps.iconsColored ?? true,
+        set: initialProps.iconSet ?? 'standard',
       },
-      gitStatus: props.gitStatus,
+      gitStatus: initialProps.gitStatus,
       initialExpandedPaths,
       initialSelectedPaths,
-      itemHeight: props.itemHeight,
+      itemHeight: initialProps.itemHeight,
       onSelectionChange: (paths) => {
         if (suppressModelEventsRef.current) return;
         const ids = remapPathsToIds(paths, adapterRef.current.idByPath);
@@ -169,7 +171,7 @@ function ExplorerTreeInner<TData>(
         lastEmittedSelectedIds.current = ids;
         propsRef.current.onSelectedChange?.(ids);
       },
-      overscan: props.overscan,
+      overscan: initialProps.overscan,
       paths: initial.paths,
       renaming: {
         canRename: (item) => {
@@ -213,10 +215,9 @@ function ExplorerTreeInner<TData>(
         if (!node) return null;
         return (fn({ node }) as FileTreeRowDecoration | null) ?? null;
       },
-      unsafeCSS: props.unsafeCSS,
+      unsafeCSS: initialProps.unsafeCSS,
     };
     // we build options ONCE; callbacks read propsRef to stay fresh
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);

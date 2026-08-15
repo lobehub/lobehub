@@ -36,8 +36,15 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
     const instanceRef = useRef<ICodeMirrorInstance | null>(null);
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
+    const valueRef = useRef(value);
+    const languageRef = useRef(language);
+    const readOnlyRef = useRef(readOnly);
+
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
+    valueRef.current = value;
+    languageRef.current = language;
+    readOnlyRef.current = readOnly;
 
     useEffect(() => {
       if (!textareaRef.current) return;
@@ -49,10 +56,10 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
         const instance = CodeMirror.fromTextArea(dom, {
           lineNumbers: true,
           lineWrapping: true,
-          mode: language,
-          readOnly,
+          mode: languageRef.current,
+          readOnly: readOnlyRef.current,
           theme: 'default',
-          value,
+          value: valueRef.current,
         });
         instance.view.dispatch({
           effects: instance.optionHelper.theme.reconfigure(
@@ -79,7 +86,6 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
           instanceRef.current = null;
         }
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {

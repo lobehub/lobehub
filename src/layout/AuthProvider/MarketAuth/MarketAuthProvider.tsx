@@ -190,50 +190,53 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * Try to refresh the access token using a refresh token
    * This is used during initialization when the access token is expired or invalid
    */
-  const tryRefreshToken = async (refreshTokenValue: string): Promise<boolean> => {
-    try {
-      const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+  const tryRefreshToken = useCallback(
+    async (refreshTokenValue: string): Promise<boolean> => {
+      try {
+        const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
 
-      const response = await lambdaClient.market.oidc.refreshToken.mutate({
-        clientId,
-        refreshToken: refreshTokenValue,
-      });
+        const response = await lambdaClient.market.oidc.refreshToken.mutate({
+          clientId,
+          refreshToken: refreshTokenValue,
+        });
 
-      // Calculate new expiration time (default to 1 hour if not provided)
-      const expiresIn = response.expiresIn ?? 3600;
-      const expiresAt = Date.now() + expiresIn * 1000;
+        // Calculate new expiration time (default to 1 hour if not provided)
+        const expiresIn = response.expiresIn ?? 3600;
+        const expiresAt = Date.now() + expiresIn * 1000;
 
-      // Save new tokens to DB
-      await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
+        // Save new tokens to DB
+        await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
 
-      // Fetch user info with new token
-      const userInfo = await fetchUserInfo(response.accessToken);
+        // Fetch user info with new token
+        const userInfo = await fetchUserInfo(response.accessToken);
 
-      // Update session state
-      const newSession: MarketAuthSession = {
-        accessToken: response.accessToken,
-        expiresAt,
-        expiresIn,
-        scope: response.scope || 'openid profile email',
-        tokenType: 'Bearer',
-        userInfo: userInfo || undefined,
-      };
+        // Update session state
+        const newSession: MarketAuthSession = {
+          accessToken: response.accessToken,
+          expiresAt,
+          expiresIn,
+          scope: response.scope || 'openid profile email',
+          tokenType: 'Bearer',
+          userInfo: userInfo || undefined,
+        };
 
-      setSession(newSession);
-      setStatus('authenticated');
+        setSession(newSession);
+        setStatus('authenticated');
 
-      console.info('[MarketAuth] Token refreshed successfully during initialization');
-      return true;
-    } catch (error) {
-      console.error('[MarketAuth] Failed to refresh token during initialization:', error);
-      return false;
-    }
-  };
+        console.info('[MarketAuth] Token refreshed successfully during initialization');
+        return true;
+      } catch (error) {
+        console.error('[MarketAuth] Failed to refresh token during initialization:', error);
+        return false;
+      }
+    },
+    [isDesktop],
+  );
 
   /**
    * Initialize: check and restore session, fetch user info
    */
-  const initializeSession = async () => {
+  const initializeSession = useCallback(async () => {
     setStatus('loading');
 
     // If Trusted Client authentication is enabled, fetch user info directly from backend (without token)
@@ -317,7 +320,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
     setSession(restoredSession);
     setStatus('authenticated');
-  };
+  }, [enableMarketTrustedClient, tryRefreshToken]);
 
   /**
    * The actual sign-in method (internal use)
@@ -671,8 +674,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     if (isUserStateInit) {
       initializeSession();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserStateInit, enableMarketTrustedClient]);
+  }, [initializeSession, isUserStateInit]);
 
   /**
    * Auto-refresh token before expiration
