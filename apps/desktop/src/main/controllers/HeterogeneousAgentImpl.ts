@@ -1939,7 +1939,12 @@ export default class HeterogeneousAgentCtr {
           type: 'image',
         });
       } catch (error) {
-        logger.warn('Failed to attach image to Pi RPC prompt:', error);
+        // A broken attachment must not silently drop the image from the
+        // prompt — surface it like the Codex/Grok paths do.
+        throw new Error(
+          `Failed to attach image(s) to Pi RPC prompt: ${this.getErrorMessage(error) || 'Unknown error'}`,
+          { cause: error },
+        );
       }
     }
 
@@ -1956,7 +1961,18 @@ export default class HeterogeneousAgentCtr {
     // `cwd::nativeSessionId`. The first turn spawns (no native id yet); later
     // turns resume with `--session-id` and hit the pool instead of respawning.
     const poolKey = session.agentSessionId ? `${cwd}::${session.agentSessionId}` : undefined;
-    const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey) : undefined;
+    // Fingerprint the runtime options that shape the spawned process (command
+    // path, args, env) so a pool hit under changed settings — model/provider,
+    // proxy env, cwd env — spawns fresh instead of reusing stale config.
+    const spawnFingerprint = [
+      commandPath,
+      cwd,
+      JSON.stringify(session.args ?? []),
+      JSON.stringify(Object.entries(spawnEnv).sort()),
+    ].join('::');
+    const pooledSession = poolKey
+      ? this.piRpcPool.acquire(poolKey, spawnFingerprint)
+      : undefined;
     const rpcSession = pooledSession ?? new PiRpcSession({
       args: session.args,
       commandPath,
@@ -1993,7 +2009,7 @@ export default class HeterogeneousAgentCtr {
       // A fresh process without a native id cannot be keyed — recycle it.
       if (session.agentSessionId) {
         const key = `${cwd}::${session.agentSessionId}`;
-        if (!pooledSession) this.piRpcPool.register(key, rpcSession);
+        if (!pooledSession) this.piRpcPool.register(key, rpcSession, spawnFingerprint);
         this.piRpcPool.release(rpcSession);
       } else if (!pooledSession) {
         await rpcSession.close().catch(() => {

@@ -2665,6 +2665,42 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
 
+    it('spawns fresh when runtime options change between turns (no stale reuse)', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      // Turn 1 with one provider configuration.
+      const first = await ctr.startSession({
+        agentType: 'pi',
+        args: ['--provider', 'anthropic'],
+        command: 'pi',
+      });
+      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+      await ctr.stopSession({ sessionId: first.sessionId });
+
+      // Turn 2 same conversation but a DIFFERENT provider — the pooled
+      // process was spawned with the old args, so it must not be reused.
+      const second = await ctr.startSession({
+        agentType: 'pi',
+        args: ['--provider', 'openai'],
+        command: 'pi',
+        resumeSessionId: 'pi_sess_1',
+      });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
+      await ctr.stopSession({ sessionId: second.sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(2);
+    });
+
     it('reaps an idle pooled pi process after the grace window', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([

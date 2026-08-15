@@ -35,9 +35,14 @@ export class PiRpcPool {
   ) {}
 
   /** Reuse an idle pooled process for `key`, or `undefined` to spawn fresh. */
-  acquire(key: string): PiRpcSession | undefined {
+  acquire(key: string, spawnFingerprint?: string): PiRpcSession | undefined {
     const entry = this.entries.get(key);
+    // A process spawned under different runtime options (command path, args,
+    // env) must not be reused — mirrors Codex app-server's canReuseFor.
     if (!entry || entry.session.isRunning) return undefined;
+    if (spawnFingerprint !== undefined && entry.spawnFingerprint !== spawnFingerprint) {
+      return undefined;
+    }
 
     if (entry.idleTimer) {
       clearTimeout(entry.idleTimer);
@@ -48,16 +53,17 @@ export class PiRpcPool {
   }
 
   /** Hand a freshly spawned process to the pool under `key`. */
-  register(key: string, session: PiRpcSession): void {
+  register(key: string, session: PiRpcSession, spawnFingerprint?: string): void {
     const existing = this.entries.get(key);
     if (existing && existing.session !== session) {
       // A replacement under the same key only happens after the previous
-      // process was reaped (idle) or failed. Runs of one conversation are
-      // strictly serial on a single device, so the old process is never busy
-      // here; reap it unconditionally for consistency.
+      // process was reaped (idle), failed, or was spawned under different
+      // runtime options (spawnFingerprint mismatch). Runs of one conversation
+      // are strictly serial on a single device, so the old process is never
+      // busy here; reap it unconditionally for consistency.
       this.reap(existing, 'replaced');
     }
-    const entry: PiRpcPoolEntry = { key, lastUsedAt: Date.now(), session };
+    const entry: PiRpcPoolEntry = { key, lastUsedAt: Date.now(), session, spawnFingerprint };
     this.entries.set(key, entry);
     this.bySession.set(session, entry);
   }
@@ -75,7 +81,14 @@ export class PiRpcPool {
   /** The run failed — close the process and drop it. */
   remove(session: PiRpcSession): void {
     const entry = this.bySession.get(session);
-    if (!entry) return;
+    if (!entry) {
+      // Never registered — a fresh process that failed before the success
+      // handoff. Close it directly or the pi child would outlive the run.
+      void session.close().catch(() => {
+        /* best-effort */
+      });
+      return;
+    }
     this.reap(entry, 'removed');
   }
 
@@ -103,4 +116,6 @@ interface PiRpcPoolEntry {
   key: string;
   lastUsedAt: number;
   session: PiRpcSession;
+  /** Runtime options the process was spawned with (command path, args, env). */
+  spawnFingerprint?: string;
 }

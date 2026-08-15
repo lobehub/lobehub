@@ -38,6 +38,17 @@ describe('PiRpcPool', () => {
     expect(pool.acquire('cwd::sess-c')).toBeUndefined();
   });
 
+  it('never reuses a process spawned under different runtime options', () => {
+    const pool = new PiRpcPool({ idleTimeoutMs: 60_000 });
+    const { session: a1 } = createSession();
+    pool.register('cwd::sess-a', a1, 'fingerprint-v1');
+
+    // Same key + same fingerprint → reuse.
+    expect(pool.acquire('cwd::sess-a', 'fingerprint-v1')).toBe(a1);
+    // Same key, different runtime options → spawn fresh (undefined).
+    expect(pool.acquire('cwd::sess-a', 'fingerprint-v2')).toBeUndefined();
+  });
+
   it('never reuses a busy process', () => {
     const pool = new PiRpcPool({ idleTimeoutMs: 60_000 });
     const { session } = createSession(true);
@@ -62,6 +73,15 @@ describe('PiRpcPool', () => {
     // B is still alive and reusable.
     expect(pool.acquire('cwd::sess-b')).toBe(b1);
     expect(pool.acquire('cwd::sess-a')).toBeUndefined();
+  });
+
+  it('remove() closes a fresh session that never reached the pool', () => {
+    const pool = new PiRpcPool({ idleTimeoutMs: 60_000 });
+    const { close: closeA, session: a1 } = createSession();
+
+    // Failed before register() — remove must still tear the process down.
+    pool.remove(a1);
+    expect(closeA).toHaveBeenCalledTimes(1);
   });
 
   it('remove() closes only the failed session, not its siblings', () => {
