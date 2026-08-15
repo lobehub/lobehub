@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Claude Opus 4.6용; 적응형 사고 기능을 켜거나 끕니다.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Claude, DeepSeek 및 기타 추론 모델용; 더 깊은 사고를 활성화합니다.",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "GLM-5.2에 대해; 높은 수준과 최대 수준으로 추론 노력을 제어합니다.",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "GLM-5.3에 대해; 낮음, 높음, 최대 수준으로 추론 노력을 조정합니다. 사고는 비활성화할 수 없습니다.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "GPT-5 시리즈용; 추론 강도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "GPT-5.1 시리즈용; 추론 강도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "GPT-5.2 Pro 시리즈용; 추론 강도를 제어합니다.",

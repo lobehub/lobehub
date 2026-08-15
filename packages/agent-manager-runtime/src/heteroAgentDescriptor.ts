@@ -125,6 +125,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Qoder',
     kind: 'cli',
   },
+  'trae': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'TRAE CLI — the TRAE Enterprise coding agent CLI. It can read and edit files, run commands, and complete multi-step software-engineering tasks in a working directory.',
+    displayName: 'TRAE CLI',
+    kind: 'cli',
+  },
 };
 
 const EXECUTION_TARGET_DESCRIPTIONS: Record<DeviceExecutionTarget, string> = {

@@ -28,6 +28,7 @@ If unsure about available components, search existing code or check `node_module
 
 | Component                                  | Import                                                                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `Alert` (+ `AlertProps`)                   | `import { Alert, type AlertProps } from '@lobehub/ui/base-ui';`                                         |
 | `Select` (+ `SelectProps`, `SelectOption`) | `import { Select } from '@lobehub/ui/base-ui';`                                                         |
 | `Modal` (imperative API)                   | `import { createModal, confirmModal, useModalContext, type ModalInstance } from '@lobehub/ui/base-ui';` |
 | `DropdownMenu`                             | `import { DropdownMenu } from '@lobehub/ui/base-ui';`                                                   |
@@ -50,7 +51,6 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 | General      | ActionIcon, ActionIconGroup, Block, Button, Icon                                      |
 | Data Display | Avatar, Collapse, Empty, Highlighter, Markdown, Tag, Tooltip                          |
 | Data Entry   | CodeEditor, CopyButton, EditableText, Form, Input, InputPassword, SearchBar, TextArea |
-| Feedback     | Alert                                                                                 |
 | Layout       | Center, DraggablePanel, Flexbox, Grid, Header, MaskShadow                             |
 | Navigation   | Burger, Menu, SideNav, Tabs                                                           |
 

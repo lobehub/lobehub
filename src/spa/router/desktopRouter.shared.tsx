@@ -2,15 +2,14 @@
 
 import {
   BrainCircuit,
-  Download,
   FilePenIcon,
   FilesIcon,
   FileText,
+  HomeIcon,
   Image,
   ImageIcon,
   LayoutPanelTopIcon,
   LibraryBigIcon,
-  MessageSquarePlus,
   Mic2,
   Settings,
   ShapesIcon,
@@ -34,6 +33,7 @@ import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
@@ -570,6 +570,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/resource/library/permission'),
+              'Desktop > Resource > Library > Permission',
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            path: 'permission',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/resource/library/[slug]'),
               'Desktop > Resource > Library > Slug',
             ),
@@ -809,6 +819,21 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'agents',
   },
 
+  // Projects view-all route
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/projects'), 'Desktop > Projects', {
+          preloadId: 'projects',
+        }),
+        handle: { meta: projectsRouteMeta },
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'projects',
+  },
+
   // Task workspace routes (cross-agent)
   {
     children: [
@@ -899,6 +924,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: pageRouteMeta },
         path: ':id',
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/page/[id]/permission'),
+          'Desktop > Page > Permission',
+        ),
+        handle: { meta: pageRouteMeta },
+        path: ':id/permission',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/page/_layout'),
@@ -912,14 +945,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
-
-  // Downloads page (personal-only — never mirrored under /:workspaceSlug)
-  {
-    element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
-    path: 'downloads',
-  },
 
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
@@ -1236,7 +1261,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     element: deferPlatformElement(options.createHomeElement),
     handle: {
       meta: routeMeta({
-        icon: MessageSquarePlus,
+        icon: HomeIcon,
         tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),

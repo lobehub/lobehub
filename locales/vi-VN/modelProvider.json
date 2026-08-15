@@ -229,6 +229,7 @@
   "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Dành cho Claude Opus 4.6; bật hoặc tắt chế độ tư duy thích ứng.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Dành cho Claude, DeepSeek và các mô hình suy luận khác; mở khóa khả năng tư duy sâu hơn.",
   "providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint": "Đối với GLM-5.2; kiểm soát mức độ nỗ lực suy luận với các cấp độ Cao và Tối đa.",
+  "providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint": "Đối với GLM-5.3; kiểm soát mức độ suy luận với các cấp độ Thấp, Cao và Tối đa. Tư duy không thể bị vô hiệu hóa.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Dành cho dòng GPT-5; điều chỉnh cường độ suy luận.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Dành cho dòng GPT-5.1; điều chỉnh cường độ suy luận.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Dành cho dòng GPT-5.2 Pro; điều chỉnh cường độ suy luận.",

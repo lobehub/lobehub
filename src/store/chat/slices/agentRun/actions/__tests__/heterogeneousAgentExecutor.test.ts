@@ -1857,6 +1857,29 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    it('should pass the selected TRAE model through ACP instead of native args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--feature=test'],
+          command: 'traecli',
+          model: 'gpt-5.4',
+          type: 'trae' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'trae',
+          args: ['--feature=test'],
+          initialModel: 'gpt-5.4',
+        }),
+      );
+    });
+
     it('should execute a persisted legacy provider config without type', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

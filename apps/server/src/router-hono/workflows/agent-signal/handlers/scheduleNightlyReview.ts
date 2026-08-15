@@ -3,12 +3,15 @@ import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { isRecord } from '@lobechat/utils';
 import type { Context } from 'hono';
 
-import { getServerDB } from '@/database/server';
-import type { DispatchNightlyReviewRequestsOptions } from '@/server/services/agentSignal/services';
-import { createServerNightlyReviewScheduleService } from '@/server/services/agentSignal/services';
+import {
+  AgentSignalNightlyReviewWorkflow,
+  type NightlyReviewWorkflowCursor,
+} from '@/server/workflows/agentSignal/nightlyReview';
 
-const DEFAULT_USER_LIMIT = 500;
+const DEFAULT_USER_PAGE_SIZE = 50;
+const HARD_MAX_USER_PAGE_SIZE = 200;
 const DEFAULT_TARGET_LIMIT = 20;
+const HARD_MAX_TARGET_LIMIT = 50;
 const CRON_SPAN_NAME = 'agent_signal.cron.hourly_nightly_self_review';
 
 /**
@@ -23,9 +26,9 @@ export interface ScheduleNightlyReviewPayload {
     id: string;
   };
   /**
-   * Maximum eligible users to scan in one dispatch pass.
+   * Maximum eligible users read by each pagination workflow.
    *
-   * @default 500
+   * @default 50
    */
   limit?: number;
   /**
@@ -38,8 +41,10 @@ export interface ScheduleNightlyReviewPayload {
   whitelist?: string[];
 }
 
-const readPositiveInteger = (value: unknown, fallback: number) => {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
+const readBoundedPositiveInteger = (value: unknown, fallback: number, maximum: number) => {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? Math.min(value, maximum)
+    : fallback;
 };
 
 const readWhitelist = (value: unknown) => {
@@ -52,7 +57,7 @@ const readWhitelist = (value: unknown) => {
   return whitelist.length > 0 ? whitelist : undefined;
 };
 
-const readCursor = (value: unknown): DispatchNightlyReviewRequestsOptions['cursor'] | undefined => {
+const readCursor = (value: unknown): NightlyReviewWorkflowCursor | undefined => {
   if (!isRecord(value)) return;
 
   const createdAt = typeof value.createdAt === 'string' ? new Date(value.createdAt) : undefined;
@@ -60,7 +65,7 @@ const readCursor = (value: unknown): DispatchNightlyReviewRequestsOptions['curso
 
   if (!createdAt || Number.isNaN(createdAt.getTime()) || !id) return;
 
-  return { createdAt, id };
+  return { createdAt: createdAt.toISOString(), id };
 };
 
 const readPayload = async (c: Context): Promise<ScheduleNightlyReviewPayload> => {
@@ -70,25 +75,25 @@ const readPayload = async (c: Context): Promise<ScheduleNightlyReviewPayload> =>
 };
 
 /**
- * Dispatches Agent Signal nightly review request sources from a QStash cron call.
+ * Starts the layered Agent Signal nightly review scheduler from a QStash cron call.
  *
  * Use when:
- * - A QStash Schedule or local QStash publish call needs to fan out nightly review source events
- * - Cron should enqueue source events but leave actual review execution to Agent Signal workflows
+ * - A QStash Schedule or local QStash publish call needs to start cursor pagination
+ * - Cron must return before database scanning and per-user source enqueueing begin
  *
  * Expects:
  * - The route is protected by {@link qstashAuth} in `agent-signal/index.ts`
- * - QStash or the caller may omit a JSON body, in which case bounded defaults are used
+ * - QStash or the caller may omit a JSON body, in which case bounded page defaults are used
  *
  * Returns:
- * - A JSON summary with enqueue and skip counts
+ * - HTTP 202 with the root pagination workflow id
  *
  * Call stack:
  *
  * scheduleNightlyReview
- *   -> {@link createServerNightlyReviewScheduleService}
- *     -> dispatchNightlyReviewRequests
- *       -> enqueueAgentSignalSourceEvent
+ *   -> {@link AgentSignalNightlyReviewWorkflow.triggerPaginateUsers}
+ *     -> paginateNightlyReviewUsers
+ *       -> executeNightlyReviewUser
  */
 export async function scheduleNightlyReview(c: Context) {
   return tracer.startActiveSpan(CRON_SPAN_NAME, async (span) => {
@@ -96,35 +101,41 @@ export async function scheduleNightlyReview(c: Context) {
       const payload = await readPayload(c);
       const options = {
         cursor: readCursor(payload.cursor),
-        limit: readPositiveInteger(payload.limit, DEFAULT_USER_LIMIT),
-        targetLimit: readPositiveInteger(payload.targetLimit, DEFAULT_TARGET_LIMIT),
+        pageSize: readBoundedPositiveInteger(
+          payload.limit,
+          DEFAULT_USER_PAGE_SIZE,
+          HARD_MAX_USER_PAGE_SIZE,
+        ),
+        requestedAt: new Date().toISOString(),
+        targetLimit: readBoundedPositiveInteger(
+          payload.targetLimit,
+          DEFAULT_TARGET_LIMIT,
+          HARD_MAX_TARGET_LIMIT,
+        ),
         whitelist: readWhitelist(payload.whitelist),
-      } satisfies DispatchNightlyReviewRequestsOptions;
+      };
 
       span.setAttributes({
-        'agent.signal.cron.limit': options.limit,
+        'agent.signal.cron.limit': options.pageSize,
         'agent.signal.cron.target_limit': options.targetLimit,
         'agent.signal.cron.whitelist_count': options.whitelist?.length ?? 0,
         ...(options.cursor
           ? {
-              'agent.signal.cron.cursor_created_at': options.cursor.createdAt.toISOString(),
+              'agent.signal.cron.cursor_created_at': options.cursor.createdAt,
               'agent.signal.cron.cursor_user_id': options.cursor.id,
             }
           : {}),
       });
 
-      const db = await getServerDB();
-      const service = createServerNightlyReviewScheduleService(db);
-      const summary = await service.dispatchNightlyReviewRequests(options);
+      const result = await AgentSignalNightlyReviewWorkflow.triggerPaginateUsers(options);
 
       span.setAttributes({
-        'agent.signal.cron.enqueued': summary.enqueued,
-        'agent.signal.cron.skipped': summary.skipped,
         'agent.signal.cron.success': true,
+        'agent.signal.cron.workflow_run_id': result.workflowRunId,
       });
       span.setStatus({ code: SpanStatusCode.OK });
 
-      return c.json({ success: true, ...summary });
+      return c.json({ scheduled: true, success: true, workflowRunId: result.workflowRunId }, 202);
     } catch (error) {
       console.error('[agent-signal/cron-hourly-nightly-self-review] Error:', error);
       span.setAttribute('agent.signal.cron.success', false);

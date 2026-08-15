@@ -37,7 +37,10 @@ const isNewsBrief = (brief: BriefItem): boolean => NEWS_BRIEF_TYPES.includes(bri
  */
 export const splitBriefs = (briefs: BriefItem[]): SplitBriefs => ({
   needsYou: briefs
-    .filter((brief) => !isNewsBrief(brief))
+    // A successful optimistic resolve stamps the row before the unresolved-list
+    // SWR cache revalidates. Hide it immediately so "Ignore" actually closes the
+    // card instead of leaving a resolved tombstone in the queue until remount.
+    .filter((brief) => !brief.resolvedAt && !isNewsBrief(brief))
     .sort((a, b) => (NEEDS_YOU_ORDER[a.type] ?? 5) - (NEEDS_YOU_ORDER[b.type] ?? 5)),
   news: briefs.filter(isNewsBrief),
 });

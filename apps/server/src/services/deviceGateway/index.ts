@@ -460,16 +460,27 @@ export class DeviceGateway {
 
   /** Query a heterogeneous CLI's model catalog on the device that will execute it. */
   async listHeterogeneousAgentModels(params: {
+    args?: string[];
     command?: string;
     cwd?: string;
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
+    type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
     userId: string;
     workspaceId?: string;
   }): Promise<HeterogeneousAgentModelCatalog> {
-    const { command, cwd, deviceId, env, timeout = 20_000, type, userId, workspaceId } = params;
+    const {
+      args,
+      command,
+      cwd,
+      deviceId,
+      env,
+      timeout = 20_000,
+      type,
+      userId,
+      workspaceId,
+    } = params;
     const client = this.getClient();
     const unavailable = (message: string): HeterogeneousAgentModelCatalog => ({
       error: { code: 'device_unavailable', message },
@@ -483,7 +494,7 @@ export class DeviceGateway {
         { deviceId, timeout, userId, workspaceId },
         {
           method: 'listHeterogeneousAgentModels',
-          params: { command, cwd, env, type },
+          params: { args, command, cwd, env, type },
         },
       );
 

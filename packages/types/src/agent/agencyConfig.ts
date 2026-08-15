@@ -7,10 +7,12 @@ import {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './heterogeneousAgent';
 import type {
+  AmpAgentMode,
   ClaudeCodeReasoningEffort,
   CodexReasoningEffort,
   CodexSpeedMode,
   HeteroCliEncoding,
+  HeterogeneousAgentMode,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
   QoderReasoningEffort,
@@ -20,6 +22,7 @@ import {
   CODEX_SERVICE_TIER_CONFIG_KEY,
   HETERO_SELECTOR_CAPABILITIES,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isAmpAgentMode,
   isClaudeCodeReasoningEffort,
   isCodexFastServiceTier,
   isCodexReasoningEffort,
@@ -32,7 +35,7 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
-  /** Exact value accepted by the CLI's model-selection flag. Treat as opaque. */
+  /** Exact value accepted by the provider's native model selector. Treat as opaque. */
   id: string;
   /** Optional human-readable model label. */
   label?: string;
@@ -43,10 +46,11 @@ export interface HeterogeneousAgentModel {
 }
 
 export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -75,7 +79,7 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder`):
+ *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -98,6 +102,12 @@ export interface HeterogeneousProviderConfig {
   effort?: HeterogeneousReasoningEffort;
   /** Custom environment variables (local CLI only). */
   env?: Record<string, string>;
+  /**
+   * Amp agent mode, surfaced through the chat-input selector and translated
+   * into `--mode <mode>` at spawn time. Omitted or `'default'` values leave
+   * Amp's own account and environment defaults in control.
+   */
+  mode?: HeterogeneousAgentMode;
   /**
    * CLI model, surfaced through the chat-input model selector and translated
    * into the provider-specific model override at spawn time. Empty / omitted
@@ -203,6 +213,11 @@ interface ClaudeCodeSelectionSource {
   model?: string | null;
 }
 
+interface AmpSelectionSource {
+  args?: string[];
+  mode?: string | null;
+}
+
 interface CodexSelectionSource {
   args?: string[];
   effort?: string | null;
@@ -228,6 +243,13 @@ const CURSOR_MODEL_FLAGS = ['--model'] as const;
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
+
+const getExplicitAmpAgentMode = (
+  source: AmpSelectionSource | null | undefined,
+): AmpAgentMode | undefined => {
+  const mode = source?.mode?.trim();
+  return isAmpAgentMode(mode) ? mode : undefined;
+};
 
 const getExplicitClaudeCodeModel = (
   source: ClaudeCodeSelectionSource | null | undefined,
@@ -274,7 +296,7 @@ const getExplicitCodexSpeedMode = (
 /**
  * Resolve the effective native CLI args for a heterogeneous spawn.
  *
- * For `claude-code`, `codebuddy`, and `codex`, explicit `model` + `effort`
+ * For Amp, Claude Code, CodeBuddy, and Codex, explicit mode/model/effort
  * selections are persisted on the provider config; this is the single place
  * that maps those stored settings onto provider-specific argv for direct local
  * desktop spawns. OpenCode, Pi, and Qoder use their device-local model catalogs
@@ -293,6 +315,7 @@ export const buildHeteroSpawnArgs = (
 ): string[] | undefined => {
   if (!provider) return undefined;
   if (
+    provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
@@ -300,13 +323,19 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
+  }
 
   if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
@@ -394,9 +423,11 @@ export const buildHeteroSpawnArgs = (
  * Unlike `buildHeteroSpawnArgs`, these args are consumed by the LobeHub CLI
  * wrapper first, not by the native agent binary. Native provider args are
  * encoded with `--agent-arg=<arg>` so wrapper flags such as `-c, --command`
- * never collide with Codex/Claude flags. Keep selector overrides in the
- * wrapper's `--model` / `--effort` form; `lh hetero exec` translates them into
- * native provider arguments immediately before `spawnAgent`.
+ * never collide with provider flags. Keep selector overrides in the wrapper's
+ * structured `--model` / `--effort` form; `lh hetero exec` translates them
+ * into native provider arguments immediately before `spawnAgent`. Amp mode is
+ * encoded as a native argument because older device CLIs predate the wrapper's
+ * structured `--mode` option but already support `--agent-arg`.
  */
 export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
@@ -411,7 +442,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
-    provider.type !== 'qoder'
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
   ) {
     return provider.args;
   }
@@ -419,6 +451,16 @@ export const buildHeteroExecArgs = (
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
   const selectorArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--mode`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${mode}`,
+      );
+    }
+  }
 
   if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
@@ -501,6 +543,13 @@ export const buildHeteroExecArgs = (
     const effort = getExplicitQoderReasoningEffort(provider);
     if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
       selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'trae') {
+    const model = provider.model?.trim();
+    if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
+      selectorArgs.push('--model', model);
     }
   }
 

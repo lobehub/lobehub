@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
   isHeterogeneousAgentAuthRequired,
@@ -23,6 +24,7 @@ describe('heterogeneous agent config', () => {
       'opencode',
       'pi',
       'qoder',
+      'trae',
     ]);
   });
 
@@ -84,6 +86,15 @@ describe('heterogeneous agent config', () => {
       title: 'Qoder',
       type: 'qoder',
     });
+    expect(getHeterogeneousAgentConfig('trae')).toMatchObject({
+      defaultCommand: 'traecli',
+      install: {
+        commands: [],
+        docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+      },
+      title: 'TRAE CLI',
+      type: 'trae',
+    });
   });
 
   it('resolves commands from descriptors and fails loudly for unknown types', () => {
@@ -96,6 +107,7 @@ describe('heterogeneous agent config', () => {
 
   it('builds auth guidance from descriptor metadata', () => {
     expect(isHeterogeneousAgentAuthRequired('amp', 'Please log in before continuing')).toBe(true);
+    expect(isHeterogeneousAgentAuthRequired('trae', 'Please sign in before continuing')).toBe(true);
     expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'amp' })).toMatchObject({
       agentType: 'amp',
       code: 'auth_required',
@@ -118,6 +130,15 @@ describe('heterogeneous agent config', () => {
     });
   });
 
+  it('builds TRAE CLI installation guidance without duplicating the CLI suffix', () => {
+    expect(buildHeterogeneousAgentCliNotFoundError({ agentType: 'trae' })).toMatchObject({
+      agentType: 'trae',
+      command: 'traecli',
+      installCommands: [],
+      message: 'TRAE CLI was not found. Install it and make sure `traecli` can be executed.',
+    });
+  });
+
   it('derives display labels from the shared config source', () => {
     expect(HETEROGENEOUS_TYPE_LABELS).toEqual({
       'amp': 'Amp',
@@ -132,6 +153,7 @@ describe('heterogeneous agent config', () => {
       'opencode': 'OpenCode',
       'pi': 'Pi',
       'qoder': 'Qoder',
+      'trae': 'TRAE CLI',
     });
   });
 
@@ -150,6 +172,7 @@ describe('heterogeneous agent config', () => {
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('pi')).toBe(false);
     expect(isRemoteHeterogeneousType('qoder')).toBe(false);
+    expect(isRemoteHeterogeneousType('trae')).toBe(false);
     expect(isRemoteHeterogeneousType('openclaw')).toBe(true);
     expect(isRemoteHeterogeneousType('hermes')).toBe(true);
   });

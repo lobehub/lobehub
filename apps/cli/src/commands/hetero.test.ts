@@ -258,6 +258,35 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs TRAE Enterprise with ACP model selection and only native provider arguments', async () => {
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'traecli' });
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'trae',
+      '--prompt',
+      'do thing',
+      '--model',
+      'gpt-5.4',
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('trae', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'trae',
+        command: 'traecli',
+        extraArgs: ['--feature', 'test'],
+        initialModel: 'gpt-5.4',
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -418,6 +447,20 @@ describe('hetero exec command', () => {
       command: 'codex',
       extraArgs: ['-c', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="xhigh"'],
     });
+  });
+
+  it('translates the Amp mode selector into its native --mode flag', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'amp', '--prompt', 'do thing', '--mode', 'ultra']);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        command: 'amp',
+        extraArgs: ['--mode', 'ultra'],
+      }),
+    );
   });
 
   it('runs AMP and forwards only native agent args', async () => {

@@ -1,4 +1,5 @@
-import { Alert, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { Blend, Cloud, LaptopMinimalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

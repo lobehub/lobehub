@@ -426,7 +426,6 @@ export default {
   'plans.btn.noAction': 'Plan Locked',
   'plans.btn.payment': 'Purchase',
   'plans.btn.paymentDesc': 'Supports credit card / Alipay / WeChat Pay',
-  'plans.btn.paymentDescForZarinpal': 'Supports credit card',
   'plans.btn.soon': 'Coming Soon',
   'plans.changePlan': 'Choose Plan',
   'plans.cloud.history': 'Unlimited conversation history',
@@ -742,11 +741,4 @@ export default {
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
   'usage.remaining': 'Remaining',
-  'zarinpal.infoModal.desc':
-    'Due to policy requirements, please complete the following personal information before placing an order:',
-  'zarinpal.infoModal.phone.label': 'Phone Number',
-  'zarinpal.infoModal.phone.placeholder': 'Please enter phone number',
-  'zarinpal.infoModal.phone.rule': 'Please enter a valid phone number',
-  'zarinpal.infoModal.submit': 'Purchase',
-  'zarinpal.infoModal.title': 'Fill in Required Information',
 };

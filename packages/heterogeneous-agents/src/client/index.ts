@@ -11,6 +11,7 @@ import {
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 
 import {
@@ -37,6 +38,7 @@ const heterogeneousAgentIcons = {
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
+  'trae': Trae,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>

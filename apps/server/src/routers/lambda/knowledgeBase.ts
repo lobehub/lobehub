@@ -6,11 +6,15 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { serverDBEnv } from '@/config/db';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
-import { insertKnowledgeBasesSchema } from '@/database/schemas';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, insertKnowledgeBasesSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  getWorkspaceScopedPermissionMatches,
+  hasWorkspaceScopedPermission,
+} from '@/server/services/workspacePermission';
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -18,6 +22,11 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertKnowledgeBaseBrowsable,
+  filterRestrictedKnowledgeBases,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -132,7 +141,18 @@ export const knowledgeBaseRouter = router({
   getKnowledgeBaseById: knowledgeBaseProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }): Promise<KnowledgeBaseItem | undefined> => {
-      return ctx.knowledgeBaseModel.findById(input.id);
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) return kb;
+
+      // Restricted KBs (resource-permission `use` level) stay mountable but
+      // their detail/content view is manager-only.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+
+      return kb;
     }),
 
   getKnowledgeBases: knowledgeBaseProcedure
@@ -143,9 +163,40 @@ export const knowledgeBaseRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
-      return ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
-    }),
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<
+        (KnowledgeBaseItem & { memberRestricted?: boolean; permissionManageable?: boolean })[]
+      > => {
+        const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+
+        // Restricted KBs are fully hidden from non-privileged members here; the
+        // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
+        const visible = await filterRestrictedKnowledgeBases(ctx, list);
+
+        // Managers keep seeing restricted KBs — flag them (and who may manage
+        // permissions) so the client renders the lock badge and the
+        // permission-page entry without a per-row permission request.
+        if (!ctx.workspaceId) return visible;
+        const [useLevelIds, { hasAllScope }] = await Promise.all([
+          getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          getWorkspaceScopedPermissionMatches({
+            action: 'KNOWLEDGE_BASE_UPDATE',
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        ]);
+        const useLevelSet = new Set(useLevelIds);
+        return visible.map((kb) => ({
+          ...kb,
+          memberRestricted: useLevelSet.has(kb.id),
+          permissionManageable: hasAllScope || kb.userId === ctx.userId,
+        }));
+      },
+    ),
 
   publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
@@ -326,12 +377,30 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.knowledgeBaseModel.transferTo(
+      const result = await ctx.knowledgeBaseModel.transferTo(
         input.id,
         input.targetWorkspaceId,
         ctx.userId,
         input.targetVisibility,
       );
+      // Mirror the agent/document transfer paths: the source workspace's
+      // permission row must not survive the move, and a public arrival gets
+      // the default level in the destination.
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'knowledgeBase',
+          input.id,
+        );
+      }
+      if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
+          'knowledgeBase',
+          input.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.knowledgeBase,
+          ctx.userId,
+        );
+      }
+      return result;
     }),
 
   updateKnowledgeBase: knowledgeBaseProcedure

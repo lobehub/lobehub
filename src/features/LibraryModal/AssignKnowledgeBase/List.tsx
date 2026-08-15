@@ -1,4 +1,5 @@
-import { Alert, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { BookOpen, ServerCrash } from 'lucide-react';
 import React, { memo, useMemo, useState } from 'react';

@@ -1,8 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Alert, Block, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';

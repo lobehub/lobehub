@@ -77,6 +77,7 @@ export const buildHeterogeneousAgentCliNotFoundError = ({
 }: BuildHeterogeneousAgentCliErrorOptions): HeterogeneousAgentCliError => {
   const descriptor = getHeterogeneousAgentConfigOrThrow(agentType);
   const resolvedCommand = resolveHeterogeneousAgentCommand(agentType, command);
+  const cliTitle = /\bcli$/i.test(descriptor.title) ? descriptor.title : `${descriptor.title} CLI`;
 
   return {
     agentType: descriptor.type,
@@ -84,7 +85,7 @@ export const buildHeterogeneousAgentCliNotFoundError = ({
     command: resolvedCommand,
     docsUrl: descriptor.install.docsUrl,
     installCommands: descriptor.install.commands,
-    message: `${descriptor.title} CLI was not found. Install it and make sure \`${resolvedCommand}\` can be executed.`,
+    message: `${cliTitle} was not found. Install it and make sure \`${resolvedCommand}\` can be executed.`,
     ...(stderr ? { stderr } : {}),
   };
 };

@@ -4,8 +4,8 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
-import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Select, SliderWithInput, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';

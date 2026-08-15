@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { INBOX_SESSION_ID } from '@lobechat/const';
+import { sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -90,6 +91,37 @@ describe('AgentSignalNightlyReviewModel', () => {
           timezone: 'UTC',
         },
       ]);
+    });
+
+    /**
+     * @example
+     * expect(nextPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-next']);
+     */
+    it('does not repeat a cursor row whose database timestamp has sub-millisecond precision', async () => {
+      // ROOT CAUSE:
+      //
+      // PostgreSQL timestamps can retain microseconds while JavaScript Date and workflow JSON retain
+      // only milliseconds. Comparing the truncated Date back to created_at made the cursor row appear
+      // newer than itself and caused an unbounded pagination loop.
+      //
+      // Before: created_at .000123 > replayed cursor .000, so the same user was returned again.
+      // After: the cursor id restores the exact (created_at, id) tuple inside PostgreSQL.
+      await serverDB.execute(sql`
+        INSERT INTO users (id, created_at, updated_at, last_active_at)
+        VALUES
+          ('nightly-review-microsecond-cursor', '2026-05-01T00:00:00.000123Z', NOW(), NOW()),
+          ('nightly-review-microsecond-next', '2026-05-02T00:00:00.000456Z', NOW(), NOW())
+      `);
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+      const firstPage = await model.listEligibleUsers({ limit: 1 });
+      const nextPage = await model.listEligibleUsers({
+        cursor: { createdAt: firstPage[0].createdAt, id: firstPage[0].id },
+        limit: 1,
+      });
+
+      expect(firstPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-cursor']);
+      expect(nextPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-next']);
     });
   });
 

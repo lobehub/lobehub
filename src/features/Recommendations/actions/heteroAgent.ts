@@ -10,6 +10,7 @@ import {
   OpenCode,
   Pi,
   Qoder,
+  Trae,
 } from '@lobehub/icons';
 import { createElement } from 'react';
 
@@ -26,6 +27,7 @@ const avatarIcons = {
   'opencode': OpenCode.Avatar,
   'pi': Pi.Avatar,
   'qoder': Qoder.Avatar,
+  'trae': Trae.Avatar,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**

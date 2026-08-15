@@ -90,6 +90,8 @@ interface ExecOptions {
   effort?: string;
   image?: string[];
   inputJson?: string;
+  /** Amp agent mode, forwarded as the native `--mode` flag. */
+  mode?: string;
   model?: string;
   operationId?: string;
   prompt?: string;
@@ -127,35 +129,39 @@ const collectImage = (value: string, previous: string[] = []): string[] => [...p
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 const buildExtraArgs = (
-  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
     options.type === 'amp'
-      ? []
-      : options.type === 'codex'
-        ? [
-            ...(options.model ? ['--model', options.model] : []),
-            ...(options.effort
-              ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
-              : []),
-            ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
-          ]
-        : options.type === 'claude-code' || options.type === 'codebuddy'
+      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      : options.type === 'trae'
+        ? []
+        : options.type === 'codex'
           ? [
               ...(options.model ? ['--model', options.model] : []),
-              ...(options.effort ? ['--effort', options.effort] : []),
+              ...(options.effort
+                ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+                : []),
+              ...(options.speed
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                : []),
             ]
-          : options.type === 'cursor' ||
-              options.type === 'kimi-code' ||
-              options.type === 'opencode' ||
-              options.type === 'pi'
-            ? [...(options.model ? ['--model', options.model] : [])]
-            : options.type === 'qoder'
-              ? [
-                  ...(options.model ? ['--model', options.model] : []),
-                  ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                ]
-              : [];
+          : options.type === 'claude-code' || options.type === 'codebuddy'
+            ? [
+                ...(options.model ? ['--model', options.model] : []),
+                ...(options.effort ? ['--effort', options.effort] : []),
+              ]
+            : options.type === 'cursor' ||
+                options.type === 'kimi-code' ||
+                options.type === 'opencode' ||
+                options.type === 'pi'
+              ? [...(options.model ? ['--model', options.model] : [])]
+              : options.type === 'qoder'
+                ? [
+                    ...(options.model ? ['--model', options.model] : []),
+                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                  ]
+                : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -800,6 +806,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
+      initialModel: options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -833,6 +840,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
+        initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.prompt,
         uploadImage,
@@ -949,6 +957,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(

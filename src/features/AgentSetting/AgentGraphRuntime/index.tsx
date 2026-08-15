@@ -2,8 +2,8 @@
 
 import type { ReasoningGraph } from '@lobechat/types';
 import { ReasoningGraphSchema } from '@lobechat/types';
-import { Alert, Flexbox, TextArea } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { Alert, Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

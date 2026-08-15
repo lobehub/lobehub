@@ -284,6 +284,51 @@ describe('resolveCliCommand', () => {
       }
     });
 
+    it('resolves and validates the TRAE Enterprise CLI', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('TraeCode CLI 1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('1.4.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('trae', 'traecli')).resolves.toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('rejects the unrelated open-source trae-cli trajectory runner', async () => {
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', '/usr/local/bin/trae-cli');
+
+      expect(status.available).toBe(false);
+      expect(execFileMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects the unrelated trae-cli banner even when the executable was renamed', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('trae-cli 0.1.0');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toEqual({ available: false });
+    });
+
     it('finds OpenCode in its well-known user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -809,6 +854,11 @@ describe('resolveCliCommand', () => {
     it('defines qodercli as the default Qoder command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
+    });
+
+    it('defines traecli as the default TRAE command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

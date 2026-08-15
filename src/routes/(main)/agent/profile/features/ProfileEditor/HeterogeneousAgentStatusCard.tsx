@@ -241,7 +241,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.type === 'kimi-code' ||
         provider.type === 'opencode' ||
         provider.type === 'pi' ||
-        provider.type === 'qoder') &&
+        provider.type === 'qoder' ||
+        provider.type === 'trae') &&
       !detecting &&
       !status?.available &&
       !isUsingCustomCommand;
