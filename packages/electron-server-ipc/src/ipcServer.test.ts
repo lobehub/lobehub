@@ -97,7 +97,7 @@ describe('ElectronIPCServer', () => {
     });
 
     it('should reapply owner-only mode after replacing an existing socket-info file', async () => {
-      let existingSocketInfoMode = 0o644;
+      let existingSocketInfoMode: number | string = 0o644;
       mockServer.listen.mockImplementation((path, callback) => {
         callback?.();
         return mockServer;

@@ -79,10 +79,13 @@ export class ChunkingLoader {
         case 'ipynb': {
           // Notebook JSON → markdown so chunks carry semantic text instead
           // of base64 payloads; non-nbformat-v4 files fall back to raw text.
-          const markdown = convertIpynbToMarkdown(txt);
-          return markdown === null
-            ? await TextLoader(scrubIpynbFallbackText(txt))
-            : await MarkdownLoader(markdown);
+          const text = this.uint8ArrayToString(content);
+          const markdown = convertIpynbToMarkdown(text);
+          documents =
+            markdown === null
+              ? await TextLoader(scrubIpynbFallbackText(text))
+              : await MarkdownLoader(markdown);
+          break;
         }
 
         default: {
@@ -148,6 +151,6 @@ export class ChunkingLoader {
   }
 
   private toBlob(content: Uint8Array) {
-    return new Blob([content]);
+    return new Blob([Buffer.from(content)]);
   }
 }
