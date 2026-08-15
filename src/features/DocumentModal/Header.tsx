@@ -2,7 +2,7 @@
 
 import { ActionIcon, Avatar, copyToClipboard, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { DropdownMenu, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { MoreHorizontal, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,14 @@ import { editorSelectors } from '@/store/document/slices/editor';
 import { buildDocumentModalUrl } from './url';
 
 const HEADER_HEIGHT = 44;
+
+const styles = createStaticStyles(({ css }) => ({
+  shareButton: css`
+    & button:not(:hover, :focus-visible) {
+      background: transparent;
+    }
+  `,
+}));
 
 const DocumentModalHeader = memo(() => {
   const { t } = useTranslation(['file', 'common']);
@@ -70,17 +78,21 @@ const DocumentModalHeader = memo(() => {
         {documentId && !isDocumentLoading && (
           <AutoSaveHint documentId={documentId} style={{ marginLeft: 4 }} />
         )}
-      </Flexbox>
-      <Flexbox horizontal align={'center'} gap={4}>
-        {documentId && <ShareButton documentId={documentId} />}
         <DropdownMenu
           iconSpaceMode={'group'}
           items={menuItems}
-          placement={'bottomRight'}
+          placement={'bottomLeft'}
           popupProps={{ style: { minWidth: 200 } }}
         >
           <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
         </DropdownMenu>
+      </Flexbox>
+      <Flexbox horizontal align={'center'} gap={4}>
+        {documentId && (
+          <span className={styles.shareButton}>
+            <ShareButton documentId={documentId} />
+          </span>
+        )}
         <ToggleRightPanelButton
           expand={showPageAgentPanel}
           showActive={false}
