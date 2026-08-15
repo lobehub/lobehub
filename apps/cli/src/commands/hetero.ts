@@ -13,6 +13,7 @@ import {
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import { createPiRpcAgentHandle, toPiRpcPrompt } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
   AgentImageSource,
@@ -612,10 +613,23 @@ const exec = async (options: ExecOptions): Promise<void> => {
     const dumpAttempt = rawDump?.openAttempt(runLabel);
 
     // `spawnAgent` is async and can reject DURING image normalization — fetch
-    // failures, missing local --image paths, decode errors.
+    // failures, missing local --image paths, decode errors. Pi runs over the
+    // RPC transport instead (same handle shape, no json fallback).
     let handle: Awaited<ReturnType<typeof spawnAgent>>;
     try {
-      handle = await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
+      handle =
+        spawnOpts.agentType === 'pi'
+          ? await createPiRpcAgentHandle({
+              args: spawnOpts.extraArgs ?? [],
+              commandPath: spawnOpts.command!,
+              cwd: spawnOpts.cwd ?? process.cwd(),
+              env: spawnOpts.env ?? {},
+              operationId: spawnOpts.operationId,
+              prompt: await toPiRpcPrompt(spawnOpts.prompt),
+              resumeSessionId: spawnOpts.resumeSessionId,
+              uploadImage: spawnOpts.uploadImage,
+            })
+          : await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
     } catch (err) {
       await dumpAttempt?.close();
       const message = err instanceof Error ? err.message : String(err);

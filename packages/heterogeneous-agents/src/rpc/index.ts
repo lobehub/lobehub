@@ -7,6 +7,12 @@
  */
 export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
 export {
+  createPiRpcAgentHandle,
+  toPiRpcPrompt,
+  type PiRpcAgentHandle,
+  type PiRpcAgentHandleOptions,
+} from './piRpcAgentHandle';
+export {
   PiRpcSession,
   type PiRpcPromptInput,
   type PiRpcSessionOptions,

@@ -212,7 +212,6 @@ export const CURSOR_BASE_ARGS = [
 ] as const;
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
-export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
 export const QODER_BASE_ARGS = [
   '-p',
@@ -311,12 +310,13 @@ const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawn
   ...extraArgs,
 ];
 
-const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
-  ...PI_BASE_ARGS,
-  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-  ...inputArgs,
-  ...extraArgs,
-];
+const buildPiArgs = (_params: BuildSpawnArgsParams): never => {
+  // pi runs exclusively over the RPC transport (PiRpcSession /
+  // createPiRpcAgentHandle). Reaching the legacy json spawn is a bug.
+  throw new Error(
+    'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle',
+  );
+};
 
 const buildKimiCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...KIMI_CODE_BASE_ARGS,

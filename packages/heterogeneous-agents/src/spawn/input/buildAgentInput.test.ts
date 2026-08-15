@@ -300,31 +300,10 @@ describe('buildAgentInput', () => {
   });
 
   describe('pi', () => {
-    it('uses raw text stdin and @path image arguments', async () => {
-      const filePath = path.join(tmp, 'pi input.png');
-      await writeFile(filePath, PNG_BYTES);
-      const plan = await buildAgentInput('pi', [
-        { text: 'first', type: 'text' },
-        { source: { path: filePath, type: 'path' }, type: 'image' },
-        { text: 'second', type: 'text' },
-      ]);
-
-      expect(plan).toEqual({ args: [`@${filePath}`], stdin: 'first\n\nsecond' });
-    });
-
-    it('materializes base64 images through the shared path-input helper', async () => {
-      const plan = await buildAgentInput(
-        'pi',
-        [
-          {
-            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
-            type: 'image',
-          },
-        ],
-        { cacheDir: tmp },
+    it('rejects the legacy stdin/args input — pi is RPC-only', async () => {
+      await expect(buildAgentInput('pi', [{ text: 'first', type: 'text' }])).rejects.toThrow(
+        /RPC transport only/,
       );
-      expect(plan.args).toHaveLength(1);
-      expect(plan.args[0]).toMatch(/^@.*\.png$/);
     });
   });
 
