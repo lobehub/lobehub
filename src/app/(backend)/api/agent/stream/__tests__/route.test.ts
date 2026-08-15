@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
-import { GET } from '../route';
+import { GET as getHandler } from '../route';
+
+const GET = (request: NextRequest) => getHandler(request, { params: Promise.resolve({}) });
 
 // Mock dependencies first
 const mockStreamEventManager = {
