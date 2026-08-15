@@ -125,7 +125,7 @@ export class FileUploadService extends BaseService {
       targetKnowledgeBaseId: knowledgeBaseId,
     });
     if (!permissionResult.isPermitted) {
-      throw this.createAuthorizationError(permissionResult.message || '无权访问知识库文件');
+      throw this.createAuthorizationError(permissionResult.message || 'No permission to access knowledge base file');
     }
 
     const knowledgeBase = await this.db.query.knowledgeBases.findFirst({
@@ -133,7 +133,7 @@ export class FileUploadService extends BaseService {
     });
 
     if (!knowledgeBase) {
-      throw this.createNotFoundError('知识库不存在或无权访问');
+      throw this.createNotFoundError('Knowledge base not found or access denied');
     }
 
     // `KNOWLEDGE_BASE_UPDATE:all` is a curation scope (restricted-KB
@@ -158,7 +158,7 @@ export class FileUploadService extends BaseService {
     try {
       const isPermitted = await this.resolveOperationPermission('FILE_UPLOAD');
       if (!isPermitted.isPermitted) {
-        throw this.createAuthorizationError(isPermitted.message || '无权上传文件');
+        throw this.createAuthorizationError(isPermitted.message || 'No permission to upload files');
       }
 
       const results: BatchFileUploadResponse = {
@@ -198,7 +198,7 @@ export class FileUploadService extends BaseService {
 
       return results;
     } catch (error) {
-      this.handleServiceError(error, '批量上传文件');
+      this.handleServiceError(error, 'batch upload files');
     }
   }
 
@@ -232,7 +232,7 @@ export class FileUploadService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('FILE_READ', resourceInfo);
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问文件列表');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access file list');
       }
 
       this.log('info', 'Getting file list', {
@@ -342,7 +342,7 @@ export class FileUploadService extends BaseService {
         totalSize: totalResult[0]?.totalSize || '0',
       };
     } catch (error) {
-      this.handleServiceError(error, '获取文件列表');
+      this.handleServiceError(error, 'get file list');
     }
   }
 
@@ -359,7 +359,7 @@ export class FileUploadService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问知识库文件列表');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access knowledge base file list');
       }
 
       // Validate knowledge base access permission and existence
@@ -389,7 +389,7 @@ export class FileUploadService extends BaseService {
 
       return result;
     } catch (error) {
-      this.handleServiceError(error, '获取知识库文件列表');
+      this.handleServiceError(error, 'get knowledge base file list');
     }
   }
 
@@ -405,7 +405,7 @@ export class FileUploadService extends BaseService {
 
       const uniqueFileIds = Array.from(new Set(request.fileIds));
       if (uniqueFileIds.length === 0) {
-        throw this.createValidationError('文件ID列表不能为空');
+        throw this.createValidationError('File ID list cannot be empty');
       }
 
       const ownedFiles = await this.db.query.files.findMany({
@@ -416,7 +416,7 @@ export class FileUploadService extends BaseService {
 
       const failed = uniqueFileIds
         .filter((fileId) => !ownedIds.includes(fileId))
-        .map((fileId) => ({ fileId, reason: '文件不存在或无权访问' }));
+        .map((fileId) => ({ fileId, reason: 'File not found or access denied' }));
 
       if (ownedIds.length) {
         await this.db
@@ -436,7 +436,7 @@ export class FileUploadService extends BaseService {
         successed: ownedIds,
       };
     } catch (error) {
-      this.handleServiceError(error, '批量添加知识库文件关联');
+      this.handleServiceError(error, 'batch add knowledge base file associations');
     }
   }
 
@@ -450,7 +450,7 @@ export class FileUploadService extends BaseService {
     try {
       const uniqueFileIds = Array.from(new Set(request.fileIds));
       if (uniqueFileIds.length === 0) {
-        throw this.createValidationError('文件ID列表不能为空');
+        throw this.createValidationError('File ID list cannot be empty');
       }
 
       await this.assertOwnedKnowledgeBase(knowledgeBaseId, 'KNOWLEDGE_BASE_UPDATE');
@@ -463,7 +463,7 @@ export class FileUploadService extends BaseService {
 
       const failed = uniqueFileIds
         .filter((fileId) => !ownedIds.includes(fileId))
-        .map((fileId) => ({ fileId, reason: '文件不存在或无权访问' }));
+        .map((fileId) => ({ fileId, reason: 'File not found or access denied' }));
 
       if (ownedIds.length) {
         await this.db
@@ -482,7 +482,7 @@ export class FileUploadService extends BaseService {
         successed: ownedIds,
       };
     } catch (error) {
-      this.handleServiceError(error, '批量移除知识库文件关联');
+      this.handleServiceError(error, 'batch remove knowledge base file associations');
     }
   }
 
@@ -495,7 +495,7 @@ export class FileUploadService extends BaseService {
   ): Promise<MoveKnowledgeBaseFilesResponse> {
     try {
       if (sourceKnowledgeBaseId === request.targetKnowledgeBaseId) {
-        throw this.createValidationError('目标知识库不能与源知识库相同');
+        throw this.createValidationError('Target knowledge base cannot be the same as the source knowledge base');
       }
 
       // Validate knowledge base ownership
@@ -514,7 +514,7 @@ export class FileUploadService extends BaseService {
 
       const failed: MoveKnowledgeBaseFilesResponse['failed'] = uniqueFileIds
         .filter((fileId) => !ownedIds.includes(fileId))
-        .map((fileId) => ({ fileId, reason: '文件不存在或无权访问' }));
+        .map((fileId) => ({ fileId, reason: 'File not found or access denied' }));
 
       if (!ownedIds.length) {
         return {
@@ -551,7 +551,7 @@ export class FileUploadService extends BaseService {
         successed: ownedIds,
       };
     } catch (error) {
-      this.handleServiceError(error, '移动知识库文件');
+      this.handleServiceError(error, 'move knowledge base files');
     }
   }
 
@@ -566,7 +566,7 @@ export class FileUploadService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this file');
       }
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
@@ -609,7 +609,7 @@ export class FileUploadService extends BaseService {
         file: convertedFile,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取文件详情');
+      this.handleServiceError(error, 'get file details');
     }
   }
 
@@ -624,7 +624,7 @@ export class FileUploadService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this file');
       }
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
@@ -652,7 +652,7 @@ export class FileUploadService extends BaseService {
         url: signedUrl,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取文件URL');
+      this.handleServiceError(error, 'get file URL');
     }
   }
 
@@ -664,7 +664,7 @@ export class FileUploadService extends BaseService {
       const isPermitted = await this.resolveOperationPermission('FILE_UPLOAD');
 
       if (!isPermitted.isPermitted) {
-        throw this.createAuthorizationError(isPermitted.message || '无权上传文件');
+        throw this.createAuthorizationError(isPermitted.message || 'No permission to upload files');
       }
 
       this.log('info', 'Starting public file upload', {
@@ -793,7 +793,7 @@ export class FileUploadService extends BaseService {
 
       return await this.getFileDetail(createResult.id);
     } catch (error) {
-      this.handleServiceError(error, '上传文件');
+      this.handleServiceError(error, 'upload file');
     }
   }
 
@@ -811,7 +811,7 @@ export class FileUploadService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this file');
       }
 
       // 2. Query file
@@ -902,7 +902,7 @@ export class FileUploadService extends BaseService {
         };
       }
     } catch (error) {
-      this.handleServiceError(error, '解析文件');
+      this.handleServiceError(error, 'parse file');
     }
   }
 
@@ -919,7 +919,7 @@ export class FileUploadService extends BaseService {
         targetFileId: fileId,
       });
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权操作该文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to operate on this file');
       }
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
@@ -954,7 +954,7 @@ export class FileUploadService extends BaseService {
         success: true,
       };
     } catch (error) {
-      this.handleServiceError(error, '创建分块任务');
+      this.handleServiceError(error, 'create chunk task');
     }
   }
 
@@ -969,7 +969,7 @@ export class FileUploadService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this file');
       }
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
@@ -991,7 +991,7 @@ export class FileUploadService extends BaseService {
         finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
       };
     } catch (error) {
-      this.handleServiceError(error, '查询文件分块状态');
+      this.handleServiceError(error, 'query file chunk status');
     }
   }
 
@@ -1006,7 +1006,7 @@ export class FileUploadService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权删除此文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to delete this file');
       }
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
@@ -1021,7 +1021,7 @@ export class FileUploadService extends BaseService {
 
       return;
     } catch (error) {
-      this.handleServiceError(error, '删除文件');
+      this.handleServiceError(error, 'delete file');
     }
   }
 
@@ -1176,7 +1176,7 @@ export class FileUploadService extends BaseService {
         userId: this.userId,
       });
     } catch (error) {
-      this.handleServiceError(error, '创建文件和会话的关联关系');
+      this.handleServiceError(error, 'create file-session association');
     }
   }
 
@@ -1231,7 +1231,7 @@ export class FileUploadService extends BaseService {
 
       return result;
     } catch (error) {
-      this.handleServiceError(error, '批量获取文件详情和内容');
+      this.handleServiceError(error, 'batch retrieve file details and content');
     }
   }
 
@@ -1246,7 +1246,7 @@ export class FileUploadService extends BaseService {
 
       return existingFile || null;
     } catch (error) {
-      this.handleServiceError(error, '查找用户是否已有指定哈希的文件记录');
+      this.handleServiceError(error, 'find user file record by hash');
     }
   }
 
@@ -1517,7 +1517,7 @@ export class FileUploadService extends BaseService {
         targetFileId: fileId,
       });
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新文件');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to update file');
       }
 
       // 2. Verify the file exists and is writable by the caller.
@@ -1544,7 +1544,7 @@ export class FileUploadService extends BaseService {
             );
 
             if (!knowledgeBase) {
-              throw this.createNotFoundError('知识库不存在或无权访问');
+              throw this.createNotFoundError('Knowledge base not found or access denied');
             }
 
             await trx.insert(knowledgeBaseFiles).values({
@@ -1561,7 +1561,7 @@ export class FileUploadService extends BaseService {
 
       return updatedFile;
     } catch (error) {
-      this.handleServiceError(error, '更新文件');
+      this.handleServiceError(error, 'update file');
     }
   }
 }
