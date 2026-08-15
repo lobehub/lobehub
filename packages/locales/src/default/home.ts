@@ -10,7 +10,7 @@ export default {
   'brief.action.confirmDone': 'Confirm complete',
   'brief.action.feedback': 'Feedback',
   'brief.action.ignore': 'Ignore',
-  'brief.action.review': 'Review delivery',
+  'brief.action.review': 'Go to acceptance',
   'brief.action.retry': 'Retry',
   'brief.action.upgrade': 'Upgrade plan',
   'brief.actionFailed': "That didn't go through. Please try again.",
