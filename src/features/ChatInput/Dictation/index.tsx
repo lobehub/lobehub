@@ -3,6 +3,7 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { LoaderCircle, Mic, RotateCcw, X } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,11 +13,18 @@ import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useChatInputStore, useStoreApi } from '../store';
 import { isOtherAudioInputModeActive } from './mutualExclusion';
 import { getDictationControlMode } from './presentation';
+import { useDictationControlFocus } from './useDictationControlFocus';
 import { useRealtimeDictation } from './useRealtimeDictation';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   cancel: css`
     color: ${cssVar.colorTextSecondary};
+  `,
+  controlRow: css`
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
   `,
   controls: css`
     display: flex;
@@ -73,12 +81,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       transition: none;
       animation: none;
     }
-  `,
-  listeningControls: css`
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
   `,
   listeningStatus: css`
     position: absolute;
@@ -137,6 +139,8 @@ const Dictation = memo(() => {
   const active = status !== 'idle' || activeAudioInputMode === 'dictation';
   const controlMode = getDictationControlMode(status);
   const otherAudioModeActive = isOtherAudioInputModeActive(activeAudioInputMode, 'dictation');
+  const { actionRef, cancelRef, preserveFocusOnActivation, retryRef, stopRef } =
+    useDictationControlFocus({ retryable, status });
 
   useEffect(() => {
     if (!client) return;
@@ -178,6 +182,38 @@ const Dictation = memo(() => {
     setActiveAudioInputMode(undefined);
   }, [client, setActiveAudioInputMode]);
 
+  const handleStart = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      preserveFocusOnActivation(event);
+      start();
+    },
+    [preserveFocusOnActivation, start],
+  );
+
+  const handleStop = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      preserveFocusOnActivation(event);
+      void client?.stop();
+    },
+    [client, preserveFocusOnActivation],
+  );
+
+  const handleCancel = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      preserveFocusOnActivation(event);
+      void client?.cancel();
+    },
+    [client, preserveFocusOnActivation],
+  );
+
+  const handleDismiss = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      preserveFocusOnActivation(event);
+      dismiss();
+    },
+    [dismiss, preserveFocusOnActivation],
+  );
+
   if (!enabled || mobile || !client) return null;
 
   if (!active) {
@@ -195,6 +231,7 @@ const Dictation = memo(() => {
           aria-label={t('voiceDictation.action')}
           data-testid="voice-dictation-action"
           icon={Mic}
+          ref={actionRef}
           showTooltip={false}
           title={title}
         />
@@ -204,8 +241,9 @@ const Dictation = memo(() => {
         aria-label={t('voiceDictation.action')}
         data-testid="voice-dictation-action"
         icon={Mic}
+        ref={actionRef}
         title={t('voiceDictation.action')}
-        onClick={start}
+        onClick={handleStart}
       />
     );
   }
@@ -226,7 +264,7 @@ const Dictation = memo(() => {
     return (
       <div
         aria-label={t('voiceDictation.statusLabel')}
-        className={styles.listeningControls}
+        className={styles.controlRow}
         data-status="listening"
         data-testid="voice-dictation-controls"
         role="group"
@@ -239,17 +277,19 @@ const Dictation = memo(() => {
           className={styles.listening}
           data-testid="voice-dictation-stop"
           icon={Mic}
+          ref={stopRef}
           style={{ borderRadius: '50%' }}
           title={t('voiceDictation.stop')}
-          onClick={() => void client.stop()}
+          onClick={handleStop}
         />
         <ChatInputAction
           aria-label={t('voiceDictation.cancel')}
           className={styles.cancel}
           data-testid="voice-dictation-cancel"
           icon={X}
+          ref={cancelRef}
           title={t('voiceDictation.cancel')}
-          onClick={() => void client.cancel()}
+          onClick={handleCancel}
         />
       </div>
     );
@@ -258,32 +298,36 @@ const Dictation = memo(() => {
   return (
     <div
       aria-label={t('voiceDictation.statusLabel')}
-      className={styles.controls}
+      className={styles.controlRow}
       data-status={status}
       data-testid="voice-dictation-controls"
       role="group"
     >
-      <span aria-live="polite" className={styles.status} role="status">
-        {statusText}
-      </span>
-      {status === 'error' && retryable ? (
-        <ChatInputAction
-          aria-label={t('voiceDictation.retry')}
-          data-testid="voice-dictation-retry"
-          icon={RotateCcw}
-          title={t('voiceDictation.retry')}
-          onClick={start}
-        />
-      ) : status !== 'error' ? (
-        <Icon aria-hidden className={styles.spin} icon={LoaderCircle} size={18} />
-      ) : null}
+      <div className={styles.controls}>
+        <span aria-live="polite" className={styles.status} role="status">
+          {statusText}
+        </span>
+        {status === 'error' && retryable ? (
+          <ChatInputAction
+            aria-label={t('voiceDictation.retry')}
+            data-testid="voice-dictation-retry"
+            icon={RotateCcw}
+            ref={retryRef}
+            title={t('voiceDictation.retry')}
+            onClick={handleStart}
+          />
+        ) : status !== 'error' ? (
+          <Icon aria-hidden className={styles.spin} icon={LoaderCircle} size={18} />
+        ) : null}
+      </div>
       <ChatInputAction
         aria-label={status === 'error' ? t('voiceDictation.dismiss') : t('voiceDictation.cancel')}
         className={styles.cancel}
         data-testid="voice-dictation-cancel"
         icon={X}
+        ref={cancelRef}
         title={status === 'error' ? t('voiceDictation.dismiss') : t('voiceDictation.cancel')}
-        onClick={status === 'error' ? dismiss : () => void client.cancel()}
+        onClick={status === 'error' ? handleDismiss : handleCancel}
       />
     </div>
   );
