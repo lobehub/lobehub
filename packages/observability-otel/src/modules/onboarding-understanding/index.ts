@@ -367,7 +367,7 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
     { attributes: buildOnboardingUnderstandingTraceAttributes(operationAttributes) },
     async (span) => {
       const startedAt = Date.now();
-      let operationStatus: OnboardingUnderstandingOperationStatus;
+      let operationStatus: OnboardingUnderstandingOperationStatus | undefined;
       let outcome: OnboardingUnderstandingProviderCollectionOutcome = 'error';
 
       try {
@@ -415,7 +415,7 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
         const providerId = attributes.providerId ?? 'provider';
         const metricAttributes = buildOnboardingUnderstandingMetricAttributes(
           operationAttributes,
-          operationStatus,
+          operationStatus ?? 'error',
         );
         const providerMetricAttributes =
           buildOnboardingUnderstandingProviderCollectionMetricAttributes(providerId, outcome);

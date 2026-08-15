@@ -2,6 +2,7 @@ import debug from 'debug';
 import { Octokit } from 'octokit';
 import type { z } from 'zod';
 
+import { ConnectorDataError } from '../../errors';
 import { createRecoverableMemo } from '../../memo';
 import { withConnectorRetry } from '../../retry';
 
@@ -148,7 +149,14 @@ export const execute = async <Response, Variables extends Record<string, unknown
       })),
       operation,
     });
-    throw result.error;
+    throw new ConnectorDataError({
+      cause: result.error,
+      code: 'github_response_invalid',
+      message: result.error.message,
+      operation,
+      provider: 'github',
+      retryable: false,
+    });
   });
 
 /** @internal */

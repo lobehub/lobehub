@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { ConnectorDataError } from '../../errors';
 import type { GitHubConnectorTransport } from './client';
 import { createOctokitTransport, execute } from './client';
 
@@ -99,7 +100,16 @@ describe('GitHub GraphQL execute', () => {
       variables: {},
     }).catch((reason) => reason);
 
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(ConnectorDataError);
+    /** @example expect(error.code).toBe('github_response_invalid'); */
+    expect(error).toMatchObject({
+      code: 'github_response_invalid',
+      operation: 'TestProfile',
+      provider: 'github',
+      retryable: false,
+    });
+    /** @example expect(error.cause).toBeInstanceOf(z.ZodError); */
+    expect(error.cause).toBeInstanceOf(z.ZodError);
     /** @example expect(error.message).toContain('upstreamBody'); */
     expect(error.message).toContain('upstreamBody');
     const diagnostic = JSON.stringify({ error, logs: log.mock.calls });
