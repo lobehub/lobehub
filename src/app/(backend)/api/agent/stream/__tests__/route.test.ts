@@ -845,7 +845,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
         },
       );
 
-      const response = await GET(request);
+      await GET(request);
 
       expect(capturedCallback).toBeDefined();
       expect(capturedSignal).toBeDefined();
