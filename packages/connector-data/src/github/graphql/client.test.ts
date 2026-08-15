@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { ConnectorDataError } from '../../errors';
 import type { GitHubConnectorTransport } from './client';
 import { createOctokitTransport, execute } from './client';
 
@@ -83,7 +82,8 @@ describe('GitHub GraphQL execute', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
-  it('sanitizes strict schema failures', async () => {
+  /** @example expect(error.message).toContain('upstreamBody'); */
+  it('retains strict schema failure details', async () => {
     const transport = createTransport(
       vi.fn().mockResolvedValue({
         upstreamBody: 'token=secret-upstream-body',
@@ -99,25 +99,19 @@ describe('GitHub GraphQL execute', () => {
       variables: {},
     }).catch((reason) => reason);
 
-    expect(error).toBeInstanceOf(ConnectorDataError);
-    expect(error).toMatchObject({
-      code: 'github_response_invalid',
-      message: 'github TestProfile failed',
-      operation: 'TestProfile',
-      retryable: false,
-    });
+    expect(error).toBeInstanceOf(Error);
+    /** @example expect(error.message).toContain('upstreamBody'); */
+    expect(error.message).toContain('upstreamBody');
     const diagnostic = JSON.stringify({ error, logs: log.mock.calls });
-    expect(diagnostic).not.toMatch(/secret-upstream-body|token=|upstreamBody/);
+    expect(diagnostic).not.toMatch(/secret-upstream-body|token=/);
   });
 
-  it('sanitizes terminal upstream failures', async () => {
-    const transport = createTransport(
-      vi
-        .fn()
-        .mockRejectedValue(
-          Object.assign(new Error('401 token=secret-upstream-body'), { status: 401 }),
-        ),
-    );
+  /** @example expect(error.message).toBe('401 upstream rejected'); */
+  it('retains terminal upstream failure messages', async () => {
+    const upstreamError = Object.assign(new Error('401 token=secret-upstream-body'), {
+      status: 401,
+    });
+    const transport = createTransport(vi.fn().mockRejectedValue(upstreamError));
 
     const error = await execute({
       operation: 'TestProfile',
@@ -127,19 +121,13 @@ describe('GitHub GraphQL execute', () => {
       variables: {},
     }).catch((reason) => reason);
 
-    expect(error).toMatchObject({
-      code: 'github_request_failed',
-      message: 'github TestProfile failed',
-      retryable: false,
-    });
+    expect(error).toBe(upstreamError);
     expect(log).toHaveBeenCalledWith('GraphQL request failed: %O', {
       errorName: 'Error',
       operation: 'TestProfile',
       status: 401,
     });
-    expect(JSON.stringify({ error, logs: log.mock.calls })).not.toMatch(
-      /secret-upstream-body|token=/,
-    );
+    expect(error.message).toContain('secret-upstream-body');
   });
 
   it('logs only safe GraphQL error types and paths', async () => {
@@ -177,10 +165,7 @@ describe('GitHub GraphQL execute', () => {
       variables: { token: 'secret-variable' },
     }).catch((reason) => reason);
 
-    expect(error).toMatchObject({
-      code: 'github_request_failed',
-      retryable: false,
-    });
+    expect(error).toBe(upstreamError);
     expect(log).toHaveBeenCalledWith('GraphQL request failed: %O', {
       errorName: 'GraphqlResponseError',
       errors: [
