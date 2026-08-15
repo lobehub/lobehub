@@ -1,0 +1,47 @@
+---
+title: 在 LobeHub 中使用 Unsloth
+description: 学习如何配置并使用 Unsloth 运行本地 AI 模型（包括你自己微调的模型），在 LobeHub 中进行对话。
+tags:
+  - LobeHub
+  - Unsloth
+  - 开源模型
+  - 微调
+---
+
+# 在 LobeHub 中使用 Unsloth
+
+[Unsloth](https://unsloth.ai/) 是一个流行的大语言模型（LLM）本地微调与运行框架。除了快速的 LoRA/QLoRA 微调之外，Unsloth 还可以将加载的任意 GGUF 模型（包括你自己微调的模型）通过 OpenAI 兼容 API 对外提供服务，让你可以在 LobeHub 中直接与本地或自定义模型对话。
+
+本文将指导你如何在 LobeHub 中使用 Unsloth：
+
+<Steps>
+  ### 第一步：安装 Unsloth
+
+  - 参考[官方安装指南](https://unsloth.ai/docs)安装或更新 Unsloth。旧版本不提供外部 API，请确保使用较新的版本。
+
+  ### 第二步：加载模型并启动 API 服务
+
+  - 使用 `unsloth run` 命令加载一个 GGUF 模型：
+
+  ```bash
+  unsloth run --model unsloth/Qwen3-1.7B-GGUF
+  ```
+
+  - 控制台会打印出服务地址（通常为 `http://localhost:8000` 或 `http://localhost:8888`）以及一个 `sk-unsloth-…` 格式的 API 密钥
+  - 你可以在 [Unsloth 的 Hugging Face 主页](https://huggingface.co/unsloth)找到更多模型，也可以直接部署你用 Unsloth 微调出来的模型
+
+  ### 第三步：在 LobeHub 中连接 Unsloth
+
+  - 打开 LobeHub 的 `应用设置`，进入 `AI 服务商` 板块
+  - 在列表中找到并选择 `Unsloth` 服务商
+  - 开启 Unsloth 服务商，填入 API 服务地址（例如 `http://127.0.0.1:8000/v1`）并粘贴 `sk-unsloth-…` API 密钥
+
+  <Callout type={'warning'}>
+    如果 Unsloth 运行在本地，请确保开启「客户端请求模式」。
+  </Callout>
+
+  - 使用模型获取功能拉取 Unsloth 当前提供的模型，或手动添加模型
+  - 为你的助手选择一个模型，开始对话
+</Steps>
+
+至此，你已经可以在 LobeHub 中直接使用 Unsloth 运行的模型（包括你自己微调的模型）进行对话了。

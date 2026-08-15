@@ -48,7 +48,7 @@ const activeProviderConfig = (s: AIProviderStoreState) =>
 const isAiProviderConfigLoading = (id: string) => (s: AIProviderStoreState) =>
   !s.aiProviderDetailMap[id];
 
-const providerWhitelist = new Set(['ollama', 'lmstudio']);
+const providerWhitelist = new Set(['ollama', 'lmstudio', 'unsloth']);
 
 const activeProviderKeyVaults = (s: AIProviderStoreState) => activeProviderConfig(s)?.keyVaults;
 

@@ -1,0 +1,49 @@
+---
+title: Using Unsloth in LobeHub
+description: >-
+  Learn how to configure and use Unsloth to run local AI models, including your
+  own fine-tuned models, for conversations within LobeHub.
+tags:
+  - LobeHub
+  - Unsloth
+  - Open Source Models
+  - Fine-tuning
+---
+
+# Using Unsloth in LobeHub
+
+[Unsloth](https://unsloth.ai/) is a popular framework for fine-tuning and running large language models (LLMs) locally. Beyond fast LoRA/QLoRA fine-tuning, Unsloth can serve any loaded GGUF model — including your own fine-tuned models — through an OpenAI-compatible API endpoint, making it a great way to chat with local or custom models in LobeHub.
+
+This guide will walk you through how to use Unsloth within LobeHub:
+
+<Steps>
+  ### Step 1: Install Unsloth
+
+  - Follow the [official installation guide](https://unsloth.ai/docs) to install or update Unsloth. Older versions do not expose the external API, so make sure you are on a recent release.
+
+  ### Step 2: Load a Model and Start the API Service
+
+  - Load a GGUF model with the `unsloth run` command:
+
+  ```bash
+  unsloth run --model unsloth/Qwen3-1.7B-GGUF
+  ```
+
+  - The endpoint URL (typically `http://localhost:8000` or `http://localhost:8888`) and an `sk-unsloth-…` API key will be printed to the console
+  - You can find more models on [Unsloth's Hugging Face page](https://huggingface.co/unsloth), or serve a model you fine-tuned with Unsloth yourself
+
+  ### Step 3: Connect Unsloth to LobeHub
+
+  - Go to the `App Settings` in LobeHub and open the `AI Service Providers` section
+  - Find and select the `Unsloth` provider from the list
+  - Enable the Unsloth provider, enter the API endpoint address (e.g. `http://127.0.0.1:8000/v1`), and paste the `sk-unsloth-…` API key
+
+  <Callout type={'warning'}>
+    If Unsloth is running locally, make sure to enable the "Client Request Mode".
+  </Callout>
+
+  - Use the model fetcher to load the models currently served by Unsloth, or add them manually
+  - Choose a model for your assistant and start chatting
+</Steps>
+
+And that's it! You're now ready to use models running in Unsloth — including your own fine-tuned models — directly within LobeHub.
