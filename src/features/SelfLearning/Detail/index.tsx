@@ -157,68 +157,88 @@ const DomainDetail = memo(() => {
                       </Text>
                     </Text>
 
-                    <Text fontSize={13} type={'secondary'}>
-                      {maturity?.usable
-                        ? t('detail.subheadOk', {
-                            ceiling: Math.round(maturity.pInf ?? 0),
-                            shape: t(SHAPE_CLAUSE[maturity.plateauKind ?? 'growing']),
-                          })
-                        : t('detail.subheadUnusable')}
-                    </Text>
+                    {data.runCount > 1 && (
+                      <Text fontSize={13} type={'secondary'}>
+                        {maturity?.usable
+                          ? t('detail.subheadOk', {
+                              ceiling: Math.round(maturity.pInf ?? 0),
+                              shape: t(SHAPE_CLAUSE[maturity.plateauKind ?? 'growing']),
+                            })
+                          : t('detail.subheadUnusable')}
+                      </Text>
+                    )}
 
-                    <Block gap={10} padding={16} variant={'outlined'}>
-                      <Flexbox
-                        horizontal
-                        align={'baseline'}
-                        justify={'space-between'}
-                        wrap={'wrap'}
-                      >
-                        <Flexbox gap={3} style={{ flex: 1, minWidth: 260 }}>
-                          <Text fontSize={13} weight={600}>
-                            {t('detail.chart.title')}
-                          </Text>
-                          <FitNote detail={data} />
-                        </Flexbox>
-                        <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
+                    {data.runCount === 1 ? (
+                      <Block gap={6} padding={16} variant={'outlined'}>
+                        <Text fontSize={13} weight={600}>
+                          {t('detail.firstPracticeTitle')}
+                        </Text>
+                        <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
+                          {t('detail.firstPracticeDesc', { lessons: data.lessonStats.total })}
+                        </Text>
+                      </Block>
+                    ) : (
+                      <>
+                        <Block gap={10} padding={16} variant={'outlined'}>
                           <Flexbox horizontal align={'center'} gap={5}>
-                            <div style={{ background: theme.colorSuccess, height: 3, width: 14 }} />
-                            <Text fontSize={11} type={'secondary'}>
-                              {t('detail.chart.legendActual')}
-                            </Text>
+                            <Flexbox gap={3} style={{ flex: 1, minWidth: 260 }}>
+                              <Text fontSize={13} weight={600}>
+                                {t('detail.chart.title')}
+                              </Text>
+                              <FitNote detail={data} />
+                            </Flexbox>
                           </Flexbox>
-                          <Flexbox horizontal align={'center'} gap={5}>
-                            <div
-                              style={{
-                                borderTop: `2px dashed ${theme.colorSuccess}`,
-                                height: 0,
-                                width: 14,
-                              }}
-                            />
-                            <Text fontSize={11} type={'secondary'}>
-                              {t('detail.chart.legendFit')}
-                            </Text>
+                          <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
+                            <Flexbox horizontal align={'center'} gap={5}>
+                              <div
+                                style={{ background: theme.colorSuccess, height: 3, width: 14 }}
+                              />
+                              <Text fontSize={11} type={'secondary'}>
+                                {t('detail.chart.legendActual')}
+                              </Text>
+                            </Flexbox>
+                            <Flexbox horizontal align={'center'} gap={5}>
+                              <div
+                                style={{
+                                  borderTop: `2px dashed ${theme.colorSuccess}`,
+                                  height: 0,
+                                  width: 14,
+                                }}
+                              />
+                              <Text fontSize={11} type={'secondary'}>
+                                {t('detail.chart.legendFit')}
+                              </Text>
+                            </Flexbox>
+                            <Flexbox horizontal align={'center'} gap={5}>
+                              <div
+                                style={{
+                                  background: theme.colorFillSecondary,
+                                  height: 8,
+                                  width: 6,
+                                }}
+                              />
+                              <div
+                                style={{
+                                  background: theme.colorInfoBorder,
+                                  height: 8,
+                                  width: 6,
+                                }}
+                              />
+                              <Text fontSize={11} type={'secondary'}>
+                                {t('detail.chart.legendBars')}
+                              </Text>
+                            </Flexbox>
                           </Flexbox>
-                          <Flexbox horizontal align={'center'} gap={5}>
-                            <div
-                              style={{ background: theme.colorFillSecondary, height: 8, width: 6 }}
-                            />
-                            <div
-                              style={{ background: theme.colorInfoBorder, height: 8, width: 6 }}
-                            />
-                            <Text fontSize={11} type={'secondary'}>
-                              {t('detail.chart.legendBars')}
-                            </Text>
-                          </Flexbox>
-                        </Flexbox>
-                      </Flexbox>
-                      <FitCurve
-                        maturity={data.maturity}
-                        runCount={data.runCount}
-                        series={data.series}
-                      />
-                    </Block>
+                          <FitCurve
+                            maturity={data.maturity}
+                            runCount={data.runCount}
+                            series={data.series}
+                          />
+                        </Block>
 
-                    <FitMetrics detail={data} />
+                        <FitMetrics detail={data} />
+                      </>
+                    )}
 
                     <div className={styles.learningGrid}>
                       <CoverageCloud detail={data} />

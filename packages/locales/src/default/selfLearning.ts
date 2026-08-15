@@ -23,6 +23,9 @@ export default {
     'At the current pace, {{remaining}} more practices reach 90% (run {{n90}}).',
   'detail.domainFilter': 'Domain filter: ',
   'detail.headline': 'Practised {{runs}} times, learned {{lessons}} rules.',
+  'detail.firstPracticeDesc':
+    '{{lessons}} rules were captured. A trend appears after the next matching practice, so there is no curve or maturity estimate yet.',
+  'detail.firstPracticeTitle': 'The first practice is recorded',
   'detail.learningSummary': '{{lessons}} reusable rules distilled from practice.',
   'detail.metric.cannot': 'needs more practice',
   'detail.metric.maturity': 'Maturity',
@@ -73,9 +76,11 @@ export default {
   'maturity.reason.tau-pinned': 'the learning cycle is longer than what has been observed',
 
   'overview.allDomains': 'All {{count}} expertises',
+  'overview.firstPractice': 'first practice',
   'overview.noNumber': 'needs more practice',
   'overview.rowMeta': '{{lessons}} rules · practised {{runs}} times',
   'overview.totals': '{{domains}} expertises · {{lessons}} rules in total',
+  'overview.trendPending': 'trend after the next practice',
 
   'plateau.growing': 'growing',
   'plateau.noisy': 'noisy',
@@ -141,6 +146,7 @@ export default {
   'create.back': 'Back',
   'create.entry': 'Create an expertise',
   'create.failed': 'Could not create it. Try again.',
+  'create.generating': 'Generating the expertise…',
   'create.filterHelp':
     'One executable test: which conversations count as practice for this expertise, and which do not. This is what keeps it from learning from everything.',
   'create.filterLabel': 'What counts as practice',

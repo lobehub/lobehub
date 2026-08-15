@@ -239,7 +239,6 @@ const SelfLearning = memo(() => {
                       gap={7}
                       key={it.id}
                       style={{ background: 'transparent', color: 'inherit', textAlign: 'start' }}
-                      type={'button'}
                       onClick={() => it.domainId && openDomain(it.domainId)}
                     >
                       <Text fontSize={11.5} type={'secondary'}>
@@ -336,7 +335,6 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
       className={styles.row}
       gap={12}
       style={{ background: 'transparent', color: 'inherit', textAlign: 'start', width: '100%' }}
-      type={'button'}
       onClick={() => onOpen(domain.id)}
       onMouseEnter={() => onHover(domain.id)}
       onMouseLeave={() => onHover(undefined)}
@@ -346,47 +344,57 @@ const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
           <Text fontSize={13.5} weight={500}>
             {domain.title}
           </Text>
-          <Tag>{t(`shape.tag.${shape}`)}</Tag>
+          <Tag>{domain.runCount === 1 ? t('overview.firstPractice') : t(`shape.tag.${shape}`)}</Tag>
         </Flexbox>
         <Text fontSize={11} type={'secondary'}>
           {t('overview.rowMeta', { lessons: domain.lessonCount, runs: domain.runCount })}
         </Text>
       </Flexbox>
 
-      <svg height={18} style={{ flex: 'none' }} viewBox={'0 0 64 18'} width={64}>
-        {domain.series.map((p, k) => {
-          const w = 64 / Math.max(1, domain.series.length);
-          const h = Math.max((p.n / ceiling) * 16, 1.2);
-          return (
-            <rect
-              fill={color ?? theme.colorTextQuaternary}
-              height={h}
-              key={p.run}
-              opacity={0.5 + (p.n / ceiling) * 0.5}
-              rx={0.8}
-              width={Math.max(w - 1.4, 1.4)}
-              x={k * w}
-              y={18 - h}
-            />
-          );
-        })}
-      </svg>
+      {domain.series.length > 1 && (
+        <svg height={18} style={{ flex: 'none' }} viewBox={'0 0 64 18'} width={64}>
+          {domain.series.map((p, k) => {
+            const w = 64 / Math.max(1, domain.series.length);
+            const h = Math.max((p.n / ceiling) * 16, 1.2);
+            return (
+              <rect
+                fill={color ?? theme.colorTextQuaternary}
+                height={h}
+                key={p.run}
+                opacity={0.5 + (p.n / ceiling) * 0.5}
+                rx={0.8}
+                width={Math.max(w - 1.4, 1.4)}
+                x={k * w}
+                y={18 - h}
+              />
+            );
+          })}
+        </svg>
+      )}
 
-      <Text
-        fontSize={12.5}
-        style={{ flex: 'none', textAlign: 'right', width: 68 }}
-        type={domain.maturity.usable ? undefined : 'secondary'}
-        weight={600}
-      >
-        {domain.maturity.usable ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%` : '—'}
-      </Text>
-      <Text
-        fontSize={12}
-        style={{ flex: 'none', textAlign: 'right', width: 42 }}
-        type={domain.delta > 0 ? 'success' : domain.delta < 0 ? 'warning' : 'secondary'}
-      >
-        {domain.delta > 0 ? `+${domain.delta}` : domain.delta < 0 ? domain.delta : '—'}
-      </Text>
+      {domain.runCount === 1 ? (
+        <Text fontSize={12} type={'secondary'}>
+          {t('overview.trendPending')}
+        </Text>
+      ) : (
+        <>
+          <Text
+            fontSize={12.5}
+            style={{ flex: 'none', textAlign: 'right', width: 68 }}
+            type={domain.maturity.usable ? undefined : 'secondary'}
+            weight={600}
+          >
+            {domain.maturity.usable ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%` : '—'}
+          </Text>
+          <Text
+            fontSize={12}
+            style={{ flex: 'none', textAlign: 'right', width: 42 }}
+            type={domain.delta > 0 ? 'success' : domain.delta < 0 ? 'warning' : 'secondary'}
+          >
+            {domain.delta > 0 ? `+${domain.delta}` : domain.delta < 0 ? domain.delta : '—'}
+          </Text>
+        </>
+      )}
       <Icon icon={ChevronRightIcon} size={13} style={{ flex: 'none' }} />
     </Flexbox>
   );

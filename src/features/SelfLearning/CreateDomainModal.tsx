@@ -1,9 +1,11 @@
 'use client';
 
 import { parseExpertiseDomainBrief } from '@lobechat/types';
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, keyframes } from 'antd-style';
 import { t as translate } from 'i18next';
+import { SparklesIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +15,24 @@ interface CreateDomainContentProps {
   agentId: string;
   onCreated: () => void;
 }
+
+const shimmer = keyframes`
+  to { background-position: 200% 0; }
+`;
+
+const styles = createStaticStyles(({ css }) => ({
+  generating: css`
+    border-color: transparent;
+    background:
+      linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgElevated}) padding-box,
+      linear-gradient(90deg, ${cssVar.colorPrimary}, ${cssVar.colorInfo}, ${cssVar.colorPrimary})
+        border-box;
+    background-size:
+      100% 100%,
+      200% 100%;
+    animation: ${shimmer} 1.5s linear infinite;
+  `,
+}));
 
 /**
  * 一句话建一个专长。
@@ -28,7 +48,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
   const { close } = useModalContext();
   const storageKey = `self-learning:create:${agentId}`;
   const [brief, setBrief] = useState(() => localStorage.getItem(storageKey) ?? '');
-  const [draft, setDraft] = useState<ReturnType<typeof parseExpertiseDomainBrief>>();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -49,7 +68,7 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
     if (!brief.trim()) return;
     setLoading(true);
     try {
-      if (!draft) return;
+      const draft = parseExpertiseDomainBrief(brief);
       await expertiseService.createDomain({ agentId, brief, ...draft });
       localStorage.removeItem(storageKey);
       onCreated();
@@ -62,50 +81,32 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
   };
 
   return (
-    <Flexbox gap={16} padding={20}>
-      <Text fontSize={13} lineHeight={1.75} type={'secondary'}>
-        {t('create.briefHelp')}
+    <Flexbox gap={12} padding={'8px 20px 20px'}>
+      <TextArea
+        autoFocus
+        className={loading ? styles.generating : undefined}
+        disabled={loading}
+        placeholder={t('create.briefPlaceholder')}
+        rows={5}
+        value={brief}
+        onChange={(e) => setBrief(e.target.value)}
+      />
+      <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
+        {loading ? t('create.generating') : t('create.briefHelp')}
       </Text>
-      {draft ? (
-        <Flexbox gap={12}>
-          <Text fontSize={12} type={'secondary'} weight={600}>
-            {t('create.parsedTitle')}
-          </Text>
-          <Input
-            value={draft.title}
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-          />
-          <Text fontSize={12} type={'secondary'} weight={600}>
-            {t('create.parsedFilter')}
-          </Text>
-          <TextArea
-            rows={4}
-            value={draft.domainFilter}
-            onChange={(e) => setDraft({ ...draft, domainFilter: e.target.value })}
-          />
-        </Flexbox>
-      ) : (
-        <TextArea
-          autoFocus
-          placeholder={t('create.briefPlaceholder')}
-          rows={4}
-          value={brief}
-          onChange={(e) => setBrief(e.target.value)}
-        />
-      )}
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-        {draft ? (
-          <Button onClick={() => setDraft(undefined)}>{t('create.back')}</Button>
-        ) : (
-          <Button onClick={close}>{t('create.cancel')}</Button>
-        )}
+        <Button disabled={loading} onClick={close}>
+          {t('create.cancel')}
+        </Button>
         <Button
-          disabled={draft ? !draft.title.trim() || !draft.domainFilter.trim() : !brief.trim()}
+          disabled={!brief.trim() || loading}
+          icon={SparklesIcon}
           loading={loading}
+          shape={'round'}
           type={'primary'}
-          onClick={draft ? submit : () => setDraft(parseExpertiseDomainBrief(brief))}
+          onClick={submit}
         >
-          {draft ? t('create.submit') : t('create.parse')}
+          {loading ? t('create.generating') : t('create.submit')}
         </Button>
       </Flexbox>
     </Flexbox>
