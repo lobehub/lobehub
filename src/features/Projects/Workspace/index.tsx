@@ -1,9 +1,9 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tag, Text, TextArea } from '@lobehub/ui';
+import { Center, Flexbox, Tag, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderKanbanIcon, SendHorizontalIcon, SparklesIcon } from 'lucide-react';
+import { SendHorizontalIcon, SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -11,6 +11,7 @@ import { useParams } from 'react-router';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { getProjectConversationStartPath } from '@/features/Projects/Layout/navigation';
+import ProjectDisabled from '@/features/Projects/ProjectDisabled';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
@@ -94,19 +95,7 @@ const ProjectWorkspace = memo(() => {
   const [message, setMessage] = useState('');
   const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
 
-  if (!enabled) {
-    return (
-      <Center height={'100%'}>
-        <Flexbox align={'center'} gap={12}>
-          <Icon icon={FolderKanbanIcon} size={40} />
-          <Text fontSize={18} weight={600}>
-            {t('disabled.title')}
-          </Text>
-          <Button onClick={() => navigate('/settings/labs')}>{t('disabled.action')}</Button>
-        </Flexbox>
-      </Center>
-    );
-  }
+  if (!enabled) return <ProjectDisabled />;
   if (error) return <AsyncError error={error} variant={'page'} onRetry={() => mutate()} />;
   if (isLoading || !detail)
     return (

@@ -14,12 +14,15 @@ import { PROJECT_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import ProjectDisabled from '@/features/Projects/ProjectDisabled';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   identifier: css`
@@ -104,8 +107,9 @@ ProjectRow.displayName = 'ProjectRow';
 const ProjectListPage = memo(() => {
   const { t } = useTranslation('project');
   const [keyword, setKeyword] = useState('');
+  const enabled = useUserStore(labPreferSelectors.enableProjects);
   const projects = useCurrentProjectList();
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(true);
+  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(enabled);
 
   const filteredProjects = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
@@ -117,6 +121,8 @@ const ProjectListPage = memo(() => {
         )
       : projects;
   }, [keyword, projects]);
+
+  if (!enabled) return <ProjectDisabled />;
 
   return (
     <Flexbox flex={1} height={'100%'}>
