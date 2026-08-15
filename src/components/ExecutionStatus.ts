@@ -1,4 +1,5 @@
 import type { ChatTopicStatus, ProjectStatus, TaskStatus } from '@lobechat/types';
+import { PROJECT_STATUSES } from '@lobechat/types';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -62,6 +63,12 @@ export const PROJECT_STATUS_VISUALS: Record<ProjectStatus, ExecutionStatusVisual
   paused: { color: cssVar.colorTextSecondary, icon: PauseCircle },
   reviewing: VISUALS.waitingForHuman,
 };
+
+const PROJECT_STATUS_SET = new Set<string>(PROJECT_STATUSES);
+
+/** Normalize untrusted persisted/API values before rendering a project status. */
+export const resolveProjectStatus = (status: null | string | undefined): ProjectStatus =>
+  status && PROJECT_STATUS_SET.has(status) ? (status as ProjectStatus) : 'backlog';
 
 export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual> = {
   active: VISUALS.idle,

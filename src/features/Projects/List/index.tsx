@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { PROJECT_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
@@ -73,12 +73,13 @@ ProjectOwnerAvatar.displayName = 'ProjectOwnerAvatar';
 
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation('project');
-  const statusVisual = PROJECT_STATUS_VISUALS[project.status];
+  const status = resolveProjectStatus(project.status);
+  const statusVisual = PROJECT_STATUS_VISUALS[status];
 
   return (
     <WorkspaceLink to={`/project/${project.id}`}>
       <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
-        <Tooltip title={t(`acceptance.status.${project.status}`)}>
+        <Tooltip title={t(`acceptance.status.${status}`)}>
           <Icon color={statusVisual.color} icon={statusVisual.icon} size={16} />
         </Tooltip>
         <Flexbox flex={1} style={{ minWidth: 0 }}>
