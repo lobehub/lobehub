@@ -26,6 +26,7 @@
   "agentDefaultMessage": "Hi, I’m **{{name}}**. One sentence is enough.\n\nWant me to match your workflow better? Go to [Agent Settings]({{url}}) and fill in the Agent Profile (you can edit it anytime).",
   "agentDefaultMessageWithSystemRole": "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   "agentDefaultMessageWithoutEdit": "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
+  "agentDocument.backToAgent": "Back to {{name}}",
   "agentDocument.backToChat": "Back to chat",
   "agentDocument.emptyDescription": "Pick a document from the panel on the right, or create a new one to get started.",
   "agentDocument.emptyTitle": "No document open",

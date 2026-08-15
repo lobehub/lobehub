@@ -26,6 +26,7 @@
   "agentDefaultMessage": "你好，我是 **{{name}}**。从一句话开始就行。\n\n想让我更贴近你的工作方式：去 [助理设置]({{url}}) 补充助理档案（随时可改）",
   "agentDefaultMessageWithSystemRole": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
   "agentDefaultMessageWithoutEdit": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
+  "agentDocument.backToAgent": "返回 {{name}}",
   "agentDocument.backToChat": "返回对话",
   "agentDocument.emptyDescription": "从右侧面板选择一个文档，或新建一个开始编辑。",
   "agentDocument.emptyTitle": "未打开任何文档",

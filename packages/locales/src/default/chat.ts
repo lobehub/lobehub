@@ -33,6 +33,7 @@ export default {
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agentDocument.backToChat': 'Back to chat',
+  'agentDocument.backToAgent': 'Back to {{name}}',
   'agentDocument.emptyDescription':
     'Pick a document from the panel on the right, or create a new one to get started.',
   'agentDocument.emptyTitle': 'No document open',

@@ -1,15 +1,19 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { ChevronLeftIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
 import AgentDocumentsGroup from '@/features/Conversation/WorkingSidebar/ResourcesSection/AgentDocumentsGroup';
-import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { appNavigate } from '@/features/Electron/navigation/appNavigate';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
@@ -17,7 +21,31 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  backLink: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    width: fit-content;
+    padding-block: 6px;
+    padding-inline: 10px 14px;
+    border-radius: 999px;
+
+    font-size: 14px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+    text-decoration: none;
+
+    background: ${cssVar.colorFillTertiary};
+
+    transition: background 150ms ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
   body: css`
     overflow-y: auto;
     flex: 1;
@@ -27,11 +55,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 const AgentDocumentSidebarContent = memo(() => {
   const { t } = useTranslation('chat');
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { aid: agentId = '' } = useActiveRouteParams<{
     aid?: string;
   }>();
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const agentTitle = agentDisplayName(agentMeta, t('untitledAgent'));
+  const agentPath = buildWorkspaceAwarePath(`/agent/${agentId}`, activeWorkspaceSlug);
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const workingDirectory = useEffectiveWorkingDirectory(agentId);
   const agencyConfig = useAgentStore((s) =>
@@ -52,7 +82,29 @@ const AgentDocumentSidebarContent = memo(() => {
       ? agencyConfig.boundDeviceId
       : undefined;
 
-  const header = <SideBarHeaderLayout backTo={`/agent/${agentId}`} left={agentTitle} />;
+  const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+
+    event.preventDefault();
+    appNavigate(agentPath, { escape: true });
+  };
+
+  const header = (
+    <Flexbox
+      horizontal
+      align={'center'}
+      flex={'none'}
+      justify={'space-between'}
+      padding={'8px 6px'}
+    >
+      <a className={styles.backLink} href={agentPath} onClick={handleBack}>
+        <Icon icon={ChevronLeftIcon} size={16} />
+        {t('agentDocument.backToAgent', { name: agentTitle })}
+      </a>
+      <ToggleLeftPanelButton />
+    </Flexbox>
+  );
 
   const body = (
     <Flexbox className={styles.body} width={'100%'}>
