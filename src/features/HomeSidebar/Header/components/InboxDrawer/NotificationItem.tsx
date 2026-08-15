@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 7px;
     border-radius: 50%;
 
-    background: ${cssVar.colorPrimary};
+    background: ${cssVar.colorInfo};
   `,
 }));
 
@@ -127,24 +127,19 @@ const NotificationItem = memo<NotificationItemProps>(
           variant="borderless"
           onClick={handleClick}
         >
-          <Flexbox horizontal align="flex-start" gap={8}>
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={TypeIcon}
-              size={18}
-              style={{ flexShrink: 0, marginTop: 2 }}
-            />
-            <Flexbox horizontal align="flex-start" flex={1} gap={6} style={{ overflow: 'hidden' }}>
-              {!isRead && <span className={styles.unreadDot} />}
-              <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
-                <Text ellipsis={{ rows: 3 }} title={preview} wordBreak="break-word">
-                  {preview}
+          <Flexbox horizontal align="flex-start" gap={6}>
+            {!isRead && <span className={styles.unreadDot} />}
+            <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
+              <Text ellipsis={{ rows: 3 }} title={preview} wordBreak="break-word">
+                {preview}
+              </Text>
+              {context && (
+                <Text ellipsis fontSize={12} title={context} type="secondary">
+                  {context}
                 </Text>
-                {context && (
-                  <Text ellipsis fontSize={12} title={context} type="secondary">
-                    {context}
-                  </Text>
-                )}
+              )}
+              <Flexbox horizontal align="center" gap={4}>
+                <Icon color={cssVar.colorTextDescription} icon={TypeIcon} size={12} />
                 <Text fontSize={12} type="secondary">
                   {formatNotificationRelativeTime(createdAt, dateLocale)}
                 </Text>
