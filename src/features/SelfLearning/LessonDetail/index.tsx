@@ -2,7 +2,7 @@
 
 import { Block, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { MessageSquareText } from 'lucide-react';
+import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -197,8 +197,12 @@ const LessonDetail = memo(() => {
                         {hit.subjectType === 'topic' && activeAgentId ? (
                           <Link to={urlJoin('/agent', activeAgentId, hit.subjectId)}>
                             <Flexbox horizontal align={'center'} gap={5}>
-                              <Icon icon={MessageSquareText} size={13} />
-                              <Text fontSize={12} type={'info'}>
+                              <Icon
+                                color={cssVar.colorTextSecondary}
+                                icon={MessagesSquare}
+                                size={13}
+                              />
+                              <Text fontSize={12} type={'secondary'}>
                                 {hit.runTitle ?? `#${hit.runIndex}`}
                               </Text>
                             </Flexbox>
