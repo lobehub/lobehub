@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -7,10 +8,12 @@ import {
   expertiseBindings,
   expertiseDomains,
   expertiseHits,
+  expertiseInsights,
   expertiseLessons,
   expertiseRuns,
   topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ExpertiseModel } from '../expertise';
@@ -123,5 +126,80 @@ describe('ExpertiseModel', () => {
     await expect(model.findLesson(foreignLessonId)).resolves.toBeUndefined();
     await expect(model.listLessons('foreign-lesson-domain')).resolves.toEqual([]);
     await expect(model.listLessonHits(foreignLessonId)).resolves.toEqual([]);
+  });
+
+  it('persists a generated domain definition and resolves its agent binding', async () => {
+    await serverDB.insert(agents).values({ id: 'owned-agent', userId });
+    const model = new ExpertiseModel(serverDB, userId);
+
+    const domainId = await model.createDomain({
+      agentId: 'owned-agent',
+      brief: 'Improve production incident diagnosis, excluding general design discussions.',
+      domainFilter: 'Include production incident diagnosis and remediation.',
+      outOfScope: 'Exclude general design discussions without an incident.',
+      title: 'Production incident response',
+    });
+
+    const [binding] = await serverDB
+      .select()
+      .from(expertiseBindings)
+      .where(eq(expertiseBindings.domainId, domainId));
+    const [resolved] = await model.listDomainsForAgent('owned-agent');
+
+    expect(binding.agentId).toBe('owned-agent');
+    expect(resolved.domain).toMatchObject({
+      description: 'Improve production incident diagnosis, excluding general design discussions.',
+      domainFilter: 'Include production incident diagnosis and remediation.',
+      id: domainId,
+      outOfScope: 'Exclude general design discussions without an incident.',
+      title: 'Production incident response',
+    });
+  });
+
+  it('keeps cross-domain insights isolated to the active workspace', async () => {
+    await serverDB.insert(workspaces).values([
+      { id: 'expertise-workspace-1', name: 'Workspace 1', primaryOwnerId: userId, slug: 'ws-1' },
+      { id: 'expertise-workspace-2', name: 'Workspace 2', primaryOwnerId: userId, slug: 'ws-2' },
+    ]);
+    await serverDB.insert(expertiseDomains).values({
+      anchorChosenAt: new Date(),
+      domainFilter: 'Workspace domain',
+      id: 'workspace-domain-1',
+      slug: 'workspace-domain-1',
+      title: 'Workspace domain',
+      userId,
+      workspaceId: 'expertise-workspace-1',
+    });
+    const workspaceOneInsightId = 'b77316f6-c807-47f0-b3b8-ab9220aca7fb';
+    const workspaceTwoInsightId = 'f5976e3b-d445-4359-98c3-92a64bbd0553';
+    await serverDB.insert(expertiseInsights).values([
+      {
+        body: 'Visible in workspace one',
+        headline: 'Workspace one insight',
+        id: workspaceOneInsightId,
+        kind: 'repeated-mistake',
+        userId,
+        workspaceId: 'expertise-workspace-1',
+      },
+      {
+        body: 'Hidden in workspace one',
+        headline: 'Workspace two insight',
+        id: workspaceTwoInsightId,
+        kind: 'repeated-mistake',
+        userId,
+        workspaceId: 'expertise-workspace-2',
+      },
+    ]);
+
+    const model = new ExpertiseModel(serverDB, userId, 'expertise-workspace-1');
+    const insights = await model.listInsights(['workspace-domain-1']);
+    await model.dismissInsight(workspaceTwoInsightId, 'must remain untouched');
+    const [foreignInsight] = await serverDB
+      .select({ status: expertiseInsights.status })
+      .from(expertiseInsights)
+      .where(eq(expertiseInsights.id, workspaceTwoInsightId));
+
+    expect(insights.map(({ id }) => id)).toEqual([workspaceOneInsightId]);
+    expect(foreignInsight.status).toBe('active');
   });
 });
