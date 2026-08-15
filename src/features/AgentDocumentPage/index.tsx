@@ -149,11 +149,11 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         <RightPanel expand defaultWidth={400} maxWidth={720} minWidth={320}>
           <Flexbox flex={1} height={'100%'} justify={'flex-end'} style={{ minHeight: 0 }}>
             <FloatingChatPanel
-              defaultOpen
               agentDocumentId={item?.id}
               agentId={chatAgentId}
               documentId={documentId}
               key={`${chatAgentId}:${docChatTopicId}:${documentId}`}
+              mode="embedded"
               topicId={docChatTopicId}
             />
           </Flexbox>
