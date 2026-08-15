@@ -1,7 +1,8 @@
 'use client';
 
-import { Block, Empty, Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { MessageSquareText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -22,13 +23,32 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
   `,
   sections: css`
+    overflow: hidden;
+  `,
+  sectionItem: css`
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 28px minmax(0, 1fr);
     gap: 12px;
+    padding: 16px;
 
-    @media (width <= 800px) {
-      grid-template-columns: 1fr;
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
+  `,
+  sectionNumber: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+
+    font-size: 12px;
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   title: css`
     max-width: 880px;
@@ -128,18 +148,21 @@ const LessonDetail = memo(() => {
                   )}
                 </Flexbox>
 
-                <div className={styles.sections}>
-                  {sections?.map((section) => (
-                    <Block gap={7} key={section.key} padding={16} variant={'outlined'}>
-                      <Text fontSize={12} type={'secondary'} weight={600}>
-                        {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
-                      </Text>
-                      <Text fontSize={14} lineHeight={1.75}>
-                        {section.body}
-                      </Text>
-                    </Block>
+                <Block className={styles.sections} padding={0} variant={'outlined'}>
+                  {sections?.map((section, index) => (
+                    <div className={styles.sectionItem} key={section.key}>
+                      <span className={styles.sectionNumber}>{index + 1}</span>
+                      <Flexbox gap={6}>
+                        <Text fontSize={12} type={'secondary'} weight={600}>
+                          {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
+                        </Text>
+                        <Text fontSize={14} lineHeight={1.75}>
+                          {section.body}
+                        </Text>
+                      </Flexbox>
+                    </div>
                   ))}
-                </div>
+                </Block>
 
                 <Flexbox gap={10}>
                   <Text fontSize={15} weight={600}>
@@ -164,11 +187,12 @@ const LessonDetail = memo(() => {
                           </Tag>
                           {hit.subjectType === 'topic' && activeAgentId ? (
                             <Link to={urlJoin('/agent', activeAgentId, hit.subjectId)}>
-                              <Text fontSize={11} type={'info'}>
-                                {t('rules.detail.openSource', {
-                                  title: hit.runTitle ?? `#${hit.runIndex}`,
-                                })}
-                              </Text>
+                              <Flexbox horizontal align={'center'} gap={5}>
+                                <Icon icon={MessageSquareText} size={13} />
+                                <Text fontSize={12} type={'info'}>
+                                  {hit.runTitle ?? `#${hit.runIndex}`}
+                                </Text>
+                              </Flexbox>
                             </Link>
                           ) : (
                             <Text fontSize={11} type={'secondary'}>

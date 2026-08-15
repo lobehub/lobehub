@@ -120,7 +120,6 @@ export const openCreateDomainModal = (props: CreateDomainContentProps) =>
     content: <CreateDomainContent {...props} />,
     footer: null,
     maskClosable: false,
-    styles: { content: { padding: 0 } },
     title: translate('create.modalTitle', { ns: 'selfLearning' }),
     width: 'min(88vw, 560px)',
   });
