@@ -1,15 +1,10 @@
-import { hasApiKeyScope } from '@lobechat/const/apiKeyScope';
 import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
 import { NextResponse } from 'next/server';
 
 import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
-import {
-  AgentOperationModel,
-  type AgentOperationOwnerScope,
-} from '@/database/models/agentOperation';
-import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { AgentStreamAuthorizationService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -39,59 +34,17 @@ const handler: RequestHandler = async (
     );
   }
 
-  const isApiKeyRequest = apiKeyScopes !== undefined;
-  if (isApiKeyRequest && !hasApiKeyScope(apiKeyScopes, 'chat:read')) {
-    return NextResponse.json(
-      { error: "Forbidden: API key is missing required scope 'chat:read'" },
-      { status: 403 },
-    );
-  }
+  const authorization = await new AgentStreamAuthorizationService(
+    serverDB,
+    streamManager,
+  ).authorize({ apiKeyScopes, operationId, userId, workspaceId });
+  if (!authorization.authorized) {
+    const error =
+      authorization.reason === 'missing_api_key_scope'
+        ? "Forbidden: API key is missing required scope 'chat:read'"
+        : 'Forbidden: operation does not belong to this authentication scope';
 
-  // Prefer the durable audit row, but runtime startup deliberately tolerates a
-  // failed audit insert. The stream backend keeps the same minimal scope as a
-  // trusted live-operation fallback (shared through Redis in distributed mode).
-  let operation: AgentOperationOwnerScope | null = null;
-  try {
-    operation = await AgentOperationModel.findOwnerScope(serverDB, operationId);
-  } catch (error) {
-    log(`Failed to read durable ownership for operation ${operationId}:`, error);
-  }
-  operation ??= await streamManager.getOperationAuthScope(operationId);
-
-  // API keys stay bound to both their issuer and, when present, their workspace.
-  // The owner scope does not carry enough agent/group context to safely authorize
-  // cross-member private resources, so fail closed unless the issuer owns the run.
-  const apiKeyWorkspaceId = workspaceId?.trim() || null;
-  let isAuthorized: boolean;
-  if (isApiKeyRequest) {
-    isAuthorized =
-      operation?.userId === userId &&
-      (apiKeyWorkspaceId
-        ? operation.workspaceId === apiKeyWorkspaceId
-        : operation.workspaceId === null);
-  } else if (operation?.userId !== userId) {
-    isAuthorized = false;
-  } else if (!operation.workspaceId) {
-    isAuthorized = true;
-  } else {
-    // Session and OIDC identities can outlive workspace membership. Re-check
-    // the active membership before exposing retained history or live events.
-    try {
-      isAuthorized = !!(await new WorkspaceMemberModel(serverDB, userId).getMember(
-        operation.workspaceId,
-        userId,
-      ));
-    } catch (error) {
-      log(`Failed to validate workspace membership for operation ${operationId}:`, error);
-      isAuthorized = false;
-    }
-  }
-
-  if (!isAuthorized) {
-    return NextResponse.json(
-      { error: 'Forbidden: operation does not belong to this authentication scope' },
-      { status: 403 },
-    );
+    return NextResponse.json({ error }, { status: 403 });
   }
 
   log(`Starting SSE connection for operation ${operationId} from eventId ${lastEventId}`);
