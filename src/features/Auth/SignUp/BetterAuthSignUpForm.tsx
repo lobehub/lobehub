@@ -17,10 +17,26 @@ import { PASSWORD_MIN_LENGTH } from '@/libs/better-auth/plugins/password-policy'
 import { useSignUp } from './useSignUp';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  /**
+   * Email is inherently LTR once filled, but Persian placeholders must sit on the
+   * inline-start edge (right under dir=rtl). `type="email"` + UA LTR often pins the
+   * empty field left; keep text + inputMode and flip direction while placeholder-shown.
+   */
+  emailInput: css`
+    html[dir='rtl'] &:placeholder-shown {
+      direction: rtl;
+      text-align: start;
+    }
+
+    html[dir='rtl'] &:not(:placeholder-shown) {
+      direction: ltr;
+      text-align: start;
+    }
+  `,
   fieldLabel: css`
     margin-block-end: 6px;
     font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   footerLink: css`
     cursor: pointer;
@@ -32,20 +48,41 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorPrimaryHover};
     }
   `,
+  nameInput: css`
+    html[dir='rtl'] & {
+      direction: rtl;
+      text-align: start;
+    }
+  `,
   nameRow: css`
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
 
+    /* Avoid min-content overflow clipping Persian labels in half-width columns */
+    & > .ant-form-item {
+      min-width: 0;
+    }
+
+    .ant-form-item-label {
+      overflow: visible;
+      max-width: 100%;
+      text-align: start;
+    }
+
+    .ant-form-item-label > label {
+      display: flex;
+
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+
+      white-space: normal;
+    }
+
     @media (width <= 420px) {
       grid-template-columns: 1fr;
     }
-  `,
-  optional: css`
-    margin-inline-start: 6px;
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -89,12 +126,7 @@ const BetterAuthSignUpForm = () => {
     </Text>
   );
 
-  const label = (text: string, optional?: boolean) => (
-    <span className={styles.fieldLabel}>
-      {text}
-      {optional ? <span className={styles.optional}>{t('betterAuth.signup.optional')}</span> : null}
-    </span>
-  );
+  const label = (text: string) => <span className={styles.fieldLabel}>{text}</span>;
 
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.title')}>
@@ -123,16 +155,18 @@ const BetterAuthSignUpForm = () => {
         }
       >
         <div className={styles.nameRow}>
-          <Form.Item label={label(t('betterAuth.signup.firstNameLabel'), true)} name="firstName">
+          <Form.Item label={label(t('betterAuth.signup.firstNameLabel'))} name="firstName">
             <Input
               autoComplete="given-name"
+              className={styles.nameInput}
               placeholder={t('betterAuth.signup.firstNamePlaceholder')}
               size="large"
             />
           </Form.Item>
-          <Form.Item label={label(t('betterAuth.signup.lastNameLabel'), true)} name="lastName">
+          <Form.Item label={label(t('betterAuth.signup.lastNameLabel'))} name="lastName">
             <Input
               autoComplete="family-name"
+              className={styles.nameInput}
               placeholder={t('betterAuth.signup.lastNamePlaceholder')}
               size="large"
             />
@@ -148,11 +182,11 @@ const BetterAuthSignUpForm = () => {
         >
           <Input
             autoComplete="email"
+            className={styles.emailInput}
             inputMode="email"
             placeholder={t('betterAuth.signup.emailPlaceholder')}
             ref={emailInputRef}
             size="large"
-            type="email"
           />
         </Form.Item>
         <Form.Item
