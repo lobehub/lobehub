@@ -1,6 +1,10 @@
 import { hasVisibleRailWidget } from '@/features/HomeInbox/hiddenWidgets';
 
-export const RAIL_INBOX_PROPS = { hideNeedsYou: true, hideUnread: true } as const;
+export const RAIL_INBOX_PROPS = {
+  hideNeedsYou: true,
+  hideRunning: true,
+  hideUnread: true,
+} as const;
 
 interface RailVisibilityInput {
   hiddenWidgets: string[];
