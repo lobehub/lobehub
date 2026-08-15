@@ -33,6 +33,8 @@ LobeHub 支持通过开源工具实现自托管部署的高级可观测性：
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/docker-compose.yml
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/.env.example
 mv .env.example .env
+sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env
+rm .env.bak
 ```
 
 1. 根据需要修改 `.env` 文件中的密码和密钥。
