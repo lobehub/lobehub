@@ -21,6 +21,9 @@ const shimmer = keyframes`
 `;
 
 const styles = createStaticStyles(({ css }) => ({
+  content: css`
+    margin-block-start: -10px;
+  `,
   generating: css`
     border-color: transparent;
     background:
@@ -81,7 +84,7 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
   };
 
   return (
-    <Flexbox gap={8} padding={'0 20px 16px'}>
+    <Flexbox className={styles.content} gap={8} padding={'0 20px 16px'}>
       <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
         {loading ? t('create.generating') : t('create.briefHelp')}
       </Text>

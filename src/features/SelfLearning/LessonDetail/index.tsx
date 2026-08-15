@@ -24,31 +24,15 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   sections: css`
     overflow: hidden;
+    width: min(100%, 760px);
   `,
   sectionItem: css`
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 12px;
-    padding: 16px;
+    padding-block: 14px;
+    padding-inline: 16px;
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
-  `,
-  sectionNumber: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
   `,
   title: css`
     max-width: 880px;
@@ -121,7 +105,7 @@ const LessonDetail = memo(() => {
             onRetry={() => mutate()}
           >
             {data && (
-              <Flexbox gap={24} paddingBlock={'26px 64px'}>
+              <Flexbox gap={20} paddingBlock={'14px 64px'}>
                 <Flexbox gap={10}>
                   <Text fontSize={12} type={'secondary'} weight={600}>
                     {t('rules.detail.eyebrow', { code: data.lesson.code })}
@@ -149,9 +133,8 @@ const LessonDetail = memo(() => {
                 </Flexbox>
 
                 <Block className={styles.sections} padding={0} variant={'outlined'}>
-                  {sections?.map((section, index) => (
+                  {sections?.map((section) => (
                     <div className={styles.sectionItem} key={section.key}>
-                      <span className={styles.sectionNumber}>{index + 1}</span>
                       <Flexbox gap={6}>
                         <Text fontSize={12} type={'secondary'} weight={600}>
                           {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
