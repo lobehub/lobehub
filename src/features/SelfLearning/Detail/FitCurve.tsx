@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { ExpertiseDomainDetail, ExpertiseMaturity } from '@/services/expertise';
 
 import { projectSeries, runsToRatio } from '../hooks';
+import { getLearnedGains } from './curveHelpers';
 
 const W = 900;
 const H = 320;
@@ -58,9 +59,9 @@ const FitCurve = memo<FitCurveProps>(({ series, maturity, runCount }) => {
             .join(' ')
         : '';
 
-    // 每次新增的柱：相邻快照的差；有人在对话里的那几次单独着色
+    const learnedGains = getLearnedGains(series);
     const bars = series.map((s, k) => ({
-      gain: s.activeCount - (series[k - 1]?.activeCount ?? 0),
+      gain: learnedGains[k],
       human: s.hadHumanInLoop,
       run: s.runIndex,
     }));
