@@ -13,7 +13,6 @@ import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
-  HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import {
@@ -22,6 +21,7 @@ import {
   getHeterogeneousAgentConfigOrThrow,
   type HeterogeneousAgentType,
   isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
   isLocalRuntimeHeterogeneousType,
   resolveHeterogeneousAgentCommand,
 } from '@lobechat/heterogeneous-agents';
@@ -160,10 +160,7 @@ const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
 
-export const redactPromptArgs = (
-  args: string[],
-  agentType: HeterogeneousCliAgentType,
-): string[] => {
+export const redactPromptArgs = (args: string[], agentType: HeterogeneousAgentType): string[] => {
   let redactNext = false;
   const supportsShortPromptFlag = agentType === 'kimi-code';
 
@@ -663,7 +660,7 @@ export default class HeterogeneousAgentCtr {
       return this.buildWorkingDirectoryMissingError(session, workingDirectory);
     }
 
-    if (isLocalRuntimeHeterogeneousType(session.agentType)) return;
+    if (!isLocalHeterogeneousType(session.agentType)) return;
 
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 

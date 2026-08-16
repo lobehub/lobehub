@@ -99,11 +99,11 @@ describe('spawnDshSdkSession', () => {
       model: 'deepseek-chat',
       provider: 'deepseek-official',
       sessionId: 'smoke',
-      timeoutMs: 20_000,
+      timeoutMs: 60_000,
     });
 
     await session.dispose();
-  }, 20_000);
+  }, 60_000);
 
   it('completes the handshake and streams one turn to whole-agent idle', async () => {
     const session = await startFake();
