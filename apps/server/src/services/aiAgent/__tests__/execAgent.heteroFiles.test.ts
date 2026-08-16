@@ -120,8 +120,6 @@ vi.mock('@/database/models/plugin', () => ({
 
 const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
-  tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-  releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
