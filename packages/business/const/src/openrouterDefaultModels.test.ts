@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  OPENROUTER_AUTO_MODEL_ID,
   computeDefaultEnabledOpenRouterModelIds,
   ensureOpenRouterAutoModel,
+  OPENROUTER_AUTO_MODEL_ID,
   pickPreferredDefaultOpenRouterModelId,
 } from './openrouterDefaultModels';
 
@@ -37,6 +37,19 @@ describe('computeDefaultEnabledOpenRouterModelIds', () => {
       { id: 'openai/gpt-4o', releasedAt: '2025-01-01', type: 'chat' },
     ]);
     expect(enabled.has(OPENROUTER_AUTO_MODEL_ID)).toBe(true);
+  });
+
+  it('pins Nano Banana Image-tab ids and :image siblings of default chat models', () => {
+    const enabled = computeDefaultEnabledOpenRouterModelIds([
+      { id: 'google/gemini-e', releasedAt: '2025-12-01', type: 'chat' },
+      { id: 'google/gemini-e:image', type: 'image' },
+      { id: 'google/gemini-3.1-flash-image-preview:image', type: 'image' },
+      { id: 'google/gemini-2.5-flash-image:image', type: 'image' },
+    ]);
+
+    expect(enabled.has('google/gemini-e:image')).toBe(true);
+    expect(enabled.has('google/gemini-3.1-flash-image-preview:image')).toBe(true);
+    expect(enabled.has('google/gemini-2.5-flash-image:image')).toBe(true);
   });
 });
 

@@ -14,6 +14,19 @@ export type OpenRouterDefaultEnabledFamily = (typeof OPENROUTER_DEFAULT_ENABLED_
 /** How many newest chat models to enable per family by default. */
 export const DEFAULT_ENABLED_MODELS_PER_FAMILY = 4;
 
+/**
+ * Image Create defaults (OpenRouter Nano Banana family).
+ * Catalog sync stores these as `type: 'image'` with `:image` suffix; chat-only
+ * default selection never enables them unless we pin them here.
+ */
+export const DEFAULT_ENABLED_OPENROUTER_IMAGE_MODEL_IDS = [
+  'google/gemini-3.1-flash-image-preview:image',
+  'google/gemini-2.5-flash-image:image',
+  'google/gemini-3-pro-image-preview:image',
+] as const;
+
+const IMAGE_MODEL_SUFFIX = ':image';
+
 export type OpenRouterDefaultModelCandidate = {
   id: string;
   releasedAt?: string | null;
@@ -38,13 +51,16 @@ const isChatType = (type?: string | null): boolean => {
  * Returns the set of OpenRouter model ids that should be enabled by default:
  * always includes {@link OPENROUTER_AUTO_MODEL_ID}, plus the
  * {@link DEFAULT_ENABLED_MODELS_PER_FAMILY} newest chat models from each of
- * openai / anthropic / google (by `releasedAt` desc; missing dates sort last).
+ * openai / anthropic / google (by `releasedAt` desc; missing dates sort last),
+ * plus Nano Banana Image-tab `:image` siblings when present in the catalog, and
+ * `:image` clones of any default-enabled chat id.
  */
 export const computeDefaultEnabledOpenRouterModelIds = (
   models: OpenRouterDefaultModelCandidate[],
   perFamily: number = DEFAULT_ENABLED_MODELS_PER_FAMILY,
 ): Set<string> => {
   const buckets = new Map<OpenRouterDefaultEnabledFamily, OpenRouterDefaultModelCandidate[]>();
+  const catalogIds = new Set(models.map((model) => model.id));
 
   for (const family of OPENROUTER_DEFAULT_ENABLED_FAMILIES) {
     buckets.set(family, []);
@@ -73,6 +89,18 @@ export const computeDefaultEnabledOpenRouterModelIds = (
     for (const model of ranked.slice(0, perFamily)) {
       enabled.add(model.id);
     }
+  }
+
+  // Pin Image Create Nano Banana defaults when the catalog has them.
+  for (const imageId of DEFAULT_ENABLED_OPENROUTER_IMAGE_MODEL_IDS) {
+    if (catalogIds.has(imageId)) enabled.add(imageId);
+  }
+
+  // Enable synthesized `:image` siblings for every default-enabled chat card.
+  for (const id of enabled) {
+    if (id.endsWith(IMAGE_MODEL_SUFFIX)) continue;
+    const imageId = `${id}${IMAGE_MODEL_SUFFIX}`;
+    if (catalogIds.has(imageId)) enabled.add(imageId);
   }
 
   return enabled;

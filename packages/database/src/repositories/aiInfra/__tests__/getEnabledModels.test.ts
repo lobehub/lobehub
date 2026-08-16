@@ -1127,5 +1127,92 @@ describe('AiInfraRepos', () => {
 
       expect(result.map((m) => m.id)).toEqual(['openai/gpt-4o']);
     });
+
+    it('promotes OpenRouter :image siblings when the chat parent is user-enabled', async () => {
+      const mockProviders = [
+        {
+          enabled: true,
+          id: 'openrouter',
+          name: 'OpenRouter',
+          sort: 1,
+          source: 'builtin' as const,
+        },
+      ];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([
+        {
+          enabled: true,
+          id: 'google/gemini-3.1-flash-image-preview',
+          providerId: 'openrouter',
+          type: 'chat',
+        },
+      ] as EnabledAiModel[]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          displayName: 'Nano Banana 2',
+          enabled: false,
+          id: 'google/gemini-3.1-flash-image-preview',
+          type: 'chat' as const,
+        },
+        {
+          displayName: 'Nano Banana 2',
+          enabled: false,
+          id: 'google/gemini-3.1-flash-image-preview:image',
+          type: 'image' as const,
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+
+      expect(result.map((m) => m.id).sort()).toEqual([
+        'google/gemini-3.1-flash-image-preview',
+        'google/gemini-3.1-flash-image-preview:image',
+      ]);
+    });
+
+    it('does not promote :image siblings the user explicitly disabled', async () => {
+      const mockProviders = [
+        {
+          enabled: true,
+          id: 'openrouter',
+          name: 'OpenRouter',
+          sort: 1,
+          source: 'builtin' as const,
+        },
+      ];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([
+        {
+          enabled: true,
+          id: 'google/gemini-3.1-flash-image-preview',
+          providerId: 'openrouter',
+          type: 'chat',
+        },
+        {
+          enabled: false,
+          id: 'google/gemini-3.1-flash-image-preview:image',
+          providerId: 'openrouter',
+          type: 'image',
+        },
+      ] as EnabledAiModel[]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          enabled: false,
+          id: 'google/gemini-3.1-flash-image-preview',
+          type: 'chat' as const,
+        },
+        {
+          enabled: false,
+          id: 'google/gemini-3.1-flash-image-preview:image',
+          type: 'image' as const,
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+
+      expect(result.map((m) => m.id)).toEqual(['google/gemini-3.1-flash-image-preview']);
+    });
   });
 });
