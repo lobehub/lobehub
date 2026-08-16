@@ -141,6 +141,7 @@ export type ActionType =
   | 'write_memory'
   | 'create_skill'
   | 'refine_skill'
+  | 'refine_prompt'
   | 'consolidate_skill'
   | 'noop'
   | 'proposal_only';
@@ -183,13 +184,27 @@ export type SkillConsolidateOperation = DomainOperationCase<
   SkillConsolidateInput
 >;
 
+export interface PromptRefineInput {
+  agentId: string;
+  systemRole: string;
+  userId: string;
+}
+
+export type PromptRefineOperation = DomainOperationCase<
+  'agent',
+  'refine_prompt',
+  PromptRefineInput
+>;
+
 export type DomainOperation =
   | MemoryWriteOperation
   | SkillConsolidateOperation
   | SkillCreateOperation
-  | SkillRefineOperation;
+  | SkillRefineOperation
+  | PromptRefineOperation;
 
 export interface ActionTarget {
+  agentId?: string;
   memoryId?: string;
   skillDocumentId?: string;
   skillName?: string;

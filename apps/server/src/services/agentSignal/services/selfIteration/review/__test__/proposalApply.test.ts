@@ -82,6 +82,56 @@ describe('self-review proposal apply service', () => {
     vi.clearAllMocks();
   });
 
+  it('applies an approved refine_prompt action', async () => {
+    const replaceAgentPrompt = vi.fn().mockResolvedValue(undefined);
+    const proposal = createProposal({
+      actionType: 'refine_prompt',
+      actions: [
+        {
+          actionType: 'refine_prompt',
+          baseSnapshot: {
+            agentId: 'agt_1',
+            promptHash: 'sha256:old',
+            targetType: 'agent_prompt',
+          },
+          evidenceRefs: [{ id: 'msg_1', type: 'message' }],
+          idempotencyKey: 'nightly:refine_prompt:agt_1',
+          operation: {
+            domain: 'agent',
+            input: { agentId: 'agt_1', systemRole: 'Improved prompt', userId: 'user_1' },
+            operation: 'refine_prompt',
+          },
+          rationale: 'Honor repeated corrections.',
+          risk: Risk.Medium,
+          target: { agentId: 'agt_1' },
+        },
+      ],
+      proposalKey: 'agt_1:refine_prompt:agent:agt_1',
+    });
+    const updateProposal = vi.fn();
+    const service = createSelfReviewProposalApplyService({
+      checkAction: vi.fn().mockResolvedValue({ allowed: true }),
+      checkGates: vi.fn().mockResolvedValue({ allowed: true }),
+      replaceAgentPrompt,
+      tools: { createSkillIfAbsent: vi.fn(), replaceSkillContentCAS: vi.fn() },
+      updateProposal,
+    });
+
+    await service.apply({
+      agentId: 'agt_1',
+      proposal,
+      sourceId: 'nightly-review:user_1:agt_1:2026-05-09',
+      sourceType: 'agent.nightly_review.requested',
+      userId: 'user_1',
+    });
+
+    expect(replaceAgentPrompt).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      systemRole: 'Improved prompt',
+    });
+    expect(updateProposal).toHaveBeenCalledWith(expect.objectContaining({ status: 'applied' }));
+  });
+
   /**
    * @example
    * expect(result.proposal.status).toBe('applied');

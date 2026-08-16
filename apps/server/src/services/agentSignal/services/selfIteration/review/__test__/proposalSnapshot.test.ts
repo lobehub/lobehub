@@ -3,6 +3,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSelfReviewProposalSnapshotService } from '../proposalSnapshot';
 
 describe('self-review proposal snapshot service', () => {
+  it('captures the reviewed agent prompt hash', async () => {
+    const service = createSelfReviewProposalSnapshotService({
+      isSkillNameAvailable: async () => true,
+      readAgentPromptSnapshot: async () => ({ promptHash: 'sha256:prompt' }),
+      readSkillTargetSnapshot: async () => undefined,
+    });
+
+    await expect(
+      service.captureActionSnapshot({
+        actionType: 'refine_prompt',
+        agentId: 'agent-1',
+        input: { agentId: 'agent-1' },
+        userId: 'user-1',
+      }),
+    ).resolves.toEqual({
+      agentId: 'agent-1',
+      promptHash: 'sha256:prompt',
+      targetType: 'agent_prompt',
+    });
+  });
+
   /**
    * @example
    * expect(snapshot).toEqual({ targetType: 'skill', contentHash: 'sha256:base' });

@@ -4,6 +4,7 @@ import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/o
 
 import type { AgentSignalReceipt } from '../../receiptService';
 import type { ToolResultWithKind } from '../finalStateExtractor';
+import type { Idea } from '../types';
 
 /**
  * Maps a durable mutation tool's api name to the user-facing receipt domain.
@@ -52,6 +53,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const getIdeas = (artifacts: ToolResultWithKind[]): Idea[] =>
+  artifacts.flatMap((artifact) => {
+    if (artifact.apiName !== 'recordSelfReviewIdea' || !isRecord(artifact.data)) return [];
+    const value = isRecord(artifact.data.idea) ? artifact.data.idea : artifact.data;
+    return typeof value.idempotencyKey === 'string' && typeof value.rationale === 'string'
+      ? [value as unknown as Idea]
+      : [];
+  });
 
 /** A `skipped_unsupported` / `skipped_stale` tool status collapses to `skipped`. */
 const isSkippedStatus = (status: unknown): boolean =>
@@ -141,6 +151,15 @@ export const buildSelfIterationReceipts = (
     kind: 'review',
     metadata: {
       actionCount: mutations.length,
+      ...(artifacts.length > 0
+        ? {
+            selfIteration: {
+              ideas: getIdeas(artifacts),
+              mode: 'review' as const,
+              sourceId,
+            },
+          }
+        : {}),
       ...(marker.localDate ? { localDate: marker.localDate } : {}),
       sourceType,
     },

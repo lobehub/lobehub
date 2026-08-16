@@ -29,6 +29,7 @@ const SELF_ITERATION_ACTION_TYPES = [
   'write_memory',
   'create_skill',
   'refine_skill',
+  'refine_prompt',
   'consolidate_skill',
   'noop',
   'proposal_only',
@@ -71,7 +72,7 @@ export interface BuildSelfReviewProposalKeyInput {
   /** Stable target id inside the selected target type. */
   targetId: string;
   /** Target namespace used to avoid collisions across resource tables. */
-  targetType: 'agent_document' | 'memory' | 'skill' | 'unknown';
+  targetType: 'agent' | 'agent_document' | 'memory' | 'skill' | 'unknown';
 }
 
 export interface SelfReviewProposalBaseSnapshot {
@@ -79,6 +80,8 @@ export interface SelfReviewProposalBaseSnapshot {
   absent?: boolean;
   /** Agent document id when the proposal targets managed skill/document state. */
   agentDocumentId?: string;
+  /** Agent id when the proposal targets its system prompt. */
+  agentId?: string;
   /** Content hash observed when the proposal was created. */
   contentHash?: string;
   /** Canonical document id observed when the proposal was created. */
@@ -87,12 +90,14 @@ export interface SelfReviewProposalBaseSnapshot {
   documentUpdatedAt?: string;
   /** Whether the target was managed by Agent Signal. */
   managed?: boolean;
+  /** Hash of the agent system prompt observed when the proposal was created. */
+  promptHash?: string;
   /** Stable skill name observed or reserved when the proposal was created. */
   skillName?: string;
   /** Human-readable target title observed at proposal time. */
   targetTitle?: string;
   /** Target domain captured by the proposal snapshot. */
-  targetType?: 'skill';
+  targetType?: 'agent_prompt' | 'skill';
   /** Whether the target was writable at proposal time. */
   writable?: boolean;
 }
@@ -138,7 +143,8 @@ export interface SelfReviewIdea {
  * @param TActionType - Mergeable action type that must carry a complete base snapshot.
  */
 export type MergeableSelfReviewProposalActionPlan<
-  TActionType extends 'create_skill' | 'refine_skill' = 'create_skill' | 'refine_skill',
+  TActionType extends 'create_skill' | 'refine_prompt' | 'refine_skill' =
+    'create_skill' | 'refine_prompt' | 'refine_skill',
 > = ActionPlan & {
   /** Mergeable action type that will be applied from a frozen proposal. */
   actionType: TActionType;
@@ -151,7 +157,7 @@ export type MergeableSelfReviewProposalActionPlan<
  */
 export type NonMergeableSelfReviewProposalActionPlan = ActionPlan & {
   /** Non-mergeable action type that can use legacy title-only fallback snapshots. */
-  actionType: Exclude<ActionType, 'create_skill' | 'refine_skill'>;
+  actionType: Exclude<ActionType, 'create_skill' | 'refine_prompt' | 'refine_skill'>;
   /** Optional proposal snapshot supplied by callers before projection. */
   baseSnapshot?: SelfReviewProposalBaseSnapshot;
 };
@@ -310,13 +316,19 @@ const getMergeableProposalSnapshotError = (action: SelfReviewProposalActionPlan)
   `Mergeable proposal action requires a complete base snapshot. actionType=${action.actionType}`;
 
 const isMergeableProposalAction = (actionType: string) =>
-  actionType === 'create_skill' || actionType === 'refine_skill';
+  actionType === 'create_skill' || actionType === 'refine_skill' || actionType === 'refine_prompt';
 
 const hasCompleteMergeableSnapshot = (
   actionType: string,
   snapshot: SelfReviewProposalBaseSnapshot | undefined,
 ) => {
-  if (!snapshot || snapshot.targetType !== 'skill') return false;
+  if (!snapshot) return false;
+
+  if (actionType === 'refine_prompt') {
+    return snapshot.targetType === 'agent_prompt' && !!snapshot.agentId && !!snapshot.promptHash;
+  }
+
+  if (snapshot.targetType !== 'skill') return false;
 
   if (actionType === 'refine_skill') {
     return (
@@ -424,6 +436,7 @@ const getProposalTarget = (
   if (action.target?.skillDocumentId) {
     return { targetId: action.target.skillDocumentId, targetType: 'agent_document' };
   }
+  if (action.target?.agentId) return { targetId: action.target.agentId, targetType: 'agent' };
   if (action.target?.memoryId) return { targetId: action.target.memoryId, targetType: 'memory' };
   if (action.target?.skillName) return { targetId: action.target.skillName, targetType: 'skill' };
 
