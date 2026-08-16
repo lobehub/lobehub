@@ -338,6 +338,8 @@ export default {
   'criterion.descriptionPlaceholder': 'Add extra context for the checker (optional)',
   'criterion.editTitle': 'Edit acceptance criterion',
   'criterion.instructionLabel': 'Judge prompt',
+  'criterion.instructionLinked':
+    'The judging rule is kept in a linked document and cannot be edited here.',
   'criterion.instructionPlaceholder': 'Describe the exact pass conditions and required evidence',
   'criterion.optional': 'Optional',
   'criterion.required': 'Required',

@@ -298,6 +298,7 @@
   "criterion.descriptionPlaceholder": "为检查方补充更多上下文（可选）",
   "criterion.editTitle": "编辑验收标准",
   "criterion.instructionLabel": "判定说明",
+  "criterion.instructionLinked": "判定说明保存在关联文档中，此处不可编辑。",
   "criterion.instructionPlaceholder": "描述明确的通过条件和所需证据",
   "criterion.optional": "可选",
   "criterion.required": "必选",
