@@ -20,7 +20,9 @@ interface SkillRowProps {
  * The hover detail card is anchored to the whole row but triggered only by the
  * label cell, so moving right onto the "..." button leaves the trigger and lets
  * the card go — the two used to share one hover, which is why a card could land
- * on top of the policy menu and swallow the click meant for it.
+ * on top of the policy menu and swallow the click meant for it. The card is
+ * also inert (pointer-events: none): a press landing on the portal'd card is
+ * read by base-ui as an outside press that dismisses the enclosing menu.
  */
 const SkillRow = memo<SkillRowProps>(
   ({
@@ -60,7 +62,7 @@ const SkillRow = memo<SkillRowProps>(
             open={open}
             placement={'rightTop'}
             positionerProps={{ anchor: rowRef, sideOffset: 8 }}
-            styles={{ content: { padding: 0 } }}
+            styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
             onOpenChange={onOpenChange}
           >
             {labelCell}

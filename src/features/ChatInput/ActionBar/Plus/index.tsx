@@ -23,7 +23,7 @@ import {
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
@@ -205,39 +205,53 @@ interface PopoverLabelProps {
   disabled?: boolean;
   label: ReactNode;
   popoverContent: ReactNode;
-  // Distance from the label cell's right edge. Switch-type rows reserve a
-  // trailing toggle, so bump this to push the popover clear of the toggle and
-  // out to the right of the whole menu instead of overlapping it.
-  sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(
-  ({ disabled, label, popoverContent, sideOffset = 10 }) => {
-    const { close, onOpenChange, open } = useDetailPopoverState(disabled);
+/**
+ * The detail card must anchor past the whole menu row, not the label cell:
+ * anchored to the label, it opens exactly over the item's trailing `extra`
+ * slot ("..." menu, re-authorize link, switches), and a press landing on the
+ * portal'd card is read by base-ui as an outside press that dismisses the
+ * whole submenu. The card is also rendered inert (pointer-events: none) — it
+ * is a hover information surface, so it must never swallow a press meant for
+ * the controls beneath it.
+ */
+const PopoverLabel = memo<PopoverLabelProps>(({ disabled, label, popoverContent }) => {
+  const { close, onOpenChange, open } = useDetailPopoverState(disabled);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const rowAnchorRef = useMemo(
+    () => ({
+      get current() {
+        const wrapper = wrapperRef.current;
+        return (wrapper?.closest('[role="menuitem"]') as HTMLElement | null) ?? wrapper;
+      },
+    }),
+    [],
+  );
 
-    return (
-      <Popover
-        arrow={false}
-        content={popoverContent}
-        disabled={disabled}
-        mouseEnterDelay={0.25}
-        open={open}
-        placement={'rightTop'}
-        positionerProps={{ sideOffset }}
-        styles={{ content: { padding: 0 } }}
-        onOpenChange={onOpenChange}
+  return (
+    <Popover
+      arrow={false}
+      content={popoverContent}
+      disabled={disabled}
+      mouseEnterDelay={0.25}
+      open={open}
+      placement={'rightTop'}
+      positionerProps={{ anchor: rowAnchorRef, sideOffset: 8 }}
+      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
+      onOpenChange={onOpenChange}
+    >
+      <span
+        ref={wrapperRef}
+        style={{ display: 'block', width: '100%' }}
+        onClickCapture={close}
+        onContextMenuCapture={close}
       >
-        <span
-          style={{ display: 'block', width: '100%' }}
-          onClickCapture={close}
-          onContextMenuCapture={close}
-        >
-          {label}
-        </span>
-      </Popover>
-    );
-  },
-);
+        {label}
+      </span>
+    </Popover>
+  );
+});
 
 PopoverLabel.displayName = 'PopoverLabel';
 
@@ -544,12 +558,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               icon: Cloud,
               key: 'gateway-mode',
               label: (
-                <PopoverLabel
-                  label={renderGatewayModeLabel()}
-                  popoverContent={gatewayModeInfo}
-                  // Clear the trailing toggle so the card sits to the right of the whole menu.
-                  sideOffset={64}
-                />
+                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
               ),
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',

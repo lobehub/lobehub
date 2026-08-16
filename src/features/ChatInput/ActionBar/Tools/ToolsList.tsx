@@ -105,6 +105,9 @@ const RegularItem = memo<{
 
   if (!item.popoverContent) return row;
 
+  // The detail card is a hover information surface: keep it inert
+  // (pointer-events: none) so a press can never land on the portal'd card and
+  // be read as an outside press that dismisses the surrounding popover.
   return (
     <Popover
       arrow={false}
@@ -114,7 +117,7 @@ const RegularItem = memo<{
       open={open}
       placement={'rightTop'}
       positionerProps={{ sideOffset: 8 }}
-      styles={{ content: { padding: 0 } }}
+      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
       onOpenChange={onOpenChange}
     >
       {row}
