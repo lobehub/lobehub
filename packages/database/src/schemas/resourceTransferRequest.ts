@@ -32,15 +32,20 @@ export const resourceTransferRequests = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Who initiated the transfer: the resource creator, or the workspace primary owner reassigning it. */
-    initiatorId: text('initiator_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
+    /**
+     * Who initiated the transfer: the resource creator, or the workspace
+     * primary owner reassigning it. Null once that account is deleted —
+     * terminal rows are the audit trail of the handover, so actor references
+     * degrade to null instead of cascading the row away.
+     */
+    initiatorId: text('initiator_id').references(() => users.id, { onDelete: 'set null' }),
 
-    /** The member who must accept before ownership changes. */
-    recipientId: text('recipient_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
+    /**
+     * The member who must accept before ownership changes. Null once that
+     * account is deleted; a still-pending row with a null recipient can no
+     * longer be accepted and is treated as cancelled/expired by reads.
+     */
+    recipientId: text('recipient_id').references(() => users.id, { onDelete: 'set null' }),
 
     /**
      * The resource owner at request time. Equals `initiatorId` for a creator

@@ -2541,8 +2541,8 @@ table resource_transfer_requests {
   resource_type text [not null]
   resource_id text [not null]
   workspace_id text [not null]
-  initiator_id text [not null]
-  recipient_id text [not null]
+  initiator_id text
+  recipient_id text
   previous_owner_id text
   status text [not null, default: 'pending']
   options jsonb

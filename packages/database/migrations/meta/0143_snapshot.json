@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "16c6daf3-0b45-4d5c-a127-3712679f12f4",
+  "id": "d20c3bdd-dc48-47cb-a075-51d76f274dfe",
   "policies": {},
   "prevId": "2ef6d6e1-c031-4e7b-b085-5aa8d810ec2a",
   "roles": {},
@@ -21171,13 +21171,13 @@
           "name": "initiator_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "recipient_id": {
           "name": "recipient_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "previous_owner_id": {
           "name": "previous_owner_id",
@@ -21308,7 +21308,7 @@
           "tableTo": "users",
           "columnsFrom": ["initiator_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "resource_transfer_requests_recipient_id_users_id_fk": {
@@ -21317,7 +21317,7 @@
           "tableTo": "users",
           "columnsFrom": ["recipient_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "resource_transfer_requests_previous_owner_id_users_id_fk": {
