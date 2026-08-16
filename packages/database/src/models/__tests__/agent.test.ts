@@ -213,30 +213,6 @@ describe('AgentModel', () => {
     });
   });
 
-  describe('getAgentAgencyConfig', () => {
-    it('returns only the persisted agency config', async () => {
-      const agentId = 'agency-config-agent';
-      const agencyConfig = {
-        executionTargetSelectionPolicy: 'fixed' as const,
-        modelSelectionPolicy: 'member' as const,
-      };
-      await serverDB.insert(agents).values({ agencyConfig, id: agentId, userId });
-
-      await expect(agentModel.getAgentAgencyConfig(agentId)).resolves.toEqual(agencyConfig);
-    });
-
-    it('does not leak agency config across users', async () => {
-      const agentId = 'agency-config-other-user';
-      await serverDB.insert(agents).values({
-        agencyConfig: { modelSelectionPolicy: 'fixed' },
-        id: agentId,
-        userId: userId2,
-      });
-
-      await expect(agentModel.getAgentAgencyConfig(agentId)).resolves.toBeNull();
-    });
-  });
-
   describe('getAgentModelConfig', () => {
     it('returns model + provider when both are configured', async () => {
       const agentId = 'snap-agent-1';

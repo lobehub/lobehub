@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import type { KnowledgeItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import type { KnowledgeItem } from '@lobechat/types';
 import { CreateAgentSchema, KnowledgeType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -69,13 +69,17 @@ const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
     : null;
 };
 
-const hasAgentPermissionPolicyUpdate = (
-  policyPatch: Record<PropertyKey, unknown>,
-  currentAgencyConfig: LobeAgentAgencyConfig | null,
-) => {
-  return AGENT_PERMISSION_POLICY_KEYS.some(
-    (key) => key in policyPatch && policyPatch[key] !== currentAgencyConfig?.[key],
-  );
+const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
+  const policyPatch = getAgentPermissionPolicyPatch(value);
+  if (!policyPatch) return value;
+
+  const {
+    executionTargetSelectionPolicy: _executionTargetSelectionPolicy,
+    modelSelectionPolicy: _modelSelectionPolicy,
+    ...safeAgencyConfig
+  } = policyPatch;
+
+  return { ...value, agencyConfig: safeAgencyConfig };
 };
 
 const protectAgentConfig = async <T extends Record<string, any>>(
@@ -1279,25 +1283,26 @@ export const agentRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
-      // Model / execution-environment selection policies govern every member,
-      // so collaborative edit access is insufficient: only the creator or a
-      // workspace owner may change them.
+      let safeValue = input.value;
+
+      // Model / execution-environment selection policies govern every member.
+      // Only the creator or workspace primary owner may write them; other
+      // collaborators send a fully merged agencyConfig, so strip the protected
+      // keys instead of comparing and later merging stale values over a newer
+      // owner update.
       if (ctx.workspaceId) {
         const policyPatch = getAgentPermissionPolicyPatch(input.value);
 
         if (policyPatch) {
-          const currentAgencyConfig = await ctx.agentModel.getAgentAgencyConfig(input.agentId);
-
-          if (hasAgentPermissionPolicyUpdate(policyPatch, currentAgencyConfig)) {
-            await assertCanPerformResourceAction({
-              action: 'manage',
+          const canUpdatePolicies =
+            (await ctx.agentModel.existsOwnedById(input.agentId)) ||
+            (await isWorkspacePrimaryOwner({
               db: ctx.serverDB,
-              resourceId: input.agentId,
-              resourceType: 'agent',
               userId: ctx.userId,
               workspaceId: ctx.workspaceId,
-            });
-          }
+            }));
+
+          if (!canUpdatePolicies) safeValue = stripAgentPermissionPolicies(input.value);
         }
       }
 
@@ -1315,7 +1320,7 @@ export const agentRouter = router({
       }
 
       // Use AgentService to update and return the updated agent data
-      return ctx.agentService.updateAgentConfig(input.agentId, input.value);
+      return ctx.agentService.updateAgentConfig(input.agentId, safeValue);
     }),
 
   /**

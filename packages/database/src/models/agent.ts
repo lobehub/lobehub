@@ -528,16 +528,6 @@ export class AgentModel {
     return rows.length > 0;
   };
 
-  getAgentAgencyConfig = async (id: string): Promise<LobeAgentAgencyConfig | null> => {
-    const rows = await this.db
-      .select({ agencyConfig: agents.agencyConfig })
-      .from(agents)
-      .where(and(eq(agents.id, id), this.ownership()))
-      .limit(1);
-
-    return rows[0]?.agencyConfig ?? null;
-  };
-
   /**
    * Lightweight lookup of an agent's currently-configured model + provider,
    * used to snapshot the model into a task config so later changes to the
