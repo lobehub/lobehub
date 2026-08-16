@@ -9,6 +9,11 @@ import { describe, expect, it, vi } from 'vitest';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
+import MemorySkeleton from '@/components/Skeleton/Memory';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
@@ -281,6 +286,11 @@ describe('desktop router shared definition', () => {
           RouteSegmentSkeleton,
           ConversationLayoutSkeleton,
           ConversationSegmentSkeleton,
+          GoalSkeleton,
+          GoalDetailSkeleton,
+          GroupLayoutSkeleton,
+          MemorySkeleton,
+          ProfileSkeleton,
           SettingsPageSkeleton,
         ]),
       );
@@ -298,7 +308,7 @@ describe('desktop router shared definition', () => {
           '/agent/agent-1/topic-1',
           [RouteSegmentSkeleton, ConversationLayoutSkeleton, ConversationSegmentSkeleton],
         ],
-        ['/group/group-1/topic-1', [RouteSegmentSkeleton, ConversationLayoutSkeleton]],
+        ['/group/group-1/topic-1', [GroupLayoutSkeleton, ConversationLayoutSkeleton]],
       ] as const) {
         const matches = matchRoutes(createRuntimeRoutes(pathname), pathname);
         const fallbackTypes = matches
@@ -315,6 +325,27 @@ describe('desktop router shared definition', () => {
       }
     },
   );
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])('%s keeps profile and goal detail route boundaries on semantic skeletons', (_, getRoutes) => {
+    for (const [pathname, expectedFallbacks] of [
+      ['/group/group-1/profile', [GroupLayoutSkeleton, ProfileSkeleton]],
+      ['/agent/agent-1/goal/goal-1', [RouteSegmentSkeleton, GoalDetailSkeleton]],
+    ] as const) {
+      const matches = matchRoutes(getRoutes(pathname), pathname);
+      const fallbackTypes = matches
+        ?.map(
+          ({ route }) =>
+            (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props.fallback
+              ?.type,
+        )
+        .filter(Boolean);
+
+      expect(fallbackTypes?.slice(-expectedFallbacks.length), pathname).toEqual(expectedFallbacks);
+    }
+  });
 
   it.each([
     ['Web', (_pathname: string) => webDesktopRoutes],

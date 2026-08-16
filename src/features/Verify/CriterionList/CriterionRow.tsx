@@ -63,6 +63,18 @@ export const CriterionRequiredChip = ({ onToggle, required }: CriterionRequiredC
   );
 };
 
+/**
+ * Keyboard activation for the row. A nested action control's Enter/Space
+ * bubbles up here; acting on it would open the row on top of (or instead of)
+ * the control's own click, so only events originating from the row itself
+ * activate it.
+ */
+export const rowKeyDownHandler =
+  (onOpen: () => void) => (event: { currentTarget: unknown; key: string; target: unknown }) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') onOpen();
+  };
+
 export interface CriterionRowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** e2e / automation anchors, forwarded onto the row element. */
   [dataAttribute: `data-${string}`]: string | undefined;
@@ -101,12 +113,7 @@ export const CriterionRow = ({
     role={onOpen ? 'button' : undefined}
     tabIndex={onOpen ? 0 : undefined}
     onClick={onOpen}
-    onKeyDown={
-      onOpen &&
-      ((event) => {
-        if (event.key === 'Enter' || event.key === ' ') onOpen();
-      })
-    }
+    onKeyDown={onOpen && rowKeyDownHandler(onOpen)}
     {...rest}
   >
     {icon}

@@ -385,16 +385,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     let verifyCriteriaIds: string[] = [];
     try {
       verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
+      const { config, goal } = buildGoalTaskConfig({
+        costBudget: plan.maxTotalCost,
+        instruction,
+        requirement,
+        roundBudget: plan.maxIterations,
+        verifyCriteriaIds,
+      });
       const result = await createTask({
         assigneeAgentId: agentId,
-        config: buildGoalTaskConfig({
-          costBudget: plan.maxTotalCost,
-          instruction,
-          requirement,
-          roundBudget: plan.maxIterations,
-          verifyCriteriaIds,
-        }),
+        config,
         editorData,
+        goal,
         instruction,
         name: plan.name.trim() || undefined,
         projectId,

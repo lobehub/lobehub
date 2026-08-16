@@ -8,6 +8,16 @@ import { useTranslation } from 'react-i18next';
 
 import type { VerifyCriterionDraft } from '@/services/verify';
 
+/**
+ * True when the criterion's judging rule lives in a linked document this editor
+ * neither loads nor can update (`updateCriterion` carries no instruction
+ * field). Rendering an editable blank box in that state would silently discard
+ * whatever the user types into it, so the editor shows a read-only note.
+ */
+export const hasLinkedInstruction = (
+  initial: Pick<VerifyCriterionDraft, 'documentId' | 'instruction'>,
+) => Boolean(initial.documentId) && !initial.instruction;
+
 export interface CriterionEditorProps {
   initial: VerifyCriterionDraft;
   /** Create flow: the criterion only exists once it is saved. */
@@ -35,6 +45,7 @@ export const CriterionEditor = ({
   const [draft, setDraft] = useState<VerifyCriterionDraft>(initial);
   const verifierType = draft.verifierType ?? 'llm';
   const isProgram = verifierType === 'program';
+  const instructionLinked = hasLinkedInstruction(initial);
 
   const patch = (value: Partial<VerifyCriterionDraft>) =>
     setDraft((previous) => ({ ...previous, ...value }));
@@ -119,6 +130,10 @@ export const CriterionEditor = ({
               patch({ verifierConfig: { ...draft.verifierConfig, command: event.target.value } })
             }
           />
+        ) : instructionLinked ? (
+          <Text fontSize={12} type={'secondary'}>
+            {t('criterion.instructionLinked')}
+          </Text>
         ) : (
           <TextArea
             autoSize={{ maxRows: 10, minRows: 3 }}

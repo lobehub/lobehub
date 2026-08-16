@@ -26,6 +26,11 @@ import {
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
+import MemorySkeleton from '@/components/Skeleton/Memory';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -160,6 +165,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goals'),
               'Desktop > Chat > Goals',
+              { fallback: <GoalSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goals',
@@ -168,6 +174,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goal/[goalId]'),
               'Desktop > Chat > Goal Detail',
+              { fallback: <GoalDetailSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goal/:goalId',
@@ -176,6 +183,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
+              { fallback: <ProfileSkeleton /> },
             ),
             handle: { meta: agentProfileRouteMeta },
             path: 'profile',
@@ -305,6 +313,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/group/profile'),
               'Desktop > Agent Group > Profile',
+              { fallback: <ProfileSkeleton variant={'group'} /> },
             ),
             handle: { meta: groupProfileRouteMeta },
             path: 'profile',
@@ -326,7 +335,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(main)/group/_layout'),
           'Desktop > Group > Layout',
-          { preloadId: 'group' },
+          { fallback: <GroupLayoutSkeleton />, preloadId: 'group' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':gid',
@@ -646,7 +655,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(main)/memory/(home)'),
           'Desktop > Memory > Home',
-          { preloadId: 'memory' },
+          { fallback: <MemorySkeleton />, preloadId: 'memory' },
         ),
         handle: {
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),

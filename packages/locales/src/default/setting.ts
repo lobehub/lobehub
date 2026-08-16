@@ -1157,9 +1157,9 @@ export default {
   'settingsSearch.placeholder': 'Search settings...',
   'settingsSearch.tabKeywords.about': 'about, version, changelog, feedback, help',
   'settingsSearch.tabKeywords.advanced': 'advanced, developer, labs, experiment, beta',
-  'settingsSearch.tabKeywords.apikey': 'api key, apikey, token, secret',
+  'settingsSearch.tabKeywords.apikey': 'api, api key, apikey, token, secret, personal key',
   'settingsSearch.tabKeywords.appearance':
-    'appearance, theme, dark mode, light mode, font, language, color',
+    'appearance, theme, dark mode, light mode, font, language, color, background',
   'settingsSearch.tabKeywords.billing': 'billing, payment, invoice, card, transaction',
   'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
   'settingsSearch.tabKeywords.credits': 'credits, balance, top up, recharge, buy credits',
@@ -1167,23 +1167,28 @@ export default {
   'settingsSearch.tabKeywords.devices': 'devices, sessions, logged in devices',
   'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
   'settingsSearch.tabKeywords.labels': 'labels, tags, grouping',
+  'settingsSearch.tabKeywords.labs': 'labs, experiment, beta, preview, developer',
   'settingsSearch.tabKeywords.memory': 'memory, memories, personalization',
-  'settingsSearch.tabKeywords.messenger': 'messenger, chat platform, bot',
-  'settingsSearch.tabKeywords.notification': 'notification, email, push, alerts',
+  'settingsSearch.tabKeywords.messenger':
+    'messenger, chat platform, bot, telegram, slack, discord, wechat',
+  'settingsSearch.tabKeywords.notification':
+    'notification, email, push, alerts, inbox, telegram, slack, discord, wechat',
+  'settingsSearch.tabKeywords.oauthApps': 'oauth, oauth apps, developer apps',
   'settingsSearch.tabKeywords.plans': 'subscription, plan, upgrade, pricing, membership',
   'settingsSearch.tabKeywords.profile':
     'profile, account, avatar, username, password, email, sign out, logout',
   'settingsSearch.tabKeywords.provider':
-    'provider, model, llm, api key, apikey, byok, bring your own key, endpoint',
-  'settingsSearch.tabKeywords.proxy': 'proxy, network, connection',
+    'provider, model, llm, api, api key, apikey, byok, bring your own key, endpoint, model provider, language model, custom provider',
+  'settingsSearch.tabKeywords.proxy': 'proxy, network, connection, proxy settings',
   'settingsSearch.tabKeywords.referral': 'referral, invite, rewards, bonus',
   'settingsSearch.tabKeywords.serviceModel':
-    'service model, model assignment, topic naming, translation, tts, voice, speech, image, image generation, embedding, prompt rewrite, suggestion',
+    'service model, model assignment, topic naming, translation, tts, tts settings, voice, speech, image, image generation, embedding, prompt rewrite, suggestion, search, search model',
   'settingsSearch.tabKeywords.skill': 'skills, plugins, tools',
   'settingsSearch.tabKeywords.stats': 'analytics, statistics, stats',
   'settingsSearch.tabKeywords.storage':
-    'storage, files, import, export, backup, reset, clear data, account deletion, delete account',
-  'settingsSearch.tabKeywords.systemTools': 'system tools, built-in tools',
+    'storage, files, import, export, backup, reset, clear data, clear storage, knowledge base, account deletion, delete account',
+  'settingsSearch.tabKeywords.systemTools':
+    'system tools, built-in tools, system, node, python, cli, environment',
   'settingsSearch.tabKeywords.usage': 'usage, consumption, quota, spend, statistics',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',

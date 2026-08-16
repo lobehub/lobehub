@@ -5,7 +5,7 @@ import { type FC } from 'react';
 import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -28,7 +28,7 @@ const ProfileArea = memo(() => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minWidth: 0, overflow: 'hidden' }}>
       {isGroupsLoading ? (
-        <SurfaceSkeleton variant={'editor'} />
+        <ProfileSkeleton variant={'group'} />
       ) : (
         <>
           <Header />
@@ -55,8 +55,9 @@ const GroupProfile: FC = () => {
   const { gid } = useParams<{ gid: string }>();
 
   return (
-    <Suspense fallback={<SurfaceSkeleton variant={'editor'} />}>
+    <Suspense fallback={<ProfileSkeleton variant={'group'} />}>
       <ResourceConfigAccessGate
+        loading={<ProfileSkeleton variant={'group'} />}
         redirectPath={`/group/${gid ?? ''}`}
         resourceId={gid}
         resourceType="agentGroup"

@@ -72,7 +72,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
      wait $GIF_PID
      ```
 
-     Verify at least the first/last frames visually (Read the GIF) before citing.
+     Keep source resolution unless file size requires an explicit `GIF_WIDTH`.
+     The recorder uses per-frame palettes without dithering so neutral loading
+     surfaces do not acquire colored noise. Verify the first, middle, and final
+     frames visually at readable size before citing; reject blurred text, noisy
+     grays, or lost one-pixel borders.
 
    - UI (before/after comparison): capture and visually verify both original
      screenshots. Do not compose them into a new image. In the case's `evidence`

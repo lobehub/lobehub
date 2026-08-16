@@ -1327,3 +1327,22 @@ server-auth 200、`isUserStateInit` true。
 It is private IP address.` 与紧随其后的 `Error converting image to base64`。
 生产用真实对象存储域名，不受影响，所以这纯粹是本地验证环境的门槛，不是产品缺陷 ——
 不要把它当 bug 报上去，也不要为了绕开它改用 inline base64 从而验证了一条产品不会走的路径。
+
+### Goals 页面入口与 Labs 开关
+
+**Situation:** 验收 goal (目标) 相关功能需要进入 Goals 页面。
+
+**Doesn't work:** 直接打开 `/agent/goals` —— goals 路由嵌套在 `/agent/:aid/goals`
+下，`goals` 会被当成 agentId 解析成「助理不可用」; 页面还门控在 Labs 开关
+`enableTopicAcceptance` 后面，关闭时路由静默 replace 回 `/agent/:aid`。
+
+**Works:** 先查 seeded 用户的 agentId (`select id from agents where user_id=...`),
+用公开 store action 打开 Labs 开关 (持久化到用户偏好，全会话生效):
+
+```js
+window.__LOBE_STORES.user().updateLab({ enableTopicAcceptance: true });
+```
+
+再开 `/agent/<agentId>/goals`。创建 Goal 弹窗中「从空白开始」可跳过 AI 生成验收
+标准 (本地无 LLM key 时必用); 标准编辑、预算输入均为普通 input, 目标描述为
+contenteditable (用 `fill`,`type` 不支持 contenteditable)。
