@@ -46,6 +46,7 @@ describe('knowledgeBaseRouter', () => {
     serverDB: {},
     userId: 'test-user',
     workspaceId: 'workspace-active',
+    workspaceRole: 'member',
   };
 
   const caller = knowledgeBaseRouter.createCaller(ctx as any);
@@ -146,6 +147,25 @@ describe('knowledgeBaseRouter', () => {
         'test-user',
         undefined,
       );
+    });
+
+    it("rejects copying another member's library before any target or storage side effects", async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        userId: 'another-member',
+      });
+
+      await expect(
+        caller.copyKnowledgeBaseToWorkspace({
+          id: 'kb-1',
+          targetWorkspaceId: 'workspace-target',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(routerMocks.hasWorkspaceScopedPermission).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCountFileUsage).not.toHaveBeenCalled();
+      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCopyToWorkspace).not.toHaveBeenCalled();
     });
 
     it('rejects target workspace copy when RBAC denies knowledge base creation', async () => {

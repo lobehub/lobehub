@@ -844,8 +844,36 @@ describe('agentRouter', () => {
         expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
       });
 
+      it.each(['executionTargetSelectionPolicy', 'modelSelectionPolicy'] as const)(
+        'requires manage access to update %s',
+        async (policyKey) => {
+          agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+          vi.mocked(assertCanPerformResourceAction).mockImplementationOnce(async ({ action }) => {
+            if (action === 'manage') {
+              throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Only the creator or a workspace owner can change member policies',
+              });
+            }
+          });
+
+          const caller = agentRouter.createCaller(wsCtx());
+
+          await expect(
+            caller.updateAgentConfig({
+              agentId: 'agent-1',
+              value: { agencyConfig: { [policyKey]: 'fixed' } },
+            }),
+          ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+          expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
+        },
+      );
+
       it('allows the update when no other member holds the lock', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+          new TRPCError({ code: 'FORBIDDEN', message: 'Unexpected manage check' }),
+        );
         vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
 
         const caller = agentRouter.createCaller(wsCtx());

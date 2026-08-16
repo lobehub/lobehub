@@ -2,6 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import { CreateAgentSchema, type KnowledgeItem } from '@lobechat/types';
 import { KnowledgeType } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -54,6 +55,17 @@ import {
   getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
+
+const AGENT_PERMISSION_POLICY_KEYS = [
+  'executionTargetSelectionPolicy',
+  'modelSelectionPolicy',
+] as const;
+
+const hasAgentPermissionPolicyUpdate = (value: Record<string, unknown>) => {
+  const agencyConfig = value.agencyConfig;
+
+  return isRecord(agencyConfig) && AGENT_PERMISSION_POLICY_KEYS.some((key) => key in agencyConfig);
+};
 
 const protectAgentConfig = async <T extends Record<string, any>>(
   ctx: {
@@ -1255,6 +1267,20 @@ export const agentRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
+
+      // Model / execution-environment selection policies govern every member,
+      // so collaborative edit access is insufficient: only the creator or a
+      // workspace owner may change them.
+      if (ctx.workspaceId && hasAgentPermissionPolicyUpdate(input.value)) {
+        await assertCanPerformResourceAction({
+          action: 'manage',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
 
       // Collaborative edit lock: reject writes to a workspace agent another
       // member is actively editing. Inert until a client acquires the lock.

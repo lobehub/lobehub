@@ -46,7 +46,12 @@ export const useDropdownMenu = ({
   const setKnowledgeBaseVisibility = useKnowledgeBaseStore((s) => s.setKnowledgeBaseVisibility);
   const { open } = useCreateNewModal();
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const transferMenuItems = useKnowledgeBaseTransferMenuItem(id);
+  // Cross-workspace move/copy follows the same creator-or-owner rule as the
+  // other row management actions. Keep the entries visible but disabled so a
+  // member understands that the capability exists without being offered an
+  // action the server will reject.
+  const canManage = useResourceManageable(userId);
+  const transferMenuItems = useKnowledgeBaseTransferMenuItem(id, { disabled: !canManage });
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Only the creator of a still-private KB sees the "Publish to workspace" entry.
   // Mirrors the file / agent / task one-way publish pattern.
@@ -82,7 +87,6 @@ export const useDropdownMenu = ({
 
   // Row-level ownership: only the creator or a workspace owner may edit or
   // delete a shared knowledge base — mirrors the server-side enforcement.
-  const canManage = useResourceManageable(userId);
   const manageTooltip = canManage ? undefined : t('manageOnlyCreator', { ns: 'common' });
 
   const handleDelete = useCallback(() => {

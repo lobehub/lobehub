@@ -1781,13 +1781,13 @@ export default {
   'taskList.contextMenu.priority': 'Priority',
   'taskList.contextMenu.runNow': 'Run now',
   'taskList.contextMenu.status': 'Status',
-  'taskList.contextMenu.transferConfirm': 'Transfer',
+  'taskList.contextMenu.transferConfirm': 'Move',
   'taskList.contextMenu.transferDescription':
     'Move this task (and all its subtasks) to another workspace. Identifiers will be re-assigned.',
-  'taskList.contextMenu.transferFailed': 'Failed to transfer task',
-  'taskList.contextMenu.transferSuccess': 'Task transferred',
-  'taskList.contextMenu.transferTitle': 'Transfer task',
-  'taskList.contextMenu.transferTo': 'Transfer to…',
+  'taskList.contextMenu.transferFailed': 'Failed to move task',
+  'taskList.contextMenu.transferSuccess': 'Task moved',
+  'taskList.contextMenu.transferTitle': 'Move task',
+  'taskList.contextMenu.transferTo': 'Move to…',
   'taskList.contextMenu.transferWarning':
     'Cross-workspace references like assigned agent and active topic will be cleared.',
   'taskList.kanban.addTask': 'Create task',

@@ -106,6 +106,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({

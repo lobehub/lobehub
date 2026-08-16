@@ -148,7 +148,7 @@ export const useAgentDropdownMenu = ({
   const { allowed: canManageLabels } = usePermission('manage_settings');
   const canCreateLabel =
     Boolean(openCreateLabelModal) && (activeWorkspaceId ? canManageLabels : true);
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess('agent', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
 
   // Row-level ownership: delete/transfer/visibility management stays scoped
@@ -419,8 +419,9 @@ export const useAgentDropdownMenu = ({
         ...(canConfigure
           ? [
               // Permissions live on their own page now — the sidebar keeps a
-              // shortcut so members don't have to open the Agent first.
-              ...(activeWorkspaceId
+              // shortcut so creators and workspace owners don't have to open
+              // the Agent first.
+              ...(activeWorkspaceId && canManageResource
                 ? [
                     { type: 'divider' as const },
                     {
@@ -554,6 +555,7 @@ export const useAgentDropdownMenu = ({
       canConfigure,
       canEdit,
       canManage,
+      canManageResource,
       navigate,
       pinned,
       id,
