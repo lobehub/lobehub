@@ -250,15 +250,21 @@ pre-deploy backups (`moz -u` / `moz -d`) if cron is unreliable on your machine.
 
 Default dirs:
 
-- Data: `~/.local/share/panachat-data` (`PANACHAT_DATA_DIR`)
+- Data fingerprint / leftover binds: `~/.local/share/panachat-data` (`PANACHAT_DATA_DIR`)
+- Live Postgres/Redis/RustFS: named volumes `panachat_{postgres,redis,rustfs}_data`
 - Backups: `~/.local/share/panachat-backups` (`PANACHAT_BACKUP_DIR`)
+
+After pulling the named-volume change: `moz -i` → `moz -d` → `moz -i` (mounts must be `volume:panachat_*`; user count unchanged).\
+`docker volume rm panachat_*` is a wipe — restore from SQL backups instead.
 
 **Restore (SQL)** — stop app, restore into empty/known-good cluster, restart:
 
 ```bash
 moz -k
 # optional: wipe cluster only if intentionally replacing
-# rm -rf "$PANACHAT_DATA_DIR/postgres" && MOZ_ALLOW_EMPTY_DB=1 moz   # init empty, then:
+# rm volume + MOZ_ALLOW_EMPTY_DB=1 moz   # init empty, then:
+#   moz -k && docker volume rm panachat_postgres_data && MOZ_ALLOW_EMPTY_DB=1 moz
+
 gunzip -c ~/.local/share/panachat-backups/panachat-YYYYMMDD-HHMMSS-*.sql.gz \
   | docker exec -i lobe-postgres psql -U postgres -d lobechat
 moz -r

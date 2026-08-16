@@ -10,6 +10,7 @@
 #   moz -d          # force redeploy (auto pre-deploy backup)
 #   moz -b          # build only (app image + control-plane dist)
 #   moz -B          # backup DB + uploads now
+#   moz --restore F # restore SQL dump into running Postgres
 #   moz -r          # restart
 #   moz -i          # info
 #   moz -k          # kill (stop)

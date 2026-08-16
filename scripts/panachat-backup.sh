@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Backup PanaChat / Aico deploy data (Postgres dump + RustFS uploads).
+# Backup / restore PanaChat / Aico deploy data (Postgres dump + RustFS uploads).
+#
+# Postgres/Redis/RustFS live in Docker named volumes (moz local deploys).
+# Dumps go through `docker exec … pg_dump` and a volume tar for RustFS.
 #
 # Usage:
 #   ./scripts/panachat-backup.sh                  # manual backup
 #   ./scripts/panachat-backup.sh --reason daily
 #   ./scripts/panachat-backup.sh --reason pre-deploy
+#   ./scripts/panachat-backup.sh --restore FILE.sql.gz
 #   ./scripts/panachat-backup.sh --install-cron    # daily 03:00 user crontab
 #   ./scripts/panachat-backup.sh --list
 #   ./scripts/panachat-backup.sh --prune-only
@@ -14,20 +18,29 @@
 #   PANACHAT_BACKUP_DIR    default ~/.local/share/panachat-backups
 #   LOBE_DB_NAME           default lobechat
 #   POSTGRES_CONTAINER     default lobe-postgres
+#   POSTGRES_VOLUME_NAME   default panachat_postgres_data
+#   RUSTFS_VOLUME_NAME     default panachat_rustfs_data
 #   PANACHAT_KEEP_DAILY_DAYS=14
 #   PANACHAT_KEEP_WEEKLY_DAYS=56
 #   PANACHAT_KEEP_MONTHLY_DAYS=365
 #   PANACHAT_KEEP_PREDEPLOY=5
-#   MOZ_SKIP_BACKUP=1      no-op exit 0 (used by moz)
+#   MOZ_SKIP_BACKUP=1              no-op exit 0 (used by moz)
+#   MOZ_ALLOW_EMPTY_BACKUP=1       allow dump when live users=0 but fingerprint>0,
+#                                  or when Postgres is down but fingerprint has users
+#   MOZ_ALLOW_TMPFS_PGDATA=1       allow dump while PGDATA is tmpfs (dangerous)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPLOY_DIR="$ROOT/docker-compose/deploy"
+# shellcheck source=moz-pgdata-guards.sh
+source "$ROOT/scripts/moz-pgdata-guards.sh"
 
 PANACHAT_DATA_DIR="${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}"
 PANACHAT_BACKUP_DIR="${PANACHAT_BACKUP_DIR:-$HOME/.local/share/panachat-backups}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-lobe-postgres}"
+POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-panachat_postgres_data}"
+RUSTFS_VOLUME_NAME="${RUSTFS_VOLUME_NAME:-panachat_rustfs_data}"
 LOBE_DB_NAME="${LOBE_DB_NAME:-lobechat}"
 
 KEEP_DAILY_DAYS="${PANACHAT_KEEP_DAILY_DAYS:-14}"
@@ -40,11 +53,12 @@ DO_INSTALL_CRON=0
 DO_LIST=0
 DO_PRUNE_ONLY=0
 STRICT=0
+RESTORE_FILE=""
 
 load_deploy_env() {
   [[ -f "$DEPLOY_DIR/.env" ]] || return 0
   local key val
-  for key in PANACHAT_DATA_DIR PANACHAT_BACKUP_DIR LOBE_DB_NAME; do
+  for key in PANACHAT_DATA_DIR PANACHAT_BACKUP_DIR LOBE_DB_NAME POSTGRES_VOLUME_NAME RUSTFS_VOLUME_NAME; do
     val="$(grep -E "^${key}=" "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
     if [[ -n "$val" ]]; then
       printf -v "$key" '%s' "$val"
@@ -58,11 +72,17 @@ Usage: panachat-backup.sh [options]
 
 Options:
   --reason <daily|pre-deploy|manual>   Tag for this run (default: manual)
+  --restore <file.sql.gz>              Restore a SQL dump into running Postgres
   --install-cron                       Install daily 03:00 user crontab entry
   --list                               List backup files
   --prune-only                         Only apply retention (no new dump)
   --strict                             Fail if Postgres is not running
   -h, --help                           Show help
+
+Postgres / Redis / RustFS storage (moz local):
+  Postgres volume: ${POSTGRES_VOLUME_NAME}
+  RustFS volume:   ${RUSTFS_VOLUME_NAME}
+  Fingerprint:     \$PANACHAT_DATA_DIR/.moz-db-fingerprint
 
 Retention (one dump job; keepers from the same files):
   daily:      last ${KEEP_DAILY_DAYS} days
@@ -82,6 +102,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --reason=*)
       REASON="${1#*=}"
+      shift
+      ;;
+    --restore)
+      RESTORE_FILE="${2:-}"
+      shift 2
+      ;;
+    --restore=*)
+      RESTORE_FILE="${1#*=}"
       shift
       ;;
     --install-cron)
@@ -119,7 +147,7 @@ case "$REASON" in
     ;;
 esac
 
-if [[ "${MOZ_SKIP_BACKUP:-}" == "1" ]]; then
+if [[ "${MOZ_SKIP_BACKUP:-}" == "1" && -z "$RESTORE_FILE" ]]; then
   echo "==> Backup skipped (MOZ_SKIP_BACKUP=1)"
   exit 0
 fi
@@ -164,6 +192,118 @@ list_backups() {
 
 postgres_running() {
   [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || echo missing)" == "running" ]]
+}
+
+fingerprint_file() {
+  echo "$PANACHAT_DATA_DIR/.moz-db-fingerprint"
+}
+
+load_fingerprint_users() {
+  local file
+  file="$(fingerprint_file)"
+  [[ -f "$file" ]] || return 1
+  grep -E '^users=' "$file" 2>/dev/null | head -1 | cut -d= -f2-
+}
+
+postgres_pgdata_fstype() {
+  docker exec "$POSTGRES_CONTAINER" sh -c \
+    'df -T /var/lib/postgresql/data 2>/dev/null | awk "NR==2{print \$2}"' 2>/dev/null || echo unknown
+}
+
+postgres_user_count() {
+  docker exec "$POSTGRES_CONTAINER" psql -U postgres -d "$LOBE_DB_NAME" -Atc \
+    "SELECT count(*) FROM users;" 2>/dev/null || echo "?"
+}
+
+# Refuse dumps that would archive a known-bad empty/tmpfs DB as if it were healthy.
+assert_postgres_safe_to_dump() {
+  local fstype live_users fp_users
+
+  fstype="$(postgres_pgdata_fstype)"
+  if moz_should_refuse_tmpfs_dump "$fstype" "${MOZ_ALLOW_TMPFS_PGDATA:-0}"; then
+    cat >&2 <<EOF
+Error: refusing backup — Postgres PGDATA is on $fstype (empty RAM disk).
+
+  A dump now would archive an empty DB and can look like "data was deleted".
+  Fix the mount (moz -k && moz -d), then retry. Override only if intentional:
+    MOZ_ALLOW_TMPFS_PGDATA=1 moz -B
+EOF
+    return 1
+  fi
+  if moz_is_tmpfs_pgdata "$fstype"; then
+    echo "==> Warning: PGDATA is $fstype — dumping anyway (MOZ_ALLOW_TMPFS_PGDATA=1)"
+  fi
+
+  live_users="$(postgres_user_count)"
+  fp_users="$(load_fingerprint_users || true)"
+  if moz_should_refuse_empty_backup "$live_users" "$fp_users" "${MOZ_ALLOW_EMPTY_BACKUP:-0}"; then
+    cat >&2 <<EOF
+Error: refusing backup — live users=0 but last healthy fingerprint had $fp_users users.
+
+  This usually means Postgres is on a bad/empty mount. Do not treat this dump as recovery.
+  Recover first (moz -k && moz -d), or override:
+    MOZ_ALLOW_EMPTY_BACKUP=1 moz -B
+EOF
+    return 1
+  fi
+  if [[ "$fp_users" =~ ^[0-9]+$ && "$fp_users" -gt 0 ]] \
+    && [[ "$live_users" =~ ^[0-9]+$ && "$live_users" -eq 0 ]]; then
+    echo "==> Warning: live users=0 but fingerprint users=$fp_users — dumping anyway (MOZ_ALLOW_EMPTY_BACKUP=1)"
+  fi
+
+  echo "    PGDATA fs=$fstype  users=${live_users}  volume=${POSTGRES_VOLUME_NAME}"
+}
+
+restore_sql_dump() {
+  local file="$1"
+  local live_users fstype
+
+  if [[ -z "$file" ]]; then
+    echo "Error: --restore requires a .sql.gz path" >&2
+    exit 2
+  fi
+  if [[ ! -f "$file" ]]; then
+    echo "Error: restore file not found: $file" >&2
+    exit 1
+  fi
+  if [[ "$file" != *.sql.gz && "$file" != *.sql ]]; then
+    echo "Error: restore file must be .sql.gz or .sql (got: $file)" >&2
+    exit 2
+  fi
+  if ! postgres_running; then
+    echo "Error: Postgres '$POSTGRES_CONTAINER' is not running — start with: moz" >&2
+    exit 1
+  fi
+
+  fstype="$(postgres_pgdata_fstype)"
+  if moz_is_tmpfs_pgdata "$fstype"; then
+    cat >&2 <<EOF
+Error: refusing restore — PGDATA is on $fstype. Fix the mount first:
+  moz -k && moz -d
+EOF
+    exit 1
+  fi
+
+  live_users="$(postgres_user_count)"
+  echo "==> Restoring into $POSTGRES_CONTAINER / db=$LOBE_DB_NAME"
+  echo "    File:   $file"
+  echo "    Volume: $POSTGRES_VOLUME_NAME (fs=$fstype)"
+  echo "    Live users before restore: $live_users"
+  echo "    Note: dump is applied on top of the current DB (not a full wipe)."
+  echo "    For a clean slate: moz -k && docker volume rm $POSTGRES_VOLUME_NAME && MOZ_ALLOW_EMPTY_DB=1 moz -d"
+  echo "                       then re-run this restore."
+
+  if [[ "$file" == *.sql.gz ]]; then
+    gunzip -c "$file" | docker exec -i "$POSTGRES_CONTAINER" \
+      psql -U postgres -d "$LOBE_DB_NAME" -v ON_ERROR_STOP=1
+  else
+    docker exec -i "$POSTGRES_CONTAINER" \
+      psql -U postgres -d "$LOBE_DB_NAME" -v ON_ERROR_STOP=1 <"$file"
+  fi
+
+  live_users="$(postgres_user_count)"
+  echo "==> Restore finished. Live users now: $live_users"
+  echo "    Tip: moz -i   # refresh status / fingerprint on next healthy deploy"
 }
 
 # Parse panachat-YYYYMMDD-HHMMSS-<reason>.(sql.gz|rustfs.tar.gz|meta.txt)
@@ -288,10 +428,13 @@ create_backup() {
   local sql_path="$PANACHAT_BACKUP_DIR/${base}.sql.gz"
   local rustfs_path="$PANACHAT_BACKUP_DIR/${base}.rustfs.tar.gz"
   local rustfs_src="$PANACHAT_DATA_DIR/rustfs"
+  local live_users="?" fstype="?" fp_users="" rustfs_archived=0
 
   echo "==> Backup reason=$REASON"
   echo "    Data dir:   $PANACHAT_DATA_DIR"
   echo "    Backup dir: $PANACHAT_BACKUP_DIR"
+  echo "    PG volume:     $POSTGRES_VOLUME_NAME"
+  echo "    RustFS volume: $RUSTFS_VOLUME_NAME"
 
   if ! command -v docker >/dev/null 2>&1; then
     echo "Error: docker is required for SQL dumps" >&2
@@ -303,17 +446,50 @@ create_backup() {
       echo "Error: Postgres container '$POSTGRES_CONTAINER' is not running" >&2
       exit 1
     fi
-    echo "⚠️  Postgres not running — skipped SQL dump (start stack with: moz)"
+    fp_users="$(load_fingerprint_users || true)"
+    if [[ "$fp_users" =~ ^[0-9]+$ && "$fp_users" -gt 0 ]]; then
+      if [[ "${MOZ_ALLOW_EMPTY_BACKUP:-}" == "1" ]]; then
+        echo "==> Warning: Postgres not running but fingerprint users=$fp_users — continuing without SQL dump (MOZ_ALLOW_EMPTY_BACKUP=1)"
+      else
+        cat >&2 <<EOF
+Error: refusing backup — Postgres is not running but last healthy fingerprint had $fp_users users.
+
+  A pre-deploy dump would skip SQL and leave you without a recovery copy of the known-good DB.
+  Start the stack (moz), then retry. Override only if intentional:
+    MOZ_ALLOW_EMPTY_BACKUP=1 moz -B
+EOF
+        exit 1
+      fi
+    else
+      echo "⚠️  Postgres not running — skipped SQL dump (start stack with: moz)"
+    fi
   else
+    assert_postgres_safe_to_dump
+    live_users="$(postgres_user_count)"
+    fstype="$(postgres_pgdata_fstype)"
     echo "==> Dumping database '$LOBE_DB_NAME' from $POSTGRES_CONTAINER"
     docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres -d "$LOBE_DB_NAME" --no-owner --no-acl \
       | gzip -c >"$sql_path"
     echo "    SQL: $(basename "$sql_path") ($(du -h "$sql_path" | awk '{print $1}'))"
   fi
 
-  if [[ -d "$rustfs_src" ]] && find "$rustfs_src" -type f ! -path '*/.*' 2>/dev/null | grep -q .; then
-    echo "==> Archiving RustFS uploads"
+  if docker volume inspect "$RUSTFS_VOLUME_NAME" >/dev/null 2>&1; then
+    if docker run --rm \
+      -v "$RUSTFS_VOLUME_NAME:/rustfs:ro" \
+      -v "$PANACHAT_BACKUP_DIR:/out" \
+      alpine sh -c 'find /rustfs -type f ! -path "*/.*" | grep -q . || exit 2
+        tar -C / -czf /out/'"$(basename "$rustfs_path")"' rustfs'; then
+      rustfs_archived=1
+    fi
+  fi
+  if [[ $rustfs_archived -eq 0 ]] \
+    && [[ -d "$rustfs_src" ]] \
+    && find "$rustfs_src" -type f ! -path '*/.*' 2>/dev/null | grep -q .; then
     tar -C "$PANACHAT_DATA_DIR" -czf "$rustfs_path" rustfs
+    rustfs_archived=1
+  fi
+  if [[ $rustfs_archived -eq 1 ]]; then
+    echo "==> Archiving RustFS uploads"
     echo "    RustFS: $(basename "$rustfs_path") ($(du -h "$rustfs_path" | awk '{print $1}'))"
   else
     echo "==> RustFS empty/missing — skipped"
@@ -324,6 +500,11 @@ create_backup() {
     echo "reason=$REASON"
     echo "day=$day dow=$dow dom=$dom"
     echo "data_dir=$PANACHAT_DATA_DIR"
+    echo "postgres_volume=$POSTGRES_VOLUME_NAME"
+    echo "rustfs_volume=$RUSTFS_VOLUME_NAME"
+    echo "postgres_container=$POSTGRES_CONTAINER"
+    echo "pgdata_fstype=$fstype"
+    echo "users=$live_users"
     echo "db=$LOBE_DB_NAME"
     echo "host=$(hostname 2>/dev/null || echo unknown)"
   } >"$PANACHAT_BACKUP_DIR/${base}.meta.txt"
@@ -342,6 +523,11 @@ fi
 if [[ $DO_PRUNE_ONLY -eq 1 ]]; then
   prune_backups
   list_backups
+  exit 0
+fi
+
+if [[ -n "$RESTORE_FILE" ]]; then
+  restore_sql_dump "$RESTORE_FILE"
   exit 0
 fi
 

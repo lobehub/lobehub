@@ -4,7 +4,8 @@ description: >-
   Deploy Aico self-hosted with Docker Compose — zero to production.
   Covers setup.sh, custom domain, reverse proxy/CDN, build-from-source,
   platform admin bootstrap, production hardening, SPA chunk troubleshooting,
-  and local moz deploy data persistence (PANACHAT_DATA_DIR / tmpfs bind bugs).
+  and local moz deploy data persistence (named volumes panachat_postgres_data,
+  panachat_redis_data, panachat_rustfs_data; PANACHAT_DATA_DIR fingerprint/legacy binds).
   Use when the user asks to deploy, self-host, docker compose, production setup,
   domain config, platform admin, best practices, moz -u/-d/-i, missing users,
   empty DB after redeploy, platform admins gone, or errors like "Failed to fetch

@@ -1,15 +1,35 @@
-# Mount runtime data outside the repo (see PANACHAT_DATA_DIR in deploy/.env).
-# Used with: docker compose -f docker-compose.yml -f docker-compose.aico.override.yml -f docker-compose.aico.data.override.yml
+# Runtime data for Aico local moz deploys (see PANACHAT_DATA_DIR in deploy/.env).
+#
+# Postgres, Redis, and RustFS use Docker *named* volumes. That avoids the
+# Docker Desktop + WSL2 bug where a host bind mount appears in `docker inspect`
+# but the container actually gets empty tmpfs. For Postgres that meant initdb
+# and 0 users; for Redis/RustFS it emptied cache and uploads while the real
+# files still sat under PANACHAT_DATA_DIR.
+#
+# PANACHAT_DATA_DIR still holds the moz fingerprint, SQL-adjacent metadata, and
+# leftover bind copies after one-time migrate.
+#
+# Used with:
+#   docker compose -f docker-compose.yml -f docker-compose.aico.override.yml \
+#     -f docker-compose.aico.data.override.yml ...
 
 services:
   postgresql:
     volumes:
-      - ${PANACHAT_DATA_DIR}/postgres:/var/lib/postgresql/data
+      - panachat_postgres_data:/var/lib/postgresql/data
 
   redis:
     volumes:
-      - ${PANACHAT_DATA_DIR}/redis:/data
+      - panachat_redis_data:/data
 
   rustfs:
     volumes:
-      - ${PANACHAT_DATA_DIR}/rustfs:/data
+      - panachat_rustfs_data:/data
+
+volumes:
+  panachat_postgres_data:
+    name: panachat_postgres_data
+  panachat_redis_data:
+    name: panachat_redis_data
+  panachat_rustfs_data:
+    name: panachat_rustfs_data

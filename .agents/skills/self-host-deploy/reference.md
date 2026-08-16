@@ -119,41 +119,60 @@ JOIN users u ON u.id = pa.user_id;
 
 ## Local moz data dir (PanaChat)
 
-Local builds via `moz` / `scripts/deploy-local.sh` persist Postgres/Redis/RustFS under:
+Local builds via `moz` / `scripts/deploy-local.sh` persist data under:
 
-`PANACHAT_DATA_DIR` → default `~/.local/share/panachat-data/{postgres,redis,rustfs}`
+| Data                         | Where                                                        |
+| ---------------------------- | ------------------------------------------------------------ |
+| **Postgres**                 | Docker named volume `panachat_postgres_data`                 |
+| **Redis**                    | Docker named volume `panachat_redis_data`                    |
+| **RustFS**                   | Docker named volume `panachat_rustfs_data`                   |
+| Fingerprint / leftover binds | `PANACHAT_DATA_DIR` (default `~/.local/share/panachat-data`) |
 
-Compose binds that path via `docker-compose.aico.data.override.yml`. **`moz -u` / `moz -d` do not delete this directory** — they only recreate containers.
+Compose: `docker-compose.aico.data.override.yml`. **`moz -u` / `moz -d` do not delete** the volume or data dir — they only recreate containers.
+
+### First deploy after named-volume change
+
+```bash
+moz -i # note user count + current mounts
+moz -d # one-time migrate leftover binds / old Compose volumes → panachat_*
+moz -i # expect volume:panachat_{postgres,redis,rustfs}_data; users unchanged
+```
+
+`moz -d` copies leftover host binds under `PANACHAT_DATA_DIR/{postgres,redis,rustfs}` and older Compose volumes `redis_data` / `rustfs-data` into the new named volumes when the targets are empty.
+
+**Never** `docker volume rm panachat_postgres_data` / `panachat_redis_data` / `panachat_rustfs_data` unless you intend a wipe. Prefer SQL restore from `~/.local/share/panachat-backups/`.
+
+### Why named volumes
+
+Docker Desktop + WSL2 sometimes reports a **bind** mount in `docker inspect` while the container actually gets **tmpfs** (empty RAM). Postgres then `initdb`s → 0 users; Redis/RustFS look empty while the real files still sit on the host path. Named volumes live in Docker’s Linux VM and avoid that failure mode. `moz` also refuses to mark a deploy healthy if PGDATA is tmpfs or missing `PG_VERSION`.
 
 ### Symptom: users / platform admins “missing” after redeploy
-
-Often **not** a wipe. Docker Desktop + WSL2 sometimes reports a bind mount in `docker inspect` but the container filesystem is **tmpfs** (empty RAM disk). Postgres then initializes a fresh empty cluster while the real data remains on the host path.
 
 Diagnose:
 
 ```bash
 docker exec lobe-postgres df -T /var/lib/postgresql/data
-# Good: ext4 (or other real FS) under ~/.local/share/panachat-data/postgres
+# Good: not tmpfs (overlay/ext4/…)
 # Bad:  tmpfs / none
 
-./scripts/deploy-local.sh -i # Users / Platform admins counts
+docker inspect lobe-postgres --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Type}} {{.Name}}{{end}}{{end}}'
+# Expect: volume panachat_postgres_data
+
+./scripts/deploy-local.sh -i
 ```
 
-Recover (do **not** `rm -rf` the host postgres dir):
+Recover:
 
 ```bash
 moz -k
-# Optional: confirm host cluster still has data
-docker run --rm -v "$HOME/.local/share/panachat-data/postgres:/d:ro" alpine \
-  sh -c 'test -f /d/PG_VERSION && du -sh /d && df -T /d'
+# If volume empty but legacy bind still has data, moz -d migrates automatically:
+#   ~/.local/share/panachat-data/postgres → volume panachat_postgres_data
 moz -d
 docker exec lobe-postgres df -T /var/lib/postgresql/data # must NOT be tmpfs
 moz -i
 ```
 
-If it is **still tmpfs** after redeploy: restart Docker Desktop, then `moz -d` again.
-
-**Never** run `rm -rf ~/.local/share/panachat-data/postgres` unless the user explicitly wants a destructive reset — that is the good copy when the live container is on tmpfs.
+If still tmpfs: restart Docker Desktop, then `moz -d` again.
 
 ## Database reset (destructive)
 
@@ -161,11 +180,13 @@ Only when the user explicitly wants to wipe data:
 
 ```bash
 moz -k
-rm -rf "${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}/postgres"
-moz -d
+docker volume rm panachat_postgres_data
+# optional: also remove legacy cold copy
+# rm -rf "${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}/postgres"
+MOZ_ALLOW_EMPTY_DB=1 moz -d
 ```
 
-Upstream-style `./data` wipe is obsolete for Aico local moz deploys (data lives under `PANACHAT_DATA_DIR`, not `docker-compose/deploy/data`).
+Upstream-style `./data` wipe is obsolete for Aico local moz deploys.
 
 Migrations run automatically on container start (`docker.cjs`).
 
@@ -186,16 +207,20 @@ docker compose up -d
 | Dev / light | 2   | 4 GB  | 20 GB      |
 | Production  | 4+  | 8 GB+ | 50 GB+ SSD |
 
-## Backup
+## Backup / restore
 
 ```bash
-# DB
-docker compose exec postgresql pg_dump -U postgres lobechat > backup-$(date +%F).sql
+moz -B # dump now (refuses tmpfs / empty-vs-fingerprint)
+moz --restore ~/.local/share/panachat-backups/panachat-….sql.gz
+./scripts/panachat-backup.sh --list
+./scripts/panachat-backup.sh --install-cron # daily 03:00
 
-# S3 data
-docker compose exec rustfs tar czf /tmp/s3-backup.tar.gz /data
-docker cp lobe-rustfs:/tmp/s3-backup.tar.gz ./s3-backup.tar.gz
+# Or raw:
+docker exec lobe-postgres pg_dump -U postgres lobechat | gzip > backup.sql.gz
 ```
+
+Dumps use `pg_dump` against the running container (named volume `panachat_postgres_data`).
+Meta files record `postgres_volume`, `pgdata_fstype`, and `users`.
 
 ## Production best practices
 
