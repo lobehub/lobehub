@@ -81,7 +81,7 @@ describe('DshAdapter', () => {
           apiName: 'read_file',
           arguments: '{"path":"README.md"}',
           id: 'call_a1',
-          identifier: 'read_file',
+          identifier: 'deepseek-harness',
           type: 'default',
         },
       ],
@@ -121,7 +121,7 @@ describe('DshAdapter', () => {
     const end = events.find(({ type }) => type === 'tool_end');
     expect(end?.data).toMatchObject({
       isSuccess: true,
-      payload: { toolCalling: { identifier: 'read_file' } },
+      payload: { toolCalling: { identifier: 'deepseek-harness' } },
       result: { content: '# DeepSeek Harness', success: true },
       toolCallId: 'call_a1',
     });

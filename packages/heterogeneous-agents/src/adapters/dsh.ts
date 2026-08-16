@@ -518,7 +518,7 @@ export class DshAdapter implements AgentEventAdapter {
       apiName: name,
       arguments: typeof args === 'string' ? args : JSON.stringify(args ?? {}),
       id,
-      identifier: name,
+      identifier: DSH_IDENTIFIER,
       type: 'default',
     };
     this.toolPayloadById.set(id, payload);

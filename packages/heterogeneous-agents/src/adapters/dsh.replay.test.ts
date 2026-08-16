@@ -113,10 +113,15 @@ describe('DshAdapter — recorded harness streams', () => {
     expect(countOf(events, 'tool_end')).toBe(6);
     expect(Math.max(...events.map((e) => e.stepIndex))).toBe(6);
 
-    const identifiers = events
+    const toolCalls = events
       .filter((e) => e.type === 'tool_start')
-      .map((e) => (e.data as any).toolCalling.identifier);
-    expect(new Set(identifiers)).toEqual(new Set(['bash', 'str_replace_editor']));
+      .map((e) => (e.data as any).toolCalling);
+    expect(new Set(toolCalls.map(({ identifier }) => identifier))).toEqual(
+      new Set(['deepseek-harness']),
+    );
+    expect(new Set(toolCalls.map(({ apiName }) => apiName))).toEqual(
+      new Set(['bash', 'str_replace_editor']),
+    );
 
     // A non-zero shell exit is a completed tool call, not a failed one: the
     // harness reports a tool error separately from the command's exit code.

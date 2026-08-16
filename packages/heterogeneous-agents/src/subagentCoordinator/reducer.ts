@@ -225,6 +225,7 @@ const finalizeRun = (
 
   const intents: SubagentIntent[] = [];
   const run = copyRun(existing);
+  const streamedContent = run.accContent;
 
   if (run.accContent || run.accReasoning) {
     intents.push({
@@ -238,7 +239,12 @@ const finalizeRun = (
     run.accReasoning = '';
   }
 
-  if (resultContent) {
+  // Some runtimes return the child's last streamed answer verbatim as the
+  // parent spawn tool result. Re-adding that payload as a terminal assistant
+  // duplicates the same visible message in the child Thread. Preserve a
+  // genuinely distinct terminal result, but reuse the streamed turn when the
+  // two payloads are identical.
+  if (resultContent && resultContent !== streamedContent) {
     const terminalId = ctx.newId('message');
     intents.push({
       agentId: ctx.agentId,
