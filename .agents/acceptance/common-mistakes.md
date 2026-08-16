@@ -590,6 +590,30 @@ directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_
 — and treat the collision as a local multi-worktree artifact, never as a defect of
 the branch or of canary (the numbers get rebased on merge).
 
+### L-S10 — Judging popover/menu behaviour from a Chrome MCP tab (it is hidden)
+
+**Wrong approach:** drive the debug-proxy page through the Chrome MCP tools, click a
+popover trigger, read the DOM \~500ms later, see no popup, and conclude the trigger is
+broken — then bisect, revert a refactor, and write up a root cause from those readings.
+
+**Why it fails:** the MCP tab is not the foreground tab. Measured inside it:
+`document.visibilityState === 'hidden'`, `requestAnimationFrame` delivers **0 frames**,
+and `setInterval(16ms)` fires **once per second** (Chrome's background throttling). A
+base-ui popup still opens in its store and mounts in the DOM, but its entry transition
+never advances, so it sits at `data-starting-style` with `visibility: hidden` and zero
+size — indistinguishable from "the click did nothing". Anything else timed from that
+tab (perceived latency, "it landed 7 seconds later") is an artifact of the same
+throttling, not of the code under test.
+
+**Correct approach:** in an MCP tab, assert on **state**, not on visibility — the
+component's own store/props (`handle.store.state.open`, a probed React state), or DOM
+presence with `data-open`, never `visibility`/painted pixels or a rAF-timed measurement.
+Confirm the tab's own health first (`visibilityState`, a rAF frame count) before
+trusting any negative UI observation, and get behaviour that depends on animation or
+input timing confirmed in a foreground tab — the user's window, or a screenshot-based
+check that tolerates a frozen transition. A negative result from a hidden tab is not
+evidence of a defect.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions
