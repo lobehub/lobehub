@@ -41,6 +41,7 @@ import {
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
+  agentSelfLearningRouteMeta,
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
@@ -215,6 +216,39 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: redirectElement('../statistics'),
             path: 'stats',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning'),
+              'Desktop > Chat > Self Learning',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning',
+          },
+          // 单个专长的完整拟合面板。做成路由而不是页内状态，深链才打得开。
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+              'Desktop > Chat > Self Learning > Domain',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/:domainId',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules'),
+              'Desktop > Chat > Self Learning > Domain > Rules',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/:domainId/rules',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
+              'Desktop > Chat > Self Learning > Domain > Rule',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/:domainId/rules/:lessonId',
           },
           {
             element: dynamicElement(

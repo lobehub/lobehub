@@ -630,8 +630,8 @@ describe('UnderstandingService', () => {
     expect(harness.repository.completeProvider).toHaveBeenCalledOnce();
   });
 
-  /** @example A missing Gmail scope remains an actionable failed-provider diagnostic. */
-  it('persists a provider-owned failure code without its free-form message', async () => {
+  /** @example A provider rejection remains actionable in persisted diagnostics. */
+  it('persists the original provider failure message', async () => {
     const harness = createHarness(createSession({ gmail: providerState('running', 1) }));
     harness.setProvider('gmail', {
       collect: vi.fn(async () => ({
@@ -640,7 +640,7 @@ describe('UnderstandingService', () => {
           errors: [
             {
               code: 'GMAIL_READ_PERMISSION_REQUIRED',
-              message: 'raw account-specific details must not be persisted',
+              message: 'Gmail rejected the search because scope gmail.readonly is missing',
               operation: 'permission',
               provider: 'gmail',
               retryable: false,
@@ -670,7 +670,7 @@ describe('UnderstandingService', () => {
       errors: [
         {
           code: 'GMAIL_READ_PERMISSION_REQUIRED',
-          message: 'gmail permission failed',
+          message: 'Gmail rejected the search because scope gmail.readonly is missing',
           operation: 'permission',
           provider: 'gmail',
           retryable: false,
@@ -678,6 +678,60 @@ describe('UnderstandingService', () => {
       ],
       failedCount: 1,
       providerId: 'gmail',
+      revision: 1,
+      sessionId: 'session-1',
+      succeededCount: 0,
+      topicId: 'topic-1',
+    });
+  });
+
+  /** @example expect(failProvider).toContain('GraphQL FORBIDDEN'); */
+  it('persists a raw non-retryable provider exception without wrapping it', async () => {
+    // ROOT CAUSE:
+    //
+    // Connector retry wrapped terminal upstream exceptions in ConnectorDataError before the
+    // Understanding service observed them. That discarded the original error identity and stack.
+    //
+    // Before: Error("GraphQL FORBIDDEN at viewer.repository") became
+    // ConnectorDataError("github collection failed").
+    //
+    // We fixed this by rethrowing the original exception and converting it only at the DB
+    // diagnostic boundary, where its original message is retained.
+    const harness = createHarness(createSession({ github: providerState('running', 1) }));
+    const upstreamError = Object.assign(
+      new Error('GraphQL FORBIDDEN at viewer.repository(name: profile)'),
+      { status: 403 },
+    );
+    harness.setProvider('github', {
+      collect: vi.fn(async () => {
+        throw upstreamError;
+      }),
+      connectionSource: 'composio',
+      id: 'github',
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        revision: 1,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ providerId: 'github', status: 'failed' });
+
+    /** @example expect(failProvider).toHaveBeenCalledWith({ errors: [...] }); */
+    expect(harness.repository.failProvider).toHaveBeenCalledWith({
+      errors: [
+        {
+          code: 'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
+          message: upstreamError.message,
+          operation: 'collection',
+          provider: 'github',
+          retryable: false,
+        },
+      ],
+      failedCount: 1,
+      providerId: 'github',
       revision: 1,
       sessionId: 'session-1',
       succeededCount: 0,

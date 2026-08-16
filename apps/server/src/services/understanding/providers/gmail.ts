@@ -1,4 +1,8 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import {
+  ConnectorDataError,
+  getConnectorErrorMessage,
+  isConnectorErrorRetryable,
+} from '@lobechat/connector-data';
 import type { GmailMessage } from '@lobechat/connector-data/gmail';
 import { toGmailMessagesXml } from '@lobechat/connector-data/gmail';
 
@@ -116,16 +120,18 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
     const fulfilled = settled.filter(
       (result): result is PromiseFulfilledResult<GmailMessage[]> => result.status === 'fulfilled',
     );
+    const rejectedReasons = settled.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
         ? [
             {
               code: getGmailCollectionErrorCode(result.reason),
-              message: 'Gmail search category failed',
+              message: getConnectorErrorMessage(result.reason) ?? 'Gmail search category failed',
               operation: GMAIL_PROFILE_SEARCHES[index].operation,
               provider: 'gmail',
-              retryable:
-                result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+              retryable: isConnectorErrorRetryable(result.reason),
             },
           ]
         : [],
@@ -140,6 +146,7 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
     if (selected.length === 0) {
       if (errors.some(({ retryable }) => retryable)) {
         throw new ConnectorDataError({
+          cause: rejectedReasons.length === 1 ? rejectedReasons[0] : rejectedReasons,
           code: 'gmail_evidence_unavailable',
           operation: 'collect',
           provider: 'gmail',

@@ -1072,6 +1072,48 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
       assistantMessageId: 'msg-assistant',
     });
   });
+
+  it('hydrates a persisted self-reflection marker when terminal state metadata lost it', async () => {
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+    const lifecycle = buildLifecycle();
+    (lifecycle as any).agentOperationModel = {
+      findById: vi.fn().mockResolvedValue({
+        metadata: {
+          agentSignal: {
+            agentId: 'agent-1',
+            kind: 'self-reflection',
+            sourceId: 'reflection-source-1',
+            topicId: 'tpc-1',
+          },
+        },
+      }),
+    };
+
+    await lifecycle.emitSignalEvents(
+      'op-1',
+      {
+        messages: [{ content: 'review complete', id: 'msg-assistant', role: 'assistant' }],
+        metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        stepCount: 1,
+      },
+      'done',
+    );
+
+    const [emission] = emitSpy.mock.calls[0];
+    expect(emission.payload).toMatchObject({
+      selfIteration: {
+        marker: {
+          agentId: 'agent-1',
+          kind: 'self-reflection',
+          sourceId: 'reflection-source-1',
+          topicId: 'tpc-1',
+        },
+        userId: 'user-1',
+      },
+    });
+  });
 });
 
 describe('CompletionLifecycle.registerFileWorks', () => {
