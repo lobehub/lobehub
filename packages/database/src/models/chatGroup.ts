@@ -12,15 +12,10 @@ import {
   agentBotProviders,
   agentCronJobs,
   agents,
-  briefs,
   chatGroups,
   chatGroupsAgents,
   sessionGroups,
-  taskComments,
-  taskDependencies,
-  taskDocuments,
   tasks,
-  taskTopics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeAgencyConfigsForWorkspace } from '../utils/agencyConfigDevices';
@@ -898,7 +893,7 @@ export class ChatGroupModel {
       // recipient's group runs unroutable. Same sanitation as the member
       // agent handover.
       const ownedRows = await trx
-        .select({ agencyConfig: agents.agencyConfig, id: agents.id })
+        .select({ agencyConfig: agents.agencyConfig, id: agents.id, visibility: agents.visibility })
         .from(agents)
         .where(inArray(agents.id, ownedAgentIds));
       const cleanedConfigs = await sanitizeAgencyConfigsForWorkspace(
@@ -937,39 +932,24 @@ export class ChatGroupModel {
           ),
         );
 
-      // Tasks the previous owner attributed to the owned agents re-home too —
-      // `runScheduleTick()` executes a task AS its creator, and a private
-      // owned agent under the new owner resolves to NOT_FOUND for the old one.
-      const movedTasks = await trx
-        .update(tasks)
-        .set({ createdByUserId: toUserId, updatedAt: tasks.updatedAt })
-        .where(
-          and(
-            eq(tasks.createdByUserId, fromUserId),
-            or(
-              inArray(tasks.assigneeAgentId, ownedAgentIds),
-              inArray(tasks.createdByAgentId, ownedAgentIds),
-            ),
-          ),
-        )
-        .returning({ id: tasks.id });
-      const movedTaskIds = movedTasks.map((task) => task.id);
-      if (movedTaskIds.length > 0) {
-        for (const table of [taskDependencies, taskDocuments, taskTopics, taskComments] as const) {
-          await trx
-            .update(table)
-            .set({ userId: toUserId })
-            .where(and(inArray(table.taskId, movedTaskIds), eq(table.userId, fromUserId)));
-        }
+      // Tasks stay with their creators (moving ownership breaks in-flight run
+      // identity and splits subtrees). But owned agents that are PRIVATE stop
+      // resolving for everyone but the recipient, so detach other users' task
+      // assignments to them — the schedule goes quiet rather than erroring.
+      const privateOwnedIds = ownedRows
+        .filter((row) => row.visibility === 'private')
+        .map((row) => row.id);
+      if (privateOwnedIds.length > 0) {
         await trx
-          .update(briefs)
-          .set({ userId: toUserId })
-          .where(and(inArray(briefs.taskId, movedTaskIds), eq(briefs.userId, fromUserId)));
+          .update(tasks)
+          .set({ assigneeAgentId: null, updatedAt: tasks.updatedAt })
+          .where(
+            and(
+              inArray(tasks.assigneeAgentId, privateOwnedIds),
+              ne(tasks.createdByUserId, toUserId),
+            ),
+          );
       }
-      await trx
-        .update(briefs)
-        .set({ userId: toUserId })
-        .where(and(inArray(briefs.agentId, ownedAgentIds), eq(briefs.userId, fromUserId)));
     }
   };
 

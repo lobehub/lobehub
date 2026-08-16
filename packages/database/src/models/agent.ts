@@ -2375,38 +2375,19 @@ export class AgentModel {
       .set({ updatedAt: agentBotProviders.updatedAt, userId: toUserId })
       .where(and(eq(agentBotProviders.agentId, agentId), eq(agentBotProviders.userId, fromUserId)));
 
-    // Tasks the previous owner attributed to this agent re-home too:
-    // `runScheduleTick()` executes a task AS its creator, and a private agent
-    // owned by someone else resolves to NOT_FOUND — without this flip every
-    // scheduled/manual run breaks after the handover. Owner-scoped like the
-    // rest: teammates' tasks on a shared agent stay theirs.
-    const movedTasks = await trx
-      .update(tasks)
-      .set({ createdByUserId: toUserId, updatedAt: tasks.updatedAt })
-      .where(
-        and(
-          eq(tasks.createdByUserId, fromUserId),
-          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
-        ),
-      )
-      .returning({ id: tasks.id });
-    const movedTaskIds = movedTasks.map((task) => task.id);
-    if (movedTaskIds.length > 0) {
-      for (const table of [taskDependencies, taskDocuments, taskTopics, taskComments] as const) {
-        await trx
-          .update(table)
-          .set({ userId: toUserId })
-          .where(and(inArray(table.taskId, movedTaskIds), eq(table.userId, fromUserId)));
-      }
+    // Tasks stay with their creators — moving `createdByUserId` would break
+    // in-flight run identity and split task subtrees across owners. What DOES
+    // change: a PRIVATE agent stops resolving for everyone but the recipient,
+    // so tasks other users had assigned to it would fail every scheduled run
+    // with NOT_FOUND. Detach those assignments instead — the schedule goes
+    // quiet (visible in the task list) rather than erroring; a public agent's
+    // tasks keep working and are left untouched.
+    if (agent.visibility === 'private') {
       await trx
-        .update(briefs)
-        .set({ userId: toUserId })
-        .where(and(inArray(briefs.taskId, movedTaskIds), eq(briefs.userId, fromUserId)));
+        .update(tasks)
+        .set({ assigneeAgentId: null, updatedAt: tasks.updatedAt })
+        .where(and(eq(tasks.assigneeAgentId, agentId), ne(tasks.createdByUserId, toUserId)));
     }
-    await trx
-      .update(briefs)
-      .set({ userId: toUserId })
-      .where(and(eq(briefs.agentId, agentId), eq(briefs.userId, fromUserId)));
 
     if (!migrateSessions) return { transferJobId: null };
 

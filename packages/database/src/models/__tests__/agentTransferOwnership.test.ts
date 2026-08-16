@@ -232,32 +232,45 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(updated.agencyConfig?.workingDirByDevice).toEqual({ 'public-ws-device': '/srv/shared' });
   });
 
-  it('re-homes the previous owner’s tasks on this agent, not teammates’', async () => {
-    const agent = await ownerModel.create({ title: 'Agent' });
+  it('detaches other users’ tasks from a PRIVATE agent, keeps public-agent tasks intact', async () => {
+    const privateAgent = await ownerModel.create({ title: 'Private', visibility: 'private' });
+    const publicAgent = await ownerModel.create({ title: 'Public', visibility: 'public' });
     await serverDB.insert(tasks).values([
       {
-        assigneeAgentId: agent.id,
+        assigneeAgentId: privateAgent.id,
         createdByUserId: ownerId,
         identifier: 'TASK-1',
-        instruction: 'owner task',
+        instruction: 'owner task on private agent',
         seq: 1,
         workspaceId: wsId,
       },
       {
-        assigneeAgentId: agent.id,
-        createdByUserId: teammateId,
+        assigneeAgentId: privateAgent.id,
+        createdByUserId: recipientId,
         identifier: 'TASK-2',
-        instruction: 'teammate task',
+        instruction: 'recipient task on private agent',
         seq: 2,
+        workspaceId: wsId,
+      },
+      {
+        assigneeAgentId: publicAgent.id,
+        createdByUserId: ownerId,
+        identifier: 'TASK-3',
+        instruction: 'owner task on public agent',
+        seq: 3,
         workspaceId: wsId,
       },
     ]);
 
-    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+    await handover({ agentId: privateAgent.id, fromUserId: ownerId, toUserId: recipientId });
+    await handover({ agentId: publicAgent.id, fromUserId: ownerId, toUserId: recipientId });
 
     const taskRows = await serverDB.select().from(tasks);
-    expect(taskRows.find((t) => t.identifier === 'TASK-1')?.createdByUserId).toBe(recipientId);
-    expect(taskRows.find((t) => t.identifier === 'TASK-2')?.createdByUserId).toBe(teammateId);
+    // Ownership never changes; only unusable private-agent assignments detach.
+    expect(taskRows.find((t) => t.identifier === 'TASK-1')?.createdByUserId).toBe(ownerId);
+    expect(taskRows.find((t) => t.identifier === 'TASK-1')?.assigneeAgentId).toBeNull();
+    expect(taskRows.find((t) => t.identifier === 'TASK-2')?.assigneeAgentId).toBe(privateAgent.id);
+    expect(taskRows.find((t) => t.identifier === 'TASK-3')?.assigneeAgentId).toBe(publicAgent.id);
   });
 
   it('re-homes the previous owner’s cron jobs and bot providers, not teammates’', async () => {
