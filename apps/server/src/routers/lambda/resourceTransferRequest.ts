@@ -3,7 +3,6 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AGENT_OWNERSHIP_STALE } from '@/database/models/agent';
@@ -161,8 +160,7 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
 export const resourceTransferRequestRouter = router({
   /**
    * Recipient accepts: the request flips and ownership is handed over in one
-   * transaction. Large migrated histories continue through the standard
-   * transfer backfill job after commit.
+   * transaction.
    */
   accept: transferRequestProcedure.input(requestIdInput).mutation(async ({ ctx, input }) => {
     const request = await ctx.transferRequestModel.findById(input.requestId);
@@ -172,13 +170,12 @@ export const resourceTransferRequestRouter = router({
     }
 
     try {
-      const { transferJobId } = await executeAcceptedTransfer({
+      await executeAcceptedTransfer({
         db: ctx.serverDB,
         recipientId: ctx.userId,
         request,
         workspaceId: ctx.workspaceId,
       });
-      if (transferJobId) startAgentTransferJob(ctx.serverDB, transferJobId);
       // Best-effort: outcome + courtesy notices must not fail the accept.
       // Scheduled with after() so serverless runtimes keep it alive past the
       // response.
@@ -197,7 +194,7 @@ export const resourceTransferRequestRouter = router({
           console.error('[resourceTransferRequest:accept] notify failed', error),
         ),
       );
-      return { data: { transferJobId }, success: true };
+      return { data: null, success: true };
     } catch (error) {
       if (error instanceof TRPCError) {
         // The authority-stale refusal aborts the accept transaction, so the

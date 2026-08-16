@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "Agenten konnten nicht geladen werden",
   "workspace.general.transferAgents.modal.memberDesc": "Überträgt die Inhaberschaft an dieses Mitglied. Es muss die Übertragung akzeptieren, bevor sich etwas ändert; Einstellungen und alle Gespräche bleiben unberührt.",
   "workspace.general.transferAgents.modal.memberGroup": "Mitglieder des Arbeitsbereichs",
-  "workspace.general.transferAgents.modal.migrateSessions": "Übertrage auch meinen Gesprächsverlauf mit diesem Agenten",
   "workspace.general.transferAgents.modal.moveAgent": "Agent verschieben",
   "workspace.general.transferAgents.modal.moveAgentDesc": "Sie können in Ihr persönliches Konto oder in Arbeitsbereiche verschieben, in denen Sie die Berechtigung zum Erstellen eines Agenten haben. Alle zugehörigen Daten werden mit dem Agenten verschoben: Themen, Datei- und Wissensdatenbank-Links, geplante Aufgaben und verwandte Tätigkeiten. Benutzerdefinierte Plugins sind möglicherweise nicht verfügbar, und Verknüpfungen mit Multi-Agenten-Gruppen werden entfernt.",
   "workspace.general.transferAgents.modal.moveTitle": "Verschieben",

@@ -108,23 +108,7 @@ export const rewriteMessageScopeForTopics = async (
  */
 export const rewriteResidualMessageScope = async (
   executor: Executor,
-  linkage: {
-    agentIds: string[];
-    groupIds?: string[];
-    /**
-     * When set, only this user's residual rows move. A member-to-member
-     * handover moves one owner's history, so an unscoped agent arm would grab
-     * teammates' topicless rows too.
-     */
-    ownerUserId?: string;
-    /**
-     * When set, a row carrying a non-null `session_id` only moves if that
-     * session is in this list. Member handovers pass the moved (exclusive)
-     * sessions so rows sitting in a shared session the owner keeps stay put.
-     */
-    restrictSessionIds?: string[];
-    sessionIds: string[];
-  },
+  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
   target: AgentTransferTargetScope,
 ): Promise<void> => {
   const arms: SQL[] = [];
@@ -134,26 +118,14 @@ export const rewriteResidualMessageScope = async (
     arms.push(inArray(messages.groupId, linkage.groupIds));
   if (arms.length === 0) return;
 
-  const residual = and(
-    isNull(messages.topicId),
-    ...(linkage.ownerUserId ? [eq(messages.userId, linkage.ownerUserId)] : []),
-    ...(linkage.restrictSessionIds
-      ? [
-          linkage.restrictSessionIds.length > 0
-            ? or(
-                isNull(messages.sessionId),
-                inArray(messages.sessionId, linkage.restrictSessionIds),
-              )!
-            : isNull(messages.sessionId),
-        ]
-      : []),
-    arms.length === 1 ? arms[0] : or(...arms),
-  );
+  const residual = and(isNull(messages.topicId), arms.length === 1 ? arms[0] : or(...arms));
 
-  // Children BEFORE the parent: the owner-scoped predicate reads
-  // `messages.user_id`, so rewriting the parent first would unmatch every
-  // child join. Child-first is idempotent under crash-rerun — the parent
-  // predicate still matches, and re-updating children is a no-op.
+  await executor.execute(sql`
+    UPDATE ${messages}
+    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}
+    WHERE ${residual}
+  `);
+
   for (const { anchor, table } of MESSAGE_CHILD_ANCHORS) {
     await executor.execute(sql`
       UPDATE ${table}
@@ -162,12 +134,6 @@ export const rewriteResidualMessageScope = async (
       WHERE ${anchor} = ${messages.id} AND ${residual}
     `);
   }
-
-  await executor.execute(sql`
-    UPDATE ${messages}
-    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}
-    WHERE ${residual}
-  `);
 };
 
 /**
@@ -301,18 +267,6 @@ export interface CreateAgentTransferJobParams {
    * drift this framework exists to avoid.
    */
   residualAgentIds?: string[];
-  /**
-   * Owner-scoped residual linkage for a member handover whose residual set was
-   * too large to rewrite synchronously. Persisted in the PAYLOAD (with the
-   * residual columns blank) so a finalizer predating owner scoping no-ops
-   * instead of running an unscoped sweep of teammates' rows.
-   */
-  residualOwnerScope?: {
-    agentIds: string[];
-    ownerUserId: string;
-    restrictSessionIds: string[];
-    sessionIds: string[];
-  };
   sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
@@ -350,18 +304,10 @@ export class AgentTransferJobModel {
         agentIds: params.residualAgentIds ?? params.agentIds,
         groupIds: params.groupIds ?? [],
         // `payload` is the generic per-job slot; the remap only exists for
-        // group transfers and the owner-scoped residual only for member
-        // handovers, so both stay out of the columns.
+        // group transfers, so it stays out of the columns.
         payload:
-          (params.agentIdRemap && params.agentIdRemap.length > 0) || params.residualOwnerScope
-            ? {
-                ...(params.agentIdRemap && params.agentIdRemap.length > 0
-                  ? { agentIdRemap: params.agentIdRemap }
-                  : {}),
-                ...(params.residualOwnerScope
-                  ? { residualOwnerScope: params.residualOwnerScope }
-                  : {}),
-              }
+          params.agentIdRemap && params.agentIdRemap.length > 0
+            ? { agentIdRemap: params.agentIdRemap }
             : undefined,
         sessionIds: params.sessionIds,
         sourceUserId: params.source.userId,
@@ -725,16 +671,9 @@ export class AgentTransferJobModel {
         .limit(1);
 
       if (!next) {
-        // A member handover's owner-scoped residual rides in the payload; its
-        // columns are intentionally blank (see createJob).
-        const ownerScope = job.payload?.residualOwnerScope;
         await rewriteResidualMessageScope(
           trx,
-          ownerScope ?? {
-            agentIds: job.agentIds,
-            groupIds: job.groupIds,
-            sessionIds: job.sessionIds,
-          },
+          { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
           target,
         );
         if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);

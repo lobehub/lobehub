@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "Не удалось загрузить агентов",
   "workspace.general.transferAgents.modal.memberDesc": "Передает право собственности этому участнику. Он должен принять перед тем, как что-либо изменится; настройки и разговоры всех участников остаются неизменными.",
   "workspace.general.transferAgents.modal.memberGroup": "Участники рабочего пространства",
-  "workspace.general.transferAgents.modal.migrateSessions": "Также передать мою историю разговоров с этим агентом",
   "workspace.general.transferAgents.modal.moveAgent": "Перенести агента",
   "workspace.general.transferAgents.modal.moveAgentDesc": "Вы можете перенести в личный аккаунт или в рабочие пространства, где у вас есть право создавать агента. Все связанные данные переносятся вместе с агентом: темы, ссылки на файлы и базу знаний, запланированные задания и связанные задачи. Пользовательские плагины могут быть недоступны, а ассоциации с несколькими группами агентов будут удалены.",
   "workspace.general.transferAgents.modal.moveTitle": "Перенести",

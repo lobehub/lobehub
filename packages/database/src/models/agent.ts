@@ -2301,9 +2301,9 @@ export class AgentModel {
    * Same-workspace ownership handover: the recipient of an accepted transfer
    * request becomes the agent's owner. Deliberately NOT {@link transferAgents}:
    * the agent stays in its workspace, so nothing about scope changes — slug,
-   * visibility, permission rows, group links, labels and every other member's
-   * conversations all stay put. Only `agents.userId` flips, plus (opt-in) the
-   * previous owner's OWN conversation history.
+   * visibility, permission rows, group links, labels and every member's
+   * conversations all stay put — conversation history never changes author on
+   * a member handover.
    *
    * Runs inside the caller's transaction: the caller flips the transfer
    * request's status in the same `trx`, so a stale/raced accept rolls both
@@ -2315,12 +2315,10 @@ export class AgentModel {
       agentId: string;
       /** The owner recorded on the transfer request; a mismatch means the request is stale. */
       fromUserId: string;
-      /** Also hand over `fromUserId`'s own topics/messages/threads for this agent. */
-      migrateSessions?: boolean;
       toUserId: string;
     },
-  ): Promise<{ transferJobId: string | null }> => {
-    const { agentId, fromUserId, migrateSessions, toUserId } = params;
+  ): Promise<void> => {
+    const { agentId, fromUserId, toUserId } = params;
     if (!this.workspaceId) throw new Error(AGENT_OWNERSHIP_STALE);
 
     // FOR UPDATE: serialize against a concurrent cross-scope transfer or a
@@ -2388,150 +2386,5 @@ export class AgentModel {
         .set({ assigneeAgentId: null, updatedAt: tasks.updatedAt })
         .where(and(eq(tasks.assigneeAgentId, agentId), ne(tasks.createdByUserId, toUserId)));
     }
-
-    if (!migrateSessions) return { transferJobId: null };
-
-    const target = { userId: toUserId, workspaceId: this.workspaceId };
-
-    // The previous owner's sessions for this agent travel with the history:
-    // a moved topic pointing at a session the recipient cannot see would
-    // strand it in legacy session-based surfaces.
-    const links = await trx
-      .select({ sessionId: agentsToSessions.sessionId })
-      .from(agentsToSessions)
-      .innerJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(sessions.userId, fromUserId)));
-    const linkedSessionIds = [...new Set(links.map((link) => link.sessionId))];
-
-    // Only sessions EXCLUSIVE to this agent move. A legacy group session links
-    // several agents; handing it over with one of them would expose the other
-    // agents' conversations and leave the junction rows split across owners.
-    // Shared-session content simply stays with the previous owner, who keeps
-    // the session.
-    const sharedLinks =
-      linkedSessionIds.length > 0
-        ? await trx
-            .select({ sessionId: agentsToSessions.sessionId })
-            .from(agentsToSessions)
-            .where(
-              and(
-                inArray(agentsToSessions.sessionId, linkedSessionIds),
-                ne(agentsToSessions.agentId, agentId),
-              ),
-            )
-        : [];
-    const sharedSessionIds = new Set(sharedLinks.map((link) => link.sessionId));
-    const sessionIds = linkedSessionIds.filter((id) => !sharedSessionIds.has(id));
-
-    if (sessionIds.length > 0) {
-      await trx
-        .update(sessions)
-        .set({ groupId: null, updatedAt: sessions.updatedAt, userId: toUserId })
-        .where(inArray(sessions.id, sessionIds));
-      await trx
-        .update(agentsToSessions)
-        .set({ userId: toUserId })
-        .where(
-          and(
-            eq(agentsToSessions.agentId, agentId),
-            inArray(agentsToSessions.sessionId, sessionIds),
-          ),
-        );
-    }
-
-    // Only the previous owner's own topics move; teammates keep theirs. A
-    // topic inside a shared (unmoved) session stays too — moving it would
-    // strand it on a session the recipient cannot see.
-    const topicCondition = and(
-      eq(topics.userId, fromUserId),
-      sessionIds.length > 0
-        ? or(eq(topics.agentId, agentId), inArray(topics.sessionId, sessionIds))
-        : eq(topics.agentId, agentId),
-      sessionIds.length > 0
-        ? or(isNull(topics.sessionId), inArray(topics.sessionId, sessionIds))
-        : isNull(topics.sessionId),
-    );
-    await trx
-      .select({ id: topics.id })
-      .from(topics)
-      .where(topicCondition)
-      .orderBy(asc(topics.id))
-      .for('update');
-    const movedTopics = await trx
-      .update(topics)
-      .set({ updatedAt: topics.updatedAt, userId: toUserId })
-      .where(topicCondition)
-      .returning({ id: topics.id, updatedAt: topics.updatedAt });
-    const movedTopicIds = movedTopics.map((topic) => topic.id);
-
-    // Threads follow their topics, not the agent: a thread on a topic that
-    // stayed behind (shared legacy session) must keep its owner too.
-    if (movedTopicIds.length > 0) {
-      await trx
-        .update(threads)
-        .set({ updatedAt: threads.updatedAt, userId: toUserId })
-        .where(and(inArray(threads.topicId, movedTopicIds), eq(threads.userId, fromUserId)));
-    }
-
-    // Topicless (residual) rows travel with the handover, but only the
-    // previous owner's (`ownerUserId` — an unscoped whole-agent sweep would
-    // grab teammates' rows) and never out of a shared session the owner keeps
-    // (`restrictSessionIds`).
-    const residualScope = {
-      agentIds: [agentId],
-      ownerUserId: fromUserId,
-      restrictSessionIds: sessionIds,
-      sessionIds,
-    };
-    const residualCondition = and(
-      isNull(messages.topicId),
-      eq(messages.userId, fromUserId),
-      sessionIds.length > 0
-        ? or(isNull(messages.sessionId), inArray(messages.sessionId, sessionIds))
-        : isNull(messages.sessionId),
-      sessionIds.length > 0
-        ? or(eq(messages.agentId, agentId), inArray(messages.sessionId, sessionIds))
-        : eq(messages.agentId, agentId),
-    )!;
-
-    // Both the residual and the topic history reuse the transfer fast/slow
-    // split: small sets move inside this transaction, large ones defer to the
-    // backfill job. The job's residual COLUMNS stay blank either way — a
-    // finalizer that predates owner scoping reads only the columns and so
-    // no-ops instead of sweeping teammates' rows; the owner-scoped linkage
-    // rides in the payload for current finalizers. (Worst case during the
-    // first rolling deployment: a huge-residual handover's residual waits for
-    // a manual sweep — bounded, and never corruption.)
-    const threshold = getAgentTransferSyncMessageThreshold();
-    const [{ residualMessages }] = await trx
-      .select({ residualMessages: count() })
-      .from(messages)
-      .where(residualCondition);
-    const syncResidual = residualMessages <= threshold;
-    if (syncResidual) await rewriteResidualMessageScope(trx, residualScope, target);
-
-    const [{ affectedMessages }] = await trx
-      .select({ affectedMessages: count() })
-      .from(messages)
-      .where(movedTopicIds.length > 0 ? inArray(messages.topicId, movedTopicIds) : sql`false`);
-    const syncTopics = affectedMessages <= threshold;
-    if (syncTopics) await rewriteMessageScopeForTopics(trx, movedTopicIds, target);
-
-    let transferJobId: string | null = null;
-    if (!syncTopics || !syncResidual) {
-      transferJobId = await AgentTransferJobModel.createJob(trx, {
-        agentIds: [agentId],
-        residualAgentIds: [],
-        residualOwnerScope: syncResidual ? undefined : residualScope,
-        sessionIds: [],
-        source: { userId: fromUserId, workspaceId: this.workspaceId },
-        target,
-        topics: syncTopics
-          ? []
-          : movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
-      });
-    }
-
-    return { transferJobId };
   };
 }

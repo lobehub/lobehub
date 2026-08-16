@@ -937,7 +937,6 @@ export const agentRouter = router({
          * Member transfer: hand the initiator's own conversation history to the
          * recipient on accept. Creator path only; ignored without `targetMemberId`.
          */
-        migrateSessions: z.boolean().optional(),
         targetAccessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
         /** @deprecated Compatibility for released clients. */
         targetGeneralAccess: z.enum(['editor', 'viewer']).optional(),
@@ -993,16 +992,6 @@ export const agentRouter = router({
             message: 'This agent cannot be transferred',
           });
         }
-        // Handing over conversations is a personal decision: only the creator
-        // moving their OWN agent may include their history. A primary owner
-        // reassigning someone else's agent transfers the bare resource.
-        if (input.migrateSessions && agent.userId !== ctx.userId) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: "Only the agent's owner can migrate their conversation history",
-          });
-        }
         await assertTransferRecipientValid({
           currentOwnerId: agent.userId,
           db: ctx.serverDB,
@@ -1017,7 +1006,6 @@ export const agentRouter = router({
             ctx.workspaceId,
           ).create({
             initiatorId: ctx.userId,
-            options: input.migrateSessions ? { migrateSessions: true } : undefined,
             previousOwnerId: agent.userId,
             recipientId: input.targetMemberId,
             resourceId: input.agentId,

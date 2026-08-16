@@ -32,12 +32,10 @@ export const RESOURCE_TRANSFER_REQUEST_STATUSES = [
 ] as const;
 export type ResourceTransferRequestStatus = (typeof RESOURCE_TRANSFER_REQUEST_STATUSES)[number];
 
-export interface ResourceTransferRequestOptions {
-  /**
-   * Hand the initiator's own topics/messages of this resource to the recipient
-   * on accept. Only the resource creator may set it (a primary owner
-   * reassigning someone else's resource cannot give away conversations that
-   * are not theirs).
-   */
-  migrateSessions?: boolean;
-}
+/**
+ * Reserved per-request options. The `options` jsonb column exists on the
+ * request row, but nothing is currently stored in it — conversation-history
+ * migration was deliberately dropped from member handover (a member's own
+ * messages should not change author).
+ */
+export type ResourceTransferRequestOptions = Record<string, never>;

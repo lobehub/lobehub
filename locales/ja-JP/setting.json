@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "エージェントの読み込みに失敗しました",
   "workspace.general.transferAgents.modal.memberDesc": "このメンバーに所有権を譲渡します。変更が行われる前に、相手が承諾する必要があります。設定やすべての会話はそのまま維持されます。",
   "workspace.general.transferAgents.modal.memberGroup": "ワークスペースメンバー",
-  "workspace.general.transferAgents.modal.migrateSessions": "このエージェントとの会話履歴も引き継ぐ",
   "workspace.general.transferAgents.modal.moveAgent": "エージェントを移動",
   "workspace.general.transferAgents.modal.moveAgentDesc": "個人アカウント、またはエージェントの作成権限があるワークスペースに移動できます。関連するすべてのデータがエージェントと一緒に移動します：トピック、ファイルとナレッジベースのリンク、スケジュールされたジョブ、および関連するタスク。カスタムプラグインは利用できない可能性があり、マルチエージェントグループの関連付けは削除されます。",
   "workspace.general.transferAgents.modal.moveTitle": "移動",

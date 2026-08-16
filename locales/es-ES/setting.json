@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "Error al cargar agentes",
   "workspace.general.transferAgents.modal.memberDesc": "Transfiere la propiedad a este miembro. Deben aceptar antes de que ocurra cualquier cambio; la configuración y las conversaciones de todos permanecen intactas.",
   "workspace.general.transferAgents.modal.memberGroup": "Miembros del espacio de trabajo",
-  "workspace.general.transferAgents.modal.migrateSessions": "También transferir mi historial de conversaciones con este agente",
   "workspace.general.transferAgents.modal.moveAgent": "Mover agente",
   "workspace.general.transferAgents.modal.moveAgentDesc": "Puedes mover a tu cuenta personal o a espacios de trabajo en los que tengas permiso para crear un agente. Todos los datos asociados se mueven con el agente: temas, enlaces de archivos y bases de conocimiento, trabajos programados y tareas relacionadas. Los complementos personalizados pueden no estar disponibles y las asociaciones de grupos multi-agente serán eliminadas.",
   "workspace.general.transferAgents.modal.moveTitle": "Mover",

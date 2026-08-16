@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "Nie udało się załadować agentów",
   "workspace.general.transferAgents.modal.memberDesc": "Przekazuje własność temu członkowi. Musi on zaakceptować, zanim cokolwiek się zmieni; ustawienia i rozmowy wszystkich pozostają nienaruszone.",
   "workspace.general.transferAgents.modal.memberGroup": "Członkowie przestrzeni roboczej",
-  "workspace.general.transferAgents.modal.migrateSessions": "Przekaż również moją historię rozmów z tym agentem",
   "workspace.general.transferAgents.modal.moveAgent": "Przenieś agenta",
   "workspace.general.transferAgents.modal.moveAgentDesc": "Możesz przenieść na konto osobiste lub do przestrzeni roboczych, w których masz uprawnienia do tworzenia agenta. Wszystkie powiązane dane zostaną przeniesione wraz z agentem: tematy, linki do plików i bazy wiedzy, zaplanowane zadania oraz powiązane obowiązki. Niestandardowe wtyczki mogą być niedostępne, a powiązania grup wieloagentowych zostaną usunięte.",
   "workspace.general.transferAgents.modal.moveTitle": "Przenieś",

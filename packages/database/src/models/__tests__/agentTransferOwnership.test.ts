@@ -6,15 +6,9 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentBotProviders,
   agentCronJobs,
-  agentHistoryJobs,
   agents,
-  agentsToSessions,
   devices,
-  messages,
-  messageTranslates,
-  sessions,
   tasks,
-  threads,
   topics,
   users,
   workspaces,
@@ -58,12 +52,11 @@ describe('AgentModel.transferAgentOwnership', () => {
       visibility: 'public',
     });
 
-    const result = await handover({
+    await handover({
       agentId: agent.id,
       fromUserId: ownerId,
       toUserId: recipientId,
     });
-    expect(result.transferJobId).toBeNull();
 
     const [updated] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
     expect(updated.userId).toBe(recipientId);
@@ -72,7 +65,7 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(updated.visibility).toBe('public');
   });
 
-  it('keeps everyone’s conversations without migrateSessions', async () => {
+  it('keeps everyone’s conversations untouched', async () => {
     const agent = await ownerModel.create({ title: 'Agent' });
     await serverDB.insert(topics).values([
       { agentId: agent.id, id: 'owner-topic', userId: ownerId, workspaceId: wsId },
@@ -84,112 +77,6 @@ describe('AgentModel.transferAgentOwnership', () => {
     const rows = await serverDB.select().from(topics);
     expect(rows.find((t) => t.id === 'owner-topic')?.userId).toBe(ownerId);
     expect(rows.find((t) => t.id === 'teammate-topic')?.userId).toBe(teammateId);
-  });
-
-  it('migrates only the previous owner’s topics/messages/threads with migrateSessions', async () => {
-    const agent = await ownerModel.create({ title: 'Agent' });
-    await serverDB.insert(topics).values([
-      { agentId: agent.id, id: 'owner-topic', userId: ownerId, workspaceId: wsId },
-      { agentId: agent.id, id: 'teammate-topic', userId: teammateId, workspaceId: wsId },
-    ]);
-    await serverDB.insert(messages).values([
-      {
-        agentId: agent.id,
-        id: 'owner-msg',
-        role: 'assistant',
-        topicId: 'owner-topic',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: agent.id,
-        id: 'teammate-msg',
-        role: 'assistant',
-        topicId: 'teammate-topic',
-        userId: teammateId,
-        workspaceId: wsId,
-      },
-    ]);
-    await serverDB.insert(threads).values([
-      {
-        agentId: agent.id,
-        id: 'owner-thread',
-        topicId: 'owner-topic',
-        type: 'continuation',
-        userId: ownerId,
-      },
-      {
-        agentId: agent.id,
-        id: 'teammate-thread',
-        topicId: 'teammate-topic',
-        type: 'continuation',
-        userId: teammateId,
-      },
-    ]);
-
-    const result = await handover({
-      agentId: agent.id,
-      fromUserId: ownerId,
-      migrateSessions: true,
-      toUserId: recipientId,
-    });
-    expect(result.transferJobId).toBeNull();
-
-    const topicRows = await serverDB.select().from(topics);
-    expect(topicRows.find((t) => t.id === 'owner-topic')?.userId).toBe(recipientId);
-    expect(topicRows.find((t) => t.id === 'owner-topic')?.workspaceId).toBe(wsId);
-    expect(topicRows.find((t) => t.id === 'teammate-topic')?.userId).toBe(teammateId);
-
-    const messageRows = await serverDB.select().from(messages);
-    expect(messageRows.find((m) => m.id === 'owner-msg')?.userId).toBe(recipientId);
-    expect(messageRows.find((m) => m.id === 'teammate-msg')?.userId).toBe(teammateId);
-
-    const threadRows = await serverDB.select().from(threads);
-    expect(threadRows.find((t) => t.id === 'owner-thread')?.userId).toBe(recipientId);
-    expect(threadRows.find((t) => t.id === 'teammate-thread')?.userId).toBe(teammateId);
-  });
-
-  it('moves the previous owner’s topicless messages, leaving teammates’ residual rows', async () => {
-    const agent = await ownerModel.create({ title: 'Agent' });
-    await serverDB.insert(messages).values([
-      {
-        agentId: agent.id,
-        id: 'owner-residual',
-        role: 'assistant',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: agent.id,
-        id: 'teammate-residual',
-        role: 'assistant',
-        userId: teammateId,
-        workspaceId: wsId,
-      },
-    ]);
-
-    // Child rows must travel with their residual parent (regression: the
-    // owner predicate reads messages.user_id, so parent-first rewriting
-    // stranded children with the previous owner).
-    await serverDB.insert(messageTranslates).values([
-      { content: 'hi', id: 'owner-residual', userId: ownerId, workspaceId: wsId },
-      { content: 'yo', id: 'teammate-residual', userId: teammateId, workspaceId: wsId },
-    ]);
-
-    await handover({
-      agentId: agent.id,
-      fromUserId: ownerId,
-      migrateSessions: true,
-      toUserId: recipientId,
-    });
-
-    const rows = await serverDB.select().from(messages);
-    expect(rows.find((m) => m.id === 'owner-residual')?.userId).toBe(recipientId);
-    expect(rows.find((m) => m.id === 'teammate-residual')?.userId).toBe(teammateId);
-
-    const childRows = await serverDB.select().from(messageTranslates);
-    expect(childRows.find((c) => c.id === 'owner-residual')?.userId).toBe(recipientId);
-    expect(childRows.find((c) => c.id === 'teammate-residual')?.userId).toBe(teammateId);
   });
 
   it('drops a binding to another member’s PRIVATE workspace device, keeps public ones', async () => {
@@ -346,196 +233,20 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(updated.agencyConfig?.executionTargetSelectionPolicy).toBe('member');
   });
 
-  it('moves exclusive sessions but leaves shared legacy group sessions untouched', async () => {
+  it('refuses while a cross-scope backfill job still covers the agent', async () => {
     const agent = await ownerModel.create({ title: 'Agent' });
-    const otherAgent = await ownerModel.create({ title: 'Other Agent' });
-    await serverDB.insert(sessions).values([
-      { id: 'exclusive-session', userId: ownerId, workspaceId: wsId },
-      { id: 'shared-session', userId: ownerId, workspaceId: wsId },
-    ]);
-    await serverDB.insert(agentsToSessions).values([
-      { agentId: agent.id, sessionId: 'exclusive-session', userId: ownerId, workspaceId: wsId },
-      { agentId: agent.id, sessionId: 'shared-session', userId: ownerId, workspaceId: wsId },
-      { agentId: otherAgent.id, sessionId: 'shared-session', userId: ownerId, workspaceId: wsId },
-    ]);
-    await serverDB.insert(topics).values([
-      {
-        id: 'exclusive-topic',
-        sessionId: 'exclusive-session',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: agent.id,
-        id: 'shared-topic',
-        sessionId: 'shared-session',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: otherAgent.id,
-        id: 'other-agent-topic',
-        sessionId: 'shared-session',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-    ]);
-
-    await serverDB.insert(threads).values([
-      {
-        agentId: agent.id,
-        id: 'exclusive-thread',
-        topicId: 'exclusive-topic',
-        type: 'continuation',
-        userId: ownerId,
-      },
-      {
-        agentId: agent.id,
-        id: 'shared-thread',
-        topicId: 'shared-topic',
-        type: 'continuation',
-        userId: ownerId,
-      },
-    ]);
-
-    await handover({
-      agentId: agent.id,
-      fromUserId: ownerId,
-      migrateSessions: true,
-      toUserId: recipientId,
-    });
-
-    const sessionRows = await serverDB.select().from(sessions);
-    expect(sessionRows.find((s) => s.id === 'exclusive-session')?.userId).toBe(recipientId);
-    // The shared session (and every junction row on it) stays with the owner.
-    expect(sessionRows.find((s) => s.id === 'shared-session')?.userId).toBe(ownerId);
-    const junctionRows = await serverDB.select().from(agentsToSessions);
-    expect(
-      junctionRows
-        .filter((j) => j.sessionId === 'shared-session')
-        .every((j) => j.userId === ownerId),
-    ).toBe(true);
-
-    // Topics inside the shared session stay too — including the transferred
-    // agent's own, which would otherwise strand on an invisible session.
-    const topicRows = await serverDB.select().from(topics);
-    expect(topicRows.find((t) => t.id === 'exclusive-topic')?.userId).toBe(recipientId);
-    expect(topicRows.find((t) => t.id === 'shared-topic')?.userId).toBe(ownerId);
-    expect(topicRows.find((t) => t.id === 'other-agent-topic')?.userId).toBe(ownerId);
-
-    // Threads follow their topics: the one on the unmoved shared topic stays.
-    const threadRows = await serverDB.select().from(threads);
-    expect(threadRows.find((t) => t.id === 'exclusive-thread')?.userId).toBe(recipientId);
-    expect(threadRows.find((t) => t.id === 'shared-thread')?.userId).toBe(ownerId);
-  });
-
-  it('drains topicless residual rows through the backfill job with owner scoping', async () => {
-    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '0';
-    const agent = await ownerModel.create({ title: 'Agent' });
-    await serverDB
-      .insert(topics)
-      .values([{ agentId: agent.id, id: 'drain-topic', userId: ownerId, workspaceId: wsId }]);
-    await serverDB.insert(messages).values([
-      {
-        agentId: agent.id,
-        id: 'drain-topic-msg',
-        role: 'assistant',
-        topicId: 'drain-topic',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: agent.id,
-        id: 'drain-owner-residual',
-        role: 'assistant',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-      {
-        agentId: agent.id,
-        id: 'drain-teammate-residual',
-        role: 'assistant',
-        userId: teammateId,
-        workspaceId: wsId,
-      },
-    ]);
-
-    const result = await handover({
-      agentId: agent.id,
-      fromUserId: ownerId,
-      migrateSessions: true,
-      toUserId: recipientId,
-    });
-    expect(result.transferJobId).not.toBeNull();
-
-    // With the threshold at 0 the residual set is also "large", so it defers
-    // to the job: the owner-scoped linkage rides in the payload while the
-    // residual COLUMNS stay blank — a finalizer predating owner scoping would
-    // no-op instead of sweeping teammates' rows.
-    const preDrain = await serverDB.select().from(messages);
-    expect(preDrain.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(ownerId);
-    expect(preDrain.find((m) => m.id === 'drain-topic-msg')?.userId).toBe(ownerId);
-
-    const [jobRow] = await serverDB
-      .select()
-      .from(agentHistoryJobs)
-      .where(eq(agentHistoryJobs.id, result.transferJobId!));
-    expect(jobRow.agentIds).toEqual([]);
-    expect(jobRow.sessionIds).toEqual([]);
-    expect(jobRow.payload?.residualOwnerScope).toEqual({
-      agentIds: [agent.id],
-      ownerUserId: ownerId,
-      restrictSessionIds: [],
-      sessionIds: [],
-    });
-
-    let done = false;
-    while (!done) {
-      ({ done } = await AgentTransferJobModel.processNextTopic(serverDB, result.transferJobId!));
-    }
-
-    const rows = await serverDB.select().from(messages);
-    expect(rows.find((m) => m.id === 'drain-topic-msg')?.userId).toBe(recipientId);
-    expect(rows.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(recipientId);
-    expect(rows.find((m) => m.id === 'drain-teammate-residual')?.userId).toBe(teammateId);
-  });
-
-  it('records a backfill job instead of rewriting large histories inline', async () => {
-    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '0';
-    const agent = await ownerModel.create({ title: 'Agent' });
-    await serverDB
-      .insert(topics)
-      .values([{ agentId: agent.id, id: 'big-topic', userId: ownerId, workspaceId: wsId }]);
-    await serverDB.insert(messages).values([
-      {
-        agentId: agent.id,
-        id: 'big-msg',
-        role: 'assistant',
-        topicId: 'big-topic',
-        userId: ownerId,
-        workspaceId: wsId,
-      },
-    ]);
-
-    const result = await handover({
-      agentId: agent.id,
-      fromUserId: ownerId,
-      migrateSessions: true,
-      toUserId: recipientId,
-    });
-
-    expect(result.transferJobId).not.toBeNull();
-    // The job owns the message rewrite; the row still carries the old scope.
-    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'big-msg'));
-    expect(msg.userId).toBe(ownerId);
-    // The junction registers the agent so later transfers see the pending job.
-    await expect(AgentTransferJobModel.hasPendingJobForAgents(serverDB, [agent.id])).resolves.toBe(
-      true,
+    await serverDB.transaction((trx) =>
+      AgentTransferJobModel.createJob(trx, {
+        agentIds: [agent.id],
+        sessionIds: [],
+        source: { userId: ownerId, workspaceId: wsId },
+        target: { userId: teammateId, workspaceId: wsId },
+        topics: [],
+      }),
     );
 
-    // A second handover while the backfill is pending is refused.
     await expect(
-      handover({ agentId: agent.id, fromUserId: recipientId, toUserId: teammateId }),
+      handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
     ).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
   });
 

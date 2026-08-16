@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "فشل في تحميل الوكلاء",
   "workspace.general.transferAgents.modal.memberDesc": "ينقل الملكية إلى هذا العضو. يجب أن يقبل قبل حدوث أي تغييرات؛ تبقى الإعدادات وجميع المحادثات كما هي.",
   "workspace.general.transferAgents.modal.memberGroup": "أعضاء مساحة العمل",
-  "workspace.general.transferAgents.modal.migrateSessions": "قم أيضًا بنقل سجل محادثاتي مع هذا الوكيل",
   "workspace.general.transferAgents.modal.moveAgent": "نقل الوكيل",
   "workspace.general.transferAgents.modal.moveAgentDesc": "يمكنك النقل إلى الحساب الشخصي أو إلى مساحات العمل التي لديك فيها صلاحية إنشاء وكيل. تنتقل جميع البيانات المرتبطة مع الوكيل: المواضيع، والروابط إلى الملفات وقاعدة المعرفة، والوظائف المجدولة، والمهام ذات الصلة. قد لا تكون الإضافات المخصصة متاحة وسيتم إزالة ارتباطات مجموعات الوكلاء المتعددة.",
   "workspace.general.transferAgents.modal.moveTitle": "نقل",

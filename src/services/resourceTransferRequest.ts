@@ -15,7 +15,6 @@ export interface PendingTransferRequest {
   id: string;
   initiator: TransferRequestParty | null;
   initiatorId: string;
-  options: { migrateSessions?: boolean } | null;
   previousOwnerId: string | null;
   recipient: TransferRequestParty | null;
   recipientId: string;
@@ -54,9 +53,8 @@ class ResourceTransferRequestService {
     return (result.data as PendingTransferRequest[]) ?? [];
   };
 
-  accept = async (requestId: string): Promise<{ transferJobId: string | null }> => {
-    const result = await lambdaClient.resourceTransferRequest.accept.mutate({ requestId });
-    return result.data;
+  accept = async (requestId: string): Promise<void> => {
+    await lambdaClient.resourceTransferRequest.accept.mutate({ requestId });
   };
 
   decline = async (requestId: string): Promise<void> => {

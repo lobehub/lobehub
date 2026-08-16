@@ -42,19 +42,6 @@ export interface AgentHistoryJobPayload {
    * of the single-agent remap.
    */
   group?: { newGroupId: string; sourceGroupId: string };
-  /**
-   * `transfer` jobs from a member-to-member handover whose topicless residual
-   * set was too large to rewrite synchronously: the owner-scoped linkage for
-   * the final residual rewrite. Lives here — with the residual columns blank —
-   * so a finalizer predating owner scoping no-ops instead of sweeping
-   * teammates' rows.
-   */
-  residualOwnerScope?: {
-    agentIds: string[];
-    ownerUserId: string;
-    restrictSessionIds: string[];
-    sessionIds: string[];
-  };
 }
 
 /** `copy` queue-row payload. */

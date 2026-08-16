@@ -383,12 +383,10 @@ class AgentService {
    */
   requestAgentTransferToMember = async (params: {
     agentId: string;
-    migrateSessions?: boolean;
     targetMemberId: string;
   }): Promise<{ requestId: string; status: 'pending' }> => {
     const result = await lambdaClient.agent.transferAgent.mutate({
       agentId: params.agentId,
-      migrateSessions: params.migrateSessions,
       targetMemberId: params.targetMemberId,
       targetWorkspaceId: null,
     });

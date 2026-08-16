@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "Ajanlar yüklenemedi",
   "workspace.general.transferAgents.modal.memberDesc": "Bu üyeye sahipliği devreder. Kabul etmeden önce hiçbir şey değişmez; ayarlar ve herkesin konuşmaları olduğu gibi kalır.",
   "workspace.general.transferAgents.modal.memberGroup": "Çalışma alanı üyeleri",
-  "workspace.general.transferAgents.modal.migrateSessions": "Bu temsilciyle olan konuşma geçmişimi de devret",
   "workspace.general.transferAgents.modal.moveAgent": "Ajanı Taşı",
   "workspace.general.transferAgents.modal.moveAgentDesc": "Kişisel hesabınıza veya ajan oluşturma izniniz olan çalışma alanlarına taşıyabilirsiniz. İlişkili tüm veriler ajanla birlikte taşınır: konular, dosya ve bilgi tabanı bağlantıları, planlanmış işler ve ilgili görevler. Özel eklentiler mevcut olmayabilir ve çoklu ajan grup ilişkileri kaldırılacaktır.",
   "workspace.general.transferAgents.modal.moveTitle": "Taşı",

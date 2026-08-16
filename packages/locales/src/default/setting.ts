@@ -2432,8 +2432,6 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.memberDesc':
     'Hands ownership to this member. They must accept before anything changes; settings and everyone’s conversations stay untouched.',
   'workspace.general.transferAgents.modal.memberGroup': 'Workspace members',
-  'workspace.general.transferAgents.modal.migrateSessions':
-    'Also hand over my conversation history with this agent',
   'workspace.general.transferAgents.modal.moveAgent': 'Move Agent',
   'workspace.general.transferAgents.modal.moveAgentDesc':
     'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, file and knowledge base links, scheduled jobs, and related tasks. Custom plugins may not be available and multi-agent group associations will be removed.',

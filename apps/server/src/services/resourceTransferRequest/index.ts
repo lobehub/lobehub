@@ -101,17 +101,13 @@ const assertOwnableMemberRow = (member: { role: string } | undefined): void => {
  * Execute an accepted transfer: flip the request state and hand the resource
  * over, atomically. The request flip and the ownership rewrite share one
  * transaction so a raced/stale accept rolls both back.
- *
- * Session migration is only honored on the creator path — a primary owner
- * reassigning someone else's resource cannot give away conversations that are
- * not theirs (`previousOwnerId !== initiatorId` drops the option).
  */
 export const executeAcceptedTransfer = async (params: {
   db: LobeChatDatabase;
   recipientId: string;
   request: ResourceTransferRequestItem;
   workspaceId: string;
-}): Promise<{ transferJobId: string | null }> => {
+}): Promise<void> => {
   const { db, recipientId, request, workspaceId } = params;
 
   if (!isMemberTransferSupported(request.resourceType)) {
@@ -127,10 +123,6 @@ export const executeAcceptedTransfer = async (params: {
   const resourceType = request.resourceType;
 
   const requestModel = new ResourceTransferRequestModel(db, workspaceId);
-  const migrateSessions =
-    !!request.options?.migrateSessions &&
-    !!request.previousOwnerId &&
-    request.previousOwnerId === request.initiatorId;
 
   return db.transaction(async (trx: Transaction) => {
     // Re-validate at accept time, INSIDE the transaction with the membership
@@ -206,15 +198,13 @@ export const executeAcceptedTransfer = async (params: {
           groupId: request.resourceId,
           toUserId: recipientId,
         });
-        // Nothing moves scope on a group handover, so there is no backfill.
-        return { transferJobId: null };
+        return;
       }
       default: {
         const agentModel = new AgentModel(db, recipientId, workspaceId);
-        return agentModel.transferAgentOwnership(trx, {
+        await agentModel.transferAgentOwnership(trx, {
           agentId: request.resourceId,
           fromUserId,
-          migrateSessions,
           toUserId: recipientId,
         });
       }

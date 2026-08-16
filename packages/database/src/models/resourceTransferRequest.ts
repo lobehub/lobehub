@@ -1,4 +1,4 @@
-import type { ResourceTransferRequestOptions, TransferResourceType } from '@lobechat/types';
+import type { TransferResourceType } from '@lobechat/types';
 import { and, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 
 import type { ResourceTransferRequestItem } from '../schemas';
@@ -48,7 +48,6 @@ export class ResourceTransferRequestModel {
 
   create = async (params: {
     initiatorId: string;
-    options?: ResourceTransferRequestOptions;
     previousOwnerId?: string | null;
     recipientId: string;
     resourceId: string;
@@ -64,7 +63,6 @@ export class ResourceTransferRequestModel {
         .values({
           expiresAt: new Date(Date.now() + TRANSFER_REQUEST_TTL_MS),
           initiatorId: params.initiatorId,
-          options: params.options,
           previousOwnerId: params.previousOwnerId ?? params.initiatorId,
           recipientId: params.recipientId,
           resourceId: params.resourceId,

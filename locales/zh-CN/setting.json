@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "加载助理失败",
   "workspace.general.transferAgents.modal.memberDesc": "将所有权转让给该成员。对方接受前不会有任何变化；配置和所有人的会话保持不变。",
   "workspace.general.transferAgents.modal.memberGroup": "工作区成员",
-  "workspace.general.transferAgents.modal.migrateSessions": "同时把我与该助理的会话历史移交给对方",
   "workspace.general.transferAgents.modal.moveAgent": "移动助理",
   "workspace.general.transferAgents.modal.moveAgentDesc": "您可以移动到有权限创建助理的个人账户或工作区。全部关联数据会随助理一并迁移：话题、文件与知识库关联、定时任务及关联任务。自定义技能可能不可用，多助理群组关联将被移除。",
   "workspace.general.transferAgents.modal.moveTitle": "移动",

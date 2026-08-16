@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "에이전트 로드에 실패했습니다",
   "workspace.general.transferAgents.modal.memberDesc": "이 멤버에게 소유권을 넘깁니다. 변경 사항이 발생하기 전에 그들이 수락해야 하며, 설정과 모든 대화는 그대로 유지됩니다.",
   "workspace.general.transferAgents.modal.memberGroup": "워크스페이스 멤버",
-  "workspace.general.transferAgents.modal.migrateSessions": "이 에이전트와의 대화 기록도 함께 넘깁니다",
   "workspace.general.transferAgents.modal.moveAgent": "에이전트 이동",
   "workspace.general.transferAgents.modal.moveAgentDesc": "개인 계정 또는 에이전트를 만들 권한이 있는 워크스페이스로 이동할 수 있습니다. 모든 관련 데이터가 에이전트와 함께 이동합니다: 주제, 파일 및 지식 기반 링크, 예약된 작업, 관련된 작업. 맞춤형 플러그인은 사용할 수 없을 수 있으며 다중 에이전트 그룹 연관은 제거됩니다.",
   "workspace.general.transferAgents.modal.moveTitle": "이동",

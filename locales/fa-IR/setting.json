@@ -2383,7 +2383,6 @@
   "workspace.general.transferAgents.modal.loadFailed": "بارگذاری نمایندگان انجام نشد",
   "workspace.general.transferAgents.modal.memberDesc": "مالکیت را به این عضو واگذار می‌کند. آنها باید قبل از هر تغییری قبول کنند؛ تنظیمات و مکالمات همه دست‌نخورده باقی می‌مانند.",
   "workspace.general.transferAgents.modal.memberGroup": "اعضای فضای کاری",
-  "workspace.general.transferAgents.modal.migrateSessions": "همچنین تاریخچه مکالماتم با این نماینده را واگذار کن",
   "workspace.general.transferAgents.modal.moveAgent": "انتقال عامل",
   "workspace.general.transferAgents.modal.moveAgentDesc": "می‌توانید به حساب شخصی یا به فضاهای کاری که در آن‌ها اجازه ایجاد عامل دارید منتقل کنید. تمام داده‌های مرتبط همراه با عامل منتقل می‌شوند: موضوعات، لینک‌های فایل و پایگاه دانش، وظایف زمان‌بندی شده و کارهای مرتبط. افزونه‌های سفارشی ممکن است در دسترس نباشند و ارتباطات گروه‌های چند نماینده حذف خواهند شد.",
   "workspace.general.transferAgents.modal.moveTitle": "انتقال",

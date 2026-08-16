@@ -38,11 +38,6 @@ vi.mock('@/server/services/resourceTransferRequest', async (importOriginal) => {
   return { ...actual, executeAcceptedTransfer: mockExecuteAcceptedTransfer };
 });
 
-const mockStartJob = vi.fn();
-vi.mock('@/business/server/agent-transfer/jobRunner', () => ({
-  startAgentTransferJob: mockStartJob,
-}));
-
 const { TRANSFER_REQUEST_EXPIRED, TRANSFER_REQUEST_NOT_PENDING } =
   await import('@/database/models/resourceTransferRequest');
 const { AGENT_OWNERSHIP_STALE } = await import('@/database/models/agent');
@@ -83,17 +78,16 @@ describe('resourceTransferRequestRouter', () => {
   });
 
   describe('accept', () => {
-    it('executes the handover and kicks the backfill job', async () => {
+    it('executes the handover', async () => {
       mockFindById.mockResolvedValue(pendingRequest);
-      mockExecuteAcceptedTransfer.mockResolvedValue({ transferJobId: 'job-1' });
+      mockExecuteAcceptedTransfer.mockResolvedValue(undefined);
 
       const result = await caller.accept({ requestId: 'req-1' });
 
-      expect(result).toEqual({ data: { transferJobId: 'job-1' }, success: true });
+      expect(result).toEqual({ data: null, success: true });
       expect(mockExecuteAcceptedTransfer).toHaveBeenCalledWith(
         expect.objectContaining({ recipientId, request: pendingRequest, workspaceId: 'ws-1' }),
       );
-      expect(mockStartJob).toHaveBeenCalledWith(expect.anything(), 'job-1');
     });
 
     it('hides requests addressed to someone else behind NOT_FOUND', async () => {
@@ -155,16 +149,14 @@ describe('resourceTransferRequestRouter', () => {
     it('accepts a group request through the same execute path', async () => {
       const groupRequest = { ...pendingRequest, resourceId: 'group-1', resourceType: 'agentGroup' };
       mockFindById.mockResolvedValue(groupRequest);
-      mockExecuteAcceptedTransfer.mockResolvedValue({ transferJobId: null });
+      mockExecuteAcceptedTransfer.mockResolvedValue(undefined);
 
       const result = await caller.accept({ requestId: 'req-1' });
 
-      expect(result).toEqual({ data: { transferJobId: null }, success: true });
+      expect(result).toEqual({ data: null, success: true });
       expect(mockExecuteAcceptedTransfer).toHaveBeenCalledWith(
         expect.objectContaining({ request: groupRequest }),
       );
-      // No scope move on a group handover, so no backfill job to kick.
-      expect(mockStartJob).not.toHaveBeenCalled();
     });
 
     it('retires the request when the group changed since it was created', async () => {
