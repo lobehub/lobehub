@@ -36,10 +36,11 @@ interface ResolveGenerationModelNoticeParams {
  * We gate on `isModelConfigReady` (aiProvider runtime state initialized) so we do
  * NOT flash a false warning while the provider runtime config is still loading and
  * the enabled model list is transiently empty. This matters for the default state
- * where the store falls back to `provider=google,
- * model='gemini-3.1-flash-image-preview:image'`: once config is ready and Google is
- * disabled, the notice reads as `providerDisabled` instead of silently generating
- * against a disabled provider (see lobehub/lobehub#17400).
+ * where the store falls back to `provider=openrouter`,
+ * model='google/gemini-3.1-flash-image-preview:image'`: once config is ready and that
+ * provider/model is unavailable, the notice reads as `providerDisabled` /
+ * `modelRemoved` instead of silently generating against a disabled provider
+ * (see lobehub/lobehub#17400).
  */
 export const resolveGenerationModelNotice = ({
   enabledModelList,
