@@ -21,6 +21,14 @@ export interface TaskListSliceState {
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /**
+   * Automation filter of the task data currently stored in `tasks` — `false`
+   * for Home's recent block (live schedules excluded server-side), undefined
+   * for the unfiltered Tasks page. Tracked like `listQueryVisibility` so a
+   * scope change resets the shared field instead of rendering the other
+   * surface's filter.
+   */
+  listQueryAutomated?: boolean;
   /** Effective visibility of the task data currently stored in `tasks`. */
   listQueryVisibility: TaskListVisibilityFilter;
   /** Defaults to 'all' so the Tasks top entry shows every visible task

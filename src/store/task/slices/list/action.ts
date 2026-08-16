@@ -1,5 +1,5 @@
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { taskKeys } from '@/libs/swr/keys';
+import { isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -89,14 +89,14 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
+    const { listAgentId, listVisibility } = this.#get();
     const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
-      // Both orderings of the same list: the Tasks page holds the createdAt
-      // entry and Home the updatedAt one, and an edit invalidates both — an
-      // edit is exactly what moves a task in the updatedAt ordering.
-      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'createdAt', projectId)),
-      mutate(taskKeys.list(listAgentId, listQueryVisibility, 'updatedAt', projectId)),
+      // Every cached variant of the list — both orderings, any visibility chip
+      // or automation filter — an edit can move a task across each of those
+      // boundaries (touching reorders `updatedAt`, scheduling flips the
+      // automation filter), so they are invalidated by root, not enumerated.
+      mutate(isTaskListKey),
       mutate(taskKeys.groupList(listAgentId, listVisibility, projectId)),
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
@@ -209,6 +209,14 @@ export class TaskListSliceActionImpl {
     options: {
       agentId?: string;
       allAgents?: boolean;
+      /**
+       * Server-side automation filter: `false` excludes the tasks that still
+       * fire on their own (Home's recent block — those live in the scheduled
+       * roll-up), `true` is that roll-up's own side, undefined applies no
+       * filter. Part of the cache key and the scope reset for the same reason
+       * as `orderBy` and `visibility`.
+       */
+      automated?: boolean;
       enabled?: boolean;
       /**
        * Newest-first by creation unless a caller asks otherwise. A block that
@@ -223,23 +231,38 @@ export class TaskListSliceActionImpl {
       visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, orderBy, projectId, visibility } = options;
+    const {
+      agentId,
+      allAgents = false,
+      automated,
+      enabled = true,
+      orderBy,
+      projectId,
+      visibility,
+    } = options;
     const effectiveKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : allAgents
         ? ALL_AGENTS_LIST_KEY
         : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
-    const { listAgentId, listQueryVisibility } = this.#get();
+    const { listAgentId, listQueryAutomated, listQueryVisibility } = this.#get();
 
     // `tasks` is shared by the full Tasks page and embedded overviews. Reset it
-    // when either part of the effective query changes so an `all` override does
-    // not temporarily inherit a previously initialized private/workspace list.
-    if (effectiveKey && (listAgentId !== effectiveKey || listQueryVisibility !== listVisibility)) {
+    // when any part of the effective query changes so an `all` override does
+    // not temporarily inherit a previously initialized private/workspace list,
+    // nor the Tasks page a list narrowed by Home's automation filter.
+    if (
+      effectiveKey &&
+      (listAgentId !== effectiveKey ||
+        listQueryVisibility !== listVisibility ||
+        listQueryAutomated !== automated)
+    ) {
       this.#set(
         {
           ...scopeChangeResetState,
           listAgentId: effectiveKey,
+          listQueryAutomated: automated,
           listQueryVisibility: listVisibility,
         },
         false,
@@ -249,11 +272,12 @@ export class TaskListSliceActionImpl {
 
     return useClientDataSWR(
       enabled && effectiveKey
-        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId)
+        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, automated)
         : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
           ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
+          automated,
           hasGoal: false,
           orderBy,
           projectId,

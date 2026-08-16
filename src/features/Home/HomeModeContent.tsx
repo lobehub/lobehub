@@ -161,6 +161,14 @@ export const resolveTaskSummaryLine = (
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
+/**
+ * Reserved width for the trailing timestamp. Relative and absolute forms differ
+ * in width ("4 分钟前" vs "8月13日"), and without a shared column each row's
+ * avatar drifts to wherever its own time happens to start — the right side of
+ * the list reads as ragged instead of as a column.
+ */
+const TIME_COLUMN_WIDTH = 56;
+
 const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
   <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
@@ -218,7 +226,7 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         trailing={
           <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
             {showAuthor && <AuthorChip userId={topic.userId} />}
-            <Time date={topic.updatedAt} />
+            <Time date={topic.updatedAt} minWidth={TIME_COLUMN_WIDTH} />
           </Flexbox>
         }
       />
@@ -287,50 +295,63 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
 
 /**
  * A task in the home list carries the same right-hand read as the Tasks page:
- * how it is triggered, who runs it, when it last moved. Without that a task row
- * is indistinguishable from a topic row, and the section reads as another feed
- * rather than as work with an owner.
+ * who runs it, when it last moved — plus how it is triggered, but only in the
+ * scheduled block, where the trigger is the point. The recent block hides it:
+ * the runnable schedules are filtered out of that list anyway, and the ones
+ * that slip through are terminal leftovers whose schedule no longer fires, so
+ * printing it would claim an automation that is not there.
  */
-const TaskRow = memo<{ task: TaskListItem }>(({ task }) => {
-  const title = task.name?.trim() || task.identifier;
-  const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
+const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
+  ({ showTrigger = true, task }) => {
+    const title = task.name?.trim() || task.identifier;
+    const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
 
-  return (
-    <Row
-      description={description}
-      href={taskDetailPath(task.identifier)}
-      icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
-      title={title}
-      // The identifier is how the task is referred to everywhere else, so it
-      // belongs beside the name rather than in the sentence slot below it.
-      titleExtra={
-        title === task.identifier ? undefined : (
-          <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
-        )
-      }
-      trailing={
-        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <TaskTriggerTag
-            automationMode={task.automationMode}
-            heartbeatInterval={task.heartbeatInterval}
-            schedulePattern={task.schedulePattern}
-            scheduleTimezone={task.scheduleTimezone}
-          />
-          <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
-          <Time date={task.updatedAt || task.createdAt} />
-        </Flexbox>
-      }
-    />
-  );
-});
+    return (
+      <Row
+        description={description}
+        href={taskDetailPath(task.identifier)}
+        icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
+        title={title}
+        // The identifier is how the task is referred to everywhere else, so it
+        // belongs beside the name rather than in the sentence slot below it.
+        titleExtra={
+          title === task.identifier ? undefined : (
+            <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
+          )
+        }
+        trailing={
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            {showTrigger && (
+              <TaskTriggerTag
+                automationMode={task.automationMode}
+                heartbeatInterval={task.heartbeatInterval}
+                schedulePattern={task.schedulePattern}
+                scheduleTimezone={task.scheduleTimezone}
+              />
+            )}
+            <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
+            <Time date={task.updatedAt || task.createdAt} minWidth={TIME_COLUMN_WIDTH} />
+          </Flexbox>
+        }
+      />
+    );
+  },
+);
 
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Home is an overview, not a continuation of the Task page's last-used
   // filter. It must always show the complete task set — ordered by activity,
-  // because this block calls itself "recent" and prints the same timestamp.
-  const tasksSWR = useFetchTaskList({ allAgents: true, orderBy: 'updatedAt', visibility: 'all' });
+  // because this block calls itself "recent" and prints the same timestamp —
+  // minus live schedules and heartbeats (`automated: false`), which belong to
+  // the scheduled block below and would otherwise print twice on one page.
+  const tasksSWR = useFetchTaskList({
+    allAgents: true,
+    automated: false,
+    orderBy: 'updatedAt',
+    visibility: 'all',
+  });
   const tasks = useTaskStore(taskListSelectors.taskList);
   const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
@@ -362,7 +383,7 @@ const TaskContent = memo(() => {
       ) : (
         <Flexbox gap={4}>
           {shown.map((task) => (
-            <TaskRow key={task.identifier} task={task} />
+            <TaskRow key={task.identifier} showTrigger={false} task={task} />
           ))}
         </Flexbox>
       )}
@@ -563,14 +584,18 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // Recent tasks answer "what is going on"; the scheduled block answers "what
     // will happen without me" — the second question only makes sense after the
     // first, so it always sits underneath.
+    //
+    // The inline padding keeps the lists from running edge-to-edge with the
+    // composer above: rows carry a -10px hover overhang (see `rowBox`), so
+    // without it the hover pill would reach past the column bounds.
     const taskBlocks = (
-      <>
+      <Flexbox gap={32} paddingInline={12}>
         {!tasksHidden && <TaskContent />}
         {!scheduledTasksHidden && <ScheduledTaskContent />}
-      </>
+      </Flexbox>
     );
 
-    if (!inlineRail) return <Flexbox gap={32}>{taskBlocks}</Flexbox>;
+    if (!inlineRail) return taskBlocks;
 
     // The rail's sections sit beside task mode while it is open, so a folded
     // rail must not take them away here either: goals and reports above the
