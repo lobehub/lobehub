@@ -301,14 +301,28 @@ export const taskKeys = {
       orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
       projectId?: string,
       // Same reasoning as `orderBy`: Home's recent block excludes live
-      // automation server-side while the Tasks page fetches everything, and a
-      // shared entry would serve one surface the other's filter.
-      automated?: boolean,
+      // automation and finished statuses server-side while the Tasks page
+      // fetches everything, and a shared entry would serve one surface the
+      // other's filter. Folded into one trailing slot (appended only when a
+      // filter is actually set) so unfiltered keys keep their shape.
+      filters?: { automated?: boolean; statuses?: readonly string[] },
     ) => {
       const key = projectId
         ? ['task:list', agentKey, visibility, orderBy, projectId]
         : ['task:list', agentKey, visibility, orderBy];
-      return automated === undefined ? key : [...key, automated];
+      const automated = filters?.automated;
+      // Order-insensitive: the same status set must hash to the same key.
+      const statuses = filters?.statuses?.length
+        ? [...filters.statuses].sort().join(',')
+        : undefined;
+      if (automated === undefined && statuses === undefined) return key;
+      return [
+        ...key,
+        {
+          ...(automated === undefined ? {} : { automated }),
+          ...(statuses === undefined ? {} : { statuses }),
+        },
+      ];
     },
   ),
   /**

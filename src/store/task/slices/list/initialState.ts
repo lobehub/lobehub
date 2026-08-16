@@ -29,6 +29,12 @@ export interface TaskListSliceState {
    * surface's filter.
    */
   listQueryAutomated?: boolean;
+  /**
+   * Status narrowing of the data in `tasks`, as an order-insensitive signature
+   * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
+   * for the same scope-reset reason as `listQueryAutomated`.
+   */
+  listQueryStatuses?: string;
   /** Effective visibility of the task data currently stored in `tasks`. */
   listQueryVisibility: TaskListVisibilityFilter;
   /** Defaults to 'all' so the Tasks top entry shows every visible task

@@ -1,3 +1,4 @@
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
@@ -120,15 +121,17 @@ interface RowProps {
   trailing?: ReactNode;
 }
 
-const TASK_STATUSES = new Set<TaskStatus>([
-  'backlog',
-  'canceled',
-  'completed',
-  'failed',
-  'paused',
-  'running',
-  'scheduled',
-]);
+const TASK_STATUS_SET = new Set<TaskStatus>(TASK_STATUSES);
+
+/**
+ * What the recent block lists: everything that is not finished work. Derived
+ * from the canonical status set (not hand-listed) so a status added later shows
+ * up here by default instead of silently vanishing from Home.
+ */
+export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
+  (status) => status !== 'completed',
+);
+
 export const HOME_TOPIC_RECENT_LIMIT = 15;
 
 const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
@@ -159,7 +162,7 @@ export const resolveTaskSummaryLine = (
 };
 
 const normalizeTaskStatus = (status: string): TaskStatus =>
-  TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 /**
  * Reserved width for the trailing timestamp. Relative and absolute forms differ
@@ -342,14 +345,17 @@ const TaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Home is an overview, not a continuation of the Task page's last-used
-  // filter. It must always show the complete task set — ordered by activity,
+  // filter. It must always show the ongoing task set — ordered by activity,
   // because this block calls itself "recent" and prints the same timestamp —
   // minus live schedules and heartbeats (`automated: false`), which belong to
-  // the scheduled block below and would otherwise print twice on one page.
+  // the scheduled block below and would otherwise print twice on one page,
+  // and minus completed tasks: finished work is history for the Tasks page,
+  // not part of "what is going on".
   const tasksSWR = useFetchTaskList({
     allAgents: true,
     automated: false,
     orderBy: 'updatedAt',
+    statuses: RECENT_TASK_STATUSES,
     visibility: 'all',
   });
   const tasks = useTaskStore(taskListSelectors.taskList);

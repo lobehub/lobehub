@@ -75,10 +75,12 @@ describe('TaskListSliceAction', () => {
         .mock.calls.map(([arg]) => arg)
         .find((arg): arg is (key: unknown) => boolean => typeof arg === 'function');
       expect(matcher).toBeDefined();
-      // The Tasks page's entry, Home's activity-ordered automation-filtered
-      // entry, and a project-scoped entry all match…
+      // The Tasks page's entry, Home's activity-ordered filtered entry, and a
+      // project-scoped entry all match…
       expect(matcher!(['task:list', 'agt_1', 'private', 'createdAt'])).toBe(true);
-      expect(matcher!(['task:list', '__all__', 'all', 'updatedAt', false])).toBe(true);
+      expect(matcher!(['task:list', '__all__', 'all', 'updatedAt', { automated: false }])).toBe(
+        true,
+      );
       expect(matcher!(['task:list', '__project__:p1', 'all', 'createdAt', 'p1'])).toBe(true);
       // …while other task caches are refreshed through their own keys.
       expect(matcher!(['task:groupList', 'agt_1', 'private'])).toBe(false);
@@ -136,10 +138,11 @@ describe('TaskListSliceAction', () => {
       );
     });
 
-    // Home's recent block excludes live schedules server-side. The filter has
-    // to reach the request and the cache key, or Home and the Tasks page would
-    // serve each other's list from one shared entry.
-    it('passes the automation filter to the server and keys the cache by it', async () => {
+    // Home's recent block excludes live schedules and finished statuses
+    // server-side. Both filters have to reach the request and the cache key, or
+    // Home and the Tasks page would serve each other's list from one shared
+    // entry.
+    it('passes the automation and status filters to the server and keys the cache by them', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
@@ -147,19 +150,29 @@ describe('TaskListSliceAction', () => {
         allAgents: true,
         automated: false,
         orderBy: 'updatedAt',
+        statuses: ['running', 'backlog'],
         visibility: 'all',
       });
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__all__', 'all', 'updatedAt', false],
+        // The key's status signature is order-insensitive.
+        [
+          'task:list',
+          '__all__',
+          'all',
+          'updatedAt',
+          { automated: false, statuses: 'backlog,running' },
+        ],
         expect.any(Function),
         expect.any(Object),
       );
       const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
         key: unknown[],
       ) => Promise<unknown>;
-      await fetcher(['task:list', '__all__', 'all', 'updatedAt', false]);
-      expect(taskService.list).toHaveBeenCalledWith(expect.objectContaining({ automated: false }));
+      await fetcher(['task:list', '__all__', 'all', 'updatedAt', {}]);
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: false, statuses: ['running', 'backlog'] }),
+      );
     });
 
     it('resets stale task data when the automation filter changes the query scope', () => {
@@ -179,6 +192,28 @@ describe('TaskListSliceAction', () => {
 
       const state = useTaskStore.getState();
       expect(state.listQueryAutomated).toBe(false);
+      expect(state.tasks).toEqual([]);
+      expect(state.tasksTotal).toBe(0);
+      expect(state.isTaskListInit).toBe(false);
+    });
+
+    it('resets stale task data when the status filter changes the query scope', () => {
+      useTaskStore.setState({
+        isTaskListInit: true,
+        listAgentId: '__all__',
+        listQueryStatuses: undefined,
+        listQueryVisibility: 'all',
+        listVisibility: 'all',
+        tasks: [{ id: 'completed-task' }] as any,
+        tasksTotal: 1,
+      });
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, statuses: ['running', 'backlog'], visibility: 'all' });
+
+      const state = useTaskStore.getState();
+      expect(state.listQueryStatuses).toBe('backlog,running');
       expect(state.tasks).toEqual([]);
       expect(state.tasksTotal).toBe(0);
       expect(state.isTaskListInit).toBe(false);

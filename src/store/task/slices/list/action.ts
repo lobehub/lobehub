@@ -1,3 +1,5 @@
+import type { TaskStatus } from '@lobechat/types';
+
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
@@ -227,6 +229,12 @@ export class TaskListSliceActionImpl {
        */
       orderBy?: 'createdAt' | 'updatedAt';
       projectId?: string;
+      /**
+       * Server-side status narrowing (include-list). Home's recent block uses
+       * it to drop finished work; the Tasks page omits it. Same key/scope
+       * treatment as `automated`.
+       */
+      statuses?: readonly TaskStatus[];
       /** Override the Task page's persisted filter for embedded consumers. */
       visibility?: TaskListVisibilityFilter;
     } = {},
@@ -238,6 +246,7 @@ export class TaskListSliceActionImpl {
       enabled = true,
       orderBy,
       projectId,
+      statuses,
       visibility,
     } = options;
     const effectiveKey = projectId
@@ -246,23 +255,27 @@ export class TaskListSliceActionImpl {
         ? ALL_AGENTS_LIST_KEY
         : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
-    const { listAgentId, listQueryAutomated, listQueryVisibility } = this.#get();
+    // Order-insensitive signature, only for change detection in the scope guard.
+    const statusesSignature = statuses?.length ? [...statuses].sort().join(',') : undefined;
+    const { listAgentId, listQueryAutomated, listQueryStatuses, listQueryVisibility } = this.#get();
 
     // `tasks` is shared by the full Tasks page and embedded overviews. Reset it
     // when any part of the effective query changes so an `all` override does
     // not temporarily inherit a previously initialized private/workspace list,
-    // nor the Tasks page a list narrowed by Home's automation filter.
+    // nor the Tasks page a list narrowed by Home's automation/status filters.
     if (
       effectiveKey &&
       (listAgentId !== effectiveKey ||
         listQueryVisibility !== listVisibility ||
-        listQueryAutomated !== automated)
+        listQueryAutomated !== automated ||
+        listQueryStatuses !== statusesSignature)
     ) {
       this.#set(
         {
           ...scopeChangeResetState,
           listAgentId: effectiveKey,
           listQueryAutomated: automated,
+          listQueryStatuses: statusesSignature,
           listQueryVisibility: listVisibility,
         },
         false,
@@ -272,7 +285,7 @@ export class TaskListSliceActionImpl {
 
     return useClientDataSWR(
       enabled && effectiveKey
-        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, automated)
+        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, { automated, statuses })
         : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
@@ -281,6 +294,7 @@ export class TaskListSliceActionImpl {
           hasGoal: false,
           orderBy,
           projectId,
+          statuses: statuses?.length ? [...statuses] : undefined,
           visibility: filterToServerVisibility(listVisibility),
         });
       },
