@@ -152,6 +152,10 @@ describe('agentRouter', () => {
       deleteAgentKnowledgeBase: vi.fn(),
       duplicate: vi.fn(),
       findBySessionId: vi.fn(),
+      getAgentAgencyConfig: vi.fn().mockResolvedValue({
+        executionTargetSelectionPolicy: 'member',
+        modelSelectionPolicy: 'member',
+      }),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
       publishToWorkspace: vi.fn(),
@@ -868,6 +872,29 @@ describe('agentRouter', () => {
           expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
         },
       );
+
+      it('allows a fully merged agency config when the member policies are unchanged', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+          new TRPCError({ code: 'FORBIDDEN', message: 'Unexpected manage check' }),
+        );
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.updateAgentConfig({
+          agentId: 'agent-1',
+          value: {
+            agencyConfig: {
+              boundDeviceId: 'device-1',
+              executionTargetSelectionPolicy: 'member',
+              modelSelectionPolicy: 'member',
+            },
+          },
+        });
+
+        expect(assertCanPerformResourceAction).not.toHaveBeenCalled();
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalled();
+      });
 
       it('allows the update when no other member holds the lock', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
