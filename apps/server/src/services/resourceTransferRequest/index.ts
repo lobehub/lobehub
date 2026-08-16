@@ -1,11 +1,13 @@
 import type { TransferResourceType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { ResourceTransferRequestItem } from '@/database/schemas';
+import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -69,6 +71,11 @@ export const assertRecipientCanOwn = async (params: {
   const { actorId, db, recipientId, workspaceId } = params;
 
   const member = await new WorkspaceMemberModel(db, actorId).getMember(workspaceId, recipientId);
+  assertOwnableMemberRow(member);
+};
+
+/** The role half of recipient validation, shared by the create-time lookup and the accept-time lock. */
+const assertOwnableMemberRow = (member: { role: string } | undefined): void => {
   if (!member) {
     throw new TRPCError({
       cause: { data: { code: TransferErrorCode.TargetNotWorkspaceMember } },
@@ -114,10 +121,6 @@ export const executeAcceptedTransfer = async (params: {
     });
   }
 
-  // Re-validate at accept time: creation-time validation does not survive the
-  // pending window (the recipient may have been removed or downgraded since).
-  await assertRecipientCanOwn({ actorId: recipientId, db, recipientId, workspaceId });
-
   const requestModel = new ResourceTransferRequestModel(db, workspaceId);
   const migrateSessions =
     !!request.options?.migrateSessions &&
@@ -125,6 +128,23 @@ export const executeAcceptedTransfer = async (params: {
     request.previousOwnerId === request.initiatorId;
 
   return db.transaction(async (trx: Transaction) => {
+    // Re-validate at accept time, INSIDE the transaction with the membership
+    // row locked: creation-time validation does not survive the pending
+    // window, and a check outside the transaction could race a concurrent
+    // removal/downgrade committing between the check and the handover.
+    const [member] = await trx
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, recipientId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .for('update');
+    assertOwnableMemberRow(member);
+
     await requestModel.accept(request.id, recipientId, trx);
 
     // A null previousOwnerId means the owner's account was deleted after the

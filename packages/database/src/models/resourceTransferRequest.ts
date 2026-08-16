@@ -1,5 +1,5 @@
 import type { ResourceTransferRequestOptions, TransferResourceType } from '@lobechat/types';
-import { and, desc, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 
 import type { ResourceTransferRequestItem } from '../schemas';
 import { resourceTransferRequests } from '../schemas';
@@ -126,6 +126,9 @@ export class ResourceTransferRequestModel {
         and(
           eq(resourceTransferRequests.workspaceId, this.workspaceId),
           eq(resourceTransferRequests.status, 'pending'),
+          // Orphaned rows (recipient account deleted → recipient_id nulled)
+          // are dead: nobody can accept them, so don't show them.
+          isNotNull(resourceTransferRequests.recipientId),
           or(
             eq(resourceTransferRequests.recipientId, userId),
             eq(resourceTransferRequests.initiatorId, userId),
@@ -189,6 +192,11 @@ export class ResourceTransferRequestModel {
       eq(resourceTransferRequests.resourceType, resourceType),
       eq(resourceTransferRequests.resourceId, resourceId),
       eq(resourceTransferRequests.status, 'pending'),
+      // A deleted recipient account nulls `recipient_id` (FK SET NULL) while
+      // the row stays `pending`; the partial unique index already ignores such
+      // orphans, so pending lookups must too or they shadow the replacement
+      // request.
+      isNotNull(resourceTransferRequests.recipientId),
     );
 
   private expireOverdue = async (resourceType: TransferResourceType, resourceId: string) => {

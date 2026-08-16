@@ -220,6 +220,23 @@ describe('ResourceTransferRequestModel', () => {
       );
     });
 
+    it('hides orphaned rows whose recipient account was deleted', async () => {
+      const orphan = await createRequest();
+      // FK `ON DELETE SET NULL`: simulate the recipient account vanishing.
+      await serverDB
+        .update(resourceTransferRequests)
+        .set({ recipientId: null })
+        .where(eq(resourceTransferRequests.id, orphan.id));
+
+      await expect(model.listPendingForUser(initiatorId)).resolves.toEqual([]);
+      await expect(model.findPendingByResource('agent', 'agent-1')).resolves.toBeUndefined();
+      // The partial unique index ignores the orphan, so a replacement request
+      // for the same resource must go through — and become the visible one.
+      const replacement = await createRequest();
+      const visible = await model.findPendingByResource('agent', 'agent-1');
+      expect(visible?.id).toBe(replacement.id);
+    });
+
     it('caps the listing at PENDING_TRANSFER_LIST_LIMIT rows', async () => {
       for (let i = 0; i < PENDING_TRANSFER_LIST_LIMIT + 3; i++) {
         await createRequest({ resourceId: `agent-cap-${i}` });

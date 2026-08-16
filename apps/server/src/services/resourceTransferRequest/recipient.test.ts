@@ -71,12 +71,24 @@ describe('executeAcceptedTransfer recipient recheck', () => {
     workspaceId: 'ws-1',
   } as any;
 
-  it('refuses acceptance when the recipient was downgraded to viewer during the pending window', async () => {
-    getMember.mockResolvedValue({ role: 'viewer' });
+  // The recheck runs inside db.transaction with the membership row locked
+  // (`FOR UPDATE`); the mock replays that select chain with a canned row set.
+  const dbWithLockedMemberRows = (rows: { role: string }[]) =>
+    ({
+      transaction: (cb: (trx: unknown) => Promise<unknown>) =>
+        cb({
+          select: () => ({
+            from: () => ({
+              where: () => ({ for: () => Promise.resolve(rows) }),
+            }),
+          }),
+        }),
+    }) as unknown as LobeChatDatabase;
 
+  it('refuses acceptance when the recipient was downgraded to viewer during the pending window', async () => {
     await expect(
       executeAcceptedTransfer({
-        db: {} as LobeChatDatabase,
+        db: dbWithLockedMemberRows([{ role: 'viewer' }]),
         recipientId: 'recipient-1',
         request,
         workspaceId: 'ws-1',
@@ -87,11 +99,9 @@ describe('executeAcceptedTransfer recipient recheck', () => {
   });
 
   it('refuses acceptance when the recipient left the workspace during the pending window', async () => {
-    getMember.mockResolvedValue(undefined);
-
     await expect(
       executeAcceptedTransfer({
-        db: {} as LobeChatDatabase,
+        db: dbWithLockedMemberRows([]),
         recipientId: 'recipient-1',
         request,
         workspaceId: 'ws-1',
