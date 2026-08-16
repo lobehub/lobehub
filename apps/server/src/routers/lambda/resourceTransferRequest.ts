@@ -200,11 +200,11 @@ export const resourceTransferRequestRouter = router({
         // The authority-stale refusal aborts the accept transaction, so the
         // retire has to happen here: without it the same permanently
         // unfulfillable request keeps rendering (and failing) until expiry.
+        // Targeted at THIS request only — a racing replacement request for
+        // the same resource must survive.
         const causeCode = (error.cause as { data?: { code?: unknown } } | undefined)?.data?.code;
         if (causeCode === TransferErrorCode.TransferRequestStale) {
-          await ctx.transferRequestModel.invalidateForResources(request.resourceType, [
-            request.resourceId,
-          ]);
+          await ctx.transferRequestModel.invalidateRequest(request.id);
         }
         throw error;
       }

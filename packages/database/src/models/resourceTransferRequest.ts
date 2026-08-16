@@ -186,6 +186,25 @@ export class ResourceTransferRequestModel {
       );
   };
 
+  /**
+   * Retire ONE request that turned out to be unfulfillable (e.g. the
+   * initiator's authority went stale). Conditional on `pending` so it cannot
+   * touch a racing replacement request for the same resource. No-op when the
+   * request already resolved.
+   */
+  invalidateRequest = async (id: string): Promise<void> => {
+    await this.db
+      .update(resourceTransferRequests)
+      .set({ resolvedAt: new Date(), status: 'cancelled' })
+      .where(
+        and(
+          eq(resourceTransferRequests.id, id),
+          eq(resourceTransferRequests.workspaceId, this.workspaceId),
+          eq(resourceTransferRequests.status, 'pending'),
+        ),
+      );
+  };
+
   private pendingResourceMatch = (resourceType: TransferResourceType, resourceId: string) =>
     and(
       eq(resourceTransferRequests.workspaceId, this.workspaceId),

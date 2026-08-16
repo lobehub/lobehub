@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentBotProviders,
+  agentCronJobs,
   agentHistoryJobs,
   agents,
   agentsToSessions,
@@ -227,6 +229,54 @@ describe('AgentModel.transferAgentOwnership', () => {
     // recipient; only the public device survives the handover.
     expect(updated.agencyConfig?.boundDeviceId).toBeUndefined();
     expect(updated.agencyConfig?.workingDirByDevice).toEqual({ 'public-ws-device': '/srv/shared' });
+  });
+
+  it('re-homes the previous owner’s cron jobs and bot providers, not teammates’', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB.insert(agentCronJobs).values([
+      {
+        agentId: agent.id,
+        content: 'daily report',
+        cronPattern: '0 9 * * *',
+        id: 'owner-cron',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        content: 'teammate digest',
+        cronPattern: '0 8 * * *',
+        id: 'teammate-cron',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+    await serverDB.insert(agentBotProviders).values([
+      {
+        agentId: agent.id,
+        applicationId: 'app-owner',
+        platform: 'discord',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        applicationId: 'app-teammate',
+        platform: 'slack',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const cronRows = await serverDB.select().from(agentCronJobs);
+    expect(cronRows.find((j) => j.id === 'owner-cron')?.userId).toBe(recipientId);
+    expect(cronRows.find((j) => j.id === 'teammate-cron')?.userId).toBe(teammateId);
+
+    const botRows = await serverDB.select().from(agentBotProviders);
+    expect(botRows.find((b) => b.applicationId === 'app-owner')?.userId).toBe(recipientId);
+    expect(botRows.find((b) => b.applicationId === 'app-teammate')?.userId).toBe(teammateId);
   });
 
   it('strips device bindings the recipient cannot reach', async () => {

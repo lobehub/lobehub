@@ -2361,6 +2361,20 @@ export class AgentModel {
       .set({ agencyConfig: cleanedAgencyConfig, updatedAt: agents.updatedAt, userId: toUserId })
       .where(eq(agents.id, agentId));
 
+    // Owner-attributed runtime rows travel with the agent: cron jobs and bot
+    // providers execute AS their `userId`, so rows the previous owner set up
+    // must re-home or the transferred bot keeps running as the former member
+    // (and dies with their account). Only the previous owner's rows move —
+    // teammates' schedules stay theirs.
+    await trx
+      .update(agentCronJobs)
+      .set({ updatedAt: agentCronJobs.updatedAt, userId: toUserId })
+      .where(and(eq(agentCronJobs.agentId, agentId), eq(agentCronJobs.userId, fromUserId)));
+    await trx
+      .update(agentBotProviders)
+      .set({ updatedAt: agentBotProviders.updatedAt, userId: toUserId })
+      .where(and(eq(agentBotProviders.agentId, agentId), eq(agentBotProviders.userId, fromUserId)));
+
     if (!migrateSessions) return { transferJobId: null };
 
     const target = { userId: toUserId, workspaceId: this.workspaceId };

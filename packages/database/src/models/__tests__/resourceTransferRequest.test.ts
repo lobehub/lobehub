@@ -247,6 +247,24 @@ describe('ResourceTransferRequestModel', () => {
     });
   });
 
+  describe('invalidateRequest', () => {
+    it('retires only the given pending request, leaving a replacement untouched', async () => {
+      const stale = await createRequest();
+      await model.invalidateRequest(stale.id);
+      const replacement = await createRequest();
+
+      await model.invalidateRequest(stale.id); // already resolved → no-op
+
+      const [staleRow] = await serverDB
+        .select()
+        .from(resourceTransferRequests)
+        .where(eq(resourceTransferRequests.id, stale.id));
+      expect(staleRow.status).toBe('cancelled');
+      const visible = await model.findPendingByResource('agent', 'agent-1');
+      expect(visible?.id).toBe(replacement.id);
+    });
+  });
+
   describe('invalidateForResources', () => {
     it('cancels pending requests of the given resources only', async () => {
       const doomed = await createRequest();

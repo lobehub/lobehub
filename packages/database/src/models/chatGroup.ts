@@ -8,7 +8,14 @@ import type {
   NewChatGroup,
   NewChatGroupAgent,
 } from '../schemas';
-import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
+import {
+  agentBotProviders,
+  agentCronJobs,
+  agents,
+  chatGroups,
+  chatGroupsAgents,
+  sessionGroups,
+} from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeAgencyConfigsForWorkspace } from '../utils/agencyConfigDevices';
 import type { GroupMemberRole } from '../utils/groupMembership';
@@ -904,6 +911,25 @@ export class ChatGroupModel {
           })
           .where(eq(agents.id, row.id));
       }
+
+      // Owner-attributed runtime rows (cron jobs, bot providers) execute AS
+      // their `userId`; the previous owner's rows on the owned agents re-home
+      // with them. Same scoping as the single-agent handover.
+      await trx
+        .update(agentCronJobs)
+        .set({ updatedAt: agentCronJobs.updatedAt, userId: toUserId })
+        .where(
+          and(inArray(agentCronJobs.agentId, ownedAgentIds), eq(agentCronJobs.userId, fromUserId)),
+        );
+      await trx
+        .update(agentBotProviders)
+        .set({ updatedAt: agentBotProviders.updatedAt, userId: toUserId })
+        .where(
+          and(
+            inArray(agentBotProviders.agentId, ownedAgentIds),
+            eq(agentBotProviders.userId, fromUserId),
+          ),
+        );
     }
   };
 

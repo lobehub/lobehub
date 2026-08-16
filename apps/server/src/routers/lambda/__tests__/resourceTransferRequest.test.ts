@@ -14,6 +14,7 @@ const mockListPendingForUser = vi.fn();
 const mockCancel = vi.fn();
 const mockDecline = vi.fn();
 const mockInvalidate = vi.fn();
+const mockInvalidateRequest = vi.fn();
 
 vi.mock('@/database/models/resourceTransferRequest', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -25,6 +26,7 @@ vi.mock('@/database/models/resourceTransferRequest', async (importOriginal) => {
       findById: mockFindById,
       findPendingByResource: mockFindPendingByResource,
       invalidateForResources: mockInvalidate,
+      invalidateRequest: mockInvalidateRequest,
       listPendingForUser: mockListPendingForUser,
     })),
   };
@@ -134,8 +136,10 @@ describe('resourceTransferRequestRouter', () => {
       await expect(caller.accept({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'BAD_REQUEST',
       });
-      // A permanently unfulfillable request must not keep rendering until expiry.
-      expect(mockInvalidate).toHaveBeenCalledWith('agent', ['agent-1']);
+      // A permanently unfulfillable request must not keep rendering until
+      // expiry — but only THIS request retires; a racing replacement survives.
+      expect(mockInvalidateRequest).toHaveBeenCalledWith('req-1');
+      expect(mockInvalidate).not.toHaveBeenCalled();
     });
 
     it('retires the request when the agent changed since it was created', async () => {
