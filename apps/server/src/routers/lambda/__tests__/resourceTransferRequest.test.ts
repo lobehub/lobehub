@@ -177,6 +177,18 @@ describe('resourceTransferRequestRouter', () => {
         code: 'CONFLICT',
       });
     });
+
+    it('maps an expired request to BAD_REQUEST on cancel and decline', async () => {
+      mockCancel.mockRejectedValue(new Error(TRANSFER_REQUEST_EXPIRED));
+      await expect(caller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+
+      mockDecline.mockRejectedValue(new Error(TRANSFER_REQUEST_EXPIRED));
+      await expect(caller.decline({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    });
   });
 
   describe('getPendingByResource', () => {

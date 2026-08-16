@@ -245,6 +245,11 @@ export const resourceTransferRequestRouter = router({
       const request = await ctx.transferRequestModel.cancel(input.requestId, ctx.userId);
       return { data: request, success: true };
     } catch (error) {
+      // A still-rendered request may cross `expiresAt` before the click lands:
+      // an expected business outcome, not a server error.
+      if (error instanceof Error && error.message === TRANSFER_REQUEST_EXPIRED) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This transfer request expired' });
+      }
       if (error instanceof Error && error.message === TRANSFER_REQUEST_NOT_PENDING) {
         throw new TRPCError({
           code: 'CONFLICT',
@@ -284,6 +289,11 @@ export const resourceTransferRequestRouter = router({
       );
       return { data: request, success: true };
     } catch (error) {
+      // A still-rendered request may cross `expiresAt` before the click lands:
+      // an expected business outcome, not a server error.
+      if (error instanceof Error && error.message === TRANSFER_REQUEST_EXPIRED) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This transfer request expired' });
+      }
       if (error instanceof Error && error.message === TRANSFER_REQUEST_NOT_PENDING) {
         throw new TRPCError({
           code: 'CONFLICT',

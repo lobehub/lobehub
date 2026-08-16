@@ -134,6 +134,87 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(threadRows.find((t) => t.id === 'teammate-thread')?.userId).toBe(teammateId);
   });
 
+  it('moves the previous owner’s topicless messages, leaving teammates’ residual rows', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB.insert(messages).values([
+      {
+        agentId: agent.id,
+        id: 'owner-residual',
+        role: 'assistant',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        id: 'teammate-residual',
+        role: 'assistant',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await handover({
+      agentId: agent.id,
+      fromUserId: ownerId,
+      migrateSessions: true,
+      toUserId: recipientId,
+    });
+
+    const rows = await serverDB.select().from(messages);
+    expect(rows.find((m) => m.id === 'owner-residual')?.userId).toBe(recipientId);
+    expect(rows.find((m) => m.id === 'teammate-residual')?.userId).toBe(teammateId);
+  });
+
+  it('drains topicless residual rows through the backfill job with owner scoping', async () => {
+    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '0';
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB
+      .insert(topics)
+      .values([{ agentId: agent.id, id: 'drain-topic', userId: ownerId, workspaceId: wsId }]);
+    await serverDB.insert(messages).values([
+      {
+        agentId: agent.id,
+        id: 'drain-topic-msg',
+        role: 'assistant',
+        topicId: 'drain-topic',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        id: 'drain-owner-residual',
+        role: 'assistant',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        id: 'drain-teammate-residual',
+        role: 'assistant',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    const result = await handover({
+      agentId: agent.id,
+      fromUserId: ownerId,
+      migrateSessions: true,
+      toUserId: recipientId,
+    });
+    expect(result.transferJobId).not.toBeNull();
+
+    let done = false;
+    while (!done) {
+      ({ done } = await AgentTransferJobModel.processNextTopic(serverDB, result.transferJobId!));
+    }
+
+    const rows = await serverDB.select().from(messages);
+    expect(rows.find((m) => m.id === 'drain-topic-msg')?.userId).toBe(recipientId);
+    expect(rows.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(recipientId);
+    expect(rows.find((m) => m.id === 'drain-teammate-residual')?.userId).toBe(teammateId);
+  });
+
   it('records a backfill job instead of rewriting large histories inline', async () => {
     process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '0';
     const agent = await ownerModel.create({ title: 'Agent' });

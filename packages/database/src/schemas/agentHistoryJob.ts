@@ -42,6 +42,11 @@ export interface AgentHistoryJobPayload {
    * of the single-agent remap.
    */
   group?: { newGroupId: string; sourceGroupId: string };
+  /**
+   * `transfer` jobs from a member-to-member handover: scope the final residual
+   * (topicless) rewrite to this previous owner so teammates' rows stay put.
+   */
+  residualOwnerUserId?: string;
 }
 
 /** `copy` queue-row payload. */

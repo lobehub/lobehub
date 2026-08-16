@@ -50,10 +50,25 @@ export const assertTransferRecipientValid = async (params: {
     });
   }
 
-  const member = await new WorkspaceMemberModel(db, initiatorId).getMember(
-    workspaceId,
-    recipientId,
-  );
+  await assertRecipientCanOwn({ actorId: initiatorId, db, recipientId, workspaceId });
+};
+
+/**
+ * The membership half of recipient validation: an ACTIVE member with write
+ * capability. Checked when a request is created AND re-checked at accept time
+ * — the seven-day pending window is long enough for the recipient to be
+ * removed or downgraded to viewer in between.
+ */
+export const assertRecipientCanOwn = async (params: {
+  /** Whose model instance runs the lookup (initiator at create, recipient at accept). */
+  actorId: string;
+  db: LobeChatDatabase;
+  recipientId: string;
+  workspaceId: string;
+}): Promise<void> => {
+  const { actorId, db, recipientId, workspaceId } = params;
+
+  const member = await new WorkspaceMemberModel(db, actorId).getMember(workspaceId, recipientId);
   if (!member) {
     throw new TRPCError({
       cause: { data: { code: TransferErrorCode.TargetNotWorkspaceMember } },
@@ -98,6 +113,10 @@ export const executeAcceptedTransfer = async (params: {
       message: `Member transfer is not supported for ${request.resourceType} yet`,
     });
   }
+
+  // Re-validate at accept time: creation-time validation does not survive the
+  // pending window (the recipient may have been removed or downgraded since).
+  await assertRecipientCanOwn({ actorId: recipientId, db, recipientId, workspaceId });
 
   const requestModel = new ResourceTransferRequestModel(db, workspaceId);
   const migrateSessions =

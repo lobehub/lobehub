@@ -108,7 +108,17 @@ export const rewriteMessageScopeForTopics = async (
  */
 export const rewriteResidualMessageScope = async (
   executor: Executor,
-  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
+  linkage: {
+    agentIds: string[];
+    groupIds?: string[];
+    /**
+     * When set, only this user's residual rows move. A member-to-member
+     * handover moves one owner's history, so an unscoped agent arm would grab
+     * teammates' topicless rows too.
+     */
+    ownerUserId?: string;
+    sessionIds: string[];
+  },
   target: AgentTransferTargetScope,
 ): Promise<void> => {
   const arms: SQL[] = [];
@@ -118,7 +128,11 @@ export const rewriteResidualMessageScope = async (
     arms.push(inArray(messages.groupId, linkage.groupIds));
   if (arms.length === 0) return;
 
-  const residual = and(isNull(messages.topicId), arms.length === 1 ? arms[0] : or(...arms));
+  const residual = and(
+    isNull(messages.topicId),
+    ...(linkage.ownerUserId ? [eq(messages.userId, linkage.ownerUserId)] : []),
+    arms.length === 1 ? arms[0] : or(...arms),
+  );
 
   await executor.execute(sql`
     UPDATE ${messages}
@@ -267,6 +281,12 @@ export interface CreateAgentTransferJobParams {
    * drift this framework exists to avoid.
    */
   residualAgentIds?: string[];
+  /**
+   * Owner scoping for the final residual rewrite (see
+   * `rewriteResidualMessageScope`). A member-to-member handover sets it to the
+   * previous owner so the drain cannot move teammates' topicless rows.
+   */
+  residualOwnerUserId?: string;
   sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
@@ -304,10 +324,18 @@ export class AgentTransferJobModel {
         agentIds: params.residualAgentIds ?? params.agentIds,
         groupIds: params.groupIds ?? [],
         // `payload` is the generic per-job slot; the remap only exists for
-        // group transfers, so it stays out of the columns.
+        // group transfers and the owner scoping only for member handovers, so
+        // both stay out of the columns.
         payload:
-          params.agentIdRemap && params.agentIdRemap.length > 0
-            ? { agentIdRemap: params.agentIdRemap }
+          (params.agentIdRemap && params.agentIdRemap.length > 0) || params.residualOwnerUserId
+            ? {
+                ...(params.agentIdRemap && params.agentIdRemap.length > 0
+                  ? { agentIdRemap: params.agentIdRemap }
+                  : {}),
+                ...(params.residualOwnerUserId
+                  ? { residualOwnerUserId: params.residualOwnerUserId }
+                  : {}),
+              }
             : undefined,
         sessionIds: params.sessionIds,
         sourceUserId: params.source.userId,
@@ -673,7 +701,12 @@ export class AgentTransferJobModel {
       if (!next) {
         await rewriteResidualMessageScope(
           trx,
-          { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
+          {
+            agentIds: job.agentIds,
+            groupIds: job.groupIds,
+            ownerUserId: job.payload?.residualOwnerUserId,
+            sessionIds: job.sessionIds,
+          },
           target,
         );
         if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);

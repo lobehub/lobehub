@@ -2491,21 +2491,38 @@ export class AgentModel {
 
     // Message rewrite reuses the transfer fast/slow split: small histories move
     // inside this transaction, large ones drain topic-by-topic via the backfill
-    // job. `residualAgentIds: []` keeps the job strictly to the moved topics —
-    // a whole-agent residual sweep would grab teammates' rows too.
+    // job. Topicless (residual) rows travel too, but only the previous owner's:
+    // the residual linkage is owner-scoped (`residualOwnerUserId`) because an
+    // unscoped whole-agent sweep would grab teammates' rows.
+    const residualCondition = and(
+      isNull(messages.topicId),
+      eq(messages.userId, fromUserId),
+      sessionIds.length > 0
+        ? or(eq(messages.agentId, agentId), inArray(messages.sessionId, sessionIds))
+        : eq(messages.agentId, agentId),
+    )!;
     const [{ affectedMessages }] = await trx
       .select({ affectedMessages: count() })
       .from(messages)
-      .where(movedTopicIds.length > 0 ? inArray(messages.topicId, movedTopicIds) : sql`false`);
+      .where(
+        movedTopicIds.length > 0
+          ? or(inArray(messages.topicId, movedTopicIds), residualCondition)
+          : residualCondition,
+      );
 
     let transferJobId: string | null = null;
     if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
       await rewriteMessageScopeForTopics(trx, movedTopicIds, target);
+      await rewriteResidualMessageScope(
+        trx,
+        { agentIds: [agentId], ownerUserId: fromUserId, sessionIds },
+        target,
+      );
     } else {
       transferJobId = await AgentTransferJobModel.createJob(trx, {
         agentIds: [agentId],
-        residualAgentIds: [],
-        sessionIds: [],
+        residualOwnerUserId: fromUserId,
+        sessionIds,
         source: { userId: fromUserId, workspaceId: this.workspaceId },
         target,
         topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),

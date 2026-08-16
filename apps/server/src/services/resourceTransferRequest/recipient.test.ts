@@ -4,7 +4,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertTransferRecipientValid } from './index';
+import { assertTransferRecipientValid, executeAcceptedTransfer } from './index';
 
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
@@ -54,6 +54,50 @@ describe('assertTransferRecipientValid', () => {
 
     await expect(assertTransferRecipientValid(baseParams)).rejects.toMatchObject({
       cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+    });
+  });
+});
+
+describe('executeAcceptedTransfer recipient recheck', () => {
+  const request = {
+    id: 'req-1',
+    initiatorId: 'initiator-1',
+    options: null,
+    previousOwnerId: 'owner-1',
+    recipientId: 'recipient-1',
+    resourceId: 'agent-1',
+    resourceType: 'agent',
+    status: 'pending',
+    workspaceId: 'ws-1',
+  } as any;
+
+  it('refuses acceptance when the recipient was downgraded to viewer during the pending window', async () => {
+    getMember.mockResolvedValue({ role: 'viewer' });
+
+    await expect(
+      executeAcceptedTransfer({
+        db: {} as LobeChatDatabase,
+        recipientId: 'recipient-1',
+        request,
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toMatchObject({
+      cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+    });
+  });
+
+  it('refuses acceptance when the recipient left the workspace during the pending window', async () => {
+    getMember.mockResolvedValue(undefined);
+
+    await expect(
+      executeAcceptedTransfer({
+        db: {} as LobeChatDatabase,
+        recipientId: 'recipient-1',
+        request,
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toMatchObject({
+      cause: { data: { code: TransferErrorCode.TargetNotWorkspaceMember } },
     });
   });
 });
