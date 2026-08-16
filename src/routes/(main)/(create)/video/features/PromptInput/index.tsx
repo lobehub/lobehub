@@ -13,6 +13,7 @@ import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
+import { useEnabledVideoModels } from '@/hooks/useEnabledVideoModels';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { usePermission } from '@/hooks/usePermission';
@@ -320,7 +321,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const setNewGenerationTopicVisibility = useVideoStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
-  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const enabledVideoModelList = useEnabledVideoModels().list;
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );

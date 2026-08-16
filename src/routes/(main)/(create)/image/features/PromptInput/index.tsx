@@ -12,6 +12,7 @@ import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
+import { useEnabledImageModels } from '@/hooks/useEnabledImageModels';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { usePermission } from '@/hooks/usePermission';
@@ -175,7 +176,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWatermark = useImageStore(isSupportedParamSelector('watermark'));
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
-  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const enabledImageModelList = useEnabledImageModels().list;
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );

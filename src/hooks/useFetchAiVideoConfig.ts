@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 
+import { useEnabledVideoModels } from '@/hooks/useEnabledVideoModels';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -10,9 +11,10 @@ import {
   DEFAULT_AI_VIDEO_MODEL,
   DEFAULT_AI_VIDEO_PROVIDER,
 } from '@/store/video/slices/generationConfig/initialState';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const checkModelEnabled = (
-  enabledVideoModelList: ReturnType<typeof aiProviderSelectors.enabledVideoModelList>,
+  enabledVideoModelList: EnabledProviderWithModels[],
   provider: string,
   model: string,
 ) => {
@@ -34,7 +36,10 @@ export const useFetchAiVideoConfig = () => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const isUserStateReady = isUserStateInit || isActualLogout;
 
-  const isReadyForInit = isStatusInit && isInitAiProviderRuntimeState && isUserStateReady;
+  const { list: enabledVideoModelList, isManagedStatusLoading } = useEnabledVideoModels();
+
+  const isReadyForInit =
+    isStatusInit && isInitAiProviderRuntimeState && isUserStateReady && !isManagedStatusLoading;
 
   const { lastSelectedVideoModel, lastSelectedVideoProvider } = useGlobalStore((s) => ({
     lastSelectedVideoModel: s.status.lastSelectedVideoModel,
@@ -42,8 +47,6 @@ export const useFetchAiVideoConfig = () => {
   }));
   const isInitializedVideoConfig = useVideoStore((s) => s.isInit);
   const initializeVideoConfig = useVideoStore((s) => s.initializeVideoConfig);
-
-  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
 
   // Determine which model/provider to use for initialization
   const initParams = useMemo(() => {
