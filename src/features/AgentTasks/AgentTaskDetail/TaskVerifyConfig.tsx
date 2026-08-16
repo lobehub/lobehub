@@ -726,17 +726,33 @@ const TaskVerifyConfig = memo(() => {
               seq={index + 1}
               title={item.title || t('verifyConfig.criterionTitlePlaceholder')}
               actions={
-                // Edit only — removal lives inside the editor modal, so the row
-                // never exposes a destructive control at rest.
-                <ActionIcon
-                  icon={Pencil}
-                  size={'small'}
-                  title={t('verifyConfig.edit')}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openCriterionDetail(item);
-                  }}
-                />
+                // Edit and delete both fold into one per-row overflow, so the
+                // row at rest shows a single quiet trigger.
+                <DropdownMenu
+                  placement={'bottomRight'}
+                  items={[
+                    {
+                      icon: <Icon icon={Pencil} />,
+                      key: 'edit',
+                      label: t('verifyConfig.edit'),
+                      onClick: () => openCriterionDetail(item),
+                    },
+                    {
+                      danger: true,
+                      icon: <Icon icon={Trash} />,
+                      key: 'remove',
+                      label: t('verifyConfig.removeCriterion'),
+                      onClick: () => handleRemove(item.id),
+                    },
+                  ]}
+                >
+                  <ActionIcon
+                    icon={MoreHorizontal}
+                    size={'small'}
+                    title={t('verifyConfig.moreActions')}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                </DropdownMenu>
               }
               icon={
                 <Icon
