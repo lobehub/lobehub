@@ -23,7 +23,7 @@ Apply these before generating any migration — they change what the schema file
   resourceType: text('resource_type', { enum: TRANSFER_RESOURCE_TYPES }).notNull(),
   ```
 
-- **Do not export const variables from schema files.** Schema files under `packages/database/src/schemas/` export tables and inferred row types only. Shared literal arrays, union types, and option interfaces belong in `@lobechat/types` (one module per domain, re-exported from its `index.ts`); both the schema (`.$type<>()`) and consumers (routers via `z.enum(...)`, services, UI) import from there. This keeps the database package from becoming an import source for app-layer constants.
+- **Keep domain constants out of schema files.** In new or modified schema files under `packages/database/src/schemas/`, shared domain literal arrays, union types, and option interfaces belong in `@lobechat/types` (one module per domain, re-exported from its `index.ts`); both the schema (`.$type<>()`) and consumers (routers via `z.enum(...)`, services, UI) import from there. This rule targets domain constants only — table objects, inferred row types, Drizzle relation objects, and zod insert/select schemas (`insertAgentSchema`, …) are the schema file's job and stay put. Existing schema files that already export such constants (e.g. `resourcePermission.ts`) are grandfathered; migrate them opportunistically when the file is next touched, not in bulk.
 
 ## Choose the rollout strategy
 
