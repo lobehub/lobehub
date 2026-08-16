@@ -19,6 +19,11 @@ import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async/caller';
+import {
+  managedPolicyErrorToTrpc,
+  resolveManagedGenerationBilling,
+} from '@/server/services/aico/generationBilling';
+import { AicoManagedPolicyError } from '@/server/services/aico/managedPolicy';
 import { FileService } from '@/server/services/file';
 import {
   AsyncTaskError,
@@ -47,7 +52,13 @@ const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 
 const imageCreateProcedure = imageProcedure.use(withScopedPermission('file:upload'));
 
+const aicoBillingSchema = z.union([
+  z.object({ source: z.literal('personal') }),
+  z.object({ organizationId: z.string().min(1), source: z.literal('organization') }),
+]);
+
 const createImageInputSchema = z.object({
+  aicoBilling: aicoBillingSchema.optional(),
   generationTopicId: z.string(),
   imageNum: z.number(),
   model: z.string(),
@@ -87,9 +98,19 @@ export const imageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, imageNum, params } = input;
+      const { generationTopicId, provider, model, imageNum, params, aicoBilling } = input;
 
       log('Starting image creation process, input: %O', input);
+
+      let billingContext;
+      try {
+        billingContext = resolveManagedGenerationBilling({ aicoBilling, provider });
+      } catch (error) {
+        if (error instanceof AicoManagedPolicyError) {
+          throw new TRPCError(managedPolicyErrorToTrpc(error));
+        }
+        throw error;
+      }
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -268,7 +289,10 @@ export const imageRouter = router({
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
-                  metadata: prechargeItem === undefined ? undefined : { precharge: prechargeItem },
+                  metadata: {
+                    aicoBilling: billingContext,
+                    ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
+                  },
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,

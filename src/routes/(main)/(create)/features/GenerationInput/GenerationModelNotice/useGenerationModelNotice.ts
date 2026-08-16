@@ -1,3 +1,5 @@
+import { useEnabledImageModels } from '@/hooks/useEnabledImageModels';
+import { useEnabledVideoModels } from '@/hooks/useEnabledVideoModels';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
@@ -69,7 +71,7 @@ export interface UseGenerationModelNoticeResult {
 export const useImageGenerationModelNotice = (): UseGenerationModelNoticeResult => {
   const model = useImageStore(imageGenerationConfigSelectors.model);
   const provider = useImageStore(imageGenerationConfigSelectors.provider);
-  const enabledModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const enabledModelList = useEnabledImageModels().list;
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
@@ -87,7 +89,7 @@ export const useImageGenerationModelNotice = (): UseGenerationModelNoticeResult 
 export const useVideoGenerationModelNotice = (): UseGenerationModelNoticeResult => {
   const model = useVideoStore(videoGenerationConfigSelectors.model);
   const provider = useVideoStore(videoGenerationConfigSelectors.provider);
-  const enabledModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const enabledModelList = useEnabledVideoModels().list;
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );

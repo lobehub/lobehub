@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 
+import { useEnabledImageModels } from '@/hooks/useEnabledImageModels';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -10,9 +11,10 @@ import {
 } from '@/store/image/slices/generationConfig/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const checkModelEnabled = (
-  enabledImageModelList: ReturnType<typeof aiProviderSelectors.enabledImageModelList>,
+  enabledImageModelList: EnabledProviderWithModels[],
   provider: string,
   model: string,
 ) => {
@@ -34,7 +36,10 @@ export const useFetchAiImageConfig = () => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const isUserStateReady = isUserStateInit || isActualLogout;
 
-  const isReadyForInit = isStatusInit && isInitAiProviderRuntimeState && isUserStateReady;
+  const { list: enabledImageModelList, isManagedStatusLoading } = useEnabledImageModels();
+
+  const isReadyForInit =
+    isStatusInit && isInitAiProviderRuntimeState && isUserStateReady && !isManagedStatusLoading;
 
   const { lastSelectedImageModel, lastSelectedImageProvider } = useGlobalStore((s) => ({
     lastSelectedImageModel: s.status.lastSelectedImageModel,
@@ -42,8 +47,6 @@ export const useFetchAiImageConfig = () => {
   }));
   const isInitializedImageConfig = useImageStore((s) => s.isInit);
   const initializeImageConfig = useImageStore((s) => s.initializeImageConfig);
-
-  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
 
   // Determine which model/provider to use for initialization
   const initParams = useMemo(() => {
@@ -69,7 +72,7 @@ export const useFetchAiImageConfig = () => {
       return { model: DEFAULT_AI_IMAGE_MODEL, provider: providerWithDefaultModel.id };
     }
 
-    // 3. Fallback to first enabled model
+    // 3. Fallback to first enabled model (OpenRouter under Aico managed mode)
     const firstProvider = enabledImageModelList[0];
     const firstModel = firstProvider?.children[0];
     if (firstProvider && firstModel) {

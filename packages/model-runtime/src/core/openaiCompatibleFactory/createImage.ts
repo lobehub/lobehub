@@ -211,7 +211,6 @@ async function generateByChatModel(
     }
   }
 
-  // Call chat completion API
   const response = await client.chat.completions.create({
     messages: [
       {
@@ -220,8 +219,12 @@ async function generateByChatModel(
       },
     ],
     model: actualModel,
+    // OpenRouter (and similar) require modalities so the model returns an image
+    // rather than text. The provider chat() path injects this via handlePayload;
+    // createImage uses the raw OpenAI client, so set it here explicitly.
+    modalities: ['image', 'text'],
     stream: false,
-  });
+  } as Parameters<typeof client.chat.completions.create>[0]);
 
   log('Chat API response: %O', response);
 

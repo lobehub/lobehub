@@ -87,7 +87,12 @@ describe('createOpenAICompatibleImage', () => {
         const result = await createOpenAICompatibleImage(mockClient, payload, 'openrouter');
 
         expect(result.imageUrl).toBe('data:image/png;base64,generatedImageData');
-        expect(mockClient.chat.completions.create).toHaveBeenCalled();
+        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            model: 'gemini-2.0-flash-exp',
+          }),
+        );
       });
 
       it('should process base64 data URI without mimeType', async () => {
@@ -267,6 +272,7 @@ describe('createOpenAICompatibleImage', () => {
               role: 'user',
             },
           ],
+          modalities: ['image', 'text'],
           model: 'gemini-2.0-flash',
           stream: false,
         });

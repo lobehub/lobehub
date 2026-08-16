@@ -137,15 +137,16 @@ describe('imageRouter', () => {
   });
 
   const createDefaultInput = (overrides = {}) => ({
+    aicoBilling: { source: 'personal' as const },
     generationTopicId: 'topic-1',
     imageNum: 2,
-    model: 'stable-diffusion',
+    model: 'google/gemini-3.1-flash-image-preview:image',
     params: {
       prompt: 'a beautiful sunset',
       width: 512,
       height: 512,
     },
-    provider: 'test-provider',
+    provider: 'openrouter',
     ...overrides,
   });
 
@@ -170,8 +171,8 @@ describe('imageRouter', () => {
     const mockBatch = {
       id: 'batch-1',
       generationTopicId: 'topic-1',
-      model: 'stable-diffusion',
-      provider: 'test-provider',
+      model: 'google/gemini-3.1-flash-image-preview:image',
+      provider: 'openrouter',
       config: {},
       userId: mockUserId,
     };
@@ -237,31 +238,40 @@ describe('imageRouter', () => {
       expect(mockServerDB.transaction).toHaveBeenCalled();
     });
 
-    it('should validate mapped model id before rejecting deprecated lobehub image models', async () => {
-      mockResolveBusinessModelMapping.mockResolvedValue({
-        requestedModelId: 'onboarding-image',
-        resolvedModelId: 'gpt-image-1',
-      });
-
+    it('should reject direct (BYOK) image providers under Aico managed policy', async () => {
       const ctx = createMockCtx();
       const input = createDefaultInput({
-        model: 'onboarding-image',
-        provider: 'lobehub',
+        aicoBilling: undefined,
+        model: 'gemini-3.1-flash-image-preview:image',
+        provider: 'google',
       });
 
       const caller = imageRouter.createCaller(ctx);
-      const result = await caller.createImage(input);
 
-      expect(result.success).toBe(true);
-      expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
-      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('gpt-image-1', 'image', {
-        getUserEmail: expect.any(Function),
+      await expect(caller.createImage(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'DIRECT_PROVIDER_NOT_ALLOWED',
       });
-      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
-      expect(mockFindUserById).not.toHaveBeenCalled();
-      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
-      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
-      expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should reject managed providers when billing context is missing', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        aicoBilling: undefined,
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      await expect(caller.createImage(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'BILLING_CONTEXT_REQUIRED',
+      });
+
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
     it('should reject inaccessible generation topic before charging or creating records', async () => {
@@ -275,26 +285,6 @@ describe('imageRouter', () => {
       });
 
       expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
-      expect(mockServerDB.transaction).not.toHaveBeenCalled();
-      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
-    });
-
-    it('should reject unavailable lobehub image models before creating async tasks', async () => {
-      mockIsLobeHubModelAvailable.mockResolvedValue(false);
-
-      const ctx = createMockCtx();
-      const input = createDefaultInput({
-        model: 'restricted-image-model',
-        provider: 'lobehub',
-      });
-
-      const caller = imageRouter.createCaller(ctx);
-
-      await expect(caller.createImage(input)).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-        message: 'LobeHubModelDeprecated',
-      });
-
       expect(mockServerDB.transaction).not.toHaveBeenCalled();
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
@@ -436,8 +426,8 @@ describe('imageRouter', () => {
         expect.objectContaining({
           generationTopicId: 'topic-1',
           imageNum: 2,
-          model: 'stable-diffusion',
-          provider: 'test-provider',
+          model: 'google/gemini-3.1-flash-image-preview:image',
+          provider: 'openrouter',
           userId: mockUserId,
         }),
       );
@@ -456,14 +446,24 @@ describe('imageRouter', () => {
 
       // insertValues: [0] batch, [1] generations[], [2] task#1, [3] task#2
       expect(mockInsertValues[2]).toEqual(
-        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-1' } } }),
+        expect.objectContaining({
+          metadata: {
+            aicoBilling: { source: 'personal' },
+            precharge: { reservationKey: 'k-1' },
+          },
+        }),
       );
       expect(mockInsertValues[3]).toEqual(
-        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-2' } } }),
+        expect.objectContaining({
+          metadata: {
+            aicoBilling: { source: 'personal' },
+            precharge: { reservationKey: 'k-2' },
+          },
+        }),
       );
     });
 
-    it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {
+    it('stores aicoBilling on asyncTask metadata when there are no prechargeItems', async () => {
       mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
 
       const ctx = createMockCtx();
@@ -472,7 +472,11 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: undefined }));
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({
+          metadata: { aicoBilling: { source: 'personal' } },
+        }),
+      );
     });
 
     it('should trigger async image generation tasks', async () => {

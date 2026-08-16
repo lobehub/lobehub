@@ -7,6 +7,8 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import type { AicoBillingContext } from '@/server/services/aico/billingContext';
+import { toManagedGenerationModelId } from '@/server/services/aico/generationBilling';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
@@ -16,6 +18,7 @@ import type { VideoGenerationAsset } from '@/types/generation';
 const log = debug('lobe-video:background-polling');
 
 interface BackgroundPollingParams {
+  aicoBilling?: AicoBillingContext;
   asyncTaskCreatedAt: Date;
   asyncTaskId: string;
   generationBatchId: string;
@@ -34,6 +37,7 @@ export async function processBackgroundVideoPolling(
   params: BackgroundPollingParams,
 ): Promise<void> {
   const {
+    aicoBilling,
     asyncTaskCreatedAt,
     asyncTaskId,
     generationBatchId,
@@ -57,7 +61,10 @@ export async function processBackgroundVideoPolling(
     const videoService = new VideoGenerationService(db, userId, workspaceId);
     const generationModel = new GenerationModel(db, userId, workspaceId);
 
-    const modelRuntime = await initModelRuntimeFromDB(db, userId, provider, workspaceId);
+    const modelRuntime = await initModelRuntimeFromDB(db, userId, provider, workspaceId, {
+      billingContext: aicoBilling,
+      modelId: toManagedGenerationModelId(model),
+    });
     const pollResult = await pollUntilCompletion(modelRuntime, inferenceId);
 
     if (!pollResult) {

@@ -21,6 +21,8 @@ import { GenerationModel } from '@/database/models/generation';
 import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { parseAicoBillingContext } from '@/server/services/aico/billingContext';
+import { toManagedGenerationModelId } from '@/server/services/aico/generationBilling';
 import { GenerationService } from '@/server/services/generation';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -142,7 +144,13 @@ export const imageRouter = router({
         // billing. Loaded before the model mapping so the handle is available
         // for reconciliation even when mapping resolution throws.
         const asyncTask = await asyncTaskModel.findById(taskId);
-        prechargeResult = (asyncTask?.metadata as { precharge?: unknown } | undefined)?.precharge;
+        const taskMetadata = asyncTask?.metadata as
+          { aicoBilling?: unknown; precharge?: unknown } | undefined;
+        prechargeResult = taskMetadata?.precharge;
+        const billingContext =
+          taskMetadata?.aicoBilling !== undefined
+            ? parseAicoBillingContext(taskMetadata.aicoBilling)
+            : undefined;
 
         // Resolve model mapping up front so both the success and error billing
         // paths can reference the resolved model id.
@@ -160,6 +168,10 @@ export const imageRouter = router({
             ctx.userId,
             provider,
             workspaceId,
+            {
+              billingContext,
+              modelId: toManagedGenerationModelId(resolvedModelId),
+            },
           );
 
           // Check if operation has been cancelled

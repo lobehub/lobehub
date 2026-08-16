@@ -19,6 +19,8 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { parseAicoBillingContext } from '@/server/services/aico/billingContext';
+import { toManagedGenerationModelId } from '@/server/services/aico/generationBilling';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { FileSource } from '@/types/files';
@@ -156,11 +158,23 @@ export const videoRouter = router({
     try {
       const pollingPromise = async (signal: AbortSignal) => {
         log('Initializing agent runtime for provider: %s', provider);
+
+        const asyncTask = await asyncTaskModel.findById(asyncTaskId);
+        const taskMetadata = asyncTask?.metadata as { aicoBilling?: unknown } | undefined;
+        const billingContext =
+          taskMetadata?.aicoBilling !== undefined
+            ? parseAicoBillingContext(taskMetadata.aicoBilling)
+            : undefined;
+
         const modelRuntime = await initModelRuntimeFromDB(
           ctx.serverDB,
           ctx.userId,
           provider,
           workspaceId,
+          {
+            billingContext,
+            modelId: toManagedGenerationModelId(resolvedModelId),
+          },
         );
 
         checkAbortSignal(signal);

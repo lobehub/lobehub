@@ -64,6 +64,20 @@ vi.mock('@/store/aiInfra', () => ({
     selector(testState.aiInfra),
 }));
 
+vi.mock('@/hooks/useEnabledImageModels', () => ({
+  useEnabledImageModels: () => ({
+    isManagedStatusLoading: false,
+    list: testState.aiInfra.enabledImageModelList,
+  }),
+}));
+
+vi.mock('@/hooks/useEnabledVideoModels', () => ({
+  useEnabledVideoModels: () => ({
+    isManagedStatusLoading: false,
+    list: testState.aiInfra.enabledVideoModelList,
+  }),
+}));
+
 describe('resolveGenerationModelNotice', () => {
   it('does not return a notice before the model runtime config is ready', () => {
     expect(
