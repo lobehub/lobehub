@@ -6,7 +6,16 @@ import {
 } from '@lobechat/const';
 import { type AgentPluginMode, getDisabledPluginIds } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
+import {
+  Avatar,
+  Icon,
+  Popover,
+  SearchBar,
+  stopPropagation,
+  Tag,
+  Tooltip,
+  usePopoverGroupHandle,
+} from '@lobehub/ui';
 import { confirmModal, Switch } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -54,10 +63,14 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
-import { SKILL_ICON_GAP, SKILL_ICON_SIZE, SKILL_TRAILING_CONTROL_SIZE } from './constants';
+import {
+  policyTriggerId,
+  SKILL_ICON_GAP,
+  SKILL_ICON_SIZE,
+  SKILL_TRAILING_CONTROL_SIZE,
+} from './constants';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
@@ -379,14 +392,18 @@ const styles = createStaticStyles(({ css }) => ({
 
     transition: opacity 150ms ${cssVar.motionEaseOut};
 
+    /* The policy menu is anchored outside the row, so the row loses hover as soon
+       as the pointer moves into it. Keep the button that opened it visible. */
+    &:has([data-popup-open]),
+    &:has([aria-expanded='true']) {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
     @media (hover: none) {
       pointer-events: auto;
       opacity: 1;
     }
-  `,
-  toolTrailingVisible: css`
-    pointer-events: auto;
-    opacity: 1;
   `,
   typeTag: css`
     display: inline-flex;
@@ -445,7 +462,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [autoOpen, setAutoOpen] = useState(true);
   const [disabledOpen, setDisabledOpen] = useState(true);
-  const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
+  const popoverGroup = usePopoverGroupHandle();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -517,10 +534,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [canEdit, checkedSet, disabledIdSet, setPluginMode],
   );
 
-  const openSkillPolicyMenu = useCallback((id: string) => {
-    closeToolDetailPopovers();
-    setPolicyOpenId(id);
-  }, []);
+  // Right-click has no trigger of its own, so it drives the shared group popup
+  // by the trigger id the "..." button registers.
+  const openSkillPolicyMenu = useCallback(
+    (id: string) => {
+      popoverGroup?.open(policyTriggerId(id));
+    },
+    [popoverGroup],
+  );
 
   const renderPolicyMenu = useCallback(
     (
@@ -566,7 +587,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onClick={async (event) => {
             event.stopPropagation();
             if (!canEdit) return;
-            setPolicyOpenId(null);
+            popoverGroup?.close();
             await updateSkillPolicy(id, value);
           }}
         >
@@ -623,7 +644,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               onClick={(event) => {
                 event.stopPropagation();
                 if (!canEdit) return;
-                setPolicyOpenId(null);
+                popoverGroup?.close();
                 configureConfig.onConfigure();
               }}
             >
@@ -641,7 +662,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               onClick={(event) => {
                 event.stopPropagation();
                 if (!canEdit) return;
-                setPolicyOpenId(null);
+                popoverGroup?.close();
                 confirmModal({
                   content: t('tools.builtins.uninstallConfirm.desc', {
                     name: deleteConfig.displayName,
@@ -669,22 +690,19 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         <Popover
           arrow={false}
           content={content}
-          open={policyOpenId === id}
           placement="rightTop"
           positionerProps={{ sideOffset: 8 }}
           styles={{ content: { padding: 0 } }}
           trigger="click"
-          onOpenChange={(open) => (open ? openSkillPolicyMenu(id) : setPolicyOpenId(null))}
+          triggerProps={{ id: policyTriggerId(id) }}
         >
           <button
             aria-label={t('tools.skillActivateMode.title')}
             className={cx(styles.policyButton)}
             disabled={!canEdit}
             type="button"
-            onPointerEnter={closeToolDetailPopovers}
             onClick={(event) => {
               event.stopPropagation();
-              closeToolDetailPopovers();
             }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -693,7 +711,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             }}
             onPointerDown={(event) => {
               event.stopPropagation();
-              closeToolDetailPopovers();
             }}
           >
             <Icon icon={MoreHorizontal} size={15} />
@@ -701,7 +718,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [canEdit, checkedSet, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [canEdit, checkedSet, disabledIdSet, openSkillPolicyMenu, popoverGroup, t, updateSkillPolicy],
   );
 
   const renderToolLabel = useCallback(
@@ -717,8 +734,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       <SkillRow
         className={cx(styles.toolRow)}
         detailContent={detailContent}
-        detailDisabled={policyOpenId !== null}
         labelClassName={cx(styles.toolLabel)}
+        trailingClassName={cx(styles.toolTrailing)}
         label={
           <>
             {icon}
@@ -734,14 +751,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             {action}
           </>
         }
-        trailingClassName={cx(
-          styles.toolTrailing,
-          policyOpenId === id && styles.toolTrailingVisible,
-        )}
         onContextMenu={() => openSkillPolicyMenu(id)}
       />
     ),
-    [openSkillPolicyMenu, policyOpenId],
+    [openSkillPolicyMenu],
   );
 
   const createManagedSkillItem = useCallback(
@@ -2028,7 +2041,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   return {
     autoCount: allAutoItems.length,
     installedPluginItems,
-    isPolicyMenuOpen: policyOpenId !== null,
     marketFooter,
     marketHeader,
     marketItems,

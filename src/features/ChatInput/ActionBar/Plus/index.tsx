@@ -2,7 +2,7 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover, Tag } from '@lobehub/ui';
+import { Icon, Popover, PopoverGroup, Tag } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
@@ -52,7 +52,6 @@ import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
-import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -202,7 +201,6 @@ type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
 };
 
 interface PopoverLabelProps {
-  disabled?: boolean;
   label: ReactNode;
   popoverContent: ReactNode;
   // Distance from the label cell's right edge. Switch-type rows reserve a
@@ -211,48 +209,28 @@ interface PopoverLabelProps {
   sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(
-  ({ disabled, label, popoverContent, sideOffset = 10 }) => {
-    const { close, onOpenChange, open } = useDetailPopoverState(disabled);
-
-    return (
-      <Popover
-        arrow={false}
-        content={popoverContent}
-        disabled={disabled}
-        mouseEnterDelay={0.25}
-        open={open}
-        placement={'rightTop'}
-        positionerProps={{ sideOffset }}
-        styles={{ content: { padding: 0 } }}
-        onOpenChange={onOpenChange}
-      >
-        <span
-          style={{ display: 'block', width: '100%' }}
-          onClickCapture={close}
-          onContextMenuCapture={close}
-        >
-          {label}
-        </span>
-      </Popover>
-    );
-  },
-);
+const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffset = 10 }) => (
+  <Popover
+    arrow={false}
+    content={popoverContent}
+    mouseEnterDelay={0.25}
+    placement={'rightTop'}
+    positionerProps={{ sideOffset }}
+    styles={{ content: { padding: 0 } }}
+  >
+    <span style={{ display: 'block', width: '100%' }}>{label}</span>
+  </Popover>
+));
 
 PopoverLabel.displayName = 'PopoverLabel';
 
-const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown, disabled?: boolean) => {
+const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown) => {
   if (!popoverContent) return label;
 
-  return (
-    <PopoverLabel disabled={disabled} label={label} popoverContent={popoverContent as ReactNode} />
-  );
+  return <PopoverLabel label={label} popoverContent={popoverContent as ReactNode} />;
 };
 
-const stripPopoverContent = (
-  items?: ActionDropdownMenuItems,
-  detailPopoverDisabled?: boolean,
-): ActionDropdownMenuItems =>
+const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMenuItems =>
   items?.map((item) => {
     if (!item) return item;
     if ('type' in item && item.type === 'divider') return item;
@@ -264,12 +242,12 @@ const stripPopoverContent = (
     if ('children' in nextItem && nextItem.children) {
       return {
         ...nextItem,
-        children: stripPopoverContent(nextItem.children, detailPopoverDisabled),
+        children: stripPopoverContent(nextItem.children),
       } as ActionDropdownMenuItems[number];
     }
 
     if ('label' in nextItem) {
-      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent, detailPopoverDisabled);
+      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent);
     }
 
     return nextItem;
@@ -335,7 +313,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const closeDropdown = useCallback(() => close(), [close]);
   const {
     autoCount: skillAutoCount,
-    isPolicyMenuOpen: isSkillPolicyMenuOpen,
     marketFooter: skillMarketFooter,
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
@@ -460,13 +437,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       </div>
     );
 
-    // The row detail card and the "..." policy menu anchor to the same right edge,
-    // so leaving hover live lets a neighbouring row's card open on top of the menu
-    // and swallow the click meant for it.
-    const skillMenuItems = stripPopoverContent(
-      skillItems as ActionDropdownMenuItems,
-      isSkillPolicyMenuOpen,
-    );
+    const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
 
     const uploadItems: ActionDropdownMenuItems = [
       {
@@ -755,7 +726,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,
-    isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
     showProviderSearch,
@@ -786,18 +756,23 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
 const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
 
+  // One shared popup for every detail card and the rows' policy menus, so only
+  // one of them can be open at a time — the mutual exclusion the menu needs, and
+  // the reason none of these popovers is controlled.
   return (
-    <ChatInputAction
-      icon={PlusIcon}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-      title={t('plus.tooltip')}
-      tooltipProps={{ placement: 'top' }}
-      dropdown={{
-        menu: { useItems: usePlusMenuItems },
-        minWidth: 220,
-        placement: 'topLeft',
-      }}
-    />
+    <PopoverGroup>
+      <ChatInputAction
+        icon={PlusIcon}
+        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+        title={t('plus.tooltip')}
+        tooltipProps={{ placement: 'top' }}
+        dropdown={{
+          menu: { useItems: usePlusMenuItems },
+          minWidth: 220,
+          placement: 'topLeft',
+        }}
+      />
+    </PopoverGroup>
   );
 });
 

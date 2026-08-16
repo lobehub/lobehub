@@ -117,14 +117,13 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
 
 interface PopoverContentProps {
   autoCount: number;
-  detailPopoverDisabled?: boolean;
   items: ItemType[];
   onOpenStore: () => void;
   pinnedCount: number;
 }
 
 const PopoverContent = memo<PopoverContentProps>(
-  ({ autoCount, detailPopoverDisabled, items, onOpenStore, pinnedCount }) => {
+  ({ autoCount, items, onOpenStore, pinnedCount }) => {
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const [searchKeyword, setSearchKeyword] = useState('');
@@ -157,7 +156,7 @@ const PopoverContent = memo<PopoverContentProps>(
             overflowY: 'auto',
           }}
         >
-          <ToolsList detailPopoverDisabled={detailPopoverDisabled} items={filteredItems} />
+          <ToolsList items={filteredItems} />
         </ScrollSignalProvider>
         <div className={styles.footer}>
           <span className={styles.statsItem}>
