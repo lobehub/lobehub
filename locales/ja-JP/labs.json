@@ -30,6 +30,8 @@
   "features.oauthApps.title": "OAuthアプリ",
   "features.projects.desc": "長期的な目標を専用のワークスペースに整理し、それぞれに専用のエージェント、知識ベース、タスクを設定できます。",
   "features.projects.title": "プロジェクトワークスペース",
+  "features.selfLearning.desc": "各エージェントが実際の実践から学んだ内容を表示します—そのルールベース、実際に使用されるルール、およびまだ空白のレイヤー。",
+  "features.selfLearning.title": "自己進化",
   "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",
   "features.taskVerify.title": "タスク納品受け入れ",
   "features.topicAcceptance.desc": "現在のトピックのための配達チェックリストを作成し、コンポーザーのすぐ上に配置します。これにより、会話がいつでも編集可能な基準に従って行われます。",

@@ -30,6 +30,8 @@
   "features.oauthApps.title": "Ứng dụng OAuth",
   "features.projects.desc": "Tổ chức các mục tiêu dài hạn thành các không gian làm việc riêng biệt với các tác nhân, cơ sở kiến thức và nhiệm vụ riêng.",
   "features.projects.title": "Không gian Làm việc Dự án",
+  "features.selfLearning.desc": "Hiển thị những gì mỗi tác nhân đã học từ thực tiễn thực tế — cơ sở quy tắc của nó, các quy tắc thực sự được sử dụng và các lớp nào vẫn còn trống.",
+  "features.selfLearning.title": "Tự tiến hóa",
   "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",
   "features.taskVerify.title": "Chấp Nhận Giao Nhiệm Vụ",
   "features.topicAcceptance.desc": "Tạo danh sách kiểm tra giao hàng cho chủ đề hiện tại ngay phía trên trình soạn thảo, để cuộc trò chuyện tuân theo các tiêu chuẩn mà bạn có thể chỉnh sửa bất kỳ lúc nào.",
