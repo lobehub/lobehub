@@ -137,6 +137,19 @@ describe('executeAcceptedTransfer recipient recheck', () => {
     );
   });
 
+  it('propagates transient authority-check failures instead of mapping them to stale', async () => {
+    assertCanPerformResourceAction.mockRejectedValue(new Error('connection reset'));
+
+    await expect(
+      executeAcceptedTransfer({
+        db: dbWithLockedMemberRows([{ role: 'member' }]),
+        recipientId: 'recipient-1',
+        request,
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toThrow('connection reset');
+  });
+
   it('refuses a reassignment accept when the initiator account was deleted', async () => {
     await expect(
       executeAcceptedTransfer({

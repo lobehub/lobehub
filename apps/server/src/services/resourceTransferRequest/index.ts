@@ -177,8 +177,17 @@ export const executeAcceptedTransfer = async (params: {
           userId: request.initiatorId,
           workspaceId,
         });
-      } catch {
-        throw staleAuthority();
+      } catch (error) {
+        // Only the expected authorization OUTCOMES mean stale authority (the
+        // router retires the request on that code). A transient DB/permission
+        // -service failure must propagate and stay retryable instead.
+        if (
+          error instanceof TRPCError &&
+          (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND')
+        ) {
+          throw staleAuthority();
+        }
+        throw error;
       }
     }
 

@@ -12,9 +12,15 @@ import {
   agentBotProviders,
   agentCronJobs,
   agents,
+  briefs,
   chatGroups,
   chatGroupsAgents,
   sessionGroups,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeAgencyConfigsForWorkspace } from '../utils/agencyConfigDevices';
@@ -930,6 +936,40 @@ export class ChatGroupModel {
             eq(agentBotProviders.userId, fromUserId),
           ),
         );
+
+      // Tasks the previous owner attributed to the owned agents re-home too —
+      // `runScheduleTick()` executes a task AS its creator, and a private
+      // owned agent under the new owner resolves to NOT_FOUND for the old one.
+      const movedTasks = await trx
+        .update(tasks)
+        .set({ createdByUserId: toUserId, updatedAt: tasks.updatedAt })
+        .where(
+          and(
+            eq(tasks.createdByUserId, fromUserId),
+            or(
+              inArray(tasks.assigneeAgentId, ownedAgentIds),
+              inArray(tasks.createdByAgentId, ownedAgentIds),
+            ),
+          ),
+        )
+        .returning({ id: tasks.id });
+      const movedTaskIds = movedTasks.map((task) => task.id);
+      if (movedTaskIds.length > 0) {
+        for (const table of [taskDependencies, taskDocuments, taskTopics, taskComments] as const) {
+          await trx
+            .update(table)
+            .set({ userId: toUserId })
+            .where(and(inArray(table.taskId, movedTaskIds), eq(table.userId, fromUserId)));
+        }
+        await trx
+          .update(briefs)
+          .set({ userId: toUserId })
+          .where(and(inArray(briefs.taskId, movedTaskIds), eq(briefs.userId, fromUserId)));
+      }
+      await trx
+        .update(briefs)
+        .set({ userId: toUserId })
+        .where(and(inArray(briefs.agentId, ownedAgentIds), eq(briefs.userId, fromUserId)));
     }
   };
 

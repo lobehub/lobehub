@@ -2375,6 +2375,39 @@ export class AgentModel {
       .set({ updatedAt: agentBotProviders.updatedAt, userId: toUserId })
       .where(and(eq(agentBotProviders.agentId, agentId), eq(agentBotProviders.userId, fromUserId)));
 
+    // Tasks the previous owner attributed to this agent re-home too:
+    // `runScheduleTick()` executes a task AS its creator, and a private agent
+    // owned by someone else resolves to NOT_FOUND — without this flip every
+    // scheduled/manual run breaks after the handover. Owner-scoped like the
+    // rest: teammates' tasks on a shared agent stay theirs.
+    const movedTasks = await trx
+      .update(tasks)
+      .set({ createdByUserId: toUserId, updatedAt: tasks.updatedAt })
+      .where(
+        and(
+          eq(tasks.createdByUserId, fromUserId),
+          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
+        ),
+      )
+      .returning({ id: tasks.id });
+    const movedTaskIds = movedTasks.map((task) => task.id);
+    if (movedTaskIds.length > 0) {
+      for (const table of [taskDependencies, taskDocuments, taskTopics, taskComments] as const) {
+        await trx
+          .update(table)
+          .set({ userId: toUserId })
+          .where(and(inArray(table.taskId, movedTaskIds), eq(table.userId, fromUserId)));
+      }
+      await trx
+        .update(briefs)
+        .set({ userId: toUserId })
+        .where(and(inArray(briefs.taskId, movedTaskIds), eq(briefs.userId, fromUserId)));
+    }
+    await trx
+      .update(briefs)
+      .set({ userId: toUserId })
+      .where(and(eq(briefs.agentId, agentId), eq(briefs.userId, fromUserId)));
+
     if (!migrateSessions) return { transferJobId: null };
 
     const target = { userId: toUserId, workspaceId: this.workspaceId };

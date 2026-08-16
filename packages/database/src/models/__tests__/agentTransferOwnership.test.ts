@@ -13,6 +13,7 @@ import {
   messages,
   messageTranslates,
   sessions,
+  tasks,
   threads,
   topics,
   users,
@@ -229,6 +230,34 @@ describe('AgentModel.transferAgentOwnership', () => {
     // recipient; only the public device survives the handover.
     expect(updated.agencyConfig?.boundDeviceId).toBeUndefined();
     expect(updated.agencyConfig?.workingDirByDevice).toEqual({ 'public-ws-device': '/srv/shared' });
+  });
+
+  it('re-homes the previous owner’s tasks on this agent, not teammates’', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB.insert(tasks).values([
+      {
+        assigneeAgentId: agent.id,
+        createdByUserId: ownerId,
+        identifier: 'TASK-1',
+        instruction: 'owner task',
+        seq: 1,
+        workspaceId: wsId,
+      },
+      {
+        assigneeAgentId: agent.id,
+        createdByUserId: teammateId,
+        identifier: 'TASK-2',
+        instruction: 'teammate task',
+        seq: 2,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const taskRows = await serverDB.select().from(tasks);
+    expect(taskRows.find((t) => t.identifier === 'TASK-1')?.createdByUserId).toBe(recipientId);
+    expect(taskRows.find((t) => t.identifier === 'TASK-2')?.createdByUserId).toBe(teammateId);
   });
 
   it('re-homes the previous owner’s cron jobs and bot providers, not teammates’', async () => {
