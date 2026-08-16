@@ -135,16 +135,18 @@ describe('REVIEW_PREDICT_MODEL_CONFIG', () => {
    * surfaced. The pinned model must be able to actually see the frames.
    */
   it('pins a model that model-bank says can read images', async () => {
-    const { google } = await import('model-bank');
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
-    const card = google.find(
-      (model) => model.id === REVIEW_PREDICT_MODEL_CONFIG.model && model.type === 'chat',
+    const card = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) =>
+        model.id === REVIEW_PREDICT_MODEL_CONFIG.model &&
+        model.providerId === REVIEW_PREDICT_MODEL_CONFIG.provider &&
+        model.type === 'chat',
     );
-    expect(REVIEW_PREDICT_MODEL_CONFIG.provider).toBe('google');
     expect(
       card,
-      `${REVIEW_PREDICT_MODEL_CONFIG.model} is not in model-bank's google chat list`,
+      `${REVIEW_PREDICT_MODEL_CONFIG.provider}/${REVIEW_PREDICT_MODEL_CONFIG.model} is not a chat model in model-bank`,
     ).toBeDefined();
-    expect(card!.type === 'chat' && card!.abilities?.vision).toBe(true);
+    expect(card!.abilities?.vision).toBe(true);
   });
 });

@@ -1,5 +1,9 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import {
+  DEFAULT_PROVIDER,
+  DEFAULT_REVIEW_PREDICT_MODEL,
+  DEFAULT_REVIEW_PREDICT_PROVIDER,
+} from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
 
 import { AgentModel } from '@/database/models/agent';
@@ -41,10 +45,12 @@ export const isHeterogeneousVerifyProvider = (provider?: string | null): boolean
  * verifier each run happened to use.
  *
  * The pinned model MUST have `vision: true` in model-bank; a test guards this.
+ * The values live in `@lobechat/business-const` so the cloud build can override
+ * them without touching this service.
  */
 export const REVIEW_PREDICT_MODEL_CONFIG: VerifyModelConfig = {
-  model: 'gemini-3.6-flash',
-  provider: 'google',
+  model: DEFAULT_REVIEW_PREDICT_MODEL,
+  provider: DEFAULT_REVIEW_PREDICT_PROVIDER,
 };
 
 const isUsableVerifyModelConfig = (
