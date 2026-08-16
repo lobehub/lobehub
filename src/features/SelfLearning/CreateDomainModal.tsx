@@ -1,6 +1,5 @@
 'use client';
 
-import { parseExpertiseDomainBrief } from '@lobechat/types';
 import { Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, keyframes } from 'antd-style';
@@ -37,15 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/**
- * 一句话建一个专长。
- *
- * 验收原话是「填写太麻烦了，能否改成一个输入框直接填写，然后我们做后台解析」。所以这里
- * 只剩一个框：你说想让它在什么事情上变强、什么不算，名称由后端拆出来。
- *
- * 那句话本身会原样成为领域过滤器 —— 它是这个专长唯一可执行的判据，不做改写：
- * 替用户改写判断标准，等于替他改了这个专长将来会学什么。
- */
+/** Creates an expertise domain from one natural-language brief interpreted by the backend. */
 const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated }) => {
   const { t } = useTranslation('selfLearning');
   const { close } = useModalContext();
@@ -71,8 +62,7 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
     if (!brief.trim()) return;
     setLoading(true);
     try {
-      const draft = parseExpertiseDomainBrief(brief);
-      await expertiseService.createDomain({ agentId, brief, ...draft });
+      await expertiseService.createDomain({ agentId, brief: brief.trim() });
       localStorage.removeItem(storageKey);
       onCreated();
       close();

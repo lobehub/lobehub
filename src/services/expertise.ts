@@ -14,7 +14,7 @@ export type ExpertiseLessonItem = Awaited<
 export type ExpertiseLessonDetail = NonNullable<
   Awaited<ReturnType<typeof lambdaClient.expertise.getLesson.query>>
 >;
-/** 成熟度是个联合类型：可用时有百分比，不可用时只有原因。界面必须两种都渲染。 */
+/** Maturity is a union: usable results expose a value, while unusable results expose a reason. */
 export type ExpertiseMaturity = ExpertiseDomainItem['maturity'];
 
 class ExpertiseService {
@@ -27,12 +27,8 @@ class ExpertiseService {
 
   getLesson = async (lessonId: string) => lambdaClient.expertise.getLesson.query({ lessonId });
 
-  createDomain = async (params: {
-    agentId: string;
-    brief: string;
-    domainFilter?: string;
-    title?: string;
-  }) => lambdaClient.expertise.createDomain.mutate(params);
+  createDomain = async (params: { agentId: string; brief: string }) =>
+    lambdaClient.expertise.createDomain.mutate(params);
 
   ingestHistory = async (agentId: string) =>
     lambdaClient.expertise.ingestHistory.mutate({ agentId });

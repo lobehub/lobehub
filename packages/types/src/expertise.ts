@@ -95,31 +95,6 @@ export interface ExpertiseAnchorCandidate {
   title: string;
 }
 
-const EXPERTISE_TITLE_MAX = 18;
-
-/**
- * Turns the user's one-sentence description into the editable draft shown before creation.
- * The domain filter deliberately remains verbatim: it is the user's acceptance rule, not copy.
- */
-export const parseExpertiseDomainBrief = (value: string) => {
-  const brief = value.trim();
-  const firstClause = brief.split(/[。；;\n，,]/)[0]?.trim() || brief;
-  const stripped = firstClause
-    .replace(/^(我想|我希望|希望|想)?(让|把)?(它|他|这个\s*agent|agent)?/i, '')
-    .replace(/^(在|对|针对|关于)/, '')
-    .replace(/(上|方面|这块|这件事)?(变强|更强|更专业|更好|做得更好|积累经验|学习|成长)。?$/, '')
-    .trim();
-  const rawTitle = stripped || firstClause;
-
-  return {
-    domainFilter: brief,
-    title:
-      rawTitle.length > EXPERTISE_TITLE_MAX
-        ? `${rawTitle.slice(0, EXPERTISE_TITLE_MAX)}…`
-        : rawTitle,
-  };
-};
-
 export type ExpertiseInsightEvidenceType = 'lesson' | 'run' | 'hit' | 'topic' | 'operation';
 
 export interface ExpertiseInsightEvidenceRef {
