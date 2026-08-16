@@ -34,13 +34,14 @@ export class ExpertiseDomainService {
     private readonly workspaceId?: string,
   ) {}
 
-  createFromBrief = async (input: { agentId: string; brief: string }) => {
+  /** Turns one natural-language brief into an editable domain draft; nothing is persisted. */
+  draftFromBrief = async (input: { agentId: string; brief: string }) => {
     const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
     const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
     if (!modelConfig) throw new Error('Agent model configuration is unavailable');
 
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
-    const generated = DomainBriefSchema.parse(
+    return DomainBriefSchema.parse(
       await ai.generateObject(
         {
           messages: [
@@ -65,12 +66,27 @@ export class ExpertiseDomainService {
         },
       ),
     );
+  };
 
-    return new ExpertiseModel(this.db, this.userId, this.workspaceId).createDomain({
-      ...generated,
+  /** Persists a reviewed draft. The user has seen and possibly edited every field by now. */
+  create = async (input: {
+    agentId: string;
+    brief: string;
+    domainFilter: string;
+    outOfScope?: string | null;
+    title: string;
+  }) =>
+    new ExpertiseModel(this.db, this.userId, this.workspaceId).createDomain({
       agentId: input.agentId,
       brief: input.brief,
-      outOfScope: generated.outOfScope ?? undefined,
+      domainFilter: input.domainFilter,
+      outOfScope: input.outOfScope ?? undefined,
+      title: input.title,
     });
+
+  /** One-shot path kept for callers that do not review the draft (tests, scripts). */
+  createFromBrief = async (input: { agentId: string; brief: string }) => {
+    const generated = await this.draftFromBrief(input);
+    return this.create({ ...input, ...generated });
   };
 }

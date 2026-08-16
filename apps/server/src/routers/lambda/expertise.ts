@@ -7,8 +7,6 @@ import { ExpertiseDomainService } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
-import { recentLessonDelta } from './expertiseHelpers';
-
 const expertiseProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
@@ -66,23 +64,23 @@ const toMaturity = (s?: {
 };
 
 export const expertiseRouter = router({
-  /** L0: all expertise available to an agent and its latest state. */
+  /**
+   * L0: the growth portrait — every bound domain with its habits (active lessons + recent
+   * outcomes), the cumulative-learned series, and the per-run reliability series.
+   * Reliability tiers are folded on the client so one pure helper owns the thresholds.
+   */
   listByAgent: expertiseProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ ctx, input }) => {
       const bound = await ctx.expertiseModel.listDomainsForAgent(input.agentId);
       const domainIds = bound.map((b) => b.domain.id);
-      const [snapshots, actors, insights, series] = await Promise.all([
+      const [snapshots, series, reliability, lessons] = await Promise.all([
         ctx.expertiseModel.latestSnapshots(domainIds),
-        ctx.expertiseModel.actorsByDomain(domainIds),
-        ctx.expertiseModel.listInsights(domainIds),
         ctx.expertiseModel.seriesForDomains(domainIds),
+        ctx.expertiseModel.reliabilitySeries(domainIds),
+        ctx.expertiseModel.listLessonsWithRecent(domainIds),
       ]);
       const snapByDomain = new Map(snapshots.map((s) => [s.domainId, s]));
-      const actorsByDomain = new Map<string, string[]>();
-      for (const a of actors) {
-        actorsByDomain.set(a.domainId, [...(actorsByDomain.get(a.domainId) ?? []), a.actorId]);
-      }
       const seriesByDomain = new Map<string, { n: number; run: number }[]>();
       for (const s of series) {
         seriesByDomain.set(s.domainId, [
@@ -90,43 +88,49 @@ export const expertiseRouter = router({
           { n: s.activeCount, run: s.runIndex },
         ]);
       }
+      const reliabilityByDomain = new Map<
+        string,
+        { pass: number; run: number; violation: number }[]
+      >();
+      for (const r of reliability) {
+        reliabilityByDomain.set(r.domainId, [
+          ...(reliabilityByDomain.get(r.domainId) ?? []),
+          { pass: r.pass, run: r.runIndex, violation: r.violation },
+        ]);
+      }
+      const lessonsByDomain = new Map<string, typeof lessons>();
+      for (const l of lessons) {
+        lessonsByDomain.set(l.domainId, [...(lessonsByDomain.get(l.domainId) ?? []), l]);
+      }
 
-      const domains = bound.map(({ binding, domain }) => {
+      const domains = bound.map(({ domain }) => {
         const snap = snapByDomain.get(domain.id);
-        const points = seriesByDomain.get(domain.id) ?? [];
-        // Net change over the latest five runs distinguishes growth, retirement, and no learning.
-        const delta = recentLessonDelta(points);
         return {
-          activeRate: snap?.activeRate ?? null,
-          actors: actorsByDomain.get(domain.id) ?? [],
-          canonCoverage: snap?.canonCoverage ?? null,
-          contributionMode: binding.contributionMode,
-          delta,
+          domainFilter: domain.domainFilter,
           id: domain.id,
-          /** Timestamp of the latest practice run. */
           lastPracticedAt: snap?.capturedAt ?? null,
-          layerCounts: snap?.layerCounts ?? {},
-          layerCoverage: snap?.layerCoverage ?? null,
           layers: domain.layers,
-          layerSource: domain.layerSource,
-          lessonCount: snap?.activeCount ?? 0,
-          maturity: toMaturity(snap),
+          lessons: (lessonsByDomain.get(domain.id) ?? []).map((l) => ({
+            code: l.code,
+            createdAt: l.createdAt,
+            hitCount: l.hitCount,
+            id: l.id,
+            lastHitAt: l.lastHitAt,
+            layer: l.layer,
+            recent: l.recent,
+            /** Taught by the user directly (as opposed to distilled from practice). */
+            taughtByUser: l.createdByUserId != null,
+            title: l.title,
+          })),
+          outOfScope: domain.outOfScope,
+          reliability: reliabilityByDomain.get(domain.id) ?? [],
           runCount: snap?.runIndex ?? 0,
-          /** Series used by the overlaid maturity chart. */
-          series: points,
-          slug: domain.slug,
+          series: seriesByDomain.get(domain.id) ?? [],
           title: domain.title,
         };
       });
 
-      return {
-        domains,
-        insights,
-        totals: {
-          domains: domains.length,
-          lessons: domains.reduce((a, d) => a + d.lessonCount, 0),
-        },
-      };
+      return { domains };
     }),
 
   /** L1: the complete SCLPT domain state and time series. */
@@ -199,15 +203,49 @@ export const expertiseRouter = router({
       return { hits, lesson };
     }),
 
-  /** Creates an expertise domain from a natural-language brief. */
+  /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
+  draftDomain: expertiseProcedure
+    .input(z.object({ agentId: z.string(), brief: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
+
+  /** Step 2 of creation: persist the reviewed draft and bind it to the agent. */
   createDomain: expertiseProcedure
     .input(
       z.object({
         agentId: z.string(),
         brief: z.string().min(1),
+        domainFilter: z.string().min(1),
+        outOfScope: z.string().nullable().optional(),
+        title: z.string().min(1).max(80),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.createFromBrief(input)),
+    .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.create(input)),
+
+  /** How many past conversations a history warm-up would read. */
+  countHistory: expertiseProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ ctx, input }) => ({
+      candidateCount: await ctx.expertiseIngestionService.countHistoricalTopics(input.agentId),
+    })),
+
+  /** The user teaches one lesson directly, in their own words. */
+  teachLesson: expertiseProcedure
+    .input(z.object({ domainId: z.string(), text: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseModel.teachLesson({ domainId: input.domainId, text: input.text }),
+    ),
+
+  /** The user corrects a lesson; the correction is versioned and joins the lesson body. */
+  reviseLesson: expertiseProcedure
+    .input(z.object({ lessonId: z.string(), text: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseModel.reviseLesson(input.lessonId, input.text),
+    ),
+
+  /** The user asks it to forget a lesson. */
+  retireLesson: expertiseProcedure
+    .input(z.object({ lessonId: z.string() }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.retireLesson(input.lessonId)),
 
   /** Explicitly bootstraps expertise from conversations that existed before the domain did. */
   ingestHistory: expertiseProcedure

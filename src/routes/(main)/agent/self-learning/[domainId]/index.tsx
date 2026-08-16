@@ -3,11 +3,12 @@
 import { memo, Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import DomainDetail from '@/features/SelfLearning/Detail';
+import SelfLearning from '@/features/SelfLearning';
 
+/** The domain page is the same growth portrait, scoped to one direction via :domainId. */
 const AgentSelfLearningDomainPage = memo(() => (
   <Suspense fallback={<Loading debugId="SelfLearningDomain" />}>
-    <DomainDetail />
+    <SelfLearning />
   </Suspense>
 ));
 
