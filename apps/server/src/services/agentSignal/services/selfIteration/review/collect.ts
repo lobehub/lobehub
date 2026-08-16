@@ -381,6 +381,8 @@ export interface SelfReviewSignal {
 export type SelfReviewSignalKind =
   | 'durable_user_preference'
   | 'frequent_tool_workflow'
+  | 'recurring_review_idea'
+  | 'repeated_user_correction'
   | 'hinted_skill_document_changed'
   | 'pending_related_proposal_exists'
   | 'repeated_tool_failure'
