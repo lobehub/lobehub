@@ -301,6 +301,18 @@ export interface CreateAgentTransferJobParams {
    * drift this framework exists to avoid.
    */
   residualAgentIds?: string[];
+  /**
+   * Owner-scoped residual linkage for a member handover whose residual set was
+   * too large to rewrite synchronously. Persisted in the PAYLOAD (with the
+   * residual columns blank) so a finalizer predating owner scoping no-ops
+   * instead of running an unscoped sweep of teammates' rows.
+   */
+  residualOwnerScope?: {
+    agentIds: string[];
+    ownerUserId: string;
+    restrictSessionIds: string[];
+    sessionIds: string[];
+  };
   sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
@@ -338,10 +350,18 @@ export class AgentTransferJobModel {
         agentIds: params.residualAgentIds ?? params.agentIds,
         groupIds: params.groupIds ?? [],
         // `payload` is the generic per-job slot; the remap only exists for
-        // group transfers, so it stays out of the columns.
+        // group transfers and the owner-scoped residual only for member
+        // handovers, so both stay out of the columns.
         payload:
-          params.agentIdRemap && params.agentIdRemap.length > 0
-            ? { agentIdRemap: params.agentIdRemap }
+          (params.agentIdRemap && params.agentIdRemap.length > 0) || params.residualOwnerScope
+            ? {
+                ...(params.agentIdRemap && params.agentIdRemap.length > 0
+                  ? { agentIdRemap: params.agentIdRemap }
+                  : {}),
+                ...(params.residualOwnerScope
+                  ? { residualOwnerScope: params.residualOwnerScope }
+                  : {}),
+              }
             : undefined,
         sessionIds: params.sessionIds,
         sourceUserId: params.source.userId,
@@ -705,9 +725,16 @@ export class AgentTransferJobModel {
         .limit(1);
 
       if (!next) {
+        // A member handover's owner-scoped residual rides in the payload; its
+        // columns are intentionally blank (see createJob).
+        const ownerScope = job.payload?.residualOwnerScope;
         await rewriteResidualMessageScope(
           trx,
-          { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
+          ownerScope ?? {
+            agentIds: job.agentIds,
+            groupIds: job.groupIds,
+            sessionIds: job.sessionIds,
+          },
           target,
         );
         if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);

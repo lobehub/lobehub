@@ -188,6 +188,31 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(childRows.find((c) => c.id === 'teammate-residual')?.userId).toBe(teammateId);
   });
 
+  it('strips device bindings the recipient cannot reach', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB
+      .update(agents)
+      .set({
+        agencyConfig: {
+          boundDeviceId: 'owner-personal-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+          workingDirByDevice: { 'owner-personal-device': '/home/owner' },
+        },
+      })
+      .where(eq(agents.id, agent.id));
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const [updated] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.userId).toBe(recipientId);
+    // The personal device is not enrolled in the workspace: binding, per-device
+    // working dirs, and the fixed-device policy are all re-homed.
+    expect(updated.agencyConfig?.boundDeviceId).toBeUndefined();
+    expect(updated.agencyConfig?.workingDirByDevice).toBeUndefined();
+    expect(updated.agencyConfig?.executionTargetSelectionPolicy).toBe('member');
+  });
+
   it('moves exclusive sessions but leaves shared legacy group sessions untouched', async () => {
     const agent = await ownerModel.create({ title: 'Agent' });
     const otherAgent = await ownerModel.create({ title: 'Other Agent' });
@@ -223,6 +248,23 @@ describe('AgentModel.transferAgentOwnership', () => {
       },
     ]);
 
+    await serverDB.insert(threads).values([
+      {
+        agentId: agent.id,
+        id: 'exclusive-thread',
+        topicId: 'exclusive-topic',
+        type: 'continuation',
+        userId: ownerId,
+      },
+      {
+        agentId: agent.id,
+        id: 'shared-thread',
+        topicId: 'shared-topic',
+        type: 'continuation',
+        userId: ownerId,
+      },
+    ]);
+
     await handover({
       agentId: agent.id,
       fromUserId: ownerId,
@@ -247,6 +289,11 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(topicRows.find((t) => t.id === 'exclusive-topic')?.userId).toBe(recipientId);
     expect(topicRows.find((t) => t.id === 'shared-topic')?.userId).toBe(ownerId);
     expect(topicRows.find((t) => t.id === 'other-agent-topic')?.userId).toBe(ownerId);
+
+    // Threads follow their topics: the one on the unmoved shared topic stays.
+    const threadRows = await serverDB.select().from(threads);
+    expect(threadRows.find((t) => t.id === 'exclusive-thread')?.userId).toBe(recipientId);
+    expect(threadRows.find((t) => t.id === 'shared-thread')?.userId).toBe(ownerId);
   });
 
   it('drains topicless residual rows through the backfill job with owner scoping', async () => {
@@ -288,12 +335,12 @@ describe('AgentModel.transferAgentOwnership', () => {
     });
     expect(result.transferJobId).not.toBeNull();
 
-    // Residual rows move synchronously inside the handover transaction; the
-    // job carries only the topic drain, with blank residual linkage so every
-    // finalizer version's residual pass is a no-op. A rolling deployment can
-    // therefore neither sweep teammates' rows nor drop the residual.
+    // With the threshold at 0 the residual set is also "large", so it defers
+    // to the job: the owner-scoped linkage rides in the payload while the
+    // residual COLUMNS stay blank — a finalizer predating owner scoping would
+    // no-op instead of sweeping teammates' rows.
     const preDrain = await serverDB.select().from(messages);
-    expect(preDrain.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(recipientId);
+    expect(preDrain.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(ownerId);
     expect(preDrain.find((m) => m.id === 'drain-topic-msg')?.userId).toBe(ownerId);
 
     const [jobRow] = await serverDB
@@ -302,6 +349,12 @@ describe('AgentModel.transferAgentOwnership', () => {
       .where(eq(agentHistoryJobs.id, result.transferJobId!));
     expect(jobRow.agentIds).toEqual([]);
     expect(jobRow.sessionIds).toEqual([]);
+    expect(jobRow.payload?.residualOwnerScope).toEqual({
+      agentIds: [agent.id],
+      ownerUserId: ownerId,
+      restrictSessionIds: [],
+      sessionIds: [],
+    });
 
     let done = false;
     while (!done) {
