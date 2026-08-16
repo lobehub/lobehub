@@ -172,6 +172,12 @@ export interface AgentGroupMembershipRef {
 export const AGENT_OWNED_BY_GROUP = 'AGENT_OWNED_BY_GROUP';
 
 /**
+ * Ownership handover rejected: the agent's owner changed (or the agent left
+ * the workspace) between the transfer request and its acceptance.
+ */
+export const AGENT_OWNERSHIP_STALE = 'AGENT_OWNERSHIP_STALE';
+
+/**
  * Refusal to move an agent that belongs to a chat group rather than to the
  * user. Carries the groups so the caller can say WHICH ones, the way the
  * existing visibility guards do — "cannot move this agent" with no reason is
@@ -2375,5 +2381,137 @@ export class AgentModel {
         transferJobId,
       }));
     });
+  };
+
+  /**
+   * Same-workspace ownership handover: the recipient of an accepted transfer
+   * request becomes the agent's owner. Deliberately NOT {@link transferAgents}:
+   * the agent stays in its workspace, so nothing about scope changes — slug,
+   * visibility, permission rows, group links, labels and every other member's
+   * conversations all stay put. Only `agents.userId` flips, plus (opt-in) the
+   * previous owner's OWN conversation history.
+   *
+   * Runs inside the caller's transaction: the caller flips the transfer
+   * request's status in the same `trx`, so a stale/raced accept rolls both
+   * back together.
+   */
+  transferAgentOwnership = async (
+    trx: Transaction,
+    params: {
+      agentId: string;
+      /** The owner recorded on the transfer request; a mismatch means the request is stale. */
+      fromUserId: string;
+      /** Also hand over `fromUserId`'s own topics/messages/threads for this agent. */
+      migrateSessions?: boolean;
+      toUserId: string;
+    },
+  ): Promise<{ transferJobId: string | null }> => {
+    const { agentId, fromUserId, migrateSessions, toUserId } = params;
+    if (!this.workspaceId) throw new Error(AGENT_OWNERSHIP_STALE);
+
+    // FOR UPDATE: serialize against a concurrent cross-scope transfer or a
+    // second accept; the loser re-reads and fails the staleness check below.
+    const [agent] = await trx
+      .select()
+      .from(agents)
+      .where(and(eq(agents.id, agentId), eq(agents.workspaceId, this.workspaceId)))
+      .for('update');
+    if (!agent || agent.userId !== fromUserId) throw new Error(AGENT_OWNERSHIP_STALE);
+
+    // An unfinished backfill still rewrites rows toward the OLD owner's
+    // request; hand the agent over only once it has drained (same guards as
+    // the cross-scope transfer).
+    if (await AgentTransferJobModel.hasPendingJobForAgents(trx, [agentId])) {
+      throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+    }
+    if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, [agentId])) {
+      throw new Error(AGENT_COPY_IN_PROGRESS);
+    }
+
+    // An ownership flip does not make the agent's content newer.
+    await trx
+      .update(agents)
+      .set({ updatedAt: agents.updatedAt, userId: toUserId })
+      .where(eq(agents.id, agentId));
+
+    if (!migrateSessions) return { transferJobId: null };
+
+    const target = { userId: toUserId, workspaceId: this.workspaceId };
+
+    // The previous owner's sessions for this agent travel with the history:
+    // a moved topic pointing at a session the recipient cannot see would
+    // strand it in legacy session-based surfaces.
+    const links = await trx
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .innerJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+      .where(and(eq(agentsToSessions.agentId, agentId), eq(sessions.userId, fromUserId)));
+    const sessionIds = [...new Set(links.map((link) => link.sessionId))];
+
+    if (sessionIds.length > 0) {
+      await trx
+        .update(sessions)
+        .set({ groupId: null, updatedAt: sessions.updatedAt, userId: toUserId })
+        .where(inArray(sessions.id, sessionIds));
+      await trx
+        .update(agentsToSessions)
+        .set({ userId: toUserId })
+        .where(
+          and(
+            eq(agentsToSessions.agentId, agentId),
+            inArray(agentsToSessions.sessionId, sessionIds),
+          ),
+        );
+    }
+
+    // Only the previous owner's own topics move; teammates keep theirs.
+    const topicCondition = and(
+      eq(topics.userId, fromUserId),
+      sessionIds.length > 0
+        ? or(eq(topics.agentId, agentId), inArray(topics.sessionId, sessionIds))
+        : eq(topics.agentId, agentId),
+    );
+    await trx
+      .select({ id: topics.id })
+      .from(topics)
+      .where(topicCondition)
+      .orderBy(asc(topics.id))
+      .for('update');
+    const movedTopics = await trx
+      .update(topics)
+      .set({ updatedAt: topics.updatedAt, userId: toUserId })
+      .where(topicCondition)
+      .returning({ id: topics.id, updatedAt: topics.updatedAt });
+    const movedTopicIds = movedTopics.map((topic) => topic.id);
+
+    await trx
+      .update(threads)
+      .set({ updatedAt: threads.updatedAt, userId: toUserId })
+      .where(and(eq(threads.agentId, agentId), eq(threads.userId, fromUserId)));
+
+    // Message rewrite reuses the transfer fast/slow split: small histories move
+    // inside this transaction, large ones drain topic-by-topic via the backfill
+    // job. `residualAgentIds: []` keeps the job strictly to the moved topics —
+    // a whole-agent residual sweep would grab teammates' rows too.
+    const [{ affectedMessages }] = await trx
+      .select({ affectedMessages: count() })
+      .from(messages)
+      .where(movedTopicIds.length > 0 ? inArray(messages.topicId, movedTopicIds) : sql`false`);
+
+    let transferJobId: string | null = null;
+    if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
+      await rewriteMessageScopeForTopics(trx, movedTopicIds, target);
+    } else {
+      transferJobId = await AgentTransferJobModel.createJob(trx, {
+        agentIds: [agentId],
+        residualAgentIds: [],
+        sessionIds: [],
+        source: { userId: fromUserId, workspaceId: this.workspaceId },
+        target,
+        topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
+      });
+    }
+
+    return { transferJobId };
   };
 }

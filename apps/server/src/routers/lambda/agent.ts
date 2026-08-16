@@ -9,6 +9,7 @@ import {
   prioritizeAgentTransferTopic,
   startAgentTransferJob,
 } from '@/business/server/agent-transfer/jobRunner';
+import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel, AgentOwnedByGroupError } from '@/database/models/agent';
@@ -21,6 +22,10 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import {
+  ResourceTransferRequestModel,
+  TRANSFER_REQUEST_ALREADY_PENDING,
+} from '@/database/models/resourceTransferRequest';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
@@ -42,6 +47,7 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
+import { assertTransferRecipientValid } from '@/server/services/resourceTransferRequest';
 import {
   hasWorkspaceScopedPermission,
   isWorkspacePrimaryOwner,
@@ -779,6 +785,11 @@ export const agentRouter = router({
           'agent',
           input.agentId,
         );
+        // A deleted agent can no longer be handed over — void any live request.
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agent', [input.agentId]);
       }
       return result;
     }),
@@ -921,9 +932,20 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        /**
+         * Member transfer: hand the initiator's own conversation history to the
+         * recipient on accept. Creator path only; ignored without `targetMemberId`.
+         */
+        migrateSessions: z.boolean().optional(),
         targetAccessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
         /** @deprecated Compatibility for released clients. */
         targetGeneralAccess: z.enum(['editor', 'viewer']).optional(),
+        /**
+         * Hand ownership to another member of the CURRENT workspace. Mutually
+         * exclusive with `targetWorkspaceId`; creates a pending transfer
+         * request the recipient must accept instead of moving anything now.
+         */
+        targetMemberId: z.string().optional(),
         targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
@@ -949,6 +971,79 @@ export const agentRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
+      }
+
+      // 2a. Member transfer: initiate a pending request instead of moving the
+      // agent. Nothing changes until the recipient accepts.
+      if (input.targetMemberId) {
+        if (!ctx.workspaceId || input.targetWorkspaceId) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+            code: 'BAD_REQUEST',
+            message: 'Member transfer happens inside the current workspace',
+          });
+        }
+        // Group-built/virtual rows are workspace infrastructure, not content
+        // someone can personally hand over.
+        if (agent.virtual) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+            code: 'BAD_REQUEST',
+            message: 'This agent cannot be transferred',
+          });
+        }
+        // Handing over conversations is a personal decision: only the creator
+        // moving their OWN agent may include their history. A primary owner
+        // reassigning someone else's agent transfers the bare resource.
+        if (input.migrateSessions && agent.userId !== ctx.userId) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only the agent's owner can migrate their conversation history",
+          });
+        }
+        await assertTransferRecipientValid({
+          currentOwnerId: agent.userId,
+          db: ctx.serverDB,
+          initiatorId: ctx.userId,
+          recipientId: input.targetMemberId,
+          workspaceId: ctx.workspaceId,
+        });
+
+        try {
+          const request = await new ResourceTransferRequestModel(
+            ctx.serverDB,
+            ctx.workspaceId,
+          ).create({
+            initiatorId: ctx.userId,
+            options: input.migrateSessions ? { migrateSessions: true } : undefined,
+            previousOwnerId: agent.userId,
+            recipientId: input.targetMemberId,
+            resourceId: input.agentId,
+            resourceType: 'agent',
+          });
+          // Best-effort: a notification failure must not fail the request.
+          notifyResourceTransfer({
+            event: 'requested',
+            initiatorId: ctx.userId,
+            previousOwnerId: agent.userId,
+            recipientId: input.targetMemberId,
+            requestId: request.id,
+            resourceId: input.agentId,
+            resourceType: 'agent',
+            workspaceId: ctx.workspaceId,
+          }).catch((error) => console.error('[agent:transferAgent] notify failed', error));
+          return { requestId: request.id, status: 'pending' as const };
+        } catch (error) {
+          if (error instanceof Error && error.message === TRANSFER_REQUEST_ALREADY_PENDING) {
+            throw new TRPCError({
+              cause: { data: { code: TransferErrorCode.TransferRequestPending } },
+              code: 'CONFLICT',
+              message: 'This agent already has a pending transfer request',
+            });
+          }
+          throw error;
+        }
       }
 
       // 3. Validate target workspace access (user must be member+)
@@ -1052,6 +1147,12 @@ export const agentRouter = router({
           'agent',
           input.agentId,
         );
+        // The agent left this workspace — a live member-transfer request can
+        // no longer be accepted, so void it.
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agent', [input.agentId]);
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         // A released client's two-valued `viewer` is an explicit "less than
@@ -1221,6 +1322,11 @@ export const agentRouter = router({
         await Promise.all(
           agentIds.map((agentId) => sourcePermissionModel.removeAll('agent', agentId)),
         );
+        // The agents left this workspace — void any live member-transfer requests.
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agent', agentIds);
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         const targetAccessLevel = input.targetAccessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent;

@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -9,7 +9,7 @@ import type {
   NewChatGroupAgent,
 } from '../schemas';
 import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import type { GroupMemberRole } from '../utils/groupMembership';
 import {
   GROUP_SUPERVISOR_ROLE,
@@ -18,9 +18,18 @@ import {
 } from '../utils/groupMembership';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
+import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from './agentTransferJob';
 
 /** Slugs owned by builtin provisioning; a group delete must never reach one. */
 const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
+
+/**
+ * The group is no longer where the transfer request said it was: moved scope,
+ * changed hands, or was deleted. The request that referenced it can never
+ * complete.
+ */
+export const CHAT_GROUP_OWNERSHIP_STALE = 'CHAT_GROUP_OWNERSHIP_STALE';
 
 export class ChatGroupModel {
   private userId: string;
@@ -774,6 +783,107 @@ export class ChatGroupModel {
       await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
     });
   }
+
+  /**
+   * Same-workspace ownership handover: what accepting a member-to-member
+   * transfer request executes. Deliberately narrower than the cross-scope
+   * `AgentGroupRepository.transferToWorkspace` — the group stays where it is,
+   * so nothing is cloned and no conversation moves. Only ownership flips: the
+   * group row, its junction rows, and the member agents that exist to serve it
+   * (supervisor + generated members). Referenced standalone members keep their
+   * own owners — membership never owned them.
+   *
+   * Runs inside the caller's transaction: the caller flips the transfer
+   * request's status in the same `trx`, so a stale/raced accept rolls both
+   * back together.
+   */
+  transferGroupOwnership = async (
+    trx: Transaction,
+    params: {
+      /** The owner recorded on the transfer request; a mismatch means the request is stale. */
+      fromUserId: string;
+      groupId: string;
+      toUserId: string;
+    },
+  ): Promise<void> => {
+    const { fromUserId, groupId, toUserId } = params;
+    if (!this.workspaceId) throw new Error(CHAT_GROUP_OWNERSHIP_STALE);
+
+    // FOR UPDATE: serialize against a concurrent cross-scope transfer, delete,
+    // or second accept; the loser re-reads and fails the staleness check.
+    const [group] = await trx
+      .select()
+      .from(chatGroups)
+      .where(and(eq(chatGroups.id, groupId), eq(chatGroups.workspaceId, this.workspaceId)))
+      .for('update');
+    if (!group || group.userId !== fromUserId) throw new Error(CHAT_GROUP_OWNERSHIP_STALE);
+
+    // Raw roster read (no visibility predicate): the owned/referenced split
+    // must see every member, exactly as delete and the cross-scope transfer do.
+    const memberRows = await trx
+      .select({
+        agentId: chatGroupsAgents.agentId,
+        role: chatGroupsAgents.role,
+        slug: agents.slug,
+        virtual: agents.virtual,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(eq(chatGroupsAgents.chatGroupId, groupId));
+
+    const agentIds = memberRows.map((row) => row.agentId);
+    const ownedAgentIds = memberRows
+      .filter((row) => resolveGroupMembershipType(row) === 'owned')
+      .map((row) => row.agentId);
+
+    // Same lock-then-guard as `transferToWorkspace`: serialize with a
+    // concurrent transfer of any member agent BEFORE consulting the pending
+    // job tables, so two racing operations cannot both pass the guards.
+    if (agentIds.length > 0) {
+      await trx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(inArray(agents.id, agentIds))
+        .orderBy(asc(agents.id))
+        .for('update');
+    }
+
+    // An unfinished backfill still rewrites rows toward the OLD owner's
+    // request; hand the group over only once it has drained.
+    if (
+      (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) ||
+      (await AgentTransferJobModel.hasPendingJobForGroups(trx, [groupId]))
+    ) {
+      throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+    }
+    if (
+      (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, agentIds)) ||
+      (await AgentCopyJobModel.hasPendingCopyJobForSourceGroups(trx, [groupId]))
+    ) {
+      throw new Error(AGENT_COPY_IN_PROGRESS);
+    }
+
+    // An ownership flip does not make the group's content newer, and the
+    // scope/visibility/folder/pin all stay: the group is not moving anywhere.
+    await trx
+      .update(chatGroups)
+      .set({ updatedAt: chatGroups.updatedAt, userId: toUserId })
+      .where(eq(chatGroups.id, groupId));
+
+    // The junction rows belong to the GROUP, so all of them follow its owner —
+    // including the rows pointing at referenced members that stay put.
+    await trx
+      .update(chatGroupsAgents)
+      .set({ userId: toUserId })
+      .where(eq(chatGroupsAgents.chatGroupId, groupId));
+
+    if (ownedAgentIds.length > 0) {
+      await trx
+        .update(agents)
+        .set({ updatedAt: agents.updatedAt, userId: toUserId })
+        .where(inArray(agents.id, ownedAgentIds));
+    }
+  };
 
   // ******* Agent Query Methods ******* //
 
