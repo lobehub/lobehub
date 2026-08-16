@@ -1,12 +1,13 @@
 # Runtime data for Aico local moz deploys (see PANACHAT_DATA_DIR in deploy/.env).
 #
-# Postgres uses a Docker *named* volume (panachat_postgres_data). That avoids the
+# Postgres, Redis, and RustFS use Docker *named* volumes. That avoids the
 # Docker Desktop + WSL2 bug where a host bind mount appears in `docker inspect`
-# but the container actually gets empty tmpfs → Postgres initdb → 0 users while
-# the real cluster still sits on disk under PANACHAT_DATA_DIR/postgres.
+# but the container actually gets empty tmpfs. For Postgres that meant initdb
+# and 0 users; for Redis/RustFS it emptied cache and uploads while the real
+# files still sat under PANACHAT_DATA_DIR.
 #
-# Redis / RustFS stay on host binds (easier to inspect; less catastrophic if
-# Desktop remounts wrong). SQL backups via `moz -B` remain the recovery path.
+# PANACHAT_DATA_DIR still holds the moz fingerprint, SQL-adjacent metadata, and
+# leftover bind copies after one-time migrate.
 #
 # Used with:
 #   docker compose -f docker-compose.yml -f docker-compose.aico.override.yml \
@@ -19,12 +20,16 @@ services:
 
   redis:
     volumes:
-      - ${PANACHAT_DATA_DIR}/redis:/data
+      - panachat_redis_data:/data
 
   rustfs:
     volumes:
-      - ${PANACHAT_DATA_DIR}/rustfs:/data
+      - panachat_rustfs_data:/data
 
 volumes:
   panachat_postgres_data:
     name: panachat_postgres_data
+  panachat_redis_data:
+    name: panachat_redis_data
+  panachat_rustfs_data:
+    name: panachat_rustfs_data

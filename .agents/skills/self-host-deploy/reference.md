@@ -121,17 +121,18 @@ JOIN users u ON u.id = pa.user_id;
 
 Local builds via `moz` / `scripts/deploy-local.sh` persist data under:
 
-| Data                         | Where                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| **Postgres**                 | Docker named volume `panachat_postgres_data` (not a host bind)                   |
-| Redis / RustFS               | `PANACHAT_DATA_DIR` → default `~/.local/share/panachat-data/{redis,rustfs}`      |
-| Fingerprint / legacy PG copy | `~/.local/share/panachat-data/` (legacy `postgres/` kept after one-time migrate) |
+| Data                         | Where                                                        |
+| ---------------------------- | ------------------------------------------------------------ |
+| **Postgres**                 | Docker named volume `panachat_postgres_data`                 |
+| **Redis**                    | Docker named volume `panachat_redis_data`                    |
+| **RustFS**                   | Docker named volume `panachat_rustfs_data`                   |
+| Fingerprint / leftover binds | `PANACHAT_DATA_DIR` (default `~/.local/share/panachat-data`) |
 
 Compose: `docker-compose.aico.data.override.yml`. **`moz -u` / `moz -d` do not delete** the volume or data dir — they only recreate containers.
 
-### Why named volume for Postgres
+### Why named volumes
 
-Docker Desktop + WSL2 sometimes reports a **bind** mount in `docker inspect` while the container actually gets **tmpfs** (empty RAM). Postgres then `initdb`s → 0 users while the real cluster still sits on the host path. A named volume lives in Docker’s Linux VM and avoids that failure mode. `moz` also refuses to mark a deploy healthy if PGDATA is tmpfs or missing `PG_VERSION`.
+Docker Desktop + WSL2 sometimes reports a **bind** mount in `docker inspect` while the container actually gets **tmpfs** (empty RAM). Postgres then `initdb`s → 0 users; Redis/RustFS look empty while the real files still sit on the host path. Named volumes live in Docker’s Linux VM and avoid that failure mode. `moz` also refuses to mark a deploy healthy if PGDATA is tmpfs or missing `PG_VERSION`.
 
 ### Symptom: users / platform admins “missing” after redeploy
 

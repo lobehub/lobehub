@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Backup / restore PanaChat / Aico deploy data (Postgres dump + RustFS uploads).
 #
-# Postgres lives in Docker named volume `panachat_postgres_data` (moz local deploys).
-# Dumps go through `docker exec … pg_dump` — no host PGDATA bind required.
+# Postgres/Redis/RustFS live in Docker named volumes (moz local deploys).
+# Dumps go through `docker exec … pg_dump` and a volume tar for RustFS.
 #
 # Usage:
 #   ./scripts/panachat-backup.sh                  # manual backup
@@ -19,6 +19,7 @@
 #   LOBE_DB_NAME           default lobechat
 #   POSTGRES_CONTAINER     default lobe-postgres
 #   POSTGRES_VOLUME_NAME   default panachat_postgres_data
+#   RUSTFS_VOLUME_NAME     default panachat_rustfs_data
 #   PANACHAT_KEEP_DAILY_DAYS=14
 #   PANACHAT_KEEP_WEEKLY_DAYS=56
 #   PANACHAT_KEEP_MONTHLY_DAYS=365
@@ -38,6 +39,7 @@ PANACHAT_DATA_DIR="${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}"
 PANACHAT_BACKUP_DIR="${PANACHAT_BACKUP_DIR:-$HOME/.local/share/panachat-backups}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-lobe-postgres}"
 POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-panachat_postgres_data}"
+RUSTFS_VOLUME_NAME="${RUSTFS_VOLUME_NAME:-panachat_rustfs_data}"
 LOBE_DB_NAME="${LOBE_DB_NAME:-lobechat}"
 
 KEEP_DAILY_DAYS="${PANACHAT_KEEP_DAILY_DAYS:-14}"
@@ -55,7 +57,7 @@ RESTORE_FILE=""
 load_deploy_env() {
   [[ -f "$DEPLOY_DIR/.env" ]] || return 0
   local key val
-  for key in PANACHAT_DATA_DIR PANACHAT_BACKUP_DIR LOBE_DB_NAME POSTGRES_VOLUME_NAME; do
+  for key in PANACHAT_DATA_DIR PANACHAT_BACKUP_DIR LOBE_DB_NAME POSTGRES_VOLUME_NAME RUSTFS_VOLUME_NAME; do
     val="$(grep -E "^${key}=" "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
     if [[ -n "$val" ]]; then
       printf -v "$key" '%s' "$val"
@@ -76,9 +78,10 @@ Options:
   --strict                             Fail if Postgres is not running
   -h, --help                           Show help
 
-Postgres storage (moz local):
-  Named volume: ${POSTGRES_VOLUME_NAME}
-  Fingerprint:  \$PANACHAT_DATA_DIR/.moz-db-fingerprint
+Postgres / Redis / RustFS storage (moz local):
+  Postgres volume: ${POSTGRES_VOLUME_NAME}
+  RustFS volume:   ${RUSTFS_VOLUME_NAME}
+  Fingerprint:     \$PANACHAT_DATA_DIR/.moz-db-fingerprint
 
 Retention (one dump job; keepers from the same files):
   daily:      last ${KEEP_DAILY_DAYS} days
@@ -429,7 +432,8 @@ create_backup() {
   echo "==> Backup reason=$REASON"
   echo "    Data dir:   $PANACHAT_DATA_DIR"
   echo "    Backup dir: $PANACHAT_BACKUP_DIR"
-  echo "    PG volume:  $POSTGRES_VOLUME_NAME"
+  echo "    PG volume:     $POSTGRES_VOLUME_NAME"
+  echo "    RustFS volume: $RUSTFS_VOLUME_NAME"
 
   if ! command -v docker >/dev/null 2>&1; then
     echo "Error: docker is required for SQL dumps" >&2
@@ -452,9 +456,24 @@ create_backup() {
     echo "    SQL: $(basename "$sql_path") ($(du -h "$sql_path" | awk '{print $1}'))"
   fi
 
-  if [[ -d "$rustfs_src" ]] && find "$rustfs_src" -type f ! -path '*/.*' 2>/dev/null | grep -q .; then
-    echo "==> Archiving RustFS uploads"
+  rustfs_archived=0
+  if docker volume inspect "$RUSTFS_VOLUME_NAME" >/dev/null 2>&1; then
+    if docker run --rm \
+      -v "$RUSTFS_VOLUME_NAME:/rustfs:ro" \
+      -v "$PANACHAT_BACKUP_DIR:/out" \
+      alpine sh -c 'find /rustfs -type f ! -path "*/.*" | grep -q . || exit 2
+        tar -C / -czf /out/'"$(basename "$rustfs_path")"' rustfs'; then
+      rustfs_archived=1
+    fi
+  fi
+  if [[ $rustfs_archived -eq 0 ]] \
+    && [[ -d "$rustfs_src" ]] \
+    && find "$rustfs_src" -type f ! -path '*/.*' 2>/dev/null | grep -q .; then
     tar -C "$PANACHAT_DATA_DIR" -czf "$rustfs_path" rustfs
+    rustfs_archived=1
+  fi
+  if [[ $rustfs_archived -eq 1 ]]; then
+    echo "==> Archiving RustFS uploads"
     echo "    RustFS: $(basename "$rustfs_path") ($(du -h "$rustfs_path" | awk '{print $1}'))"
   else
     echo "==> RustFS empty/missing — skipped"
@@ -466,6 +485,7 @@ create_backup() {
     echo "day=$day dow=$dow dom=$dom"
     echo "data_dir=$PANACHAT_DATA_DIR"
     echo "postgres_volume=$POSTGRES_VOLUME_NAME"
+    echo "rustfs_volume=$RUSTFS_VOLUME_NAME"
     echo "postgres_container=$POSTGRES_CONTAINER"
     echo "pgdata_fstype=$fstype"
     echo "users=$live_users"

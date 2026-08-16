@@ -114,8 +114,9 @@ Aliases (same actions):
 
 Environment:
   PANACHAT_DATA_DIR       Host data root (default: ~/.local/share/panachat-data)
-                          Redis/RustFS bind here; Postgres uses named volume
-                          panachat_postgres_data (legacy bind path is migration source)
+                          Fingerprint + leftover bind copies after migrate.
+                          Live Postgres/Redis/RustFS use named volumes
+                          panachat_{postgres,redis,rustfs}_data
   PANACHAT_BACKUP_DIR     Backup root (default: ~/.local/share/panachat-backups)
   MOZ_SKIP_BACKUP=1       Skip automatic pre-deploy backup on -u / -d
   MOZ_ALLOW_EMPTY_DB=1    Allow starting Postgres when volume has no cluster
@@ -139,6 +140,7 @@ Backups:
 Reset Postgres (destructive):
   moz -k && docker volume rm panachat_postgres_data
   MOZ_ALLOW_EMPTY_DB=1 moz -d
+  # optional: docker volume rm panachat_redis_data panachat_rustfs_data
 EOF
       exit 0
       ;;
@@ -273,15 +275,19 @@ load_panachat_data_dir() {
   export PANACHAT_BACKUP_DIR
 }
 
-# Stable Docker volume for Postgres (see docker-compose.aico.data.override.yml).
+# Stable Docker volumes (see docker-compose.aico.data.override.yml).
 POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-panachat_postgres_data}"
+REDIS_VOLUME_NAME="${REDIS_VOLUME_NAME:-panachat_redis_data}"
+RUSTFS_VOLUME_NAME="${RUSTFS_VOLUME_NAME:-panachat_rustfs_data}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-lobe-redis}"
+RUSTFS_CONTAINER="${RUSTFS_CONTAINER:-lobe-rustfs}"
 
 ensure_panachat_data_env() {
-  # Legacy postgres/ kept as one-time migration source; redis/rustfs still bind-mounted.
+  # Legacy postgres/redis/rustfs dirs kept as one-time migration sources.
   mkdir -p "$PANACHAT_DATA_DIR"/{postgres,redis,rustfs}
 
   if [[ -f "$DEPLOY_DIR/.env" ]] && ! grep -qE '^PANACHAT_DATA_DIR=' "$DEPLOY_DIR/.env"; then
-    printf '\n# PanaChat runtime data (outside repo). Redis/RustFS binds; Postgres = volume panachat_postgres_data\nPANACHAT_DATA_DIR=%s\n' \
+    printf '\n# PanaChat runtime data (outside repo). Live data = named volumes; this dir keeps fingerprint + leftover binds\nPANACHAT_DATA_DIR=%s\n' \
       "$PANACHAT_DATA_DIR" >>"$DEPLOY_DIR/.env"
   fi
 }
@@ -292,6 +298,93 @@ legacy_postgres_bind_dir() {
 
 postgres_volume_name() {
   echo "$POSTGRES_VOLUME_NAME"
+}
+
+redis_volume_name() {
+  echo "$REDIS_VOLUME_NAME"
+}
+
+rustfs_volume_name() {
+  echo "$RUSTFS_VOLUME_NAME"
+}
+
+# True if a Docker volume already has any non-dot files (used to skip re-copy).
+volume_has_any_files() {
+  local vol="$1"
+  docker volume inspect "$vol" >/dev/null 2>&1 || return 1
+  docker run --rm -v "$vol:/data:ro" alpine sh -c 'find /data -type f ! -path "*/.*" | grep -q .' 2>/dev/null
+}
+
+dir_has_any_files() {
+  local dir="$1"
+  [[ -n "$dir" && -d "$dir" ]] || return 1
+  docker run --rm -v "$dir:/data:ro" alpine sh -c 'find /data -type f ! -path "*/.*" | grep -q .' 2>/dev/null
+}
+
+container_uses_named_volume() {
+  local container="$1" dest="$2" vol="$3"
+  local mount_type mount_name
+  docker inspect "$container" >/dev/null 2>&1 || return 1
+  mount_type="$(
+    docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$dest\"}}{{.Type}}{{end}}{{end}}"       "$container" 2>/dev/null || true
+  )"
+  mount_name="$(
+    docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$dest\"}}{{.Name}}{{end}}{{end}}"       "$container" 2>/dev/null || true
+  )"
+  [[ "$mount_type" == "volume" && "$mount_name" == "$vol" ]]
+}
+
+# One-time: copy a host bind directory into a named volume (never the reverse).
+migrate_legacy_bind_dir_to_volume() {
+  local vol="$1" legacy="$2" container="$3" label="$4"
+  if volume_has_any_files "$vol"; then
+    return 0
+  fi
+  if ! dir_has_any_files "$legacy"; then
+    return 0
+  fi
+
+  if docker inspect "$container" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || true)" == "running" ]]; then
+    echo "==> Stopping $container for safe $label copy into volume"
+    docker stop "$container" >/dev/null
+  fi
+
+  echo "==> Migrating $label into Docker volume $vol"
+  echo "    Source (legacy bind): $legacy"
+  docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
+  docker run --rm \
+    -v "$legacy:/from:ro" \
+    -v "$vol:/to" \
+    alpine sh -c 'cp -a /from/. /to/'
+  echo "==> $label migration complete (legacy bind left intact as cold copy)"
+}
+
+migrate_legacy_redis_bind_to_volume() {
+  migrate_legacy_bind_dir_to_volume "$(redis_volume_name)" "$PANACHAT_DATA_DIR/redis" "$REDIS_CONTAINER" "Redis"
+}
+
+migrate_legacy_rustfs_bind_to_volume() {
+  migrate_legacy_bind_dir_to_volume "$(rustfs_volume_name)" "$PANACHAT_DATA_DIR/rustfs" "$RUSTFS_CONTAINER" "RustFS"
+}
+
+ensure_service_named_volume_mount() {
+  local container="$1" dest="$2" vol="$3" service="$4" migrate_fn="$5"
+  "$migrate_fn"
+  if container_uses_named_volume "$container" "$dest" "$vol"; then
+    return 0
+  fi
+  echo "==> Recreating $service on named volume $vol"
+  compose_in_deploy_dir up -d --force-recreate --no-deps "$service"
+  wait_for_container "$container" 90 || true
+}
+
+ensure_redis_named_volume_mount() {
+  ensure_service_named_volume_mount "$REDIS_CONTAINER" "/data" "$(redis_volume_name)" redis migrate_legacy_redis_bind_to_volume
+}
+
+ensure_rustfs_named_volume_mount() {
+  ensure_service_named_volume_mount "$RUSTFS_CONTAINER" "/data" "$(rustfs_volume_name)" rustfs migrate_legacy_rustfs_bind_to_volume
 }
 
 # True if path-or-volume currently holds a Postgres cluster (PG_VERSION).
@@ -456,11 +549,17 @@ ensure_postgres_named_volume_mount() {
   assert_postgres_pgdata_healthy
 }
 
-# Copy legacy host bind → named volume, then recreate Postgres if still on a bind/tmpfs.
+# Copy leftover host binds → named volumes, then recreate services still on binds/tmpfs.
 # Must run before pre-deploy backup and fingerprint so moz -u never dumps/compares a RAM DB.
-prepare_postgres_for_deploy() {
+prepare_runtime_volumes_for_deploy() {
   migrate_legacy_deploy_data
   ensure_postgres_named_volume_mount
+  ensure_redis_named_volume_mount
+  ensure_rustfs_named_volume_mount
+}
+
+prepare_postgres_for_deploy() {
+  prepare_runtime_volumes_for_deploy
 }
 
 # Read live DB stats when postgres is up. Prints: users|admins|migrations
@@ -662,6 +761,8 @@ migrate_legacy_deploy_data() {
   vol="$(postgres_volume_name)"
 
   migrate_legacy_postgres_bind_to_volume
+  migrate_legacy_redis_bind_to_volume
+  migrate_legacy_rustfs_bind_to_volume
 
   if has_postgres_cluster_in_volume "$vol"; then
     return 0
@@ -1016,8 +1117,8 @@ fi
 # refuse deploy because live users dropped vs fingerprint.
 if [[ $DEPLOY -eq 1 ]]; then
   load_panachat_data_dir
-  echo "==> Preparing Postgres named volume (migrate legacy bind if needed)"
-  prepare_postgres_for_deploy
+  echo "==> Preparing named volumes (migrate leftover binds if needed)"
+  prepare_runtime_volumes_for_deploy
   if [[ "${MOZ_SKIP_BACKUP:-}" != "1" ]]; then
     echo "==> Pre-deploy backup"
     run_panachat_backup pre-deploy || {
@@ -1122,7 +1223,7 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
   [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
-  prepare_postgres_for_deploy
+  prepare_runtime_volumes_for_deploy
   assert_db_fingerprint_matches
   compose_in_deploy_dir up -d
   verify_deploy_health
@@ -1132,7 +1233,7 @@ fi
 if [[ $RESTART -eq 1 ]]; then
   url="$(app_url)"
   [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
-  prepare_postgres_for_deploy
+  prepare_runtime_volumes_for_deploy
   assert_db_fingerprint_matches
   if is_app_running; then
     echo "==> Restarting containers from $DEPLOY_DIR"

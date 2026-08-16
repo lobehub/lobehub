@@ -250,7 +250,8 @@ pre-deploy backups (`moz -u` / `moz -d`) if cron is unreliable on your machine.
 
 Default dirs:
 
-- Data: `~/.local/share/panachat-data` (`PANACHAT_DATA_DIR`)
+- Data fingerprint / leftover binds: `~/.local/share/panachat-data` (`PANACHAT_DATA_DIR`)
+- Live Postgres/Redis/RustFS: named volumes `panachat_{postgres,redis,rustfs}_data`
 - Backups: `~/.local/share/panachat-backups` (`PANACHAT_BACKUP_DIR`)
 
 **Restore (SQL)** — stop app, restore into empty/known-good cluster, restart:

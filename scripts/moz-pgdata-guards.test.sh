@@ -46,17 +46,25 @@ assert_false moz_should_refuse_empty_backup 0 "?" 0
 COMPOSE="$SCRIPT_DIR/../docker-compose/deploy/docker-compose.aico.data.override.yml"
 grep -q 'panachat_postgres_data:/var/lib/postgresql/data' "$COMPOSE" \
   || fail "compose override must mount named volume panachat_postgres_data for PGDATA"
+grep -q 'panachat_redis_data:/data' "$COMPOSE" \
+  || fail "compose override must mount named volume panachat_redis_data for Redis"
+grep -q 'panachat_rustfs_data:/data' "$COMPOSE" \
+  || fail "compose override must mount named volume panachat_rustfs_data for RustFS"
 grep -q '${PANACHAT_DATA_DIR}/postgres:/var/lib/postgresql/data' "$COMPOSE" \
   && fail "compose override must not bind-mount host postgres (WSL2 tmpfs bug)"
+grep -q '${PANACHAT_DATA_DIR}/redis:/data' "$COMPOSE" \
+  && fail "compose override must not bind-mount host redis (WSL2 tmpfs bug)"
+grep -q '${PANACHAT_DATA_DIR}/rustfs:/data' "$COMPOSE" \
+  && fail "compose override must not bind-mount host rustfs (WSL2 tmpfs bug)"
 
 DEPLOY="$SCRIPT_DIR/deploy-local.sh"
-grep -q 'prepare_postgres_for_deploy' "$DEPLOY" \
-  || fail "deploy-local.sh must remount named volume before backup/fingerprint"
+grep -q 'prepare_runtime_volumes_for_deploy' "$DEPLOY" \
+  || fail "deploy-local.sh must remount named volumes before backup/fingerprint"
 # Remount *call* (not the function definition) must appear before pre-deploy backup.
 backup_line="$(grep -n 'run_panachat_backup pre-deploy' "$DEPLOY" | head -1 | cut -d: -f1)"
-prepare_line="$(grep -n '^  prepare_postgres_for_deploy$' "$DEPLOY" | head -1 | cut -d: -f1)"
+prepare_line="$(grep -n '^  prepare_runtime_volumes_for_deploy$' "$DEPLOY" | head -1 | cut -d: -f1)"
 [[ -n "$backup_line" && -n "$prepare_line" ]] || fail "missing backup/prepare line numbers"
-(( prepare_line < backup_line )) || fail "prepare_postgres_for_deploy must run before pre-deploy backup (was $prepare_line >= $backup_line)"
+(( prepare_line < backup_line )) || fail "prepare_runtime_volumes_for_deploy must run before pre-deploy backup (was $prepare_line >= $backup_line)"
 
 # cluster_safe must run inside ensure_postgres_named_volume_mount BEFORE compose up
 # (otherwise the Postgres image initdb's an empty volume).
