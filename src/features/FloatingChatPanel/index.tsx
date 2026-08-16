@@ -17,6 +17,8 @@ import {
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
+import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
+import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
 import { useAgentStore } from '@/store/agent';
@@ -279,6 +281,9 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         >
           {isEmbedded ? (
             <>
+              <PageAgentPanelOverrideProvider defaultExpand>
+                <CopilotToolbar />
+              </PageAgentPanelOverrideProvider>
               <ChatBody />
               <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />
             </>

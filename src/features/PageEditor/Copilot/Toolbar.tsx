@@ -22,10 +22,10 @@ const CopilotToolbar = memo(() => {
   const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
     s.activeTopicId,
     s.switchTopic,
-    topicSelectors.currentTopics(s),
+    topicSelectors.getTopicsByAgentId(agentId)(s),
   ]);
 
-  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
+  const currentTopic = topics?.find((topic) => topic.id === activeTopicId);
 
   const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const hasOverride = !!usePageAgentPanelOverride();

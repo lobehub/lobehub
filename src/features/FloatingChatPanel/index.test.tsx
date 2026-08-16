@@ -154,6 +154,14 @@ vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => undefined,
 }));
 
+vi.mock('@/features/PageEditor/Copilot/Toolbar', () => ({
+  default: () => <header data-testid="copilot-toolbar">Standard conversation toolbar</header>,
+}));
+
+vi.mock('@/features/PageEditor/RightPanel/OverrideContext', () => ({
+  PageAgentPanelOverrideProvider: ({ children }: { children?: ReactNode }) => children,
+}));
+
 vi.mock('@/features/Conversation/hooks/useChatFollowUp', () => ({
   useChatFollowUp: () => ({}),
 }));
@@ -285,6 +293,15 @@ describe('FloatingChatPanel', () => {
     expect(panel).toContainElement(getByTestId('chat-input'));
     expect(queryByTestId('floating-panel-shell')).toBeNull();
     expect(queryByTestId('floating-chat-panel-collapse-button')).toBeNull();
+  });
+
+  it('renders the standard conversation toolbar in embedded mode', () => {
+    const { getByTestId, queryByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />,
+    );
+
+    expect(getByTestId('copilot-toolbar')).toBeInTheDocument();
+    expect(queryByTestId('floating-panel-shell')).toBeNull();
   });
 
   it('renders a minimal ChatInput while collapsed (no left/right actions)', () => {
