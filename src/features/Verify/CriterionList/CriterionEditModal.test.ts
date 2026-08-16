@@ -28,7 +28,6 @@ describe('openCriterionEditModal', () => {
     openCriterionEditModal({
       criterion: { required: true, title: 'Check result', verifierType: 'agent' },
       onSubmit: vi.fn(),
-      seq: 2,
     });
 
     const options = mocks.createModal.mock.calls[0][0];

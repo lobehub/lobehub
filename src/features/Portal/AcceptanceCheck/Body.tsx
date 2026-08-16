@@ -111,7 +111,7 @@ const Body = memo(() => {
               <Text fontSize={12} type={'secondary'}>
                 {t('taskDetail.acceptance.verifier')}
               </Text>
-              <Tag>{t(`verifyConfig.verifierType.${verifierType}` as const)}</Tag>
+              <Tag>{t(`criterion.verifierType.${verifierType}` as const, { ns: 'verify' })}</Tag>
               {usesMultimodalLlm && <Tag>{t('taskDetail.acceptance.multimodalLlm')}</Tag>}
             </Flexbox>
           )}

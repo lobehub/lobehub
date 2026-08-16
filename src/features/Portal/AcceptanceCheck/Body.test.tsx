@@ -118,7 +118,7 @@ describe('AcceptanceCheck Portal Body', () => {
     render(<Body />);
 
     expect(screen.getByText('taskDetail.acceptance.verifier')).toBeInTheDocument();
-    expect(screen.getByText('verifyConfig.verifierType.agent')).toBeInTheDocument();
+    expect(screen.getByText('criterion.verifierType.agent')).toBeInTheDocument();
     expect(screen.getByText('taskDetail.acceptance.multimodalLlm')).toBeInTheDocument();
     expect(screen.getByText('taskDetail.acceptance.requiredEvidence')).toBeInTheDocument();
     expect(screen.getByText('report.evidence.medium.markdown')).toBeInTheDocument();

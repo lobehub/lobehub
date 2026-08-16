@@ -27,7 +27,6 @@ import { groupManagementRuntime } from './groupManagement';
 import { imageGenerationRuntime } from './imageGeneration';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
-import { lobeDeliveryCheckerRuntime } from './lobeDeliveryChecker';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
@@ -105,7 +104,6 @@ registerRuntimes([
   agentSignalFeedbackIntentRuntime,
   pageAgentRuntime,
   verifyResultRuntime,
-  lobeDeliveryCheckerRuntime,
 ]);
 
 // ==================== Registry API ====================
