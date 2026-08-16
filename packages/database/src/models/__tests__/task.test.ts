@@ -8,6 +8,7 @@ import {
   agents,
   briefs,
   documents,
+  goals,
   tasks,
   topics,
   users,
@@ -1274,6 +1275,24 @@ describe('TaskModel', () => {
       const { total: total2 } = await model2.list();
       expect(total1).toBe(0);
       expect(total2).toBe(1);
+    });
+
+    it('sweeps the goals bound to bulk-deleted tasks', async () => {
+      // Regression (codex review): the FK-less goals rows survived clearAll,
+      // orphaning every cleared goal — only single and subtree deletion swept.
+      const model = new TaskModel(serverDB, userId);
+      const goalModel = new GoalModel(serverDB, userId);
+      const goalTask = await model.create({ instruction: 'Goal task' });
+      await goalModel.create({ subjectId: goalTask.id, subjectType: 'task', title: 'Doomed' });
+      const otherUsers = new GoalModel(serverDB, userId2);
+      await otherUsers.create({ subjectId: 'task_foreign', subjectType: 'task', title: 'Keep' });
+
+      await model.deleteAll();
+
+      const mine = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId) });
+      const theirs = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId2) });
+      expect(mine).toHaveLength(0);
+      expect(theirs).toHaveLength(1);
     });
   });
 

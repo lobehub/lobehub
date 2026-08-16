@@ -295,16 +295,19 @@ export class TaskModel {
    * to render as "resource deleted" from its version snapshot. See.
    */
   async delete(id: string): Promise<boolean> {
-    const deleted = await this.db
-      .delete(tasks)
-      .where(and(eq(tasks.id, id), this.ownership()))
-      .returning({ id: tasks.id });
-
     // The goal carried by this task has no FK on the polymorphic subject link,
-    // so its row must be swept explicitly or it would orphan.
-    if (deleted.length > 0) await this.deleteGoalsOfTasks([id]);
+    // so its row must be swept explicitly — in the same transaction, or a
+    // failure between the two statements would orphan it.
+    return this.db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .returning({ id: tasks.id });
 
-    return deleted.length > 0;
+      if (deleted.length > 0) await this.deleteGoalsOfTasks([id], tx);
+
+      return deleted.length > 0;
+    });
   }
 
   /** Sweep the goals bound to the given (already deleted) tasks. */
@@ -491,9 +494,17 @@ export class TaskModel {
     const where = options?.restrictToCreator
       ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
       : this.ownership();
-    const result = await this.db.delete(tasks).where(where).returning();
 
-    return result.length;
+    // One transaction so the FK-less goals rows can never outlive their
+    // swept carriers (see deleteGoalsOfTasks).
+    return this.db.transaction(async (tx) => {
+      const result = await tx.delete(tasks).where(where).returning({ id: tasks.id });
+      await this.deleteGoalsOfTasks(
+        result.map(({ id }) => id),
+        tx,
+      );
+      return result.length;
+    });
   }
 
   /** Delete a task and every descendant in one transaction. */

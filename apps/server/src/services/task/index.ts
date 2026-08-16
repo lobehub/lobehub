@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
   CreateTaskGoalInput,
+  GoalItem,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -195,24 +196,35 @@ export class TaskService {
     const task = await this.taskModel.create(createData);
 
     if (goal) {
-      const created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
-        agentId: task.assigneeAgentId,
-        // `null` is the user's explicit "no cap"; `undefined` means they never
-        // chose, which falls back to the documented default. The floor keeps a
-        // degenerate 1-round loop from ever passing verify-then-stop.
-        maxRounds:
-          goal.maxRounds === undefined
-            ? DEFAULT_GOAL_MAX_ROUNDS
-            : goal.maxRounds === null
-              ? null
-              : Math.max(2, goal.maxRounds),
-        maxTotalCost: goal.maxTotalCost ?? null,
-        projectId: task.projectId,
-        requirement: goal.requirement ?? null,
-        subjectId: task.id,
-        subjectType: 'task',
-        title: goal.title?.trim() || task.name?.trim() || task.instruction,
-      });
+      // Not a transaction on purpose: TaskModel.create's identifier-conflict
+      // retry loop relies on continuing after a 23505, which an enclosing
+      // transaction would abort. Compensate instead — a task committed without
+      // its promised goal is a ghost on goal surfaces (it never lists as a
+      // goal), and a retry would stack another one.
+      let created: GoalItem;
+      try {
+        created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
+          agentId: task.assigneeAgentId,
+          // `null` is the user's explicit "no cap"; `undefined` means they never
+          // chose, which falls back to the documented default. The floor keeps a
+          // degenerate 1-round loop from ever passing verify-then-stop.
+          maxRounds:
+            goal.maxRounds === undefined
+              ? DEFAULT_GOAL_MAX_ROUNDS
+              : goal.maxRounds === null
+                ? null
+                : Math.max(2, goal.maxRounds),
+          maxTotalCost: goal.maxTotalCost ?? null,
+          projectId: task.projectId,
+          requirement: goal.requirement ?? null,
+          subjectId: task.id,
+          subjectType: 'task',
+          title: goal.title?.trim() || task.name?.trim() || task.instruction,
+        });
+      } catch (error) {
+        await this.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
       return { ...task, goal: created };
     }
 
