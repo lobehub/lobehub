@@ -130,6 +130,18 @@ Local builds via `moz` / `scripts/deploy-local.sh` persist data under:
 
 Compose: `docker-compose.aico.data.override.yml`. **`moz -u` / `moz -d` do not delete** the volume or data dir — they only recreate containers.
 
+### First deploy after named-volume change
+
+```bash
+moz -i # note user count + current mounts
+moz -d # one-time migrate leftover binds / old Compose volumes → panachat_*
+moz -i # expect volume:panachat_{postgres,redis,rustfs}_data; users unchanged
+```
+
+`moz -d` copies leftover host binds under `PANACHAT_DATA_DIR/{postgres,redis,rustfs}` and older Compose volumes `redis_data` / `rustfs-data` into the new named volumes when the targets are empty.
+
+**Never** `docker volume rm panachat_postgres_data` / `panachat_redis_data` / `panachat_rustfs_data` unless you intend a wipe. Prefer SQL restore from `~/.local/share/panachat-backups/`.
+
 ### Why named volumes
 
 Docker Desktop + WSL2 sometimes reports a **bind** mount in `docker inspect` while the container actually gets **tmpfs** (empty RAM). Postgres then `initdb`s → 0 users; Redis/RustFS look empty while the real files still sit on the host path. Named volumes live in Docker’s Linux VM and avoid that failure mode. `moz` also refuses to mark a deploy healthy if PGDATA is tmpfs or missing `PG_VERSION`.
@@ -161,8 +173,6 @@ moz -i
 ```
 
 If still tmpfs: restart Docker Desktop, then `moz -d` again.
-
-**Never** `docker volume rm panachat_postgres_data` unless you intend a wipe. Prefer SQL restore from `~/.local/share/panachat-backups/`.
 
 ## Database reset (destructive)
 

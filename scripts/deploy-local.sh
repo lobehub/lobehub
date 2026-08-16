@@ -124,7 +124,8 @@ Environment:
   MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
                           the last known good snapshot (users dropped, etc.)
   MOZ_ALLOW_TMPFS_PGDATA=1  Allow Postgres PGDATA on tmpfs (DANGEROUS — empty DB)
-  MOZ_ALLOW_EMPTY_BACKUP=1  Allow moz -B when live users=0 but fingerprint>0
+  MOZ_ALLOW_EMPTY_BACKUP=1  Allow moz -B when live users=0 but fingerprint>0,
+                          or when Postgres is down but fingerprint has users
   AICO_CONTROL_PLANE_SERVICE_TOKEN   Shared product↔control-plane token
                           (moz generates a strong random token if missing/weak;
                            \`devtok\` is rejected)
@@ -360,12 +361,46 @@ migrate_legacy_bind_dir_to_volume() {
   echo "==> $label migration complete (legacy bind left intact as cold copy)"
 }
 
+# One-time: copy an old Compose named volume into panachat_* (never the reverse).
+migrate_legacy_compose_volume_to_volume() {
+  local dest_vol="$1" source_vol="$2" container="$3" label="$4"
+  if volume_has_any_files "$dest_vol"; then
+    return 0
+  fi
+  if ! volume_has_any_files "$source_vol"; then
+    return 0
+  fi
+
+  if docker inspect "$container" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || true)" == "running" ]]; then
+    echo "==> Stopping $container for safe $label copy into volume"
+    docker stop "$container" >/dev/null
+  fi
+
+  echo "==> Migrating $label into Docker volume $dest_vol"
+  echo "    Source (legacy Compose volume): $source_vol"
+  docker volume inspect "$dest_vol" >/dev/null 2>&1 || docker volume create "$dest_vol" >/dev/null
+  docker run --rm \
+    -v "$source_vol:/from:ro" \
+    -v "$dest_vol:/to" \
+    alpine sh -c 'cp -a /from/. /to/'
+  echo "==> $label migration complete (legacy Compose volume left intact)"
+}
+
 migrate_legacy_redis_bind_to_volume() {
-  migrate_legacy_bind_dir_to_volume "$(redis_volume_name)" "$PANACHAT_DATA_DIR/redis" "$REDIS_CONTAINER" "Redis"
+  local dest
+  dest="$(redis_volume_name)"
+  # Prefer leftover host bind; then older Compose volume redis_data from base compose.
+  migrate_legacy_bind_dir_to_volume "$dest" "$PANACHAT_DATA_DIR/redis" "$REDIS_CONTAINER" "Redis"
+  migrate_legacy_compose_volume_to_volume "$dest" "redis_data" "$REDIS_CONTAINER" "Redis"
 }
 
 migrate_legacy_rustfs_bind_to_volume() {
-  migrate_legacy_bind_dir_to_volume "$(rustfs_volume_name)" "$PANACHAT_DATA_DIR/rustfs" "$RUSTFS_CONTAINER" "RustFS"
+  local dest
+  dest="$(rustfs_volume_name)"
+  migrate_legacy_bind_dir_to_volume "$dest" "$PANACHAT_DATA_DIR/rustfs" "$RUSTFS_CONTAINER" "RustFS"
+  # Base compose historically named this rustfs-data (hyphen).
+  migrate_legacy_compose_volume_to_volume "$dest" "rustfs-data" "$RUSTFS_CONTAINER" "RustFS"
 }
 
 ensure_service_named_volume_mount() {
@@ -526,13 +561,14 @@ EOF
 ensure_postgres_named_volume_mount() {
   migrate_legacy_postgres_bind_to_volume
 
+  # Always gate empty volume vs fingerprint — even when already on the named volume
+  # (early return used to skip this and allow a later empty initdb path).
+  # First install (no fingerprint) still proceeds; MOZ_ALLOW_EMPTY_DB=1 for intentional wipe.
+  assert_postgres_cluster_safe
+
   if postgres_uses_named_volume; then
     return 0
   fi
-
-  # Refuse empty volume before compose starts Postgres (image initdb if no PG_VERSION).
-  # First install (no fingerprint) still proceeds; MOZ_ALLOW_EMPTY_DB=1 for intentional wipe.
-  assert_postgres_cluster_safe
 
   echo "==> Recreating postgresql on named volume $(postgres_volume_name)"
   compose_in_deploy_dir up -d --force-recreate --no-deps postgresql
@@ -933,8 +969,8 @@ show_status() {
   local expected_migrations applied_migrations migrate_log docker_cjs migrations_dir
   local user_count admin_count exit_code=0
   local fp_users
+  local pg_fs pg_mount redis_mount rustfs_mount
   local cp_port cp_code
-  local pg_fs pg_mount
 
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
   app_url="http://127.0.0.1:${app_port:-3210}"
@@ -1033,6 +1069,24 @@ show_status() {
     printf "PGDATA:        fs=%s mount=%s\n" "$pg_fs" "$pg_mount"
     if moz_is_tmpfs_pgdata "$pg_fs"; then
       echo "  ⚠️  PGDATA on tmpfs — empty-DB risk (moz -k && moz -d)"
+      exit_code=1
+    fi
+    redis_mount="$(
+      docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' \
+        "$REDIS_CONTAINER" 2>/dev/null || echo "?"
+    )"
+    rustfs_mount="$(
+      docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' \
+        "$RUSTFS_CONTAINER" 2>/dev/null || echo "?"
+    )"
+    printf "Redis data:    mount=%s (expect volume:%s)\n" "$redis_mount" "$(redis_volume_name)"
+    printf "RustFS data:   mount=%s (expect volume:%s)\n" "$rustfs_mount" "$(rustfs_volume_name)"
+    if [[ "$redis_mount" != "volume:$(redis_volume_name)" ]]; then
+      echo "  ⚠️  Redis not on named volume — run: moz -k && moz -d"
+      exit_code=1
+    fi
+    if [[ "$rustfs_mount" != "volume:$(rustfs_volume_name)" ]]; then
+      echo "  ⚠️  RustFS not on named volume — run: moz -k && moz -d"
       exit_code=1
     fi
     if [[ -f "$(db_fingerprint_file)" ]]; then

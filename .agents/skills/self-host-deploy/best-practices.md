@@ -254,6 +254,9 @@ Default dirs:
 - Live Postgres/Redis/RustFS: named volumes `panachat_{postgres,redis,rustfs}_data`
 - Backups: `~/.local/share/panachat-backups` (`PANACHAT_BACKUP_DIR`)
 
+After pulling the named-volume change: `moz -i` → `moz -d` → `moz -i` (mounts must be `volume:panachat_*`; user count unchanged).\
+`docker volume rm panachat_*` is a wipe — restore from SQL backups instead.
+
 **Restore (SQL)** — stop app, restore into empty/known-good cluster, restart:
 
 ```bash

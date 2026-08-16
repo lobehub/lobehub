@@ -25,7 +25,8 @@
 #   PANACHAT_KEEP_MONTHLY_DAYS=365
 #   PANACHAT_KEEP_PREDEPLOY=5
 #   MOZ_SKIP_BACKUP=1              no-op exit 0 (used by moz)
-#   MOZ_ALLOW_EMPTY_BACKUP=1       allow dump when live users=0 but fingerprint>0
+#   MOZ_ALLOW_EMPTY_BACKUP=1       allow dump when live users=0 but fingerprint>0,
+#                                  or when Postgres is down but fingerprint has users
 #   MOZ_ALLOW_TMPFS_PGDATA=1       allow dump while PGDATA is tmpfs (dangerous)
 
 set -euo pipefail
@@ -427,7 +428,7 @@ create_backup() {
   local sql_path="$PANACHAT_BACKUP_DIR/${base}.sql.gz"
   local rustfs_path="$PANACHAT_BACKUP_DIR/${base}.rustfs.tar.gz"
   local rustfs_src="$PANACHAT_DATA_DIR/rustfs"
-  local live_users="?" fstype="?"
+  local live_users="?" fstype="?" fp_users="" rustfs_archived=0
 
   echo "==> Backup reason=$REASON"
   echo "    Data dir:   $PANACHAT_DATA_DIR"
@@ -445,7 +446,23 @@ create_backup() {
       echo "Error: Postgres container '$POSTGRES_CONTAINER' is not running" >&2
       exit 1
     fi
-    echo "⚠️  Postgres not running — skipped SQL dump (start stack with: moz)"
+    fp_users="$(load_fingerprint_users || true)"
+    if [[ "$fp_users" =~ ^[0-9]+$ && "$fp_users" -gt 0 ]]; then
+      if [[ "${MOZ_ALLOW_EMPTY_BACKUP:-}" == "1" ]]; then
+        echo "==> Warning: Postgres not running but fingerprint users=$fp_users — continuing without SQL dump (MOZ_ALLOW_EMPTY_BACKUP=1)"
+      else
+        cat >&2 <<EOF
+Error: refusing backup — Postgres is not running but last healthy fingerprint had $fp_users users.
+
+  A pre-deploy dump would skip SQL and leave you without a recovery copy of the known-good DB.
+  Start the stack (moz), then retry. Override only if intentional:
+    MOZ_ALLOW_EMPTY_BACKUP=1 moz -B
+EOF
+        exit 1
+      fi
+    else
+      echo "⚠️  Postgres not running — skipped SQL dump (start stack with: moz)"
+    fi
   else
     assert_postgres_safe_to_dump
     live_users="$(postgres_user_count)"
@@ -456,7 +473,6 @@ create_backup() {
     echo "    SQL: $(basename "$sql_path") ($(du -h "$sql_path" | awk '{print $1}'))"
   fi
 
-  rustfs_archived=0
   if docker volume inspect "$RUSTFS_VOLUME_NAME" >/dev/null 2>&1; then
     if docker run --rm \
       -v "$RUSTFS_VOLUME_NAME:/rustfs:ro" \

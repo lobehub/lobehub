@@ -66,21 +66,35 @@ prepare_line="$(grep -n '^  prepare_runtime_volumes_for_deploy$' "$DEPLOY" | hea
 [[ -n "$backup_line" && -n "$prepare_line" ]] || fail "missing backup/prepare line numbers"
 (( prepare_line < backup_line )) || fail "prepare_runtime_volumes_for_deploy must run before pre-deploy backup (was $prepare_line >= $backup_line)"
 
-# cluster_safe must run inside ensure_postgres_named_volume_mount BEFORE compose up
-# (otherwise the Postgres image initdb's an empty volume).
-python3 - "$DEPLOY" <<'PY' || fail "assert_postgres_cluster_safe must run before force-recreate postgresql"
+# cluster_safe must always run after migrate (even when already on the named volume),
+# and before compose force-recreate (otherwise the Postgres image initdb's an empty volume).
+python3 - "$DEPLOY" <<'PY' || fail "assert_postgres_cluster_safe must run before remount/early-return"
 from pathlib import Path
 import sys
 text = Path(sys.argv[1]).read_text().splitlines()
 start = next(i for i, line in enumerate(text) if line.startswith("ensure_postgres_named_volume_mount()"))
 end = start + 1
-while end < len(text) and not text[end].startswith("prepare_postgres_for_deploy()"):
+while end < len(text) and not text[end].startswith("prepare_runtime_volumes_for_deploy()"):
     end += 1
 block = "\n".join(text[start:end])
 i_safe = block.find("assert_postgres_cluster_safe")
+i_named = block.find("if postgres_uses_named_volume")
 i_up = block.find("force-recreate --no-deps postgresql")
-if i_safe < 0 or i_up < 0 or i_safe > i_up:
+if i_safe < 0 or i_named < 0 or i_up < 0:
+    raise SystemExit(1)
+if not (i_safe < i_named < i_up):
     raise SystemExit(1)
 PY
+
+grep -q 'migrate_legacy_compose_volume_to_volume' "$DEPLOY" \
+  || fail "deploy-local.sh must migrate orphan Compose volumes redis_data/rustfs-data"
+grep -q 'Redis data:' "$DEPLOY" \
+  || fail "moz -i must print Redis mount"
+grep -q 'RustFS data:' "$DEPLOY" \
+  || fail "moz -i must print RustFS mount"
+
+BACKUP="$SCRIPT_DIR/panachat-backup.sh"
+grep -q 'Postgres is not running but last healthy fingerprint' "$BACKUP" \
+  || fail "backup must refuse when Postgres is down but fingerprint has users"
 
 echo "OK: moz-pgdata-guards"
