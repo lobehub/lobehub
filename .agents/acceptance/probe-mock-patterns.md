@@ -80,6 +80,13 @@ query the aggregate with `lh acceptance view task:<internal-task-id>`. The start
 response and task activity expose the operation and topic ids; the Acceptance
 bundle exposes the repair round and final rollup.
 
+The same identifier/internal-id gap exists on the WRITE path: a local
+`acceptance run ingest --subject task:T-N` stores the literal `T-N` as
+`acceptance_subjects.subject_id`, while task/goal detail pages resolve the
+acceptance by the task's INTERNAL id — the page then renders an empty state even
+though ingest succeeded. Use the internal id in `--subject` (or fix the
+`subject_id` row afterwards) when the evidence must render in the local app UI.
+
 ### Message-attached heterogeneous-agent errors
 
 Inject a temporary assistant message through
