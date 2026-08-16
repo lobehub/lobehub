@@ -52,7 +52,7 @@ const EditorPlaceholder = () => (
 
 const AgentProfileSkeleton = () => (
   <WideScreenContainer>
-    <Flexbox marginBottom={28}>
+    <Flexbox style={{ marginBottom: 28 }}>
       <Flexbox paddingBlock={'0 16px'} style={{ marginInline: -16 }}>
         <div className={styles.cover} />
         <Flexbox
@@ -63,7 +63,7 @@ const AgentProfileSkeleton = () => (
           style={{ marginTop: -36 }}
         >
           <SkeletonBar height={72} radius={cssVar.borderRadiusLG} width={72} />
-          <Flexbox gap={8} paddingBottom={4} style={{ minWidth: 0 }}>
+          <Flexbox gap={8} style={{ minWidth: 0, paddingBottom: 4 }}>
             <SkeletonBar height={36} width={220} />
             <SkeletonBar height={14} width={156} />
           </Flexbox>
@@ -93,7 +93,7 @@ const GroupProfileSkeleton = () => (
       <SkeletonBar height={72} radius={cssVar.borderRadiusLG} width={72} />
       <SkeletonBar height={36} width={240} />
     </Flexbox>
-    <Flexbox horizontal gap={8} marginBlock={'16px 28px'}>
+    <Flexbox horizontal gap={8} style={{ marginBlock: '16px 28px' }}>
       <SkeletonBar height={32} width={132} />
       <SkeletonBar height={32} width={96} />
     </Flexbox>
