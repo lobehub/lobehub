@@ -1,4 +1,9 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import {
+  nanoBanana2Parameters,
+  nanoBananaParameters,
+  nanoBananaProParameters,
+} from '../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
@@ -849,6 +854,72 @@ const openrouterChatModels: AIChatModelCard[] = [
   },
 ];
 
-export const allModels = [...openrouterChatModels];
+/**
+ * Image-tab siblings for OpenRouter Nano Banana models.
+ *
+ * Chat cards above stay `type: 'chat'` (with `imageOutput`) for the Chat picker.
+ * Image Create filters on `type: 'image'`, so without these static `:image` entries
+ * OpenRouter never appears in `enabledImageModelList` until a remote fetch runs
+ * `postProcessModelList` — which leaves Aico managed Image Create stuck on
+ * `provider=openrouter` with a "provider disabled" notice.
+ */
+const openrouterImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'Gemini 3.1 Flash Image Preview, a.k.a. "Nano Banana 2," is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines advanced contextual understanding with fast, cost-efficient inference, making complex image generation and iterative edits significantly more accessible.',
+    displayName: 'Nano Banana 2',
+    enabled: true,
+    id: 'google/gemini-3.1-flash-image-preview:image',
+    parameters: nanoBanana2Parameters,
+    pricing: {
+      approximatePricePerImage: 0.067,
+      units: [
+        { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-26',
+    type: 'image',
+  },
+  {
+    description:
+      'Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and high-fidelity visual synthesis.',
+    displayName: 'Nano Banana Pro',
+    enabled: true,
+    id: 'google/gemini-3-pro-image-preview:image',
+    parameters: nanoBananaProParameters,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    type: 'image',
+  },
+  {
+    description:
+      'Gemini 2.5 Flash Image, a.k.a. "Nano Banana," is a state of the art image generation model with contextual understanding. It is capable of image generation, edits, and multi-turn conversations.',
+    displayName: 'Nano Banana',
+    enabled: true,
+    id: 'google/gemini-2.5-flash-image:image',
+    parameters: nanoBananaParameters,
+    pricing: {
+      approximatePricePerImage: 0.039,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-07',
+    type: 'image',
+  },
+];
+
+export const allModels = [...openrouterChatModels, ...openrouterImageModels];
 
 export default allModels;
