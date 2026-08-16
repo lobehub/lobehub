@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import type {
   ChatTopicMetadata,
   ChatTopicStatus,
@@ -66,7 +64,6 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
-const TERMINAL_CLAIM_TTL_MS = 5 * 60 * 1000;
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -1432,12 +1429,7 @@ export class TopicModel {
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
       const runningOperation = existing?.metadata?.runningOperation;
-      if (
-        !existing ||
-        runningOperation?.operationId !== parentOperationId ||
-        runningOperation.terminalClaimedAt
-      )
-        return false;
+      if (!existing || runningOperation?.operationId !== parentOperationId) return false;
 
       await tx
         .update(topics)
@@ -1490,7 +1482,6 @@ export class TopicModel {
     operationId: string,
   ): Promise<
     | {
-        claimToken: string;
         isRoot: boolean;
         operation: NonNullable<ChatTopicMetadata['runningOperation']>;
       }
@@ -1504,92 +1495,22 @@ export class TopicModel {
         .for('update');
       const runningOperation = existing?.metadata?.runningOperation;
       if (!existing || !runningOperation) return undefined;
-      const now = Date.now();
-      const claimIsLive = (claimedAt?: string) =>
-        !!claimedAt && now - Date.parse(claimedAt) < TERMINAL_CLAIM_TTL_MS;
 
       if (runningOperation.operationId === operationId) {
-        if (claimIsLive(runningOperation.terminalClaimedAt)) return undefined;
-        const terminalClaimedAt = new Date(now).toISOString();
-        const claimToken = randomUUID();
         await tx
           .update(topics)
           .set({
-            metadata: {
-              ...existing.metadata,
-              runningOperation: {
-                ...runningOperation,
-                terminalClaimedAt,
-                terminalClaimToken: claimToken,
-              },
-            },
+            metadata: { ...existing.metadata, runningOperation: null },
           })
           .where(and(eq(topics.id, id), this.ownership()));
-        return { isRoot: true, claimToken, operation: runningOperation };
+        return { isRoot: true, operation: runningOperation };
       }
 
       const child = runningOperation.childOperations?.find(
         (candidate) => candidate.operationId === operationId,
       );
       if (!child) return undefined;
-      if (claimIsLive(child.terminalClaimedAt)) return undefined;
-      const terminalClaimedAt = new Date(now).toISOString();
-      const claimToken = randomUUID();
 
-      await tx
-        .update(topics)
-        .set({
-          metadata: {
-            ...existing.metadata,
-            runningOperation: {
-              ...runningOperation,
-              childOperations: runningOperation.childOperations
-                ?.filter((candidate) => candidate.operationId !== operationId)
-                .concat({ ...child, terminalClaimedAt, terminalClaimToken: claimToken }),
-            },
-          },
-        })
-        .where(and(eq(topics.id, id), this.ownership()));
-      return { isRoot: false, claimToken, operation: child };
-    });
-
-  completeRunningOperation = async (
-    id: string,
-    operationId: string,
-    claimToken: string,
-  ): Promise<boolean> =>
-    this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ metadata: topics.metadata })
-        .from(topics)
-        .where(and(eq(topics.id, id), this.ownership()))
-        .for('update');
-      const runningOperation = existing?.metadata?.runningOperation;
-      if (!existing || !runningOperation) return false;
-      if (runningOperation.operationId === operationId) {
-        if (runningOperation.terminalClaimToken !== claimToken) return false;
-        const remainingChildren = runningOperation.childOperations ?? [];
-        await tx
-          .update(topics)
-          .set({
-            metadata: {
-              ...existing.metadata,
-              runningOperation:
-                remainingChildren.length === 0
-                  ? null
-                  : {
-                      ...remainingChildren[0],
-                      childOperations: remainingChildren.slice(1),
-                    },
-            },
-          })
-          .where(and(eq(topics.id, id), this.ownership()));
-        return true;
-      }
-      const child = runningOperation.childOperations?.find(
-        (candidate) => candidate.operationId === operationId,
-      );
-      if (!child || child.terminalClaimToken !== claimToken) return false;
       await tx
         .update(topics)
         .set({
@@ -1604,109 +1525,7 @@ export class TopicModel {
           },
         })
         .where(and(eq(topics.id, id), this.ownership()));
-      return true;
-    });
-
-  releaseRunningOperationClaim = async (
-    id: string,
-    operationId: string,
-    claimToken: string,
-  ): Promise<boolean> =>
-    this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ metadata: topics.metadata })
-        .from(topics)
-        .where(and(eq(topics.id, id), this.ownership()))
-        .for('update');
-      const runningOperation = existing?.metadata?.runningOperation;
-      if (!existing || !runningOperation) return false;
-      if (runningOperation.operationId === operationId) {
-        if (runningOperation.terminalClaimToken !== claimToken) return false;
-        const {
-          terminalClaimedAt: _terminalClaimedAt,
-          terminalClaimToken: _terminalClaimToken,
-          ...unclaimed
-        } = runningOperation;
-        await tx
-          .update(topics)
-          .set({ metadata: { ...existing.metadata, runningOperation: unclaimed } })
-          .where(and(eq(topics.id, id), this.ownership()));
-        return true;
-      }
-      const child = runningOperation.childOperations?.find(
-        (candidate) => candidate.operationId === operationId,
-      );
-      if (!child || child.terminalClaimToken !== claimToken) return false;
-      const {
-        terminalClaimedAt: _terminalClaimedAt,
-        terminalClaimToken: _terminalClaimToken,
-        ...unclaimedChild
-      } = child;
-      await tx
-        .update(topics)
-        .set({
-          metadata: {
-            ...existing.metadata,
-            runningOperation: {
-              ...runningOperation,
-              childOperations: runningOperation.childOperations?.map((candidate) =>
-                candidate.operationId === operationId ? unclaimedChild : candidate,
-              ),
-            },
-          },
-        })
-        .where(and(eq(topics.id, id), this.ownership()));
-      return true;
-    });
-
-  refreshRunningOperationClaim = async (
-    id: string,
-    operationId: string,
-    claimToken: string,
-  ): Promise<boolean> =>
-    this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ metadata: topics.metadata })
-        .from(topics)
-        .where(and(eq(topics.id, id), this.ownership()))
-        .for('update');
-      const runningOperation = existing?.metadata?.runningOperation;
-      if (!existing || !runningOperation) return false;
-      const terminalClaimedAt = new Date().toISOString();
-      if (runningOperation.operationId === operationId) {
-        if (runningOperation.terminalClaimToken !== claimToken) return false;
-        await tx
-          .update(topics)
-          .set({
-            metadata: {
-              ...existing.metadata,
-              runningOperation: { ...runningOperation, terminalClaimedAt },
-            },
-          })
-          .where(and(eq(topics.id, id), this.ownership()));
-        return true;
-      }
-      const child = runningOperation.childOperations?.find(
-        (candidate) => candidate.operationId === operationId,
-      );
-      if (!child || child.terminalClaimToken !== claimToken) return false;
-      await tx
-        .update(topics)
-        .set({
-          metadata: {
-            ...existing.metadata,
-            runningOperation: {
-              ...runningOperation,
-              childOperations: runningOperation.childOperations?.map((candidate) =>
-                candidate.operationId === operationId
-                  ? { ...candidate, terminalClaimedAt }
-                  : candidate,
-              ),
-            },
-          },
-        })
-        .where(and(eq(topics.id, id), this.ownership()));
-      return true;
+      return { isRoot: false, operation: child };
     });
 
   /**
@@ -1743,9 +1562,7 @@ export class TopicModel {
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
-        allowRunningOperationId &&
-        runningOperation?.operationId === allowRunningOperationId &&
-        !runningOperation.terminalClaimedAt;
+        allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
       if (allowRunningOperationId) return ownedRunningOperation;
       const canReplaceRunningOperation =
         !!replacesOperationId && runningOperation?.operationId === replacesOperationId;

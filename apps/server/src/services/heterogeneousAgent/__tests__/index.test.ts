@@ -84,10 +84,8 @@ const createService = (overrides: { streamEventManager?: IStreamEventManager } =
     settleRunningStatus: vi.fn(async () => {}),
     takeRunningOperation: vi.fn(async (_topicId: string, operationId: string) => ({
       isRoot: true,
-      claimToken: 'claim-token',
       operation: { assistantMessageId: 'asst-1', operationId },
     })),
-    completeRunningOperation: vi.fn(async () => true),
   };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     persistenceHandler,
@@ -741,10 +739,8 @@ describe('HeterogeneousAgentService', () => {
         settleRunningStatus: vi.fn(async () => {}),
         takeRunningOperation: vi.fn(async () => ({
           isRoot: true,
-          claimToken: 'claim-token',
           operation: { assistantMessageId: 'asst-q', hooks, operationId: 'op-q' },
         })),
-        completeRunningOperation: vi.fn(async () => true),
         updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
@@ -846,7 +842,7 @@ describe('HeterogeneousAgentService', () => {
           const running = meta.runningOperation;
           if (running?.operationId === operationId) {
             meta = { ...meta, runningOperation: null };
-            return { isRoot: true, claimToken: 'claim-token', operation: running };
+            return { isRoot: true, operation: running };
           }
           const child = running?.childOperations?.find(
             (candidate: any) => candidate.operationId === operationId,
@@ -861,9 +857,8 @@ describe('HeterogeneousAgentService', () => {
               ),
             },
           };
-          return { isRoot: false, claimToken: 'claim-token', operation: child };
+          return { isRoot: false, operation: child };
         }),
-        completeRunningOperation: vi.fn(async () => true),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };
         }),

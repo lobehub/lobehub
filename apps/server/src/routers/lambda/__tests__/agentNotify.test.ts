@@ -17,8 +17,6 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 
 const mockTopicFindById = vi.fn();
 const mockTopicTakeRunningOperation = vi.fn();
-const mockTopicCompleteRunningOperation = vi.fn();
-const mockTopicReleaseRunningOperationClaim = vi.fn();
 const mockTopicUpdateMetadata = vi.fn();
 const mockTopicRemoveRunningOperationChild = vi.fn();
 const mockMessageFindById = vi.fn();
@@ -43,8 +41,6 @@ vi.mock('@/database/models/topic', () => ({
     findById: mockTopicFindById,
     removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
     takeRunningOperation: mockTopicTakeRunningOperation,
-    completeRunningOperation: mockTopicCompleteRunningOperation,
-    releaseRunningOperationClaim: mockTopicReleaseRunningOperationClaim,
     updateMetadata: mockTopicUpdateMetadata,
   })),
 }));
@@ -119,8 +115,6 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     mockMessageFindById.mockResolvedValue({ content: 'the final reply', topicId: TOPIC });
     mockTopicUpdateMetadata.mockResolvedValue(undefined);
     mockTopicRemoveRunningOperationChild.mockResolvedValue(undefined);
-    mockTopicCompleteRunningOperation.mockResolvedValue(true);
-    mockTopicReleaseRunningOperationClaim.mockResolvedValue(true);
     // Default: a non-task op so the plan-instantiation guard no-ops unless a
     // test opts into a task-bound op.
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
@@ -197,40 +191,6 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
 
     await vi.waitFor(() => expect(completeOperationSpy).toHaveBeenCalledTimes(1));
     completeOperationSpy.mockRestore();
-  });
-
-  it('rejects a legacy child terminal callback without an operation id', async () => {
-    mockTopicFindById.mockResolvedValue({
-      agentId: 'agent-1',
-      metadata: {
-        runningOperation: {
-          childOperations: [{ assistantMessageId: 'child-msg', operationId: 'child-op' }],
-          operationId: OP,
-        },
-      },
-    });
-
-    const result = await createCaller().notify({
-      content: '',
-      done: true,
-      role: 'assistant',
-      topicId: TOPIC,
-    });
-
-    expect(result).toEqual({ messageId: undefined, operationId: undefined, topicId: TOPIC });
-    expect(mockTopicTakeRunningOperation).not.toHaveBeenCalled();
-    expect(mockPublishAgentRuntimeEnd).not.toHaveBeenCalled();
-  });
-
-  it('releases a terminal claim when stream publication fails before lifecycle', async () => {
-    mockPublishAgentRuntimeEnd.mockRejectedValueOnce(new Error('stream unavailable'));
-
-    await expect(
-      createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC }),
-    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
-
-    await vi.waitFor(() => expect(mockTopicReleaseRunningOperationClaim).toHaveBeenCalledTimes(1));
-    expect(mockTopicCompleteRunningOperation).not.toHaveBeenCalled();
   });
 
   it('durably ensures the verify plan for a task-bound run before the gate', async () => {
