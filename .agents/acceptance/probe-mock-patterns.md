@@ -596,6 +596,15 @@ agent-browser --session "$RUN_SESSION" \
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
 
+A cross-wired session can also look perfectly healthy while running STALE code:
+if the other instance's Vite has since died, the browser keeps serving its last
+bundle from disk cache — every probe answers, `innerText` is full, and only the
+rendered copy (an old i18n string, a pre-change label) betrays it. Before any
+assertion about working-tree code, read `location.origin` AND the page's script
+`src` origins, and require both to match the ports this run's `test-env.sh` /
+`.records/runtime` resolved. A dead script origin that still renders = disk
+cache, not your build.
+
 ### Agent-browser navigation hangs after an orphaned Next child keeps the port
 
 **Situation:** an isolated full-stack dev launcher exits, but its Next child
