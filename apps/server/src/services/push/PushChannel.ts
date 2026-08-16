@@ -58,10 +58,13 @@ export class PushChannel {
       body: ctx.content,
       channelId: DEFAULT_PUSH_CHANNEL_ID,
       data: {
+        ...ctx.pushPresentation?.data,
+        // Routing and identity fields are owned by the delivery context. Keep
+        // them after caller-provided presentation data so custom metadata can
+        // never redirect a tap or impersonate another notification scenario.
         notificationId: ctx.notificationId,
         type: ctx.type,
         url: ctx.actionUrl,
-        ...ctx.pushPresentation?.data,
       },
       mutableContent: ctx.pushPresentation?.mutableContent,
       priority: 'high',
