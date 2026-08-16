@@ -70,10 +70,12 @@ export const resourceTransferRequests = pgTable(
   },
   (t) => [
     // One live request per resource: the arbiter for the "concurrent second
-    // transfer" race. Terminal rows stay for audit without blocking new ones.
+    // transfer" race. Terminal rows stay for audit without blocking new ones,
+    // and a pending row orphaned by recipient deletion (recipient_id nulled by
+    // the FK) is no longer acceptable, so it must not block a replacement either.
     uniqueIndex('resource_transfer_requests_pending_resource_unique')
       .on(t.resourceType, t.resourceId)
-      .where(sql`${t.status} = 'pending'`),
+      .where(sql`${t.status} = 'pending' AND ${t.recipientId} IS NOT NULL`),
     index('resource_transfer_requests_recipient_idx').on(t.recipientId, t.status),
     index('resource_transfer_requests_workspace_idx').on(t.workspaceId),
   ],

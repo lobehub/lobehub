@@ -23,6 +23,6 @@ ALTER TABLE "resource_transfer_requests" DROP CONSTRAINT IF EXISTS "resource_tra
 ALTER TABLE "resource_transfer_requests" ADD CONSTRAINT "resource_transfer_requests_recipient_id_users_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_transfer_requests" DROP CONSTRAINT IF EXISTS "resource_transfer_requests_previous_owner_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "resource_transfer_requests" ADD CONSTRAINT "resource_transfer_requests_previous_owner_id_users_id_fk" FOREIGN KEY ("previous_owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "resource_transfer_requests_pending_resource_unique" ON "resource_transfer_requests" USING btree ("resource_type","resource_id") WHERE "resource_transfer_requests"."status" = 'pending';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "resource_transfer_requests_pending_resource_unique" ON "resource_transfer_requests" USING btree ("resource_type","resource_id") WHERE "resource_transfer_requests"."status" = 'pending' AND "resource_transfer_requests"."recipient_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "resource_transfer_requests_recipient_idx" ON "resource_transfer_requests" USING btree ("recipient_id","status");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "resource_transfer_requests_workspace_idx" ON "resource_transfer_requests" USING btree ("workspace_id");

@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "d20c3bdd-dc48-47cb-a075-51d76f274dfe",
+  "id": "311a56b9-41d5-4e3d-89f9-b22968e73bf8",
   "policies": {},
   "prevId": "2ef6d6e1-c031-4e7b-b085-5aa8d810ec2a",
   "roles": {},
@@ -21250,7 +21250,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"resource_transfer_requests\".\"status\" = 'pending'",
+          "where": "\"resource_transfer_requests\".\"status\" = 'pending' AND \"resource_transfer_requests\".\"recipient_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
