@@ -163,7 +163,11 @@ export const executeAcceptedTransfer = async (params: {
       try {
         await assertCanPerformResourceAction({
           action: 'transfer',
-          db,
+          // Read through the transaction connection so the authorization sees
+          // the same snapshot the handover commits against. (Transaction and
+          // LobeChatDatabase share the query surface these checks use; the
+          // param type is the narrower of the two.)
+          db: trx as unknown as LobeChatDatabase,
           resourceId: request.resourceId,
           resourceType: request.resourceType,
           userId: request.initiatorId,

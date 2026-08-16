@@ -196,7 +196,18 @@ export const resourceTransferRequestRouter = router({
       );
       return { data: { transferJobId }, success: true };
     } catch (error) {
-      if (error instanceof TRPCError) throw error;
+      if (error instanceof TRPCError) {
+        // The authority-stale refusal aborts the accept transaction, so the
+        // retire has to happen here: without it the same permanently
+        // unfulfillable request keeps rendering (and failing) until expiry.
+        const causeCode = (error.cause as { data?: { code?: unknown } } | undefined)?.data?.code;
+        if (causeCode === TransferErrorCode.TransferRequestStale) {
+          await ctx.transferRequestModel.invalidateForResources(request.resourceType, [
+            request.resourceId,
+          ]);
+        }
+        throw error;
+      }
       if (error instanceof Error) {
         if (error.message === TRANSFER_REQUEST_EXPIRED) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'This transfer request expired' });

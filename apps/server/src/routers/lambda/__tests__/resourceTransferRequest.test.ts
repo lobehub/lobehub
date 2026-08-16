@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
@@ -118,6 +119,23 @@ describe('resourceTransferRequestRouter', () => {
       await expect(caller.accept({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'CONFLICT',
       });
+    });
+
+    it('retires the request when the initiator authority went stale', async () => {
+      mockFindById.mockResolvedValue(pendingRequest);
+      mockExecuteAcceptedTransfer.mockRejectedValue(
+        new TRPCError({
+          cause: { data: { code: 'TRANSFER_REQUEST_STALE' } },
+          code: 'BAD_REQUEST',
+          message: "The initiator's authority changed since this request was created",
+        }),
+      );
+
+      await expect(caller.accept({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+      // A permanently unfulfillable request must not keep rendering until expiry.
+      expect(mockInvalidate).toHaveBeenCalledWith('agent', ['agent-1']);
     });
 
     it('retires the request when the agent changed since it was created', async () => {
