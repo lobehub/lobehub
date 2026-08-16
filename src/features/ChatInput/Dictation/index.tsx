@@ -139,8 +139,14 @@ const Dictation = memo(() => {
   const active = status !== 'idle' || activeAudioInputMode === 'dictation';
   const controlMode = getDictationControlMode(status);
   const otherAudioModeActive = isOtherAudioInputModeActive(activeAudioInputMode, 'dictation');
-  const { actionRef, cancelRef, preserveFocusOnActivation, retryRef, stopRef } =
-    useDictationControlFocus({ retryable, status });
+  const {
+    actionRef,
+    cancelRef,
+    handleKeyboardActivation,
+    preserveFocusOnActivation,
+    retryRef,
+    stopRef,
+  } = useDictationControlFocus({ active, retryable, status });
 
   useEffect(() => {
     if (!client) return;
@@ -244,6 +250,7 @@ const Dictation = memo(() => {
         ref={actionRef}
         title={t('voiceDictation.action')}
         onClick={handleStart}
+        onKeyDown={(event) => handleKeyboardActivation(event, start)}
       />
     );
   }
@@ -281,6 +288,11 @@ const Dictation = memo(() => {
           style={{ borderRadius: '50%' }}
           title={t('voiceDictation.stop')}
           onClick={handleStop}
+          onKeyDown={(event) =>
+            handleKeyboardActivation(event, () => {
+              void client?.stop();
+            })
+          }
         />
         <ChatInputAction
           aria-label={t('voiceDictation.cancel')}
@@ -290,6 +302,11 @@ const Dictation = memo(() => {
           ref={cancelRef}
           title={t('voiceDictation.cancel')}
           onClick={handleCancel}
+          onKeyDown={(event) =>
+            handleKeyboardActivation(event, () => {
+              void client?.cancel();
+            })
+          }
         />
       </div>
     );
@@ -315,6 +332,7 @@ const Dictation = memo(() => {
             ref={retryRef}
             title={t('voiceDictation.retry')}
             onClick={handleStart}
+            onKeyDown={(event) => handleKeyboardActivation(event, start)}
           />
         ) : status !== 'error' ? (
           <Icon aria-hidden className={styles.spin} icon={LoaderCircle} size={18} />
@@ -328,6 +346,16 @@ const Dictation = memo(() => {
         ref={cancelRef}
         title={status === 'error' ? t('voiceDictation.dismiss') : t('voiceDictation.cancel')}
         onClick={status === 'error' ? handleDismiss : handleCancel}
+        onKeyDown={(event) =>
+          handleKeyboardActivation(event, () => {
+            if (status === 'error') {
+              dismiss();
+              return;
+            }
+
+            void client?.cancel();
+          })
+        }
       />
     </div>
   );
