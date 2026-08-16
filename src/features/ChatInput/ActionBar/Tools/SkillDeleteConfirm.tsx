@@ -57,29 +57,37 @@ const SkillDeleteConfirm = memo<SkillDeleteConfirmProps>(
       onDone();
     }, [onDelete, onDone]);
 
-    if (!confirming) return renderTrigger(() => setConfirming(true));
-
     return (
-      <div className={cx(styles.confirm)}>
-        <span className={cx(styles.text)}>
-          {t('tools.builtins.uninstallConfirm.desc', { name: displayName })}
+      <>
+        {/* Hidden rather than unmounted: dropping the button inside its own click
+            leaves base-ui resolving the rest of that press against a detached
+            node, which it reads as an outside press and closes the menu. */}
+        <span style={{ display: confirming ? 'none' : 'contents' }}>
+          {renderTrigger(() => setConfirming(true))}
         </span>
-        <div className={cx(styles.actions)}>
-          <Button disabled={loading} size="small" onClick={() => setConfirming(false)}>
-            {tCommon('cancel')}
-          </Button>
-          <Button
-            danger
-            disabled={disabled}
-            loading={loading}
-            size="small"
-            type="primary"
-            onClick={handleConfirm}
-          >
-            {t('tools.builtins.uninstall')}
-          </Button>
-        </div>
-      </div>
+        {confirming && (
+          <div className={cx(styles.confirm)}>
+            <span className={cx(styles.text)}>
+              {t('tools.builtins.uninstallConfirm.desc', { name: displayName })}
+            </span>
+            <div className={cx(styles.actions)}>
+              <Button disabled={loading} size="small" onClick={() => setConfirming(false)}>
+                {tCommon('cancel')}
+              </Button>
+              <Button
+                danger
+                disabled={disabled}
+                loading={loading}
+                size="small"
+                type="primary"
+                onClick={handleConfirm}
+              >
+                {t('tools.builtins.uninstall')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </>
     );
   },
 );

@@ -1,4 +1,3 @@
-import { PopoverGroup } from '@lobehub/ui';
 import { Blocks } from 'lucide-react';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,7 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems, pinnedCount, autoCount } = useControls();
+  const { marketItems, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
@@ -30,35 +29,31 @@ const Tools = memo(() => {
       <ChatInputAction disabled icon={Blocks} showTooltip={true} title={t('tools.disabled')} />
     );
 
-  // The action's own popover is controlled, so it stays standalone; only the
-  // rows' detail cards and policy menus join the group and take turns in its
-  // single shared popup.
   return (
     <Suspense fallback={<ChatInputAction disabled icon={Blocks} title={t('tools.title')} />}>
-      <PopoverGroup>
-        <ChatInputAction
-          icon={Blocks}
-          showTooltip={false}
-          title={t('tools.title')}
-          popover={{
-            content: (
-              <PopoverContent
-                autoCount={autoCount}
-                items={marketItems}
-                pinnedCount={pinnedCount}
-                onOpenStore={handleOpenStore}
-              />
-            ),
-            maxWidth: 320,
-            minWidth: 320,
-            styles: {
-              content: {
-                padding: 0,
-              },
+      <ChatInputAction
+        icon={Blocks}
+        showTooltip={false}
+        title={t('tools.title')}
+        popover={{
+          content: (
+            <PopoverContent
+              autoCount={autoCount}
+              detailPopoverDisabled={isPolicyMenuOpen}
+              items={marketItems}
+              pinnedCount={pinnedCount}
+              onOpenStore={handleOpenStore}
+            />
+          ),
+          maxWidth: 320,
+          minWidth: 320,
+          styles: {
+            content: {
+              padding: 0,
             },
-          }}
-        />
-      </PopoverGroup>
+          },
+        }}
+      />
     </Suspense>
   );
 });
