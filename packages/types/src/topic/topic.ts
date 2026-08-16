@@ -224,7 +224,6 @@ export interface ChatTopicMetadata {
       operationId: string;
       orchestrationRole?: 'supervisor' | 'member';
       scope?: string;
-      terminalClaimed?: boolean;
       threadId?: string | null;
     }>;
     /** Device selected for a notify-based platform task. */
@@ -253,7 +252,6 @@ export interface ChatTopicMetadata {
     operationId: string;
     orchestrationRole?: 'supervisor' | 'member';
     scope?: string;
-    terminalClaimed?: boolean;
     threadId?: string | null;
   } | null;
   /**
@@ -503,7 +501,6 @@ export const chatTopicMetadataUpdateSchema = z.object({
             operationId: z.string(),
             orchestrationRole: z.enum(['supervisor', 'member']).optional(),
             scope: z.string().optional(),
-            terminalClaimed: z.boolean().optional(),
             threadId: z.string().nullish(),
           }),
         )
@@ -516,7 +513,6 @@ export const chatTopicMetadataUpdateSchema = z.object({
       operationId: z.string(),
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
       scope: z.string().optional(),
-      terminalClaimed: z.boolean().optional(),
       threadId: z.string().nullish(),
     })
     .nullable()

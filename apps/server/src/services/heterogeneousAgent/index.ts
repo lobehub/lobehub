@@ -303,44 +303,29 @@ export class HeterogeneousAgentService {
 
       // The per-step pointer is independent from the running marker, so it
       // remains available after the atomic claim removes that marker.
-      const currentMsgRef = await this.topicModel.findById(topicId).catch(async (error) => {
-        await this.topicModel.releaseRunningOperationClaim(topicId, operationId).catch(() => {});
-        throw error;
-      });
+      const currentMsgRef = (await this.topicModel.findById(topicId))?.metadata?.heteroCurrentMsgId;
       assistantMessageId =
-        currentMsgRef?.metadata?.heteroCurrentMsgId?.operationId === operationId
-          ? currentMsgRef.metadata.heteroCurrentMsgId.msgId
+        currentMsgRef?.operationId === operationId
+          ? currentMsgRef.msgId
           : running.assistantMessageId;
-      if (claimed.isRoot && orchestrationRole !== 'member') {
-        await this.topicModel.settleRunningStatus(topicId).catch(async (error) => {
-          await this.topicModel.releaseRunningOperationClaim(topicId, operationId).catch(() => {});
-          throw error;
-        });
-      }
+      if (claimed.isRoot) await this.topicModel.settleRunningStatus(topicId);
     }
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,
     // network drop on last batch). Idempotent on the renderer side: the
     // gateway event handler latches `terminalState` on first end-event.
-    await this.streamEventManager
-      .publishStreamEvent(operationId, {
-        data: {
-          agentType,
-          error,
-          operationId,
-          reason: result,
-          sessionId,
-        },
-        stepIndex: 0,
-        type: 'agent_runtime_end',
-      })
-      .catch(async (error) => {
-        if (result !== 'cancelled') {
-          await this.topicModel.releaseRunningOperationClaim(topicId, operationId).catch(() => {});
-        }
-        throw error;
-      });
+    await this.streamEventManager.publishStreamEvent(operationId, {
+      data: {
+        agentType,
+        error,
+        operationId,
+        reason: result,
+        sessionId,
+      },
+      stepIndex: 0,
+      type: 'agent_runtime_end',
+    });
 
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
@@ -482,43 +467,37 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId)
-      .completeOperation(
-        {
-          agentId,
-          assistantMessageId,
-          cost: { total: totals?.totalCost ?? null },
-          deliverable: lastAssistantContent ?? '',
-          error: error ?? undefined,
-          goal: goalContent,
-          // Backfilled executed model/provider — the verify gate bails when absent.
-          model: totals?.model,
-          operationId,
-          orchestrationRole,
-          provider: totals?.provider,
-          serializedHooks,
-          stepCount: totals?.stepCount ?? null,
-          topicId,
-          usage: {
-            llm: {
-              apiCalls: totals?.llmCalls ?? null,
-              tokens: {
-                input: totals?.totalInputTokens ?? null,
-                output: totals?.totalOutputTokens ?? null,
-                total: totals?.totalTokens ?? null,
-              },
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+      {
+        agentId,
+        assistantMessageId,
+        cost: { total: totals?.totalCost ?? null },
+        deliverable: lastAssistantContent ?? '',
+        error: error ?? undefined,
+        goal: goalContent,
+        // Backfilled executed model/provider — the verify gate bails when absent.
+        model: totals?.model,
+        operationId,
+        orchestrationRole,
+        provider: totals?.provider,
+        serializedHooks,
+        stepCount: totals?.stepCount ?? null,
+        topicId,
+        usage: {
+          llm: {
+            apiCalls: totals?.llmCalls ?? null,
+            tokens: {
+              input: totals?.totalInputTokens ?? null,
+              output: totals?.totalOutputTokens ?? null,
+              total: totals?.totalTokens ?? null,
             },
-            tools: { totalCalls: totals?.toolCalls ?? null },
           },
-          userId: this.userId,
+          tools: { totalCalls: totals?.toolCalls ?? null },
         },
-        completionReason,
-      )
-      .catch(async (error) => {
-        await this.topicModel.releaseRunningOperationClaim(topicId, operationId).catch(() => {});
-        throw error;
-      });
-    await this.topicModel.completeRunningOperation(topicId, operationId);
+        userId: this.userId,
+      },
+      completionReason,
+    );
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
   }
 

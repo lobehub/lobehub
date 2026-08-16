@@ -17,8 +17,6 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 
 const mockTopicFindById = vi.fn();
 const mockTopicTakeRunningOperation = vi.fn();
-const mockTopicCompleteRunningOperation = vi.fn();
-const mockTopicReleaseRunningOperationClaim = vi.fn();
 const mockTopicUpdateMetadata = vi.fn();
 const mockTopicRemoveRunningOperationChild = vi.fn();
 const mockMessageFindById = vi.fn();
@@ -43,8 +41,6 @@ vi.mock('@/database/models/topic', () => ({
     findById: mockTopicFindById,
     removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
     takeRunningOperation: mockTopicTakeRunningOperation,
-    completeRunningOperation: mockTopicCompleteRunningOperation,
-    releaseRunningOperationClaim: mockTopicReleaseRunningOperationClaim,
     updateMetadata: mockTopicUpdateMetadata,
   })),
 }));
@@ -114,8 +110,6 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
         operationId: OP,
       },
     });
-    mockTopicCompleteRunningOperation.mockResolvedValue(true);
-    mockTopicReleaseRunningOperationClaim.mockResolvedValue(true);
     // The placeholder message holds the agent's final reply (written in-place
     // by earlier `lh notify` calls).
     mockMessageFindById.mockResolvedValue({ content: 'the final reply', topicId: TOPIC });

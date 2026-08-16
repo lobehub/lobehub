@@ -1268,7 +1268,7 @@ export class AiAgentService {
     // advance the topic's main spine. They may start while their parent
     // operation owns `runningOperation` (for example callAgent/callSubAgent),
     // so making them wait for the topic-start claim deadlocks the child start.
-    if (!topicId || params.appContext?.threadId) {
+    if (!topicId || params.appContext?.threadId || params.topicStartOwnerOperationId) {
       return this.execAgentWithReservation(params);
     }
 
