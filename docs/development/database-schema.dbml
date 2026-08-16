@@ -2536,6 +2536,29 @@ table resource_permissions {
   }
 }
 
+table resource_transfer_requests {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  resource_type text [not null]
+  resource_id text [not null]
+  workspace_id text [not null]
+  initiator_id text
+  recipient_id text
+  previous_owner_id text
+  status text [not null, default: 'pending']
+  options jsonb
+  expires_at "timestamp with time zone" [not null]
+  resolved_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (resource_type, resource_id) [name: 'resource_transfer_requests_pending_resource_unique', unique]
+    (recipient_id, status) [name: 'resource_transfer_requests_recipient_idx']
+    workspace_id [name: 'resource_transfer_requests_workspace_idx']
+  }
+}
+
 table session_groups {
   id text [pk, not null]
   name text [not null]

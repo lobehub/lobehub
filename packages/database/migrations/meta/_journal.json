@@ -1001,6 +1001,13 @@
       "when": 1786791246437,
       "tag": "0142_expertise_domain_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -30,6 +30,8 @@
   "features.oauthApps.title": "OAuth 应用",
   "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",
   "features.projects.title": "项目工作空间",
+  "features.selfLearning.desc": "看见每个 agent 从真实实践里学到了什么 —— 它的规则库、哪些规则真的用得上、哪几层还是空的。",
+  "features.selfLearning.title": "自进化",
   "features.taskVerify.desc": "在任务详情里增加「交付验收」模块：一句话描述验收要求，AI 自动生成可编辑的验收项。",
   "features.taskVerify.title": "任务交付验收",
   "features.topicAcceptance.desc": "在输入框上方为当前话题编写一份交付验收清单，让对话对照你随时可编辑的标准来交付。",

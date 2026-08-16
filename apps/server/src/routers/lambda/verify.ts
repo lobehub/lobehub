@@ -38,6 +38,7 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
@@ -496,11 +497,15 @@ export const verifyRouter = router({
       } catch (error) {
         const errorType = (error as { errorType?: unknown } | null)?.errorType;
         if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
-          throw new TRPCError({
+          const trpcError = new TRPCError({
             cause: error,
-            code: 'UNAUTHORIZED',
+            code: 'PRECONDITION_FAILED',
             message: AgentRuntimeErrorType.InvalidProviderAPIKey,
           });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an Error cause.
+          // Mark the normalized cause that the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
         }
 
         throw error;

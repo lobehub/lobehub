@@ -551,6 +551,28 @@ to an Agent rather than to the Project that provides its tasks, goals, resources
 route and Project sidebar. The coordinator may still execute the conversation internally, but the
 visible URL, active list, empty state, and navigation must consistently identify the Project.
 
+### L-S9 — Trusting "migration pass" on the shared acceptance Postgres
+
+**Wrong approach:** run `init-dev-env.sh migrate` in a worktree whose branch adds a
+migration, read `✅ database migration pass`, and start seeding fixtures against the
+new tables.
+
+**Why it fails:** the managed `lobehub-agent-testing-postgres` container is shared by
+every worktree, and drizzle decides what to apply by comparing each journal entry's
+`when` timestamp against the newest `created_at` in `drizzle.__drizzle_migrations` —
+not by hash or by index. A sibling worktree that applied its own same-numbered
+migration a few minutes later leaves a newer row, after which your migration is
+skipped in silence and the command still reports success in \~40ms. Every later probe
+then fails as `relation ... does not exist`, which reads like a broken schema import
+rather than a migration that never ran.
+
+**Correct approach:** after any migrate, assert the tables/columns your fixtures need
+actually exist (`select tablename from pg_tables where tablename like '<prefix>%'`)
+rather than trusting the pass line. When it was skipped, apply the branch's SQL
+directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_STOP=1`
+— and treat the collision as a local multi-worktree artifact, never as a defect of
+the branch or of canary (the numbers get rebased on merge).
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions

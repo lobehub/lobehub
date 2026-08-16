@@ -72,6 +72,7 @@ const LabsForm = memo(() => {
     enableInAppBrowser,
     enableArtifactDeployment,
     enableTopicAcceptance,
+    enableSelfLearning,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -91,6 +92,7 @@ const LabsForm = memo(() => {
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
     labPreferSelectors.enableTopicAcceptance(s),
+    labPreferSelectors.enableSelfLearning(s),
     s.updateLab,
   ]);
 
@@ -149,6 +151,13 @@ const LabsForm = memo(() => {
       flag: 'enableMessageTextSelectionActions',
       stage: 'alpha',
       title: tLabs('features.messageTextSelectionActions.title'),
+    },
+    {
+      checked: enableSelfLearning,
+      desc: tLabs('features.selfLearning.desc'),
+      flag: 'enableSelfLearning',
+      stage: 'alpha',
+      title: tLabs('features.selfLearning.title'),
     },
     {
       checked: enableTopicAcceptance,

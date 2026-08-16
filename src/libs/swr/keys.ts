@@ -892,6 +892,18 @@ export const messengerKeys = {
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
+export const expertiseKeys = {
+  domain: def('expertise:domain', (domainId: string) => ['expertise:domain', domainId]),
+  lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
+  lessons: def('expertise:lessons', (domainId: string, layer?: string, search?: string) => [
+    'expertise:lessons',
+    domainId,
+    layer ?? '',
+    search ?? '',
+  ]),
+  overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
+};
+
 export const verifyKeys = {
   acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
     'verify:acceptanceBundle',
@@ -1201,6 +1213,7 @@ export const swrKeys = {
   document: documentSWRKeys,
   electron: electronKeys,
   eval: evalKeys,
+  expertise: expertiseKeys,
   favorite: favoriteKeys,
   file: fileKeys,
   fork: forkKeys,
