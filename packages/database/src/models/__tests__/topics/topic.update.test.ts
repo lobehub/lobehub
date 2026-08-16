@@ -288,7 +288,37 @@ describe('TopicModel - Update', () => {
       });
       const topic = await topicModel.findById(topicId);
       expect(topic?.metadata?.runningOperation).toMatchObject({ operationId: 'parent-operation' });
-      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([]);
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        expect.objectContaining({ operationId: 'child-operation', terminalClaimed: true }),
+      ]);
+    });
+
+    it('keeps active children when the supervisor completes', async () => {
+      const topicId = 'task-callback-complete-supervisor';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      await topicModel.takeRunningOperation(topicId, 'parent-operation');
+      await expect(topicModel.completeRunningOperation(topicId, 'parent-operation')).resolves.toBe(
+        true,
+      );
+      await expect(
+        topicModel.takeRunningOperation(topicId, 'child-operation'),
+      ).resolves.toMatchObject({
+        operation: { operationId: 'child-operation' },
+      });
     });
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';

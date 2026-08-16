@@ -81,6 +81,8 @@ const createService = (overrides: { streamEventManager?: IStreamEventManager } =
   const persistenceHandler = createFakePersistenceHandler();
   const topicModel = {
     findById: vi.fn(async () => undefined),
+    completeRunningOperation: vi.fn(async () => true),
+    releaseRunningOperationClaim: vi.fn(async () => true),
     settleRunningStatus: vi.fn(async () => {}),
     takeRunningOperation: vi.fn(async (_topicId: string, operationId: string) => ({
       isRoot: true,
@@ -737,6 +739,8 @@ describe('HeterogeneousAgentService', () => {
           metadata: { runningOperation: { hooks, operationId: 'op-q' } },
         })),
         settleRunningStatus: vi.fn(async () => {}),
+        completeRunningOperation: vi.fn(async () => true),
+        releaseRunningOperationClaim: vi.fn(async () => true),
         takeRunningOperation: vi.fn(async () => ({
           isRoot: true,
           operation: { assistantMessageId: 'asst-q', hooks, operationId: 'op-q' },
@@ -838,6 +842,8 @@ describe('HeterogeneousAgentService', () => {
       const topicModel = {
         findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
         settleRunningStatus: vi.fn(async () => {}),
+        completeRunningOperation: vi.fn(async () => true),
+        releaseRunningOperationClaim: vi.fn(async () => true),
         takeRunningOperation: vi.fn(async (_id: string, operationId: string) => {
           const running = meta.runningOperation;
           if (running?.operationId === operationId) {

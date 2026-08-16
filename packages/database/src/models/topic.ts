@@ -1429,7 +1429,12 @@ export class TopicModel {
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
       const runningOperation = existing?.metadata?.runningOperation;
-      if (!existing || runningOperation?.operationId !== parentOperationId) return false;
+      if (
+        !existing ||
+        runningOperation?.operationId !== parentOperationId ||
+        runningOperation.terminalClaimed
+      )
+        return false;
 
       await tx
         .update(topics)
@@ -1497,10 +1502,14 @@ export class TopicModel {
       if (!existing || !runningOperation) return undefined;
 
       if (runningOperation.operationId === operationId) {
+        if (runningOperation.terminalClaimed) return undefined;
         await tx
           .update(topics)
           .set({
-            metadata: { ...existing.metadata, runningOperation: null },
+            metadata: {
+              ...existing.metadata,
+              runningOperation: { ...runningOperation, terminalClaimed: true },
+            },
           })
           .where(and(eq(topics.id, id), this.ownership()));
         return { isRoot: true, operation: runningOperation };
@@ -1510,7 +1519,59 @@ export class TopicModel {
         (candidate) => candidate.operationId === operationId,
       );
       if (!child) return undefined;
+      if (child.terminalClaimed) return undefined;
 
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.map((candidate) =>
+                candidate.operationId === operationId
+                  ? { ...candidate, terminalClaimed: true }
+                  : candidate,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { isRoot: false, operation: child };
+    });
+
+  completeRunningOperation = async (id: string, operationId: string): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+
+      if (runningOperation.operationId === operationId) {
+        if (!runningOperation.terminalClaimed) return false;
+        const remainingChildren = runningOperation.childOperations ?? [];
+        await tx
+          .update(topics)
+          .set({
+            metadata: {
+              ...existing.metadata,
+              runningOperation:
+                remainingChildren.length === 0
+                  ? null
+                  : { ...remainingChildren[0], childOperations: remainingChildren.slice(1) },
+            },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return true;
+      }
+
+      const child = runningOperation.childOperations?.find(
+        (candidate) => candidate.operationId === operationId,
+      );
+      if (!child?.terminalClaimed) return false;
       await tx
         .update(topics)
         .set({
@@ -1525,7 +1586,47 @@ export class TopicModel {
           },
         })
         .where(and(eq(topics.id, id), this.ownership()));
-      return { isRoot: false, operation: child };
+      return true;
+    });
+
+  releaseRunningOperationClaim = async (id: string, operationId: string): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+      if (runningOperation.operationId === operationId) {
+        if (!runningOperation.terminalClaimed) return false;
+        const { terminalClaimed: _terminalClaimed, ...operation } = runningOperation;
+        await tx
+          .update(topics)
+          .set({ metadata: { ...existing.metadata, runningOperation: operation } })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return true;
+      }
+      const child = runningOperation.childOperations?.find(
+        (candidate) => candidate.operationId === operationId,
+      );
+      if (!child?.terminalClaimed) return false;
+      const { terminalClaimed: _terminalClaimed, ...operation } = child;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.map((candidate) =>
+                candidate.operationId === operationId ? operation : candidate,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
     });
 
   /**

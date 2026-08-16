@@ -141,6 +141,10 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const marker = (topic.metadata as any)?.runningOperation;
+    if ((marker?.childOperations?.length ?? 0) > 0 && !input.operationId) {
+      log('notify: rejecting callback without operationId while children are active');
+      return { messageId: undefined, operationId: undefined, topicId };
+    }
     const remoteOperationId = input.operationId ?? marker?.operationId;
     const activeOperation =
       remoteOperationId && marker
@@ -293,6 +297,7 @@ export const agentNotifyRouter = router({
             // write — keep that prior behavior on the error path.
             { skipErrorMessageWrite: true },
           );
+          await ctx.topicModel.completeRunningOperation(topicId, remoteOperationId);
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -302,11 +307,17 @@ export const agentNotifyRouter = router({
           });
         }
       } catch (err) {
+        if (isTerminal && claimedOperation) {
+          await ctx.topicModel
+            .releaseRunningOperationClaim(topicId, remoteOperationId)
+            .catch(() => {});
+        }
         log(
           'notify: failed to publish stream event for operationId=%s: %O',
           remoteOperationId,
           err,
         );
+        if (isTerminal) throw err;
       }
     };
 
@@ -340,11 +351,12 @@ export const agentNotifyRouter = router({
           // `lastAssistantContent` — bot completion callbacks and the task
           // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
           if (isTerminal && !content) {
-            void publishRemoteHeteroEvent(resolvedMessageId);
+            await publishRemoteHeteroEvent(resolvedMessageId);
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
           await ctx.messageModel.update(resolvedMessageId, { content });
-          void publishRemoteHeteroEvent(resolvedMessageId);
+          if (isTerminal) await publishRemoteHeteroEvent(resolvedMessageId);
+          else void publishRemoteHeteroEvent(resolvedMessageId);
           if (shouldContinue) {
             const result = await ctx.aiAgentService.execAgent({
               agentId,
@@ -362,7 +374,7 @@ export const agentNotifyRouter = router({
         // Terminal signal (done or error) with no messageId and empty content →
         // just finalize the run, no DB write.
         if (isTerminal && !content) {
-          void publishRemoteHeteroEvent();
+          await publishRemoteHeteroEvent();
           return { messageId: undefined, operationId: undefined, topicId };
         }
 
@@ -374,7 +386,8 @@ export const agentNotifyRouter = router({
           topicId,
         });
 
-        void publishRemoteHeteroEvent(msg.id);
+        if (isTerminal) await publishRemoteHeteroEvent(msg.id);
+        else void publishRemoteHeteroEvent(msg.id);
 
         // Optionally trigger a follow-up agent turn.
         // Use resume=true + parentMessageId so execAgent skips creating an
@@ -398,6 +411,11 @@ export const agentNotifyRouter = router({
 
         return { messageId: msg.id, operationId: undefined, topicId };
       } catch (error: any) {
+        if (isTerminal && claimedOperation && remoteOperationId) {
+          await ctx.topicModel
+            .releaseRunningOperationClaim(topicId, remoteOperationId)
+            .catch(() => {});
+        }
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           cause: error,
