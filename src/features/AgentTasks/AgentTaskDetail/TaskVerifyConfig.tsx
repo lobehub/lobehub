@@ -27,8 +27,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { openVerifyCriterionModal } from '@/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal';
-import { VerifyCriterionEditor } from '@/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal/VerifyCriterionForm';
+import {
+  CriterionEditor,
+  CriterionRequiredChip,
+  openCriterionEditModal,
+} from '@/features/Verify/CriterionList';
 import { useRubrics } from '@/features/Verify/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
@@ -427,8 +430,9 @@ const TaskVerifyConfig = memo(() => {
   // New criteria are authored in the detail modal, not via an inline empty row —
   // so a half-typed criterion never leaks into the read-only preview.
   const handleManualAdd = useCallback(() => {
-    openVerifyCriterionModal({
-      initial: { required: true, title: '', verifierType: 'llm' },
+    openCriterionEditModal({
+      criterion: { required: true, title: '', verifierType: 'llm' },
+      isNew: true,
       onSubmit: (next) => commit([...drafts, toDraftItem(next)]),
     });
   }, [drafts, commit]);
@@ -692,9 +696,9 @@ const TaskVerifyConfig = memo(() => {
         {item.title || t('verifyConfig.criterionTitlePlaceholder')}
       </Text>
       {item.verifierType ? (
-        <Tag>{t(`verifyConfig.verifierType.${item.verifierType}` as const)}</Tag>
+        <Tag>{t(`criterion.verifierType.${item.verifierType}` as const, { ns: 'verify' })}</Tag>
       ) : null}
-      <Tag>{item.required === false ? t('verifyConfig.optional') : t('verifyConfig.required')}</Tag>
+      <CriterionRequiredChip required={item.required !== false} />
     </>
   );
 
@@ -828,7 +832,7 @@ const TaskVerifyConfig = memo(() => {
         {drafts
           .filter((item) => item.id === selectedCriterionId)
           .map((item) => (
-            <VerifyCriterionEditor
+            <CriterionEditor
               initial={item}
               key={item.id}
               onClose={() => setSelectedCriterionId(null)}
