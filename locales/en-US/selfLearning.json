@@ -1,8 +1,9 @@
 {
-  "anchor.filter": "Counts as practice: ",
+  "anchor.filter": "Counts as practice",
   "anchor.noCanon": "no canon — coverage cannot be judged",
   "anchor.noLayers": "no layers — lessons are not grouped by level",
-  "anchor.outOfScope": "Does not count: ",
+  "anchor.outOfScope": "Does not count",
+  "anchor.subtitle": "the standard it learns against, set when the direction was created",
   "anchor.title": "Its anchor",
   "charts.count": "{{count}} lessons",
   "charts.early": "started at {{rate}}%",

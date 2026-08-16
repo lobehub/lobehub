@@ -117,7 +117,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   itemRow: css`
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 28px;
+    grid-template-columns: 32px minmax(0, 1fr) 28px;
     gap: 8px;
     align-items: start;
 
@@ -136,10 +136,9 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   seq: css`
-    padding-block-start: 6px;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
+    padding-block-start: 8px;
+    font-size: 14px;
+    color: ${cssVar.colorTextTertiary};
   `,
   title: css`
     box-sizing: border-box;
@@ -394,7 +393,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                   <Flexbox horizontal gap={8}>
                     <Input
                       placeholder={t('create.anchor.canonTitle')}
-                      size={'small'}
                       style={{ flex: 1 }}
                       value={entry.title}
                       variant={'filled'}
@@ -410,7 +408,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                     />
                     <Input
                       placeholder={t('create.anchor.canonSource')}
-                      size={'small'}
                       style={{ flex: 1 }}
                       value={entry.source}
                       variant={'filled'}
@@ -426,7 +423,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                   <TextArea
                     autoSize={{ maxRows: 4, minRows: 1 }}
                     placeholder={t('create.anchor.canonStatement')}
-                    size={'small'}
                     value={entry.statement}
                     variant={'borderless'}
                     onChange={(e) =>
@@ -488,7 +484,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                 <Flexbox gap={4}>
                   <Input
                     placeholder={t('create.anchor.layerTitle')}
-                    size={'small'}
                     value={layer.title}
                     variant={'filled'}
                     onChange={(e) =>
@@ -503,7 +498,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                   />
                   <Input
                     placeholder={t('create.anchor.layerDesc')}
-                    size={'small'}
                     value={layer.description ?? ''}
                     variant={'borderless'}
                     onChange={(e) =>

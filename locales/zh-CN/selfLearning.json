@@ -1,8 +1,9 @@
 {
-  "anchor.filter": "什么算实践：",
+  "anchor.filter": "什么算实践",
   "anchor.noCanon": "没有经典依据 —— 没法判断覆盖",
   "anchor.noLayers": "没有分层 —— 经验不按层归类",
-  "anchor.outOfScope": "什么不算：",
+  "anchor.outOfScope": "什么不算",
+  "anchor.subtitle": "建域时定下的标准，它拿这些在学",
   "anchor.title": "它的锚",
   "charts.count": "{{count}} 条",
   "charts.early": "起步时 {{rate}}%",
