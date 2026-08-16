@@ -296,7 +296,7 @@
   "criterion.delete": "Remove criterion",
   "criterion.descriptionLabel": "Notes",
   "criterion.descriptionPlaceholder": "Add extra context for the checker (optional)",
-  "criterion.editTitle": "Edit acceptance criterion C{{seq}}",
+  "criterion.editTitle": "Edit acceptance criterion",
   "criterion.instructionLabel": "Judge prompt",
   "criterion.instructionPlaceholder": "Describe the exact pass conditions and required evidence",
   "criterion.optional": "Optional",

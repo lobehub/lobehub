@@ -154,7 +154,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
       openCriterionEditModal({
         criterion: args.criteria[index],
         onSubmit: (value) => updateCriterion(index, value),
-        seq: index + 1,
       });
     const updateCriterion = (index: number, value: Partial<GoalCriterionDraft>) =>
       patch({
@@ -245,14 +244,13 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
               {args.criteria.map((criterion, index) => (
                 <CriterionRow
                   key={index}
-                  seq={index + 1}
                   title={criterion.title}
                   actions={
                     <>
                       <ActionIcon
                         icon={Pencil}
                         size={'small'}
-                        title={t('builtins.lobe-task.goal.editCriterion', { seq: index + 1 })}
+                        title={t('builtins.lobe-task.goal.editCriterion')}
                         onClick={(event) => {
                           event.stopPropagation();
                           openEditModal(index);
@@ -296,7 +294,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                     },
                     isNew: true,
                     onSubmit: (value) => patch({ criteria: [...args.criteria, value] }),
-                    seq: args.criteria.length + 1,
                   })
                 }
               >

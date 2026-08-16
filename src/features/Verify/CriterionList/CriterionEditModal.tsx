@@ -7,19 +7,14 @@ import type { VerifyCriterionDraft } from '@/services/verify';
 
 import { CriterionEditor, type CriterionEditorProps } from './CriterionEditor';
 
-interface ModalTitleProps {
-  isNew?: boolean;
-  seq?: number;
-}
-
 /**
  * A component rather than a `t()` string so a lazily loaded `verify` namespace
  * still updates the title after the modal is already open.
  */
-const ModalTitle = ({ isNew, seq }: ModalTitleProps) => {
+const ModalTitle = ({ isNew }: { isNew?: boolean }) => {
   const { t } = useTranslation('verify');
 
-  return isNew || seq === undefined ? t('criterion.addTitle') : t('criterion.editTitle', { seq });
+  return isNew ? t('criterion.addTitle') : t('criterion.editTitle');
 };
 
 const ModalContent = (props: Omit<CriterionEditorProps, 'onClose'>) => {
@@ -34,8 +29,6 @@ export interface OpenCriterionEditModalProps {
   isNew?: boolean;
   onDelete?: () => void;
   onSubmit: (next: VerifyCriterionDraft) => void;
-  /** 1-based position shown in the edit title. */
-  seq?: number;
 }
 
 /** Imperatively open the shared criterion editor in a modal. */
@@ -44,7 +37,6 @@ export const openCriterionEditModal = ({
   isNew,
   onDelete,
   onSubmit,
-  seq,
 }: OpenCriterionEditModalProps): ModalInstance =>
   createModal({
     content: (
@@ -53,6 +45,6 @@ export const openCriterionEditModal = ({
     footer: null,
     maskClosable: true,
     styles: { content: { padding: 0 } },
-    title: <ModalTitle isNew={isNew} seq={seq} />,
+    title: <ModalTitle isNew={isNew} />,
     width: 'min(90vw, 560px)',
   });

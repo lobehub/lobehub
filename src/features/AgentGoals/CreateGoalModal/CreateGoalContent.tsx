@@ -9,7 +9,6 @@ import { InputNumber } from 'antd';
 import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
-  CircleDashed,
   Paperclip,
   Pencil,
   PencilLine,
@@ -358,9 +357,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       isNew: true,
       onSubmit: (criterion) =>
         setPlan((current) => ({ ...current, criteria: [...current.criteria, criterion] })),
-      seq: plan.criteria.length + 1,
     });
-  }, [plan.criteria.length]);
+  }, []);
 
   const editCriterion = useCallback(
     (index: number) => {
@@ -369,7 +367,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       openCriterionEditModal({
         criterion,
         onSubmit: (next) => updateCriterion(index, next),
-        seq: index + 1,
       });
     },
     [plan.criteria, updateCriterion],
@@ -530,12 +527,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
+            {/* Draft rows carry no status icon / C{seq} anchor — those belong to the
+                post-creation check list, not to authoring. */}
             <CriterionList className={styles.criteriaList}>
               {plan.criteria.map((criterion, index) => (
                 <CriterionRow
-                  icon={<Icon color={cssVar.colorTextQuaternary} icon={CircleDashed} size={16} />}
                   key={index}
-                  seq={index + 1}
                   title={criterion.title || t('createGoal.criterionPlaceholder')}
                   actions={
                     <>

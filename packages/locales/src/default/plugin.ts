@@ -415,7 +415,7 @@ export default {
   'builtins.lobe-task.goal.phase.rejected': 'Sent back',
   'builtins.lobe-task.goal.phase.repairing': 'Repairing',
   'builtins.lobe-task.goal.phase.verifying': 'Verifying',
-  'builtins.lobe-task.goal.editCriterion': 'Edit criterion C{{seq}}',
+  'builtins.lobe-task.goal.editCriterion': 'Edit criterion',
   'builtins.lobe-task.goal.roundBudget': 'Iteration budget',
   'builtins.lobe-task.goal.roundsUnit': 'rounds',
   'builtins.lobe-task.goal.sectionBudget': 'Budget',

@@ -296,7 +296,7 @@
   "criterion.delete": "删除验收标准",
   "criterion.descriptionLabel": "补充说明",
   "criterion.descriptionPlaceholder": "为检查方补充更多上下文（可选）",
-  "criterion.editTitle": "编辑验收标准 C{{seq}}",
+  "criterion.editTitle": "编辑验收标准",
   "criterion.instructionLabel": "判定说明",
   "criterion.instructionPlaceholder": "描述明确的通过条件和所需证据",
   "criterion.optional": "可选",

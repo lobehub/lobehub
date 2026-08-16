@@ -425,7 +425,7 @@
   "builtins.lobe-task.goal.addCriterion": "添加验收标准",
   "builtins.lobe-task.goal.costBudget": "总成本预算",
   "builtins.lobe-task.goal.criteria": "验收标准",
-  "builtins.lobe-task.goal.editCriterion": "编辑验收标准 C{{seq}}",
+  "builtins.lobe-task.goal.editCriterion": "编辑验收标准",
   "builtins.lobe-task.goal.phase.accepted": "已验收",
   "builtins.lobe-task.goal.phase.awaitingDecision": "未通过 · 待你定夺",
   "builtins.lobe-task.goal.phase.awaitingReview": "待你验收",
