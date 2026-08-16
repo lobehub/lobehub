@@ -303,8 +303,9 @@ export class DshAdapter implements AgentEventAdapter {
     this.pendingStream = false;
     this.streamOpen = true;
 
-    const data: StreamStartData = {
+    const data: StreamStartData & { newStep?: boolean } = {
       model: this.route?.model,
+      ...(this.stepIndex > 0 ? { newStep: true } : {}),
       provider: DSH_IDENTIFIER,
       sessionId: this.sessionId,
     };

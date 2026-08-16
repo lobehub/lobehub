@@ -52,6 +52,13 @@ describe('DshAdapter', () => {
       provider: 'deepseek-harness',
       sessionId: 'dsh-session-1',
     });
+    expect(starts[0].data.newStep).toBeUndefined();
+    expect(starts[1].data).toMatchObject({
+      model: 'deepseek-v4-pro',
+      newStep: true,
+      provider: 'deepseek-harness',
+      sessionId: 'dsh-session-1',
+    });
     expect(starts.map(({ stepIndex }) => stepIndex)).toEqual([0, 1]);
   });
 
