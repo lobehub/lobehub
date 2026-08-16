@@ -122,6 +122,10 @@ export const executeAcceptedTransfer = async (params: {
     });
   }
 
+  // Capture the guard-narrowed type: narrowing on `request.resourceType`
+  // does not survive into the transaction closure below.
+  const resourceType = request.resourceType;
+
   const requestModel = new ResourceTransferRequestModel(db, workspaceId);
   const migrateSessions =
     !!request.options?.migrateSessions &&
@@ -169,7 +173,7 @@ export const executeAcceptedTransfer = async (params: {
           // param type is the narrower of the two.)
           db: trx as unknown as LobeChatDatabase,
           resourceId: request.resourceId,
-          resourceType: request.resourceType,
+          resourceType,
           userId: request.initiatorId,
           workspaceId,
         });
