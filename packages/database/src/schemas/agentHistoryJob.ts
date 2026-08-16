@@ -43,6 +43,12 @@ export interface AgentHistoryJobPayload {
    */
   group?: { newGroupId: string; sourceGroupId: string };
   /**
+   * `transfer` jobs from a member-to-member handover: the residual (topicless)
+   * rewrite linkage. Lives here — with the columns left blank — so a finalizer
+   * predating owner scoping no-ops instead of running an unscoped sweep.
+   */
+  residualLinkage?: { agentIds: string[]; sessionIds: string[] };
+  /**
    * `transfer` jobs from a member-to-member handover: scope the final residual
    * (topicless) rewrite to this previous owner so teammates' rows stay put.
    */

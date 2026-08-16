@@ -3,7 +3,16 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, messages, threads, topics, users, workspaces } from '../../schemas';
+import {
+  agentHistoryJobs,
+  agents,
+  messages,
+  messageTranslates,
+  threads,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AGENT_OWNERSHIP_STALE, AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
@@ -153,6 +162,14 @@ describe('AgentModel.transferAgentOwnership', () => {
       },
     ]);
 
+    // Child rows must travel with their residual parent (regression: the
+    // owner predicate reads messages.user_id, so parent-first rewriting
+    // stranded children with the previous owner).
+    await serverDB.insert(messageTranslates).values([
+      { content: 'hi', id: 'owner-residual', userId: ownerId, workspaceId: wsId },
+      { content: 'yo', id: 'teammate-residual', userId: teammateId, workspaceId: wsId },
+    ]);
+
     await handover({
       agentId: agent.id,
       fromUserId: ownerId,
@@ -163,6 +180,10 @@ describe('AgentModel.transferAgentOwnership', () => {
     const rows = await serverDB.select().from(messages);
     expect(rows.find((m) => m.id === 'owner-residual')?.userId).toBe(recipientId);
     expect(rows.find((m) => m.id === 'teammate-residual')?.userId).toBe(teammateId);
+
+    const childRows = await serverDB.select().from(messageTranslates);
+    expect(childRows.find((c) => c.id === 'owner-residual')?.userId).toBe(recipientId);
+    expect(childRows.find((c) => c.id === 'teammate-residual')?.userId).toBe(teammateId);
   });
 
   it('drains topicless residual rows through the backfill job with owner scoping', async () => {
@@ -203,6 +224,18 @@ describe('AgentModel.transferAgentOwnership', () => {
       toUserId: recipientId,
     });
     expect(result.transferJobId).not.toBeNull();
+
+    // Rolling-deploy guard: the residual linkage lives in the payload, and
+    // the columns an owner-scoping-unaware finalizer reads stay blank so it
+    // no-ops instead of sweeping teammates' rows.
+    const [jobRow] = await serverDB
+      .select()
+      .from(agentHistoryJobs)
+      .where(eq(agentHistoryJobs.id, result.transferJobId!));
+    expect(jobRow.agentIds).toEqual([]);
+    expect(jobRow.sessionIds).toEqual([]);
+    expect(jobRow.payload?.residualOwnerUserId).toBe(ownerId);
+    expect(jobRow.payload?.residualLinkage?.agentIds).toEqual([agent.id]);
 
     let done = false;
     while (!done) {
