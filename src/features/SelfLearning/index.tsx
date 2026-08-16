@@ -4,7 +4,7 @@ import { Block, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { GraduationCapIcon, HistoryIcon, PlusIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
@@ -78,45 +78,50 @@ const SelfLearning = memo(() => {
     () => scoped.flatMap((d) => d.lessons.map((l) => ({ ...l, domainId: d.id }))),
     [scoped],
   );
-  const counts = useMemo(() => countTiers(habits), [habits]);
   const runs = scoped.reduce((a, d) => a + d.runCount, 0);
   const domainTitles = useMemo(
     () => Object.fromEntries(allDomains.map((d) => [d.id, d.title])),
     [allDomains],
   );
 
-  const headline = useMemo(() => {
-    if (scoped.length === 0) return '';
-    if (single && current) {
-      const name = current.title;
-      if (current.runCount === 0) return t('headline.single.notPracticed', { name });
-      const recurring = habits.find((h) => habitTier(h.recent) === 'recurring');
+  /**
+   * 判断句永远说一件具体的事 —— 多个方向时也是先挑最值得说的那个方向（老毛病 > 还不稳），
+   * 「N 个方向、M 个习惯」这种盘点放到副标题里。
+   */
+  const sentenceFor = useCallback(
+    (d: ExpertiseDomainItem) => {
+      const name = d.title;
+      const list = d.lessons;
+      const c = countTiers(list);
+      if (d.runCount === 0) return t('headline.single.notPracticed', { name });
+      const recurring = list.find((h) => habitTier(h.recent) === 'recurring');
       if (recurring)
         return t('headline.single.recurring', {
           name,
-          runs: current.runCount,
+          runs: d.runCount,
           title: recurring.title.length > 18 ? `${recurring.title.slice(0, 17)}…` : recurring.title,
         });
-      if (counts.shaky > 0)
-        return t('headline.single.shaky', { count: counts.shaky, name, runs: current.runCount });
-      if (counts.stable === 0)
-        return t('headline.single.fresh', {
-          count: habits.length,
-          name,
-          runs: current.runCount,
-        });
-      return t('headline.single.stable', { name, runs: current.runCount });
-    }
-    const worst = scoped.find((d) => d.lessons.some((l) => habitTier(l.recent) === 'recurring'));
-    return worst
-      ? t('headline.multi.recurring', {
-          count: counts.recurring,
-          domains: scoped.length,
-          habits: habits.length,
-          name: worst.title,
-        })
-      : t('headline.multi.ok', { domains: scoped.length, habits: habits.length });
-  }, [counts, current, habits, scoped, single, t]);
+      if (c.shaky > 0)
+        return t('headline.single.shaky', { count: c.shaky, name, runs: d.runCount });
+      if (c.stable === 0)
+        return t('headline.single.fresh', { count: list.length, name, runs: d.runCount });
+      return t('headline.single.stable', { name, runs: d.runCount });
+    },
+    [t],
+  );
+
+  const headline = useMemo(() => {
+    if (scoped.length === 0) return '';
+    if (single && current) return sentenceFor(current);
+    const rank = (d: ExpertiseDomainItem) => {
+      const c = countTiers(d.lessons);
+      return c.recurring > 0 ? 0 : c.shaky > 0 ? 1 : d.runCount === 0 ? 3 : 2;
+    };
+    const focus = [...scoped].sort((a, b) => rank(a) - rank(b))[0];
+    return rank(focus) <= 1
+      ? sentenceFor(focus)
+      : t('headline.multi.ok', { domains: scoped.length });
+  }, [current, scoped, sentenceFor, single, t]);
 
   // The warm-up card is front and centre only for a direction that has never been practiced.
   const freshDomain = scoped.find((d) => d.runCount === 0 && d.lessons.length === 0);
@@ -216,7 +221,7 @@ const SelfLearning = memo(() => {
                 <Text type={'secondary'}>
                   {single
                     ? t('headline.subline', { habits: habits.length, runs })
-                    : t('headline.sublineMulti')}
+                    : t('headline.sublineMulti', { domains: scoped.length, habits: habits.length })}
                 </Text>
               </Flexbox>
 

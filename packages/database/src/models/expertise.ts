@@ -1,4 +1,9 @@
-import type { ExpertiseLessonSection } from '@lobechat/types';
+import type {
+  ExpertiseAnchorCandidate,
+  ExpertiseCanonEntry,
+  ExpertiseLayerDefinition,
+  ExpertiseLessonSection,
+} from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import {
@@ -388,12 +393,20 @@ export class ExpertiseModel {
 
   // Writes
 
-  /** Persists a model-generated domain definition and binds it to the selected agent. */
+  /**
+   * Persists a reviewed anchor and binds it to the selected agent.
+   * The chosen candidate is also kept in anchorCandidates so the alternative can be revisited.
+   */
   createDomain = async (params: {
     agentId: string;
     brief: string;
+    canonEntries?: ExpertiseCanonEntry[];
     domainFilter: string;
+    layerCanonRef?: string;
+    layerSource?: 'canonical' | 'invented';
+    layers?: ExpertiseLayerDefinition[];
     outOfScope?: string;
+    rationale?: string;
     title: string;
   }) => {
     const brief = params.brief.trim();
@@ -401,15 +414,33 @@ export class ExpertiseModel {
     const title = params.title.trim();
     const domainFilter = params.domainFilter.trim();
     const slug = `${title.slice(0, 40).replaceAll(/\s+/g, '-').toLowerCase()}-${id.slice(-6)}`;
+    const layers = params.layers ?? [];
+    const canonEntries = params.canonEntries ?? [];
+    const layerSource = params.layerSource ?? 'invented';
+    const candidate: ExpertiseAnchorCandidate = {
+      canonEntries,
+      domainFilter,
+      key: 'chosen',
+      layerCanonRef: params.layerCanonRef,
+      layers,
+      layerSource,
+      outOfScope: params.outOfScope?.trim() || undefined,
+      rationale: params.rationale?.trim() || undefined,
+      title,
+    };
 
     await this.db.transaction(async (tx) => {
       await tx.insert(expertiseDomains).values({
+        anchorCandidates: [candidate],
         anchorChosenAt: new Date(),
         anchorChosenByUserId: this.userId,
+        canonEntries,
         description: brief,
         domainFilter,
-        outOfScope: params.outOfScope?.trim() || null,
         id,
+        layerSource,
+        layers,
+        outOfScope: params.outOfScope?.trim() || null,
         seedState: 'seeded',
         slug,
         title,

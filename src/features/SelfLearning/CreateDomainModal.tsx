@@ -1,13 +1,22 @@
 'use client';
 
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, keyframes } from 'antd-style';
-import { t as translate } from 'i18next';
-import { ArrowLeftIcon, RefreshCwIcon, SparklesIcon } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
+import {
+  AnchorIcon,
+  ArrowLeftIcon,
+  LayersIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  XIcon,
+} from 'lucide-react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 
@@ -16,59 +25,179 @@ interface CreateDomainContentProps {
   onCreated: (domainId: string) => void;
 }
 
-const shimmer = keyframes`
-  to { background-position: 200% 0; }
-`;
-
 const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    margin-block-start: -10px;
+  body: css`
+    overflow-y: auto;
+
+    min-height: 0;
+    max-height: min(70vh, 680px);
+    padding-block: 8px 24px;
+    padding-inline: 16px;
   `,
-  field: css`
+  close: css`
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 14px;
+  `,
+  footer: css`
+    padding-block: 8px;
+    padding-inline: 16px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  head: css`
+    position: relative;
+    padding-block: 16px 8px;
+    padding-inline: 16px;
+  `,
+  inputShell: css`
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: ${cssVar.colorBgElevated};
+
+    textarea {
+      min-height: 206px !important;
+      padding: 16px;
+      border: none;
+
+      font-size: 14px;
+
+      background: transparent;
+      box-shadow: none;
+    }
+  `,
+  inputShellLoading: css`
+    &::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+
+      padding: 2px;
+      border-radius: inherit;
+
+      background: conic-gradient(
+        from var(--domain-border-angle),
+        ${cssVar.colorBorderSecondary} 0deg 210deg,
+        #ff3d8d 238deg,
+        #8b5cf6 258deg,
+        #00c8ff 278deg,
+        #22e6a8 298deg,
+        #ffd43b 318deg,
+        #ff6b35 338deg,
+        ${cssVar.colorBorderSecondary} 360deg
+      );
+
+      mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+
+      animation: domain-input-flow 1.8s linear infinite;
+
+      mask-composite: exclude;
+    }
+
+    @keyframes domain-input-flow {
+      from {
+        --domain-border-angle: 0deg;
+      }
+
+      to {
+        --domain-border-angle: 360deg;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::after {
+        animation: none;
+      }
+    }
+  `,
+  itemRow: css`
     display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: 24px minmax(0, 1fr) 28px;
+    gap: 8px;
     align-items: start;
-  `,
-  generating: css`
-    border-color: transparent;
-    background:
-      linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgElevated}) padding-box,
-      linear-gradient(90deg, ${cssVar.colorPrimary}, ${cssVar.colorInfo}, ${cssVar.colorPrimary})
-        border-box;
-    background-size:
-      100% 100%,
-      200% 100%;
-    animation: ${shimmer} 1.5s linear infinite;
-  `,
-  step: css`
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
 
-    font-size: 11.5px;
-    color: ${cssVar.colorTextSecondary};
+    padding-block: 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${cssVar.colorFillSecondary};
+    &:last-child {
+      border-block-end: none;
+    }
   `,
-  stepActive: css`
-    color: ${cssVar.colorBgContainer};
-    background: ${cssVar.colorText};
+  reviewSection: css`
+    padding-block: 14px;
+
+    &:first-child {
+      padding-block: 0 4px;
+    }
+  `,
+  seq: css`
+    padding-block-start: 6px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  title: css`
+    box-sizing: border-box;
+    width: 100%;
+    padding-block: 4px 8px;
+    padding-inline-end: 40px;
+    border: none;
+
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: inherit;
+
+    background: transparent;
+    outline: none;
+  `,
+  titleStatic: css`
+    padding-block: 4px 8px;
+    padding-inline-end: 40px;
+
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${cssVar.colorText};
   `,
 }));
 
+const DomainBorderFlowStyle = createGlobalStyle`
+  @property --domain-border-angle {
+    inherits: false;
+    initial-value: 0deg;
+    syntax: '<angle>';
+  }
+`;
+
+const slugify = (s: string, fallback: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^\da-z]+/g, '-')
+    .replaceAll(/^-|-$/g, '') || fallback;
+
 /**
- * 两步建域：① 一句话说清方向 → ② 检查它读出来的名字 / 什么算实践 / 什么不算，再创建。
- * 这三个字段决定它从哪些对话里学 —— 值得让人看一眼，而不是生成即落库。
+ * 两步建域，交互对齐 createGoal：① 一段话说清方向 → ② 检查它读出来的锚。
+ *
+ * 锚不只是名字和过滤器：分层决定经验挂在哪一层、经典依据决定「覆盖」意味着什么。
+ * 这两样在落库前必须让人看见并能改 —— 所以 step 2 把整个锚候选摊开。
  */
 const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated }) => {
   const { t } = useTranslation('selfLearning');
   const { close } = useModalContext();
   const storageKey = `self-learning:create:${agentId}`;
   const [brief, setBrief] = useState(() => localStorage.getItem(storageKey) ?? '');
+  const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [draft, setDraft] = useState<ExpertiseDomainDraft>();
-  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const meta = useAgentDisplayMeta(agentId);
 
   useEffect(() => {
     if (brief.trim()) localStorage.setItem(storageKey, brief);
@@ -84,26 +213,31 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
     return () => window.removeEventListener('beforeunload', preventLoss);
   }, [brief]);
 
-  const generate = async () => {
+  const generate = useCallback(async () => {
     if (!brief.trim()) return;
-    setLoading(true);
+    setStep('preparing');
     try {
       setDraft(await expertiseService.draftDomain({ agentId, brief: brief.trim() }));
+      setStep('review');
     } catch {
       toast.error(t('create.failed'));
-    } finally {
-      setLoading(false);
+      setStep(draft ? 'review' : 'describe');
     }
-  };
+  }, [agentId, brief, draft, t]);
 
-  const create = async () => {
-    if (!draft || !draft.title.trim() || !draft.domainFilter.trim()) return;
+  const canCreate = !!draft && !!draft.title.trim() && !!draft.domainFilter.trim() && !creating;
+
+  const create = useCallback(async () => {
+    if (!draft || !canCreate) return;
     setCreating(true);
     try {
       const id = await expertiseService.createDomain({
+        ...draft,
         agentId,
         brief: brief.trim(),
+        canonEntries: draft.canonEntries.filter((c) => c.title.trim()),
         domainFilter: draft.domainFilter.trim(),
+        layers: draft.layers.filter((l) => l.title.trim()),
         outOfScope: draft.outOfScope?.trim() || null,
         title: draft.title.trim(),
       });
@@ -115,118 +249,317 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
     } finally {
       setCreating(false);
     }
-  };
+  }, [agentId, brief, canCreate, close, draft, onCreated, storageKey, t]);
 
-  const step = draft ? 2 : 1;
+  const primaryRef = useRef<() => void>(undefined);
+  primaryRef.current = step === 'describe' ? generate : step === 'review' ? create : undefined;
+  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      void primaryRef.current?.();
+    }
+  }, []);
+
+  const patch = (p: Partial<ExpertiseDomainDraft>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
   return (
-    <Flexbox className={styles.content} gap={12} padding={'0 20px 16px'}>
-      <Flexbox horizontal align={'center'} gap={6}>
-        <span className={`${styles.step} ${step === 1 ? styles.stepActive : ''}`}>
-          1 · {t('create.step1')}
-        </span>
-        <span className={`${styles.step} ${step === 2 ? styles.stepActive : ''}`}>
-          2 · {t('create.step2')}
-        </span>
+    <Flexbox onKeyDown={onKeyDown}>
+      <DomainBorderFlowStyle />
+      <Flexbox horizontal className={styles.head}>
+        <Flexbox flex={1} gap={6}>
+          {step === 'review' && (
+            <Flexbox horizontal align={'center'} gap={8}>
+              <ActionIcon
+                icon={ArrowLeftIcon}
+                size={'small'}
+                title={t('create.back')}
+                onClick={() => setStep('describe')}
+              />
+              <Text fontSize={12} type={'secondary'}>
+                {t('create.reviewStep')}
+              </Text>
+            </Flexbox>
+          )}
+          {step === 'review' && draft ? (
+            <input
+              className={styles.title}
+              maxLength={80}
+              placeholder={t('create.field.title')}
+              value={draft.title}
+              onChange={(e) => patch({ title: e.target.value })}
+            />
+          ) : (
+            <div className={styles.titleStatic}>{t('create.modalTitle')}</div>
+          )}
+          {step !== 'review' && (
+            <>
+              <div
+                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
+              >
+                <TextArea
+                  autoFocus
+                  disabled={step === 'preparing'}
+                  placeholder={t('create.briefPlaceholder')}
+                  value={brief}
+                  variant={'borderless'}
+                  onChange={(e) => setBrief(e.target.value)}
+                />
+              </div>
+              <Text type={'secondary'}>
+                {step === 'preparing' ? t('create.generating') : t('create.briefHelp')}
+              </Text>
+            </>
+          )}
+        </Flexbox>
+        <ActionIcon className={styles.close} icon={XIcon} onClick={close} />
       </Flexbox>
 
-      {step === 1 ? (
-        <>
-          <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
-            {loading ? t('create.generating') : t('create.briefHelp')}
-          </Text>
-          <TextArea
-            autoFocus
-            className={loading ? styles.generating : undefined}
-            disabled={loading}
-            placeholder={t('create.briefPlaceholder')}
-            rows={5}
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-          />
-          <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-            <Button disabled={loading} onClick={close}>
-              {t('create.cancel')}
-            </Button>
-            <Button
-              disabled={!brief.trim() || loading}
-              icon={SparklesIcon}
-              loading={loading}
-              type={'primary'}
-              onClick={generate}
-            >
-              {loading ? t('create.generating') : t('create.generate')}
-            </Button>
+      {step === 'review' && draft && (
+        <Flexbox className={styles.body}>
+          <Flexbox className={styles.reviewSection} gap={6}>
+            <Text fontSize={12} type={'secondary'}>
+              {t('create.reviewHelp')}
+            </Text>
+            {draft.rationale && (
+              <Text fontSize={13} type={'secondary'}>
+                {draft.rationale}
+              </Text>
+            )}
           </Flexbox>
-        </>
-      ) : (
-        <>
-          <Text fontSize={12.5} lineHeight={1.7} type={'secondary'}>
-            {t('create.reviewHelp')}
-          </Text>
-          <Flexbox gap={12}>
-            <div className={styles.field}>
-              <Text fontSize={13} weight={500}>
-                {t('create.field.title')}
-              </Text>
-              <Input
-                maxLength={80}
-                value={draft!.title}
-                onChange={(e) => setDraft({ ...draft!, title: e.target.value })}
-              />
-            </div>
-            <div className={styles.field}>
-              <Text fontSize={13} weight={500}>
-                {t('create.field.domainFilter')}
-              </Text>
-              <TextArea
-                autoSize={{ maxRows: 6, minRows: 3 }}
-                value={draft!.domainFilter}
-                onChange={(e) => setDraft({ ...draft!, domainFilter: e.target.value })}
-              />
-            </div>
-            <div className={styles.field}>
-              <Text fontSize={13} weight={500}>
-                {t('create.field.outOfScope')}
-              </Text>
-              <TextArea
-                autoSize={{ maxRows: 5, minRows: 2 }}
-                value={draft!.outOfScope ?? ''}
-                onChange={(e) => setDraft({ ...draft!, outOfScope: e.target.value })}
-              />
-            </div>
+
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Text fontSize={13} weight={600}>
+              {t('create.field.domainFilter')}
+            </Text>
+            <TextArea
+              autoSize={{ maxRows: 6, minRows: 2 }}
+              value={draft.domainFilter}
+              variant={'filled'}
+              onChange={(e) => patch({ domainFilter: e.target.value })}
+            />
+            <Text fontSize={13} weight={600}>
+              {t('create.field.outOfScope')}
+            </Text>
+            <TextArea
+              autoSize={{ maxRows: 5, minRows: 2 }}
+              placeholder={t('create.field.outOfScopePlaceholder')}
+              value={draft.outOfScope ?? ''}
+              variant={'filled'}
+              onChange={(e) => patch({ outOfScope: e.target.value })}
+            />
           </Flexbox>
-          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-            <Flexbox horizontal gap={8}>
+
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon color={cssVar.colorTextTertiary} icon={LayersIcon} size={16} />
+                <Text fontSize={13} weight={600}>
+                  {t('create.anchor.layers')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {draft.layerSource === 'canonical' && draft.layerCanonRef
+                    ? t('create.anchor.layersFrom', { ref: draft.layerCanonRef })
+                    : t('create.anchor.layersInvented')}
+                </Text>
+              </Flexbox>
               <Button
-                disabled={creating}
-                icon={ArrowLeftIcon}
+                icon={PlusIcon}
+                size={'small'}
                 type={'text'}
-                onClick={() => setDraft(undefined)}
+                onClick={() =>
+                  patch({
+                    layers: [
+                      ...draft.layers,
+                      { description: null, key: `layer-${draft.layers.length + 1}`, title: '' },
+                    ],
+                  })
+                }
               >
-                {t('create.back')}
-              </Button>
-              <Button
-                disabled={creating}
-                icon={RefreshCwIcon}
-                loading={loading}
-                type={'text'}
-                onClick={generate}
-              >
-                {t('create.regenerate')}
+                {t('create.anchor.addLayer')}
               </Button>
             </Flexbox>
-            <Button
-              disabled={!draft!.title.trim() || !draft!.domainFilter.trim() || creating}
-              loading={creating}
-              type={'primary'}
-              onClick={create}
-            >
-              {t('create.confirm')}
-            </Button>
+            {draft.layers.length === 0 && (
+              <Text fontSize={12} type={'secondary'}>
+                {t('create.anchor.noLayers')}
+              </Text>
+            )}
+            {draft.layers.map((layer, i) => (
+              <div className={styles.itemRow} key={i}>
+                <span className={styles.seq}>L{i + 1}</span>
+                <Flexbox gap={4}>
+                  <Input
+                    placeholder={t('create.anchor.layerTitle')}
+                    size={'small'}
+                    value={layer.title}
+                    variant={'filled'}
+                    onChange={(e) =>
+                      patch({
+                        layers: draft.layers.map((l, j) =>
+                          j === i
+                            ? { ...l, key: slugify(e.target.value, l.key), title: e.target.value }
+                            : l,
+                        ),
+                      })
+                    }
+                  />
+                  <Input
+                    placeholder={t('create.anchor.layerDesc')}
+                    size={'small'}
+                    value={layer.description ?? ''}
+                    variant={'borderless'}
+                    onChange={(e) =>
+                      patch({
+                        layers: draft.layers.map((l, j) =>
+                          j === i ? { ...l, description: e.target.value } : l,
+                        ),
+                      })
+                    }
+                  />
+                </Flexbox>
+                <ActionIcon
+                  icon={Trash2Icon}
+                  size={'small'}
+                  onClick={() => patch({ layers: draft.layers.filter((_, j) => j !== i) })}
+                />
+              </div>
+            ))}
           </Flexbox>
-        </>
+
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon color={cssVar.colorTextTertiary} icon={AnchorIcon} size={16} />
+                <Text fontSize={13} weight={600}>
+                  {t('create.anchor.canon')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('create.anchor.canonHint')}
+                </Text>
+              </Flexbox>
+              <Button
+                icon={PlusIcon}
+                size={'small'}
+                type={'text'}
+                onClick={() =>
+                  patch({
+                    canonEntries: [
+                      ...draft.canonEntries,
+                      {
+                        key: `canon-${draft.canonEntries.length + 1}`,
+                        source: '',
+                        statement: '',
+                        title: '',
+                      },
+                    ],
+                  })
+                }
+              >
+                {t('create.anchor.addCanon')}
+              </Button>
+            </Flexbox>
+            {draft.canonEntries.length === 0 && (
+              <Text fontSize={12} type={'secondary'}>
+                {t('create.anchor.noCanon')}
+              </Text>
+            )}
+            {draft.canonEntries.map((entry, i) => (
+              <div className={styles.itemRow} key={i}>
+                <span className={styles.seq}>C{i + 1}</span>
+                <Flexbox gap={4}>
+                  <Flexbox horizontal gap={8}>
+                    <Input
+                      placeholder={t('create.anchor.canonTitle')}
+                      size={'small'}
+                      style={{ flex: 1 }}
+                      value={entry.title}
+                      variant={'filled'}
+                      onChange={(e) =>
+                        patch({
+                          canonEntries: draft.canonEntries.map((c, j) =>
+                            j === i
+                              ? { ...c, key: slugify(e.target.value, c.key), title: e.target.value }
+                              : c,
+                          ),
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder={t('create.anchor.canonSource')}
+                      size={'small'}
+                      style={{ flex: 1 }}
+                      value={entry.source}
+                      variant={'filled'}
+                      onChange={(e) =>
+                        patch({
+                          canonEntries: draft.canonEntries.map((c, j) =>
+                            j === i ? { ...c, source: e.target.value } : c,
+                          ),
+                        })
+                      }
+                    />
+                  </Flexbox>
+                  <TextArea
+                    autoSize={{ maxRows: 4, minRows: 1 }}
+                    placeholder={t('create.anchor.canonStatement')}
+                    size={'small'}
+                    value={entry.statement}
+                    variant={'borderless'}
+                    onChange={(e) =>
+                      patch({
+                        canonEntries: draft.canonEntries.map((c, j) =>
+                          j === i ? { ...c, statement: e.target.value } : c,
+                        ),
+                      })
+                    }
+                  />
+                </Flexbox>
+                <ActionIcon
+                  icon={Trash2Icon}
+                  size={'small'}
+                  onClick={() =>
+                    patch({ canonEntries: draft.canonEntries.filter((_, j) => j !== i) })
+                  }
+                />
+              </div>
+            ))}
+          </Flexbox>
+        </Flexbox>
       )}
+
+      <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <AssigneeAvatar agentId={agentId} size={18} />
+          <Text fontSize={12}>{meta?.title}</Text>
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={4}>
+          {step === 'review' && (
+            <Button
+              icon={RefreshCwIcon}
+              size={'small'}
+              style={{ color: cssVar.colorTextTertiary }}
+              type={'text'}
+              onClick={() => void generate()}
+            >
+              {t('create.regenerate')}
+            </Button>
+          )}
+          <Button
+            disabled={step === 'preparing' || (step === 'describe' ? !brief.trim() : !canCreate)}
+            loading={step === 'preparing' || creating}
+            shape={'round'}
+            size={'small'}
+            type={'primary'}
+            onClick={() => void primaryRef.current?.()}
+          >
+            {step === 'preparing'
+              ? t('create.generating')
+              : step === 'describe'
+                ? t('create.next')
+                : t('create.confirm')}
+          </Button>
+        </Flexbox>
+      </Flexbox>
     </Flexbox>
   );
 });
@@ -238,6 +571,7 @@ export const openCreateDomainModal = (props: CreateDomainContentProps) =>
     content: <CreateDomainContent {...props} />,
     footer: null,
     maskClosable: false,
-    title: translate('create.modalTitle', { ns: 'selfLearning' }),
-    width: 'min(88vw, 600px)',
+    styles: { content: { overflow: 'hidden', padding: 0 } },
+    title: null,
+    width: 'min(88vw, 720px)',
   });

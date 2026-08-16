@@ -2,7 +2,6 @@
 
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { SendIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -44,14 +43,7 @@ const TeachBox = memo<TeachBoxProps>(({ autoFocus, onSubmit, placeholder }) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void submit();
         }}
       />
-      <Button
-        disabled={!value.trim()}
-        icon={SendIcon}
-        loading={busy}
-        size={'small'}
-        type={'primary'}
-        onClick={submit}
-      >
+      <Button disabled={!value.trim()} loading={busy} type={'primary'} onClick={submit}>
         {t('habit.teach.send')}
       </Button>
     </Flexbox>

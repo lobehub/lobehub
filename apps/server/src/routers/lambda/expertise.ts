@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ExpertiseModel } from '@/database/models/expertise';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { ExpertiseDomainService } from '@/server/services/expertise/domain';
+import { DomainDraftSchema, ExpertiseDomainService } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
@@ -208,17 +208,9 @@ export const expertiseRouter = router({
     .input(z.object({ agentId: z.string(), brief: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
 
-  /** Step 2 of creation: persist the reviewed draft and bind it to the agent. */
+  /** Step 2 of creation: persist the reviewed anchor and bind it to the agent. */
   createDomain: expertiseProcedure
-    .input(
-      z.object({
-        agentId: z.string(),
-        brief: z.string().min(1),
-        domainFilter: z.string().min(1),
-        outOfScope: z.string().nullable().optional(),
-        title: z.string().min(1).max(80),
-      }),
-    )
+    .input(DomainDraftSchema.extend({ agentId: z.string(), brief: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.create(input)),
 
   /** How many past conversations a history warm-up would read. */
