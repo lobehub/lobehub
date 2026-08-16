@@ -1,5 +1,8 @@
 import React, { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
+
+import { agentDisplayName } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { useChatStore } from '@/store/chat';
@@ -21,6 +24,7 @@ interface AgentItemProps {
 
 const AgentItem = memo<AgentItemProps>(({ groupId, id }) => {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation('chat');
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -32,7 +36,8 @@ const AgentItem = memo<AgentItemProps>(({ groupId, id }) => {
   const item = useHomeStore((s) => homeAgentListSelectors.getAgentById(id)(s));
 
   const pin = item?.pinned ?? false;
-  const title = item?.title ?? 'Untitled';
+  // name wins over title (matches desktop sidebar); i18n fallback for unnamed
+  const title = agentDisplayName(item, t('untitledAgent'));
   const avatar = item?.avatar ?? undefined;
   const avatarBackground = item?.backgroundColor ?? undefined;
   const updateAt = item?.updatedAt;

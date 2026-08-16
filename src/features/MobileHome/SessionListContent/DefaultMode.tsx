@@ -3,6 +3,8 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type SidebarAgentItem } from '@lobechat/types';
+
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useGlobalStore } from '@/store/global';
@@ -33,6 +35,16 @@ const DefaultMode = memo(() => {
   const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
 
+  // Skip chat-group rows on mobile (no /group/:id route). The sidebar API can
+  // return `type: 'group'` items in any bucket; they must not render as agents
+  // or expose agent-only actions (e.g. removeAgent).
+  const onlyAgents = (items: SidebarAgentItem[] | undefined) =>
+    (items ?? []).filter((item) => item.type === 'agent');
+
+  const visiblePinnedAgents = onlyAgents(pinnedAgents);
+  const visibleAgentGroups = agentGroups.map((group) => ({ ...group, items: onlyAgents(group.items) }));
+  const visibleUngroupedAgents = onlyAgents(ungroupedAgents);
+
   const activeWorkspaceId = useActiveWorkspaceId();
   const sessionGroupKeys = useGlobalStore(
     systemStatusSelectors.sessionGroupKeys(activeWorkspaceId),
@@ -42,14 +54,14 @@ const DefaultMode = memo(() => {
   const items = useMemo(
     () =>
       [
-        pinnedAgents &&
-          pinnedAgents.length > 0 && {
-            children: <AgentList dataSource={pinnedAgents} />,
+        visiblePinnedAgents &&
+          visiblePinnedAgents.length > 0 && {
+            children: <AgentList dataSource={visiblePinnedAgents} />,
             extra: <Actions isPinned openConfigModal={() => setConfigGroupModalOpen(true)} />,
             key: 'pinned',
             label: t('pin'),
           },
-        ...agentGroups.map(({ id, name, items: children }) => ({
+        ...visibleAgentGroups.map(({ id, name, items: children }) => ({
           children: <AgentList dataSource={children} groupId={id} />,
           extra: (
             <Actions
@@ -63,13 +75,13 @@ const DefaultMode = memo(() => {
           label: name,
         })),
         {
-          children: <AgentList dataSource={ungroupedAgents || []} />,
+          children: <AgentList dataSource={visibleUngroupedAgents} />,
           extra: <Actions openConfigModal={() => setConfigGroupModalOpen(true)} />,
           key: 'default',
           label: t('defaultList'),
         },
       ].filter(Boolean) as CollapseProps['items'],
-    [t, agentGroups, pinnedAgents, ungroupedAgents],
+    [t, visibleAgentGroups, visiblePinnedAgents, visibleUngroupedAgents],
   );
 
   // CRITICAL: defer rendering behind serverConfigInit to prevent antd-style
