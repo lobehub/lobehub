@@ -22,28 +22,43 @@ export type BillboardAction = (typeof BILLBOARD_ACTIONS)[number];
 export const isBillboardAction = (value: unknown): value is BillboardAction =>
   typeof value === 'string' && (BILLBOARD_ACTIONS as readonly string[]).includes(value);
 
-/**
- * Narrow a platform-configured value to an action this client can actually run:
- * unknown values and actions unavailable on the current platform both return
- * null, so the CTA falls back to `linkUrl`.
- *
- * `resetOnboarding` targets the web onboarding flow, which only exists on the
- * official cloud instance. Desktop honors it only when synced to official
- * cloud (the reset then applies to that account and the flow opens at
- * OFFICIAL_URL in the external browser); local and self-host modes keep it
- * disabled since their reset would not match what the browser shows.
- */
-export const resolveBillboardAction = (value: unknown): BillboardAction | null => {
-  if (!isBillboardAction(value)) return null;
-  if (value === 'resetOnboarding' && isDesktop && !isSyncedToOfficialCloud()) return null;
-  return value;
-};
-
 const isSyncedToOfficialCloud = () => {
   const state = getElectronStoreState();
   return (
     electronSyncSelectors.isSyncActive(state) &&
     electronSyncSelectors.storageMode(state) === 'cloud'
+  );
+};
+
+type BillboardActionGuard = (action: BillboardAction) => BillboardAction | null;
+
+const onlyWhen =
+  (target: BillboardAction, available: () => boolean): BillboardActionGuard =>
+  (action) =>
+    action !== target || available() ? action : null;
+
+/**
+ * Availability pipeline: the action flows through each guard, and any guard
+ * may drop it to null (the CTA then falls back to `linkUrl`). Add a guard per
+ * constraint instead of branching inside `resolveBillboardAction`.
+ */
+const actionGuards: BillboardActionGuard[] = [
+  // The web onboarding flow only exists on the official cloud instance, and
+  // the reset must apply to the same account the external browser will show —
+  // so desktop honors resetOnboarding only when synced to official cloud.
+  onlyWhen('resetOnboarding', () => !isDesktop || isSyncedToOfficialCloud()),
+];
+
+/**
+ * Narrow a platform-configured value to an action this client can actually run:
+ * unknown values and actions unavailable on the current platform both return
+ * null, so the CTA falls back to `linkUrl`.
+ */
+export const resolveBillboardAction = (value: unknown): BillboardAction | null => {
+  if (!isBillboardAction(value)) return null;
+  return actionGuards.reduce<BillboardAction | null>(
+    (action, guard) => (action ? guard(action) : null),
+    value,
   );
 };
 
