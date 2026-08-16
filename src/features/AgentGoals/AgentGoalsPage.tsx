@@ -7,7 +7,7 @@ import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react'
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -144,9 +144,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && !isInitialized ? (
-          <Flexbox align={'center'} flex={1} justify={'center'}>
-            <NeuralNetworkLoading />
-          </Flexbox>
+          <GoalSkeleton showHeader={false} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
             <Flexbox align={'center'} gap={12}>
