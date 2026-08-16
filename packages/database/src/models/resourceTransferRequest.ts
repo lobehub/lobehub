@@ -14,6 +14,9 @@ export const TRANSFER_REQUEST_EXPIRED = 'TRANSFER_REQUEST_EXPIRED';
 
 export const TRANSFER_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Upper bound for a user's pending-transfer listing (inbox drawer renders all rows it gets). */
+export const PENDING_TRANSFER_LIST_LIMIT = 50;
+
 type Executor = Transaction | LobeChatDatabase;
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -109,7 +112,12 @@ export class ResourceTransferRequestModel {
     return resolved.status === 'pending' ? resolved : undefined;
   };
 
-  /** Live requests the user must answer (recipient) or may withdraw (initiator). */
+  /**
+   * Live requests the user must answer (recipient) or may withdraw
+   * (initiator). Newest-first and capped: the inbox drawer renders every row
+   * it receives, so an unbounded result would balloon both the enrichment
+   * fan-out and the DOM for a user involved in many transfers.
+   */
   listPendingForUser = async (userId: string): Promise<ResourceTransferRequestItem[]> => {
     const rows = await this.db
       .select()
@@ -124,7 +132,8 @@ export class ResourceTransferRequestModel {
           ),
         ),
       )
-      .orderBy(desc(resourceTransferRequests.createdAt));
+      .orderBy(desc(resourceTransferRequests.createdAt))
+      .limit(PENDING_TRANSFER_LIST_LIMIT);
 
     const resolved = await Promise.all(rows.map((row) => this.withLazyExpiry(row)));
     return resolved.filter((row) => row.status === 'pending');

@@ -294,6 +294,23 @@ describe('agentGroupRouter', () => {
       expect(agentGroupRepoMock.transferToWorkspace).not.toHaveBeenCalled();
     });
 
+    it('rejects an empty targetMemberId instead of falling through to scope transfer', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId });
+
+      await expect(
+        agentGroupRouter.createCaller(wsCtx() as any).transferGroup({
+          groupId: 'cg_1',
+          targetMemberId: '',
+          targetWorkspaceId: null,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      // Schema-level rejection: neither the pending-request path nor the
+      // legacy scope-transfer path may run.
+      expect(transferRequestModelMock.create).not.toHaveBeenCalled();
+      expect(agentGroupRepoMock.transferToWorkspace).not.toHaveBeenCalled();
+    });
+
     it('rejects member transfer outside a workspace', async () => {
       chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId });
 

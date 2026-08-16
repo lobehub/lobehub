@@ -61,6 +61,17 @@ export const assertTransferRecipientValid = async (params: {
       message: 'The recipient is not an active member of this workspace',
     });
   }
+
+  // Viewers hold no `agent:update` capability, so ownership handed to one
+  // would strand the resource: they could neither edit it nor transfer it
+  // back.
+  if (member.role === 'viewer') {
+    throw new TRPCError({
+      cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+      code: 'BAD_REQUEST',
+      message: 'The recipient cannot own resources in this workspace',
+    });
+  }
 };
 
 /**

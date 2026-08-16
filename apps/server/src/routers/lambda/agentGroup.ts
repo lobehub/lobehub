@@ -48,6 +48,7 @@ import {
   hasWorkspaceScopedPermission,
   isWorkspacePrimaryOwner,
 } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -763,7 +764,7 @@ export const agentGroupRouter = router({
          * exclusive with `targetWorkspaceId`; creates a pending transfer
          * request the recipient must accept instead of moving anything now.
          */
-        targetMemberId: z.string().optional(),
+        targetMemberId: z.string().min(1).optional(),
         targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
@@ -819,16 +820,23 @@ export const agentGroupRouter = router({
             resourceType: 'agentGroup',
           });
           // Best-effort: a notification failure must not fail the request.
-          notifyResourceTransfer({
-            event: 'requested',
+          // Scheduled with after() so serverless runtimes keep it alive past
+          // the response.
+          const notifyParams = {
+            event: 'requested' as const,
             initiatorId: ctx.userId,
             previousOwnerId: group.userId,
             recipientId: input.targetMemberId,
             requestId: request.id,
             resourceId: input.groupId,
-            resourceType: 'agentGroup',
+            resourceType: 'agentGroup' as const,
             workspaceId: ctx.workspaceId,
-          }).catch((error) => console.error('[agentGroup:transferGroup] notify failed', error));
+          };
+          after(() =>
+            notifyResourceTransfer(notifyParams).catch((error) =>
+              console.error('[agentGroup:transferGroup] notify failed', error),
+            ),
+          );
           return { requestId: request.id, status: 'pending' as const };
         } catch (error) {
           if (error instanceof Error && error.message === TRANSFER_REQUEST_ALREADY_PENDING) {

@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { resourceTransferRequests, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
+  PENDING_TRANSFER_LIST_LIMIT,
   ResourceTransferRequestModel,
   TRANSFER_REQUEST_ALREADY_PENDING,
   TRANSFER_REQUEST_EXPIRED,
@@ -217,6 +218,15 @@ describe('ResourceTransferRequestModel', () => {
       expect(new Set(forInitiator.map((r) => r.id))).toEqual(
         new Set([asRecipient.id, asInitiator.id]),
       );
+    });
+
+    it('caps the listing at PENDING_TRANSFER_LIST_LIMIT rows', async () => {
+      for (let i = 0; i < PENDING_TRANSFER_LIST_LIMIT + 3; i++) {
+        await createRequest({ resourceId: `agent-cap-${i}` });
+      }
+
+      const rows = await model.listPendingForUser(recipientId);
+      expect(rows).toHaveLength(PENDING_TRANSFER_LIST_LIMIT);
     });
   });
 

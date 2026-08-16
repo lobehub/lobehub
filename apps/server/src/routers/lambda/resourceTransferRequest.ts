@@ -21,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { executeAcceptedTransfer } from '@/server/services/resourceTransferRequest';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 const resourceInput = z.object({
@@ -169,8 +170,10 @@ export const resourceTransferRequestRouter = router({
       });
       if (transferJobId) startAgentTransferJob(ctx.serverDB, transferJobId);
       // Best-effort: outcome + courtesy notices must not fail the accept.
-      notifyResourceTransfer({
-        event: 'accepted',
+      // Scheduled with after() so serverless runtimes keep it alive past the
+      // response.
+      const notifyParams = {
+        event: 'accepted' as const,
         initiatorId: request.initiatorId,
         previousOwnerId: request.previousOwnerId,
         recipientId: ctx.userId,
@@ -178,7 +181,12 @@ export const resourceTransferRequestRouter = router({
         resourceId: request.resourceId,
         resourceType: request.resourceType,
         workspaceId: ctx.workspaceId,
-      }).catch((error) => console.error('[resourceTransferRequest:accept] notify failed', error));
+      };
+      after(() =>
+        notifyResourceTransfer(notifyParams).catch((error) =>
+          console.error('[resourceTransferRequest:accept] notify failed', error),
+        ),
+      );
       return { data: { transferJobId }, success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -257,8 +265,10 @@ export const resourceTransferRequestRouter = router({
     try {
       const request = await ctx.transferRequestModel.decline(input.requestId, ctx.userId);
       // Best-effort: the outcome notice must not fail the decline.
-      notifyResourceTransfer({
-        event: 'declined',
+      // Scheduled with after() so serverless runtimes keep it alive past the
+      // response.
+      const notifyParams = {
+        event: 'declined' as const,
         initiatorId: request.initiatorId,
         previousOwnerId: request.previousOwnerId,
         recipientId: ctx.userId,
@@ -266,7 +276,12 @@ export const resourceTransferRequestRouter = router({
         resourceId: request.resourceId,
         resourceType: request.resourceType,
         workspaceId: ctx.workspaceId,
-      }).catch((error) => console.error('[resourceTransferRequest:decline] notify failed', error));
+      };
+      after(() =>
+        notifyResourceTransfer(notifyParams).catch((error) =>
+          console.error('[resourceTransferRequest:decline] notify failed', error),
+        ),
+      );
       return { data: request, success: true };
     } catch (error) {
       if (error instanceof Error && error.message === TRANSFER_REQUEST_NOT_PENDING) {
