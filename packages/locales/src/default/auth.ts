@@ -206,6 +206,7 @@ export default {
   'heatmaps.months.nov': 'Nov',
   'heatmaps.months.oct': 'Oct',
   'heatmaps.months.sep': 'Sep',
+  'heatmaps.swipeHint': '‹ swipe horizontally ›',
   'heatmaps.tooltip': '{{count}} messages were created on {{date}}',
   'heatmaps.tooltipTokens': '{{count}} tokens were used on {{date}}',
   'heatmaps.totalCount': 'A total of {{count}} messages sent in the past year',

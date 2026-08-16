@@ -137,7 +137,9 @@ const AiHeatmaps = memo<
       <HeatmapStats mobile={mobile} />
       <div style={{ overflowX: 'auto' }}>{content}</div>
       {mobile && (
-        <div style={{ color: '#6b707a', fontSize: 10, marginTop: 4 }}>‹ swipe horizontally ›</div>
+        <div style={{ color: cssVar.colorTextDescription, fontSize: 10, marginTop: 4 }}>
+          {t('heatmaps.swipeHint')}
+        </div>
       )}
     </StatsFormGroup>
   );
