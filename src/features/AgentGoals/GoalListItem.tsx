@@ -1,6 +1,5 @@
 'use client';
 
-import type { TaskStatus } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRightIcon, RefreshCwIcon } from 'lucide-react';
@@ -8,14 +7,14 @@ import type { KeyboardEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 import { GoalAcceptance } from './GoalAcceptance';
 import { getGoalPresentation } from './goalPresentation';
 import { GoalProgress } from './GoalProgress';
-import { getGoalDescription, goalStatusToTaskStatus, shouldShowGoal } from './goalViewModel';
+import GoalStatusGlyph from './GoalStatusGlyph';
+import { getGoalDescription, shouldShowGoal } from './goalViewModel';
 import type { GoalItemProps } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -64,9 +63,6 @@ export const GoalListItem = memo<GoalItemProps>((props) => {
         });
         if (!isLoading && !shouldShowGoal(presentation.statusKey, hideAchieved ? 'active' : 'all'))
           return null;
-        const visual =
-          TASK_STATUS_VISUALS[goalStatusToTaskStatus(presentation.statusKey) as TaskStatus] ??
-          TASK_STATUS_VISUALS.backlog;
 
         return (
           <Block
@@ -94,12 +90,7 @@ export const GoalListItem = memo<GoalItemProps>((props) => {
             >
               <Flexbox gap={4} style={{ minWidth: 0 }}>
                 <Flexbox horizontal align={'center'} gap={7}>
-                  <Icon
-                    color={visual.color}
-                    icon={visual.icon}
-                    size={13}
-                    style={{ flexShrink: 0 }}
-                  />
+                  <GoalStatusGlyph size={13} statusKey={presentation.statusKey} />
                   <Text ellipsis fontSize={15} weight={600}>
                     {title}
                   </Text>
