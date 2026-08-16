@@ -258,7 +258,9 @@ Default dirs:
 ```bash
 moz -k
 # optional: wipe cluster only if intentionally replacing
-# rm -rf "$PANACHAT_DATA_DIR/postgres" && MOZ_ALLOW_EMPTY_DB=1 moz   # init empty, then:
+# rm volume + MOZ_ALLOW_EMPTY_DB=1 moz   # init empty, then:
+#   moz -k && docker volume rm panachat_postgres_data && MOZ_ALLOW_EMPTY_DB=1 moz
+
 gunzip -c ~/.local/share/panachat-backups/panachat-YYYYMMDD-HHMMSS-*.sql.gz \
   | docker exec -i lobe-postgres psql -U postgres -d lobechat
 moz -r

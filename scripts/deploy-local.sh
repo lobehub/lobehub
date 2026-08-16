@@ -10,11 +10,14 @@
 #   ./scripts/deploy-local.sh -i|--info    # containers / HTTP / migrations
 #   ./scripts/deploy-local.sh -k|--kill    # stop containers
 #   ./scripts/deploy-local.sh -B|--backup  # DB + uploads backup (no deploy)
+#   ./scripts/deploy-local.sh --restore F  # restore SQL dump into running Postgres
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPLOY_DIR="$ROOT/docker-compose/deploy"
+# shellcheck source=moz-pgdata-guards.sh
+source "$ROOT/scripts/moz-pgdata-guards.sh"
 PANACHAT_DATA_DIR="${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}"
 IMAGE="aico/lobehub:local"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)"
@@ -29,10 +32,37 @@ STATUS=0
 RESTART=0
 START_IF_NEEDED=0
 BACKUP_ONLY=0
+RESTORE_FILE=""
 
 if [[ $# -eq 0 ]]; then
   START_IF_NEEDED=1
 fi
+
+# Pre-parse --restore FILE (needs the following argv; main loop is for-arg).
+_MOZ_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --restore|-R)
+      if [[ -z "${2:-}" || "$2" == -* ]]; then
+        echo "Error: --restore requires a file path: moz --restore FILE.sql.gz" >&2
+        exit 2
+      fi
+      RESTORE_FILE="$2"
+      START_IF_NEEDED=0
+      shift 2
+      ;;
+    --restore=*)
+      RESTORE_FILE="${1#*=}"
+      START_IF_NEEDED=0
+      shift
+      ;;
+    *)
+      _MOZ_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${_MOZ_ARGS[@]+"${_MOZ_ARGS[@]}"}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -49,6 +79,7 @@ for arg in "$@"; do
       echo "  moz -k   kill / stop containers" >&2
       echo "  moz -r   restart containers" >&2
       echo "  moz -B   backup DB + uploads" >&2
+      echo "  moz --restore FILE.sql.gz" >&2
       exit 2
       ;;
     -t)
@@ -68,6 +99,7 @@ Options (each has a distinct one-letter flag):
   -d, --deploy, deploy  Force redeploy / recreate (no build)
   -b, --build, build    Build and tag the image only (skip deploy)
   -B, --backup, backup  Backup Postgres + RustFS (no deploy)
+  --restore FILE.sql.gz Restore a SQL dump into running Postgres
   -r, --restart, restart  Restart running containers (start if stopped)
   -i, --info, info      Show containers, HTTP, image, and DB migration status
   -k, --kill, kill      Stop the deployment containers
@@ -82,22 +114,31 @@ Aliases (same actions):
 
 Environment:
   PANACHAT_DATA_DIR       Host data root (default: ~/.local/share/panachat-data)
+                          Redis/RustFS bind here; Postgres uses named volume
+                          panachat_postgres_data (legacy bind path is migration source)
   PANACHAT_BACKUP_DIR     Backup root (default: ~/.local/share/panachat-backups)
   MOZ_SKIP_BACKUP=1       Skip automatic pre-deploy backup on -u / -d
-  MOZ_ALLOW_EMPTY_DB=1    Allow starting Postgres when data dir has no cluster
+  MOZ_ALLOW_EMPTY_DB=1    Allow starting Postgres when volume has no cluster
                           (intentional wipe / first bootstrap after delete)
   MOZ_ALLOW_DB_DRIFT=1    Allow redeploy when live DB fingerprint differs from
                           the last known good snapshot (users dropped, etc.)
+  MOZ_ALLOW_TMPFS_PGDATA=1  Allow Postgres PGDATA on tmpfs (DANGEROUS — empty DB)
+  MOZ_ALLOW_EMPTY_BACKUP=1  Allow moz -B when live users=0 but fingerprint>0
   AICO_CONTROL_PLANE_SERVICE_TOKEN   Shared product↔control-plane token
                           (moz generates a strong random token if missing/weak;
-                           `devtok` is rejected)
+                           \`devtok\` is rejected)
   AICO_CONTROL_PLANE_PORT            Host port for control plane (default: 3020; bound to 127.0.0.1)
   OPENROUTER_MANAGEMENT_API_KEY      Set in repo .env — loaded only by control plane
 
 Backups:
-  moz -B                  Manual backup now
+  moz -B                  Manual backup now (refuses tmpfs / empty-vs-fingerprint dumps)
+  moz --restore FILE.sql.gz
   moz -u / moz -d         Auto pre-deploy backup (unless MOZ_SKIP_BACKUP=1)
   Daily cron:             ./scripts/panachat-backup.sh --install-cron
+
+Reset Postgres (destructive):
+  moz -k && docker volume rm panachat_postgres_data
+  MOZ_ALLOW_EMPTY_DB=1 moz -d
 EOF
       exit 0
       ;;
@@ -191,6 +232,20 @@ run_panachat_backup() {
   "$script" --reason "$reason"
 }
 
+run_panachat_restore() {
+  local file="$1"
+  local script="$ROOT/scripts/panachat-backup.sh"
+  if [[ ! -x "$script" ]]; then
+    if [[ -f "$script" ]]; then
+      chmod +x "$script"
+    else
+      echo "Error: missing backup script: $script" >&2
+      return 1
+    fi
+  fi
+  "$script" --restore "$file"
+}
+
 app_url() {
   local app_port
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
@@ -218,26 +273,194 @@ load_panachat_data_dir() {
   export PANACHAT_BACKUP_DIR
 }
 
+# Stable Docker volume for Postgres (see docker-compose.aico.data.override.yml).
+POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-panachat_postgres_data}"
+
 ensure_panachat_data_env() {
+  # Legacy postgres/ kept as one-time migration source; redis/rustfs still bind-mounted.
   mkdir -p "$PANACHAT_DATA_DIR"/{postgres,redis,rustfs}
 
   if [[ -f "$DEPLOY_DIR/.env" ]] && ! grep -qE '^PANACHAT_DATA_DIR=' "$DEPLOY_DIR/.env"; then
-    printf '\n# PanaChat runtime data (outside repo). Subdirs: postgres/, redis/, rustfs/\nPANACHAT_DATA_DIR=%s\n' \
+    printf '\n# PanaChat runtime data (outside repo). Redis/RustFS binds; Postgres = volume panachat_postgres_data\nPANACHAT_DATA_DIR=%s\n' \
       "$PANACHAT_DATA_DIR" >>"$DEPLOY_DIR/.env"
   fi
 }
 
-has_postgres_cluster() {
+legacy_postgres_bind_dir() {
+  echo "$PANACHAT_DATA_DIR/postgres"
+}
+
+postgres_volume_name() {
+  echo "$POSTGRES_VOLUME_NAME"
+}
+
+# True if path-or-volume currently holds a Postgres cluster (PG_VERSION).
+has_postgres_cluster_in_dir() {
   local dir="$1"
+  [[ -n "$dir" ]] || return 1
   docker run --rm -v "$dir:/data:ro" alpine sh -c 'test -f /data/PG_VERSION' 2>/dev/null
 }
 
-postgres_data_dir() {
-  echo "$PANACHAT_DATA_DIR/postgres"
+has_postgres_cluster_in_volume() {
+  local vol="$1"
+  docker volume inspect "$vol" >/dev/null 2>&1 || return 1
+  docker run --rm -v "$vol:/data:ro" alpine sh -c 'test -f /data/PG_VERSION' 2>/dev/null
+}
+
+has_postgres_cluster() {
+  # Prefer named volume; fall back to legacy bind path (pre-migration).
+  has_postgres_cluster_in_volume "$(postgres_volume_name)" \
+    || has_postgres_cluster_in_dir "$(legacy_postgres_bind_dir)"
 }
 
 db_fingerprint_file() {
   echo "$PANACHAT_DATA_DIR/.moz-db-fingerprint"
+}
+
+# One-time: copy legacy host bind cluster into the named volume (never the reverse).
+migrate_legacy_postgres_bind_to_volume() {
+  local vol legacy
+  vol="$(postgres_volume_name)"
+  legacy="$(legacy_postgres_bind_dir)"
+
+  if has_postgres_cluster_in_volume "$vol"; then
+    return 0
+  fi
+
+  if ! has_postgres_cluster_in_dir "$legacy"; then
+    return 0
+  fi
+
+  # Never copy a live PGDATA directory — stop Postgres first if it is using the bind.
+  if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" == "running" ]]; then
+    echo "==> Stopping $POSTGRES_CONTAINER for safe PGDATA copy into volume"
+    docker stop "$POSTGRES_CONTAINER" >/dev/null
+  fi
+
+  echo "==> Migrating Postgres cluster into Docker volume $vol"
+  echo "    Source (legacy bind): $legacy"
+  # Prefer Compose-created volume (labels) to avoid "not created by Compose" warnings.
+  if ! docker volume inspect "$vol" >/dev/null 2>&1; then
+    compose_in_deploy_dir up --no-start postgresql >/dev/null || docker volume create "$vol" >/dev/null
+  fi
+  docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
+  docker run --rm \
+    -v "$legacy:/from:ro" \
+    -v "$vol:/to" \
+    alpine sh -c 'cp -a /from/. /to/ && test -f /to/PG_VERSION'
+  echo "==> Migration complete (legacy bind left intact as cold copy)"
+}
+
+# True when running lobe-postgres is already on the named volume (not a host bind / tmpfs).
+postgres_uses_named_volume() {
+  local mount_type mount_name
+  docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 || return 1
+  mount_type="$(
+    docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Type}}{{end}}{{end}}' \
+      "$POSTGRES_CONTAINER" 2>/dev/null || true
+  )"
+  mount_name="$(
+    docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}' \
+      "$POSTGRES_CONTAINER" 2>/dev/null || true
+  )"
+  [[ "$mount_type" == "volume" && "$mount_name" == "$(postgres_volume_name)" ]]
+}
+
+# After Postgres is up: refuse tmpfs / missing PG_VERSION (the empty-DB failure mode).
+assert_postgres_pgdata_healthy() {
+  local fstype has_version
+
+  if [[ "${MOZ_ALLOW_TMPFS_PGDATA:-}" == "1" ]]; then
+    echo "==> Warning: MOZ_ALLOW_TMPFS_PGDATA=1 — skipping PGDATA filesystem check."
+    return 0
+  fi
+
+  if ! docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 \
+    || [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" != "running" ]]; then
+    echo "Error: $POSTGRES_CONTAINER is not running — cannot verify PGDATA." >&2
+    return 1
+  fi
+
+  fstype="$(
+    docker exec "$POSTGRES_CONTAINER" sh -c 'df -T /var/lib/postgresql/data 2>/dev/null | awk "NR==2{print \$2}"' \
+      2>/dev/null || echo unknown
+  )"
+  has_version="$(
+    docker exec "$POSTGRES_CONTAINER" sh -c 'test -f /var/lib/postgresql/data/PG_VERSION && echo yes || echo no' \
+      2>/dev/null || echo no
+  )"
+
+  if moz_is_tmpfs_pgdata "$fstype"; then
+    cat >&2 <<EOF
+Error: Postgres PGDATA is on $fstype (empty RAM disk) — refusing to continue.
+
+  This is the Docker Desktop + WSL2 bind-mount bug (or a broken volume mount).
+  An empty PGDATA would make Postgres initdb and look like all users were deleted.
+
+  Fix:
+    moz -k
+    # restart Docker Desktop if needed
+    moz -d
+
+  Override only if intentional:
+    MOZ_ALLOW_TMPFS_PGDATA=1 moz -d
+EOF
+    return 1
+  fi
+
+  if [[ "$has_version" != "yes" ]]; then
+    cat >&2 <<EOF
+Error: Postgres PGDATA has no PG_VERSION inside the container (initdb risk).
+
+  Volume: $(postgres_volume_name)
+  FS type: $fstype
+
+  Recover from backup (moz -B dumps) or migrate legacy bind data, then redeploy.
+EOF
+    return 1
+  fi
+
+  if ! postgres_uses_named_volume; then
+    echo "==> Warning: Postgres is running but not on volume $(postgres_volume_name) (mount may be stale)."
+    echo "    Run: moz -k && moz -d  to recreate postgresql with the named volume."
+  fi
+
+  echo "==> Postgres PGDATA ok (fs=$fstype, volume=$(postgres_volume_name))"
+}
+
+# Bring Postgres up on the named volume; recreate the container if still on a bind.
+ensure_postgres_named_volume_mount() {
+  migrate_legacy_postgres_bind_to_volume
+
+  if postgres_uses_named_volume; then
+    return 0
+  fi
+
+  # Refuse empty volume before compose starts Postgres (image initdb if no PG_VERSION).
+  # First install (no fingerprint) still proceeds; MOZ_ALLOW_EMPTY_DB=1 for intentional wipe.
+  assert_postgres_cluster_safe
+
+  echo "==> Recreating postgresql on named volume $(postgres_volume_name)"
+  compose_in_deploy_dir up -d --force-recreate --no-deps postgresql
+  wait_for_container "$POSTGRES_CONTAINER" 90
+  # Wait until healthy / accepting connections
+  local elapsed=0
+  while (( elapsed < 60 )); do
+    if docker exec "$POSTGRES_CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  assert_postgres_pgdata_healthy
+}
+
+# Copy legacy host bind → named volume, then recreate Postgres if still on a bind/tmpfs.
+# Must run before pre-deploy backup and fingerprint so moz -u never dumps/compares a RAM DB.
+prepare_postgres_for_deploy() {
+  migrate_legacy_deploy_data
+  ensure_postgres_named_volume_mount
 }
 
 # Read live DB stats when postgres is up. Prints: users|admins|migrations
@@ -264,10 +487,10 @@ read_live_db_stats() {
 
 # Persist a fingerprint after a healthy deploy so later moz runs can detect wipe/drift.
 save_db_fingerprint() {
-  local users admins migrations has_cluster=0 pgdir
-  local stats
-  pgdir="$(postgres_data_dir)"
-  if has_postgres_cluster "$pgdir"; then
+  local users admins migrations has_cluster=0
+  local stats vol
+  vol="$(postgres_volume_name)"
+  if has_postgres_cluster; then
     has_cluster=1
   fi
   stats="$(read_live_db_stats)"
@@ -279,7 +502,8 @@ save_db_fingerprint() {
 version=1
 saved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 data_dir=$PANACHAT_DATA_DIR
-postgres_dir=$pgdir
+postgres_volume=$vol
+postgres_dir=$(legacy_postgres_bind_dir)
 has_cluster=$has_cluster
 users=${users}
 admins=${admins}
@@ -295,12 +519,11 @@ load_fingerprint_value() {
   grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2-
 }
 
-# Abort if starting Postgres would initdb on an empty dir after we previously had data.
+# Abort if starting Postgres would initdb on an empty volume after we previously had data.
 assert_postgres_cluster_safe() {
-  local pgdir fingerprint_users fingerprint_cluster
-  pgdir="$(postgres_data_dir)"
+  local fingerprint_users fingerprint_cluster
 
-  if has_postgres_cluster "$pgdir"; then
+  if has_postgres_cluster; then
     return 0
   fi
 
@@ -308,7 +531,7 @@ assert_postgres_cluster_safe() {
   fingerprint_users="$(load_fingerprint_value users || true)"
 
   if [[ "${MOZ_ALLOW_EMPTY_DB:-}" == "1" ]]; then
-    echo "==> Warning: postgres data dir has no cluster (PG_VERSION missing)."
+    echo "==> Warning: Postgres volume/data has no cluster (PG_VERSION missing)."
     echo "    MOZ_ALLOW_EMPTY_DB=1 set — allowing empty bootstrap (initdb will wipe/create)."
     return 0
   fi
@@ -316,24 +539,27 @@ assert_postgres_cluster_safe() {
   if [[ "$fingerprint_cluster" == "1" ]] \
     || [[ "$fingerprint_users" =~ ^[0-9]+$ && "$fingerprint_users" -gt 0 ]]; then
     cat >&2 <<EOF
-Error: refusing to start/redeploy — Postgres data directory is EMPTY but moz
+Error: refusing to start/redeploy — Postgres volume is EMPTY but moz
 previously recorded a real cluster here.
 
   Data dir:     $PANACHAT_DATA_DIR
-  Postgres dir: $pgdir
+  Volume:       $(postgres_volume_name)
+  Legacy bind:  $(legacy_postgres_bind_dir)
   Fingerprint:  $(db_fingerprint_file)
   Last users:   ${fingerprint_users:-unknown}
 
 Starting the stack now would run initdb and permanently lose the previous DB.
 
-Recover the postgres folder from backup, or intentionally reset with:
+Recover: ensure volume has data (moz migrates from legacy bind automatically),
+restore a SQL dump, or intentionally reset with:
+  moz -k && docker volume rm $(postgres_volume_name)
   MOZ_ALLOW_EMPTY_DB=1 moz -d
 EOF
     exit 1
   fi
 
   # First-time install (no fingerprint / never had users): allow empty cluster.
-  echo "==> Postgres data dir has no cluster yet (first bootstrap)."
+  echo "==> Postgres volume has no cluster yet (first bootstrap)."
 }
 
 # Abort redeploy when live DB no longer matches the last known fingerprint.
@@ -430,23 +656,27 @@ EOF
 }
 
 migrate_legacy_deploy_data() {
+  # Older installs kept PGDATA under docker-compose/deploy/data — copy into named volume.
   local legacy="$DEPLOY_DIR/data"
-  local target="$PANACHAT_DATA_DIR/postgres"
+  local vol
+  vol="$(postgres_volume_name)"
 
-  if has_postgres_cluster "$target"; then
+  migrate_legacy_postgres_bind_to_volume
+
+  if has_postgres_cluster_in_volume "$vol"; then
     return 0
   fi
 
-  if ! has_postgres_cluster "$legacy"; then
+  if ! has_postgres_cluster_in_dir "$legacy"; then
     return 0
   fi
 
-  echo "==> Migrating postgres data from $legacy to $target"
-  mkdir -p "$target"
+  echo "==> Migrating postgres data from $legacy to volume $vol"
+  docker volume create "$vol" >/dev/null
   docker run --rm \
     -v "$legacy:/from:ro" \
-    -v "$target:/to" \
-    alpine sh -c 'cp -a /from/. /to/'
+    -v "$vol:/to" \
+    alpine sh -c 'cp -a /from/. /to/ && test -f /to/PG_VERSION'
 }
 
 compose_in_deploy_dir() {
@@ -550,6 +780,10 @@ verify_deploy_health() {
   local url migrate_line cp_port
   url="$(app_url)"
 
+  # Gate empty/tmpfs PGDATA before treating the app as healthy.
+  wait_for_container "$POSTGRES_CONTAINER" 90 || return 1
+  assert_postgres_pgdata_healthy || return 1
+
   echo "==> Waiting for container $CONTAINER_NAME..."
   wait_for_container "$CONTAINER_NAME" 120
 
@@ -599,6 +833,7 @@ show_status() {
   local user_count admin_count exit_code=0
   local fp_users
   local cp_port cp_code
+  local pg_fs pg_mount
 
   app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
   app_url="http://127.0.0.1:${app_port:-3210}"
@@ -686,6 +921,19 @@ show_status() {
     printf "\nDB migrations: %s / %s applied\n" "$applied_migrations" "$expected_migrations"
     printf "Users:         %s\n" "$user_count"
     printf "Platform admins: %s\n" "$admin_count"
+    pg_fs="$(
+      docker exec "$POSTGRES_CONTAINER" sh -c 'df -T /var/lib/postgresql/data 2>/dev/null | awk "NR==2{print \$2}"' \
+        2>/dev/null || echo "?"
+    )"
+    pg_mount="$(
+      docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' \
+        "$POSTGRES_CONTAINER" 2>/dev/null || echo "?"
+    )"
+    printf "PGDATA:        fs=%s mount=%s\n" "$pg_fs" "$pg_mount"
+    if moz_is_tmpfs_pgdata "$pg_fs"; then
+      echo "  ⚠️  PGDATA on tmpfs — empty-DB risk (moz -k && moz -d)"
+      exit_code=1
+    fi
     if [[ -f "$(db_fingerprint_file)" ]]; then
       printf "DB fingerprint: users=%s admins=%s migrations=%s (saved %s)\n" \
         "$(load_fingerprint_value users || echo '?')" \
@@ -711,9 +959,11 @@ show_status() {
   else
     echo ""
     echo "DB:            postgres not running"
-    if ! has_postgres_cluster "$(postgres_data_dir)"; then
-      echo "Postgres data: NO cluster (empty dir — initdb risk)"
+    if ! has_postgres_cluster; then
+      echo "Postgres data: NO cluster on volume $(postgres_volume_name) (initdb risk)"
       exit_code=1
+    else
+      printf "Postgres data: cluster present on volume %s\n" "$(postgres_volume_name)"
     fi
     exit_code=1
   fi
@@ -742,6 +992,12 @@ if [[ $STATUS -eq 1 ]]; then
   exit $?
 fi
 
+if [[ -n "$RESTORE_FILE" ]]; then
+  load_panachat_data_dir
+  run_panachat_restore "$RESTORE_FILE"
+  exit 0
+fi
+
 if [[ $BACKUP_ONLY -eq 1 ]]; then
   load_panachat_data_dir
   run_panachat_backup manual
@@ -755,14 +1011,21 @@ if [[ $STOP -eq 1 ]]; then
   exit 0
 fi
 
-# Pre-deploy safety net: dump before rebuild/recreate can touch data.
-if [[ $DEPLOY -eq 1 && "${MOZ_SKIP_BACKUP:-}" != "1" ]]; then
+# Remount Postgres onto the named volume BEFORE backup/fingerprint/build.
+# Otherwise moz -u can dump a Docker Desktop tmpfs empty DB (0 users) and then
+# refuse deploy because live users dropped vs fingerprint.
+if [[ $DEPLOY -eq 1 ]]; then
   load_panachat_data_dir
-  echo "==> Pre-deploy backup"
-  run_panachat_backup pre-deploy || {
-    echo "Error: pre-deploy backup failed. Fix the backup error, or set MOZ_SKIP_BACKUP=1 to continue." >&2
-    exit 1
-  }
+  echo "==> Preparing Postgres named volume (migrate legacy bind if needed)"
+  prepare_postgres_for_deploy
+  if [[ "${MOZ_SKIP_BACKUP:-}" != "1" ]]; then
+    echo "==> Pre-deploy backup"
+    run_panachat_backup pre-deploy || {
+      echo "Error: pre-deploy backup failed. Fix the backup error, or set MOZ_SKIP_BACKUP=1 to continue." >&2
+      exit 1
+    }
+  fi
+  assert_db_fingerprint_matches
 fi
 
 if [[ $BUILD -eq 1 ]]; then
@@ -859,7 +1122,7 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
   [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
-  migrate_legacy_deploy_data
+  prepare_postgres_for_deploy
   assert_db_fingerprint_matches
   compose_in_deploy_dir up -d
   verify_deploy_health
@@ -868,15 +1131,14 @@ fi
 
 if [[ $RESTART -eq 1 ]]; then
   url="$(app_url)"
-  assert_db_fingerprint_matches
   [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
+  prepare_postgres_for_deploy
+  assert_db_fingerprint_matches
   if is_app_running; then
     echo "==> Restarting containers from $DEPLOY_DIR"
     compose_in_deploy_dir restart
   else
     echo "==> Not running — starting stack from $DEPLOY_DIR"
-    migrate_legacy_deploy_data
-    assert_db_fingerprint_matches
     compose_in_deploy_dir up -d
   fi
   verify_deploy_health
@@ -886,8 +1148,8 @@ fi
 if [[ $DEPLOY -eq 1 ]]; then
   echo "==> Force-deploying from $DEPLOY_DIR"
   [[ -f "$ROOT/apps/aico-control-plane/dist/standalone.js" ]] || ensure_control_plane_build
-  migrate_legacy_deploy_data
-  assert_db_fingerprint_matches
+  # Postgres was already migrated/remounted/fingerprinted before the build.
   compose_in_deploy_dir up -d --force-recreate lobe aico-control-plane
+  ensure_postgres_named_volume_mount
   verify_deploy_health
 fi
