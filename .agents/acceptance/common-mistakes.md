@@ -258,6 +258,15 @@ gateway/device route, then assert the complete persisted tree: original owner
 user, target assistant/tool call, tool result, and target final response. Also
 assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
+### L-E18 — 从「没有默认导入」推断某个 composer 表面是死代码
+
+**Wrong approach:** 改动技能行这类被 ActionBar 复用的组件后，grep `ActionBar/Tools` 的默认导入没有命中，就断定该表面未挂载，只验证 `+` 菜单一条路径。
+
+**Why it fails:** ActionBar 的表面不是靠直接 import 挂载的，而是靠 action key 注册表 + 各路由自己的 `leftActions` 数组启用。`ActionBar/config` 里 `tools: Tools` 一直注册着，真正决定它是否渲染的是
+`src/routes/(main)/**/MainChatInput` 里的 `leftActions`—— 群聊 composer 就启用了 `'tools'`，走的是 `PopoverContent → ToolsList` 这条与 `+` 菜单不同的组合路径。漏掉它会让一次绿色的验证只覆盖一半用户可见面。
+
+**Correct approach:** 改动任何被 ActionBar 复用的组件后，先枚举 action key 的真实启用点（grep 各路由的 `leftActions` 数组，而不是组件的 import），对每个启用该 key 的表面分别取证；确实不打算验的表面要显式标记未测。
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -515,6 +524,14 @@ attributing any module-load failure to the change under test, compare the runnin
 server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` and
 restart before diagnosing anything. The restarted server is then yours to stop at
 teardown even though you did not start the original.
+
+**Same failure, third shape — files removed from the working tree still being served.**
+After a `git stash` used to capture a "before" frame, the dev server can keep serving the
+pre-stash transform: a file deleted from disk still answers **200** and the module body still
+contains the new code. Reloading the page does not help. Restart the process (and clear
+`node_modules/.vite`) before capturing, and gate the capture on a marker that cannot collide
+with unrelated identifiers — a component name like `SkillRow` also matches a CSS class such as
+`addSkillRow`, so a substring count "confirms" the wrong state.
 
 ---
 
