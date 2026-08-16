@@ -16,7 +16,6 @@ const {
   runSetMetadata,
   opFindById,
   taskFindById,
-  taskGetGoalConfig,
   taskUpdateStatus,
   briefCreate,
   serviceUpdateStatus,
@@ -24,11 +23,15 @@ const {
   deliverMock,
   goalContinueMock,
   goalSyncMock,
+  goalFindBySubject,
+  goalUpdateStatus,
 } = vi.hoisted(() => ({
   briefCreate: vi.fn(),
   deliverMock: vi.fn(),
   goalContinueMock: vi.fn(),
+  goalFindBySubject: vi.fn(),
   goalSyncMock: vi.fn(),
+  goalUpdateStatus: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
   runClaimTaskDrive: vi.fn().mockResolvedValue(true),
@@ -36,7 +39,6 @@ const {
   serviceUpdateStatus: vi.fn(),
   statusRecompute: vi.fn(),
   taskFindById: vi.fn(),
-  taskGetGoalConfig: vi.fn(),
   taskUpdateStatus: vi.fn(),
 }));
 
@@ -61,7 +63,7 @@ vi.mock('../goalLoop', () => ({
   }),
   maybeContinueGoalLoop: goalContinueMock,
   resolveGoalRoundBudget: (goal: any) =>
-    goal.maxIterations === null ? Number.POSITIVE_INFINITY : (goal.maxIterations ?? 3),
+    goal.maxRounds === null ? Number.POSITIVE_INFINITY : goal.maxRounds,
   syncGoalToolState: goalSyncMock,
 }));
 
@@ -82,8 +84,13 @@ vi.mock('@/database/models/agentOperation', () => ({
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(() => ({
     findById: taskFindById,
-    getGoalConfig: taskGetGoalConfig,
     updateStatus: taskUpdateStatus,
+  })),
+}));
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(() => ({
+    findBySubject: goalFindBySubject,
+    updateStatus: goalUpdateStatus,
   })),
 }));
 vi.mock('@/database/models/brief', () => ({
@@ -108,7 +115,6 @@ describe('driveTaskFromVerify', () => {
       runSetMetadata,
       opFindById,
       taskFindById,
-      taskGetGoalConfig,
       taskUpdateStatus,
       briefCreate,
       serviceUpdateStatus,
@@ -116,6 +122,8 @@ describe('driveTaskFromVerify', () => {
       deliverMock,
       goalContinueMock,
       goalSyncMock,
+      goalFindBySubject,
+      goalUpdateStatus,
     ].forEach((m) => m.mockReset());
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
@@ -127,7 +135,7 @@ describe('driveTaskFromVerify', () => {
       identifier: 'T-1',
       status: 'running',
     });
-    taskGetGoalConfig.mockReturnValue(undefined);
+    goalFindBySubject.mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -280,11 +288,11 @@ describe('driveTaskFromVerify', () => {
       status: 'running',
       totalTopics: 1,
     };
-    const goal = { maxIterations: 3, maxTotalCost: null, originTopicId: 'origin-t' };
+    const goal = { id: 'goal-1', maxRounds: 3, maxTotalCost: null, status: 'running' };
 
     beforeEach(() => {
       taskFindById.mockResolvedValue(goalTask);
-      taskGetGoalConfig.mockReturnValue(goal);
+      goalFindBySubject.mockResolvedValue(goal);
     });
 
     it('failed + budget left → spawns the next round silently (no brief, no pause, no callback)', async () => {
@@ -334,6 +342,8 @@ describe('driveTaskFromVerify', () => {
       });
       const briefArg = briefCreate.mock.calls[0][0];
       expect(briefArg.summary).toContain('budget exhausted (exhausted-rounds)');
+      // An exhausted budget parks the goal for the user, it does not fail it.
+      expect(goalUpdateStatus).toHaveBeenCalledWith('goal-1', 'paused');
       expect(goalSyncMock).toHaveBeenCalledWith(
         expect.objectContaining({
           state: expect.objectContaining({ pausedReason: 'exhausted-rounds', phase: 'paused' }),
@@ -364,6 +374,9 @@ describe('driveTaskFromVerify', () => {
         'paused',
         expect.objectContaining({ error: expect.stringContaining('could not run') }),
       );
+      // Infra gave up without evaluating the delivery → the goal is `failed`,
+      // distinct from the user-actionable `paused` of an exhausted budget.
+      expect(goalUpdateStatus).toHaveBeenCalledWith('goal-1', 'failed');
     });
 
     it('passed → parks for sign-off instead of completing (the verifier only recommends)', async () => {
@@ -383,6 +396,8 @@ describe('driveTaskFromVerify', () => {
       expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
         error: 'ready for your sign-off',
       });
+      // The goal's own lifecycle records the sign-off wait.
+      expect(goalUpdateStatus).toHaveBeenCalledWith('goal-1', 'review');
       expect(goalSyncMock).toHaveBeenCalledWith(
         expect.objectContaining({ state: expect.objectContaining({ phase: 'review' }) }),
       );
@@ -415,7 +430,7 @@ describe('driveTaskFromVerify', () => {
   });
 
   it('non-goal task still completes on a passing verify (contract unchanged)', async () => {
-    taskGetGoalConfig.mockReturnValue(undefined);
+    goalFindBySubject.mockResolvedValue(undefined);
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
 
     await driveTaskFromVerify(db, 'u1', 'op-1');

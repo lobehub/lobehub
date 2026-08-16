@@ -107,10 +107,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const TERMINAL_STATUSES = new Set<TaskStatus | string>(['canceled', 'completed']);
 const ATTENTION_STATUSES = new Set<TaskStatus | string>(['failed', 'paused']);
-const isGoalTask = (task: NonNullable<ProjectDetail['tasks']>[number]) => {
-  if (!task.config || typeof task.config !== 'object') return false;
-  return Boolean((task.config as { goal?: unknown }).goal);
-};
+const isGoalTask = (task: NonNullable<ProjectDetail['tasks']>[number]) => Boolean(task.goal);
 
 interface ProjectDashboardProps {
   detail: ProjectDetail;

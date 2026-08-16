@@ -150,7 +150,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const bundle = useVerifyStore(verifySelectors.acceptanceBundle(acceptance?.id));
   const acceptanceQuery = useFetchAcceptanceBySubject('task', task?.id);
   const bundleQuery = useFetchAcceptanceBundle(acceptance?.id);
-  const config = task?.config as { goal?: { maxIterations?: number | null } } | undefined;
   const runs = useMemo(() => getGoalRuns(task?.activities), [task?.activities]);
   const recentRuns = useMemo(() => getRecentGoalRuns(task?.activities), [task?.activities]);
   const runMetrics = useMemo(() => getGoalRunMetrics(task?.activities), [task?.activities]);
@@ -158,7 +157,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const presentation = getGoalPresentation({
     acceptanceStatus: bundle?.acceptance.status,
     checks: bundle?.checks,
-    maxRounds: config?.goal?.maxIterations,
+    goalStatus: task?.goal?.status,
+    maxRounds: task?.goal?.maxRounds,
     rounds: task?.topicCount ?? 0,
     taskStatus: task?.status ?? 'backlog',
   });

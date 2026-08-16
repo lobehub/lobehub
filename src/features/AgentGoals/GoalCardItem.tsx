@@ -39,7 +39,7 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
   const { hideAchieved = false, projectId, task } = props;
-  const config = task.config as { goal?: { maxIterations?: number | null } } | null;
+  const goal = task.goal;
   const title = task.name?.trim() || task.instruction.trim() || task.identifier;
   const description = getGoalDescription(task);
   const handleClick = () => {
@@ -58,7 +58,8 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
         const presentation = getGoalPresentation({
           acceptanceStatus: bundle?.acceptance.status,
           checks: bundle?.checks,
-          maxRounds: config?.goal?.maxIterations,
+          goalStatus: goal?.status,
+          maxRounds: goal?.maxRounds,
           rounds: task.totalTopics ?? 0,
           taskStatus: task.status,
         });

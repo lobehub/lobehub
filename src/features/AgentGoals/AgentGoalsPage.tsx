@@ -96,11 +96,11 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     return goals.filter((goal) => {
       const acceptance = acceptanceBySubjectMap[`task:${goal.id}`];
       const bundle = acceptance ? acceptanceBundleMap[acceptance.id] : undefined;
-      const config = goal.config as { goal?: { maxIterations?: number | null } } | null;
       const presentation = getGoalPresentation({
         acceptanceStatus: bundle?.acceptance.status,
         checks: bundle?.checks,
-        maxRounds: config?.goal?.maxIterations,
+        goalStatus: goal.goal?.status,
+        maxRounds: goal.goal?.maxRounds,
         rounds: goal.totalTopics ?? 0,
         taskStatus: goal.status,
       });

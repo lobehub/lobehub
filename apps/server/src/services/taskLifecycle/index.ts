@@ -31,6 +31,7 @@ import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -199,7 +200,12 @@ export class TaskLifecycleService {
       //    that actually needs the user. The settle path owns those moments:
       //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
       //    loop succeeds and the budget-exhausted alert when it stops.
-      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      const isGoalLoopRound =
+        !!currentTask &&
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findBySubject(
+          'task',
+          currentTask.id,
+        ));
       if (
         !isGoalLoopRound &&
         getBriefMode(currentTask) === 'auto' &&
