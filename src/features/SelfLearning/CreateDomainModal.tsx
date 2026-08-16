@@ -353,82 +353,6 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
           <Flexbox className={styles.reviewSection} gap={10}>
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
-                <Icon color={cssVar.colorTextTertiary} icon={LayersIcon} size={16} />
-                <Text fontSize={13} weight={600}>
-                  {t('create.anchor.layers')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {draft.layerSource === 'canonical' && draft.layerCanonRef
-                    ? t('create.anchor.layersFrom', { ref: draft.layerCanonRef })
-                    : t('create.anchor.layersInvented')}
-                </Text>
-              </Flexbox>
-              <Button
-                icon={PlusIcon}
-                size={'small'}
-                type={'text'}
-                onClick={() =>
-                  patch({
-                    layers: [
-                      ...draft.layers,
-                      { description: null, key: `layer-${draft.layers.length + 1}`, title: '' },
-                    ],
-                  })
-                }
-              >
-                {t('create.anchor.addLayer')}
-              </Button>
-            </Flexbox>
-            {draft.layers.length === 0 && (
-              <Text fontSize={12} type={'secondary'}>
-                {t('create.anchor.noLayers')}
-              </Text>
-            )}
-            {draft.layers.map((layer, i) => (
-              <div className={styles.itemRow} key={i}>
-                <span className={styles.seq}>L{i + 1}</span>
-                <Flexbox gap={4}>
-                  <Input
-                    placeholder={t('create.anchor.layerTitle')}
-                    size={'small'}
-                    value={layer.title}
-                    variant={'filled'}
-                    onChange={(e) =>
-                      patch({
-                        layers: draft.layers.map((l, j) =>
-                          j === i
-                            ? { ...l, key: slugify(e.target.value, l.key), title: e.target.value }
-                            : l,
-                        ),
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder={t('create.anchor.layerDesc')}
-                    size={'small'}
-                    value={layer.description ?? ''}
-                    variant={'borderless'}
-                    onChange={(e) =>
-                      patch({
-                        layers: draft.layers.map((l, j) =>
-                          j === i ? { ...l, description: e.target.value } : l,
-                        ),
-                      })
-                    }
-                  />
-                </Flexbox>
-                <ActionIcon
-                  icon={Trash2Icon}
-                  size={'small'}
-                  onClick={() => patch({ layers: draft.layers.filter((_, j) => j !== i) })}
-                />
-              </div>
-            ))}
-          </Flexbox>
-
-          <Flexbox className={styles.reviewSection} gap={10}>
-            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={AnchorIcon} size={16} />
                 <Text fontSize={13} weight={600}>
                   {t('create.anchor.canon')}
@@ -520,6 +444,81 @@ const CreateDomainContent = memo<CreateDomainContentProps>(({ agentId, onCreated
                   onClick={() =>
                     patch({ canonEntries: draft.canonEntries.filter((_, j) => j !== i) })
                   }
+                />
+              </div>
+            ))}
+          </Flexbox>
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon color={cssVar.colorTextTertiary} icon={LayersIcon} size={16} />
+                <Text fontSize={13} weight={600}>
+                  {t('create.anchor.layers')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {draft.layerSource === 'canonical' && draft.layerCanonRef
+                    ? t('create.anchor.layersFrom', { ref: draft.layerCanonRef })
+                    : t('create.anchor.layersInvented')}
+                </Text>
+              </Flexbox>
+              <Button
+                icon={PlusIcon}
+                size={'small'}
+                type={'text'}
+                onClick={() =>
+                  patch({
+                    layers: [
+                      ...draft.layers,
+                      { description: null, key: `layer-${draft.layers.length + 1}`, title: '' },
+                    ],
+                  })
+                }
+              >
+                {t('create.anchor.addLayer')}
+              </Button>
+            </Flexbox>
+            {draft.layers.length === 0 && (
+              <Text fontSize={12} type={'secondary'}>
+                {t('create.anchor.noLayers')}
+              </Text>
+            )}
+            {draft.layers.map((layer, i) => (
+              <div className={styles.itemRow} key={i}>
+                <span className={styles.seq}>L{i + 1}</span>
+                <Flexbox gap={4}>
+                  <Input
+                    placeholder={t('create.anchor.layerTitle')}
+                    size={'small'}
+                    value={layer.title}
+                    variant={'filled'}
+                    onChange={(e) =>
+                      patch({
+                        layers: draft.layers.map((l, j) =>
+                          j === i
+                            ? { ...l, key: slugify(e.target.value, l.key), title: e.target.value }
+                            : l,
+                        ),
+                      })
+                    }
+                  />
+                  <Input
+                    placeholder={t('create.anchor.layerDesc')}
+                    size={'small'}
+                    value={layer.description ?? ''}
+                    variant={'borderless'}
+                    onChange={(e) =>
+                      patch({
+                        layers: draft.layers.map((l, j) =>
+                          j === i ? { ...l, description: e.target.value } : l,
+                        ),
+                      })
+                    }
+                  />
+                </Flexbox>
+                <ActionIcon
+                  icon={Trash2Icon}
+                  size={'small'}
+                  onClick={() => patch({ layers: draft.layers.filter((_, j) => j !== i) })}
                 />
               </div>
             ))}

@@ -13,7 +13,7 @@ import TierBar from './TierBar';
 /** 「它在哪儿强、哪儿弱」—— 按领域自己的分层，一层一行。 */
 const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   const { t } = useTranslation('selfLearning');
-  if (domain.layers.length === 0 || domain.lessons.length < 4) return null;
+  if (domain.layers.length === 0 || domain.lessons.length === 0) return null;
 
   return (
     <Block padding={'10px 14px'} variant={'outlined'}>

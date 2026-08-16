@@ -106,10 +106,13 @@ export const expertiseRouter = router({
       const domains = bound.map(({ domain }) => {
         const snap = snapByDomain.get(domain.id);
         return {
+          canonEntries: domain.canonEntries,
           domainFilter: domain.domainFilter,
           id: domain.id,
           lastPracticedAt: snap?.capturedAt ?? null,
+          layerCanonRef: domain.anchorCandidates?.[0]?.layerCanonRef ?? null,
           layers: domain.layers,
+          layerSource: domain.layerSource,
           lessons: (lessonsByDomain.get(domain.id) ?? []).map((l) => ({
             code: l.code,
             createdAt: l.createdAt,

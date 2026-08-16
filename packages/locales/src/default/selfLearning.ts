@@ -1,4 +1,9 @@
 export default {
+  'anchor.filter': 'Counts as practice: ',
+  'anchor.noCanon': 'no canon — coverage cannot be judged',
+  'anchor.noLayers': 'no layers — lessons are not grouped by level',
+  'anchor.outOfScope': 'Does not count: ',
+  'anchor.title': 'Its anchor',
   'charts.count': '{{count}} lessons',
   'charts.early': 'started at {{rate}}%',
   'charts.learned': 'Learned so far',
@@ -89,10 +94,10 @@ export default {
   'headline.single.fresh':
     '{{name}}: {{runs}} practice in, {{count}} lessons captured, none tested yet.',
   'headline.single.notPracticed': '{{name}} is set as a direction — nothing practiced yet.',
-  'headline.single.recurring':
-    '{{name}}: {{runs}} practices in, habits are mostly solid — except “{{title}}”, which it keeps getting wrong.',
-  'headline.single.shaky':
-    '{{name}}: {{runs}} practices in, most habits are solid; {{count}} still go either way.',
+  'headline.detail.recurring': '“{{title}}” keeps going wrong',
+  'headline.detail.shaky': '{{count}} habits still go either way',
+  'headline.single.recurring': '{{name}}: {{runs}} practices in, habits are mostly solid.',
+  'headline.single.shaky': '{{name}}: {{runs}} practices in, most habits are solid.',
   'headline.single.stable':
     '{{name}}: {{runs}} practices in, everything it learned has become a habit.',
   'headline.subline':

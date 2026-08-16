@@ -22,6 +22,7 @@ import { useAgentStore } from '@/store/agent';
 import { openCreateDomainModal } from './CreateDomainModal';
 import { countTiers, habitTier } from './helpers';
 import { useExpertiseOverview, useHistoryCount } from './hooks';
+import AnchorCard from './Portrait/AnchorCard';
 import DomainList from './Portrait/DomainList';
 import GrowthCharts from './Portrait/GrowthCharts';
 import HabitList from './Portrait/HabitList';
@@ -89,29 +90,36 @@ const SelfLearning = memo(() => {
    * 「N 个方向、M 个习惯」这种盘点放到副标题里。
    */
   const sentenceFor = useCallback(
-    (d: ExpertiseDomainItem) => {
+    (d: ExpertiseDomainItem): { detail?: string; headline: string } => {
       const name = d.title;
       const list = d.lessons;
       const c = countTiers(list);
-      if (d.runCount === 0) return t('headline.single.notPracticed', { name });
+      if (d.runCount === 0) return { headline: t('headline.single.notPracticed', { name }) };
       const recurring = list.find((h) => habitTier(h.recent) === 'recurring');
       if (recurring)
-        return t('headline.single.recurring', {
-          name,
-          runs: d.runCount,
-          title: recurring.title.length > 18 ? `${recurring.title.slice(0, 17)}…` : recurring.title,
-        });
+        return {
+          detail: t('headline.detail.recurring', {
+            title:
+              recurring.title.length > 18 ? `${recurring.title.slice(0, 17)}…` : recurring.title,
+          }),
+          headline: t('headline.single.recurring', { name, runs: d.runCount }),
+        };
       if (c.shaky > 0)
-        return t('headline.single.shaky', { count: c.shaky, name, runs: d.runCount });
+        return {
+          detail: t('headline.detail.shaky', { count: c.shaky }),
+          headline: t('headline.single.shaky', { name, runs: d.runCount }),
+        };
       if (c.stable === 0)
-        return t('headline.single.fresh', { count: list.length, name, runs: d.runCount });
-      return t('headline.single.stable', { name, runs: d.runCount });
+        return {
+          headline: t('headline.single.fresh', { count: list.length, name, runs: d.runCount }),
+        };
+      return { headline: t('headline.single.stable', { name, runs: d.runCount }) };
     },
     [t],
   );
 
-  const headline = useMemo(() => {
-    if (scoped.length === 0) return '';
+  const sentence = useMemo(() => {
+    if (scoped.length === 0) return { headline: '' };
     if (single && current) return sentenceFor(current);
     const rank = (d: ExpertiseDomainItem) => {
       const c = countTiers(d.lessons);
@@ -120,8 +128,17 @@ const SelfLearning = memo(() => {
     const focus = [...scoped].sort((a, b) => rank(a) - rank(b))[0];
     return rank(focus) <= 1
       ? sentenceFor(focus)
-      : t('headline.multi.ok', { domains: scoped.length });
+      : { headline: t('headline.multi.ok', { domains: scoped.length }) };
   }, [current, scoped, sentenceFor, single, t]);
+
+  const subline = [
+    sentence.detail,
+    single
+      ? t('headline.subline', { habits: habits.length, runs })
+      : t('headline.sublineMulti', { domains: scoped.length, habits: habits.length }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   // The warm-up card is front and centre only for a direction that has never been practiced.
   const freshDomain = scoped.find((d) => d.runCount === 0 && d.lessons.length === 0);
@@ -217,12 +234,8 @@ const SelfLearning = memo(() => {
           >
             <Flexbox gap={20} paddingBlock={'22px 64px'}>
               <Flexbox gap={4}>
-                <Text className={portraitStyles.sentence}>{headline}</Text>
-                <Text type={'secondary'}>
-                  {single
-                    ? t('headline.subline', { habits: habits.length, runs })
-                    : t('headline.sublineMulti', { domains: scoped.length, habits: habits.length })}
-                </Text>
+                <Text className={portraitStyles.sentence}>{sentence.headline}</Text>
+                <Text type={'secondary'}>{subline}</Text>
               </Flexbox>
 
               {teachOpen && (
@@ -279,6 +292,8 @@ const SelfLearning = memo(() => {
                   onChanged={() => void mutate()}
                 />
               )}
+
+              {current && <AnchorCard domain={current} />}
 
               {!single && !domainId && (
                 <DomainList
