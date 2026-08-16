@@ -47,6 +47,7 @@ const partyLabel = (party: TransferRequestParty | null, fallback: string) =>
  */
 const TRANSFER_ERROR_KEY_BY_CODE: Partial<Record<TransferErrorCode, string>> = {
   [TransferErrorCode.CopyInProgress]: 'error:transfer.copyInProgress',
+  [TransferErrorCode.GroupHasInaccessibleMember]: 'error:transfer.groupHasInaccessibleMember',
   [TransferErrorCode.ResourceNotFound]: 'error:transfer.resourceNotFound',
   [TransferErrorCode.TargetNoWriteAccess]: 'error:transfer.targetNoWriteAccess',
   [TransferErrorCode.TargetNotWorkspaceMember]: 'error:transfer.targetNotWorkspaceMember',

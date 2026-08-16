@@ -6,7 +6,11 @@ import { getTestDB } from '../../core/getTestDB';
 import { agents, chatGroups, chatGroupsAgents, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
-import { CHAT_GROUP_OWNERSHIP_STALE, ChatGroupModel } from '../chatGroup';
+import {
+  CHAT_GROUP_OWNERSHIP_STALE,
+  CHAT_GROUP_TRANSFER_HIDDEN_MEMBER,
+  ChatGroupModel,
+} from '../chatGroup';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -112,6 +116,22 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
     const rows = await serverDB.select().from(topics);
     expect(rows.find((t) => t.id === 'grp-owner-topic')?.userId).toBe(ownerId);
     expect(rows.find((t) => t.id === 'grp-teammate-topic')?.userId).toBe(teammateId);
+  });
+
+  it('refuses handover when a referenced member is private to someone else', async () => {
+    const { group, referenced } = await seedGroupWithRoster();
+    await serverDB
+      .update(agents)
+      .set({ visibility: 'private' })
+      .where(eq(agents.id, referenced.id));
+
+    await expect(
+      handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId }),
+    ).rejects.toThrow(CHAT_GROUP_TRANSFER_HIDDEN_MEMBER);
+
+    // Nothing moved.
+    const [groupRow] = await serverDB.select().from(chatGroups).where(eq(chatGroups.id, group.id));
+    expect(groupRow.userId).toBe(ownerId);
   });
 
   it('rejects a stale request when the owner already changed', async () => {

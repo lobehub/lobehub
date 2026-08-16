@@ -40,6 +40,12 @@ const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS
  */
 export const CHAT_GROUP_OWNERSHIP_STALE = 'CHAT_GROUP_OWNERSHIP_STALE';
 
+/**
+ * Handover refused: the group references a member agent that is private to
+ * someone other than the recipient, who would silently lose that participant.
+ */
+export const CHAT_GROUP_TRANSFER_HIDDEN_MEMBER = 'CHAT_GROUP_TRANSFER_HIDDEN_MEMBER';
+
 export class ChatGroupModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -832,9 +838,11 @@ export class ChatGroupModel {
     const memberRows = await trx
       .select({
         agentId: chatGroupsAgents.agentId,
+        agentUserId: agents.userId,
         role: chatGroupsAgents.role,
         slug: agents.slug,
         virtual: agents.virtual,
+        visibility: agents.visibility,
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
@@ -844,6 +852,19 @@ export class ChatGroupModel {
     const ownedAgentIds = memberRows
       .filter((row) => resolveGroupMembershipType(row) === 'owned')
       .map((row) => row.agentId);
+
+    // A REFERENCED member that is private to someone other than the recipient
+    // would silently vanish from the roster for the group's new owner (every
+    // roster read applies member-agent visibility). Refuse instead — same
+    // policy as the cross-scope transfer; the member's owner can share it and
+    // the recipient can retry.
+    const hasHiddenReferencedMember = memberRows.some(
+      (row) =>
+        resolveGroupMembershipType(row) === 'referenced' &&
+        row.visibility === 'private' &&
+        row.agentUserId !== toUserId,
+    );
+    if (hasHiddenReferencedMember) throw new Error(CHAT_GROUP_TRANSFER_HIDDEN_MEMBER);
 
     // Same lock-then-guard as `transferToWorkspace`: serialize with a
     // concurrent transfer of any member agent BEFORE consulting the pending

@@ -9,7 +9,10 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AGENT_OWNERSHIP_STALE } from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
-import { CHAT_GROUP_OWNERSHIP_STALE } from '@/database/models/chatGroup';
+import {
+  CHAT_GROUP_OWNERSHIP_STALE,
+  CHAT_GROUP_TRANSFER_HIDDEN_MEMBER,
+} from '@/database/models/chatGroup';
 import {
   ResourceTransferRequestModel,
   TRANSFER_REQUEST_EXPIRED,
@@ -231,6 +234,15 @@ export const resourceTransferRequestRouter = router({
             cause: { data: { code: TransferErrorCode.TransferRequestStale } },
             code: 'CONFLICT',
             message: 'The resource changed since this request was created',
+          });
+        }
+        if (error.message === CHAT_GROUP_TRANSFER_HIDDEN_MEMBER) {
+          // Not permanently stale: the member's owner can share the agent and
+          // the recipient can retry, so the request stays pending.
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.GroupHasInaccessibleMember } },
+            code: 'BAD_REQUEST',
+            message: 'The group references a member agent the recipient cannot access',
           });
         }
         if (error.message === AGENT_TRANSFER_IN_PROGRESS) {
