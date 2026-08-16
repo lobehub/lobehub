@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import BusinessKnowledgeBaseImportAction from '@/business/client/BusinessKnowledgeBaseImportAction';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import RepoIcon from '@/components/LibIcon';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import { useDragActive } from '@/features/ResourceManager/DndContextWrapper';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -48,6 +48,8 @@ const Head = memo<{ id: string }>(({ id }) => {
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
   const { data: libraries } = useFetchKnowledgeBaseList();
+  const activeLibrary = libraries?.find((library) => library.id === id) as
+    (NonNullable<typeof libraries>[number] & { memberRestricted?: boolean }) | undefined;
 
   const handleClick = useCallback(() => {
     navigate(`/resource/library/${id}`);
@@ -92,7 +94,13 @@ const Head = memo<{ id: string }>(({ id }) => {
       item: {
         icon: (
           <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
-            <RepoIcon size={14} />
+            <LibraryStatusIcon
+              size={14}
+              visibility={library.visibility}
+              memberRestricted={
+                (library as typeof library & { memberRestricted?: boolean }).memberRestricted
+              }
+            />
           </Center>
         ),
         key: library.id,
@@ -128,7 +136,11 @@ const Head = memo<{ id: string }>(({ id }) => {
       onDrop={handleDrop}
     >
       <Center style={{ minWidth: 32 }} width={32}>
-        <RepoIcon size={18} />
+        <LibraryStatusIcon
+          memberRestricted={activeLibrary?.memberRestricted}
+          size={18}
+          visibility={activeLibrary?.visibility}
+        />
       </Center>
       {!name ? (
         <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />

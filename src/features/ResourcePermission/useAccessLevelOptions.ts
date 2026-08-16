@@ -1,6 +1,6 @@
 'use client';
 
-import { EyeIcon, EyeOffIcon, PencilIcon, PlayIcon } from 'lucide-react';
+import { EyeIcon, LockIcon, PencilIcon, PlayIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,7 +50,7 @@ export const useAccessLevelOptions = (params: {
         },
         {
           desc: t('permission.generalAccess.kbNoAccessDesc'),
-          icon: EyeOffIcon,
+          icon: LockIcon,
           label: t(
             isPrivate
               ? 'permission.page.kbNoAccessWhenShared'

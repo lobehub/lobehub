@@ -7,8 +7,7 @@ import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import LibIcon from '@/components/LibIcon';
-import LockedLibIcon from '@/components/LibIcon/Locked';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -16,22 +15,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
 
 import SectionTitle from './SectionTitle';
-
-/**
- * Chip icon with the shared restricted-library lock badge for managers.
- * The flag rides the `getKnowledgeBases` list payload — no per-row request.
- */
-const ChipIcon = memo<{ memberRestricted?: boolean; visibility?: 'private' | 'public' | null }>(
-  ({ memberRestricted, visibility }) => {
-    return visibility === 'public' && memberRestricted ? (
-      <LockedLibIcon size={18} />
-    ) : (
-      <LibIcon size={18} />
-    );
-  },
-);
-
-ChipIcon.displayName = 'LibraryChipIcon';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -158,8 +141,9 @@ const Libraries = memo(() => {
                 navigate(`/resource/library/${item.id}`);
               }}
             >
-              <ChipIcon
+              <LibraryStatusIcon
                 memberRestricted={(item as { memberRestricted?: boolean }).memberRestricted}
+                size={18}
                 visibility={item.visibility}
               />
               <span className={styles.name}>{item.name}</span>
