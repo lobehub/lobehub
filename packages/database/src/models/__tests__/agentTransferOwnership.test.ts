@@ -6,8 +6,10 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentHistoryJobs,
   agents,
+  agentsToSessions,
   messages,
   messageTranslates,
+  sessions,
   threads,
   topics,
   users,
@@ -186,6 +188,67 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(childRows.find((c) => c.id === 'teammate-residual')?.userId).toBe(teammateId);
   });
 
+  it('moves exclusive sessions but leaves shared legacy group sessions untouched', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    const otherAgent = await ownerModel.create({ title: 'Other Agent' });
+    await serverDB.insert(sessions).values([
+      { id: 'exclusive-session', userId: ownerId, workspaceId: wsId },
+      { id: 'shared-session', userId: ownerId, workspaceId: wsId },
+    ]);
+    await serverDB.insert(agentsToSessions).values([
+      { agentId: agent.id, sessionId: 'exclusive-session', userId: ownerId, workspaceId: wsId },
+      { agentId: agent.id, sessionId: 'shared-session', userId: ownerId, workspaceId: wsId },
+      { agentId: otherAgent.id, sessionId: 'shared-session', userId: ownerId, workspaceId: wsId },
+    ]);
+    await serverDB.insert(topics).values([
+      {
+        id: 'exclusive-topic',
+        sessionId: 'exclusive-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: agent.id,
+        id: 'shared-topic',
+        sessionId: 'shared-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: otherAgent.id,
+        id: 'other-agent-topic',
+        sessionId: 'shared-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await handover({
+      agentId: agent.id,
+      fromUserId: ownerId,
+      migrateSessions: true,
+      toUserId: recipientId,
+    });
+
+    const sessionRows = await serverDB.select().from(sessions);
+    expect(sessionRows.find((s) => s.id === 'exclusive-session')?.userId).toBe(recipientId);
+    // The shared session (and every junction row on it) stays with the owner.
+    expect(sessionRows.find((s) => s.id === 'shared-session')?.userId).toBe(ownerId);
+    const junctionRows = await serverDB.select().from(agentsToSessions);
+    expect(
+      junctionRows
+        .filter((j) => j.sessionId === 'shared-session')
+        .every((j) => j.userId === ownerId),
+    ).toBe(true);
+
+    // Topics inside the shared session stay too — including the transferred
+    // agent's own, which would otherwise strand on an invisible session.
+    const topicRows = await serverDB.select().from(topics);
+    expect(topicRows.find((t) => t.id === 'exclusive-topic')?.userId).toBe(recipientId);
+    expect(topicRows.find((t) => t.id === 'shared-topic')?.userId).toBe(ownerId);
+    expect(topicRows.find((t) => t.id === 'other-agent-topic')?.userId).toBe(ownerId);
+  });
+
   it('drains topicless residual rows through the backfill job with owner scoping', async () => {
     process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '0';
     const agent = await ownerModel.create({ title: 'Agent' });
@@ -225,17 +288,20 @@ describe('AgentModel.transferAgentOwnership', () => {
     });
     expect(result.transferJobId).not.toBeNull();
 
-    // Rolling-deploy guard: the residual linkage lives in the payload, and
-    // the columns an owner-scoping-unaware finalizer reads stay blank so it
-    // no-ops instead of sweeping teammates' rows.
+    // Residual rows move synchronously inside the handover transaction; the
+    // job carries only the topic drain, with blank residual linkage so every
+    // finalizer version's residual pass is a no-op. A rolling deployment can
+    // therefore neither sweep teammates' rows nor drop the residual.
+    const preDrain = await serverDB.select().from(messages);
+    expect(preDrain.find((m) => m.id === 'drain-owner-residual')?.userId).toBe(recipientId);
+    expect(preDrain.find((m) => m.id === 'drain-topic-msg')?.userId).toBe(ownerId);
+
     const [jobRow] = await serverDB
       .select()
       .from(agentHistoryJobs)
       .where(eq(agentHistoryJobs.id, result.transferJobId!));
     expect(jobRow.agentIds).toEqual([]);
     expect(jobRow.sessionIds).toEqual([]);
-    expect(jobRow.payload?.residualOwnerUserId).toBe(ownerId);
-    expect(jobRow.payload?.residualLinkage?.agentIds).toEqual([agent.id]);
 
     let done = false;
     while (!done) {
