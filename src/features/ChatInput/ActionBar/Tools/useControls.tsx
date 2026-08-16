@@ -16,7 +16,7 @@ import {
   Tooltip,
   usePopoverGroupHandle,
 } from '@lobehub/ui';
-import { confirmModal, Switch } from '@lobehub/ui/base-ui';
+import { Switch } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -75,6 +75,7 @@ import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
 import MarketSkillIcon from './MarketSkillIcon';
+import SkillDeleteConfirm from './SkillDeleteConfirm';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
@@ -655,33 +656,29 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             </button>
           )}
           {deleteConfig && (
-            <button
-              className={cx(styles.deleteButton)}
+            <SkillDeleteConfirm
               disabled={!canEdit}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!canEdit) return;
-                popoverGroup?.close();
-                confirmModal({
-                  content: t('tools.builtins.uninstallConfirm.desc', {
-                    name: deleteConfig.displayName,
-                  }),
-                  okButtonProps: { danger: true },
-                  onOk: async () => {
-                    await deleteConfig.onDelete();
-                  },
-                  title: t('tools.builtins.uninstallConfirm.title', {
-                    name: deleteConfig.displayName,
-                  }),
-                });
-              }}
-            >
-              <span className={cx(styles.policyItemIcon)}>
-                <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
-              </span>
-              <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
-            </button>
+              displayName={deleteConfig.displayName}
+              renderTrigger={(onStart) => (
+                <button
+                  className={cx(styles.deleteButton)}
+                  disabled={!canEdit}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!canEdit) return;
+                    onStart();
+                  }}
+                >
+                  <span className={cx(styles.policyItemIcon)}>
+                    <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
+                  </span>
+                  <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
+                </button>
+              )}
+              onDelete={deleteConfig.onDelete}
+              onDone={() => popoverGroup?.close()}
+            />
           )}
         </div>
       );
