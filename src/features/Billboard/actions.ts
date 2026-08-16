@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, OFFICIAL_URL } from '@lobechat/const';
 import urlJoin from 'url-join';
 
 import { openChangelogModal } from '@/components/ChangelogModal';
@@ -27,21 +27,24 @@ export const isBillboardAction = (value: unknown): value is BillboardAction =>
  * unknown values and actions unavailable on the current platform both return
  * null, so the CTA falls back to `linkUrl`.
  *
- * `resetOnboarding` targets the web onboarding flow. Desktop can only honor it
- * when synced to a remote server (the reset then applies to that account and
- * the flow opens in the external browser); in local mode the reset would hit
- * the local DB while the browser shows a different account, so it stays
- * disabled there.
+ * `resetOnboarding` targets the web onboarding flow, which only exists on the
+ * official cloud instance. Desktop honors it only when synced to official
+ * cloud (the reset then applies to that account and the flow opens at
+ * OFFICIAL_URL in the external browser); local and self-host modes keep it
+ * disabled since their reset would not match what the browser shows.
  */
 export const resolveBillboardAction = (value: unknown): BillboardAction | null => {
   if (!isBillboardAction(value)) return null;
-  if (
-    value === 'resetOnboarding' &&
-    isDesktop &&
-    !electronSyncSelectors.isSyncActive(getElectronStoreState())
-  )
-    return null;
+  if (value === 'resetOnboarding' && isDesktop && !isSyncedToOfficialCloud()) return null;
   return value;
+};
+
+const isSyncedToOfficialCloud = () => {
+  const state = getElectronStoreState();
+  return (
+    electronSyncSelectors.isSyncActive(state) &&
+    electronSyncSelectors.storageMode(state) === 'cloud'
+  );
 };
 
 const billboardActionHandlers: Record<BillboardAction, () => Promise<void> | void> = {
@@ -55,8 +58,7 @@ const billboardActionHandlers: Record<BillboardAction, () => Promise<void> | voi
     await getUserStoreState().resetOnboarding();
 
     if (isDesktop) {
-      const remoteServerUrl = electronSyncSelectors.remoteServerUrl(getElectronStoreState());
-      await electronSystemService.openExternalLink(urlJoin(remoteServerUrl, '/onboarding'));
+      await electronSystemService.openExternalLink(urlJoin(OFFICIAL_URL, '/onboarding'));
       return;
     }
 

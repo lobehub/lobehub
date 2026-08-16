@@ -99,7 +99,7 @@ describe('resolveBillboardAction', () => {
   });
 
   it('should not resolve resetOnboarding on desktop in local mode', async () => {
-    electronState.dataSyncConfig = { active: false, storageMode: 'selfHost' };
+    electronState.dataSyncConfig = { active: false, storageMode: 'cloud' };
 
     try {
       const desktopActions = await importDesktopActions();
@@ -110,7 +110,22 @@ describe('resolveBillboardAction', () => {
     }
   });
 
-  it('should resolve resetOnboarding on desktop when remote sync is active', async () => {
+  it('should not resolve resetOnboarding on desktop synced to a self-host server', async () => {
+    electronState.dataSyncConfig = {
+      active: true,
+      remoteServerUrl: 'https://my-server.example.com',
+      storageMode: 'selfHost',
+    };
+
+    try {
+      const desktopActions = await importDesktopActions();
+      expect(desktopActions.resolveBillboardAction('resetOnboarding')).toBeNull();
+    } finally {
+      restoreDesktopMock();
+    }
+  });
+
+  it('should resolve resetOnboarding on desktop synced to official cloud', async () => {
     electronState.dataSyncConfig = { active: true, storageMode: 'cloud' };
 
     try {
@@ -144,7 +159,7 @@ describe('runBillboardAction', () => {
     expect(openExternalLink).not.toHaveBeenCalled();
   });
 
-  it('should reset then open the web onboarding externally on desktop cloud mode', async () => {
+  it('should reset then open the official web onboarding externally on desktop', async () => {
     electronState.dataSyncConfig = { active: true, storageMode: 'cloud' };
 
     try {
@@ -153,23 +168,6 @@ describe('runBillboardAction', () => {
 
       expect(resetOnboarding).toHaveBeenCalledTimes(1);
       expect(openExternalLink).toHaveBeenCalledWith('https://app.lobehub.com/onboarding');
-    } finally {
-      restoreDesktopMock();
-    }
-  });
-
-  it('should open the configured self-host server onboarding on desktop', async () => {
-    electronState.dataSyncConfig = {
-      active: true,
-      remoteServerUrl: 'https://my-server.example.com',
-      storageMode: 'selfHost',
-    };
-
-    try {
-      const desktopActions = await importDesktopActions();
-      await desktopActions.runBillboardAction('resetOnboarding');
-
-      expect(openExternalLink).toHaveBeenCalledWith('https://my-server.example.com/onboarding');
     } finally {
       restoreDesktopMock();
     }
