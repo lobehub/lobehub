@@ -59,9 +59,13 @@ export class PushChannel {
       channelId: DEFAULT_PUSH_CHANNEL_ID,
       data: {
         notificationId: ctx.notificationId,
+        type: ctx.type,
         url: ctx.actionUrl,
+        ...ctx.pushPresentation?.data,
       },
+      mutableContent: ctx.pushPresentation?.mutableContent,
       priority: 'high',
+      richContent: ctx.pushPresentation?.image ? { image: ctx.pushPresentation.image } : undefined,
       sound: 'default',
       title: ctx.title,
       to: t.expoToken,
