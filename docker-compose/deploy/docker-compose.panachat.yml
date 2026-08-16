@@ -1,0 +1,242 @@
+# Panachat production / canary CI-CD stack (blue-green app + durable data plane).
+#
+# Usage (from docker-compose/deploy):
+#   export PANACHAT_IMAGE=ghcr.io/panafor-ai-team/panachat:<sha>
+#   docker compose -f docker-compose.panachat.yml --env-file ../../.env --env-file .env up -d
+#
+# Deploy script (scripts/panachat-deploy-remote.sh) starts only the inactive
+# app slot, verifies it, flips nginx, then stops the old slot.
+# Never run `docker compose down -v` — named volumes hold production data.
+
+name: panachat
+
+services:
+  # App slots are profile-gated so `compose up -d` (data plane) never
+  # accidentally restarts a stopped color. Deploy script starts one profile.
+  panachat-blue:
+    image: ${PANACHAT_IMAGE:?set PANACHAT_IMAGE to ghcr.io/<owner>/panachat:<sha>}
+    container_name: panachat-blue
+    pull_policy: always
+    profiles:
+      - slot-blue
+    ports:
+      - '127.0.0.1:${PANACHAT_PORT_BLUE:-3210}:3210'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}'
+      - 'INTERNAL_APP_URL=http://localhost:3210'
+      - 'S3_ENDPOINT=${S3_ENDPOINT}'
+      - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
+      - 'S3_ENABLE_PATH_STYLE=1'
+      - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
+      - 'S3_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}'
+      - 'S3_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}'
+      - 'LLM_VISION_IMAGE_USE_BASE64=1'
+      - 'S3_SET_ACL=0'
+      - 'SEARXNG_URL=http://searxng:8080'
+      - 'REDIS_URL=redis://redis:6379'
+      - 'REDIS_PREFIX=${REDIS_PREFIX:-panachat}'
+      - 'REDIS_TLS=0'
+      - 'AICO_CONTROL_PLANE_URL=${AICO_CONTROL_PLANE_URL:-http://panachat-control-plane:3020}'
+      - 'OPENROUTER_MANAGEMENT_API_KEY='
+    env_file:
+      - ../../.env
+      - .env
+    networks:
+      - panachat-network
+    restart: unless-stopped
+
+  panachat-green:
+    image: ${PANACHAT_IMAGE:?set PANACHAT_IMAGE to ghcr.io/<owner>/panachat:<sha>}
+    container_name: panachat-green
+    pull_policy: always
+    profiles:
+      - slot-green
+    ports:
+      - '127.0.0.1:${PANACHAT_PORT_GREEN:-3211}:3210'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}'
+      - 'INTERNAL_APP_URL=http://localhost:3210'
+      - 'S3_ENDPOINT=${S3_ENDPOINT}'
+      - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
+      - 'S3_ENABLE_PATH_STYLE=1'
+      - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
+      - 'S3_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}'
+      - 'S3_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}'
+      - 'LLM_VISION_IMAGE_USE_BASE64=1'
+      - 'S3_SET_ACL=0'
+      - 'SEARXNG_URL=http://searxng:8080'
+      - 'REDIS_URL=redis://redis:6379'
+      - 'REDIS_PREFIX=${REDIS_PREFIX:-panachat}'
+      - 'REDIS_TLS=0'
+      - 'AICO_CONTROL_PLANE_URL=${AICO_CONTROL_PLANE_URL:-http://panachat-control-plane:3020}'
+      - 'OPENROUTER_MANAGEMENT_API_KEY='
+    env_file:
+      - ../../.env
+      - .env
+    networks:
+      - panachat-network
+    restart: unless-stopped
+
+  panachat-control-plane:
+    image: ${PANACHAT_CONTROL_PLANE_IMAGE:-node:24-bookworm-slim}
+    container_name: panachat-control-plane
+    profiles:
+      - control-plane
+    working_dir: ${PANACHAT_CONTROL_PLANE_WORKDIR:-/repo/apps/aico-control-plane}
+    volumes:
+      - ${PANACHAT_REPO_ROOT:-../..}:/repo
+    command: ['node', 'dist/standalone.js']
+    env_file:
+      - ../../.env
+      - .env
+    environment:
+      AICO_IS_CONTROL_PLANE: '1'
+      AICO_CONTROL_PLANE_PORT: '3020'
+      HONO_HOST: '0.0.0.0'
+      AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-}
+      OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY:-}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}
+      REDIS_URL: redis://redis:6379
+      REDIS_PREFIX: ${REDIS_PREFIX:-panachat}
+      REDIS_TLS: '0'
+      APP_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://127.0.0.1:${PANACHAT_CONTROL_PLANE_PORT:-3020}}
+      AICO_CONTROL_PLANE_UI_URL: ${AICO_CONTROL_PLANE_PUBLIC_URL:-http://127.0.0.1:${PANACHAT_CONTROL_PLANE_PORT:-3020}}
+      INTERNAL_APP_URL: http://panachat-app:3210
+      AICO_INSECURE_AUTH_COOKIES: ${AICO_INSECURE_AUTH_COOKIES:-0}
+      NODE_ENV: production
+      ENABLE_MOCK_DEV_USER: '0'
+      MOCK_DEV_USER_ID: ''
+      AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH: '0'
+      AICO_OPENROUTER_MOCK: '0'
+      AICO_ALLOW_INSECURE_CONTROL_PLANE: '0'
+    ports:
+      - '127.0.0.1:${PANACHAT_CONTROL_PLANE_PORT:-3020}:3020'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:3020/health\").then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - panachat-network
+
+  postgresql:
+    image: paradedb/paradedb:latest-pg17
+    container_name: panachat-postgres
+    volumes:
+      - panachat_postgres_data:/var/lib/postgresql/data
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
+    environment:
+      - 'POSTGRES_DB=${PANACHAT_DB_NAME}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - panachat-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: panachat-redis
+    command: redis-server --save 60 1000 --appendonly yes
+    volumes:
+      - panachat_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - panachat-network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: panachat-rustfs
+    ports:
+      - '127.0.0.1:${RUSTFS_PORT:-9000}:9000'
+    environment:
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+    volumes:
+      - panachat_rustfs_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    command:
+      ['--access-key', '${RUSTFS_ACCESS_KEY}', '--secret-key', '${RUSTFS_SECRET_KEY}', '/data']
+    restart: always
+    networks:
+      - panachat-network
+
+  rustfs-init:
+    image: minio/mc:latest
+    container_name: panachat-rustfs-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    volumes:
+      - ./bucket.config.json:/bucket.config.json:ro
+    entrypoint: /bin/sh
+    command: -c ' set -eux; mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    restart: 'no'
+    networks:
+      - panachat-network
+
+  searxng:
+    image: searxng/searxng
+    container_name: panachat-searxng
+    volumes:
+      - './searxng-settings.yml:/etc/searxng/settings.yml'
+    environment:
+      - 'SEARXNG_SETTINGS_FILE=/etc/searxng/settings.yml'
+    restart: always
+    networks:
+      - panachat-network
+    env_file:
+      - .env
+
+networks:
+  panachat-network:
+    name: panachat-network
+    driver: bridge
+
+volumes:
+  panachat_postgres_data:
+    name: panachat_postgres_data
+  panachat_redis_data:
+    name: panachat_redis_data
+  panachat_rustfs_data:
+    name: panachat_rustfs_data

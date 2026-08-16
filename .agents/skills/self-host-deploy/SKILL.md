@@ -94,7 +94,13 @@ docker build -t aico/lobehub:latest .
 
 Build pipeline inside Dockerfile runs: `build:spa` → `build:spa:mobile` → `build:spa:auth` → `build:spa:workbench` → `build:spa:copy` → `next build`. Never skip `build:spa:copy` — it publishes JS chunks to `public/_spa*`.
 
----
+### Path C: Canary CI/CD (production VPS)
+
+For a Linux server that must always match GitHub `canary` with no data loss and near-zero downtime, use the Panachat blue-green pipeline:
+
+→ **[canary-cicd.md](canary-cicd.md)** (`deploy-canary.yml` + `panachat-deploy-remote.sh` + `docker-compose.panachat.yml`)
+
+## Image: private `ghcr.io/<owner>/panachat:<sha>`. Volumes: `panachat_*` only.
 
 ## Reverse proxy / CDN
 
@@ -217,10 +223,12 @@ Full troubleshooting: [reference.md](reference.md)
 | **CDN**     | Pass `/_spa*` through unchanged; cache hashed assets, not HTML                                            |
 | **Deploy**  | Backup → pull/rebuild → `verify-deployment.sh` → rollback plan ready                                      |
 | **Updates** | Pin image tags; never `pull` without a DB backup                                                          |
+| **Canary**  | Server tracks GitHub `canary` via GHCR + blue-green — see [canary-cicd.md](canary-cicd.md)                |
 
 Templates:
 
 - [production.env.example](templates/production.env.example)
 - [docker-compose.production.override.yml](templates/docker-compose.production.override.yml)
+- [canary-cicd.md](canary-cicd.md) — Panachat CI/CD (private GHCR, `panachat-deploy-remote.sh`)
 
 Complete guide: [best-practices.md](best-practices.md)
