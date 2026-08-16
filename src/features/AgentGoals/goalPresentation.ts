@@ -23,7 +23,9 @@ const acceptanceStatusKey = (status?: string) => {
     case 'errored': {
       return 'goalList.status.error';
     }
-    case 'planned':
+    // `planned` deliberately falls through to the goal/task tiers: the verify
+    // plan is confirmed at RUN START, so this phase spans the whole executing
+    // round — showing 验证中 for it misreads an executing goal as verifying.
     case 'repairing':
     case 'verifying': {
       return 'goalList.status.verifying';

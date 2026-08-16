@@ -555,9 +555,12 @@ export class AcceptanceService {
     status: AcceptanceStatus,
   ): Promise<void> => {
     if (subjectType !== 'task') return;
+    // `planned` is deliberately NOT mirrored: the plan being confirmed at run
+    // start says nothing about verification running — the round is still
+    // executing, and flipping the goal to `verifying` here would show 验证中
+    // for the whole execution phase (caught by the E2E acceptance run).
     const mirrored: Partial<Record<AcceptanceStatus, GoalStatus>> = {
       delivered: 'review',
-      planned: 'verifying',
       repairing: 'verifying',
       verifying: 'verifying',
     };
