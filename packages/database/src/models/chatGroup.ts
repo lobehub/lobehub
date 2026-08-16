@@ -838,11 +838,9 @@ export class ChatGroupModel {
     const memberRows = await trx
       .select({
         agentId: chatGroupsAgents.agentId,
-        agentUserId: agents.userId,
         role: chatGroupsAgents.role,
         slug: agents.slug,
         virtual: agents.virtual,
-        visibility: agents.visibility,
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
@@ -852,19 +850,6 @@ export class ChatGroupModel {
     const ownedAgentIds = memberRows
       .filter((row) => resolveGroupMembershipType(row) === 'owned')
       .map((row) => row.agentId);
-
-    // A REFERENCED member that is private to someone other than the recipient
-    // would silently vanish from the roster for the group's new owner (every
-    // roster read applies member-agent visibility). Refuse instead — same
-    // policy as the cross-scope transfer; the member's owner can share it and
-    // the recipient can retry.
-    const hasHiddenReferencedMember = memberRows.some(
-      (row) =>
-        resolveGroupMembershipType(row) === 'referenced' &&
-        row.visibility === 'private' &&
-        row.agentUserId !== toUserId,
-    );
-    if (hasHiddenReferencedMember) throw new Error(CHAT_GROUP_TRANSFER_HIDDEN_MEMBER);
 
     // Same lock-then-guard as `transferToWorkspace`: serialize with a
     // concurrent transfer of any member agent BEFORE consulting the pending
@@ -876,6 +861,27 @@ export class ChatGroupModel {
         .where(inArray(agents.id, agentIds))
         .orderBy(asc(agents.id))
         .for('update');
+    }
+
+    // A REFERENCED member that is private to someone other than the recipient
+    // would silently vanish from the roster for the group's new owner (every
+    // roster read applies member-agent visibility). Refuse instead — same
+    // policy as the cross-scope transfer; the member's owner can share it and
+    // the recipient can retry. Evaluated from a re-read AFTER the agent locks
+    // above, so a visibility flip racing this handover cannot slip past the
+    // guard on a stale snapshot.
+    const referencedIds = memberRows
+      .filter((row) => resolveGroupMembershipType(row) === 'referenced')
+      .map((row) => row.agentId);
+    if (referencedIds.length > 0) {
+      const lockedReferenced = await trx
+        .select({ userId: agents.userId, visibility: agents.visibility })
+        .from(agents)
+        .where(inArray(agents.id, referencedIds));
+      const hasHiddenReferencedMember = lockedReferenced.some(
+        (row) => row.visibility === 'private' && row.userId !== toUserId,
+      );
+      if (hasHiddenReferencedMember) throw new Error(CHAT_GROUP_TRANSFER_HIDDEN_MEMBER);
     }
 
     // An unfinished backfill still rewrites rows toward the OLD owner's
