@@ -24,10 +24,16 @@ const SearchInput = memo(() => {
     setSearchQuery(debouncedQuery || null);
   }, [debouncedQuery, expanded, setSearchQuery]);
 
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => clearTimeout(focusTimerRef.current);
+  }, []);
+
   const handleExpand = useCallback(() => {
     setShowIcon(false);
     setExpanded(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    focusTimerRef.current = setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
   const handleCollapse = useCallback(() => {
