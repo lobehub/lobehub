@@ -23,6 +23,46 @@ const checkModelEnabled = (
   );
 };
 
+/** Prefer Nano Banana family when the hard-coded default is missing from the list. */
+export const PREFERRED_AI_IMAGE_MODEL_IDS = [
+  DEFAULT_AI_IMAGE_MODEL,
+  'google/gemini-2.5-flash-image:image',
+  'google/gemini-3-pro-image-preview:image',
+] as const;
+
+/**
+ * Pick the best available Image Create model from the enabled list.
+ * Prefers OpenRouter Nano Banana defaults, then any "Nano Banana*" display name,
+ * then the first enabled model.
+ */
+export const resolvePreferredImageModel = (
+  enabledImageModelList: EnabledProviderWithModels[],
+): { model: string; provider: string } | undefined => {
+  if (enabledImageModelList.length === 0) return undefined;
+
+  for (const modelId of PREFERRED_AI_IMAGE_MODEL_IDS) {
+    const providerGroup = enabledImageModelList.find((p) =>
+      p.children.some((m) => m.id === modelId),
+    );
+    if (providerGroup) return { model: modelId, provider: providerGroup.id };
+  }
+
+  for (const providerGroup of enabledImageModelList) {
+    const nanoBanana = providerGroup.children.find((m) =>
+      /nano\s*banana/i.test(m.displayName || ''),
+    );
+    if (nanoBanana) return { model: nanoBanana.id, provider: providerGroup.id };
+  }
+
+  const firstProvider = enabledImageModelList[0];
+  const firstModel = firstProvider?.children[0];
+  if (firstProvider && firstModel) {
+    return { model: firstModel.id, provider: firstProvider.id };
+  }
+
+  return undefined;
+};
+
 export const useFetchAiImageConfig = () => {
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const isInitAiProviderRuntimeState = useAiInfraStore(
@@ -46,7 +86,10 @@ export const useFetchAiImageConfig = () => {
     lastSelectedImageProvider: s.status.lastSelectedImageProvider,
   }));
   const isInitializedImageConfig = useImageStore((s) => s.isInit);
+  const currentModel = useImageStore((s) => s.model);
+  const currentProvider = useImageStore((s) => s.provider);
   const initializeImageConfig = useImageStore((s) => s.initializeImageConfig);
+  const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
 
   // Determine which model/provider to use for initialization
   const initParams = useMemo(() => {
@@ -59,25 +102,16 @@ export const useFetchAiImageConfig = () => {
       return { model: lastSelectedImageModel, provider: lastSelectedImageProvider };
     }
 
-    // 2. Try default model from any enabled provider (prefer default provider first)
+    // 2. Prefer default OpenRouter Nano Banana when present
     if (
       checkModelEnabled(enabledImageModelList, DEFAULT_AI_IMAGE_PROVIDER, DEFAULT_AI_IMAGE_MODEL)
     ) {
       return { model: undefined, provider: undefined }; // Use initialState defaults
     }
-    const providerWithDefaultModel = enabledImageModelList.find((p) =>
-      p.children.some((m) => m.id === DEFAULT_AI_IMAGE_MODEL),
-    );
-    if (providerWithDefaultModel) {
-      return { model: DEFAULT_AI_IMAGE_MODEL, provider: providerWithDefaultModel.id };
-    }
 
-    // 3. Fallback to first enabled model (OpenRouter under Aico managed mode)
-    const firstProvider = enabledImageModelList[0];
-    const firstModel = firstProvider?.children[0];
-    if (firstProvider && firstModel) {
-      return { model: firstModel.id, provider: firstProvider.id };
-    }
+    // 3. Prefer Nano Banana family / first available model
+    const preferred = resolvePreferredImageModel(enabledImageModelList);
+    if (preferred) return preferred;
 
     // No enabled models
     return { model: undefined, provider: undefined };
@@ -88,4 +122,25 @@ export const useFetchAiImageConfig = () => {
       initializeImageConfig(isLogin, initParams.model, initParams.provider);
     }
   }, [isReadyForInit, isInitializedImageConfig, isLogin, initParams, initializeImageConfig]);
+
+  // Heal sticky defaults (e.g. OpenRouter before `:image` builtins existed) once
+  // the enabled image list is ready and the current selection is unavailable.
+  useEffect(() => {
+    if (!isInitializedImageConfig || !isReadyForInit) return;
+    if (enabledImageModelList.length === 0) return;
+    if (checkModelEnabled(enabledImageModelList, currentProvider, currentModel)) return;
+
+    const preferred = resolvePreferredImageModel(enabledImageModelList);
+    if (!preferred) return;
+    if (preferred.model === currentModel && preferred.provider === currentProvider) return;
+
+    setModelAndProviderOnSelect(preferred.model, preferred.provider);
+  }, [
+    isInitializedImageConfig,
+    isReadyForInit,
+    enabledImageModelList,
+    currentModel,
+    currentProvider,
+    setModelAndProviderOnSelect,
+  ]);
 };
