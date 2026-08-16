@@ -527,12 +527,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
-            {/* Draft rows carry no status icon / C{seq} anchor — those belong to the
-                post-creation check list, not to authoring. */}
+            {/* Draft rows keep the C{seq} anchor but no status icon — the pending
+                circle belongs to the post-creation check list, not to authoring. */}
             <CriterionList className={styles.criteriaList}>
               {plan.criteria.map((criterion, index) => (
                 <CriterionRow
                   key={index}
+                  seq={index + 1}
                   title={criterion.title || t('createGoal.criterionPlaceholder')}
                   actions={
                     <>

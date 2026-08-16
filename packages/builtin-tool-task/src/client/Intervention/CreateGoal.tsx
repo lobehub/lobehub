@@ -244,6 +244,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
               {args.criteria.map((criterion, index) => (
                 <CriterionRow
                   key={index}
+                  seq={index + 1}
                   title={criterion.title}
                   actions={
                     <>

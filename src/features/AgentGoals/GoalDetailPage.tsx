@@ -21,7 +21,12 @@ import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavHeader from '@/features/NavHeader';
-import { checkHeadMeta, CriterionList, CriterionRow } from '@/features/Verify';
+import {
+  checkHeadMeta,
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+} from '@/features/Verify';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
@@ -135,7 +140,7 @@ const TaskTreeRows = memo<{ depth?: number; tasks: TaskDetailSubtask[] }>(({ tas
 TaskTreeRows.displayName = 'GoalTaskTreeRows';
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'verify']);
   const navigateToTaskDetail = useNavigateToTaskDetail();
   const { error, isInitialLoading, isNotFound, onRetry } = useActiveTaskDetail(goalId);
   const task = useTaskStore(taskDetailSelectors.taskDetailById(goalId));
@@ -288,6 +293,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                         <CriterionList>
                           {bundle?.checks.map((check, index) => {
                             const meta = checkHeadMeta(check);
+                            const verifierType = check.planItem?.verifierType;
                             return (
                               <CriterionRow
                                 key={check.id}
@@ -301,7 +307,16 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                                     style={{ flex: 'none' }}
                                   />
                                 }
-                              />
+                              >
+                                {verifierType ? (
+                                  <Tag>
+                                    {t(`criterion.verifierType.${verifierType}` as const, {
+                                      ns: 'verify',
+                                    })}
+                                  </Tag>
+                                ) : null}
+                                <CriterionRequiredChip required={check.required !== false} />
+                              </CriterionRow>
                             );
                           })}
                         </CriterionList>

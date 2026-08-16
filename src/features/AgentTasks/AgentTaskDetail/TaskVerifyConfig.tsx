@@ -678,6 +678,12 @@ const TaskVerifyConfig = memo(() => {
       label: t('verifyConfig.regenerate'),
       onClick: handleGenerate,
     },
+    {
+      disabled: !hydrated || (verify?.verifyCriteriaIds?.length ?? 0) === 0,
+      key: 'save-as-template',
+      label: t('verifyConfig.saveAsTemplate'),
+      onClick: () => void handleSaveAsTemplate(),
+    },
     { type: 'divider' },
     {
       danger: true,
@@ -720,26 +726,17 @@ const TaskVerifyConfig = memo(() => {
               seq={index + 1}
               title={item.title || t('verifyConfig.criterionTitlePlaceholder')}
               actions={
-                <>
-                  <ActionIcon
-                    icon={Pencil}
-                    size={'small'}
-                    title={t('verifyConfig.edit')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openCriterionDetail(item);
-                    }}
-                  />
-                  <ActionIcon
-                    icon={Trash}
-                    size={'small'}
-                    title={t('verifyConfig.removeCriterion')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemove(item.id);
-                    }}
-                  />
-                </>
+                // Edit only — removal lives inside the editor modal, so the row
+                // never exposes a destructive control at rest.
+                <ActionIcon
+                  icon={Pencil}
+                  size={'small'}
+                  title={t('verifyConfig.edit')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openCriterionDetail(item);
+                  }}
+                />
               }
               icon={
                 <Icon
@@ -764,14 +761,6 @@ const TaskVerifyConfig = memo(() => {
         <Flexbox horizontal align={'center'} gap={8}>
           <Button icon={Plus} size={'small'} type={'text'} onClick={handleManualAdd}>
             {t('verifyConfig.addCriterion')}
-          </Button>
-          <Button
-            disabled={!hydrated || (verify?.verifyCriteriaIds?.length ?? 0) === 0}
-            size={'small'}
-            type={'text'}
-            onClick={handleSaveAsTemplate}
-          >
-            {t('verifyConfig.saveAsTemplate')}
           </Button>
         </Flexbox>
       </Flexbox>
