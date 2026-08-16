@@ -283,12 +283,18 @@ describe('TopicModel - Update', () => {
 
       expect(claims.filter(Boolean)).toHaveLength(1);
       expect(claims.find(Boolean)).toMatchObject({
+        claimToken: expect.any(String),
         isRoot: false,
         operation: { operationId: 'child-operation' },
       });
       const topic = await topicModel.findById(topicId);
       expect(topic?.metadata?.runningOperation).toMatchObject({ operationId: 'parent-operation' });
-      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([]);
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        expect.objectContaining({
+          operationId: 'child-operation',
+          terminalClaimedAt: expect.any(String),
+        }),
+      ]);
     });
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
