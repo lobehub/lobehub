@@ -32,11 +32,14 @@ describe('KeenableImpl', () => {
 
   describe('query', () => {
     it('should return mapped results for a successful query', async () => {
+      // A realistic result: the API returns both fields and `description` is
+      // frequently empty, with `snippet` carrying the page text.
       const keenableResults = [
         {
           title: 'Example Title',
           url: 'https://example.com/page',
-          description: 'Example description',
+          description: '',
+          snippet: 'Example page text',
           published_at: '2026-01-15T10:30:00Z',
         },
       ];
@@ -52,12 +55,53 @@ describe('KeenableImpl', () => {
       expect(result.results[0]).toMatchObject({
         title: 'Example Title',
         url: 'https://example.com/page',
-        content: 'Example description',
+        content: 'Example page text',
         engines: ['keenable'],
         category: 'general',
         score: 1,
         parsedUrl: 'example.com',
       });
+    });
+
+    it('falls back to description when snippet is absent', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        createMockResponse(
+          makeKeenableResponse([
+            {
+              title: 'Example Title',
+              url: 'https://example.com/page',
+              description: 'A description',
+            },
+          ]),
+        ),
+      );
+
+      const result = await impl.query('test query');
+
+      expect(result.results[0].content).toBe('A description');
+    });
+
+    it('collapses whitespace and caps the content', async () => {
+      // Snippets are raw page text: newlines in them, and far longer than the
+      // snippet the other providers return.
+      vi.mocked(fetch).mockResolvedValueOnce(
+        createMockResponse(
+          makeKeenableResponse([
+            {
+              title: 'Example Title',
+              url: 'https://example.com/page',
+              description: '',
+              snippet: 'line one\n\nline two' + ' padding'.repeat(500),
+            },
+          ]),
+        ),
+      );
+
+      const { content } = (await impl.query('test query')).results[0];
+
+      expect(content).toHaveLength(500);
+      expect(content).not.toContain('\n');
+      expect(content.startsWith('line one line two')).toBe(true);
     });
 
     it('uses the keyless public endpoint and no API key header by default', async () => {

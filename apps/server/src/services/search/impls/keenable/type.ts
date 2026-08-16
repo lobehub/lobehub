@@ -1,5 +1,5 @@
 export interface KeenableSearchParameters {
-  mode?: 'pro' | 'realtime';
+  mode?: 'pro';
   published_after?: string;
   published_before?: string;
   query: string;
@@ -8,8 +8,11 @@ export interface KeenableSearchParameters {
 
 interface KeenableResult {
   acquired_at?: string;
+  /** Frequently empty; `snippet` is where the page text is. */
   description?: string;
   published_at?: string | null;
+  /** Raw page text, newlines included. */
+  snippet?: string;
   title?: string;
   url: string;
 }

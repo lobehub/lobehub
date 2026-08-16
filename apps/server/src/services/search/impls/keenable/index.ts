@@ -15,6 +15,27 @@ const log = debug('lobe-search:Keenable');
 const DEFAULT_BASE_URL = 'https://api.keenable.ai';
 
 /**
+ * Keenable returns whole-page text where the other providers return a short
+ * snippet, so cap it to keep `content` the same size as theirs.
+ */
+const MAX_CONTENT_CHARS = 500;
+
+/**
+ * Picks a result's text.
+ *
+ * Keenable returns both `snippet` and `description`: `snippet` carries the page
+ * text and `description` is frequently empty, so prefer whichever has content.
+ * Snippets are raw page text with newlines in them, hence the whitespace
+ * collapse and the cap.
+ */
+const resultContent = (result: { description?: string; snippet?: string }): string =>
+  (result.snippet || result.description || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, MAX_CONTENT_CHARS);
+
+/**
  * Keenable implementation of the search service.
  *
  * Keenable is a web search API built for AI agents. Unlike the other providers,
@@ -92,7 +113,7 @@ export class KeenableImpl implements SearchServiceImpl {
       const mappedResults = (keenableResponse.results || []).map(
         (result): UniformSearchResult => ({
           category: 'general',
-          content: result.description || '',
+          content: resultContent(result),
           engines: ['keenable'],
           parsedUrl: result.url ? new URL(result.url).hostname : '',
           publishedDate: result.published_at || undefined,
