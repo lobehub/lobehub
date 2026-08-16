@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -8,6 +9,11 @@ import { assertTransferRecipientValid, executeAcceptedTransfer } from './index';
 
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
+}));
+
+const assertCanPerformResourceAction = vi.fn();
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: (...args: unknown[]) => assertCanPerformResourceAction(...args),
 }));
 
 const getMember = vi.fn();
@@ -108,6 +114,39 @@ describe('executeAcceptedTransfer recipient recheck', () => {
       }),
     ).rejects.toMatchObject({
       cause: { data: { code: TransferErrorCode.TargetNotWorkspaceMember } },
+    });
+  });
+
+  it("refuses a reassignment accept when the initiator's transfer authority was revoked", async () => {
+    assertCanPerformResourceAction.mockRejectedValue(
+      new TRPCError({ code: 'FORBIDDEN', message: 'no longer primary owner' }),
+    );
+
+    await expect(
+      executeAcceptedTransfer({
+        db: dbWithLockedMemberRows([{ role: 'member' }]),
+        recipientId: 'recipient-1',
+        request, // previousOwnerId !== initiatorId → reassignment
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toMatchObject({
+      cause: { data: { code: TransferErrorCode.TransferRequestStale } },
+    });
+    expect(assertCanPerformResourceAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'transfer', userId: 'initiator-1' }),
+    );
+  });
+
+  it('refuses a reassignment accept when the initiator account was deleted', async () => {
+    await expect(
+      executeAcceptedTransfer({
+        db: dbWithLockedMemberRows([{ role: 'member' }]),
+        recipientId: 'recipient-1',
+        request: { ...request, initiatorId: null },
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toMatchObject({
+      cause: { data: { code: TransferErrorCode.TransferRequestStale } },
     });
   });
 });

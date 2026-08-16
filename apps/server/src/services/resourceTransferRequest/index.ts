@@ -9,6 +9,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { ResourceTransferRequestItem } from '@/database/schemas';
 import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 /**
@@ -144,6 +145,34 @@ export const executeAcceptedTransfer = async (params: {
       )
       .for('update');
     assertOwnableMemberRow(member);
+
+    // A reassignment request (primary owner moving someone ELSE's resource)
+    // borrowed the INITIATOR's authority at creation; that authority must
+    // still hold now — workspace ownership can change and the resource can
+    // turn private during the seven-day pending window. Creator-initiated
+    // requests need no re-check: the per-type staleness guard already proves
+    // the initiator still owns the resource.
+    if (request.previousOwnerId !== request.initiatorId) {
+      const staleAuthority = () =>
+        new TRPCError({
+          cause: { data: { code: TransferErrorCode.TransferRequestStale } },
+          code: 'BAD_REQUEST',
+          message: "The initiator's authority changed since this request was created",
+        });
+      if (!request.initiatorId) throw staleAuthority();
+      try {
+        await assertCanPerformResourceAction({
+          action: 'transfer',
+          db,
+          resourceId: request.resourceId,
+          resourceType: request.resourceType,
+          userId: request.initiatorId,
+          workspaceId,
+        });
+      } catch {
+        throw staleAuthority();
+      }
+    }
 
     await requestModel.accept(request.id, recipientId, trx);
 
