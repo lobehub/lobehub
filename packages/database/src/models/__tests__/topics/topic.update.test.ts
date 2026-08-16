@@ -290,6 +290,47 @@ describe('TopicModel - Update', () => {
       expect(topic?.metadata?.runningOperation).toMatchObject({ operationId: 'parent-operation' });
       expect(topic?.metadata?.runningOperation?.childOperations).toEqual([]);
     });
+
+    it('updates only the matching child assistant message pointer', async () => {
+      const topicId = 'task-callback-update-child-message';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child-1', operationId: 'child-operation-1' },
+              { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.updateRunningOperationAssistantMessage(
+          topicId,
+          'child-operation-1',
+          'assistant-child-1-next',
+        ),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        assistantMessageId: 'assistant-parent',
+        childOperations: [
+          { assistantMessageId: 'assistant-child-1-next', operationId: 'child-operation-1' },
+          { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+        ],
+      });
+      expect(topic?.metadata?.heteroCurrentMsgId).toEqual({
+        msgId: 'assistant-child-1-next',
+        operationId: 'child-operation-1',
+      });
+    });
+
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
       const topicId = 'task-callback-stale-reservation';
       await serverDB.insert(topics).values({

@@ -76,13 +76,22 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: { operationId?: string; streamEventManager?: IStreamEventManager } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
   const topicModel = {
-    findById: vi.fn(async () => undefined),
+    findById: vi.fn(async (): Promise<any> => ({
+      metadata: {
+        runningOperation: {
+          assistantMessageId: 'asst-1',
+          operationId: overrides.operationId ?? 'op-1',
+        },
+      },
+    })),
     settleRunningStatus: vi.fn(async () => {}),
-    takeRunningOperation: vi.fn(async (_topicId: string, operationId: string) => ({
+    takeRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
       isRoot: true,
       operation: { assistantMessageId: 'asst-1', operationId },
     })),
@@ -415,7 +424,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('forwards classified error details when the run failed', async () => {
-      const { published, service } = createService();
+      const { published, service } = createService({ operationId: 'op-2' });
 
       await service.heteroFinish({
         agentType: 'codex',
@@ -434,7 +443,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('persists and publishes a structured auth_required error from a flattened finish', async () => {
-      const { persistenceHandler, published, service } = createService();
+      const { persistenceHandler, published, service } = createService({ operationId: 'op-auth' });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -492,7 +501,7 @@ describe('HeterogeneousAgentService', () => {
     };
 
     it('fires onComplete (reason=done) hooks on a successful run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-success' });
       const { onComplete, onError } = registerHook('op-hook-success');
 
       await service.heteroFinish({
@@ -513,7 +522,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-error' });
       const { onComplete, onError } = registerHook('op-hook-error');
 
       await service.heteroFinish({
@@ -540,7 +549,7 @@ describe('HeterogeneousAgentService', () => {
     // gate on success — and the gate bails unless op.model/provider are set, so the
     // synthetic state MUST carry the model/provider backfilled from the CLI stream.
     it('routes the terminal transition through CompletionLifecycle with backfilled model/provider', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-verify-align' });
 
       const finalizeSpy = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue({
         llmCalls: 3,
@@ -586,7 +595,21 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('forwards a group member role to the completion lifecycle', async () => {
-      const { service, topicModel } = createService();
+      const { service, topicModel } = createService({ operationId: 'op-member' });
+      topicModel.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            childOperations: [
+              {
+                assistantMessageId: 'asst-member',
+                operationId: 'op-member',
+                orchestrationRole: 'member',
+              },
+            ],
+            operationId: 'op-supervisor',
+          },
+        },
+      });
       topicModel.takeRunningOperation.mockResolvedValue({
         isRoot: false,
         operation: {
@@ -619,7 +642,7 @@ describe('HeterogeneousAgentService', () => {
     // must therefore re-run the idempotent durable instantiation and AWAIT it
     // before dispatching the gate.
     it('awaits durable verify-plan instantiation before the completion gate for a task-bound run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-race-guard' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -656,7 +679,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('skips verify-plan instantiation for a non-task hetero run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-no-task' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')

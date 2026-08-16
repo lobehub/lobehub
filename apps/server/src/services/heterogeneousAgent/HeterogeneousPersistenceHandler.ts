@@ -947,9 +947,17 @@ export class HeterogeneousPersistenceHandler {
           intent.messageId,
         );
 
-        await this.deps.topicModel.updateMetadata(state.topicId, {
-          heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
-        });
+        if (this.deps.topicModel.updateRunningOperationAssistantMessage) {
+          await this.deps.topicModel.updateRunningOperationAssistantMessage(
+            state.topicId,
+            state.operationId,
+            intent.messageId,
+          );
+        } else {
+          await this.deps.topicModel.updateMetadata(state.topicId, {
+            heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
+          });
+        }
         return;
       }
 

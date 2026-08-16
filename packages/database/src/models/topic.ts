@@ -1477,6 +1477,52 @@ export class TopicModel {
       return true;
     });
 
+  updateRunningOperationAssistantMessage = async (
+    id: string,
+    operationId: string,
+    assistantMessageId: string,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: {
+              ...existing.metadata,
+              heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+              runningOperation: { ...runningOperation, assistantMessageId },
+            },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return true;
+      }
+
+      const childOperations = runningOperation.childOperations?.map((child) =>
+        child.operationId === operationId ? { ...child, assistantMessageId } : child,
+      );
+      if (!childOperations?.some((child) => child.operationId === operationId)) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+            runningOperation: { ...runningOperation, childOperations },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
   takeRunningOperation = async (
     id: string,
     operationId: string,
@@ -1562,7 +1608,7 @@ export class TopicModel {
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
-        allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
+        !!allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
       if (allowRunningOperationId) return ownedRunningOperation;
       const canReplaceRunningOperation =
         !!replacesOperationId && runningOperation?.operationId === replacesOperationId;

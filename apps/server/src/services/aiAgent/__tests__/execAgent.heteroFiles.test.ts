@@ -6,6 +6,7 @@ const {
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
   mockBuildRemoteDeviceHeteroContext,
+  mockCreateOperationMetadata,
   mockDispatchAgentRun,
   mockExecuteToolCall,
   mockGetHeterogeneousResumeSessionId,
@@ -17,6 +18,7 @@ const {
   mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
   mockBuildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
+  mockCreateOperationMetadata: vi.fn().mockResolvedValue(undefined),
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
@@ -35,7 +37,9 @@ const {
 // the assertion below can verify the init, and so the real one (which probes
 // Redis synchronously) doesn't throw a server-env error in the test env.
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
-  createAgentStateManager: vi.fn(),
+  createAgentStateManager: vi.fn(() => ({
+    createOperationMetadata: mockCreateOperationMetadata,
+  })),
   createStreamEventManager: () => ({
     publishAgentRuntimeEnd: mockPublishAgentRuntimeEnd,
     publishAgentRuntimeInit: mockPublishAgentRuntimeInit,
@@ -122,6 +126,8 @@ const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
+  releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+  tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock('@/database/models/topic', () => ({
@@ -212,6 +218,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
     topicMock.findById.mockResolvedValue(undefined);
+    topicMock.releaseTaskCallbackReservation.mockResolvedValue(undefined);
+    topicMock.tryReserveTaskCallback.mockResolvedValue(true);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
@@ -221,6 +229,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
+    mockCreateOperationMetadata.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
     heteroAgentConfig.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } } as any;
     heteroAgentConfig.model = 'claude-code';
@@ -894,6 +903,62 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         'topic-1',
         'parent-operation',
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
+      );
+      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith(
+        'topic-1',
+        expect.any(String),
+        'parent-operation',
+        undefined,
+      );
+      expect(mockCreateOperationMetadata).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
+      );
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
+      );
+    });
+
+    it('threads the parent operation through remote member dispatch', async () => {
+      heteroAgentConfig.agencyConfig = {
+        executionTarget: 'local',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      heteroAgentConfig.model = 'openclaw';
+      heteroAgentConfig.provider = 'lobehub';
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'supervisor-assistant',
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          orchestrationRole: 'member',
+          topicId: 'topic-1',
+        },
+        localDeviceId: 'personal-desktop',
+        parentOperationId: 'parent-operation',
+        prompt: 'run this member',
+        topicStartOwnerOperationId: 'parent-operation',
+      } as any);
+
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
+      );
+      expect(mockCreateOperationMetadata).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
+      );
+      const toolCall = mockExecuteToolCall.mock.calls.at(-1)?.[1];
+      expect(JSON.parse(toolCall.arguments)).toEqual(
+        expect.objectContaining({ parentOperationId: 'parent-operation' }),
       );
     });
 

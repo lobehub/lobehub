@@ -37,11 +37,15 @@ export class ServerOperationStore implements OperationStore {
     try {
       const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId);
       const topic = await topicModel.findById(this.topicId);
-      const markedOperationId = topic?.metadata?.runningOperation?.operationId;
+      const marker = topic?.metadata?.runningOperation;
+      const markedOperationId = marker?.operationId;
+      const isChild = marker?.childOperations?.some(
+        (child) => child.operationId === this.operationId,
+      );
       // No mark (already cleared) or someone else's mark — nothing of ours to drop.
-      if (!markedOperationId || markedOperationId !== this.operationId) return;
+      if (!markedOperationId || (markedOperationId !== this.operationId && !isChild)) return;
 
-      await topicModel.updateMetadata(this.topicId, { runningOperation: null });
+      await topicModel.takeRunningOperation(this.topicId, this.operationId!);
     } catch {
       // best-effort — swallow
     }

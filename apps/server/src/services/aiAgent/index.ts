@@ -126,7 +126,10 @@ import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
-import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import {
+  createAgentStateManager,
+  createStreamEventManager,
+} from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
@@ -805,12 +808,7 @@ export class AiAgentService {
     // 3. The operation never started — drop the running marker so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
     try {
-      const marker = (await this.topicModel.findById(topicId))?.metadata?.runningOperation;
-      if (marker?.operationId === operationId) {
-        await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      } else if (marker?.childOperations) {
-        await this.topicModel.removeRunningOperationChild(topicId, operationId);
-      }
+      await this.topicModel.takeRunningOperation(topicId, operationId);
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
     }
@@ -1268,7 +1266,7 @@ export class AiAgentService {
     // advance the topic's main spine. They may start while their parent
     // operation owns `runningOperation` (for example callAgent/callSubAgent),
     // so making them wait for the topic-start claim deadlocks the child start.
-    if (!topicId || params.appContext?.threadId || params.topicStartOwnerOperationId) {
+    if (!topicId || params.appContext?.threadId) {
       return this.execAgentWithReservation(params);
     }
 
@@ -2468,14 +2466,6 @@ export class AiAgentService {
               heteroType,
             }
           : {}),
-        ...(isRemoteHetero && remoteDeviceId
-          ? {
-              deviceId: remoteDeviceId,
-              deviceUserId: remoteDeviceUserId,
-              deviceWorkspaceId: remoteDeviceWorkspaceId,
-              heteroType,
-            }
-          : {}),
         operationId,
         orchestrationRole: appContext?.orchestrationRole,
         scope: appContext?.scope ?? undefined,
@@ -2520,6 +2510,19 @@ export class AiAgentService {
       } else {
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }
+
+      const persistMirrorTarget = async () => {
+        if (!params.topicStartOwnerOperationId) return;
+        try {
+          await createAgentStateManager().createOperationMetadata(operationId, {
+            mirrorToOperationId: params.topicStartOwnerOperationId,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          });
+        } catch (err) {
+          log('execAgent: failed to persist hetero mirror target: %O', err);
+        }
+      };
 
       // Notify-based platform agents (openclaw / hermes) communicate back via
       // agentNotify.notify. A local run uses the requesting desktop's device ID;
@@ -2586,12 +2589,14 @@ export class AiAgentService {
 
         // Open the stream channel so the gateway WS subscription can receive
         // notify_update events published by agentNotify.notify.
+        await persistMirrorTarget();
         const streamManager = createStreamEventManager();
         await streamManager
           .publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             heteroType,
+            mirrorToOperationId: params.topicStartOwnerOperationId,
             topicId,
             userId: this.userId,
           })
@@ -2612,6 +2617,7 @@ export class AiAgentService {
               agentType: heteroType,
               cwd: undefined,
               operationId,
+              parentOperationId: params.topicStartOwnerOperationId,
               platformAgentId: agentConfig.agencyConfig?.heterogeneousProvider?.platformAgentId,
               prompt,
               taskId: operationId,
@@ -2686,10 +2692,12 @@ export class AiAgentService {
         // the init only powers reconnect, not the run. `createStreamEventManager`
         // probes Redis synchronously, so guard construction too, not just publish.
         try {
+          await persistMirrorTarget();
           await createStreamEventManager().publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             heteroType,
+            mirrorToOperationId: params.topicStartOwnerOperationId,
             topicId,
             userId: this.userId,
           });
@@ -4178,6 +4186,38 @@ export class AiAgentService {
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
+    if (params.topicStartOwnerOperationId) {
+      const attached = await this.topicModel.appendRunningOperationChild(
+        topicId,
+        params.topicStartOwnerOperationId,
+        {
+          assistantMessageId: assistantMessageRecord.id,
+          operationId,
+          orchestrationRole: appContext?.orchestrationRole,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      );
+      if (!attached) {
+        const errorMessage = 'Group supervisor finished before this member could start.';
+        await updateAbortedAssistantMessage(errorMessage);
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: errorMessage,
+          message: errorMessage,
+          operationId,
+          status: 'error',
+          success: false,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+        };
+      }
+    }
+
     // 16. Create initial context
     let initialContext: AgentRuntimeContext = {
       payload: {
@@ -4716,6 +4756,9 @@ export class AiAgentService {
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     } catch (error) {
+      if (params.topicStartOwnerOperationId) {
+        await this.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
+      }
       if (isAbortError(error)) {
         await updateAbortedAssistantMessage(error.message);
         log('execAgent: createOperation aborted for %s: %s', operationId, error.message);
@@ -5061,7 +5104,6 @@ export class AiAgentService {
     params: ExecSubAgentParams | ExecVirtualSubAgentParams,
     options: {
       /**
-      topicStartOwnerOperationId: parentOperationId,
        * Override the default sub-agent completion bridge with a custom hook
        * (e.g. the group-action member bridge for isolated executeAgentTask(s)).
        * Receives the freshly-created isolation thread id. Only used when

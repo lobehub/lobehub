@@ -1202,6 +1202,39 @@ describe('GatewayConnectionCtr', () => {
       killSpy.mockRestore();
     });
 
+    it('isolates concurrent group members that share a topic', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-1',
+        parentOperationId: 'op-parent',
+        prompt: 'member one',
+        taskId: 'task-child-1',
+        topicId: 'topic-shared',
+      });
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-2',
+        parentOperationId: 'op-parent',
+        prompt: 'member two',
+        taskId: 'task-child-2',
+        topicId: 'topic-shared',
+      });
+
+      expect(killSpy).not.toHaveBeenCalled();
+      const firstArgs = spawnMock.mock.calls[0][1] as string[];
+      const secondArgs = spawnMock.mock.calls[1][1] as string[];
+      expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+      expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+      expect((ctr as any).platformTasks.get('task-child-2')).toMatchObject({
+        parentOperationId: 'op-parent',
+      });
+
+      killSpy.mockRestore();
+    });
+
     it('kills the complete detached process group when cancelling a task', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
       const child = makeMockChild(5555);

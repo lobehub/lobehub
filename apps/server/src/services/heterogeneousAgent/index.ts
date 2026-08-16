@@ -290,25 +290,28 @@ export class HeterogeneousAgentService {
     // `cancelled` is only an intermediate process signal. Keep the marker for
     // the following success/error terminal callback, which owns completion.
     if (result !== 'cancelled') {
-      const claimed = await this.topicModel.takeRunningOperation(topicId, operationId);
-      if (!claimed) {
+      const topic = await this.topicModel.findById(topicId);
+      const marker = topic?.metadata?.runningOperation;
+      const running =
+        marker?.operationId === operationId
+          ? marker
+          : marker?.childOperations?.find((child) => child.operationId === operationId);
+      if (!running) {
         log('heteroFinish: ignoring already-settled terminal callback for op=%s', operationId);
         return;
       }
 
-      const running = claimed.operation;
       serializedHooks = running.hooks as SerializedHook[] | undefined;
       isolationThreadId = running.threadId ?? undefined;
       orchestrationRole = running.orchestrationRole;
 
       // The per-step pointer is independent from the running marker, so it
       // remains available after the atomic claim removes that marker.
-      const currentMsgRef = (await this.topicModel.findById(topicId))?.metadata?.heteroCurrentMsgId;
+      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
       assistantMessageId =
         currentMsgRef?.operationId === operationId
           ? currentMsgRef.msgId
           : running.assistantMessageId;
-      if (claimed.isRoot) await this.topicModel.settleRunningStatus(topicId);
     }
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
@@ -498,6 +501,8 @@ export class HeterogeneousAgentService {
       },
       completionReason,
     );
+    const claimed = await this.topicModel.takeRunningOperation(topicId, operationId);
+    if (claimed?.isRoot) await this.topicModel.settleRunningStatus(topicId);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
   }
 

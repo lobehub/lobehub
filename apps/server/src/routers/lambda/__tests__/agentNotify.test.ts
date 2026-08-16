@@ -150,7 +150,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     expect(mockTopicTakeRunningOperation).toHaveBeenCalledWith(TOPIC, OP);
   });
 
-  it('uses the claimed marker snapshot after publishing the terminal event', async () => {
+  it('uses the marker snapshot read before terminal lifecycle completion', async () => {
     const completeOperationSpy = vi
       .spyOn(CompletionLifecycle.prototype, 'completeOperation')
       .mockResolvedValue(undefined);
@@ -168,28 +168,31 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       'done',
       expect.anything(),
     );
-    // A terminal stream subscriber can clear the live marker immediately. The
-    // lifecycle must therefore not issue a second topic lookup for its hooks.
+    // The lifecycle must not issue a second topic lookup for its hooks.
     expect(mockTopicFindById).toHaveBeenCalledTimes(1);
     completeOperationSpy.mockRestore();
   });
 
-  it('settles concurrent terminal retries only once', async () => {
+  it('leaves the marker intact so a failed terminal lifecycle can retry', async () => {
     const completeOperationSpy = vi
       .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockRejectedValueOnce(new Error('lifecycle failed'))
       .mockResolvedValue(undefined);
-    mockTopicTakeRunningOperation.mockResolvedValueOnce({
-      isRoot: true,
-      operation: { assistantMessageId: FINAL_MSG_ID, operationId: OP },
-    });
-    mockTopicTakeRunningOperation.mockResolvedValueOnce(undefined);
 
-    await Promise.all([
+    await expect(
       createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC }),
-      createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC }),
-    ]);
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
-    await vi.waitFor(() => expect(completeOperationSpy).toHaveBeenCalledTimes(1));
+    expect(mockPublishAgentRuntimeEnd).not.toHaveBeenCalled();
+    expect(mockTopicTakeRunningOperation).not.toHaveBeenCalled();
+
+    await expect(
+      createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC }),
+    ).resolves.toMatchObject({ messageId: FINAL_MSG_ID, topicId: TOPIC });
+
+    expect(completeOperationSpy).toHaveBeenCalledTimes(2);
+    expect(mockPublishAgentRuntimeEnd).toHaveBeenCalledTimes(1);
+    expect(mockTopicTakeRunningOperation).toHaveBeenCalledWith(TOPIC, OP);
     completeOperationSpy.mockRestore();
   });
 
@@ -293,6 +296,24 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     completeOperationSpy.mockRestore();
   });
 
+  it('requires operationId when child operations are active', async () => {
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          childOperations: [{ operationId: 'op-child-1', orchestrationRole: 'member' }],
+          operationId: OP,
+        },
+      },
+    });
+
+    await expect(
+      createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockTopicTakeRunningOperation).not.toHaveBeenCalled();
+  });
+
   it('ignores a repeated child terminal callback after its marker was removed', async () => {
     const childOperationId = 'op-child-1';
     const activeTopic = {
@@ -307,7 +328,15 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     const completeOperationSpy = vi
       .spyOn(CompletionLifecycle.prototype, 'completeOperation')
       .mockResolvedValue(undefined);
-    mockTopicFindById.mockResolvedValueOnce(activeTopic).mockResolvedValueOnce(activeTopic);
+    mockTopicFindById.mockResolvedValueOnce(activeTopic).mockResolvedValueOnce({
+      ...activeTopic,
+      metadata: {
+        runningOperation: {
+          childOperations: [],
+          operationId: OP,
+        },
+      },
+    });
     mockTopicTakeRunningOperation
       .mockResolvedValueOnce({
         isRoot: false,
@@ -335,37 +364,6 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     expect(duplicate).toEqual({ messageId: undefined, operationId: undefined, topicId: TOPIC });
     expect(completeOperationSpy).toHaveBeenCalledTimes(1);
     completeOperationSpy.mockRestore();
-  });
-
-  it('writes a child notification to its own placeholder message', async () => {
-    const childOperationId = 'op-child-1';
-    const childMessageId = 'msg-child';
-    const supervisorMessageId = 'msg-supervisor';
-    mockTopicFindById.mockResolvedValue({
-      agentId: 'agent-1',
-      metadata: {
-        runningOperation: {
-          assistantMessageId: supervisorMessageId,
-          childOperations: [{ assistantMessageId: childMessageId, operationId: childOperationId }],
-          operationId: OP,
-        },
-      },
-    });
-    mockMessageFindById.mockResolvedValue({ content: '', topicId: TOPIC });
-
-    await createCaller().notify({
-      content: 'child response',
-      operationId: childOperationId,
-      role: 'assistant',
-      topicId: TOPIC,
-    });
-
-    expect(mockMessageUpdate).toHaveBeenCalledWith(childMessageId, { content: 'child response' });
-    expect(mockMessageUpdate).not.toHaveBeenCalledWith(supervisorMessageId, expect.anything());
-    expect(mockPublishStreamEvent).toHaveBeenCalledWith(
-      childOperationId,
-      expect.objectContaining({ type: 'notify_update' }),
-    );
   });
 
   it('writes a child notification to its own placeholder message', async () => {

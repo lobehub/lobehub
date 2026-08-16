@@ -52,11 +52,11 @@ vi.mock('@/database/models/thread', () => ({
 }));
 
 const topicFindByIdMock = vi.fn().mockResolvedValue(null);
-const topicUpdateMetadataMock = vi.fn().mockResolvedValue(undefined);
+const topicTakeRunningOperationMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     findById: topicFindByIdMock,
-    updateMetadata: topicUpdateMetadataMock,
+    takeRunningOperation: topicTakeRunningOperationMock,
   })),
 }));
 
@@ -94,7 +94,7 @@ describe('AbandonOperationService', () => {
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
     topicFindByIdMock.mockReset().mockResolvedValue(null);
-    topicUpdateMetadataMock.mockReset().mockResolvedValue(undefined);
+    topicTakeRunningOperationMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -162,7 +162,7 @@ describe('AbandonOperationService', () => {
         toolCalls: 0,
       }),
     );
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicTakeRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
       content: '',
       error: expect.objectContaining({
@@ -228,8 +228,42 @@ describe('AbandonOperationService', () => {
 
     expect(result.abandoned).toBe(true);
     expect(recordCompletionMock).toHaveBeenCalled();
-    expect(topicUpdateMetadataMock).not.toHaveBeenCalled();
+    expect(topicTakeRunningOperationMock).not.toHaveBeenCalled();
     expect(messageUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('cleans up a no-state child marker and errors its own placeholder', async () => {
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const db = buildDb({
+      operationRow: {
+        id: 'op_child',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+      },
+    });
+    topicFindByIdMock.mockResolvedValue({
+      metadata: {
+        runningOperation: {
+          assistantMessageId: 'msg_parent',
+          childOperations: [{ assistantMessageId: 'msg_child', operationId: 'op_child' }],
+          operationId: 'op_parent',
+        },
+      },
+    });
+
+    const result = await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    }).finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.assistantMessageUpdated).toBe(true);
+    expect(topicTakeRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_child');
+    expect(messageUpdateMock).toHaveBeenCalledWith(
+      'msg_child',
+      expect.objectContaining({ error: expect.anything() }),
+    );
   });
 
   it('finalizes snapshot and marks assistant message errored when state + partial exist', async () => {
@@ -289,7 +323,7 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicTakeRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
       expect.objectContaining({
@@ -332,7 +366,7 @@ describe('AbandonOperationService', () => {
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
       expect(result.found).toBe(true);
-      expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+      expect(topicTakeRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
       expect(dispatchHooksMock).not.toHaveBeenCalled();
     },
   );
@@ -477,6 +511,7 @@ describe('AbandonOperationService', () => {
             isSubAgent: true,
             orchestrationRole: 'member',
             threadId: 'thread_g',
+            topicId: 'tpc_x',
             userId: 'user_x',
             workspaceId: 'ws_1',
           },
@@ -485,6 +520,14 @@ describe('AbandonOperationService', () => {
     });
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
+    topicFindByIdMock.mockResolvedValue({
+      metadata: {
+        runningOperation: {
+          childOperations: [{ operationId: 'op_member' }],
+          operationId: 'op_supervisor',
+        },
+      },
+    });
 
     const svc = new AbandonOperationService({} as any, {
       coordinator: coord as any,
@@ -498,6 +541,7 @@ describe('AbandonOperationService', () => {
     // coordinator state is cleaned up normally.
     expect(result.subAgentResume).toBeUndefined();
     expect(findOperationMock).not.toHaveBeenCalled();
+    expect(topicTakeRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_member');
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
   });
 
