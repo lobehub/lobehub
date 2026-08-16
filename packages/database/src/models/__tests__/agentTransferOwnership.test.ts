@@ -7,6 +7,7 @@ import {
   agentHistoryJobs,
   agents,
   agentsToSessions,
+  devices,
   messages,
   messageTranslates,
   sessions,
@@ -186,6 +187,46 @@ describe('AgentModel.transferAgentOwnership', () => {
     const childRows = await serverDB.select().from(messageTranslates);
     expect(childRows.find((c) => c.id === 'owner-residual')?.userId).toBe(recipientId);
     expect(childRows.find((c) => c.id === 'teammate-residual')?.userId).toBe(teammateId);
+  });
+
+  it('drops a binding to another member’s PRIVATE workspace device, keeps public ones', async () => {
+    const agent = await ownerModel.create({ title: 'Agent' });
+    await serverDB.insert(devices).values([
+      {
+        deviceId: 'owner-private-ws-device',
+        identitySource: 'machine-id',
+        userId: ownerId,
+        visibility: 'private',
+        workspaceId: wsId,
+      },
+      {
+        deviceId: 'public-ws-device',
+        identitySource: 'machine-id',
+        userId: ownerId,
+        visibility: 'public',
+        workspaceId: wsId,
+      },
+    ]);
+    await serverDB
+      .update(agents)
+      .set({
+        agencyConfig: {
+          boundDeviceId: 'owner-private-ws-device',
+          workingDirByDevice: {
+            'owner-private-ws-device': '/home/owner',
+            'public-ws-device': '/srv/shared',
+          },
+        },
+      })
+      .where(eq(agents.id, agent.id));
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const [updated] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+    // The previous owner's private workspace enrollment is invisible to the
+    // recipient; only the public device survives the handover.
+    expect(updated.agencyConfig?.boundDeviceId).toBeUndefined();
+    expect(updated.agencyConfig?.workingDirByDevice).toEqual({ 'public-ws-device': '/srv/shared' });
   });
 
   it('strips device bindings the recipient cannot reach', async () => {

@@ -54,6 +54,10 @@ import {
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import {
+  collectBoundDeviceIds,
+  sanitizeAgencyConfigsForWorkspace,
+} from '../utils/agencyConfigDevices';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
@@ -280,111 +284,21 @@ export class AgentModel {
   private agentsToSessionsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
 
-  /**
-   * Collect device ids that an incoming `agencyConfig` patch is *setting*
-   * (not clearing). `workingDirByDevice` entries with `undefined` value are
-   * deletes (per `pruneWorkingDirByDeviceDeletes`) and are skipped.
-   */
   private collectBoundDeviceIds = (
     agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
-  ): string[] => {
-    if (!agencyConfig) return [];
-    const ids: string[] = [];
-    const bound = agencyConfig.boundDeviceId;
-    if (typeof bound === 'string' && bound) ids.push(bound);
-    const map = agencyConfig.workingDirByDevice;
-    if (map) {
-      for (const [deviceId, cwd] of Object.entries(map)) {
-        if (cwd === undefined) continue;
-        ids.push(deviceId);
-      }
-    }
-    return ids;
-  };
+  ): string[] => collectBoundDeviceIds(agencyConfig);
 
   /**
-   * Strip device bindings that are not enrolled in `targetWorkspaceId`, and
-   * downgrade `fixed` device execution targets that can no longer be resolved.
-   * Any `boundDeviceId` / `workingDirByDevice` entry pointing outside the
-   * target workspace is dropped, and a `fixed` device target without a valid
-   * public device is downgraded to `member` (defaulting to the caller's own
-   * device). Shared by `transferAgents` (moving a row into a workspace) and
-   * `duplicate` (copying a row into the caller's workspace): both re-home the
-   * row to a new owner, so a leftover reference to a device only the previous
-   * owner can reach would otherwise point the re-homed agent at a target
-   * nobody else can resolve.
+   * Shared ownership-rehoming device sanitation — see
+   * `sanitizeAgencyConfigsForWorkspace` in `utils/agencyConfigDevices`.
    */
-  private sanitizeAgencyConfigForWorkspace = async (
+  private sanitizeAgencyConfigForWorkspace = (
     db: LobeChatDatabase | Transaction,
     targetWorkspaceId: string,
     agencyConfigs: Array<LobeAgentAgencyConfig | null | undefined>,
-  ): Promise<Array<LobeAgentAgencyConfig | null>> => {
-    const allCandidateIds = [
-      ...new Set(agencyConfigs.flatMap((config) => this.collectBoundDeviceIds(config))),
-    ];
-    const deviceRows =
-      allCandidateIds.length > 0
-        ? await db
-            .select({ deviceId: devices.deviceId, visibility: devices.visibility })
-            .from(devices)
-            .where(
-              and(
-                eq(devices.workspaceId, targetWorkspaceId),
-                inArray(devices.deviceId, allCandidateIds),
-              ),
-            )
-        : [];
-    const allowed = new Set(deviceRows.map((r) => r.deviceId));
-    const publicDeviceIds = new Set(
-      deviceRows.filter((r) => r.visibility === 'public').map((r) => r.deviceId),
-    );
-
-    return agencyConfigs.map((config) => {
-      let next: LobeAgentAgencyConfig | null = config ?? null;
-      if (!next) return next;
-
-      const candidateIds = this.collectBoundDeviceIds(next);
-      if (candidateIds.length > 0) {
-        const cleaned: LobeAgentAgencyConfig = { ...next };
-        if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
-          delete cleaned.boundDeviceId;
-        }
-        if (cleaned.workingDirByDevice) {
-          const filtered: Record<string, string> = {};
-          for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
-            if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
-          }
-          cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
-        }
-        if (
-          cleaned.executionTargetSelectionPolicy === 'fixed' &&
-          cleaned.executionTarget === 'device' &&
-          (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
-        ) {
-          cleaned.executionTargetSelectionPolicy = 'member';
-        }
-        next = cleaned;
-      }
-
-      if (
-        next.executionTargetSelectionPolicy === 'fixed' &&
-        (!next.executionTarget ||
-          !['auto', 'device', 'none', 'sandbox'].includes(next.executionTarget))
-      ) {
-        next.executionTargetSelectionPolicy = 'member';
-      }
-
-      if (
-        next.executionTargetSelectionPolicy === 'fixed' &&
-        next.executionTarget === 'device' &&
-        (!next.boundDeviceId || !publicDeviceIds.has(next.boundDeviceId))
-      ) {
-        next.executionTargetSelectionPolicy = 'member';
-      }
-
-      return next;
-    });
-  };
+    options?: { viewerUserId?: string },
+  ): Promise<Array<LobeAgentAgencyConfig | null>> =>
+    sanitizeAgencyConfigsForWorkspace(db, targetWorkspaceId, agencyConfigs, options);
 
   /**
    * Enforce: a workspace-scoped agent may only bind devices enrolled in the
@@ -2436,6 +2350,9 @@ export class AgentModel {
       trx,
       this.workspaceId,
       [agent.agencyConfig],
+      // The recipient is the new author: bindings to another member's PRIVATE
+      // workspace device are as unreachable for them as a personal device.
+      { viewerUserId: toUserId },
     );
 
     // An ownership flip does not make the agent's content newer.

@@ -1,6 +1,6 @@
 import { TRANSFER_RESOURCE_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
@@ -74,6 +74,11 @@ interface TransferRequestResourceSummary {
 const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRequestItem[]) => {
   if (requests.length === 0) return [];
 
+  // All requests here come from one workspace-scoped model; pinning the
+  // resource lookups to that workspace keeps a stale request (resource moved
+  // away, invalidation raced) from leaking the resource's post-move identity.
+  const requestWorkspaceId = requests[0].workspaceId;
+
   const userIds = [
     ...new Set(
       requests.flatMap((request) =>
@@ -115,7 +120,7 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
             title: agents.title,
           })
           .from(agents)
-          .where(inArray(agents.id, agentIds))
+          .where(and(inArray(agents.id, agentIds), eq(agents.workspaceId, requestWorkspaceId)))
       : Promise.resolve([]),
     groupIds.length > 0
       ? db
@@ -126,7 +131,9 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
             title: chatGroups.title,
           })
           .from(chatGroups)
-          .where(inArray(chatGroups.id, groupIds))
+          .where(
+            and(inArray(chatGroups.id, groupIds), eq(chatGroups.workspaceId, requestWorkspaceId)),
+          )
       : Promise.resolve([]),
   ]);
 

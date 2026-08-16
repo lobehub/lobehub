@@ -19,6 +19,7 @@ import { resourceTransferRequestService } from '@/services/resourceTransferReque
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { TransferErrorCode } from '@/types/transferError';
 
 export const PENDING_TRANSFERS_SWR_KEY = 'pending-transfer-requests';
 
@@ -38,6 +39,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const partyLabel = (party: TransferRequestParty | null, fallback: string) =>
   party?.fullName?.trim() || party?.username?.trim() || fallback;
+
+/**
+ * Actionable copy for the failures a still-rendered request can hit (recipient
+ * downgraded/removed, migration still draining, resource changed). Falls back
+ * to the generic toast for anything unmapped.
+ */
+const TRANSFER_ERROR_KEY_BY_CODE: Partial<Record<TransferErrorCode, string>> = {
+  [TransferErrorCode.CopyInProgress]: 'error:transfer.copyInProgress',
+  [TransferErrorCode.ResourceNotFound]: 'error:transfer.resourceNotFound',
+  [TransferErrorCode.TargetNoWriteAccess]: 'error:transfer.targetNoWriteAccess',
+  [TransferErrorCode.TargetNotWorkspaceMember]: 'error:transfer.targetNotWorkspaceMember',
+  [TransferErrorCode.TransferInProgress]: 'error:transfer.transferInProgress',
+  [TransferErrorCode.TransferRequestStale]: 'error:transfer.transferRequestStale',
+};
+
+const getActionFailedMessageKey = (error: unknown): string => {
+  const code = (error as { data?: { errorData?: { code?: unknown } } } | null)?.data?.errorData
+    ?.code;
+  return (
+    (typeof code === 'string' && TRANSFER_ERROR_KEY_BY_CODE[code as TransferErrorCode]) ||
+    'agent:transferRequest.actionFailed'
+  );
+};
 
 /**
  * i18n key per transferable type — a title alone can't tell an agent from a
@@ -64,7 +88,7 @@ const RESOURCE_CHAT_URLS: Record<string, (id: string) => string> = {
  * workspace or when nothing is pending.
  */
 const PendingTransfersSection = memo<{ onResolved?: () => void }>(({ onResolved }) => {
-  const { i18n, t } = useTranslation('agent');
+  const { i18n, t } = useTranslation(['agent', 'error']);
   // Same relative-time convention as the notification items below.
   const dateLocale = i18n.resolvedLanguage || i18n.language;
   const [actingId, setActingId] = useState<string | null>(null);
@@ -117,7 +141,7 @@ const PendingTransfersSection = memo<{ onResolved?: () => void }>(({ onResolved 
       );
     } catch (error) {
       console.error('[PendingTransfersSection] action failed', error);
-      toast.error({ placement: 'top', title: t('transferRequest.actionFailed') });
+      toast.error({ placement: 'top', title: t(getActionFailedMessageKey(error) as never) });
     } finally {
       setActingId(null);
       // Either way re-read: a raced/expired request must leave the list.

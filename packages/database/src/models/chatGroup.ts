@@ -10,6 +10,7 @@ import type {
 } from '../schemas';
 import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { sanitizeAgencyConfigsForWorkspace } from '../utils/agencyConfigDevices';
 import type { GroupMemberRole } from '../utils/groupMembership';
 import {
   GROUP_SUPERVISOR_ROLE,
@@ -878,10 +879,31 @@ export class ChatGroupModel {
       .where(eq(chatGroupsAgents.chatGroupId, groupId));
 
     if (ownedAgentIds.length > 0) {
-      await trx
-        .update(agents)
-        .set({ updatedAt: agents.updatedAt, userId: toUserId })
+      // Re-home device bindings on the owned agents (supervisor + generated
+      // members): a boundDeviceId / fixed device policy pointing at the
+      // previous owner's personal or private device would leave the
+      // recipient's group runs unroutable. Same sanitation as the member
+      // agent handover.
+      const ownedRows = await trx
+        .select({ agencyConfig: agents.agencyConfig, id: agents.id })
+        .from(agents)
         .where(inArray(agents.id, ownedAgentIds));
+      const cleanedConfigs = await sanitizeAgencyConfigsForWorkspace(
+        trx,
+        this.workspaceId,
+        ownedRows.map((row) => row.agencyConfig),
+        { viewerUserId: toUserId },
+      );
+      for (const [index, row] of ownedRows.entries()) {
+        await trx
+          .update(agents)
+          .set({
+            agencyConfig: cleanedConfigs[index],
+            updatedAt: agents.updatedAt,
+            userId: toUserId,
+          })
+          .where(eq(agents.id, row.id));
+      }
     }
   };
 
