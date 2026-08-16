@@ -41,6 +41,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
+import RunningGlyph from './components/RunningGlyph';
 import Time from './components/Time';
 import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
@@ -308,13 +309,23 @@ const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
   ({ showTrigger = true, task }) => {
     const title = task.name?.trim() || task.identifier;
     const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
+    const status = normalizeTaskStatus(task.status);
 
     return (
       <Row
         description={description}
         href={taskDetailPath(task.identifier)}
-        icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
         title={title}
+        // A row that is executing right now wears the shared animated running
+        // mark instead of the static glyph — the same liveness signal running
+        // topics and the home rail cards already use.
+        icon={
+          status === 'running' ? (
+            <RunningGlyph size={16} />
+          ) : (
+            <TaskStatusIcon size={16} status={status} />
+          )
+        }
         // The identifier is how the task is referred to everywhere else, so it
         // belongs beside the name rather than in the sentence slot below it.
         titleExtra={
