@@ -369,8 +369,8 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       if (sessionId) saveHermesSessionId(topicId, sessionId);
 
       if (response) {
-        void sendAutoNotify(topicId, taskId, response, agentId, operationId, workspaceId).finally(() =>
-          sendTerminalSignal(topicId, agentId, operationId, workspaceId),
+        void sendAutoNotify(topicId, taskId, response, agentId, operationId, workspaceId).finally(
+          () => sendTerminalSignal(topicId, agentId, operationId, workspaceId),
         );
       } else {
         void sendTerminalSignal(topicId, agentId, operationId, workspaceId);
