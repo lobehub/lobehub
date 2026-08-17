@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "اسم عرض النموذج",
   "providerModels.item.modelConfig.extendParams.extra": "اختر المعلمات الموسعة التي يدعمها النموذج. مرّر المؤشر فوق خيار لمعاينة عناصر التحكم. قد تؤدي التهيئة غير الصحيحة إلى فشل الطلب.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "لنماذج Codex؛ يتحكم في شدة التفكير.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "بالنسبة لوضع التفكير DeepSeek V4 GA؛ يتحكم في شدة التفكير. يضيف مستوى `منخفض` بالإضافة إلى مستويات V4 الأصلية. `عالي` هو الإعداد الافتراضي، و`أقصى` يفتح أعمق مستويات التفكير المستخدمة في سير عمل الوكلاء المعقد.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "لوضع التفكير في DeepSeek V4؛ يتحكم في شدة التفكير. القيمة الافتراضية هي high، بينما max يفعّل أعمق مستويات الاستدلال المستخدمة في مهام الوكلاء المعقّدة.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "لنماذج Claude؛ يمكن أن يقلل التكلفة ويسرّع الاستجابات.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "لـ Claude Opus 4.6؛ يتحكم في مستوى الجهد (منخفض/متوسط/عالٍ/أقصى).",

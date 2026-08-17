@@ -77,7 +77,9 @@ const TaskInstruction = memo(() => {
 
   useEffect(() => {
     if (persistedFiles && persistedFiles.length > 0) {
-      seedAttachments(persistedFiles.map((f) => ({ id: f.id, url: f.url })));
+      seedAttachments(
+        persistedFiles.map((f) => ({ downloadUrl: f.downloadUrl, id: f.id, url: f.url })),
+      );
     }
   }, [persistedFiles]);
 

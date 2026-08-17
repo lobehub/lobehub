@@ -1326,19 +1326,19 @@ When I am ___, I need ___
   'skillView.connectors': 'Connectors',
   'skillView.skills': 'Skills',
   'startConversation': 'Start Conversation',
-  'storage.actions.transfer.button': 'Move to...',
+  'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
     'Move agents and their data to another Workspace or your personal account. The originals leave the current space. LobeAI cannot be moved; copy it instead.',
   'storage.actions.transfer.title': 'Move Agents',
-  'storage.actions.transferAgentGroups.button': 'Move to...',
+  'storage.actions.transferAgentGroups.button': 'Move to…',
   'storage.actions.transferAgentGroups.desc':
     'Move groups, member Agents, and group conversation data to another Workspace or your personal account.',
   'storage.actions.transferAgentGroups.title': 'Move Groups',
-  'storage.actions.copyLobeAI.button': 'Copy to...',
+  'storage.actions.copyLobeAI.button': 'Copy to…',
   'storage.actions.copyLobeAI.desc':
     'Keep the originals and create independent copies in another Workspace or your personal account. Topics and messages are optional.',
   'storage.actions.copyLobeAI.title': 'Copy Agents',
-  'storage.actions.copyAgentGroups.button': 'Copy to...',
+  'storage.actions.copyAgentGroups.button': 'Copy to…',
   'storage.actions.copyAgentGroups.desc':
     'Copy agent groups and their member agents into another workspace or personal account.',
   'storage.actions.copyAgentGroups.title': 'Agent Groups Copy',
@@ -2485,8 +2485,8 @@ When I am ___, I need ___
   'workspace.general.transferAgentGroups.modal.selectedGroup': 'Agent group to transfer.',
   'workspace.general.transferAgentGroups.modal.success':
     '{{count}} agent group(s) transferred successfully',
-  'workspace.general.transferAgentGroups.modal.title': 'Transfer Agent Groups',
-  'workspace.general.transferAgentGroups.modal.transfer': 'Transfer {{count}} agent group(s)',
+  'workspace.general.transferAgentGroups.modal.title': 'Move Agent Groups',
+  'workspace.general.transferAgentGroups.modal.transfer': 'Move {{count}} agent group(s)',
   'workspace.general.transferAgentGroups.modal.untitledGroup': 'Untitled Agent Group',
   'workspace.general.copyLobeAI.modal.back': 'Back',
   'workspace.general.copyLobeAI.modal.continue': 'Continue',

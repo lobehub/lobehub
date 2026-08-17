@@ -1,3 +1,10 @@
 import { type ItemType } from 'antd/es/menu/interface';
 
-export const useKnowledgeBaseTransferMenuItem = (_id?: string): ItemType[] | null => null;
+export interface KnowledgeBaseTransferMenuItemOptions {
+  disabled?: boolean;
+}
+
+export const useKnowledgeBaseTransferMenuItem = (
+  _id?: string,
+  _options?: KnowledgeBaseTransferMenuItemOptions,
+): ItemType[] | null => null;

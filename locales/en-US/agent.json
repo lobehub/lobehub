@@ -296,7 +296,7 @@
   "transfer.confirm.plugins": "Custom plugins may not be available in the target workspace",
   "transfer.confirm.title": "Move Agent",
   "transfer.confirm.warning": "Some links won't move:",
-  "transfer.copyTo": "Copy to...",
+  "transfer.copyTo": "Copy to…",
   "transfer.desc": "Move this Agent to another Workspace or your personal account.",
   "transfer.error": "Failed to move agent",
   "transfer.personalAccount": "Personal Account",
@@ -304,5 +304,5 @@
   "transfer.selectTarget": "Move Agent to",
   "transfer.success": "Agent moved successfully",
   "transfer.title": "Move",
-  "transfer.transferTo": "Move to..."
+  "transfer.transferTo": "Move to…"
 }
