@@ -591,6 +591,47 @@ describe('spawnAgent', () => {
     }
   });
 
+  it('resolves a relative TRAE command against the child working directory before probing', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobehub-trae-cwd-'));
+    tempDirs.push(cwd);
+    const relativeCommand = './bin/traecli';
+    const resolvedCommand = path.resolve(cwd, relativeCommand);
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    detectHeterogeneousCliCommandMock.mockImplementationOnce(async (_agentType, command) => ({
+      available: true,
+      path: command,
+    }));
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        command: relativeCommand,
+        cwd,
+        operationId: 'op-trae-relative',
+        prompt: 'do a thing',
+      });
+
+      for await (const _event of handle.events) {
+        // Consume the ACP session to completion.
+      }
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        resolvedCommand,
+        expect.objectContaining({ PATH: process.env.PATH }),
+      );
+      expect(spawnCalls[0]).toMatchObject({
+        command: resolvedCommand,
+        options: { cwd },
+      });
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('rejects a custom TRAE command that does not expose the ACP runtime', async () => {
     detectHeterogeneousCliCommandMock.mockResolvedValue({ available: false });
 

@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
@@ -8,7 +9,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
-import { resolveCliSpawnPlan } from './cliSpawn';
+import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -735,9 +736,13 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
       workingDirectory: cwd,
     });
   }
+  const command =
+    isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
+      ? path.resolve(cwd, requestedCommand)
+      : requestedCommand;
   const childEnv = { ...process.env, ...options.env };
   const { detectHeterogeneousCliCommand } = await import('./resolveCliCommand');
-  const commandStatus = await detectHeterogeneousCliCommand('trae', requestedCommand, childEnv);
+  const commandStatus = await detectHeterogeneousCliCommand('trae', command, childEnv);
   if (!commandStatus.available || !commandStatus.path) {
     throw new Error(`TRAE command does not expose the required ACP runtime: ${requestedCommand}`);
   }
