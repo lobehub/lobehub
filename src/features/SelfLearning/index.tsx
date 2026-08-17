@@ -26,7 +26,6 @@ import type { ExpertiseDomainItem } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
-import { openCreateDomainModal } from './CreateDomainModal';
 import { countTiers, habitTier } from './helpers';
 import { useExpertiseOverview, useHistoryCount } from './hooks';
 import AnchorCard from './Portrait/AnchorCard';
@@ -172,7 +171,7 @@ const SelfLearning = memo(() => {
 
   const openCreate = () => {
     if (!activeAgentId) return;
-    openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() });
+    navigate(urlJoin('/agent', activeAgentId, 'self-learning/new'));
   };
 
   // Dropping a direction takes its habits and practice history with it — say so before asking.

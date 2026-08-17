@@ -233,6 +233,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentSelfLearningRouteMeta },
             path: 'self-learning',
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/new'),
+              'Desktop > Chat > Self Learning > Create',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning/new',
+          },
           // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
             children: [

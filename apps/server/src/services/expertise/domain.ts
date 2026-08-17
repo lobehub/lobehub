@@ -94,11 +94,19 @@ const DOMAIN_DRAFT_JSON_SCHEMA: GenerateObjectSchema = {
 const DRAFT_SYSTEM_PROMPT = [
   'Convert the user brief into one executable expertise domain — an anchor the agent will learn against.',
   'Return: a concise title; domainFilter stating which conversations and work count as practice; outOfScope stating explicit exclusions;',
-  'layers — the 2 to 5 levels this expertise is judged on (a stable key, a short title, one-line description). Prefer a canonical layer model from a well-known framework in this field and name it in layerCanonRef with layerSource="canonical"; only invent layers (layerSource="invented", layerCanonRef=null) when no canonical model fits;',
+  'layers — 3 to 5 ordered proficiency levels for the same expertise (a stable key, a short title, and a one-line observable criterion). Every later level must subsume the earlier levels and require demonstrably greater complexity, judgement, reliability, or autonomy. A workflow sequence, lifecycle, taxonomy, list of tasks, or parallel dimensions is NOT a level model and must never be returned as layers. Prefer a recognised maturity or competency framework when one truly provides progressive proficiency levels; do not misuse a domain workflow such as the Intelligence Cycle as a hierarchy. When no fitting progression exists, invent an honest progression and set layerSource="invented", layerCanonRef=null;',
   'canonEntries — 3 to 8 referenceable principles from recognised books, frameworks or methodologies in this field (stable key, title, source, and the general statement of why the failure recurs);',
   'rationale — one or two sentences on why this anchor fits the brief.',
+  'Before returning, verify that a practitioner at each layer can do everything in the prior layer and that adjacent layers can be distinguished through observable work quality. If this test fails, rewrite the layers.',
   'Preserve the user intent, do not invent a broader domain, keep keys short ASCII slugs, and write all human-facing fields in the language used by the user.',
 ].join(' ');
+
+interface DraftFromBriefInput {
+  adjustment?: string;
+  agentId: string;
+  brief: string;
+  currentDraft?: DomainDraft;
+}
 
 export class ExpertiseDomainService {
   constructor(
@@ -108,7 +116,7 @@ export class ExpertiseDomainService {
   ) {}
 
   /** Turns one natural-language brief into an editable domain draft; nothing is persisted. */
-  draftFromBrief = async (input: { agentId: string; brief: string }) => {
+  draftFromBrief = async (input: DraftFromBriefInput) => {
     const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
     const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
     if (!modelConfig) throw new Error('Agent model configuration is unavailable');
@@ -117,10 +125,23 @@ export class ExpertiseDomainService {
     return DomainDraftSchema.parse(
       await ai.generateObject(
         {
-          messages: [
-            { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
-            { content: input.brief.trim(), role: 'user' },
-          ],
+          messages: input.currentDraft
+            ? [
+                { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
+                {
+                  content: [
+                    `Original brief:\n${input.brief.trim()}`,
+                    `Current editable draft:\n${JSON.stringify(input.currentDraft)}`,
+                    `Requested adjustment:\n${input.adjustment?.trim()}`,
+                    'Revise the current draft to satisfy the requested adjustment while preserving unaffected fields and the original intent. Return the complete revised draft.',
+                  ].join('\n\n'),
+                  role: 'user',
+                },
+              ]
+            : [
+                { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
+                { content: input.brief.trim(), role: 'user' },
+              ],
           ...modelConfig,
           schema: DOMAIN_DRAFT_JSON_SCHEMA,
         },
@@ -128,7 +149,7 @@ export class ExpertiseDomainService {
           metadata: { trigger: 'expertise_domain_draft' },
           tracing: {
             agentId: input.agentId,
-            promptVersion: 'expertise-domain-draft-v2',
+            promptVersion: 'expertise-domain-draft-v3',
             scenario: TRACING_SCENARIOS.TopicAutoSummary,
             schemaName: DOMAIN_DRAFT_JSON_SCHEMA.name,
           },

@@ -219,7 +219,14 @@ export const expertiseRouter = router({
 
   /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
   draftDomain: expertiseWriteProcedure
-    .input(z.object({ agentId: z.string(), brief: z.string().min(1) }))
+    .input(
+      z.object({
+        adjustment: z.string().min(1).max(2000).optional(),
+        agentId: z.string(),
+        brief: z.string().min(1),
+        currentDraft: DomainDraftSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
 
   /** Step 2 of creation: persist the reviewed anchor and bind it to the agent. */

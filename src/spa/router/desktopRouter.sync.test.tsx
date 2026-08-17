@@ -168,6 +168,20 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
+    '%s serves self-learning creation as a dedicated page',
+    (_, factory) => {
+      const matches = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/agent/agent-1/self-learning/new',
+      );
+
+      expect(matches?.at(-1)?.route.path).toBe('self-learning/new');
+      expect(matches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+      expect(matches?.at(-1)?.params).not.toHaveProperty('domainId');
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s exposes projects as task and goal containers only',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');

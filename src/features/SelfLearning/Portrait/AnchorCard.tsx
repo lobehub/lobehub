@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AnchorIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -23,9 +23,22 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   definition: css`
     display: grid;
-    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-columns: 110px minmax(0, 1fr);
     gap: 6px 16px;
     align-items: baseline;
+  `,
+  definitionLabel: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  `,
+  definitionMark: css`
+    width: 12px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
+    text-align: center;
   `,
   grid: css`
     display: grid;
@@ -66,94 +79,113 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   const { t } = useTranslation('selfLearning');
   const canonRef =
     domain.layerSource === 'canonical' && domain.layerCanonRef ? domain.layerCanonRef : undefined;
+  const domainFilter = domain.domainFilter.trim();
+  const outOfScope = domain.outOfScope?.trim();
+  const title = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <Icon color={cssVar.colorTextTertiary} icon={AnchorIcon} size={15} />
+      <Text weight={600}>{t('anchor.title')}</Text>
+      <Text fontSize={12} type={'secondary'}>
+        {t('anchor.subtitle')}
+      </Text>
+    </Flexbox>
+  );
 
   return (
-    <Block padding={16} variant={'outlined'}>
-      <Flexbox gap={18}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Icon color={cssVar.colorTextTertiary} icon={AnchorIcon} size={15} />
-          <Text weight={600}>{t('anchor.title')}</Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('anchor.subtitle')}
-          </Text>
-        </Flexbox>
-
-        <div className={styles.definition}>
-          <Text fontSize={12.5} type={'secondary'}>
-            {t('anchor.filter')}
-          </Text>
-          <Text fontSize={13} lineHeight={1.7}>
-            {domain.domainFilter}
-          </Text>
-          {domain.outOfScope && (
-            <>
-              <Text fontSize={12.5} type={'secondary'}>
-                {t('anchor.outOfScope')}
-              </Text>
-              <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
-                {domain.outOfScope}
-              </Text>
-            </>
-          )}
-        </div>
-
-        <Flexbox gap={10}>
-          <Flexbox horizontal align={'baseline'} gap={8}>
-            <span className={styles.sectionLabel}>{t('create.anchor.canon')}</span>
-            <Text fontSize={12} type={'secondary'}>
-              {domain.canonEntries.length > 0 ? t('create.anchor.canonHint') : t('anchor.noCanon')}
-            </Text>
-          </Flexbox>
-          {domain.canonEntries.length > 0 && (
-            <div className={styles.grid}>
-              {domain.canonEntries.map((c) => (
-                <div className={styles.canonCard} key={c.key}>
-                  <Text fontSize={13.5} weight={600}>
-                    {c.title}
+    <Accordion defaultExpandedKeys={['anchor']}>
+      <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
+        <Flexbox gap={18} paddingBlock={8}>
+          {(domainFilter || outOfScope) && (
+            <div className={styles.definition}>
+              {domainFilter && (
+                <>
+                  <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                    <span aria-hidden className={styles.definitionMark}>
+                      √
+                    </span>
+                    {t('anchor.filter')}
                   </Text>
-                  <Text fontSize={12.5} lineHeight={1.65} type={'secondary'}>
-                    {c.statement}
+                  <Text fontSize={13} lineHeight={1.7}>
+                    {domainFilter}
                   </Text>
-                  <Text ellipsis fontSize={11.5} style={{ opacity: 0.75 }} type={'secondary'}>
-                    — {c.source}
+                </>
+              )}
+              {outOfScope && (
+                <>
+                  <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                    <span aria-hidden className={styles.definitionMark}>
+                      ×
+                    </span>
+                    {t('anchor.outOfScope')}
                   </Text>
-                </div>
-              ))}
+                  <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
+                    {outOfScope}
+                  </Text>
+                </>
+              )}
             </div>
           )}
-        </Flexbox>
 
-        <Flexbox gap={10}>
-          <Flexbox horizontal align={'baseline'} gap={8}>
-            <span className={styles.sectionLabel}>{t('create.anchor.layers')}</span>
-            <Text fontSize={12} type={'secondary'}>
-              {domain.layers.length === 0
-                ? t('anchor.noLayers')
-                : canonRef
-                  ? t('create.anchor.layersFrom', { ref: canonRef })
-                  : t('create.anchor.layersInvented')}
-            </Text>
-          </Flexbox>
-          {domain.layers.length > 0 && (
-            <div className={styles.grid}>
-              {domain.layers.map((l, i) => (
-                <div className={styles.layerCell} key={l.key}>
-                  <span className={styles.layerIndex}>L{i + 1}</span>
-                  <Text fontSize={13.5} weight={600}>
-                    {l.title}
-                  </Text>
-                  {l.description && (
-                    <Text fontSize={12.5} lineHeight={1.6} type={'secondary'}>
-                      {l.description}
+          <Flexbox gap={10}>
+            <Flexbox horizontal align={'baseline'} gap={8}>
+              <span className={styles.sectionLabel}>{t('create.anchor.canon')}</span>
+              <Text fontSize={12} type={'secondary'}>
+                {domain.canonEntries.length > 0
+                  ? t('create.anchor.canonHint')
+                  : t('anchor.noCanon')}
+              </Text>
+            </Flexbox>
+            {domain.canonEntries.length > 0 && (
+              <div className={styles.grid}>
+                {domain.canonEntries.map((c) => (
+                  <div className={styles.canonCard} key={c.key}>
+                    <Text fontSize={13.5} weight={600}>
+                      {c.title}
                     </Text>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    <Text fontSize={12.5} lineHeight={1.65} type={'secondary'}>
+                      {c.statement}
+                    </Text>
+                    <Text ellipsis fontSize={11.5} style={{ opacity: 0.75 }} type={'secondary'}>
+                      — {c.source}
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Flexbox>
+
+          <Flexbox gap={10}>
+            <Flexbox horizontal align={'baseline'} gap={8}>
+              <span className={styles.sectionLabel}>{t('create.anchor.layers')}</span>
+              <Text fontSize={12} type={'secondary'}>
+                {domain.layers.length === 0
+                  ? t('anchor.noLayers')
+                  : canonRef
+                    ? t('create.anchor.layersFrom', { ref: canonRef })
+                    : t('create.anchor.layersInvented')}
+              </Text>
+            </Flexbox>
+            {domain.layers.length > 0 && (
+              <div className={styles.grid}>
+                {domain.layers.map((l, i) => (
+                  <div className={styles.layerCell} key={l.key}>
+                    <span className={styles.layerIndex}>L{i + 1}</span>
+                    <Text fontSize={13.5} weight={600}>
+                      {l.title}
+                    </Text>
+                    {l.description && (
+                      <Text fontSize={12.5} lineHeight={1.6} type={'secondary'}>
+                        {l.description}
+                      </Text>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
-    </Block>
+      </AccordionItem>
+    </Accordion>
   );
 });
 

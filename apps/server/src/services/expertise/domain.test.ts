@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { DomainDraft } from './domain';
 import { ExpertiseDomainService } from './domain';
 
 const getAgentModelConfig = vi.fn();
@@ -42,7 +43,7 @@ const draft = {
   outOfScope: 'Exclude general architecture discussions without an incident.',
   rationale: 'The brief is about incidents end to end.',
   title: 'Production incident response',
-};
+} satisfies DomainDraft;
 
 describe('ExpertiseDomainService', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -58,6 +59,12 @@ describe('ExpertiseDomainService', () => {
 
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining('A workflow sequence'),
+            role: 'system',
+          }),
+        ]),
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
       expect.any(Object),
@@ -65,6 +72,32 @@ describe('ExpertiseDomainService', () => {
     expect(result.layers).toHaveLength(2);
     expect(result.canonEntries[0].key).toBe('blameless');
     expect(createDomain).not.toHaveBeenCalled();
+  });
+
+  it('revises the current draft from a natural-language adjustment', async () => {
+    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
+    generateObject.mockResolvedValue(draft);
+
+    await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({
+      adjustment: 'Make the layers a progressive capability hierarchy.',
+      agentId: 'agent_1',
+      brief: 'Help it improve at production incidents.',
+      currentDraft: draft,
+    });
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining(
+              'Requested adjustment:\nMake the layers a progressive capability hierarchy.',
+            ),
+            role: 'user',
+          }),
+        ]),
+      }),
+      expect.any(Object),
+    );
   });
 
   it('persists the reviewed draft as the chosen anchor, carrying layers and canon', async () => {
