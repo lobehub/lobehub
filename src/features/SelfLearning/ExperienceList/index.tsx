@@ -2,7 +2,7 @@
 
 import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { GraduationCapIcon } from 'lucide-react';
+import { DnaIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -45,7 +45,7 @@ const ExperienceList = memo(() => {
   );
   const domainPath =
     activeAgentId && domainId
-      ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
+      ? urlJoin('/agent', activeAgentId, 'self-evolving', domainId)
       : undefined;
 
   return (
@@ -63,7 +63,7 @@ const ExperienceList = memo(() => {
                 t('experience.title'),
               ]}
               title={
-                <Link to={urlJoin('/agent', activeAgentId, 'self-learning')}>{t('title')}</Link>
+                <Link to={urlJoin('/agent', activeAgentId, 'self-evolving')}>{t('title')}</Link>
               }
             />
           ) : null
@@ -80,7 +80,7 @@ const ExperienceList = memo(() => {
             loading={<Loading debugId={'SelfLearningExperience'} />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
-                <Empty icon={GraduationCapIcon} title={t('experience.notFound')} />
+                <Empty icon={DnaIcon} title={t('experience.notFound')} />
               </Center>
             }
             onRetry={() => mutate()}

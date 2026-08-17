@@ -7,7 +7,11 @@ import {
 import { ExpertiseModel } from '@/database/models/expertise';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { DomainDraftSchema, ExpertiseDomainService } from '@/server/services/expertise/domain';
+import {
+  DomainDraftSchema,
+  EditableDomainDraftSchema,
+  ExpertiseDomainService,
+} from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
@@ -219,7 +223,14 @@ export const expertiseRouter = router({
 
   /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
   draftDomain: expertiseWriteProcedure
-    .input(z.object({ agentId: z.string(), brief: z.string().min(1) }))
+    .input(
+      z.object({
+        adjustment: z.string().min(1).max(2000).optional(),
+        agentId: z.string(),
+        brief: z.string().min(1),
+        currentDraft: EditableDomainDraftSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
 
   /** Step 2 of creation: persist the reviewed anchor and bind it to the agent. */

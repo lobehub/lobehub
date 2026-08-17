@@ -237,12 +237,19 @@ export interface AgentRunRequestMessage {
   jwt: string;
   operationId: string;
   prompt: string;
+  /**
+   * Full system context used only when native resume fails and the device CLI
+   * retries with a fresh session. Optional for compatibility with older
+   * servers and devices. Self-hosted gateways must forward this optional field;
+   * older gateways safely degrade to a fresh retry without recovery history.
+   */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
    * Static context injected before the user prompt (workspace conventions,
-   * conversation history on resume). The desktop sends it to `lh hetero exec`
-   * as the first text block of a content-block array. Optional — omitted for
-   * older servers that don't build a device-specific context.
+   * selected context). The desktop sends it to `lh hetero exec` as the first
+   * text block of a content-block array. Optional — omitted for older servers
+   * that don't build a device-specific context.
    */
   systemContext?: string;
   topicId: string;

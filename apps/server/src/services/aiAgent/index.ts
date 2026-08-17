@@ -2345,13 +2345,12 @@ export class AiAgentService {
         log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
-      // When resuming, inject the recent conversation turns as context so CC can
-      // orient itself even if the native session file was cleared (sandbox recycled
-      // or context overflow caused the CLI to start a fresh session).
-      // Only fetch when there IS a stored session id — for first-turn runs CC has
-      // no prior history to inject.
+      // Recovery history is reserved for the CLI's retry without native resume.
+      // The primary resumed attempt already has native history and must not get
+      // a serialized duplicate. Amp threads are server-backed, so they rely on
+      // native continuation exclusively and never need this local-file fallback.
       let conversationHistory: ConversationHistoryEntry[] | undefined;
-      if (resumeSessionId) {
+      if (resumeSessionId && heteroType !== 'amp') {
         try {
           const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
           const turns = recentMsgs
@@ -2359,6 +2358,7 @@ export class AiAgentService {
               (m) =>
                 (m.role === 'user' || m.role === 'assistant') &&
                 !m.threadId &&
+                !selfMessageIds.has(m.id) &&
                 m.content &&
                 m.content !== LOADING_FLAT,
             )
@@ -2373,13 +2373,22 @@ export class AiAgentService {
         }
       }
 
-      // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
+      // Build the primary context without conversation history. If native resume
+      // fails, the CLI switches to the complete fallback prompt on its fresh
+      // retry; successful same-session runs never consume the duplicate history.
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-        conversationHistory,
         githubToken,
         repos: topicRepos,
       });
+      const resumeFallbackSystemContext = conversationHistory
+        ? buildCloudHeteroContext({
+            agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+            conversationHistory,
+            githubToken,
+            repos: topicRepos,
+          })
+        : undefined;
 
       // Feed the resolved images (signed URLs) to the dispatched CLI for vision —
       // mirrors the local-mode path, where the client feeds the persisted
@@ -2406,6 +2415,7 @@ export class AiAgentService {
         operationId,
         prompt,
         repos: topicRepos,
+        resumeFallbackSystemContext,
         resumeSessionId,
         systemContext,
         topicId,
@@ -2731,14 +2741,20 @@ export class AiAgentService {
           // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-            conversationHistory,
           });
+          const deviceResumeFallbackSystemContext = conversationHistory
+            ? buildRemoteDeviceHeteroContext({
+                agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+                conversationHistory,
+              })
+            : undefined;
 
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
             args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
+            resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
             systemContext: deviceSystemContext,
             // Route to the workspace pool when this is a workspace device; the
             // operation JWT stays member-scoped (the run belongs to the member).

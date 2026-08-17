@@ -33,6 +33,7 @@ export * from './knowledgeBase';
 export * from './llm';
 export * from './message';
 export * from './meta';
+export * from './notification';
 export * from './plugins';
 export * from './project';
 export * from './rag';

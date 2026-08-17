@@ -6,6 +6,7 @@
   "gateway.statusDisconnected": "This device is not connected to Gateway",
   "gateway.title": "Device Gateway",
   "navigation.agents": "Agents",
+  "navigation.apps": "Apps",
   "navigation.channels": "Channels",
   "navigation.chat": "Chat",
   "navigation.discover": "Discover",
