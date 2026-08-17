@@ -9,6 +9,7 @@ Numbered operator runbook for Ubuntu 24.04. Assumes GitHub **repository** secret
 | Repo path  | `/home/panachat/panachat`                    |
 | Production | `https://chat.panafor.com`                   |
 | Preview    | `https://preview.panafor.com` (own database) |
+| Admin      | `https://adchat.panafor.com` (control plane) |
 | Image      | `ghcr.io/panafor-ai-team/panachat`           |
 
 **Hard bans:** never `docker compose down -v`; never `docker volume rm panachat_*` or `panachat_preview_*`; never point preview env at prod volumes.
@@ -81,9 +82,10 @@ chmod 600 .env docker-compose/deploy/.env
 Edit **both** files. Required:
 
 - `APP_URL=https://chat.panafor.com`
-- `AUTH_TRUSTED_ORIGINS=https://chat.panafor.com`
+- `AUTH_TRUSTED_ORIGINS=https://chat.panafor.com,https://adchat.panafor.com`
 - `INTERNAL_APP_URL=http://localhost:3210`
-- Rotate `AUTH_SECRET`, `KEY_VAULTS_SECRET`, `POSTGRES_PASSWORD`, `RUSTFS_SECRET_KEY`, `JWKS_KEY` (do not keep example values)
+- `AICO_CONTROL_PLANE_PUBLIC_URL=https://adchat.panafor.com`
+- Rotate `AUTH_SECRET`, `KEY_VAULTS_SECRET`, `POSTGRES_PASSWORD`, `RUSTFS_SECRET_KEY`, `JWKS_KEY`, `AICO_CONTROL_PLANE_SERVICE_TOKEN` (do not keep example values)
 - Browser-reachable `S3_ENDPOINT` (not `http://rustfs:9000`). Example: proxy RustFS as `https://s3.chat.panafor.com` → `127.0.0.1:9000`
 
 Infra file (`docker-compose/deploy/.env`) should keep:
@@ -92,6 +94,8 @@ Infra file (`docker-compose/deploy/.env`) should keep:
 - `PANACHAT_VOLUME_PREFIX=panachat`
 - `PANACHAT_PORT_BLUE=3210` / `PANACHAT_PORT_GREEN=3211`
 - `POSTGRES_CONTAINER=panachat-postgres`
+- `PANACHAT_CONTROL_PLANE_PORT=3020`
+- `COMPOSE_PROFILES=control-plane` (uncomment when you start the admin container)
 
 ---
 
@@ -120,6 +124,7 @@ A records (or AAAA) pointing at `5.135.244.12`:
 
 - `chat.panafor.com`
 - `preview.panafor.com`
+- `adchat.panafor.com`
 - S3 host if you use a separate name (e.g. `s3.chat.panafor.com`)
 
 Wait until `dig +short chat.panafor.com` returns the VPS IP.
@@ -160,24 +165,29 @@ sudo cp docker-compose/deploy/nginx/panachat-site.example.conf \
   /etc/nginx/sites-available/panachat
 sudo cp docker-compose/deploy/nginx/panachat-preview-site.example.conf \
   /etc/nginx/sites-available/panachat-preview
+sudo cp docker-compose/deploy/nginx/panachat-admin-site.example.conf \
+  /etc/nginx/sites-available/panachat-admin
 sudo sed -i 's/chat.example.com/chat.panafor.com/g' /etc/nginx/sites-available/panachat
 sudo sed -i 's/preview.chat.example.com/preview.panafor.com/g' \
   /etc/nginx/sites-available/panachat-preview
+sudo sed -i 's/admin.example.com/adchat.panafor.com/g' /etc/nginx/sites-available/panachat-admin
 ```
 
-The examples 301 HTTP → HTTPS. Until Certbot has issued certs, comment out each `listen 443` server block and change the port-80 `return 301` to a `location /` that `proxy_pass`es `http://panachat_backend` (prod) or `http://panachat_preview_backend` (preview), matching the example `location /` headers.
+The examples 301 HTTP → HTTPS. Until Certbot has issued certs, comment out each `listen 443` server block and change the port-80 `return 301` to a `location /` that `proxy_pass`es `http://panachat_backend` (prod), `http://panachat_preview_backend` (preview), or `http://127.0.0.1:3020` (admin), matching the example `location /` headers.
 
 ```bash
 sudo ln -sf /etc/nginx/sites-available/panachat /etc/nginx/sites-enabled/panachat
 sudo ln -sf /etc/nginx/sites-available/panachat-preview /etc/nginx/sites-enabled/panachat-preview
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/panachat-admin /etc/nginx/sites-enabled/panachat-admin
+# This host already serves developer.panafor.com from sites-enabled/default — do not delete it.
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
 
-TLS (prod first is fine; preview can wait until step 10 if that DNS is not ready):
+TLS (prod + admin first is fine; preview can wait until step 10 if that DNS is not ready):
 
 ```bash
 sudo certbot --nginx -d chat.panafor.com
+sudo certbot --nginx -d adchat.panafor.com
 sudo certbot --nginx -d preview.panafor.com
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
@@ -235,6 +245,8 @@ PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh status
 ```
 
 Open `https://chat.panafor.com`. Sign up the first user; grant platform admin if needed (see self-host-deploy skill).
+
+Admin UI (after `COMPOSE_PROFILES=control-plane` is set and the control-plane container is up): `https://adchat.panafor.com`.
 
 ---
 

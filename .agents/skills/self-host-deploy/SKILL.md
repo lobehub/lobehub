@@ -100,7 +100,7 @@ For a Linux server that must always match GitHub `canary` with no data loss and 
 
 → **[canary-cicd.md](canary-cicd.md)** (`deploy-canary.yml` + `panachat-deploy-remote.sh` + `docker-compose.panachat.yml`)
 
-First-time VPS (Ubuntu packages, env, DNS/TLS, first GHCR image, bootstrap) for `chat.panafor.com` / `preview.panafor.com`:
+First-time VPS (Ubuntu packages, env, DNS/TLS, first GHCR image, bootstrap) for `chat.panafor.com` / `preview.panafor.com` / admin `adchat.panafor.com`:
 
 → **[SERVER-BOOTSTRAP.md](../../../docker-compose/deploy/SERVER-BOOTSTRAP.md)**
 
