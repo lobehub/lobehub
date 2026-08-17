@@ -247,7 +247,7 @@ describe('BrowserManager', () => {
       });
       const closedCall = vi
         .mocked(first.browser.browserWindow.on)
-        .mock.calls.find(([event]) => event === 'closed');
+        .mock.calls.find(([event]) => String(event) === 'closed');
 
       expect(closedCall).toBeDefined();
       (closedCall?.[1] as () => void)();
