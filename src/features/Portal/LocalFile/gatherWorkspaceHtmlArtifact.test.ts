@@ -33,7 +33,7 @@ describe('gatherWorkspaceHtmlArtifact', () => {
       workingDirectory: '/project',
     });
 
-    expect(result.identifier).toBe('workspace-html-pages-index-html');
+    expect(result.identifier).toBe('workspace-html-pages-index-html-6afd7f0435');
     expect(result.title).toBe('Demo');
     expect(result.entryPath).toBe('pages/index.html');
     expect(result.files.map((file) => file.path).sort()).toEqual([

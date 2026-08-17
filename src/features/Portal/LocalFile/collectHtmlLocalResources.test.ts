@@ -223,7 +223,16 @@ describe('path helpers', () => {
 
   it('builds a stable artifact identifier from the html relative path', () => {
     expect(createWorkspaceHtmlArtifactIdentifier('pages/index.html')).toBe(
-      'workspace-html-pages-index-html',
+      'workspace-html-pages-index-html-6afd7f0435',
+    );
+    expect(createWorkspaceHtmlArtifactIdentifier('pages/index.html')).toBe(
+      createWorkspaceHtmlArtifactIdentifier('pages/index.html'),
+    );
+    expect(createWorkspaceHtmlArtifactIdentifier('页面.html')).not.toBe(
+      createWorkspaceHtmlArtifactIdentifier('报告.html'),
+    );
+    expect(createWorkspaceHtmlArtifactIdentifier('a/b.html')).not.toBe(
+      createWorkspaceHtmlArtifactIdentifier('a-b.html'),
     );
   });
 

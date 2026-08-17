@@ -1,3 +1,5 @@
+import { sha256 } from 'js-sha256';
+
 const toSlashPath = (filePath: string): string => filePath.replaceAll('\\', '/');
 
 const fromSlashPath = (filePath: string, sourcePath: string): string => {
@@ -162,15 +164,15 @@ export const extractHtmlTitle = (html: string): string | undefined => {
 };
 
 export const createWorkspaceHtmlArtifactIdentifier = (relativePath: string): string => {
-  const slug = relativePath
-    .replaceAll('\\', '/')
-    .replace(/^\/+/u, '')
+  const normalized = relativePath.replaceAll('\\', '/').replace(/^\/+/u, '');
+  const slug = normalized
     .replaceAll(/[^a-z0-9]+/gi, '-')
     .replaceAll(/^-+|-+$/g, '')
     .toLowerCase()
-    .slice(0, 80);
+    .slice(0, 48);
+  const digest = sha256(normalized).slice(0, 10);
 
-  return `workspace-html-${slug || 'page'}`;
+  return `workspace-html-${slug || 'page'}-${digest}`;
 };
 
 export { parentDirectory };

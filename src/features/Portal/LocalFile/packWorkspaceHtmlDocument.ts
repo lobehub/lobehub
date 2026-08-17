@@ -77,8 +77,9 @@ const replaceHrefToken = (source: string, href: string, replacement: string): st
   return source
     .replaceAll(new RegExp(`(["'])${escaped}\\1`, 'g'), `$1${replacement}$1`)
     .replaceAll(new RegExp(`url\\((['"]?)${escaped}\\1\\)`, 'gi'), `url($1${replacement}$1)`)
+    .replaceAll(new RegExp(`(^|[,\\s])${escaped}(?=\\s+\\d+[wx]|\\s*,|$)`, 'g'), `$1${replacement}`)
     .replaceAll(
-      new RegExp(`(^|[,\\s])${escaped}(?=\\s+\\d+[wx]|\\s*,|$)`, 'g'),
+      new RegExp(`(\\s(?:src|href|poster|data)=)${escaped}(?=[\\s>]|$)`, 'gi'),
       `$1${replacement}`,
     );
 };

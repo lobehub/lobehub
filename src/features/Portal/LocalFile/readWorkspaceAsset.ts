@@ -4,6 +4,8 @@ import { cloudSandboxService } from '@/services/cloudSandbox';
 import { localFileService } from '@/services/electron/localFileService';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 
+import { getFileExtension } from './Body.helpers';
+
 export const WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES = 8 * 1024 * 1024;
 export const WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 export const WORKSPACE_HTML_ARTIFACT_MAX_FILES = 64;
@@ -36,9 +38,80 @@ const TEXT_CONTENT_TYPES = new Set([
   'text/plain',
 ]);
 
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  css: 'text/css',
+  gif: 'image/gif',
+  html: 'text/html',
+  ico: 'image/x-icon',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  js: 'text/javascript',
+  json: 'application/json',
+  mjs: 'text/javascript',
+  png: 'image/png',
+  svg: 'image/svg+xml',
+  ttf: 'font/ttf',
+  txt: 'text/plain',
+  wasm: 'application/wasm',
+  webp: 'image/webp',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  xml: 'application/xml',
+};
+
 const isTextContentType = (contentType: string): boolean => {
   const bare = contentType.split(';')[0].trim().toLowerCase();
   return bare.startsWith('text/') || TEXT_CONTENT_TYPES.has(bare);
+};
+
+const guessContentType = (path: string): string =>
+  CONTENT_TYPE_BY_EXTENSION[getFileExtension(path).toLowerCase()] ?? 'application/octet-stream';
+
+const quoteShellArg = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
+
+const decodeBase64Bytes = (value: string): Uint8Array | undefined => {
+  const compact = value.replaceAll(/\s+/g, '');
+  if (!compact) return;
+  try {
+    const binary = globalThis.atob(compact);
+    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  } catch {
+    return;
+  }
+};
+
+const sandboxCommandOutput = (result: {
+  result?: unknown;
+  success: boolean;
+}): string | undefined => {
+  if (!result.success || !result.result || typeof result.result !== 'object') return;
+  const payload = result.result as { output?: unknown; stdout?: unknown };
+  if (typeof payload.stdout === 'string') return payload.stdout;
+  if (typeof payload.output === 'string') return payload.output;
+  return;
+};
+
+const readSandboxBytes = async (path: string, topicId: string): Promise<Uint8Array | undefined> => {
+  const python = await cloudSandboxService.callTool(
+    'runCommand',
+    {
+      command: `python3 -c ${quoteShellArg(`import pathlib,base64; print(base64.b64encode(pathlib.Path(${JSON.stringify(path)}).read_bytes()).decode(), end="")`)}`,
+      description: 'Read workspace asset bytes',
+    },
+    { topicId },
+  );
+  const pythonBytes = decodeBase64Bytes(sandboxCommandOutput(python) ?? '');
+  if (pythonBytes) return pythonBytes;
+
+  const fallback = await cloudSandboxService.callTool(
+    'runCommand',
+    {
+      command: `base64 ${quoteShellArg(path)}`,
+      description: 'Read workspace asset bytes',
+    },
+    { topicId },
+  );
+  return decodeBase64Bytes(sandboxCommandOutput(fallback) ?? '');
 };
 
 const previewToBytes = async (
@@ -84,27 +157,38 @@ export const readWorkspaceAsset = async ({
 }): Promise<ReadWorkspaceAssetResult> => {
   try {
     if (sandboxTopicId) {
-      const result = await cloudSandboxService.callTool(
-        'readLocalFile',
-        { fullContent: true, path },
-        { topicId: sandboxTopicId },
-      );
-      if (!result.success || typeof result.result?.content !== 'string') {
-        return { ok: false, reason: 'missing' };
+      const contentType = guessContentType(path);
+      if (isTextContentType(contentType)) {
+        const result = await cloudSandboxService.callTool(
+          'readLocalFile',
+          { fullContent: true, path },
+          { topicId: sandboxTopicId },
+        );
+        if (!result.success || typeof result.result?.content !== 'string') {
+          return { ok: false, reason: 'missing' };
+        }
+
+        const text = result.result.content;
+        const bytes = new TextEncoder().encode(text);
+        if (bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
+          return { ok: false, reason: 'oversized' };
+        }
+
+        return {
+          bytes,
+          contentType: result.result.mimeType || contentType,
+          ok: true,
+          text,
+        };
       }
 
-      const text = result.result.content;
-      const bytes = new TextEncoder().encode(text);
+      const bytes = await readSandboxBytes(path, sandboxTopicId);
+      if (!bytes) return { ok: false, reason: 'unreadable' };
       if (bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
         return { ok: false, reason: 'oversized' };
       }
 
-      return {
-        bytes,
-        contentType: result.result.mimeType || 'text/plain',
-        ok: true,
-        text,
-      };
+      return { bytes, contentType, ok: true };
     }
 
     const preview = await projectFileService.getLocalFilePreview({

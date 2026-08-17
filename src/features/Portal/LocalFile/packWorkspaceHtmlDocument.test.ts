@@ -39,6 +39,39 @@ describe('packWorkspaceHtmlDocument', () => {
     expect(packed.sidecars).toEqual([]);
   });
 
+  it('rewrites unquoted html attributes so inlined files are not left behind', () => {
+    const packed = packWorkspaceHtmlDocument({
+      entryPath: 'index.html',
+      files: [
+        {
+          content: '<html><img src=dot.png alt=mark><link rel=stylesheet href=app.css></html>',
+          contentType: 'text/html',
+          encoding: 'utf8',
+          path: 'index.html',
+        },
+        {
+          content: 'body { color: #111; }',
+          contentType: 'text/css',
+          encoding: 'utf8',
+          path: 'app.css',
+        },
+        {
+          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
+          contentType: 'image/png',
+          encoding: 'base64',
+          path: 'dot.png',
+        },
+      ],
+    });
+
+    expect(packed.html).toContain('src=data:image/png;base64,AQID');
+    expect(packed.html).toContain('href=data:text/css;base64,');
+    expect(packed.html).not.toContain('src=dot.png');
+    expect(packed.html).not.toContain('href=app.css');
+    expect(packed.inlinedPaths).toEqual(['app.css', 'dot.png']);
+    expect(packed.sidecars).toEqual([]);
+  });
+
   it('keeps files over the inline limit as uploaded sidecars', () => {
     const largePng = globalThis.btoa('x'.repeat(WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES + 8));
     const packed = packWorkspaceHtmlDocument({
