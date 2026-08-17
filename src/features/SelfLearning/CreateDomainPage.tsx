@@ -32,7 +32,7 @@ import { shinyTextStyles } from '@/styles';
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
 
-const GENERATION_ESTIMATE_SECONDS = 40;
+const GENERATION_ESTIMATE_SECONDS = 30;
 
 const emptyAdjustments: Record<AdjustmentTarget, string> = {
   canonEntries: '',
@@ -508,7 +508,7 @@ const CreateDomainPage = memo(() => {
                     variant={'filled'}
                     onChange={(e) => setBrief(e.target.value)}
                   />
-                  <Flexbox horizontal justify={'end'} paddingBlockEnd={8}>
+                  <Flexbox horizontal justify={'end'} style={{ paddingBlockEnd: 8 }}>
                     <Button
                       disabled={!brief.trim() || !!refiningTarget}
                       icon={RefreshCwIcon}
