@@ -858,10 +858,11 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
-    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+    it('forwards cwd and primary/fallback context from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
         cwd: '/Users/alice/repo',
+        resumeFallbackSystemContext: 'RECOVERY CONTEXT',
         systemContext: 'WORKSPACE CONTEXT',
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -869,6 +870,7 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/Users/alice/repo',
+          resumeFallbackSystemContext: 'RECOVERY CONTEXT',
           systemContext: 'WORKSPACE CONTEXT',
         }),
       );

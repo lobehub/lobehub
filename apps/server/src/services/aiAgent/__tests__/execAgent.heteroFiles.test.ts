@@ -25,7 +25,7 @@ const {
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
-  mockMessageQuery: vi.fn().mockResolvedValue([]),
+  mockMessageQuery: vi.fn(),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
   mockPublishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   mockResolveAttachmentsByFileIds: vi.fn(),
@@ -220,6 +220,10 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockDispatchAgentRun.mockResolvedValue({ success: true });
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
+    mockMessageQuery.mockResolvedValue([]);
+    mockBuildRemoteDeviceHeteroContext.mockImplementation(({ conversationHistory }) =>
+      conversationHistory ? 'device recovery context' : 'device context',
+    );
     mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
@@ -355,8 +359,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
-  it('should not replay DB conversation history when resuming an Amp thread', async () => {
-    mockGetHeterogeneousResumeSessionId.mockResolvedValue('T-existing-thread');
+  it('resumes Amp natively without loading or injecting fallback history', async () => {
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('amp-thread-existing');
     heteroAgentConfig.model = 'amp';
     heteroAgentConfig.provider = 'amp';
     heteroAgentConfig.agencyConfig = {
@@ -367,16 +371,17 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     await service.execAgent({
       agentId: 'agent-1',
-      prompt: 'Continue with Amp',
+      prompt: 'Continue the Amp thread',
     });
 
     expect(mockMessageQuery).not.toHaveBeenCalled();
-    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
-      agentSystemContext: undefined,
-      conversationHistory: undefined,
-    });
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledOnce();
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({ resumeSessionId: 'T-existing-thread' }),
+      expect.objectContaining({
+        resumeFallbackSystemContext: undefined,
+        resumeSessionId: 'amp-thread-existing',
+        systemContext: 'device context',
+      }),
     );
   });
 
@@ -418,6 +423,35 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         args: ['--model', 'gpt-5.5', '--effort', 'xhigh'],
       }),
     );
+  });
+
+  it('reserves cloud conversation history for a retry without native resume', async () => {
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('cloud-session-existing');
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Earlier cloud question', id: 'old-user', role: 'user' },
+      { content: 'Earlier cloud answer', id: 'old-assistant', role: 'assistant' },
+      { content: 'Continue in cloud', id: 'msg-1', role: 'user' },
+    ]);
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'claude-code' },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Continue in cloud',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeFallbackSystemContext: expect.stringContaining('Earlier cloud question'),
+        resumeSessionId: 'cloud-session-existing',
+        systemContext: expect.not.stringContaining('<previous_conversation>'),
+      }),
+    );
+    const { resumeFallbackSystemContext } = mockSpawnHeteroSandbox.mock.calls[0][0];
+    expect(resumeFallbackSystemContext).toContain('Earlier cloud answer');
+    expect(resumeFallbackSystemContext).not.toContain('Continue in cloud');
   });
 
   it('should encode native Codex args before forwarding them to sandbox lh hetero exec', async () => {
@@ -525,8 +559,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   it('resumes a native device session with device-specific context', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
     mockMessageQuery.mockResolvedValue([
-      { content: 'Earlier request', id: 'history-user', role: 'user' },
-      { content: 'Earlier response', id: 'history-assistant', role: 'assistant' },
+      { content: 'Earlier question', id: 'old-user', role: 'user' },
+      { content: 'Earlier answer', id: 'old-assistant', role: 'assistant' },
       { content: 'Continue on my device', id: 'msg-1', role: 'user' },
     ]);
     heteroAgentConfig.agencyConfig = {
@@ -540,19 +574,23 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       prompt: 'Continue on my device',
     });
 
-    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
-      agentSystemContext: undefined,
-      conversationHistory: [
-        { content: 'Earlier request', role: 'user' },
-        { content: 'Earlier response', role: 'assistant' },
-      ],
-    });
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
       expect.objectContaining({
+        resumeFallbackSystemContext: 'device recovery context',
         resumeSessionId: 'native-session-existing',
         systemContext: 'device context',
       }),
     );
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenNthCalledWith(1, {
+      agentSystemContext: undefined,
+    });
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenNthCalledWith(2, {
+      agentSystemContext: undefined,
+      conversationHistory: [
+        { content: 'Earlier question', role: 'user' },
+        { content: 'Earlier answer', role: 'assistant' },
+      ],
+    });
   });
 
   it('dispatches OpenCode to a bound device with its model args', async () => {

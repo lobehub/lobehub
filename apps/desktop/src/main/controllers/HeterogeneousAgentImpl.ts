@@ -2442,6 +2442,7 @@ export default class HeterogeneousAgentCtr {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     serverUrl: string;
     systemContext?: string;
@@ -2456,6 +2457,7 @@ export default class HeterogeneousAgentCtr {
       jwt,
       operationId,
       prompt,
+      resumeFallbackSystemContext,
       resumeSessionId,
       serverUrl,
       systemContext,
@@ -2491,7 +2493,12 @@ export default class HeterogeneousAgentCtr {
       ...(extraArgs ?? []),
     ];
 
-    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+    const stdinPayload = buildHeteroExecStdinPayload({
+      imageList,
+      prompt,
+      resumeFallbackSystemContext,
+      systemContext,
+    });
     const cliScript = resolveCliScript();
     if (!existsSync(cliScript)) {
       return Promise.resolve({
