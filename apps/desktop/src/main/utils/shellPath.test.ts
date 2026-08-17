@@ -106,10 +106,10 @@ describe('refreshShellEnvironment', () => {
       process.env.SHELL = '/bin/sh';
       process.env.AWS_LOBEHUB_SHELL_FIXTURE = 'fixture-value';
       process.env.UNRELATED_SECRET = 'must-not-import';
-      execFileMock.mockImplementation((...args) => {
+      execFileMock.mockImplementation((file, args, options, callback) => {
         delete process.env.AWS_LOBEHUB_SHELL_FIXTURE;
         delete process.env.UNRELATED_SECRET;
-        return actualExecFile(...args);
+        return actualExecFile(file, args, options, callback);
       });
 
       await refreshShellEnvironment();
