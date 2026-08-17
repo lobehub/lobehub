@@ -168,6 +168,7 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
+import { ExpertiseContextService } from '@/server/services/expertise/context';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -4500,6 +4501,23 @@ export class AiAgentService {
       log('execAgent: failed to build operationSkillSet: %O', error);
     }
 
+    // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
+    const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    let expertise;
+    try {
+      expertise = await new ExpertiseContextService(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).buildSnapshot(expertiseAgentId);
+    } catch (error) {
+      log(
+        'execAgent: failed to build expertise snapshot for agent %s: %O',
+        expertiseAgentId,
+        error,
+      );
+    }
+
     // 19. Create operation using AgentRuntimeService
     log(
       'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -4579,6 +4597,7 @@ export class AiAgentService {
         deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
         discordContext,
         evalContext,
+        expertise,
         initialContext,
         initialMessages: allMessages,
         initialStepCount,

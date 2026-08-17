@@ -613,6 +613,7 @@ export const buildServerCallLlmContext = async ({
     discordContext: ctx.discordContext,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: ctx.evalContext,
+    expertise: state.expertise,
     forceFinish: state.forceFinish,
     ...(groupAgentBuilderContext && { groupAgentBuilderContext }),
     historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),

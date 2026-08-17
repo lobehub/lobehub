@@ -7,7 +7,11 @@ import type {
   ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
-import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  ExpertiseContextSnapshot,
+  UserInterventionConfig,
+} from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
@@ -415,6 +419,8 @@ export interface OperationCreationParams {
    * device capability from raw config.
    */
   executionPlan?: ExecutionPlan;
+  /** Immutable expertise resolved once before the operation is persisted. */
+  expertise?: ExpertiseContextSnapshot;
   /**
    * External lifecycle hooks
    * Registered once, auto-adapt to local (in-memory) or production (webhook) mode
