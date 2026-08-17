@@ -508,14 +508,14 @@ const CreateDomainPage = memo(() => {
                     variant={'filled'}
                     onChange={(e) => setBrief(e.target.value)}
                   />
-                  <Flexbox horizontal justify={'end'}>
+                  <Flexbox horizontal justify={'end'} paddingBlockEnd={8}>
                     <Button
                       disabled={!brief.trim() || !!refiningTarget}
                       icon={RefreshCwIcon}
                       size={'small'}
                       onClick={() => void generate()}
                     >
-                      {t('create.regenerateAfterEdit')}
+                      {t('create.regenerate')}
                     </Button>
                   </Flexbox>
                 </Flexbox>

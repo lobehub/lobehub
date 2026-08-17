@@ -62,7 +62,6 @@
   "create.modalTitle": "新建领域",
   "create.next": "下一步",
   "create.regenerate": "重新生成",
-  "create.regenerateAfterEdit": "修改后重新生成",
   "create.reviewHelp": "这是它从你的描述里读出来的锚。看看有没有偏 —— 过滤器决定它从哪些对话里学；分层和经典依据决定经验挂在哪、「覆盖」意味着什么。",
   "domain.delete": "删除",
   "domain.deleteConfirm.content": "它在这个方向学到的 {{habits}} 个习惯、{{runs}} 次实践记录会一起删掉，不可恢复。",

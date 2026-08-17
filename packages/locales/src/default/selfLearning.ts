@@ -70,7 +70,6 @@ export default {
   'create.modalTitle': 'New domain',
   'create.next': 'Next',
   'create.regenerate': 'Regenerate',
-  'create.regenerateAfterEdit': 'Regenerate after edits',
   'create.reviewHelp':
     'Here is the anchor it read out of your brief. Fix anything that is off — the filter decides which conversations it learns from; the layers and canon decide where lessons attach and what “coverage” means.',
 
