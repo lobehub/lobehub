@@ -142,7 +142,7 @@ export default {
   'headline.sublineMulti':
     '{{domains}} directions · {{habits}} habits · lessons take effect as soon as they are learned; correct anything you see wrong',
 
-  'nav.newDomain': 'Start a new direction',
+  'nav.newDomain': 'Create new domain',
   'nav.teach': 'Teach it one',
   'nav.warmup': 'Review past conversations',
 

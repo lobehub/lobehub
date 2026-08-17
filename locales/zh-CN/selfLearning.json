@@ -120,7 +120,7 @@
   "headline.single.stable": "{{name}}练了 {{runs}} 次，学到的都已经养成习惯了。",
   "headline.subline": "{{habits}} 个习惯 · {{runs}} 次实践 · 经验即学即用，看到不对的随手教",
   "headline.sublineMulti": "{{domains}} 个方向 · {{habits}} 个习惯 · 经验即学即用，看到不对的随手教",
-  "nav.newDomain": "开新方向",
+  "nav.newDomain": "创建新领域",
   "nav.teach": "直接教它一条",
   "nav.warmup": "温习历史对话",
   "profile.counts": "{{count}} 个习惯",
