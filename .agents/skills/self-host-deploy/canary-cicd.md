@@ -87,21 +87,23 @@ docker compose -f docker-compose/deploy/docker-compose.panachat.yml \
 Every push to `canary` builds, pushes GHCR, then runs:
 
 ```bash
-./scripts/panachat-deploy-remote.sh deploy ghcr.io/<owner>/panachat:<sha>
+PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh deploy ghcr.io/<owner>/panachat:<sha>
 ```
 
 Manual: Actions → **Deploy Panachat Canary** → `workflow_dispatch` (optional skip deploy).
 
+For staging before prod, use the **`preview`** branch and [preview-cicd.md](preview-cicd.md) (own database on the same VPS).
+
 ## Day-2 ops
 
 ```bash
-./scripts/panachat-deploy-remote.sh status
-./scripts/panachat-deploy-remote.sh rollback # previous SHA, blue-green
+PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh status
+PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh rollback # previous SHA, blue-green
 ./scripts/panachat-backup.sh --reason manual
 bash .claude/skills/self-host-deploy/scripts/verify-deployment.sh https://chat.example.com
 ```
 
-App updates only touch `panachat-blue` / `panachat-green`. Data services stay up. Failed health checks leave traffic on the old slot.
+App updates only touch `${PANACHAT_STACK}-blue` / `-green` (default `panachat-blue` / `panachat-green`). Data services stay up. Failed health checks leave traffic on the old slot.
 
 ## Near-zero downtime notes
 

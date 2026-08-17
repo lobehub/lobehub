@@ -1,19 +1,20 @@
-name: Deploy Panachat Canary
+name: Deploy Panachat Preview
 
-# Build ghcr.io/<owner>/panachat on every push to canary, then SSH-deploy
-# with blue-green swap (scripts/panachat-deploy-remote.sh).
+# Build ghcr.io/<owner>/panachat on every push to preview, then SSH-deploy
+# the isolated preview stack (own DB volumes) with PANACHAT_ENV=preview.
 #
-# Required secrets:
+# Required secrets (same as canary deploy):
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
-#   GHCR_READ_TOKEN — PAT with read:packages (server pulls private ghcr.io/.../panachat)
-# Optional secrets:
+#   GHCR_READ_TOKEN — PAT with read:packages
+# Optional:
 #   DEPLOY_PATH (repo root on server; default ~/panachat)
 #
-# Package visibility: workflow attempts to set the GHCR package to private
-# after push (public GitHub repo does not mean a public image).
+# Preview must use .env.preview + docker-compose/deploy/.env.preview on the server
+# and panachat_preview_* volumes — never prod panachat_* volumes.
+
 on:
   push:
-    branches: [canary]
+    branches: [preview]
   workflow_dispatch:
     inputs:
       skip_deploy:
@@ -22,7 +23,7 @@ on:
         default: false
 
 concurrency:
-  group: deploy-canary
+  group: deploy-preview
   cancel-in-progress: false
 
 permissions:
@@ -34,7 +35,7 @@ env:
 
 jobs:
   build:
-    name: Build and push Panachat image
+    name: Build and push Panachat preview image
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.vars.outputs.image }}
@@ -69,7 +70,7 @@ jobs:
           tags: |
             type=raw,value=${{ steps.vars.outputs.sha_short }}
             type=raw,value=${{ steps.vars.outputs.sha }}
-            type=raw,value=canary
+            type=raw,value=preview
           labels: |
             org.opencontainers.image.title=panachat
             org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -94,28 +95,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           owner='${{ github.repository_owner }}'
-          # Package name for container API is the image name without registry
           pkg='panachat'
-          # Org vs user package endpoints
           if gh api "orgs/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
             gh api --method PATCH "orgs/${owner}/packages/container/${pkg}" \
               -f visibility=private || true
-            echo "Set org package ${owner}/${pkg} visibility=private"
           elif gh api "users/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
             gh api --method PATCH "users/${owner}/packages/container/${pkg}" \
               -f visibility=private || true
-            echo "Set user package ${owner}/${pkg} visibility=private"
           else
             echo "Package not visible yet via API — set Private in GitHub Packages UI after first push."
           fi
 
   deploy:
-    name: SSH blue-green deploy
+    name: SSH preview blue-green deploy
     needs: build
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true }}
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
+      - name: Deploy preview over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -130,7 +127,7 @@ jobs:
             if [ -n "${GHCR_TOKEN:-}" ]; then
               echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             fi
-            PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh deploy "$IMAGE"
+            PANACHAT_ENV=preview ./scripts/panachat-deploy-remote.sh deploy "$IMAGE"
         env:
           IMAGE: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.sha_short }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
