@@ -211,13 +211,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface HeterogeneousAgentStatusCardProps {
+  isLocalExecution: boolean;
   onCommandChange?: (command: string) => Promise<void> | void;
   onPermissionModeChange?: (permissionMode: CodexPermissionMode) => Promise<void> | void;
   provider: HeterogeneousProviderConfig;
 }
 
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
-  ({ provider, onCommandChange, onPermissionModeChange }) => {
+  ({ isLocalExecution, provider, onCommandChange, onPermissionModeChange }) => {
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -518,6 +519,12 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
       const permissionMode =
         provider.permissionMode ?? resolveLegacyCodexPermissionMode(provider.args);
+      const permissionDescription = t(
+        `heterogeneousStatus.codexPermission.description.${permissionMode}`,
+      );
+      const permissionTooltip = isLocalExecution
+        ? permissionDescription
+        : `${permissionDescription} ${t('heterogeneousStatus.codexPermission.localOnly')}`;
       const options = [
         ...(['ask', 'auto-review', 'read-only', 'full-access'] as const).map((mode) => ({
           label: t(`heterogeneousStatus.codexPermission.mode.${mode}`),
@@ -542,9 +549,9 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             {t('heterogeneousStatus.codexPermission.label')}
           </Text>
           <div className={styles.detailContent}>
-            <Tooltip title={t(`heterogeneousStatus.codexPermission.description.${permissionMode}`)}>
+            <Tooltip title={permissionTooltip}>
               <Select
-                disabled={!canEdit}
+                disabled={!canEdit || !isLocalExecution}
                 options={options}
                 popupMatchSelectWidth={260}
                 size="small"
@@ -554,7 +561,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   if (
                     typeof value !== 'string' ||
                     !CODEX_PERMISSION_MODES.includes(value as CodexPermissionMode) ||
-                    !canEdit
+                    !canEdit ||
+                    !isLocalExecution
                   )
                     return;
                   void onPermissionModeChange?.(value as CodexPermissionMode);

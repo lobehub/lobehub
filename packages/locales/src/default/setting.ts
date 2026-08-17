@@ -358,6 +358,8 @@ export default {
   'heterogeneousStatus.codexPermission.description.read-only':
     'Can inspect files but cannot change the workspace.',
   'heterogeneousStatus.codexPermission.label': 'Permissions',
+  'heterogeneousStatus.codexPermission.localOnly':
+    'This mode requires Codex app-server in the local desktop app.',
   'heterogeneousStatus.codexPermission.mode.ask': 'Ask before changes',
   'heterogeneousStatus.codexPermission.mode.auto-review': 'Auto review',
   'heterogeneousStatus.codexPermission.mode.custom': 'Custom CLI arguments',

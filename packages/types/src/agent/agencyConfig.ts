@@ -46,7 +46,7 @@ export type EffectiveCodexPermissionMode = CodexPermissionMode | 'custom';
 
 export interface ResolvedCodexPermissionMode {
   mode: EffectiveCodexPermissionMode;
-  source: 'agent' | 'legacy' | 'topic';
+  source: 'agent' | 'legacy';
 }
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
@@ -434,13 +434,10 @@ export const resolveLegacyCodexPermissionMode = (
 export const resolveCodexPermissionMode = ({
   args,
   permissionMode,
-  topicPermissionMode,
 }: {
   args?: string[];
   permissionMode?: CodexPermissionMode;
-  topicPermissionMode?: CodexPermissionMode | null;
 }): ResolvedCodexPermissionMode => {
-  if (topicPermissionMode) return { mode: topicPermissionMode, source: 'topic' };
   if (permissionMode) return { mode: permissionMode, source: 'agent' };
   return { mode: resolveLegacyCodexPermissionMode(args), source: 'legacy' };
 };

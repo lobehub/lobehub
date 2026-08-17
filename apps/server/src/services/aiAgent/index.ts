@@ -2319,7 +2319,6 @@ export class AiAgentService {
               resolveCodexPermissionMode({
                 args: heterogeneousProvider?.args,
                 permissionMode: heterogeneousProvider?.permissionMode,
-                topicPermissionMode: topic?.metadata?.codexPermissionMode,
               }),
             )
           : undefined;

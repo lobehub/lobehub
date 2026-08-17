@@ -262,7 +262,7 @@ const buildLocalHeterogeneousSystemContext = ({
 
 const getTopicMetadataById = (
   store: ChatStore,
-  topicId: string | null | undefined,
+  topicId: string | undefined,
 ): ChatTopicMetadata | undefined => {
   if (!topicId) return;
 
@@ -1840,13 +1840,11 @@ export const executeHeterogeneousAgent = async (
       ...heterogeneousProvider.env,
     };
 
-    const topicMetadata = getTopicMetadataById(get(), context.topicId);
     const codexPermission =
       adapterType === 'codex'
         ? resolveCodexPermissionMode({
             args: heterogeneousProvider.args,
             permissionMode: heterogeneousProvider.permissionMode,
-            topicPermissionMode: topicMetadata?.codexPermissionMode,
           })
         : undefined;
     const configuredCodexPermissionMode = codexPermission

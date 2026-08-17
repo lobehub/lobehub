@@ -148,7 +148,9 @@ export const buildConnectAgentConfig = ({
   };
   const heterogeneousProvider = {
     command: provider.command,
-    ...(provider.type === 'codex' ? { permissionMode: 'ask' as const } : {}),
+    ...(provider.type === 'codex' && target.kind === 'local'
+      ? { permissionMode: 'ask' as const }
+      : {}),
     type: provider.type,
   };
 

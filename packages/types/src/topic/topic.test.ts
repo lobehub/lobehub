@@ -3,18 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { chatTopicMetadataUpdateSchema, parseTopicScheduledRun } from './topic';
 
 describe('chatTopicMetadataUpdateSchema', () => {
-  it('accepts Codex permission overrides and rejects unknown modes', () => {
-    expect(chatTopicMetadataUpdateSchema.parse({ codexPermissionMode: 'ask' })).toEqual({
-      codexPermissionMode: 'ask',
-    });
-    expect(chatTopicMetadataUpdateSchema.parse({ codexPermissionMode: null })).toEqual({
-      codexPermissionMode: null,
-    });
-    expect(
-      chatTopicMetadataUpdateSchema.safeParse({ codexPermissionMode: 'unrestricted' }).success,
-    ).toBe(false);
-  });
-
   it('parses a scheduled heterogeneous continuation patch', () => {
     const metadata = {
       scheduledRun: {

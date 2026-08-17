@@ -320,7 +320,6 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
-  'heteroAgent.codexPermission.agentDefault': 'Agent default · {{mode}}',
   'heteroAgent.codexPermission.description.ask':
     'Can edit the workspace, but asks you before sensitive commands or file changes.',
   'heteroAgent.codexPermission.description.auto-review':
@@ -339,8 +338,6 @@ export default {
   'heteroAgent.codexPermission.mode.full-access': 'Full access',
   'heteroAgent.codexPermission.mode.read-only': 'Read only',
   'heteroAgent.codexPermission.nextRun': 'The new permission mode applies to the next run.',
-  'heteroAgent.codexPermission.noTopic':
-    'No conversation exists yet, so choosing a mode updates the Agent default.',
   'heteroAgent.codexPermission.updateFailed': 'Couldn’t update the Codex permission mode.',
   'heteroAgent.claudeQuota.accountActive': 'In use',
   'heteroAgent.claudeQuota.accountSwitch': 'Switch',

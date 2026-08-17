@@ -93,14 +93,7 @@ describe('Codex permission modes', () => {
     expect(resolveLegacyCodexPermissionMode([...args])).toBe(mode);
   });
 
-  it('resolves topic override before Agent default before legacy arguments', () => {
-    expect(
-      resolveCodexPermissionMode({
-        args: ['--dangerously-bypass-approvals-and-sandbox'],
-        permissionMode: 'ask',
-        topicPermissionMode: 'read-only',
-      }),
-    ).toEqual({ mode: 'read-only', source: 'topic' });
+  it('resolves the Agent setting before legacy arguments', () => {
     expect(
       resolveCodexPermissionMode({
         args: ['--dangerously-bypass-approvals-and-sandbox'],

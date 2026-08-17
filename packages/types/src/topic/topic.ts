@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { CodexPermissionMode } from '../agent/agencyConfig';
-import { CODEX_PERMISSION_MODES } from '../agent/agencyConfig';
 import type { SerializedAgentHook } from '../agentHook';
 import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
@@ -122,8 +120,6 @@ export interface ChatTopicMetadata {
   };
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
-  /** Optional per-topic Codex permission override. `null` restores the Agent default. */
-  codexPermissionMode?: CodexPermissionMode | null;
   cronJobId?: string;
   /**
    * The agent whose Profile page this Agent Builder conversation was started
@@ -440,7 +436,6 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
 /** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
-  codexPermissionMode: z.enum(CODEX_PERMISSION_MODES).nullable().optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),

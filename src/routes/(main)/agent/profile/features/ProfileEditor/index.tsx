@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -58,6 +59,11 @@ const ProfileEditor = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
+  const isLocalHeterogeneousExecution =
+    resolveExecutionTarget(config?.agencyConfig, {
+      clientExecutionAvailable: isDesktop,
+      isHetero: isHeterogeneous,
+    }) === 'local';
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -80,7 +86,8 @@ const ProfileEditor = memo(() => {
   };
 
   const updateCodexPermissionMode = async (permissionMode: CodexPermissionMode) => {
-    if (!canEdit || heterogeneousProvider?.type !== 'codex') return;
+    if (!canEdit || !isLocalHeterogeneousExecution || heterogeneousProvider?.type !== 'codex')
+      return;
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, permissionMode },
@@ -121,6 +128,7 @@ const ProfileEditor = memo(() => {
           disabled: !isDesktop,
           children: (
             <HeterogeneousAgentStatusCard
+              isLocalExecution={isLocalHeterogeneousExecution}
               provider={heterogeneousProvider}
               onCommandChange={updateHeterogeneousCommand}
               onPermissionModeChange={updateCodexPermissionMode}
