@@ -146,6 +146,13 @@ export const buildConnectAgentConfig = ({
     systemRole: '',
     title: provider.title,
   };
+  const heterogeneousProvider = {
+    command: provider.command,
+    ...(provider.type === 'codex' && target.kind === 'local'
+      ? { permissionMode: 'ask' as const }
+      : {}),
+    type: provider.type,
+  };
 
   if (target.kind === 'device') {
     return {
@@ -153,7 +160,7 @@ export const buildConnectAgentConfig = ({
       agencyConfig: {
         boundDeviceId: target.deviceId,
         executionTarget: 'device' as const,
-        heterogeneousProvider: { command: provider.command, type: provider.type },
+        heterogeneousProvider,
       },
     };
   }
@@ -161,7 +168,7 @@ export const buildConnectAgentConfig = ({
   return {
     ...base,
     agencyConfig: {
-      heterogeneousProvider: { command: provider.command, type: provider.type },
+      heterogeneousProvider,
     },
   };
 };

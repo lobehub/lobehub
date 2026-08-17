@@ -92,4 +92,31 @@ describe('buildConnectAgentConfig', () => {
       }),
     ).toMatchObject({ provider: 'claude-code' });
   });
+
+  it('defaults newly connected local Codex agents to ask for approval', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('codex')!,
+        target: { kind: 'local' },
+      }),
+    ).toMatchObject({
+      agencyConfig: { heterogeneousProvider: { permissionMode: 'ask', type: 'codex' } },
+    });
+  });
+
+  it('keeps connected-device Codex agents on the compatible legacy exec path', () => {
+    const config = buildConnectAgentConfig({
+      provider: getConnectableProvider('codex')!,
+      target: { deviceId: 'device-1', kind: 'device' },
+    });
+
+    expect(config).toMatchObject({
+      agencyConfig: {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'codex' },
+      },
+    });
+    expect(config).not.toHaveProperty('agencyConfig.heterogeneousProvider.permissionMode');
+  });
 });

@@ -165,7 +165,7 @@ import type {
   BuiltinStreaming,
 } from '@lobechat/types';
 
-import { CodexInspectors, CodexRenders } from './codex';
+import { CodexInspectors, CodexInterventions, CodexRenders } from './codex';
 import { GithubIdentifier, GithubInspectors, GithubRenders } from './github';
 import { registerBuiltinInspectors } from './inspectors';
 import { registerBuiltinInterventions } from './interventions';
@@ -338,6 +338,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
     [QODER_IDENTIFIER]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    codex: CodexInterventions,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,
       BuiltinIntervention

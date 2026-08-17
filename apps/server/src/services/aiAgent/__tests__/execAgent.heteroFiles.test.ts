@@ -515,6 +515,27 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('fails closed instead of dispatching a configured Codex mode through exec', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { permissionMode: 'ask', type: 'codex' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not drop the approval policy',
+    });
+
+    expect(result).toMatchObject({
+      error: expect.stringContaining('requires the local desktop app'),
+      status: 'error',
+      success: false,
+    });
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
   it('dispatches OpenCode to a bound device with its model args', async () => {
     heteroAgentConfig.model = 'opencode';
     heteroAgentConfig.provider = 'opencode';

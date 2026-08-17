@@ -197,6 +197,11 @@ export interface AgentInterventionRequestData {
   deadline: number;
   /** Tool plugin identifier (e.g. `'claude-code'`). */
   identifier: string;
+  /**
+   * Correlation key for one intervention callback when a tool item can ask
+   * more than once. Falls back to `toolCallId` for legacy producers.
+   */
+  interventionId?: string;
   /** Correlation key. Stable for the lifetime of the intervention. */
   toolCallId: string;
 }
@@ -210,6 +215,8 @@ export interface AgentInterventionResponseData {
   cancelled?: boolean;
   /** When `cancelled`, optional reason for telemetry/logging. */
   cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** Correlation key echoed from the request when it differs from the tool call. */
+  interventionId?: string;
   /** User-supplied answer (JSON-serializable). Absent when cancelled. */
   result?: unknown;
   toolCallId: string;

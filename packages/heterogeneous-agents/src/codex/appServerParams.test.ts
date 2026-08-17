@@ -5,6 +5,7 @@ import {
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
   getCodexAppServerUnsupportedArgs,
+  getCodexPermissionProfile,
 } from './appServerParams';
 
 describe('Codex app-server payload builders', () => {
@@ -41,6 +42,7 @@ describe('Codex app-server payload builders', () => {
       ),
     ).toEqual({
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       config: {
         model_provider: 'openai',
         model_reasoning_effort: 'high',
@@ -94,6 +96,51 @@ describe('Codex app-server payload builders', () => {
         '--cd=src',
         '--ephemeral',
       ]),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'full-access',
+      { approvalPolicy: 'never', approvalsReviewer: 'user', sandbox: 'danger-full-access' },
+    ],
+    [
+      'ask',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' },
+    ],
+    [
+      'auto-review',
+      {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'auto_review',
+        sandbox: 'workspace-write',
+      },
+    ],
+    [
+      'read-only',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'read-only' },
+    ],
+  ] as const)('maps %s to an exact app-server profile', (mode, expected) => {
+    expect(getCodexPermissionProfile(mode)).toEqual(expected);
+    expect(
+      buildCodexAppServerThreadParams(
+        [
+          '--dangerously-bypass-approvals-and-sandbox',
+          '--ask-for-approval',
+          'never',
+          '--sandbox',
+          'danger-full-access',
+        ],
+        '/workspace',
+        undefined,
+        mode,
+      ),
+    ).toMatchObject(expected);
+    expect(
+      getCodexAppServerUnsupportedArgs(
+        ['--ask-for-approval', 'never', '--sandbox', 'danger-full-access'],
+        { permissionMode: mode },
+      ),
     ).toEqual([]);
   });
 

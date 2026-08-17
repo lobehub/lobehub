@@ -5,6 +5,8 @@ import type { LobeToolRenderType } from '../../tool';
 
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
+  /** Runtime callback id; distinct from the tool call when one item asks more than once. */
+  interventionId?: string;
   rejectedReason?: string;
   /**
    * The user skipped the interaction (e.g. AskUserQuestion) rather than
@@ -16,6 +18,7 @@ export interface ToolIntervention {
 }
 
 export const ToolInterventionSchema = z.object({
+  interventionId: z.string().optional(),
   rejectedReason: z.string().optional(),
   skipped: z.boolean().optional(),
   status: z.enum(['pending', 'approved', 'rejected', 'aborted', 'none']).optional(),

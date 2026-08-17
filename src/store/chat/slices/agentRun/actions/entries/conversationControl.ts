@@ -1159,6 +1159,10 @@ export class ConversationControlActionImpl {
       console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
       return;
     }
+    const interventionId = toolMessage.plugin?.intervention?.interventionId;
+    const isCodexApproval = toolMessage.plugin?.identifier === 'codex';
+    const codexDecision = isCodexApproval ? payload?.decision : undefined;
+    const isCodexRejected = codexDecision === 'decline' || codexDecision === 'cancel';
 
     // Walk up to the assistant that owns this tool. `messageOperationMap` is a
     // most-granular pointer, so it may reference a transient child op
@@ -1204,24 +1208,36 @@ export class ConversationControlActionImpl {
     if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: { status: 'approved' } },
+        {
+          intervention: isCodexRejected
+            ? {
+                rejectedReason:
+                  codexDecision === 'cancel' ? 'User cancelled' : 'User denied permission',
+                status: 'rejected',
+              }
+            : { status: 'approved' },
+        },
         optimisticContext,
       );
       // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
       // to `pluginState.askUserAnswers` so the Render component can show
       // Q&A pairs instead of parsing the bridge's prose `User answers:`
       // dump out of `content`. Best-effort — never block the IPC submit.
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      if (!isCodexApproval) {
+        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      }
       // Bridge formats its own "User answers:" string for CC, so the eventual
       // tool_result re-rewrites this content. The optimistic write is just
       // for the brief gap between Submit and CC echoing the result back.
-      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        summary,
-        undefined,
-        optimisticContext,
-      );
+      if (!isCodexApproval) {
+        const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
+        await this.#get().optimisticUpdateMessageContent(
+          toolMessageId,
+          summary,
+          undefined,
+          optimisticContext,
+        );
+      }
     } else {
       const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
       await this.#get().optimisticUpdateMessagePlugin(
@@ -1265,14 +1281,26 @@ export class ConversationControlActionImpl {
           await import('@/services/electron/heterogeneousAgent');
         await heterogeneousAgentService.submitIntervention(
           actionType === 'submit'
-            ? { operationId, result: payload ?? {}, toolCallId }
-            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+            ? { interventionId, operationId, result: payload ?? {}, toolCallId }
+            : {
+                cancelReason: 'user_cancelled',
+                cancelled: true,
+                interventionId,
+                operationId,
+                toolCallId,
+              },
         );
       } else {
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, result: payload ?? {}, toolCallId }
-            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+            ? { interventionId, operationId, result: payload ?? {}, toolCallId }
+            : {
+                cancelReason: 'user_cancelled',
+                cancelled: true,
+                interventionId,
+                operationId,
+                toolCallId,
+              },
         );
       }
     } catch (err) {

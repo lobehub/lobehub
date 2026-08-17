@@ -80,12 +80,14 @@ import {
   buildHeteroExecArgs,
   ChatErrorType,
   getActivePluginIds,
+  getCodexAppServerPermissionMode,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
   ReasoningGraphSchema,
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
+  resolveCodexPermissionMode,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -2309,6 +2311,43 @@ export class AiAgentService {
       // Read repos from topic metadata for sandbox setup (web/cloud only).
       const topic = await this.topicModel.findById(topicId);
       const topicRepos: string[] = topic?.metadata?.repos ?? [];
+
+      const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+      const codexPermission =
+        heteroType === 'codex'
+          ? getCodexAppServerPermissionMode(
+              resolveCodexPermissionMode({
+                args: heterogeneousProvider?.args,
+                permissionMode: heterogeneousProvider?.permissionMode,
+              }),
+            )
+          : undefined;
+      if (codexPermission) {
+        const message =
+          'This Codex permission mode requires the local desktop app and cannot run through a connected device or cloud sandbox.';
+        await this.finalizeHeteroDispatchError({
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          detail: message,
+          message: 'Codex permission mode is unavailable on this execution target',
+          operationId,
+          topicId,
+        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: message,
+          message,
+          operationId,
+          status: 'error',
+          success: false,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+        };
+      }
 
       // Resolve GitHub OAuth token for the sandbox. Always attempt so CC can use
       // git / gh CLI even when no repos are pre-selected. Falls back to the

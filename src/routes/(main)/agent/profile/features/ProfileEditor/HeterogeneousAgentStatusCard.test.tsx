@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
-const { detectHeterogeneousAgentCommand, getClaudeAuthStatus } = vi.hoisted(() => ({
+const { confirmModal, detectHeterogeneousAgentCommand, getClaudeAuthStatus } = vi.hoisted(() => ({
+  confirmModal: vi.fn(),
   detectHeterogeneousAgentCommand: vi.fn(),
   getClaudeAuthStatus: vi.fn(),
 }));
@@ -99,6 +100,34 @@ vi.mock('@lobehub/ui', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal,
+  Select: ({
+    disabled,
+    onChange,
+    options,
+    value,
+  }: {
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    options?: { label: string; value: string }[];
+    value?: string;
+  }) => (
+    <select
+      aria-label="Permissions"
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+    >
+      {options?.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
 vi.mock('antd-style', () => ({
   createStaticStyles: () => ({
     card: 'card',
@@ -162,7 +191,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -190,7 +219,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -216,7 +245,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -242,7 +271,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -269,7 +298,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -306,7 +335,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -340,7 +369,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -364,7 +393,11 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} onCommandChange={onCommandChange} />
+        <HeterogeneousAgentStatusCard
+          isLocalExecution
+          provider={provider}
+          onCommandChange={onCommandChange}
+        />
       </MemoryRouter>,
     );
 
@@ -390,7 +423,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard isLocalExecution provider={provider} />
       </MemoryRouter>,
     );
 
@@ -400,5 +433,63 @@ describe('HeterogeneousAgentStatusCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit command' }));
 
     expect(await screen.findByDisplayValue('claude')).toBeInTheDocument();
+  });
+
+  it('confirms before enabling full access', async () => {
+    confirmModal.mockClear();
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    const onPermissionModeChange = vi.fn();
+    const provider = {
+      permissionMode: 'ask',
+      type: 'codex',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          isLocalExecution
+          provider={provider}
+          onPermissionModeChange={onPermissionModeChange}
+        />
+      </MemoryRouter>,
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Permissions' });
+    fireEvent.change(select, { target: { value: 'full-access' } });
+
+    expect(onPermissionModeChange).not.toHaveBeenCalled();
+    expect(confirmModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        okButtonProps: { danger: true },
+        onOk: expect.any(Function),
+      }),
+    );
+
+    await confirmModal.mock.calls[0][0].onOk();
+    expect(onPermissionModeChange).toHaveBeenCalledWith('full-access');
+  });
+
+  it('disables Codex permission changes for non-local execution', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    const onPermissionModeChange = vi.fn();
+    const provider = {
+      permissionMode: 'ask',
+      type: 'codex',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          isLocalExecution={false}
+          provider={provider}
+          onPermissionModeChange={onPermissionModeChange}
+        />
+      </MemoryRouter>,
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Permissions' });
+    expect(select).toBeDisabled();
+    fireEvent.change(select, { target: { value: 'read-only' } });
+    expect(onPermissionModeChange).not.toHaveBeenCalled();
   });
 });

@@ -347,6 +347,28 @@ export default {
   'heterogeneousStatus.command.edit': 'Edit command',
   'heterogeneousStatus.command.label': 'Launch Command',
   'heterogeneousStatus.command.placeholder': 'Command name or absolute path',
+  'heterogeneousStatus.codexPermission.description.ask':
+    'Can edit files in the workspace and run routine local commands. Asks before using the internet or going beyond the workspace.',
+  'heterogeneousStatus.codexPermission.description.auto-review':
+    'Can edit the workspace; Codex reviews eligible requests to use the internet or go beyond the workspace.',
+  'heterogeneousStatus.codexPermission.description.custom':
+    'Uses the legacy permission arguments in the CLI configuration.',
+  'heterogeneousStatus.codexPermission.description.full-access':
+    'Runs without a sandbox or approval prompts.',
+  'heterogeneousStatus.codexPermission.description.read-only':
+    'Starts read only and asks before editing files or taking actions that need broader access.',
+  'heterogeneousStatus.codexPermission.fullAccessConfirm.confirm': 'Enable full access',
+  'heterogeneousStatus.codexPermission.fullAccessConfirm.description':
+    'This removes sandbox restrictions and approval prompts for future local runs of this Agent. Codex can access files and the network beyond the workspace.',
+  'heterogeneousStatus.codexPermission.fullAccessConfirm.title': 'Enable full access?',
+  'heterogeneousStatus.codexPermission.label': 'Permissions',
+  'heterogeneousStatus.codexPermission.localOnly':
+    'This mode requires Codex app-server in the local desktop app.',
+  'heterogeneousStatus.codexPermission.mode.ask': 'Ask for approval',
+  'heterogeneousStatus.codexPermission.mode.auto-review': 'Approve for me',
+  'heterogeneousStatus.codexPermission.mode.custom': 'Custom CLI arguments',
+  'heterogeneousStatus.codexPermission.mode.full-access': 'Full access',
+  'heterogeneousStatus.codexPermission.mode.read-only': 'Read only',
   'heterogeneousStatus.detecting': 'Detecting {{name}} CLI...',
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',

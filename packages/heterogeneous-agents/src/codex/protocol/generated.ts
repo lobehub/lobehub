@@ -250,6 +250,12 @@ proposedExecpolicyAmendment?: ExecPolicyAmendment | null, /**
  */
 proposedNetworkPolicyAmendments?: Array<NetworkPolicyAmendment> | null};
 
+// Source: v2/CommandExecutionApprovalDecision.ts
+export type CommandExecutionApprovalDecision = "accept" | "acceptForSession" | { "acceptWithExecpolicyAmendment": { execpolicy_amendment: ExecPolicyAmendment, } } | { "applyNetworkPolicyAmendment": { network_policy_amendment: NetworkPolicyAmendment, } } | "decline" | "cancel";
+
+// Source: v2/CommandExecutionRequestApprovalResponse.ts
+export type CommandExecutionRequestApprovalResponse = { decision: CommandExecutionApprovalDecision, };
+
 // Source: v2/CommandExecutionSource.ts
 export type CommandExecutionSource = "agent" | "userShell" | "unifiedExecStartup" | "unifiedExecInteraction";
 
@@ -286,6 +292,12 @@ reason?: string | null,
  * for the remainder of the session (unclear if this is honored today).
  */
 grantRoot?: string | null, };
+
+// Source: v2/FileChangeApprovalDecision.ts
+export type FileChangeApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel";
+
+// Source: v2/FileChangeRequestApprovalResponse.ts
+export type FileChangeRequestApprovalResponse = { decision: FileChangeApprovalDecision, };
 
 // Source: v2/FileUpdateChange.ts
 export type FileUpdateChange = { path: string, kind: PatchChangeKind, diff: string, };

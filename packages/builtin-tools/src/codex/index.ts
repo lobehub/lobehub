@@ -1,5 +1,10 @@
-import { type BuiltinInspector, type BuiltinRender } from '@lobechat/types';
+import {
+  type BuiltinInspector,
+  type BuiltinIntervention,
+  type BuiltinRender,
+} from '@lobechat/types';
 
+import { CodexApprovalIntervention } from './ApprovalIntervention';
 import CollabToolInspector from './CollabToolInspector';
 import CollabToolRender from './CollabToolRender';
 import CommandExecutionInspector from './CommandExecutionInspector';
@@ -22,6 +27,11 @@ export const CodexInspectors: Record<string, BuiltinInspector> = {
   mcp_tool_call: McpToolInspector as BuiltinInspector,
   todo_list: TodoListInspector as BuiltinInspector,
   web_search: WebSearchInspector as BuiltinInspector,
+};
+
+export const CodexInterventions: Record<string, BuiltinIntervention> = {
+  command_execution: CodexApprovalIntervention as BuiltinIntervention,
+  file_change: CodexApprovalIntervention as BuiltinIntervention,
 };
 
 export const CodexRenders: Record<string, BuiltinRender> = {

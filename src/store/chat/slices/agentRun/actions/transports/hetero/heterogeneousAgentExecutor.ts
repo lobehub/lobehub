@@ -37,8 +37,10 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  getCodexAppServerPermissionMode,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
+  resolveCodexPermissionMode,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -937,7 +939,12 @@ export const executeHeterogeneousAgent = async (
     try {
       await get().optimisticUpdateMessagePlugin(
         toolMsgId,
-        { intervention: { status: 'pending' } },
+        {
+          intervention: {
+            interventionId: data.interventionId ?? data.toolCallId,
+            status: 'pending',
+          },
+        },
         { operationId },
       );
       // Sidebar topic row swaps the running spinner for a hand icon
@@ -967,6 +974,15 @@ export const executeHeterogeneousAgent = async (
     if (!toolMsgId) return false;
 
     await messageWriteBatcher.flush('before-intervention-response');
+    const activeInterventionId =
+      dbMessageSelectors.getDbMessageById(toolMsgId)(get())?.plugin?.intervention?.interventionId;
+    if (
+      data.interventionId &&
+      activeInterventionId &&
+      data.interventionId !== activeInterventionId
+    ) {
+      return true;
+    }
 
     try {
       await get().optimisticUpdateMessagePlugin(
@@ -1813,11 +1829,26 @@ export const executeHeterogeneousAgent = async (
       ...heterogeneousProvider.env,
     };
 
+    const codexPermission =
+      adapterType === 'codex'
+        ? resolveCodexPermissionMode({
+            args: heterogeneousProvider.args,
+            permissionMode: heterogeneousProvider.permissionMode,
+          })
+        : undefined;
+    const configuredCodexPermissionMode = codexPermission
+      ? getCodexAppServerPermissionMode(codexPermission)
+      : undefined;
+    const spawnProvider = configuredCodexPermissionMode
+      ? { ...heterogeneousProvider, permissionMode: configuredCodexPermissionMode }
+      : heterogeneousProvider;
+
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: buildHeteroSpawnArgs(heterogeneousProvider),
+      args: buildHeteroSpawnArgs(spawnProvider),
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+      codexPermissionMode: configuredCodexPermissionMode,
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:

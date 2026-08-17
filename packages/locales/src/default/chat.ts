@@ -320,6 +320,29 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.codexPermission.description.ask':
+    'Can edit files in the workspace and run routine local commands. Asks before using the internet or going beyond the workspace.',
+  'heteroAgent.codexPermission.description.auto-review':
+    'Can edit the workspace; Codex reviews eligible requests to use the internet or go beyond the workspace.',
+  'heteroAgent.codexPermission.description.custom':
+    'Uses custom permission arguments from this Agent’s CLI configuration.',
+  'heteroAgent.codexPermission.description.full-access':
+    'Runs without a sandbox or approval prompts. Codex can read and change any accessible file.',
+  'heteroAgent.codexPermission.description.read-only':
+    'Starts read only and asks before editing files or taking actions that need broader access.',
+  'heteroAgent.codexPermission.fullAccessConfirm.confirm': 'Enable full access',
+  'heteroAgent.codexPermission.fullAccessConfirm.description':
+    'This removes sandbox restrictions and approval prompts for future local runs of this Agent. Codex can access files and the network beyond the workspace.',
+  'heteroAgent.codexPermission.fullAccessConfirm.title': 'Enable full access?',
+  'heteroAgent.codexPermission.localOnly':
+    'This mode requires Codex app-server in the local desktop app.',
+  'heteroAgent.codexPermission.mode.ask': 'Ask for approval',
+  'heteroAgent.codexPermission.mode.auto-review': 'Approve for me',
+  'heteroAgent.codexPermission.mode.custom': 'Custom CLI arguments',
+  'heteroAgent.codexPermission.mode.full-access': 'Full access',
+  'heteroAgent.codexPermission.mode.read-only': 'Read only',
+  'heteroAgent.codexPermission.nextRun': 'The new permission mode applies to the next run.',
+  'heteroAgent.codexPermission.updateFailed': 'Couldn’t update the Codex permission mode.',
   'heteroAgent.claudeQuota.accountActive': 'In use',
   'heteroAgent.claudeQuota.accountSwitch': 'Switch',
   'heteroAgent.claudeQuota.accounts': 'Accounts',

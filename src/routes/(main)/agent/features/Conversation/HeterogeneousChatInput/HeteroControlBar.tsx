@@ -12,6 +12,7 @@ import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'l
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { CodexPermissionControl } from '@/features/ChatInput/ControlBar/CodexPermissionControl';
 import HeteroDeviceSwitcher from '@/features/ChatInput/ControlBar/HeteroDeviceSwitcher';
 import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -155,6 +156,15 @@ const HeteroControlBar = memo(() => {
   const quotaDeviceId = executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
   const shouldShowClaudeQuota =
     heteroProvider?.type === 'claude-code' && (isLocalHeteroExecution || !!quotaDeviceId);
+  const codexPermissionControl =
+    heteroProvider?.type === 'codex' ? (
+      <CodexPermissionControl
+        agentId={agentId}
+        canConfigure={canConfigureResource}
+        isLocalExecution={isLocalHeteroExecution}
+        provider={heteroProvider}
+      />
+    ) : null;
 
   if (isAccessLoading) return null;
 
@@ -163,8 +173,9 @@ const HeteroControlBar = memo(() => {
   if (!canConfigureResource) {
     if (!agentId || isLoading) return null;
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar}>
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <HeteroDeviceSwitcher agentId={agentId} />
+        {codexPermissionControl}
       </Flexbox>
     );
   }
@@ -181,9 +192,12 @@ const HeteroControlBar = memo(() => {
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {shouldShowClaudeQuota && quotaDeviceId && (
+        {(codexPermissionControl || (shouldShowClaudeQuota && quotaDeviceId)) && (
           <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
-            <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            {codexPermissionControl}
+            {shouldShowClaudeQuota && quotaDeviceId && (
+              <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            )}
           </Flexbox>
         )}
       </Flexbox>
@@ -261,7 +275,9 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
-        <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        {codexPermissionControl ?? (
+          <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        )}
       </Flexbox>
     </Flexbox>
   );

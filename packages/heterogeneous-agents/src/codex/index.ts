@@ -3,7 +3,9 @@ export {
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
   getCodexAppServerUnsupportedArgs,
+  getCodexPermissionProfile,
 } from './appServerParams';
+export { CodexApprovalBridge, type CodexApprovalDecision } from './CodexApprovalBridge';
 export {
   CodexAppServerClient,
   type CodexAppServerClientOptions,
