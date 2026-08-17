@@ -170,6 +170,7 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
+import { isExpertiseInjectionEnabledForUser } from '@/server/services/expertise/featureGate';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -4502,14 +4503,17 @@ export class AiAgentService {
       log('execAgent: failed to build operationSkillSet: %O', error);
     }
 
-    // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
-    const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    // Expertise changes model-visible behavior, so keep it behind the opt-in Self Learning Lab.
+    // Once enabled, resolve it only here so every step uses the exact same operation snapshot.
     let expertise;
-    try {
-      const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
-      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-    } catch (error) {
-      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+    if (await isExpertiseInjectionEnabledForUser(this.db, this.userId)) {
+      const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+      try {
+        const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+        expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+      } catch (error) {
+        console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+      }
     }
 
     // 19. Create operation using AgentRuntimeService
