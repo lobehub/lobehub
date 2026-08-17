@@ -2,7 +2,7 @@
 
 import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { AnchorIcon } from 'lucide-react';
+import { AnchorIcon, CircleCheckIcon, CircleXIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,14 +31,6 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     gap: 6px;
     align-items: center;
-  `,
-  definitionMark: css`
-    width: 12px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
   `,
   grid: css`
     display: grid;
@@ -92,7 +84,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   );
 
   return (
-    <Accordion defaultExpandedKeys={['anchor']}>
+    <Accordion defaultExpandedKeys={['anchor']} indicatorPlacement={'end'} variant={'outlined'}>
       <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
         <Flexbox gap={18} paddingBlock={8}>
           {(domainFilter || outOfScope) && (
@@ -100,9 +92,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
               {domainFilter && (
                 <>
                   <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
-                    <span aria-hidden className={styles.definitionMark}>
-                      √
-                    </span>
+                    <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={13} />
                     {t('anchor.filter')}
                   </Text>
                   <Text fontSize={13} lineHeight={1.7}>
@@ -113,9 +103,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
               {outOfScope && (
                 <>
                   <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
-                    <span aria-hidden className={styles.definitionMark}>
-                      ×
-                    </span>
+                    <Icon color={cssVar.colorTextTertiary} icon={CircleXIcon} size={13} />
                     {t('anchor.outOfScope')}
                   </Text>
                   <Text fontSize={13} lineHeight={1.7} type={'secondary'}>

@@ -53,11 +53,11 @@ export default {
   'create.field.outOfScope': 'What does not count',
   'create.field.outOfScopePlaceholder': 'e.g. design discussions, general Q&A…',
   'create.field.title': 'Name',
-  'create.generate': 'Generate',
+  'create.generate': 'Generate with AI',
   'create.generating': 'Reading your brief…',
   'create.generatingAlmostDone': 'Still working — this should be ready shortly…',
   'create.generatingCountdown': 'Reading your brief… about {{time}} remaining',
-  'create.modalTitle': 'Start a new direction',
+  'create.modalTitle': 'New domain',
   'create.next': 'Next',
   'create.regenerate': 'Regenerate',
   'create.reviewHelp':

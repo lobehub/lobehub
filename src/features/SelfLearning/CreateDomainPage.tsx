@@ -2,13 +2,14 @@
 
 import { ActionIcon, Block, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
   ArrowLeftIcon,
   LayersIcon,
   PlusIcon,
   RefreshCwIcon,
+  SparklesIcon,
   Trash2Icon,
 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -16,9 +17,8 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -51,71 +51,13 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     padding-block-end: 24px;
   `,
-  inputShell: css`
-    position: relative;
-    overflow: hidden;
-    border-radius: 8px;
-    background: ${cssVar.colorBgElevated};
+  generatingStatus: css`
+    padding-block: 12px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    textarea {
-      min-height: 320px !important;
-      padding: 20px;
-      border: none;
-
-      font-size: 14px;
-
-      background: transparent;
-      box-shadow: none;
-    }
-  `,
-  inputShellLoading: css`
-    &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      padding: 2px;
-      border-radius: inherit;
-
-      background: conic-gradient(
-        from var(--domain-border-angle),
-        ${cssVar.colorBorderSecondary} 0deg 210deg,
-        #ff3d8d 238deg,
-        #8b5cf6 258deg,
-        #00c8ff 278deg,
-        #22e6a8 298deg,
-        #ffd43b 318deg,
-        #ff6b35 338deg,
-        ${cssVar.colorBorderSecondary} 360deg
-      );
-
-      mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-
-      animation: domain-input-flow 1.8s linear infinite;
-
-      mask-composite: exclude;
-    }
-
-    @keyframes domain-input-flow {
-      from {
-        --domain-border-angle: 0deg;
-      }
-
-      to {
-        --domain-border-angle: 360deg;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        animation: none;
-      }
-    }
+    background: ${cssVar.colorFillQuaternary};
   `,
   itemRow: css`
     display: grid;
@@ -191,14 +133,6 @@ const readStoredDraft = (storageKey: string): StoredCreateDraft => {
   }
 };
 
-const DomainBorderFlowStyle = createGlobalStyle`
-  @property --domain-border-angle {
-    inherits: false;
-    initial-value: 0deg;
-    syntax: '<angle>';
-  }
-`;
-
 const slugify = (s: string, fallback: string) =>
   s
     .trim()
@@ -227,7 +161,6 @@ const CreateDomainPage = memo(() => {
   const [creating, setCreating] = useState(false);
   const [refining, setRefining] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
-  const meta = useAgentDisplayMeta(agentId ?? '');
 
   useEffect(() => {
     if (brief.trim() || draft || adjustment.trim())
@@ -353,7 +286,6 @@ const CreateDomainPage = memo(() => {
       <Flexbox className={styles.body} flex={1} width={'100%'}>
         <WideScreenContainer minWidth={960}>
           <Flexbox className={styles.content} onKeyDown={onKeyDown}>
-            <DomainBorderFlowStyle />
             <Flexbox horizontal className={styles.head}>
               <Flexbox flex={1} gap={6}>
                 {step === 'review' && (
@@ -382,27 +314,50 @@ const CreateDomainPage = memo(() => {
                 )}
                 {step !== 'review' && (
                   <>
-                    <div
-                      className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-                    >
-                      <TextArea
-                        autoFocus
-                        disabled={step === 'preparing'}
-                        placeholder={t('create.briefPlaceholder')}
-                        value={brief}
-                        variant={'borderless'}
-                        onChange={(e) => setBrief(e.target.value)}
-                      />
-                    </div>
-                    <Text type={'secondary'}>
-                      {step === 'preparing'
-                        ? remainingSeconds > 0
-                          ? t('create.generatingCountdown', {
-                              time: formatRemainingTime(remainingSeconds),
-                            })
-                          : t('create.generatingAlmostDone')
-                        : t('create.briefHelp')}
-                    </Text>
+                    <TextArea
+                      autoFocus
+                      autoSize={{ maxRows: 10, minRows: 5 }}
+                      disabled={step === 'preparing'}
+                      placeholder={t('create.briefPlaceholder')}
+                      value={brief}
+                      variant={'filled'}
+                      onChange={(e) => setBrief(e.target.value)}
+                    />
+                    {step === 'preparing' ? (
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        className={styles.generatingStatus}
+                        gap={10}
+                        justify={'space-between'}
+                      >
+                        <Flexbox horizontal align={'center'} gap={8}>
+                          <NeuralNetworkLoading size={18} />
+                          <Text weight={500}>{t('create.generating')}</Text>
+                        </Flexbox>
+                        <Text fontSize={12} type={'secondary'}>
+                          {remainingSeconds > 0
+                            ? t('create.generatingCountdown', {
+                                time: formatRemainingTime(remainingSeconds),
+                              })
+                            : t('create.generatingAlmostDone')}
+                        </Text>
+                      </Flexbox>
+                    ) : (
+                      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+                        <Text fontSize={12} type={'secondary'}>
+                          {t('create.briefHelp')}
+                        </Text>
+                        <Button
+                          disabled={!brief.trim()}
+                          icon={SparklesIcon}
+                          type={'primary'}
+                          onClick={() => void generate()}
+                        >
+                          {t('create.generate')}
+                        </Button>
+                      </Flexbox>
+                    )}
                   </>
                 )}
               </Flexbox>
@@ -675,18 +630,9 @@ const CreateDomainPage = memo(() => {
               </Flexbox>
             )}
 
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.footer}
-              justify={'space-between'}
-            >
-              <Flexbox horizontal align={'center'} gap={6}>
-                <AssigneeAvatar agentId={agentId ?? ''} size={18} />
-                <Text fontSize={12}>{meta?.title}</Text>
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={4}>
-                {step === 'review' && (
+            {step === 'review' && (
+              <Flexbox horizontal align={'center'} className={styles.footer} justify={'end'}>
+                <Flexbox horizontal align={'center'} gap={4}>
                   <Button
                     disabled={refining}
                     icon={RefreshCwIcon}
@@ -697,29 +643,19 @@ const CreateDomainPage = memo(() => {
                   >
                     {t('create.regenerate')}
                   </Button>
-                )}
-                <Button
-                  loading={step === 'preparing' || creating || refining}
-                  shape={'round'}
-                  size={'small'}
-                  type={'primary'}
-                  disabled={
-                    step === 'preparing' ||
-                    refining ||
-                    (step === 'describe' ? !brief.trim() : !canCreate)
-                  }
-                  onClick={() => void primaryRef.current?.()}
-                >
-                  {step === 'preparing'
-                    ? t('create.generating')
-                    : refining
-                      ? t('create.adjust.adjusting')
-                      : step === 'describe'
-                        ? t('create.next')
-                        : t('create.confirm')}
-                </Button>
+                  <Button
+                    disabled={refining || !canCreate}
+                    loading={creating || refining}
+                    shape={'round'}
+                    size={'small'}
+                    type={'primary'}
+                    onClick={() => void primaryRef.current?.()}
+                  >
+                    {refining ? t('create.adjust.adjusting') : t('create.confirm')}
+                  </Button>
+                </Flexbox>
               </Flexbox>
-            </Flexbox>
+            )}
           </Flexbox>
         </WideScreenContainer>
       </Flexbox>
