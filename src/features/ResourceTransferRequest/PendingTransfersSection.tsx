@@ -24,7 +24,7 @@ import { TransferErrorCode } from '@/types/transferError';
 import { isTransferManifestActionable } from './manifestState';
 import { refreshCachesAfterOwnershipChange } from './refreshAfterOwnershipChange';
 import TransferManifestList from './TransferManifestList';
-import { useActingRequests } from './useActingRequests';
+import { shouldEndActingAfterRefresh, useActingRequests } from './useActingRequests';
 
 export const PENDING_TRANSFERS_SWR_KEY = 'pending-transfer-requests';
 
@@ -214,14 +214,23 @@ const PendingTransfersSection = memo<{ onResolved?: () => void; open?: boolean }
       console.error('[PendingTransfersSection] action failed', error);
       toast.error({ placement: 'top', title: t(getActionFailedMessageKey(error) as never) });
     } finally {
-      endActing(request.id);
       // Either way re-read: a raced/expired request must leave the list. The
       // re-read is best-effort — the action itself already resolved, so its
       // failure must neither crash the handler nor block the ownership
       // refresh below (both caches self-heal on the next revalidation).
-      await mutate().catch((error) =>
-        console.error('[PendingTransfersSection] list refresh failed', error),
-      );
+      const refreshedRequests = await mutate().catch((error) => {
+        console.error('[PendingTransfersSection] list refresh failed', error);
+        return undefined;
+      });
+      if (
+        shouldEndActingAfterRefresh({
+          actionSucceeded: succeeded,
+          refreshedRequests,
+          requestId: request.id,
+        })
+      ) {
+        endActing(request.id);
+      }
       onResolved?.();
     }
     if (succeeded && ownershipChanged) {

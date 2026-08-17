@@ -1,7 +1,46 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { useActingRequests } from './useActingRequests';
+import { shouldEndActingAfterRefresh, useActingRequests } from './useActingRequests';
+
+describe('shouldEndActingAfterRefresh', () => {
+  it('keeps a successfully resolved request disabled while stale data still renders it', () => {
+    expect(
+      shouldEndActingAfterRefresh({
+        actionSucceeded: true,
+        refreshedRequests: [{ id: 'req-a' }],
+        requestId: 'req-a',
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps a successfully resolved request disabled when revalidation fails', () => {
+    expect(
+      shouldEndActingAfterRefresh({
+        actionSucceeded: true,
+        refreshedRequests: undefined,
+        requestId: 'req-a',
+      }),
+    ).toBe(false);
+  });
+
+  it('ends acting after failure or once revalidation removes the request', () => {
+    expect(
+      shouldEndActingAfterRefresh({
+        actionSucceeded: false,
+        refreshedRequests: [{ id: 'req-a' }],
+        requestId: 'req-a',
+      }),
+    ).toBe(true);
+    expect(
+      shouldEndActingAfterRefresh({
+        actionSucceeded: true,
+        refreshedRequests: [{ id: 'req-b' }],
+        requestId: 'req-a',
+      }),
+    ).toBe(true);
+  });
+});
 
 describe('useActingRequests', () => {
   it('tracks concurrent requests independently — one settling never frees the other', () => {

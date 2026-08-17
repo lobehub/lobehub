@@ -1,5 +1,23 @@
 import { useCallback, useState } from 'react';
 
+interface ShouldEndActingAfterRefreshOptions {
+  actionSucceeded: boolean;
+  refreshedRequests: { id: string }[] | undefined;
+  requestId: string;
+}
+
+/**
+ * A resolved request must stay locked until revalidation confirms that its
+ * stale card is gone. Failed actions can be retried; failed or stale refreshes
+ * after a successful action must not re-enable a duplicate submission.
+ */
+export const shouldEndActingAfterRefresh = ({
+  actionSucceeded,
+  refreshedRequests,
+  requestId,
+}: ShouldEndActingAfterRefreshOptions) =>
+  !actionSucceeded || refreshedRequests?.every((request) => request.id !== requestId) === true;
+
 /**
  * Per-request in-flight tracking for the transfer inbox. With several pending
  * cards, a scalar "acting id" would be overwritten by a second card's action —
