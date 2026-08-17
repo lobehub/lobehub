@@ -244,17 +244,34 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 handle: { meta: agentSelfLearningRouteMeta },
                 index: true,
               },
-              // 习惯清单就长在方向画像上；老的 /rules 深链回到画像，不再单独成页。
+              // 一个方向的全部经验（不折叠的完整清单）和单条经验详情。
               {
-                element: redirectElement('..'),
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/experience'),
+                  'Desktop > Chat > Self Learning > Domain > Experience',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/agent/self-learning/[domainId]/experience/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Lesson',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience/:lessonId',
+              },
+              // Legacy `/rules` deep-links — kept so old links keep opening.
+              {
+                element: redirectElement('../experience'),
                 path: 'rules',
               },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
-                  'Desktop > Chat > Self Learning > Domain > Rule',
+                  'Desktop > Chat > Self Learning > Domain > Legacy Rule',
                 ),
-                handle: { meta: agentSelfLearningRouteMeta },
                 path: 'rules/:lessonId',
               },
             ],

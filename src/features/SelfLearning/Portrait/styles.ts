@@ -47,6 +47,15 @@ export const portraitStyles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  viewAll: css`
+    font-size: 12.5px;
+    color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   row: css`
     padding-block: 10px;
     padding-inline: 14px;

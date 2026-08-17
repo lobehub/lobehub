@@ -34,9 +34,9 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
   const hidden = taught.length - visible.length;
 
   return (
-    <Block padding={'10px 14px'} variant={'outlined'}>
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'}>
+    <Block padding={'14px 16px'} variant={'outlined'}>
+      <Flexbox gap={4}>
+        <Text fontSize={12} style={{ marginBlockEnd: 6 }} type={'secondary'}>
           {t('taught.title', { count: taught.length })}
         </Text>
         {visible.map((h) => {
@@ -51,7 +51,13 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
                   : 'pending';
           const bad = arc === 'recurring' || arc === 'shaky';
           return (
-            <Flexbox horizontal align={'center'} gap={10} key={h.id}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={12}
+              key={h.id}
+              style={{ minHeight: 30, paddingBlock: 2 }}
+            >
               <Text fontSize={12} style={{ flex: 'none', width: 64 }} type={'secondary'}>
                 {dayjs(h.createdAt).fromNow()}
               </Text>
@@ -70,9 +76,9 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
           );
         })}
         {hidden > 0 && (
-          <Flexbox horizontal>
+          <Flexbox horizontal justify={'center'} style={{ marginBlockStart: 4 }}>
             <Button size={'small'} type={'text'} onClick={() => setExpanded(true)}>
-              {t('taught.more', { count: hidden })}
+              {t('taught.showAll', { count: taught.length })}
             </Button>
           </Flexbox>
         )}
