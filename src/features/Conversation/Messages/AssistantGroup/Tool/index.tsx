@@ -96,7 +96,9 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const looksLikeWaitingForToolResult = !hasError && !isArgumentsStreaming && !hasFinishedResult;
   const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
   const isToolCalling = !hasFinishedResult && (isToolCallingFromOperation || isToolCallingFallback);
-  const toolCallStartTime = useConversationStore(dataSelectors.getToolMessageCreatedAt(id));
+  const toolCallStartTime = useConversationStore(
+    dataSelectors.getToolMessageCreatedAt(toolMessageId),
+  );
 
   const hasCustomRender = !!getBuiltinRender(identifier, apiName);
   // Only allow toggle when has custom render and not in pending/reject/abort state
