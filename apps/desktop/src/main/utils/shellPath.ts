@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 
+import { detectWindowsShell } from '@lobechat/local-file-shell/shell';
+
 const SHELL_PATH_DELIMITER = '__LOBE_SHELL_PATH__';
 const SHELL_ENV_DELIMITER = '__LOBE_SHELL_ENV__';
 const SHELL_PATH_TIMEOUT_MS = 5000;
@@ -12,14 +14,24 @@ const shouldImportClaudeCodeBedrockEnv = (key: string) =>
   key === 'ANTHROPIC_SMALL_FAST_MODEL' ||
   /^ANTHROPIC_DEFAULT_.*_MODEL$/.test(key);
 
-const runLoginShell = (shell: string): Promise<string> =>
+const importClaudeCodeBedrockEnv = (env: Record<string, string>) => {
+  for (const [key, value] of Object.entries(env)) {
+    if (shouldImportClaudeCodeBedrockEnv(key)) process.env[key] = value;
+  }
+};
+
+const parseEnvEntry = (entry: string): [string, string] | undefined => {
+  const separatorIndex = entry.indexOf('=');
+  if (separatorIndex <= 0) return;
+
+  return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)];
+};
+
+const runCommand = (command: string, args: string[]): Promise<string> =>
   new Promise((resolve, reject) => {
     execFile(
-      shell,
-      [
-        '-ilc',
-        `printf '${SHELL_PATH_DELIMITER}%s${SHELL_PATH_DELIMITER}' "$PATH"; printf '${SHELL_ENV_DELIMITER}'; env -0; printf '${SHELL_ENV_DELIMITER}'; exit`,
-      ],
+      command,
+      args,
       {
         encoding: 'utf8',
         env: {
@@ -41,27 +53,69 @@ const runLoginShell = (shell: string): Promise<string> =>
     );
   });
 
+const runLoginShell = (shell: string): Promise<string> =>
+  runCommand(shell, [
+    '-ilc',
+    `printf '${SHELL_PATH_DELIMITER}%s${SHELL_PATH_DELIMITER}\n' "$PATH"; env | while IFS= read -r env_entry; do case "$env_entry" in AWS_*=*|CLAUDE_CODE_USE_BEDROCK=*|CLAUDE_CODE_SKIP_BEDROCK_AUTH=*|ANTHROPIC_MODEL=*|ANTHROPIC_SMALL_FAST_MODEL=*|ANTHROPIC_DEFAULT_*_MODEL=*) printf '${SHELL_ENV_DELIMITER}%s\n' "$env_entry" ;; esac; done`,
+  ]);
+
+const parseLoginShellEnv = (stdout: string): Record<string, string> => {
+  const env: Record<string, string> = {};
+
+  for (const segment of stdout.split(SHELL_ENV_DELIMITER).slice(1)) {
+    const parsed = parseEnvEntry(segment.split(/\r?\n/, 1)[0]);
+    if (parsed) env[parsed[0]] = parsed[1];
+  }
+
+  return env;
+};
+
+const runWindowsShell = async (): Promise<string | undefined> => {
+  const shell = await detectWindowsShell();
+  if (shell.type !== 'powershell' && shell.type !== 'pwsh') return;
+
+  const script = [
+    "$userEnv = [Environment]::GetEnvironmentVariables('User')",
+    "foreach ($entry in $userEnv.GetEnumerator()) { [Environment]::SetEnvironmentVariable([string]$entry.Key, [string]$entry.Value, 'Process') }",
+    '$profilePaths = @($PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost) | Select-Object -Unique',
+    'foreach ($profilePath in $profilePaths) { if (Test-Path -LiteralPath $profilePath) { . $profilePath } }',
+    '$envMap = @{}',
+    "Get-ChildItem Env: | Where-Object { $_.Name -like 'AWS_*' -or $_.Name -eq 'CLAUDE_CODE_USE_BEDROCK' -or $_.Name -eq 'CLAUDE_CODE_SKIP_BEDROCK_AUTH' -or $_.Name -eq 'ANTHROPIC_MODEL' -or $_.Name -eq 'ANTHROPIC_SMALL_FAST_MODEL' -or $_.Name -like 'ANTHROPIC_DEFAULT_*_MODEL' } | ForEach-Object { $envMap[$_.Name] = $_.Value }",
+    `Write-Output '${SHELL_ENV_DELIMITER}'`,
+    '$envMap | ConvertTo-Json -Compress',
+    `Write-Output '${SHELL_ENV_DELIMITER}'`,
+  ].join('; ');
+
+  return runCommand(shell.path, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script]);
+};
+
+const parseWindowsShellEnv = (stdout: string): Record<string, string> => {
+  const [, serializedEnv] = stdout.split(SHELL_ENV_DELIMITER);
+  if (!serializedEnv?.trim()) return {};
+
+  const parsed = JSON.parse(serializedEnv) as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(parsed).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
+    ),
+  );
+};
+
 /**
- * 从登录 shell 恢复 GUI 应用缺失的 PATH 与 Claude Code Bedrock 环境变量。
+ * 从用户 shell 恢复 GUI 应用缺失的 PATH 与 Claude Code Bedrock 环境变量。
  * shell 无法读取或没有返回有效值时保留进程中的现有配置。
  */
 export const refreshShellEnvironment = async (): Promise<void> => {
-  if (process.platform === 'win32') return;
+  if (process.platform === 'win32') {
+    const stdout = await runWindowsShell();
+    if (stdout) importClaudeCodeBedrockEnv(parseWindowsShellEnv(stdout));
+    return;
+  }
 
   const shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/sh');
   const stdout = await runLoginShell(shell);
   const [, shellPath] = stdout.split(SHELL_PATH_DELIMITER);
-  const [, shellEnv] = stdout.split(SHELL_ENV_DELIMITER);
 
   if (shellPath?.trim()) process.env.PATH = shellPath.trim();
-
-  for (const entry of shellEnv?.split('\0') ?? []) {
-    const separatorIndex = entry.indexOf('=');
-    if (separatorIndex <= 0) continue;
-
-    const key = entry.slice(0, separatorIndex);
-    if (shouldImportClaudeCodeBedrockEnv(key)) {
-      process.env[key] = entry.slice(separatorIndex + 1);
-    }
-  }
+  importClaudeCodeBedrockEnv(parseLoginShellEnv(stdout));
 };
