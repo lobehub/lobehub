@@ -2889,6 +2889,37 @@ describe('AgentModel', () => {
       expect(result?.chatConfig).not.toHaveProperty('enableGraphMode');
     });
 
+    it('should let an explicit null agency graph clear a legacy chatConfig graph', async () => {
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+        fields: {},
+        name: 'compiled-graph',
+        nodes: { work: { type: 'agent' } },
+        terminal: 'work',
+      };
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableGraphMode: true, graph },
+          title: 'Legacy Graph Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      // An explicit agency-level null must be authoritative: it clears the
+      // graph AND removes the legacy chatConfig fields, otherwise the runtime
+      // fallback would resurrect the old snapshot.
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { graph: null },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.graph).toBeNull();
+      expect(result?.chatConfig).not.toHaveProperty('graph');
+      expect(result?.chatConfig).not.toHaveProperty('enableGraphMode');
+    });
+
     it('should delete params field when value is undefined', async () => {
       const [agent] = await serverDB
         .insert(agents)

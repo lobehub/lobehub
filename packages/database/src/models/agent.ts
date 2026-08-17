@@ -1454,6 +1454,17 @@ export class AgentModel {
         ...mergedValue.agencyConfig,
         graph: data.agencyConfig.graph,
       } as AgentItem['agencyConfig'];
+      // An explicit agency-level graph — including `null` to clear it — takes
+      // ownership of the graph: drop the legacy chatConfig fields so the
+      // runtime's `??` fallback cannot resurrect an old snapshot.
+      if (mergedValue.chatConfig) {
+        const {
+          graph: _legacyGraph,
+          enableGraphMode: _legacyEnableGraphMode,
+          ...restChatConfig
+        } = mergedValue.chatConfig as Record<string, unknown>;
+        mergedValue.chatConfig = restChatConfig as AgentItem['chatConfig'];
+      }
     } else if (data.chatConfig && Object.hasOwn(data.chatConfig, 'graph')) {
       const legacyChatConfig = data.chatConfig as Record<string, unknown>;
       mergedValue.agencyConfig = {
