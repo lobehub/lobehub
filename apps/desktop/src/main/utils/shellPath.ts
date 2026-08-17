@@ -102,8 +102,8 @@ const parseWindowsShellEnv = (stdout: string): Record<string, string> => {
 };
 
 /**
- * 从用户 shell 恢复 GUI 应用缺失的 PATH 与 Claude Code Bedrock 环境变量。
- * shell 无法读取或没有返回有效值时保留进程中的现有配置。
+ * Restore PATH and Claude Code Bedrock variables that GUI-launched apps do not inherit.
+ * Preserve the current process environment when the user shell returns no usable value.
  */
 export const refreshShellEnvironment = async (): Promise<void> => {
   if (process.platform === 'win32') {
