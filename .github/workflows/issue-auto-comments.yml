@@ -23,7 +23,7 @@ jobs:
       - name: Auto Comment on Issues Closed
         uses: wow-actions/auto-comment@v1
         with:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           issuesClosed: |
             ✅ @{{ author }}
 
@@ -43,7 +43,7 @@ jobs:
       - name: Auto Comment on Pull Request Merged
         if: github.event.pull_request.merged == true && steps.maintainer-check.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh pr comment "${{ github.event.pull_request.number }}" --body "$(cat <<'EOF'
           ❤️ Great PR @${{ github.event.pull_request.user.login }} ❤️

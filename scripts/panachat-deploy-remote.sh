@@ -298,6 +298,42 @@ clear_network_alias() {
   fi
 }
 
+run_nginx() {
+  # Prefer the bootstrap wrapper (/usr/local/bin/nginx → sudo /usr/sbin/nginx).
+  if [[ -x /usr/local/bin/nginx ]]; then
+    /usr/local/bin/nginx "$@"
+    return $?
+  fi
+  if sudo -n /usr/sbin/nginx "$@" 2>/dev/null; then
+    return 0
+  fi
+  if command -v nginx >/dev/null 2>&1; then
+    nginx "$@"
+    return $?
+  fi
+  if [[ -x /usr/sbin/nginx ]]; then
+    /usr/sbin/nginx "$@"
+    return $?
+  fi
+  err "nginx binary not found"
+  return 1
+}
+
+write_nginx_upstream() {
+  local src="$1"
+  local dest="$2"
+  if cp "$src" "$dest" 2>/dev/null; then
+    return 0
+  fi
+  if sudo -n cp "$src" "$dest" 2>/dev/null; then
+    sudo -n chown "$(id -un):$(id -gn)" "$dest" 2>/dev/null || true
+    return 0
+  fi
+  err "Cannot write $dest (permission denied)"
+  err "Run docker-compose/deploy/SERVER-BOOTSTRAP.md section 6 on the VPS (chown upstream + nginx sudo wrapper)"
+  return 1
+}
+
 flip_nginx() {
   local slot="$1"
   if [[ "${PANACHAT_SKIP_NGINX:-0}" == "1" ]]; then
@@ -314,15 +350,15 @@ flip_nginx() {
     return 1
   fi
   log "Flipping nginx upstream → $slot ($src → $NGINX_UPSTREAM)"
-  cp "$src" "$NGINX_UPSTREAM"
-  if command -v nginx >/dev/null 2>&1; then
-    nginx -t
-    nginx -s reload
-  elif [[ -x /usr/sbin/nginx ]]; then
-    /usr/sbin/nginx -t
-    /usr/sbin/nginx -s reload
-  else
-    err "nginx binary not found; upstream file updated but not reloaded"
+  if ! write_nginx_upstream "$src" "$NGINX_UPSTREAM"; then
+    return 1
+  fi
+  if ! run_nginx -t; then
+    err "nginx -t failed — upstream not switched"
+    return 1
+  fi
+  if ! run_nginx -s reload; then
+    err "nginx reload failed — upstream file updated but traffic may be stale"
     return 1
   fi
 }

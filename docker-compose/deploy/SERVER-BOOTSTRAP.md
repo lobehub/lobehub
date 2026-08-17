@@ -147,6 +147,8 @@ sudo chown panachat:panachat \
 
 sudo tee /etc/sudoers.d/panachat-nginx > /dev/null << 'EOF'
 panachat ALL=(root) NOPASSWD: /usr/sbin/nginx
+panachat ALL=(root) NOPASSWD: /bin/cp, /usr/bin/cp
+panachat ALL=(root) NOPASSWD: /bin/chown
 EOF
 sudo chmod 440 /etc/sudoers.d/panachat-nginx
 
