@@ -1,5 +1,5 @@
 import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
@@ -28,7 +28,7 @@ export const CreateAgentRequestSchema = z.object({
   agencyConfig: z
     .object({
       enableGraphMode: z.boolean().nullish(),
-      graph: ReasoningGraphSchema.nullish(),
+      graph: AgentGraphSchema.nullish(),
     })
     .nullish(),
   avatar: z.string().nullish(),

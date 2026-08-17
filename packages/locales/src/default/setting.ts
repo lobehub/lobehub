@@ -1138,9 +1138,9 @@ export default {
     'Route this agent through the graph runtime using the snapshot stored below.',
   'settingGraphRuntime.enabled.title': 'Enable Graph Runtime',
   'settingGraphRuntime.snapshot.desc':
-    'Paste the complete ReasoningGraph JSON snapshot. It is stored with this agent and used directly at runtime.',
+    'Paste the complete AgentGraph JSON snapshot. It is stored with this agent and used directly at runtime.',
   'settingGraphRuntime.snapshot.placeholder':
-    'Paste a ReasoningGraph JSON snapshot, for example: {"name":"...","nodes":{...},"terminal":"...","edges":[]}',
+    'Paste a AgentGraph JSON snapshot, for example: {"name":"...","nodes":{...},"terminal":"...","edges":[]}',
   'settingGraphRuntime.snapshot.title': 'Graph Snapshot',
   'settingGraphRuntime.validation.invalidGraph': 'Invalid graph snapshot: {{error}}',
   'settingGraphRuntime.validation.invalidJson': 'Graph snapshot must be valid JSON.',

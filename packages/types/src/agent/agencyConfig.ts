@@ -1,6 +1,6 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
-import type { ReasoningGraph } from './graph';
+import type { AgentGraph } from './graph';
 import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
@@ -625,12 +625,12 @@ export interface LobeAgentAgencyConfig {
    */
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   /**
-   * Graph Agent behavior definition. The `ReasoningGraph` snapshot describing
+   * Graph Agent behavior definition. The `AgentGraph` snapshot describing
    * nodes, edges, field contracts and routing conditions for graph-style
    * orchestration. Together with `enableGraphMode`, this is the agent's
    * behavior body — one graph is one agent.
    */
-  graph?: null | ReasoningGraph;
+  graph?: null | AgentGraph;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
    * Confine the run's shell commands to the device sandbox. A *modifier* on

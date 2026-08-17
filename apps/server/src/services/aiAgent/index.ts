@@ -77,12 +77,12 @@ import type {
   WorkspaceInitResult,
 } from '@lobechat/types';
 import {
+  AgentGraphSchema,
   buildHeteroExecArgs,
   ChatErrorType,
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
-  ReasoningGraphSchema,
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
@@ -234,7 +234,7 @@ const createGraphAwareAgentFactory =
     const graphEnabled =
       (agencyConfig?.enableGraphMode ?? legacyChatConfig?.enableGraphMode) === true;
     if (graphEnabled && graph) {
-      const graphResult = ReasoningGraphSchema.safeParse(graph);
+      const graphResult = AgentGraphSchema.safeParse(graph);
 
       if (graphResult.success) {
         return new GraphAgent({ ...config, graph: graphResult.data });

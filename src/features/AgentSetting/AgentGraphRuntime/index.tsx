@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReasoningGraph } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import type { AgentGraph } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { Alert, Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -39,8 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const formatGraph = (graph?: ReasoningGraph | null) =>
-  graph ? JSON.stringify(graph, null, 2) : '';
+const formatGraph = (graph?: AgentGraph | null) => (graph ? JSON.stringify(graph, null, 2) : '');
 
 const AgentGraphRuntime = memo(() => {
   const { t } = useTranslation('setting');
@@ -74,7 +73,7 @@ const AgentGraphRuntime = memo(() => {
       return;
     }
 
-    let graph: ReasoningGraph | undefined;
+    let graph: AgentGraph | undefined;
 
     if (trimmedGraphText) {
       let parsedGraph: unknown;
@@ -86,7 +85,7 @@ const AgentGraphRuntime = memo(() => {
         return;
       }
 
-      const graphResult = ReasoningGraphSchema.safeParse(parsedGraph);
+      const graphResult = AgentGraphSchema.safeParse(parsedGraph);
 
       if (!graphResult.success) {
         setError(

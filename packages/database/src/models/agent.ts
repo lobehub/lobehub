@@ -1444,7 +1444,7 @@ export class AgentModel {
       }
     }
 
-    // A ReasoningGraph is a complete executable document, not a partial config
+    // A AgentGraph is a complete executable document, not a partial config
     // patch — replace it wholesale instead of deep-merging. The Graph Agent
     // (agencyConfig.graph) is the agent's behavior body; legacy clients may
     // still send `chatConfig.graph`, so write it through to `agencyConfig.graph`

@@ -386,7 +386,7 @@ describe('agent command', () => {
       await program.parseAsync(['node', 'test', 'agent', 'edit', 'a1', '--graph-file', graphFile]);
 
       expect(log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to read graph JSON: Invalid ReasoningGraph'),
+        expect.stringContaining('Failed to read graph JSON: Invalid AgentGraph'),
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { ReasoningGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
@@ -21,12 +21,12 @@ import { registerAgentSpaceFsCommand } from './agent/spaceFs';
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
   const content = await readFile(graphFile, 'utf8');
   const graph = JSON.parse(content);
-  const result = ReasoningGraphSchema.safeParse(graph);
+  const result = AgentGraphSchema.safeParse(graph);
 
   if (!result.success) {
     const issue = result.error.issues[0];
     const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
-    throw new Error(`Invalid ReasoningGraph: ${path}${issue?.message ?? 'unknown error'}`);
+    throw new Error(`Invalid AgentGraph: ${path}${issue?.message ?? 'unknown error'}`);
   }
 
   return result.data;
@@ -186,7 +186,7 @@ export function registerAgentCommand(program: Command) {
     .option('-m, --model <model>', 'New model ID')
     .option('-p, --provider <provider>', 'New provider ID')
     .option('-s, --system-role <role>', 'New system role prompt')
-    .option('--graph-file <path>', 'ReasoningGraph JSON file')
+    .option('--graph-file <path>', 'AgentGraph JSON file')
     .option('--enable-graph', 'Enable graph runtime')
     .option('--disable-graph', 'Disable graph runtime')
     .option(
