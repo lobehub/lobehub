@@ -7,6 +7,7 @@ import { matchRoutes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import GoalSkeleton from '@/components/Skeleton/Goal';
@@ -316,6 +317,7 @@ describe('desktop router shared definition', () => {
       expect(fallbacks).not.toContain(BrandTextLoading);
       expect(new Set(fallbacks)).toEqual(
         new Set([
+          AppsSkeleton,
           RouteSegmentSkeleton,
           ConversationLayoutSkeleton,
           ConversationSegmentSkeleton,
@@ -398,6 +400,19 @@ describe('desktop router shared definition', () => {
       expect(fallbackTypes?.slice(-2)).toEqual([SettingsPageSkeleton, SettingsPageSkeleton]);
     },
   );
+
+  it.each(mainAreaVariants)('%s keeps /apps on the apps sheet skeleton', (_, factory) => {
+    const matches = matchRoutes(createMainAreaRoutes(factory), '/apps');
+    const fallbackTypes = matches
+      ?.map(
+        ({ route }) =>
+          (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props.fallback
+            ?.type,
+      )
+      .filter(Boolean);
+
+    expect(fallbackTypes?.at(-1)).toBe(AppsSkeleton);
+  });
 
   it('injects Home only into Electron per-tab content routes', () => {
     const webChildren = createWebMainAreaChildren();

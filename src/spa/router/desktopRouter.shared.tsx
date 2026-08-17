@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   FilesIcon,
   FileText,
@@ -24,6 +25,7 @@ import {
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import GoalSkeleton from '@/components/Skeleton/Goal';
@@ -1007,6 +1009,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
+
+  // Apps page (personal-only — never mirrored under /:workspaceSlug)
+  {
+    element: dynamicElement(() => import('@/routes/(main)/apps'), 'Desktop > Apps', {
+      fallback: <AppsSkeleton />,
+    }),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.apps' }) },
+    path: 'apps',
+  },
 
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {

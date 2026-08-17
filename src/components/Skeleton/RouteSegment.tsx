@@ -2,6 +2,7 @@
 
 import { useLocation } from 'react-router';
 
+import AppsSkeleton from './Apps';
 import ConversationLayoutSkeleton from './Conversation/Layout';
 import GoalSkeleton from './Goal';
 import GoalDetailSkeleton from './GoalDetail';
@@ -47,6 +48,7 @@ const RouteSegmentSkeleton = () => {
   const segments = pathname.split('/').filter(Boolean);
 
   if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
+  if (segments[0] === 'apps') return <AppsSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
   if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton />;
   if (segments[0] === 'agent' && segments[2] === 'goals') return <GoalSkeleton />;

@@ -1,5 +1,4 @@
 import type * as LobechatConst from '@lobechat/const';
-import { DOWNLOAD_URL } from '@lobechat/const';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -173,7 +172,7 @@ describe('Footer help menu tracking', () => {
     const getApp = await screen.findByRole('link', { name: 'Get App' });
     const github = screen.getByRole('link', { name: 'GitHub' });
 
-    expect(getApp).toHaveAttribute('href', DOWNLOAD_URL.default);
+    expect(getApp).toHaveAttribute('href', '/apps');
     expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 20000);
 

@@ -6,6 +6,7 @@
   "gateway.statusDisconnected": "ゲートウェイに接続されていません",
   "gateway.title": "デバイスゲートウェイ",
   "navigation.agents": "エージェント",
+  "navigation.apps": "ダウンロード",
   "navigation.channels": "チャンネル",
   "navigation.chat": "チャット",
   "navigation.discover": "発見",

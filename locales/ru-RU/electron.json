@@ -6,6 +6,7 @@
   "gateway.statusDisconnected": "Не подключено к шлюзу",
   "gateway.title": "Шлюз устройства",
   "navigation.agents": "Агенты",
+  "navigation.apps": "Загрузки",
   "navigation.channels": "Каналы",
   "navigation.chat": "Чат",
   "navigation.discover": "Открыть",
