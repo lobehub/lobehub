@@ -1,7 +1,7 @@
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { agentBuilderKeys, recentKeys, taskKeys } from './keys';
+import { agentBuilderKeys, recentKeys, resourceKeys, taskKeys, workKeys } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -51,6 +51,31 @@ describe('recentKeys', () => {
     );
 
     expect(persisted).toBe(true);
+  });
+});
+
+describe('workKeys', () => {
+  it('keeps the Resources Private and Workspace galleries in separate cache entries', () => {
+    expect(workKeys.workspace('workspace-1', 'all', null, 'private')).not.toEqual(
+      workKeys.workspace('workspace-1', 'all', null, 'public'),
+    );
+  });
+
+  it('keeps non-Resources callers on the unfiltered cache entry', () => {
+    expect(workKeys.workspace('workspace-1', 'project:project-1')).toEqual([
+      'work:workspace',
+      'workspace-1',
+      'project:project-1',
+      null,
+      null,
+    ]);
+  });
+});
+
+describe('resourceKeys', () => {
+  it('keeps Private and Workspace recent sections in separate cache entries', () => {
+    expect(resourceKeys.recentPages('private')).not.toEqual(resourceKeys.recentPages('public'));
+    expect(resourceKeys.recentFiles('private')).not.toEqual(resourceKeys.recentFiles('public'));
   });
 });
 

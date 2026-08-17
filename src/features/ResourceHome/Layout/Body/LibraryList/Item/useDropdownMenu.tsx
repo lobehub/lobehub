@@ -1,5 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon, Tooltip } from '@lobehub/ui';
+import type { MenuProps } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash, UsersIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -47,11 +47,10 @@ export const useDropdownMenu = ({
   const { open } = useCreateNewModal();
   const { allowed: canEdit } = usePermission('edit_own_content');
   // Cross-workspace move/copy follows the same creator-or-owner rule as the
-  // other row management actions. Keep the entries visible but disabled so a
-  // member understands that the capability exists without being offered an
-  // action the server will reject.
+  // other ownership actions. Unavailable row actions are omitted from the
+  // compact menu instead of leaving members with disabled dead ends.
   const canManage = useResourceManageable(userId);
-  const transferMenuItems = useKnowledgeBaseTransferMenuItem(id, { disabled: !canManage });
+  const transferMenuItems = useKnowledgeBaseTransferMenuItem(id);
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Only the creator of a still-private KB sees the "Publish to workspace" entry.
   // Mirrors the file / agent / task one-way publish pattern.
@@ -85,10 +84,6 @@ export const useDropdownMenu = ({
     [activeWorkspaceId, permissionManageable, id, t, wsNavigate],
   );
 
-  // Row-level ownership: only the creator or a workspace owner may edit or
-  // delete a shared knowledge base — mirrors the server-side enforcement.
-  const manageTooltip = canManage ? undefined : t('manageOnlyCreator', { ns: 'common' });
-
   const handleDelete = useCallback(() => {
     if (!canEdit || !canManage) return;
     if (!id) return;
@@ -114,12 +109,12 @@ export const useDropdownMenu = ({
   }, [canEdit, canManage, id, removeKnowledgeBase, t]);
 
   const handleEditDescription = useCallback(() => {
-    if (!canEdit || !canManage) return;
+    if (!canEdit) return;
     open({
       id,
       initialValues: { description: description || '', name },
     });
-  }, [canEdit, canManage, description, id, name, open]);
+  }, [canEdit, description, id, name, open]);
 
   const handlePublish = useCallback(() => {
     if (!isOwnPrivateKb) return;
@@ -163,20 +158,13 @@ export const useDropdownMenu = ({
   return useCallback(
     () =>
       [
-        {
-          disabled: !canEdit || !canManage,
+        canEdit && {
           icon: <Icon icon={PencilLine} />,
           key: 'rename',
-          label: manageTooltip ? (
-            <Tooltip title={manageTooltip}>
-              <span>{t('rename', { ns: 'common' })}</span>
-            </Tooltip>
-          ) : (
-            t('rename', { ns: 'common' })
-          ),
+          label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
-            if (!canEdit || !canManage) return;
+            if (!canEdit) return;
             // Defer to next frame so the DropdownMenu fully finishes its
             // close animation and event handlers before the Popover opens.
             // Otherwise the tail-end mouseup/click bubbles to document and
@@ -186,22 +174,17 @@ export const useDropdownMenu = ({
             requestAnimationFrame(() => toggleEditing(true));
           },
         },
-        {
-          disabled: !canEdit || !canManage,
+        canEdit && {
           icon: <Icon icon={FileText} />,
           key: 'editDescription',
-          label: manageTooltip ? (
-            <Tooltip title={manageTooltip}>
-              <span>{t('edit', { ns: 'common' })}</span>
-            </Tooltip>
-          ) : (
-            t('edit', { ns: 'common' })
-          ),
+          label: t('edit', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
             handleEditDescription();
           },
         },
+        canEdit &&
+          (isOwnPrivateKb || isOwnPublicKb || memberPermissionMenuItem) && { type: 'divider' },
         canEdit &&
           isOwnPrivateKb && {
             icon: <Icon icon={GlobeIcon} />,
@@ -212,7 +195,6 @@ export const useDropdownMenu = ({
               handlePublish();
             },
           },
-        canEdit && isOwnPrivateKb && { type: 'divider' },
         canEdit &&
           isOwnPublicKb && {
             icon: <Icon icon={EyeOffIcon} />,
@@ -223,30 +205,25 @@ export const useDropdownMenu = ({
               handleMakePrivate();
             },
           },
-        canEdit && isOwnPublicKb && { type: 'divider' },
         memberPermissionMenuItem,
-        memberPermissionMenuItem && { type: 'divider' },
-        ...(canEdit ? (transferMenuItems ?? []) : []),
-        { type: 'divider' },
-        {
-          danger: true,
-          disabled: !canEdit || !canManage,
-          icon: <Icon icon={Trash} />,
-          key: 'delete',
-          label: manageTooltip ? (
-            <Tooltip title={manageTooltip}>
-              <span>{t('delete', { ns: 'common' })}</span>
-            </Tooltip>
-          ) : (
-            t('delete', { ns: 'common' })
-          ),
-          onClick: handleDelete,
-        },
+        memberPermissionMenuItem &&
+          canEdit &&
+          canManage &&
+          transferMenuItems?.length && { type: 'divider' },
+        ...(canEdit && canManage ? (transferMenuItems ?? []) : []),
+        canEdit && canManage && { type: 'divider' },
+        canEdit &&
+          canManage && {
+            danger: true,
+            icon: <Icon icon={Trash} />,
+            key: 'delete',
+            label: t('delete', { ns: 'common' }),
+            onClick: handleDelete,
+          },
       ].filter(Boolean) as MenuProps['items'],
     [
       canEdit,
       canManage,
-      manageTooltip,
       t,
       toggleEditing,
       handleDelete,

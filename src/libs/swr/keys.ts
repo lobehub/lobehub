@@ -356,17 +356,18 @@ export const workKeys = {
   versions: def('work:versions', (workId: string) => ['work:versions', workId]),
   // Cross-topic Work gallery on the resource page: keyed by owner scope + the
   // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +
-  // keyset cursor (one entry per infinite-scroll page). The filter key (not the
-  // Work type) is the discriminator so the per-provider linear/github tabs,
-  // which share the `external` Work type, get distinct cache entries.
+  // keyset cursor (one entry per infinite-scroll page) + the Resources
+  // Private/Workspace visibility. The filter key (not the Work type) is the
+  // discriminator so the per-provider linear/github tabs, which share the
+  // `external` Work type, get distinct cache entries.
   workspace: def(
     'work:workspace',
-    (workspaceId: string | null | undefined, filterKey: string, cursor?: string | null) => [
-      'work:workspace',
-      workspaceId ?? null,
-      filterKey,
-      cursor ?? null,
-    ],
+    (
+      workspaceId: string | null | undefined,
+      filterKey: string,
+      cursor?: string | null,
+      visibility?: 'private' | 'public' | null,
+    ) => ['work:workspace', workspaceId ?? null, filterKey, cursor ?? null, visibility ?? null],
   ),
 };
 
@@ -1170,6 +1171,14 @@ export const resourceKeys = {
     'resource:list',
     params,
     workspaceId,
+  ]),
+  recentFiles: def('resource:recentFiles', (visibility?: 'private' | 'public') => [
+    'resource:recentFiles',
+    visibility ?? null,
+  ]),
+  recentPages: def('resource:recentPages', (visibility?: 'private' | 'public') => [
+    'resource:recentPages',
+    visibility ?? null,
   ]),
   search: def('resource:search', (params: unknown) => ['resource:search', params]),
 };

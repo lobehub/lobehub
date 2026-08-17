@@ -11,6 +11,7 @@ import { DEFAULT_RESOURCE_ACCESS_LEVELS, insertKnowledgeBasesSchema } from '@/da
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import {
   getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
@@ -415,7 +416,23 @@ export const knowledgeBaseRouter = router({
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
+            .workspacePermissionCodes,
+          meta: {
+            userId: existing.userId,
+            visibility: existing.visibility ?? null,
+            workspaceId: existing.workspaceId ?? null,
+          },
+          resourceId: input.id,
+          resourceType: 'knowledgeBase',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
 
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),
