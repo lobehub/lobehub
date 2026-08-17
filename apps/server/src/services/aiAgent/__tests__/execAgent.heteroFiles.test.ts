@@ -10,6 +10,7 @@ const {
   mockExecuteToolCall,
   mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
+  mockMessageQuery,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
   mockIngestAttachment,
@@ -24,6 +25,7 @@ const {
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockMessageQuery: vi.fn().mockResolvedValue([]),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
   mockPublishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   mockResolveAttachmentsByFileIds: vi.fn(),
@@ -75,7 +77,7 @@ vi.mock('@/database/models/message', () => ({
     create: mockMessageCreate,
     getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
     getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
+    query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
   })),
 }));
@@ -212,6 +214,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageQuery.mockResolvedValue([]);
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
@@ -350,6 +353,31 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       }),
     );
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('should not replay DB conversation history when resuming an Amp thread', async () => {
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('T-existing-thread');
+    heteroAgentConfig.model = 'amp';
+    heteroAgentConfig.provider = 'amp';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'amp' },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Continue with Amp',
+    });
+
+    expect(mockMessageQuery).not.toHaveBeenCalled();
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
+      agentSystemContext: undefined,
+      conversationHistory: undefined,
+    });
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ resumeSessionId: 'T-existing-thread' }),
+    );
   });
 
   it('should pass resolved Claude Code model and effort args to sandbox dispatch', async () => {
@@ -496,6 +524,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
   it('resumes a native device session with device-specific context', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Earlier request', id: 'history-user', role: 'user' },
+      { content: 'Earlier response', id: 'history-assistant', role: 'assistant' },
+      { content: 'Continue on my device', id: 'msg-1', role: 'user' },
+    ]);
     heteroAgentConfig.agencyConfig = {
       boundDeviceId: 'device-1',
       executionTarget: 'device',
@@ -507,6 +540,13 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       prompt: 'Continue on my device',
     });
 
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
+      agentSystemContext: undefined,
+      conversationHistory: [
+        { content: 'Earlier request', role: 'user' },
+        { content: 'Earlier response', role: 'assistant' },
+      ],
+    });
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
       expect.objectContaining({
         resumeSessionId: 'native-session-existing',

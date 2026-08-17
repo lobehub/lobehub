@@ -2345,18 +2345,18 @@ export class AiAgentService {
         log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
-      // When resuming, inject the recent conversation turns as context so CC can
-      // orient itself even if the native session file was cleared (sandbox recycled
-      // or context overflow caused the CLI to start a fresh session).
-      // Only fetch when there IS a stored session id — for first-turn runs CC has
-      // no prior history to inject.
+      // When resuming a local-file session, inject recent turns so the agent can
+      // recover if its native session was cleared (sandbox recycle / context overflow).
+      // Amp threads are server-backed and already restored by `threads continue`;
+      // replaying DB history there duplicates the conversation on every turn.
       let conversationHistory: ConversationHistoryEntry[] | undefined;
-      if (resumeSessionId) {
+      if (resumeSessionId && heteroType !== 'amp') {
         try {
           const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
           const turns = recentMsgs
             .filter(
               (m) =>
+                !selfMessageIds.has(m.id) &&
                 (m.role === 'user' || m.role === 'assistant') &&
                 !m.threadId &&
                 m.content &&
