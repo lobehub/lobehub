@@ -46,7 +46,7 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   // The active topic can be absent from the list bucket — archived (completed)
   // topics are excluded by the sidebar fetch's `excludeStatuses`. Fall back to
   // the by-id detail cache so consumers keep real data (title, metadata, …).
-  return s.activeTopicId ? s.topicDetailMap[s.activeTopicId] : undefined;
+  return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
 };
 const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
 
@@ -74,7 +74,7 @@ const getTopicById =
       if (topic) return topic;
     }
 
-    return s.topicDetailMap[id];
+    return s.topicDetailMap?.[id];
   };
 
 /**

@@ -165,6 +165,17 @@ describe('topicSelectors', () => {
       expect(topic).toBeUndefined();
     });
 
+    it('should tolerate a partial store state without the detail cache', () => {
+      const state = {
+        activeAgentId: 'test',
+        activeTopicId: 'missing-topic',
+        topicDataMap: {},
+      } as ChatStore;
+
+      expect(topicSelectors.currentActiveTopic(state)).toBeUndefined();
+      expect(topicSelectors.getTopicById('missing-topic')(state)).toBeUndefined();
+    });
+
     it('should return the current active topic', () => {
       const state = merge(initialStore, {
         topicDataMap,

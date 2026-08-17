@@ -1089,6 +1089,30 @@ describe('topic action', () => {
       // Verify that the refreshTopic was called to update the state
       expect(refreshTopicSpy).toHaveBeenCalled();
     });
+
+    it('should update the detail cache when the topic is absent from list buckets', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Old title' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.updateTopicTitle(topicId, 'New title');
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toMatchObject({
+        status: 'completed',
+        title: 'New title',
+      });
+    });
   });
   describe('switchTopic', () => {
     it('should update activeTopicId and softly revalidate messages', async () => {
@@ -1430,6 +1454,28 @@ describe('topic action', () => {
       expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
+    });
+
+    it('should evict a detail-only topic after deletion', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'test-session-id',
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Archived' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId);
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toBeUndefined();
     });
     it('should forward removeFiles so the topic attachments are deleted', async () => {
       const topicId = 'topic-1';
