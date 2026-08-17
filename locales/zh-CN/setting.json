@@ -1121,6 +1121,7 @@
   "skillStore.empty": "浏览技能商店。安装一个技能开始使用，之后可随时添加更多。",
   "skillStore.emptySearch": "未找到匹配的技能",
   "skillStore.networkError": "网络错误，请重试",
+  "skillStore.rateLimited": "刚才的请求有点频繁，请稍等片刻再试。",
   "skillStore.search": "搜索技能名称或关键词，按回车键搜索…",
   "skillStore.tabs.community": "社区",
   "skillStore.tabs.custom": "自定义",

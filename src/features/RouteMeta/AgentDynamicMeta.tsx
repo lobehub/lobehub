@@ -20,9 +20,11 @@ const useTopicTitle = (
   useChatStore((state) => {
     if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
 
-    const topic = state.topicDataMap[topicMapKey({ agentId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
+    // Archived (completed) topics are excluded from the list fetch — fall back
+    // to the by-id detail cache filled by `useFetchTopicDetail`.
+    const topic =
+      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
+      state.topicDetailMap[topicId];
     return topic?.title || undefined;
   });
 

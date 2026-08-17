@@ -817,7 +817,17 @@ Page.addScriptToEvaluateOnNewDocument({
 ```
 
 Assert the clear actually ran in the new document (set a flag in that script and
-read it back) rather than trusting the removal. Pair it with a warm control run: if
+read it back) rather than trusting the removal.
+
+**The same cache tier inverts _request-gating_ assertions, not just rendered values.**
+When a component decides whether to fire a secondary query from data it reads out of
+the portrait/list query (`useX(shouldFetch ? id : undefined)`), the hydrated cache is
+what the gate sees on the mount frame. Change the underlying state with raw SQL and
+the gate still fires off the stale cached copy, so a correct gate measures as broken —
+and the reverse can hide a broken one. Drive the state change through the product
+write path (whose success handler revalidates), or re-measure after the list query has
+resolved once and the cache is reconciled; report the steady state, and record the
+stale frame separately if you observed it. Pair it with a warm control run: if
 the warm run renders data while the request is held paused and the cold run shows
 the skeleton, the cache tier is proven to be what the render reads.
 
@@ -1204,7 +1214,12 @@ agent-browser --cdp 9222 click "[data-qc=entry]"
 ```
 
 Enumerate candidates with `pop.querySelectorAll("button,[role=button],span[role]")`
-and read each node's `svg` class when the icon's identity is unknown. Two follow-ons
+and read each node's `svg` class when the icon's identity is unknown. **The class is
+the icon's _rendered_ lucide name, not the React symbol you imported** — a component
+imported as `MoreHorizontalIcon` renders `svg.lucide-ellipsis`, so a selector guessed
+from the import name matches nothing and reads as "the affordance was never rendered".
+Enumerate the classes present, then disambiguate duplicates by geometry (a header
+control is the top-most, right-most non-zero rect) rather than by DOM order. Two follow-ons
 worth knowing: a stray click on a tagged text node can dismiss the popover (re-open
 and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped cell
 needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
@@ -1311,6 +1326,25 @@ ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已
 / `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
 `http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
 server-auth 200、`isUserStateInit` true。
+
+### 技能菜单交互 bug 依赖用户数据形态 — 前台化 MCP 窗口 + 零写入点击在生产环境复现
+
+**Situation:** 复现「+」菜单 / 技能子菜单里的行级交互缺陷 (hover 详情卡、「...」策略菜单、
+卸载确认)。本地 seeded 全栈环境跑遍手势矩阵 (连续策略切换、popover 切换、禁用、卸载弹窗、
+注入 700ms 服务端延迟) 全部存活，而用户环境一触即发。
+
+**Doesn't work:** 在本地环境穷举手势排列。触发缺陷的行形态只存在于真实账号数据 —— 例如
+过期授权的 Composio 行 (Gmail 重新授权) 走的是与 SkillRow 不同的 `PopoverLabel` 渲染路径；
+本地 seeded 账号只有 builtin 行，detail card 甚至从不挂载。也不要在后台 MCP 标签页下结论
+(L-S10):popover 冻结在 data-starting-style、坐标点击失效、计时器被钳到 1s。
+
+**Works:** 三件套。① 让用户把扩展新建的 Chrome 窗口切到前台，`document.visibilityState === 'visible'` 且 DevDock 显示 60 FPS 后再驱动 —— 前台化后的 MCP 标签页是完全可信的交互
+表面；② 生产账号上的零写入复现：策略菜单只点击**当前已勾选项**(`updateSkillPolicy` 对
+currentMode === mode 提前返回，不发请求), 确认弹窗一律 Cancel, 菜单开合本身无写入；
+③ 机制归因用页面内事件取证 (document 捕获层记录 pointer/focus 事件的目标画像:closest
+role、inDialog、isConnected, 写入 `window.__AGENT_LOGS` 环形缓冲), 关闭原因用
+`onOpenChange(details.reason)` 直接记录 —— 单靠截图无法区分 outside-press /focus-out/
+hover-out。
 
 ### 服务端读取本地 S3 证据会被 SSRF 拦下 — 需显式放行私有 IP
 

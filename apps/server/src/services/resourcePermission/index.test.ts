@@ -686,6 +686,40 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(true);
     });
 
+    it('lets a member edit a KB at the default edit level', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'edit',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('blocks a member from editing a use-level KB', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'edit',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+    });
+
     it('blocks a member from browsing a use-level KB while keeping it usable', async () => {
       permissionMatchesMock.mockImplementation(memberMatches as any);
       effectiveAccessMock.mockResolvedValue('use');

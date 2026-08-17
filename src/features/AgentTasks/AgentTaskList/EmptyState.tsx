@@ -13,7 +13,6 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
-const HERO_MAX_WIDTH = 960;
 const EMPTY_STATE_RECOMMEND_COUNT = 10;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -41,9 +40,10 @@ const EmptyState = memo<EmptyStateProps>(({ agentId, projectId }) => {
 
   return (
     <WideScreenContainer
+      fullWidth
       gap={32}
-      minWidth={HERO_MAX_WIDTH}
       paddingBlock={48}
+      paddingInline={16}
       wrapperStyle={{ flex: 1, overflowY: 'auto' }}
     >
       <Flexbox align={'center'}>

@@ -2716,16 +2716,12 @@ export class AiAgentService {
             });
           }
 
-          // A device is the user's own persistent machine — build a
-          // device-specific context instead of reusing the cloud-sandbox one
-          // (which describes an ephemeral /workspace + pre-cloned repos and
-          // would mislead the agent).
+          // Build only device-relevant context instead of reusing the cloud-sandbox one
+          // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
+          // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
-            // The native CLI session already knows its cwd. Keep the explanatory workspace note
-            // on the first turn only so persistent resumed sessions do not accumulate duplicates.
-            cwd: resumeSessionId ? undefined : deviceCwd,
           });
 
           const result = await deviceGateway.dispatchAgentRun({

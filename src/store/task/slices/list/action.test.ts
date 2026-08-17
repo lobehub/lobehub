@@ -24,7 +24,6 @@ beforeEach(() => {
     listQueryVisibility: 'all',
     tasks: [],
     tasksTotal: 0,
-    viewMode: 'list',
   });
 });
 
@@ -39,19 +38,6 @@ describe('TaskListSliceAction', () => {
       useTaskStore.getState().setListAgentId('agt_1');
       useTaskStore.getState().setListAgentId(undefined);
       expect(useTaskStore.getState().listAgentId).toBeUndefined();
-    });
-  });
-
-  describe('setViewMode', () => {
-    it('should toggle to kanban', () => {
-      useTaskStore.getState().setViewMode('kanban');
-      expect(useTaskStore.getState().viewMode).toBe('kanban');
-    });
-
-    it('should toggle back to list', () => {
-      useTaskStore.getState().setViewMode('kanban');
-      useTaskStore.getState().setViewMode('list');
-      expect(useTaskStore.getState().viewMode).toBe('list');
     });
   });
 
