@@ -19,6 +19,34 @@ const CanonEntrySchema = z.object({
   title: z.string().min(1).max(80),
 });
 
+export const EditableDomainDraftSchema = z.object({
+  canonEntries: z
+    .array(
+      z.object({
+        key: z.string().max(2000),
+        source: z.string().max(2000),
+        statement: z.string().max(10_000),
+        title: z.string().max(2000),
+      }),
+    )
+    .max(20),
+  domainFilter: z.string().max(10_000),
+  layerCanonRef: z.string().max(2000).nullable(),
+  layerSource: z.enum(['canonical', 'invented']),
+  layers: z
+    .array(
+      z.object({
+        description: z.string().max(10_000).nullable(),
+        key: z.string().max(2000),
+        title: z.string().max(2000),
+      }),
+    )
+    .max(20),
+  outOfScope: z.string().max(10_000).nullable(),
+  rationale: z.string().max(10_000).nullable(),
+  title: z.string().max(2000),
+});
+
 /**
  * A draft is a full anchor candidate, not just a name and a filter: the layer model and the
  * canon decide where lessons attach and what "coverage" even means, so the person creating a
@@ -35,6 +63,7 @@ export const DomainDraftSchema = z.object({
   title: z.string().min(1).max(80),
 });
 export type DomainDraft = z.infer<typeof DomainDraftSchema>;
+export type EditableDomainDraft = z.infer<typeof EditableDomainDraftSchema>;
 
 const DOMAIN_DRAFT_JSON_SCHEMA: GenerateObjectSchema = {
   name: 'expertise_domain_draft',
@@ -105,7 +134,7 @@ interface DraftFromBriefInput {
   adjustment?: string;
   agentId: string;
   brief: string;
-  currentDraft?: DomainDraft;
+  currentDraft?: EditableDomainDraft;
 }
 
 export class ExpertiseDomainService {

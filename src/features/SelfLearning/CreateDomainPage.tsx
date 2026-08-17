@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -26,6 +27,8 @@ import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 import { shinyTextStyles } from '@/styles';
+
+import { useCreateDomainDraft } from './useCreateDomainDraft';
 
 const GENERATION_ESTIMATE_SECONDS = 120;
 
@@ -111,27 +114,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface StoredCreateDraft {
-  adjustment?: string;
-  brief: string;
-  draft?: ExpertiseDomainDraft;
-}
-
 export const formatRemainingTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return `${minutes}:${rest.toString().padStart(2, '0')}`;
-};
-
-const readStoredDraft = (storageKey: string): StoredCreateDraft => {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return { brief: '' };
-    const parsed = JSON.parse(raw) as StoredCreateDraft;
-    return typeof parsed.brief === 'string' ? parsed : { brief: '' };
-  } catch {
-    return { brief: '' };
-  }
 };
 
 const slugify = (s: string, fallback: string) =>
@@ -150,27 +136,15 @@ const slugify = (s: string, fallback: string) =>
 const CreateDomainPage = memo(() => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
-  const agentId = useAgentStore((s) => s.activeAgentId);
-  const storageKey = `self-learning:create:${agentId}`;
-  const [stored] = useState(() => readStoredDraft(storageKey));
-  const [adjustment, setAdjustment] = useState(stored.adjustment ?? '');
-  const [brief, setBrief] = useState(stored.brief);
-  const [step, setStep] = useState<'describe' | 'preparing' | 'review'>(
-    stored.draft ? 'review' : 'describe',
-  );
-  const [draft, setDraft] = useState<ExpertiseDomainDraft | undefined>(stored.draft);
+  const { aid } = useParams<{ aid?: string }>();
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const { agentId: routeAgentId } = useResolvedAgentRouteId(aid);
+  const agentId = routeAgentId || activeAgentId;
+  const { adjustment, brief, draft, setAdjustment, setBrief, setDraft, setStep, step, storageKey } =
+    useCreateDomainDraft(agentId);
   const [creating, setCreating] = useState(false);
   const [refining, setRefining] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
-
-  useEffect(() => {
-    if (brief.trim() || draft || adjustment.trim())
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ adjustment, brief, draft } satisfies StoredCreateDraft),
-      );
-    else localStorage.removeItem(storageKey);
-  }, [adjustment, brief, draft, storageKey]);
 
   useEffect(() => {
     if (step !== 'preparing' && !refining) return;
@@ -201,7 +175,7 @@ const CreateDomainPage = memo(() => {
       toast.error(t('create.failed'));
       setStep(draft ? 'review' : 'describe');
     }
-  }, [agentId, brief, draft, t]);
+  }, [agentId, brief, draft, setDraft, setStep, t]);
 
   const refine = useCallback(async () => {
     if (!agentId || !brief.trim() || !draft || !adjustment.trim()) return;
@@ -221,7 +195,7 @@ const CreateDomainPage = memo(() => {
     } finally {
       setRefining(false);
     }
-  }, [adjustment, agentId, brief, draft, t]);
+  }, [adjustment, agentId, brief, draft, setAdjustment, setDraft, t]);
 
   const canCreate = !!draft && !!draft.title.trim() && !!draft.domainFilter.trim() && !creating;
 
@@ -239,7 +213,7 @@ const CreateDomainPage = memo(() => {
         outOfScope: draft.outOfScope?.trim() || null,
         title: draft.title.trim(),
       });
-      localStorage.removeItem(storageKey);
+      if (storageKey) localStorage.removeItem(storageKey);
       navigate(urlJoin('/agent', agentId, 'self-learning', id));
     } catch {
       toast.error(t('create.failed'));

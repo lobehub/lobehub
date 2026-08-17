@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DomainDraft } from './domain';
-import { ExpertiseDomainService } from './domain';
+import { EditableDomainDraftSchema, ExpertiseDomainService } from './domain';
 
 const getAgentModelConfig = vi.fn();
 const generateObject = vi.fn();
@@ -98,6 +98,20 @@ describe('ExpertiseDomainService', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it('accepts temporarily invalid editable fields for AI refinement', () => {
+    const editableDraft = EditableDomainDraftSchema.parse({
+      ...draft,
+      canonEntries: [{ key: '', source: '', statement: '', title: '' }],
+      domainFilter: '',
+      layers: [{ description: null, key: '', title: 'x'.repeat(200) }],
+      title: '',
+    });
+
+    expect(editableDraft.title).toBe('');
+    expect(editableDraft.layers[0].title).toHaveLength(200);
+    expect(editableDraft.canonEntries[0].key).toBe('');
   });
 
   it('persists the reviewed draft as the chosen anchor, carrying layers and canon', async () => {

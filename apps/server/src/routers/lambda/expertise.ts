@@ -7,7 +7,11 @@ import {
 import { ExpertiseModel } from '@/database/models/expertise';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { DomainDraftSchema, ExpertiseDomainService } from '@/server/services/expertise/domain';
+import {
+  DomainDraftSchema,
+  EditableDomainDraftSchema,
+  ExpertiseDomainService,
+} from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
@@ -224,7 +228,7 @@ export const expertiseRouter = router({
         adjustment: z.string().min(1).max(2000).optional(),
         agentId: z.string(),
         brief: z.string().min(1),
-        currentDraft: DomainDraftSchema.optional(),
+        currentDraft: EditableDomainDraftSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
