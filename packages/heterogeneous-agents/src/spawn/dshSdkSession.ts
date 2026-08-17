@@ -51,6 +51,29 @@ export interface DshRuntimeLaunch {
   env?: Record<string, string>;
 }
 
+const DEFAULT_INITIALIZE_TIMEOUT_MS = 30_000;
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  phase: string,
+): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`harness ${phase} exceeded ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export const resolveDshRuntimeCommand = (
   versions: NodeJS.ProcessVersions,
   execPath: string,
@@ -206,12 +229,25 @@ export const spawnDshSdkSession = async (
     wake?.();
   });
 
-  await rpc.request('initialize', {
-    cwd: options.cwd,
-    model: options.model,
-    provider: options.provider,
-    ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
-  });
+  const initializeTimeoutMs = Math.min(
+    options.timeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS,
+    DEFAULT_INITIALIZE_TIMEOUT_MS,
+  );
+  try {
+    await withTimeout(
+      rpc.request('initialize', {
+        cwd: options.cwd,
+        model: options.model,
+        provider: options.provider,
+        ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+      }),
+      initializeTimeoutMs,
+      'initialize',
+    );
+  } catch (error) {
+    child.kill('SIGTERM');
+    throw error;
+  }
 
   const dispose = async (): Promise<void> => {
     if (child.exitCode !== null || child.signalCode !== null) return;
