@@ -89,10 +89,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    padding-block: 2px;
-    padding-inline: 4px;
+    height: 28px;
+    padding-inline: 8px;
     border: 0;
-    border-radius: 4px;
+    border-radius: 6px;
 
     font: inherit;
     font-size: 12px;

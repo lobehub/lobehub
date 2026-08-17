@@ -303,9 +303,9 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 20px;
-    height: 22px;
-    border-radius: 4px;
+    width: 24px;
+    height: 28px;
+    border-radius: 6px;
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
@@ -314,7 +314,7 @@ const styles = createStaticStyles(({ css }) => ({
     transition: background 0.2s;
 
     &:hover {
-      background: ${cssVar.colorFillTertiary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   triggerAnchor: css`

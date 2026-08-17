@@ -76,9 +76,9 @@ const styles = createStaticStyles(({ css }) => {
       gap: 4px;
       align-items: center;
 
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
+      height: 28px;
+      padding-inline: 8px;
+      border-radius: 6px;
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
@@ -88,7 +88,7 @@ const styles = createStaticStyles(({ css }) => {
 
       &:hover {
         color: ${cssVar.colorText};
-        background: ${cssVar.colorFillTertiary};
+        background: ${cssVar.colorFillSecondary};
       }
     `,
     separator: css`
@@ -105,9 +105,9 @@ const styles = createStaticStyles(({ css }) => {
       gap: 2px;
       align-items: center;
 
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
+      height: 28px;
+      padding-inline: 8px;
+      border-radius: 6px;
 
       font-size: 12px;
       font-variant-numeric: tabular-nums;
@@ -116,7 +116,7 @@ const styles = createStaticStyles(({ css }) => {
       transition: background 0.2s;
 
       &:hover {
-        background: ${cssVar.colorFillTertiary};
+        background: ${cssVar.colorFillSecondary};
       }
     `,
     syncTriggerDisabled: css`
@@ -135,9 +135,9 @@ const styles = createStaticStyles(({ css }) => {
       gap: 4px;
       align-items: center;
 
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
+      height: 28px;
+      padding-inline: 8px;
+      border-radius: 6px;
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
@@ -146,7 +146,7 @@ const styles = createStaticStyles(({ css }) => {
       transition: background 0.2s;
 
       &:hover {
-        background: ${cssVar.colorFillTertiary};
+        background: ${cssVar.colorFillSecondary};
       }
     `,
   };
