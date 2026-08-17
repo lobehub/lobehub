@@ -25,6 +25,25 @@ const notificationWriteProcedure = notificationProcedure.use(
   withScopedPermission('message:create'),
 );
 
+/**
+ * Live incoming transfer requests for the current workspace context (empty in
+ * personal mode). Call this BEFORE snapshotting any notification counts:
+ * `listPendingForUser` lazily expires overdue transfers (settling their linked
+ * rows as read), so counting first would preserve a ghost unread row for a
+ * request that this very call just expired.
+ */
+const listLiveIncomingTransfers = async (ctx: {
+  serverDB: ConstructorParameters<typeof ResourceTransferRequestModel>[0];
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  if (!ctx.workspaceId) return [];
+
+  const transferModel = new ResourceTransferRequestModel(ctx.serverDB, ctx.workspaceId);
+  const live = await transferModel.listPendingForUser(ctx.userId);
+  return live.filter((request) => request.recipientId === ctx.userId);
+};
+
 export const notificationRouter = router({
   archive: notificationWriteProcedure
     .input(z.object({ id: z.string() }))
@@ -40,31 +59,26 @@ export const notificationRouter = router({
     // The pending category is action-driven, not read-driven: while a
     // transfer request awaits the user, its count must keep prompting even
     // after the linked inbox row was read. Swap the linked rows out of the
-    // unread count and count the live incoming requests themselves instead.
-    if (!ctx.workspaceId) return ctx.notificationModel.getNavigationCounts();
-
-    // Resolve live requests BEFORE snapshotting counts: `listPendingForUser`
-    // lazily expires overdue transfers (settling their linked rows as read),
-    // so counting first would preserve a ghost unread row for a request that
-    // this very call just expired.
-    const transferModel = new ResourceTransferRequestModel(ctx.serverDB, ctx.workspaceId);
-    const live = await transferModel.listPendingForUser(ctx.userId);
+    // row-based counts and count the live incoming requests themselves.
+    const incoming = await listLiveIncomingTransfers(ctx);
     const counts = await ctx.notificationModel.getNavigationCounts();
-    const incoming = live.filter((request) => request.recipientId === ctx.userId);
     if (incoming.length === 0) return counts;
 
     const linked = await ctx.notificationModel.countLinkedToTransfers(
       incoming.map((request) => request.id),
     );
-    // Each live incoming request renders exactly one card, replacing its
-    // linked row (when one exists) in BOTH the unread and total tallies — a
-    // request whose linked row is missing or archived still shows a card, so
-    // it must still count.
+    // Each live incoming request renders exactly one UNREAD card, replacing
+    // its linked row (when one exists) in every tally — a request whose
+    // linked row is missing or archived still shows a card, so it must still
+    // count, while a linked row that was read is suppressed by the card and
+    // must leave the read tally it would otherwise inflate.
+    const linkedRead = linked.total - linked.unread;
     const unreadDelta = incoming.length - linked.unread;
     const totalDelta = incoming.length - linked.total;
     const pending = counts.find((item) => item.category === 'pending');
     if (pending) {
       pending.unreadCount = Math.max(0, pending.unreadCount + unreadDelta);
+      pending.readCount = Math.max(0, pending.readCount - linkedRead);
       pending.totalCount = Math.max(0, pending.totalCount + totalDelta);
     } else if (unreadDelta > 0 || totalDelta > 0) {
       counts.push({
@@ -103,7 +117,17 @@ export const notificationRouter = router({
     }),
 
   unreadCount: notificationProcedure.query(async ({ ctx }) => {
-    return ctx.notificationModel.getUnreadCount();
+    // The header bell must keep prompting while a transfer awaits the user —
+    // even if the linked row was read/archived or its delivery failed — so
+    // apply the same live-transfer reconciliation as `navigationCounts`.
+    const incoming = await listLiveIncomingTransfers(ctx);
+    const unread = await ctx.notificationModel.getUnreadCount();
+    if (incoming.length === 0) return unread;
+
+    const linked = await ctx.notificationModel.countLinkedToTransfers(
+      incoming.map((request) => request.id),
+    );
+    return Math.max(0, unread + incoming.length - linked.unread);
   }),
 });
 
