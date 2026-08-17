@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "选择一个工作区成员...",
   "transferRequest.resourceType.agent": "代理",
   "transferRequest.resourceType.agentGroup": "群组",
-  "transferRequest.sectionTitle": "待处理的转移",
   "transferRequest.someone": "一个工作区成员",
   "transferRequest.untitledResource": "未命名",
   "transferRequest.withdraw": "撤回",

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import type { NewNotification, NewNotificationDelivery } from '../schemas/notification';
 import { notificationDeliveries, notifications } from '../schemas/notification';
@@ -36,13 +36,23 @@ export class NotificationModel {
   };
 
   async list(
-    opts: { category?: string; cursor?: string; limit?: number; unreadOnly?: boolean } = {},
+    opts: {
+      category?: string;
+      cursor?: string;
+      isRead?: boolean;
+      limit?: number;
+      unreadOnly?: boolean;
+    } = {},
   ) {
-    const { cursor, limit = 20, category, unreadOnly } = opts;
+    const { cursor, limit = 20, category, isRead, unreadOnly } = opts;
 
     const conditions = [...this.scope(), eq(notifications.isArchived, false)];
 
-    if (unreadOnly) {
+    if (typeof isRead === 'boolean') {
+      conditions.push(eq(notifications.isRead, isRead));
+    } else if (unreadOnly) {
+      // Keep old desktop clients working while the notification center moves
+      // to the explicit read / unread tabs.
       conditions.push(eq(notifications.isRead, false));
     }
 
@@ -75,6 +85,66 @@ export class NotificationModel {
       .where(and(...conditions))
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limit);
+  }
+
+  async getNavigationCounts() {
+    const rows = await this.db
+      .select({
+        category: notifications.category,
+        count: count(),
+        isRead: notifications.isRead,
+      })
+      .from(notifications)
+      .where(and(...this.scope(), eq(notifications.isArchived, false)))
+      .groupBy(notifications.category, notifications.isRead);
+
+    const counts = new Map<
+      string,
+      { category: string; readCount: number; totalCount: number; unreadCount: number }
+    >();
+    for (const row of rows) {
+      const categoryCounts = counts.get(row.category) ?? {
+        category: row.category,
+        readCount: 0,
+        totalCount: 0,
+        unreadCount: 0,
+      };
+
+      categoryCounts.totalCount += row.count;
+      if (row.isRead) categoryCounts.readCount += row.count;
+      else categoryCounts.unreadCount += row.count;
+      counts.set(row.category, categoryCounts);
+    }
+
+    return [...counts.values()];
+  }
+
+  /**
+   * Unread, unarchived `pending`-category rows linked (via
+   * `metadata.transfer.requestId`) to the given live transfer requests.
+   * Navigation counts use this to swap row-based counting for request-based
+   * counting on the pending category: a linked row's read state must not hide
+   * a still-unresolved request. Scoped to the pending category because only
+   * rows counted there may be swapped out — a linked row that landed in
+   * another category counts toward that category, not against the requests.
+   */
+  async countUnreadLinkedToTransfers(requestIds: string[]): Promise<number> {
+    if (requestIds.length === 0) return 0;
+
+    const [result] = await this.db
+      .select({ count: count() })
+      .from(notifications)
+      .where(
+        and(
+          ...this.scope(),
+          eq(notifications.category, 'pending'),
+          eq(notifications.isRead, false),
+          eq(notifications.isArchived, false),
+          inArray(sql`${notifications.metadata} -> 'transfer' ->> 'requestId'`, requestIds),
+        ),
+      );
+
+    return result?.count ?? 0;
   }
 
   async getUnreadCount(): Promise<number> {

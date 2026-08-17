@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { NotificationModel } from '@/database/models/notification';
+import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -35,11 +36,38 @@ export const notificationRouter = router({
     return ctx.notificationModel.archiveAll();
   }),
 
+  navigationCounts: notificationProcedure.query(async ({ ctx }) => {
+    const counts = await ctx.notificationModel.getNavigationCounts();
+
+    // The pending category is action-driven, not read-driven: while a
+    // transfer request awaits the user, its count must keep prompting even
+    // after the linked inbox row was read. Swap the linked rows out of the
+    // unread count and count the live incoming requests themselves instead.
+    if (!ctx.workspaceId) return counts;
+
+    const transferModel = new ResourceTransferRequestModel(ctx.serverDB, ctx.workspaceId);
+    const live = await transferModel.listPendingForUser(ctx.userId);
+    const incoming = live.filter((request) => request.recipientId === ctx.userId);
+    if (incoming.length === 0) return counts;
+
+    const linkedUnread = await ctx.notificationModel.countUnreadLinkedToTransfers(
+      incoming.map((request) => request.id),
+    );
+    const delta = incoming.length - linkedUnread;
+    const pending = counts.find((item) => item.category === 'pending');
+    if (pending) pending.unreadCount = Math.max(0, pending.unreadCount + delta);
+    else if (delta > 0)
+      counts.push({ category: 'pending', readCount: 0, totalCount: 0, unreadCount: delta });
+
+    return counts;
+  }),
+
   list: notificationProcedure
     .input(
       z.object({
         category: z.string().optional(),
         cursor: z.string().optional(),
+        isRead: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         unreadOnly: z.boolean().optional(),
       }),
