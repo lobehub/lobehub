@@ -7,12 +7,17 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as resolveCliCommand from './resolveCliCommand';
+
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
+const detectHeterogeneousCliCommandMock = vi.mocked(
+  resolveCliCommand.detectHeterogeneousCliCommand,
+);
 
 const callExecFile = (stdout: string) => {
   execFileMock.mockImplementationOnce(((...args: unknown[]) => {
@@ -38,6 +43,11 @@ vi.mock('node:child_process', async () => {
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'linux') };
+});
+
+vi.mock('./resolveCliCommand', async () => {
+  const actual = await vi.importActual<typeof resolveCliCommand>('./resolveCliCommand');
+  return { ...actual, detectHeterogeneousCliCommand: vi.fn() };
 });
 
 const createFakeProc = ({
@@ -263,6 +273,7 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'traecli' });
   });
 
   afterEach(async () => {
@@ -513,6 +524,7 @@ describe('spawnAgent', () => {
       for await (const event of handle.events) events.push(event);
 
       await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith('trae', 'traecli');
       expect(spawnCalls[0]).toMatchObject({
         args: ['acp', 'serve', '--yolo', '--feature=test'],
         command: 'traecli',
@@ -540,6 +552,10 @@ describe('spawnAgent', () => {
   it('allows the official canonical trae-cli command to run through ACP', async () => {
     const fake = createFakeAcpProc();
     nextFakeProc = fake.proc;
+    detectHeterogeneousCliCommandMock.mockResolvedValue({
+      available: true,
+      path: '/usr/local/bin/trae-cli',
+    });
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
     try {
@@ -557,11 +573,28 @@ describe('spawnAgent', () => {
       await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
       expect(spawnCalls[0]).toMatchObject({
         args: ['acp', 'serve', '--yolo'],
-        command: 'trae-cli',
+        command: '/usr/local/bin/trae-cli',
       });
     } finally {
       killSpy.mockRestore();
     }
+  });
+
+  it('rejects a custom TRAE command that does not expose the ACP runtime', async () => {
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: false });
+
+    const { spawnAgent } = await import('./spawnAgent');
+
+    await expect(
+      spawnAgent({
+        agentType: 'trae',
+        command: 'trae-cli',
+        operationId: 'op-trae',
+        prompt: 'do a thing',
+      }),
+    ).rejects.toThrow('TRAE command does not expose the required ACP runtime: trae-cli');
+    expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith('trae', 'trae-cli');
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('passes --include-partial-messages only when includePartialMessages=true', async () => {

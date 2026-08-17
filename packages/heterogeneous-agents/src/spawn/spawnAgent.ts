@@ -13,6 +13,7 @@ import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { detectHeterogeneousCliCommand } from './resolveCliCommand';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 
 export interface SpawnAgentOptions {
@@ -727,13 +728,17 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
 /** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
 export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
-  const command = resolveHeterogeneousAgentCommand('trae', options.command);
+  const requestedCommand = resolveHeterogeneousAgentCommand('trae', options.command);
   const cwd = options.cwd || process.cwd();
   if (!existsSync(cwd)) {
     throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
       code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
       workingDirectory: cwd,
     });
+  }
+  const commandStatus = await detectHeterogeneousCliCommand('trae', requestedCommand);
+  if (!commandStatus.available || !commandStatus.path) {
+    throw new Error(`TRAE command does not expose the required ACP runtime: ${requestedCommand}`);
   }
 
   const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
@@ -750,9 +755,13 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
   const session = new TraeAcpSession({
     args: options.extraArgs ?? [],
     clientVersion: '1.0.0',
-    commandPath: command,
+    commandPath: commandStatus.path,
     cwd,
-    env: { ...process.env, ...options.env },
+    env: {
+      ...process.env,
+      ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
+      ...options.env,
+    },
     initialModel: options.initialModel,
     onEvents: (events) => {
       queue.push(...events);
