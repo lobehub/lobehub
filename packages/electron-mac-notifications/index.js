@@ -1,47 +1,16 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 'use strict';
 
+const { loadNativeBinding } = require('@lobechat/napi-loader');
 const { randomUUID } = require('node:crypto');
-const path = require('node:path');
 
 const ID_PREFIX = 'lobehub-';
 const SHOW_TIMEOUT_MS = 5000;
-const BINDING_RELATIVE_PATH = 'build/Release/lobehub_mac_notifications.node';
 
-// Whether this file stays external (loaded from the package dir) or gets
-// inlined into the main bundle depends on the bundler's workspace resolution,
-// which has proven unstable across invocation paths — so the loader must work
-// in both shapes: __dirname for the external case, and the asar-unpacked
-// absolute path for the inlined-in-packaged-app case.
-const bindingCandidates = () => {
-  const candidates = [path.join(__dirname, BINDING_RELATIVE_PATH)];
-  if (process.resourcesPath) {
-    candidates.push(
-      path.join(
-        process.resourcesPath,
-        'app.asar.unpacked/node_modules/@lobechat/electron-mac-notifications',
-        BINDING_RELATIVE_PATH,
-      ),
-    );
-  }
-  return candidates;
-};
-
-let binding = null;
-if (process.platform === 'darwin' && process.type !== 'renderer') {
-  const errors = [];
-  for (const candidate of bindingCandidates()) {
-    try {
-      binding = require(candidate);
-      break;
-    } catch (error) {
-      errors.push(`${candidate}: ${error.message}`);
-    }
-  }
-  if (!binding) {
-    console.error('[electron-mac-notifications] failed to load native binding:', errors.join('; '));
-  }
-}
+const binding =
+  process.platform === 'darwin' && process.type !== 'renderer'
+    ? loadNativeBinding({ dirname: __dirname, packageName: require('./package.json').name })
+    : null;
 
 const listeners = new Set();
 let setupDone = false;

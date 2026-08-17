@@ -11,6 +11,7 @@ import {
   getExternalRuntimeModulesFilesConfig,
 } from './external-runtime-deps.config.mjs';
 import {
+  buildFirstPartyNativeAddons,
   copyNativeModulesToSource,
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
@@ -144,14 +145,8 @@ const config = {
    * BeforePack hook to resolve pnpm symlinks for native modules.
    * This ensures native modules are properly included in the asar archive.
    */
-  beforePack: async (context) => {
-    if (context.electronPlatformName === 'darwin') {
-      console.info('🔔 Building electron-mac-notifications native addon...');
-      execSync('pnpm --filter @lobechat/electron-mac-notifications build:native', {
-        cwd: __dirname,
-        stdio: 'inherit',
-      });
-    }
+  beforePack: async () => {
+    buildFirstPartyNativeAddons();
 
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
