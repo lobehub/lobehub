@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ToolNameResolver } from '@lobechat/context-engine';
-import type { ReasoningGraph, RuntimeAdditionalContextFragment } from '@lobechat/types';
-import { AGENT_GRAPH_ROOT_NODE_ID, ReasoningGraphSchema } from '@lobechat/types';
+import type { AgentGraph, RuntimeAdditionalContextFragment } from '@lobechat/types';
+import { AGENT_GRAPH_ROOT_NODE_ID, AgentGraphSchema } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentInstruction, AgentRuntimeContext, AgentState } from '../../../types';
@@ -129,11 +129,11 @@ const getGraphNodeSection = (instruction: AgentInstruction | AgentInstruction[],
 const getGraphNodeContextText = (instruction: AgentInstruction | AgentInstruction[]) =>
   JSON.stringify(getGraphNodeContext(instruction));
 
-const loadGoalLoopGraph = (): ReasoningGraph => {
+const loadGoalLoopGraph = (): AgentGraph => {
   const graph = JSON.parse(
     readFileSync(path.join(TEST_DIR, 'fixtures/goal-loop.graph.json'), 'utf8'),
   );
-  const result = ReasoningGraphSchema.safeParse(graph);
+  const result = AgentGraphSchema.safeParse(graph);
 
   if (!result.success) {
     throw new Error(JSON.stringify(result.error.format(), null, 2));
@@ -142,7 +142,7 @@ const loadGoalLoopGraph = (): ReasoningGraph => {
   return result.data;
 };
 
-const parseGraph = (graph: unknown) => ReasoningGraphSchema.safeParse(graph);
+const parseGraph = (graph: unknown) => AgentGraphSchema.safeParse(graph);
 
 describe('GraphAgent', () => {
   describe('schema', () => {
@@ -623,7 +623,7 @@ describe('GraphAgent', () => {
 
     it('should render raw fallback context once when declared input fields are missing', async () => {
       const goalLoopGraph = loadGoalLoopGraph();
-      const graph: ReasoningGraph = {
+      const graph: AgentGraph = {
         ...goalLoopGraph,
         edges: goalLoopGraph.edges.map((edge) =>
           edge.from === 'plan'
@@ -1179,7 +1179,7 @@ describe('GraphAgent', () => {
     });
 
     it('should route by matching condition before default and fall back when condition misses', async () => {
-      const graph: ReasoningGraph = {
+      const graph: AgentGraph = {
         edges: [
           {
             from: AGENT_GRAPH_ROOT_NODE_ID,
@@ -1267,7 +1267,7 @@ describe('GraphAgent', () => {
     });
 
     it('should treat invalid condition schemas as no match and use the default edge', async () => {
-      const graph: ReasoningGraph = {
+      const graph: AgentGraph = {
         edges: [
           {
             from: AGENT_GRAPH_ROOT_NODE_ID,

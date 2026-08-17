@@ -2,10 +2,11 @@
 
 import { toast } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
-import { createContext, use, useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { lambdaClient } from '@/libs/trpc/client';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -160,7 +161,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
   // Shared in-flight token refresh, so concurrent callers never replay a
   // single-use refresh token against each other (see `runTokenRefresh`).
-  const refreshSingleFlightRef = useRef(createSingleFlight<boolean>());
+  const refreshSingleFlight = useSingleton(() => createSingleFlight<boolean>());
 
   // Subscribe to user store init state; when isUserStateInit is true, settings data is fully loaded
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
@@ -204,7 +205,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    */
   const runTokenRefresh = useCallback(
     (refreshTokenValue: string): Promise<boolean> =>
-      refreshSingleFlightRef.current(async (): Promise<boolean> => {
+      refreshSingleFlight(async (): Promise<boolean> => {
         try {
           const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
 
@@ -243,7 +244,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
           return false;
         }
       }),
-    [isDesktop],
+    [isDesktop, refreshSingleFlight],
   );
 
   /**

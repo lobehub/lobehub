@@ -7,6 +7,20 @@ export default {
   'agent_cron_job_failed_title': 'Scheduled task failed',
   'agent_run_completed': '{{preview}}',
   'agent_run_completed_title': 'Agent task completed',
+  'agent_transfer_reassigned':
+    'A workspace owner transferred your agent "{{agentTitle}}" to {{recipientLabel}}.',
+  'agent_transfer_reassigned_title': 'Agent reassigned',
+  'agent_transfer_requested':
+    '{{actorLabel}} wants to transfer the agent "{{agentTitle}}" to you. Accept or decline it from Notifications.',
+  'agent_transfer_requested_title': 'Agent transfer request',
+  'agent_transfer_result': 'The transfer of "{{agentTitle}}" was resolved.',
+  'agent_transfer_result_accepted':
+    '{{actorLabel}} accepted the transfer and now owns "{{agentTitle}}".',
+  'agent_transfer_result_accepted_title': 'Transfer accepted',
+  'agent_transfer_result_declined':
+    '{{actorLabel}} declined the transfer of "{{agentTitle}}". It stays with its current owner.',
+  'agent_transfer_result_declined_title': 'Transfer declined',
+  'agent_transfer_result_title': 'Transfer result',
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
   'category.billing': 'Billing',
@@ -25,6 +39,18 @@ export default {
     'You received this email because of your notification settings on LobeHub.',
   'email.footer.system': 'This is an important account notification from LobeHub.',
   'email.viewDetails': 'View Details',
+  'group_transfer_reassigned':
+    'A workspace owner transferred your group "{{agentTitle}}" to {{recipientLabel}}.',
+  'group_transfer_reassigned_title': 'Group reassigned',
+  'group_transfer_requested':
+    '{{actorLabel}} wants to transfer the group "{{agentTitle}}" to you. Accept or decline it from Notifications.',
+  'group_transfer_requested_title': 'Group transfer request',
+  'group_transfer_result_accepted':
+    '{{actorLabel}} accepted the transfer and now owns "{{agentTitle}}".',
+  'group_transfer_result_accepted_title': 'Transfer accepted',
+  'group_transfer_result_declined':
+    '{{actorLabel}} declined the transfer of "{{agentTitle}}". It stays with its current owner.',
+  'group_transfer_result_declined_title': 'Transfer declined',
   'image_generation_completed': 'Your image "{{prompt}}" is ready.',
   'image_generation_completed_title': 'Image generation completed',
   'inbox.archive': 'Archive',

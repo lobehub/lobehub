@@ -72,6 +72,9 @@ const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
   return (
     <SideBarDrawer
       open={open}
+      // Wider than the default 280: notification rows and the pending-transfer
+      // items carry inline actions + a timestamp that need the extra room.
+      width={320}
       action={
         <ActionIcon
           active={unreadOnly}

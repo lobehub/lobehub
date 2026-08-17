@@ -4,7 +4,7 @@ import {
   isConnectorErrorRetryable,
 } from '@lobechat/connector-data';
 import type { GmailMessage } from '@lobechat/connector-data/gmail';
-import { toGmailMessagesXml } from '@lobechat/connector-data/gmail';
+import { hasGmailReadPermission, toGmailMessagesXml } from '@lobechat/connector-data/gmail';
 
 import type { UnderstandingProvider } from '../types';
 
@@ -21,13 +21,6 @@ const GMAIL_PROFILE_SEARCHES = [
 
 const MAX_CONTEXT_MESSAGES = 32;
 const MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN = 6;
-
-const hasGmailReadPermission = (scopes: readonly string[]) =>
-  scopes.some((scope) =>
-    ['gmail.modify', 'gmail.readonly', 'mail.google.com/'].some((permission) =>
-      scope.endsWith(permission),
-    ),
-  );
 
 const getGmailCollectionErrorCode = (reason: unknown) =>
   reason instanceof ConnectorDataError ? reason.code : 'GMAIL_SEARCH_FAILED';

@@ -22,12 +22,25 @@ export type BillboardAction = (typeof BILLBOARD_ACTIONS)[number];
 export const isBillboardAction = (value: unknown): value is BillboardAction =>
   typeof value === 'string' && (BILLBOARD_ACTIONS as readonly string[]).includes(value);
 
-const isSyncedToOfficialCloud = () => {
+const isOfficialWebOrigin = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.location.origin === new URL(OFFICIAL_URL).origin;
+  } catch {
+    return false;
+  }
+};
+
+const isOnOfficialCloud = () => {
   const state = getElectronStoreState();
-  return (
+  if (
     electronSyncSelectors.isSyncActive(state) &&
     electronSyncSelectors.storageMode(state) === 'cloud'
-  );
+  ) {
+    return true;
+  }
+
+  return isOfficialWebOrigin();
 };
 
 type BillboardActionGuard = (action: BillboardAction) => BillboardAction | null;
@@ -42,12 +55,7 @@ const onlyWhen =
  * may drop it to null (the CTA then falls back to `linkUrl`). Add a guard per
  * constraint instead of branching inside `resolveBillboardAction`.
  */
-const actionGuards: BillboardActionGuard[] = [
-  // The web onboarding flow only exists on the official cloud instance, and
-  // the reset must apply to the same account the external browser will show —
-  // so desktop honors resetOnboarding only when synced to official cloud.
-  onlyWhen('resetOnboarding', () => !isDesktop || isSyncedToOfficialCloud()),
-];
+const actionGuards: BillboardActionGuard[] = [onlyWhen('resetOnboarding', isOnOfficialCloud)];
 
 /**
  * Narrow a platform-configured value to an action this client can actually run:

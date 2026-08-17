@@ -1,5 +1,6 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
+import type { AgentGraph } from './graph';
 import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
@@ -602,6 +603,17 @@ export interface LobeAgentAgencyConfig {
    */
   boundDeviceId?: string;
   /**
+   * Whether to route this agent through a graph-style orchestration runtime
+   * (Graph Agent). Undefined means the agent uses the default runtime path.
+   *
+   * The graph is the agent's behavior definition — node policies, routing
+   * conditions and data contracts — so it lives on the agency config (how the
+   * agent behaves and executes) rather than the chat config (per-session
+   * preferences). This lets an agent evolve its own behavior by evolving its
+   * graph nodes.
+   */
+  enableGraphMode?: boolean;
+  /**
    * Execution target for the hetero agent. When omitted, resolves to a
    * platform default: `'local'` on desktop and `'none'` on web.
    */
@@ -612,6 +624,13 @@ export interface LobeAgentAgencyConfig {
    * a device.
    */
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
+  /**
+   * Graph Agent behavior definition. The `AgentGraph` snapshot describing
+   * nodes, edges, field contracts and routing conditions for graph-style
+   * orchestration. Together with `enableGraphMode`, this is the agent's
+   * behavior body — one graph is one agent.
+   */
+  graph?: null | AgentGraph;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
    * Confine the run's shell commands to the device sandbox. A *modifier* on

@@ -602,11 +602,11 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // will happen without me" — the second question only makes sense after the
     // first, so it always sits underneath.
     //
-    // The inline padding keeps the lists from running edge-to-edge with the
-    // composer above: rows carry a -10px hover overhang (see `rowBox`), so
-    // without it the hover pill would reach past the column bounds.
+    // No inline inset: section headers sit flush with the composer edge and the
+    // folded-in inbox sections above, exactly like chat mode — row hover pills
+    // overhang by design (see `rowBox`).
     const taskBlocks = (
-      <Flexbox gap={32} paddingInline={12}>
+      <Flexbox gap={32}>
         {!tasksHidden && <TaskContent />}
         {!scheduledTasksHidden && <ScheduledTaskContent />}
       </Flexbox>

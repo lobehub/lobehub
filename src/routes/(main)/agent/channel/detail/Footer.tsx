@@ -271,7 +271,7 @@ const Footer = memo<FooterProps>(
               showIcon
               type="info"
               message={
-                <Trans
+                <Trans<'channel.endpointUrlHint', 'agent'>
                   components={{ bold: <strong /> }}
                   i18nKey="channel.endpointUrlHint"
                   ns="agent"

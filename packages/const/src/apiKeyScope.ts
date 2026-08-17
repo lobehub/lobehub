@@ -237,6 +237,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   recent: rw('chat:read', null),
   referral: 'blocked',
   resourcePermission: 'blocked',
+  // Member-to-member ownership handover: accepting/declining is an interactive
+  // human decision, not something a restricted key should automate.
+  resourceTransferRequest: 'blocked',
   search: rw('chat:read', null),
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),

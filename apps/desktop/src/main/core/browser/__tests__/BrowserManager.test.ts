@@ -223,6 +223,23 @@ describe('BrowserManager', () => {
       expect(result.identifier).toBe('my-custom-id');
     });
 
+    it('should override template dimensions with the requested window size', () => {
+      manager.createMultiInstanceWindow('popup' as any, '/popup/path', undefined, {
+        height: 900,
+        width: 1400,
+      });
+
+      expect(MockBrowser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 900,
+          path: '/popup/path',
+          restoreWindowState: false,
+          width: 1400,
+        }),
+        mockApp,
+      );
+    });
+
     it('should throw error for non-existent template', () => {
       expect(() => manager.createMultiInstanceWindow('nonexistent' as any, '/path')).toThrow(
         'Window template nonexistent not found',
