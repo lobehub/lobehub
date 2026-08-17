@@ -25,6 +25,7 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
+import { PublishHtmlArtifactButton } from './PublishHtmlArtifactButton';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('./DocumentPreview'));
@@ -162,6 +163,7 @@ interface TextPreviewPaneProps {
   readOnly?: boolean;
   reloading?: boolean;
   resourceBaseUrl?: string;
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 
@@ -178,6 +180,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     readOnly = false,
     reloading = false,
     resourceBaseUrl,
+    sandboxTopicId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -315,6 +318,16 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               ]}
               onChange={(key) => setMode(key as TextPreviewMode)}
             />
+            {isHtml && (
+              <PublishHtmlArtifactButton
+                content={editingValue}
+                deviceId={deviceId}
+                filePath={filePath}
+                sandboxTopicId={sandboxTopicId}
+                topicId={activeTopicId}
+                workingDirectory={workingDirectory}
+              />
+            )}
           </Flexbox>
         )}
         <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
@@ -503,6 +516,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         readOnly={!!sandboxTopicId}
         reloading={isValidating}
         resourceBaseUrl={preview.resourceBaseUrl}
+        sandboxTopicId={sandboxTopicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaved={handleSavedContent}
