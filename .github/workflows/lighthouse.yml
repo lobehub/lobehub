@@ -10,10 +10,10 @@ env:
   DESKTOP_LIGHTHOUSE_PARAMS: '--preset=desktop --throttling.cpuSlowdownMultiplier=1'
   COMMIT_MESSAGE: '🤖 chore: Lighthouse Results Refreshed'
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  schedule:
-    - cron: '0 0 * * *' # every day
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   lighthouse-badger-advanced:

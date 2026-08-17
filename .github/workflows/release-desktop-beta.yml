@@ -10,9 +10,12 @@ name: Release Desktop Beta
 # 注意: Nightly 版本已停用，不再参与 Desktop 发布流程
 # ============================================
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  release:
-    types: [published]
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}

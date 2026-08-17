@@ -1,8 +1,9 @@
 name: Claude Migration Support
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch: {}
 
 jobs:
   migration-support:

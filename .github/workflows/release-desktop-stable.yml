@@ -20,9 +20,9 @@ name: Release Desktop Stable
 #   - UPDATE_SERVER_URL (客户端检查更新的 URL)
 # ============================================
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:

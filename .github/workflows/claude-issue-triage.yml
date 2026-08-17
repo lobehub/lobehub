@@ -1,8 +1,9 @@
 name: Claude Issue Triage
 # Automatically triage GitHub issues using Claude Code
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  issues:
-    types: [opened, labeled]
+  workflow_dispatch: {}
 
 jobs:
   triage-issue:
