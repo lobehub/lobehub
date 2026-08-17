@@ -13,6 +13,7 @@
     "./quota": "./src/quota/index.ts",
     "./quota-sampler": "./src/quota-sampler/index.ts",
     "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",
+    "./rpc": "./src/rpc/index.ts",
     "./scanHost": "./src/scan/scanHost.ts",
     "./spawn": "./src/spawn/index.ts",
     "./transcript": "./src/transcript/index.ts"

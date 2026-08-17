@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { platform } from 'node:os';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
@@ -212,7 +213,6 @@ export const CURSOR_BASE_ARGS = [
 ] as const;
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
-export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
 export const QODER_BASE_ARGS = [
   '-p',
@@ -311,12 +311,13 @@ const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawn
   ...extraArgs,
 ];
 
-const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
-  ...PI_BASE_ARGS,
-  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-  ...inputArgs,
-  ...extraArgs,
-];
+const buildPiArgs = (_params: BuildSpawnArgsParams): never => {
+  // pi runs exclusively over the RPC transport (PiRpcSession /
+  // createPiRpcAgentHandle). Reaching the legacy json spawn is a bug.
+  throw new Error(
+    'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle',
+  );
+};
 
 const buildKimiCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...KIMI_CODE_BASE_ARGS,
@@ -384,7 +385,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   // to a direct signal. Tree-kill via `taskkill` is what the desktop
   // controller does for end-user CC, but the CLI's primary use case is
   // sandbox + Unix dev terminals, so keep this minimal.
-  if (process.platform === 'win32') {
+  if (platform() === 'win32') {
     try {
       proc.kill(signal);
     } catch {
@@ -564,7 +565,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached: platform() !== 'win32',
     env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });

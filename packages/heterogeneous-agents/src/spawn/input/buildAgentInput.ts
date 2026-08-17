@@ -139,15 +139,12 @@ const buildOpenCodeInput = async (
   };
 };
 
-const buildPiInput = async (
-  blocks: AgentContentBlock[],
-  options: BuildAgentInputOptions,
-): Promise<AgentInputPlan> => {
-  const imagePaths = await resolvePathInputImagePaths(blocks, options);
-  return {
-    args: imagePaths.map((imagePath) => `@${imagePath}`),
-    stdin: collectText(blocks),
-  };
+const buildPiInput = async (): Promise<AgentInputPlan> => {
+  // pi runs exclusively over the RPC transport (PiRpcSession /
+  // createPiRpcAgentHandle) — the legacy `--mode json` stdin input is gone.
+  throw new Error(
+    'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle',
+  );
 };
 
 const buildKimiCodeInput = (blocks: AgentContentBlock[]): AgentInputPlan => {
@@ -218,7 +215,7 @@ export const buildAgentInput = async (
       return buildOpenCodeInput(blocks, options);
     }
     case 'pi': {
-      return buildPiInput(blocks, options);
+      return buildPiInput();
     }
     case 'qoder': {
       return buildQoderInput(blocks, options);

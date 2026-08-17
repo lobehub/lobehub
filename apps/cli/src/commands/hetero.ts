@@ -9,10 +9,12 @@ import {
   HETEROGENEOUS_AGENT_CONFIGS,
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import { createPiRpcAgentHandle, toPiRpcPrompt } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
   AgentImageSource,
@@ -41,6 +43,46 @@ const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
 ).join(', ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
+
+/**
+ * Runtime selection registry for `lh hetero exec` — the CLI counterpart of
+ * the desktop controller's `runtimeDispatchers`. Long-lived bidirectional
+ * runtimes (pi RPC) register a spawn factory here; every other agent uses the
+ * generic one-shot `spawnAgent`. A future agent adopting an RPC mode only
+ * adds one entry — no dispatch edit.
+ */
+const spawnRuntimeRegistry: Partial<
+  Record<
+    LocalHeterogeneousAgentType,
+    (spawnOpts: Parameters<typeof spawnAgent>[0]) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
+  >
+> = {
+  pi: async (spawnOpts) =>
+    createPiRpcAgentHandle({
+      args: spawnOpts.extraArgs ?? [],
+      commandPath: spawnOpts.command!,
+      cwd: spawnOpts.cwd ?? process.cwd(),
+      env: spawnOpts.env ?? {},
+      operationId: spawnOpts.operationId,
+      prompt: await toPiRpcPrompt(spawnOpts.prompt),
+      resumeSessionId: spawnOpts.resumeSessionId,
+      uploadImage: spawnOpts.uploadImage,
+    }),
+};
+
+/**
+ * Spawn via the registered runtime factory, or the generic one-shot spawn.
+ * `onRawStdout` (raw-dump tee) only reaches the generic path — RPC runtimes
+ * parse stdout internally.
+ */
+const spawnAgentOrRuntime = (
+  spawnOpts: Parameters<typeof spawnAgent>[0],
+  onRawStdout?: (chunk: Buffer) => void,
+): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
+  const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
+  if (runtimeFactory) return runtimeFactory(spawnOpts);
+  return spawnAgent({ ...spawnOpts, onRawStdout });
+};
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -612,10 +654,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     const dumpAttempt = rawDump?.openAttempt(runLabel);
 
     // `spawnAgent` is async and can reject DURING image normalization — fetch
-    // failures, missing local --image paths, decode errors.
+    // failures, missing local --image paths, decode errors. The runtime
+    // registry picks the transport: pi runs over RPC, everything else spawns
+    // one-shot (same handle shape, so the event loop below is unchanged).
     let handle: Awaited<ReturnType<typeof spawnAgent>>;
     try {
-      handle = await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
+      handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout);
     } catch (err) {
       await dumpAttempt?.close();
       const message = err instanceof Error ? err.message : String(err);

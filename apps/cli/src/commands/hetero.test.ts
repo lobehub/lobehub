@@ -11,10 +11,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
-  mockResolveHeteroSpawnCommand: vi.fn(),
-  mockSpawnAgent: vi.fn(),
-}));
+const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
+  () => ({
+    mockCreatePiRpcAgentHandle: vi.fn(),
+    mockResolveHeteroSpawnCommand: vi.fn(),
+    mockSpawnAgent: vi.fn(),
+  }),
+);
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -30,6 +33,12 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
 
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/rpc', () => ({
+  createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
+  toPiRpcPrompt: (input: unknown) =>
+    Promise.resolve({ text: typeof input === 'string' ? input : JSON.stringify(input) }),
 }));
 
 vi.mock('../api/client', () => ({
@@ -112,6 +121,7 @@ describe('hetero exec command', () => {
         return { command: command ?? defaultCommand };
       },
     );
+    mockCreatePiRpcAgentHandle.mockReset();
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
     mockHeteroFinishMutate.mockReset();
@@ -553,8 +563,8 @@ describe('hetero exec command', () => {
     );
   });
 
-  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
+  it('runs Pi over the RPC transport with model, resume, and native args while ignoring effort and speed', async () => {
+    mockCreatePiRpcAgentHandle.mockResolvedValue(createFakeHandle());
 
     await runCmd([
       'hetero',
@@ -576,11 +586,12 @@ describe('hetero exec command', () => {
     ]);
 
     expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
-    expect(mockSpawnAgent).toHaveBeenCalledWith(
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(mockCreatePiRpcAgentHandle).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentType: 'pi',
-        command: 'pi',
-        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        args: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        commandPath: 'pi',
+        operationId: expect.any(String),
         resumeSessionId: 'pi-session-1',
       }),
     );

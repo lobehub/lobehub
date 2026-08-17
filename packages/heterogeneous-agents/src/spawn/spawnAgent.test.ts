@@ -12,6 +12,7 @@ let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
+const originalPlatform = process.platform;
 const execFileMock = vi.mocked(childProcess.execFile);
 
 const callExecFile = (stdout: string) => {
@@ -263,10 +264,15 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    // ACP/stdio sessions read `process.platform` directly (unlike the CLI
+    // spawn plan which uses `os.platform()`), so pin it too — otherwise the
+    // signal-path tests exercise the win32 taskkill branch on Windows hosts.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
   });
 
   afterEach(async () => {
     nextFakeProc = null;
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
@@ -891,35 +897,18 @@ describe('spawnAgent', () => {
     ]);
   });
 
-  it('spawns Pi in JSON mode, resumes its native session, and sends images as @path args', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-pi-spawn-'));
-    tempDirs.push(dir);
-    const imagePath = path.join(dir, 'input.png');
-    await writeFile(imagePath, 'image');
-    nextFakeProc = createFakeProc().proc;
+  it('rejects spawning Pi via the legacy CLI path — pi is RPC-only', async () => {
     const { spawnAgent } = await import('./spawnAgent');
-    await spawnAgent({
-      agentType: 'pi',
-      extraArgs: ['--provider', 'anthropic'],
-      operationId: 'op-pi',
-      prompt: [
-        { text: 'continue', type: 'text' },
-        { source: { path: imagePath, type: 'path' }, type: 'image' },
-      ],
-      resumeSessionId: 'pi-session-previous',
-    });
-
-    expect(spawnCalls[0]).toMatchObject({ command: 'pi' });
-    expect(spawnCalls[0].args).toEqual([
-      '--mode',
-      'json',
-      '--session-id',
-      'pi-session-previous',
-      `@${imagePath}`,
-      '--provider',
-      'anthropic',
-    ]);
-    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('continue');
+    await expect(
+      spawnAgent({
+        agentType: 'pi',
+        extraArgs: ['--provider', 'anthropic'],
+        operationId: 'op-pi',
+        prompt: 'continue',
+        resumeSessionId: 'pi-session-previous',
+      }),
+    ).rejects.toThrow(/RPC transport only/);
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
