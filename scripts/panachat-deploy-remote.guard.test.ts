@@ -1,0 +1,45 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = (rel: string) => readFileSync(path.join(root, rel), 'utf8');
+
+describe('control-plane CI/CD wiring', () => {
+  it('builds and deploys a GHCR control-plane image on canary and preview', () => {
+    const canary = read('.github/workflows/deploy-canary.yml');
+    const preview = read('.github/workflows/deploy-preview.yml');
+
+    for (const yaml of [canary, preview]) {
+      expect(yaml).toContain('build-control-plane:');
+      expect(yaml).toContain('file: ./apps/aico-control-plane/Dockerfile');
+      expect(yaml).toContain('PANACHAT_CONTROL_PLANE_IMAGE');
+      expect(yaml).toContain('needs: [build, build-control-plane]');
+    }
+  });
+
+  it('recreates the control-plane container without compose down -v', () => {
+    const script = read('scripts/panachat-deploy-remote.sh');
+    const compose = read('docker-compose/deploy/docker-compose.panachat.yml');
+    const dockerfile = read('apps/aico-control-plane/Dockerfile');
+
+    expect(script).toContain('deploy_control_plane');
+    expect(script).toMatch(
+      /compose_with_profile control-plane up -d --no-deps --force-recreate panachat-control-plane/,
+    );
+    expect(script).not.toMatch(/^\s*(docker compose|compose).*down\s+-v/m);
+
+    expect(compose).not.toMatch(
+      /panachat-control-plane:[\s\S]*?volumes:[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*-\s+\.\.:\/app/,
+    );
+    expect(compose).toContain('pull_policy: always');
+
+    expect(dockerfile).toContain('pnpm run build:spa:control-plane');
+    expect(dockerfile).toContain('pnpm --filter @aico/control-plane build');
+    expect(dockerfile).toContain('CMD ["node", "dist/standalone.js"]');
+    expect(dockerfile).toContain('Do not bind-mount');
+  });
+});

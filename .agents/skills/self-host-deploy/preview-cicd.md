@@ -15,24 +15,25 @@ feature/*  →  preview  →  (smoke test)  →  canary  →  production VPS
                     PANACHAT_ENV=preview           PANACHAT_ENV=canary
 ```
 
-| Branch    | Workflow                                                              | Image tags       | Stack                                             |
-| --------- | --------------------------------------------------------------------- | ---------------- | ------------------------------------------------- |
-| `preview` | [`deploy-preview.yml`](../../../.github/workflows/deploy-preview.yml) | `:preview` + SHA | `panachat-preview` + `panachat_preview_*` volumes |
-| `canary`  | [`deploy-canary.yml`](../../../.github/workflows/deploy-canary.yml)   | `:canary` + SHA  | `panachat` + `panachat_*` volumes                 |
+| Branch    | Workflow                                                              | Image tags                            | Stack                                             |
+| --------- | --------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- |
+| `preview` | [`deploy-preview.yml`](../../../.github/workflows/deploy-preview.yml) | chat + control-plane `:preview` + SHA | `panachat-preview` + `panachat_preview_*` volumes |
+| `canary`  | [`deploy-canary.yml`](../../../.github/workflows/deploy-canary.yml)   | chat + control-plane `:canary` + SHA  | `panachat` + `panachat_*` volumes                 |
 
 ## Isolation map
 
-| Setting          | Preview                                                                 | Prod (canary)                   |
-| ---------------- | ----------------------------------------------------------------------- | ------------------------------- |
-| Compose project  | `panachat-preview`                                                      | `panachat`                      |
-| Volumes          | `panachat_preview_postgres_data` (etc.)                                 | `panachat_postgres_data` (etc.) |
-| App ports        | `3220` / `3221`                                                         | `3210` / `3211`                 |
-| RustFS host port | `9010` (example)                                                        | `9000`                          |
-| App env          | `.env.preview`                                                          | `.env`                          |
-| Infra env        | `docker-compose/deploy/.env.preview`                                    | `docker-compose/deploy/.env`    |
-| State            | `/var/lib/panachat-preview/deploy.env`                                  | `/var/lib/panachat/deploy.env`  |
-| Nginx upstream   | `panachat_preview_backend`                                              | `panachat_backend`              |
-| Backup dir       | `~/…/panachat-preview-backups` (or `/var/lib/panachat-preview/backups`) | prod backup dir                 |
+| Setting          | Preview                                                                 | Prod (canary)                                                      |
+| ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Compose project  | `panachat-preview`                                                      | `panachat`                                                         |
+| Volumes          | `panachat_preview_postgres_data` (etc.)                                 | `panachat_postgres_data` (etc.)                                    |
+| App ports        | `3220` / `3221`                                                         | `3210` / `3211`                                                    |
+| RustFS host port | `9010` (example)                                                        | `9000`                                                             |
+| App env          | `.env.preview`                                                          | `.env`                                                             |
+| Infra env        | `docker-compose/deploy/.env.preview`                                    | `docker-compose/deploy/.env`                                       |
+| State            | `/var/lib/panachat-preview/deploy.env`                                  | `/var/lib/panachat/deploy.env`                                     |
+| Nginx upstream   | `panachat_preview_backend`                                              | `panachat_backend`                                                 |
+| Control-plane    | `panachat-preview-control-plane` on `:3030`                             | `panachat-control-plane` on `:3020` (`https://adchat.panafor.com`) |
+| Backup dir       | `~/…/panachat-preview-backups` (or `/var/lib/panachat-preview/backups`) | prod backup dir                                                    |
 
 **Hard bans:** `docker compose down -v`, deleting `panachat_*` or `panachat_preview_*` volumes casually, pointing preview `DATABASE_URL` at prod.
 

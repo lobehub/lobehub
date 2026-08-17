@@ -86,7 +86,7 @@ Edit **both** files. Required:
 - `INTERNAL_APP_URL=http://localhost:3210`
 - `AICO_CONTROL_PLANE_PUBLIC_URL=https://adchat.panafor.com`
 - Rotate `AUTH_SECRET`, `KEY_VAULTS_SECRET`, `POSTGRES_PASSWORD`, `RUSTFS_SECRET_KEY`, `JWKS_KEY`, `AICO_CONTROL_PLANE_SERVICE_TOKEN` (do not keep example values)
-- Browser-reachable `S3_ENDPOINT` (not `http://rustfs:9000`). Example: proxy RustFS as `https://s3.chat.panafor.com` → `127.0.0.1:9000`
+- Browser-reachable `S3_ENDPOINT` (not `http://rustfs:9000`). One-level host only: `https://s3.panafor.com` → `127.0.0.1:9000` (never `s3.chat.*`)
 
 Infra file (`docker-compose/deploy/.env`) should keep:
 
@@ -95,7 +95,7 @@ Infra file (`docker-compose/deploy/.env`) should keep:
 - `PANACHAT_PORT_BLUE=3210` / `PANACHAT_PORT_GREEN=3211`
 - `POSTGRES_CONTAINER=panachat-postgres`
 - `PANACHAT_CONTROL_PLANE_PORT=3020`
-- `COMPOSE_PROFILES=control-plane` (uncomment when you start the admin container)
+- `PANACHAT_CONTROL_PLANE_IMAGE` is filled by Deploy Canary (GHCR `panachat-control-plane:<sha>`)
 
 ---
 
@@ -125,9 +125,10 @@ A records (or AAAA) pointing at `5.135.244.12`:
 - `chat.panafor.com`
 - `preview.panafor.com`
 - `adchat.panafor.com`
-- S3 host if you use a separate name (e.g. `s3.chat.panafor.com`)
+- `s3.panafor.com`
+- `s3-preview.panafor.com`
 
-Wait until `dig +short chat.panafor.com` returns the VPS IP.
+Wait until `dig +short chat.panafor.com` returns the VPS IP (`5.135.244.12`). If you use ArvanCloud (or any CDN), **Cloud must be OFF** (DNS-only). Proxied A records hide the origin and HTTP-01 / nginx on this VPS never see the challenge.
 
 ---
 
@@ -169,10 +170,13 @@ sudo cp docker-compose/deploy/nginx/panachat-preview-site.example.conf \
   /etc/nginx/sites-available/panachat-preview
 sudo cp docker-compose/deploy/nginx/panachat-admin-site.example.conf \
   /etc/nginx/sites-available/panachat-admin
+sudo cp docker-compose/deploy/nginx/panachat-s3-site.example.conf \
+  /etc/nginx/sites-available/panachat-s3
 sudo sed -i 's/chat.example.com/chat.panafor.com/g' /etc/nginx/sites-available/panachat
 sudo sed -i 's/preview.chat.example.com/preview.panafor.com/g' \
   /etc/nginx/sites-available/panachat-preview
 sudo sed -i 's/admin.example.com/adchat.panafor.com/g' /etc/nginx/sites-available/panachat-admin
+sudo sed -i 's/s3.example.com/s3.panafor.com/g' /etc/nginx/sites-available/panachat-s3
 ```
 
 The examples 301 HTTP → HTTPS. Until Certbot has issued certs, comment out each `listen 443` server block and change the port-80 `return 301` to a `location /` that `proxy_pass`es `http://panachat_backend` (prod), `http://panachat_preview_backend` (preview), or `http://127.0.0.1:3020` (admin), matching the example `location /` headers.
@@ -181,20 +185,27 @@ The examples 301 HTTP → HTTPS. Until Certbot has issued certs, comment out eac
 sudo ln -sf /etc/nginx/sites-available/panachat /etc/nginx/sites-enabled/panachat
 sudo ln -sf /etc/nginx/sites-available/panachat-preview /etc/nginx/sites-enabled/panachat-preview
 sudo ln -sf /etc/nginx/sites-available/panachat-admin /etc/nginx/sites-enabled/panachat-admin
+sudo ln -sf /etc/nginx/sites-available/panachat-s3 /etc/nginx/sites-enabled/panachat-s3
 # This host already serves developer.panafor.com from sites-enabled/default — do not delete it.
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
 
-TLS (prod + admin first is fine; preview can wait until step 10 if that DNS is not ready):
+### Let's Encrypt (certbot)
+
+1. Confirm DNS A records hit this VPS (`dig +short …` → `5.135.244.12`) with CDN/cloud **off**.
+2. Serve **HTTP on port 80** first (comment out `listen 443` until certs exist, as above). `curl -I http://chat.panafor.com` should reach nginx on this host, not an Apache default page.
+3. Issue certs (certbot edits the nginx site and adds HTTPS + redirect):
 
 ```bash
 sudo certbot --nginx -d chat.panafor.com
 sudo certbot --nginx -d adchat.panafor.com
 sudo certbot --nginx -d preview.panafor.com
+sudo certbot --nginx -d s3.panafor.com
+# optional: sudo certbot --nginx -d s3-preview.panafor.com
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
 
-If you use a separate S3 hostname, add a server that `proxy_pass`es to `127.0.0.1:9000` (prod) and `127.0.0.1:9010` (preview).
+Renewal is `certbot.timer` (already installed with `python3-certbot-nginx`). Test with `sudo certbot renew --dry-run`.
 
 `PANACHAT_SKIP_NGINX=1` is for debugging only — production needs the blue/green flip.
 
@@ -204,9 +215,14 @@ If you use a separate S3 hostname, add a server that `proxy_pass`es to `127.0.0.
 
 On GitHub: **Actions** → **Deploy Panachat Canary** → **Run workflow** (branch `canary`).
 
-Wait until the **build** job pushes `ghcr.io/panafor-ai-team/panachat:canary`. Open org **Packages** and set the `panachat` package to **Private** if it is public.
+Wait until **build** and **build-control-plane** push:
 
-You can skip the deploy job on first run (`skip_deploy`) until bootstrap env is ready; you still need a successful **push**.
+- `ghcr.io/panafor-ai-team/panachat:<sha>` and `:canary`
+- `ghcr.io/panafor-ai-team/panachat-control-plane:<sha>` and `:canary`
+
+Open org **Packages** and set both packages to **Private** if they are public.
+
+You can skip the deploy job on first run (`skip_deploy`) until bootstrap env is ready; you still need a successful **push**. After bootstrap, every push to `canary` / `preview` deploys chat **and** restarts `panachat-control-plane` / `panachat-preview-control-plane` (`docker compose down -v` is never used).
 
 ---
 
@@ -246,9 +262,9 @@ Then:
 PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh status
 ```
 
-Open `https://chat.panafor.com`. Sign up the first user; grant platform admin if needed (see self-host-deploy skill).
+Open `https://chat.panafor.com`. Sign up the first user; grant platform admin if needed (see self-host-deploy skill). Do not commit passwords.
 
-Admin UI (after `COMPOSE_PROFILES=control-plane` is set and the control-plane container is up): `https://adchat.panafor.com`.
+Admin UI: `https://adchat.panafor.com` (`AICO_CONTROL_PLANE_PUBLIC_URL` must match). CI pulls the control-plane image and runs `compose --profile control-plane up -d --force-recreate panachat-control-plane`.
 
 ---
 

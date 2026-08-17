@@ -23,6 +23,7 @@
 #   PANACHAT_PUBLIC_URL           for post-flip verify
 #   PANACHAT_HEALTH_TIMEOUT_SEC   default 180
 #   PANACHAT_IMAGE_KEEP           keep last N SHA images (default 5)
+#   PANACHAT_CONTROL_PLANE_IMAGE  ghcr.io/<owner>/panachat-control-plane:<sha>
 #   PANACHAT_SKIP_BACKUP=1
 #   PANACHAT_SKIP_NGINX=1
 #   PANACHAT_ALLOW_DB_DRIFT=1     allow deploy when live user count dropped vs fingerprint
@@ -54,6 +55,7 @@ case "$PANACHAT_ENV" in
     NGINX_TEMPLATE_PREFIX="panachat-upstream"
     PORT_BLUE="${PANACHAT_PORT_BLUE:-3210}"
     PORT_GREEN="${PANACHAT_PORT_GREEN:-3211}"
+    CONTROL_PLANE_PORT="${PANACHAT_CONTROL_PLANE_PORT:-3020}"
     DEFAULT_BACKUP_DIR="${HOME}/.local/share/panachat-backups"
     ;;
   preview)
@@ -66,6 +68,7 @@ case "$PANACHAT_ENV" in
     NGINX_TEMPLATE_PREFIX="panachat-preview-upstream"
     PORT_BLUE="${PANACHAT_PORT_BLUE:-3220}"
     PORT_GREEN="${PANACHAT_PORT_GREEN:-3221}"
+    CONTROL_PLANE_PORT="${PANACHAT_CONTROL_PLANE_PORT:-3030}"
     DEFAULT_BACKUP_DIR="${HOME}/.local/share/panachat-preview-backups"
     ;;
   *)
@@ -102,6 +105,7 @@ load_infra_defaults() {
   fi
   PORT_BLUE="${PANACHAT_PORT_BLUE:-$PORT_BLUE}"
   PORT_GREEN="${PANACHAT_PORT_GREEN:-$PORT_GREEN}"
+  CONTROL_PLANE_PORT="${PANACHAT_CONTROL_PLANE_PORT:-$CONTROL_PLANE_PORT}"
 }
 
 load_state() {
@@ -198,33 +202,31 @@ compose_with_profile() {
 set_image_env() {
   local image="$1"
   export PANACHAT_IMAGE="$image"
+  persist_infra_kv "PANACHAT_IMAGE" "$image"
+  persist_infra_kv "PANACHAT_STACK" "$PANACHAT_STACK"
+  persist_infra_kv "PANACHAT_VOLUME_PREFIX" "$PANACHAT_VOLUME_PREFIX"
+  persist_infra_kv "PANACHAT_APP_ENV_FILE" "$APP_ENV_FILE"
+  persist_infra_kv "PANACHAT_INFRA_ENV_FILE" "$INFRA_ENV_FILE"
+  if [[ -n "${PANACHAT_CONTROL_PLANE_IMAGE:-}" ]]; then
+    persist_infra_kv "PANACHAT_CONTROL_PLANE_IMAGE" "$PANACHAT_CONTROL_PLANE_IMAGE"
+  fi
+}
+
+persist_infra_kv() {
+  local key="$1"
+  local val="$2"
   local envf="$INFRA_ENV_FILE"
   mkdir -p "$(dirname "$envf")"
-  if [[ -f "$envf" ]]; then
-    if grep -qE '^PANACHAT_IMAGE=' "$envf"; then
-      sed -i.bak "s|^PANACHAT_IMAGE=.*|PANACHAT_IMAGE=${image}|" "$envf"
-      rm -f "${envf}.bak"
-    else
-      printf '\nPANACHAT_IMAGE=%s\n' "$image" >>"$envf"
-    fi
-  else
-    printf 'PANACHAT_IMAGE=%s\n' "$image" >"$envf"
+  if [[ ! -f "$envf" ]]; then
+    printf '%s=%s\n' "$key" "$val" >"$envf"
+    return 0
   fi
-  # Ensure stack identity is persisted for manual compose use
-  for kv in \
-    "PANACHAT_STACK=${PANACHAT_STACK}" \
-    "PANACHAT_VOLUME_PREFIX=${PANACHAT_VOLUME_PREFIX}" \
-    "PANACHAT_APP_ENV_FILE=${APP_ENV_FILE}" \
-    "PANACHAT_INFRA_ENV_FILE=${INFRA_ENV_FILE}"; do
-    local key="${kv%%=*}"
-    local val="${kv#*=}"
-    if grep -qE "^${key}=" "$envf" 2>/dev/null; then
-      sed -i.bak "s|^${key}=.*|${key}=${val}|" "$envf"
-      rm -f "${envf}.bak"
-    else
-      printf '%s=%s\n' "$key" "$val" >>"$envf"
-    fi
-  done
+  if grep -qE "^${key}=" "$envf"; then
+    sed -i.bak "s|^${key}=.*|${key}=${val}|" "$envf"
+    rm -f "${envf}.bak"
+  else
+    printf '%s=%s\n' "$key" "$val" >>"$envf"
+  fi
 }
 
 fingerprint_file() {
@@ -269,6 +271,40 @@ stack=${PANACHAT_STACK}
 users=${live_users}
 EOF
   log "DB fingerprint saved users=${live_users} ($file)"
+}
+
+wait_control_plane() {
+  local deadline=$((SECONDS + HEALTH_TIMEOUT))
+  local svc="${PANACHAT_STACK}-control-plane"
+  log "Waiting for $svc on 127.0.0.1:${CONTROL_PLANE_PORT} (timeout ${HEALTH_TIMEOUT}s)"
+  while ((SECONDS < deadline)); do
+    if docker inspect -f '{{.State.Running}}' "$svc" 2>/dev/null | grep -q true; then
+      local code
+      code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${CONTROL_PLANE_PORT}/health" || echo 000)
+      if [[ "$code" == "200" ]]; then
+        log "$svc is healthy (HTTP $code)"
+        return 0
+      fi
+    fi
+    sleep 3
+  done
+  err "$svc did not become healthy within ${HEALTH_TIMEOUT}s"
+  docker logs "$svc" 2>&1 | tail -n 80 || true
+  return 1
+}
+
+deploy_control_plane() {
+  if [[ -z "${PANACHAT_CONTROL_PLANE_IMAGE:-}" ]]; then
+    log "Skipping control-plane (PANACHAT_CONTROL_PLANE_IMAGE unset)"
+    return 0
+  fi
+  persist_infra_kv "PANACHAT_CONTROL_PLANE_IMAGE" "$PANACHAT_CONTROL_PLANE_IMAGE"
+  persist_infra_kv "PANACHAT_CONTROL_PLANE_PORT" "$CONTROL_PLANE_PORT"
+  log "Pulling control-plane ${PANACHAT_CONTROL_PLANE_IMAGE}"
+  docker pull "$PANACHAT_CONTROL_PLANE_IMAGE"
+  log "Starting ${PANACHAT_STACK}-control-plane"
+  compose_with_profile control-plane up -d --no-deps --force-recreate panachat-control-plane
+  wait_control_plane
 }
 
 # Until DNS, APP_URL may be http://IP:3210 or :3211. Rewrite to the slot we are starting
@@ -511,6 +547,7 @@ cmd_bootstrap() {
   flip_nginx blue || true
   write_state blue "$(image_sha_tag "$image")" "" ""
   save_db_fingerprint
+  deploy_control_plane
   log "Bootstrap complete — active slot=blue stack=$PANACHAT_STACK"
 }
 
@@ -579,6 +616,7 @@ cmd_deploy() {
   write_state "$inactive" "$(image_sha_tag "$image")" "$active" "$prev_sha"
   save_db_fingerprint
   prune_old_images
+  deploy_control_plane
 
   if [[ -n "${PANACHAT_PUBLIC_URL:-}" ]]; then
     local verify="$ROOT/.claude/skills/self-host-deploy/scripts/verify-deployment.sh"

@@ -98,13 +98,12 @@ services:
     restart: unless-stopped
 
   panachat-control-plane:
-    image: ${PANACHAT_CONTROL_PLANE_IMAGE:-node:24-bookworm-slim}
+    image: ${PANACHAT_CONTROL_PLANE_IMAGE:-panachat-control-plane:canary}
     container_name: ${PANACHAT_STACK:-panachat}-control-plane
+    pull_policy: always
     profiles:
       - control-plane
-    working_dir: ${PANACHAT_CONTROL_PLANE_WORKDIR:-/repo/apps/aico-control-plane}
-    volumes:
-      - ${PANACHAT_REPO_ROOT:-../..}:/repo
+    working_dir: /app
     command: ['node', 'dist/standalone.js']
     env_file:
       - ${PANACHAT_APP_ENV_FILE:-../../.env}
