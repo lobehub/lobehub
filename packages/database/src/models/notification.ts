@@ -120,31 +120,37 @@ export class NotificationModel {
   }
 
   /**
-   * Unread, unarchived `pending`-category rows linked (via
-   * `metadata.transfer.requestId`) to the given live transfer requests.
-   * Navigation counts use this to swap row-based counting for request-based
-   * counting on the pending category: a linked row's read state must not hide
-   * a still-unresolved request. Scoped to the pending category because only
-   * rows counted there may be swapped out — a linked row that landed in
-   * another category counts toward that category, not against the requests.
+   * Unarchived `pending`-category rows linked (via
+   * `metadata.transfer.requestId`) to the given live transfer requests, split
+   * into total and unread. Navigation counts use this to swap row-based
+   * counting for request-based counting on the pending category: a linked
+   * row's read state must not hide a still-unresolved request, and a live
+   * request whose linked row is missing/archived must still count toward the
+   * totals its rendered card contributes to. Scoped to the pending category
+   * because only rows counted there may be swapped out — a linked row that
+   * landed in another category counts toward that category, not against the
+   * requests.
    */
-  async countUnreadLinkedToTransfers(requestIds: string[]): Promise<number> {
-    if (requestIds.length === 0) return 0;
+  async countLinkedToTransfers(requestIds: string[]): Promise<{ total: number; unread: number }> {
+    if (requestIds.length === 0) return { total: 0, unread: 0 };
 
     const [result] = await this.db
-      .select({ count: count() })
+      .select({
+        total: count(),
+        // count() skips NULLs, so the CASE narrows the aggregate to unread rows.
+        unread: count(sql`case when ${notifications.isRead} = false then 1 end`),
+      })
       .from(notifications)
       .where(
         and(
           ...this.scope(),
           eq(notifications.category, 'pending'),
-          eq(notifications.isRead, false),
           eq(notifications.isArchived, false),
           inArray(sql`${notifications.metadata} -> 'transfer' ->> 'requestId'`, requestIds),
         ),
       );
 
-    return result?.count ?? 0;
+    return { total: result?.total ?? 0, unread: result?.unread ?? 0 };
   }
 
   async getUnreadCount(): Promise<number> {

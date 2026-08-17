@@ -290,8 +290,8 @@ describe('NotificationModel (integration)', () => {
     });
   });
 
-  describe('countUnreadLinkedToTransfers', () => {
-    it('counts only unread unarchived rows linked to the given requests', async () => {
+  describe('countLinkedToTransfers', () => {
+    it('counts unarchived linked rows, split into total and unread', async () => {
       const model = new NotificationModel(serverDB, userId);
       await model.create(
         baseNotification({
@@ -328,11 +328,14 @@ describe('NotificationModel (integration)', () => {
       await model.markAsRead([linkedRead!.id]);
       await model.archive(linkedArchived!.id);
 
-      expect(await model.countUnreadLinkedToTransfers(['req-1', 'req-2', 'req-3', 'req-4'])).toBe(
-        1,
-      );
-      expect(await model.countUnreadLinkedToTransfers(['req-2'])).toBe(0);
-      expect(await model.countUnreadLinkedToTransfers([])).toBe(0);
+      // req-1 unread + req-2 read are unarchived pending rows; req-3 is
+      // archived and req-4 sits in another category, so neither counts.
+      expect(await model.countLinkedToTransfers(['req-1', 'req-2', 'req-3', 'req-4'])).toEqual({
+        total: 2,
+        unread: 1,
+      });
+      expect(await model.countLinkedToTransfers(['req-2'])).toEqual({ total: 1, unread: 0 });
+      expect(await model.countLinkedToTransfers([])).toEqual({ total: 0, unread: 0 });
     });
   });
 

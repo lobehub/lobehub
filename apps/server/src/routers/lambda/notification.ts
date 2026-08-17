@@ -53,14 +53,27 @@ export const notificationRouter = router({
     const incoming = live.filter((request) => request.recipientId === ctx.userId);
     if (incoming.length === 0) return counts;
 
-    const linkedUnread = await ctx.notificationModel.countUnreadLinkedToTransfers(
+    const linked = await ctx.notificationModel.countLinkedToTransfers(
       incoming.map((request) => request.id),
     );
-    const delta = incoming.length - linkedUnread;
+    // Each live incoming request renders exactly one card, replacing its
+    // linked row (when one exists) in BOTH the unread and total tallies — a
+    // request whose linked row is missing or archived still shows a card, so
+    // it must still count.
+    const unreadDelta = incoming.length - linked.unread;
+    const totalDelta = incoming.length - linked.total;
     const pending = counts.find((item) => item.category === 'pending');
-    if (pending) pending.unreadCount = Math.max(0, pending.unreadCount + delta);
-    else if (delta > 0)
-      counts.push({ category: 'pending', readCount: 0, totalCount: 0, unreadCount: delta });
+    if (pending) {
+      pending.unreadCount = Math.max(0, pending.unreadCount + unreadDelta);
+      pending.totalCount = Math.max(0, pending.totalCount + totalDelta);
+    } else if (unreadDelta > 0 || totalDelta > 0) {
+      counts.push({
+        category: 'pending',
+        readCount: 0,
+        totalCount: Math.max(0, totalDelta),
+        unreadCount: Math.max(0, unreadDelta),
+      });
+    }
 
     return counts;
   }),
