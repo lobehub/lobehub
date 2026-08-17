@@ -31,7 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
   definition: css`
     display: grid;
     grid-template-columns: 110px minmax(0, 1fr);
-    gap: 6px 16px;
+    gap: 10px 24px;
     align-items: baseline;
   `,
   definitionLabel: css`
@@ -94,7 +94,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
     <Block className={styles.anchorCard} variant={'outlined'}>
       <Accordion defaultExpandedKeys={['anchor']} indicatorPlacement={'end'} variant={'borderless'}>
         <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
-          <Flexbox className={styles.anchorContent} gap={18}>
+          <Flexbox className={styles.anchorContent} gap={24}>
             {(domainFilter || outOfScope) && (
               <div className={styles.definition}>
                 {domainFilter && (
