@@ -5,7 +5,6 @@ import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
-  ArrowLeftIcon,
   LayersIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -337,19 +336,6 @@ const CreateDomainPage = memo(() => {
           <Flexbox className={styles.content} onKeyDown={onKeyDown}>
             <Flexbox horizontal className={styles.head}>
               <Flexbox flex={1} gap={6}>
-                {step === 'review' && (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <ActionIcon
-                      icon={ArrowLeftIcon}
-                      size={'small'}
-                      title={t('create.back')}
-                      onClick={() => setStep('describe')}
-                    />
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('create.reviewStep')}
-                    </Text>
-                  </Flexbox>
-                )}
                 {step === 'review' && draft ? (
                   <input
                     className={styles.title}

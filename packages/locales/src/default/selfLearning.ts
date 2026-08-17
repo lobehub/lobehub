@@ -47,7 +47,6 @@ export default {
   'create.adjust.placeholder.outOfScope':
     'e.g. Exclude general project management and decisions made on behalf of the principal…',
   'create.adjust.title': 'Adjust with AI',
-  'create.back': 'Back',
   'create.briefHelp':
     'Say what you want it to get better at, and what does not count. This sentence becomes the test for which conversations count as practice in this direction; we work out the name from it.',
   'create.briefPlaceholder':
@@ -70,7 +69,6 @@ export default {
   'create.regenerateAfterEdit': 'Regenerate after edits',
   'create.reviewHelp':
     'Here is the anchor it read out of your brief. Fix anything that is off — the filter decides which conversations it learns from; the layers and canon decide where lessons attach and what “coverage” means.',
-  'create.reviewStep': 'Review the anchor',
 
   'domain.delete': 'Delete',
   'domain.deleteConfirm.content':
