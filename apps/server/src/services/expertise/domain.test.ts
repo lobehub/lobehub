@@ -61,7 +61,7 @@ describe('ExpertiseDomainService', () => {
       expect.objectContaining({
         messages: expect.arrayContaining([
           expect.objectContaining({
-            content: expect.stringContaining('A workflow sequence'),
+            content: expect.stringContaining('domain-native levels of abstraction'),
             role: 'system',
           }),
         ]),
@@ -72,6 +72,12 @@ describe('ExpertiseDomainService', () => {
     expect(result.layers).toHaveLength(2);
     expect(result.canonEntries[0].key).toBe('blameless');
     expect(createDomain).not.toHaveBeenCalled();
+
+    const systemPrompt = generateObject.mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain('generic seniority labels');
+    expect(systemPrompt).toContain(
+      'what larger or more abstract unit can now be handled coherently?',
+    );
   });
 
   it('revises the current draft from a natural-language adjustment', async () => {

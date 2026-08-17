@@ -25,6 +25,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
+import { shinyTextStyles } from '@/styles';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
@@ -136,13 +137,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rationale: css`
     margin: 0;
-    padding-block: 2px;
-    padding-inline-start: 14px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
     font-size: 16px;
     line-height: 1.75;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   seq: css`
     padding-block-start: 8px;
@@ -313,19 +310,16 @@ const CreateDomainPage = memo(() => {
 
     return (
       <Flexbox gap={8} onKeyDown={(e) => onAdjustmentKeyDown(target, e)}>
-        <Flexbox horizontal align={'end'} gap={8}>
-          <TextArea
-            autoFocus
-            autoSize={{ maxRows: 5, minRows: 2 }}
-            disabled={isRefining}
-            placeholder={t(`create.adjust.placeholder.${target}`)}
-            style={{ flex: 1 }}
-            value={adjustments[target]}
-            variant={'filled'}
-            onChange={(e) =>
-              setAdjustments((current) => ({ ...current, [target]: e.target.value }))
-            }
-          />
+        <TextArea
+          autoFocus
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          disabled={isRefining}
+          placeholder={t(`create.adjust.placeholder.${target}`)}
+          value={adjustments[target]}
+          variant={'filled'}
+          onChange={(e) => setAdjustments((current) => ({ ...current, [target]: e.target.value }))}
+        />
+        <Flexbox horizontal justify={'end'}>
           <Button
             disabled={!adjustments[target].trim() || isRefining}
             icon={RefreshCwIcon}
@@ -446,7 +440,10 @@ const CreateDomainPage = memo(() => {
                           >
                             <div aria-hidden className={styles.generatingTextTrack}>
                               {generatingMessages.map((message, index) => (
-                                <div className={styles.generatingTextItem} key={index}>
+                                <div
+                                  className={`${styles.generatingTextItem} ${shinyTextStyles.shinyText}`}
+                                  key={index}
+                                >
                                   {message}
                                 </div>
                               ))}
@@ -505,9 +502,7 @@ const CreateDomainPage = memo(() => {
                   <Text fontSize={14} type={'secondary'}>
                     {t('create.reviewHelp')}
                   </Text>
-                  {draft.rationale && (
-                    <blockquote className={styles.rationale}>{draft.rationale}</blockquote>
-                  )}
+                  {draft.rationale && <div className={styles.rationale}>{draft.rationale}</div>}
                 </Flexbox>
 
                 <Flexbox className={styles.reviewSection} gap={10}>
