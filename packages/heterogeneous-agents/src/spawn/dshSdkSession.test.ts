@@ -61,6 +61,8 @@ const startFake = () =>
     timeoutMs: 20_000,
   });
 
+const runLiveBootSmoke = Boolean(process.env.DEEPSEEK_API_KEY);
+
 const collect = async (handle: Awaited<ReturnType<typeof startFake>>, text: string) => {
   const events = [];
   for await (const event of handle.prompt(text)) events.push(event);
@@ -88,22 +90,40 @@ describe('spawnDshSdkSession', () => {
     ).toBe('/Electron');
   });
 
-  it('boots the bundled composition and completes the JSON-RPC handshake', async () => {
-    const workspace = await mkdtemp(path.join(tmpdir(), 'lobehub-dsh-smoke-'));
-    const session = await spawnDshSdkSession({
-      cwd: workspace,
-      env: {
-        DSH_CWD: workspace,
-        DSH_SESSION_ROOT: path.join(workspace, '.sessions'),
-      },
-      model: 'deepseek-chat',
-      provider: 'deepseek-official',
-      sessionId: 'smoke',
-      timeoutMs: 60_000,
-    });
+  it.runIf(runLiveBootSmoke)(
+    'boots the bundled composition and completes the JSON-RPC handshake',
+    async () => {
+      const workspace = await mkdtemp(path.join(tmpdir(), 'lobehub-dsh-smoke-'));
+      const session = await spawnDshSdkSession({
+        cwd: workspace,
+        env: {
+          DSH_CWD: workspace,
+          DSH_SESSION_ROOT: path.join(workspace, '.sessions'),
+        },
+        model: 'deepseek-chat',
+        provider: 'deepseek-official',
+        sessionId: 'smoke',
+        timeoutMs: 60_000,
+      });
 
-    await session.dispose();
-  }, 60_000);
+      await session.dispose();
+    },
+    60_000,
+  );
+
+  it('fails fast when the runtime never answers initialize', async () => {
+    await expect(
+      spawnDshSdkSession({
+        args: ['-e', 'process.stdin.resume()'],
+        command: process.execPath,
+        cwd: process.cwd(),
+        model: 'deepseek-chat',
+        provider: 'deepseek-official',
+        sessionId: 'live-1',
+        timeoutMs: 100,
+      }),
+    ).rejects.toThrow(/harness initialize exceeded 100ms/);
+  }, 5_000);
 
   it('completes the handshake and streams one turn to whole-agent idle', async () => {
     const session = await startFake();
