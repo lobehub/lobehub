@@ -25,8 +25,9 @@ export const portraitStyles = createStaticStyles(({ css }) => ({
   `,
   profileKey: css`
     flex: none;
-    width: 24px;
+    width: 32px;
     font-family: ${cssVar.fontFamilyCode};
+    white-space: nowrap;
   `,
   profileProgress: css`
     width: 100%;

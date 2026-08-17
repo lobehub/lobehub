@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ExpertiseDomainItem } from '@/services/expertise';
 
-import { countTiers, profileWord } from '../helpers';
+import { countTiers, layerLabel, profileWord } from '../helpers';
 import { portraitStyles as styles } from './styles';
 import TierBar from './TierBar';
 
@@ -21,7 +21,7 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
         <Text className={styles.profileTitle} type={'secondary'}>
           {t('profile.title')}
         </Text>
-        {domain.layers.map((layer) => {
+        {domain.layers.map((layer, index) => {
           const habits = domain.lessons.filter((l) => l.layer === layer.key);
           const counts = countTiers(habits);
           const word = profileWord(counts, habits.length);
@@ -36,7 +36,7 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
             <div className={styles.profileRow} key={layer.key}>
               <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
                 <Text className={styles.profileKey} fontSize={12} type={'secondary'}>
-                  {layer.key}
+                  {layerLabel(index)}
                 </Text>
                 <Text
                   ellipsis
