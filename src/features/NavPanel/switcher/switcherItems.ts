@@ -3,6 +3,7 @@ export interface SwitcherItem {
   background?: string;
   id: string;
   private?: boolean;
+  subtitle?: string;
   title: string;
 }
 
@@ -35,11 +36,15 @@ export const pickRecentItems = <T extends { id: string }>(
   return out;
 };
 
-export const filterSwitcherItems = <T extends { title: string }>(
+export const filterSwitcherItems = <T extends { subtitle?: string; title: string }>(
   items: readonly T[],
   query: string,
 ): T[] => {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return [...items];
-  return items.filter((item) => item.title.toLowerCase().includes(normalized));
+  return items.filter(
+    (item) =>
+      item.title.toLowerCase().includes(normalized) ||
+      item.subtitle?.toLowerCase().includes(normalized),
+  );
 };

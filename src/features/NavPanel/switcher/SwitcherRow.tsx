@@ -51,6 +51,9 @@ const SwitcherRow = memo<SwitcherRowProps>(({ active, item, onSelect, privateLab
       weight={active ? 500 : undefined}
     >
       {item.title}
+      {item.subtitle && (
+        <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{item.subtitle}</span>
+      )}
     </Text>
     {item.private && privateLabel && (
       <Text color={cssVar.colorTextTertiary} fontSize={12}>
