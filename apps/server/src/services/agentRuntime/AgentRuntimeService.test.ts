@@ -386,12 +386,14 @@ describe('AgentRuntimeService', () => {
 
       await service.createOperation({
         ...mockParams,
+        enableExpertise: true,
         expertise,
       });
 
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
+          enableExpertise: true,
           expertise,
         }),
       );

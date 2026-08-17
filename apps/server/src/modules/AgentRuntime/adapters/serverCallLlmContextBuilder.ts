@@ -611,6 +611,7 @@ export const buildServerCallLlmContext = async ({
     capabilities,
     botPlatformContext: ctx.botPlatformContext,
     discordContext: ctx.discordContext,
+    enableExpertise: state.enableExpertise,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: ctx.evalContext,
     expertise: state.expertise,

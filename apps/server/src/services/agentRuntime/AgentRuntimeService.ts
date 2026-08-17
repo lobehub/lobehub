@@ -462,6 +462,7 @@ export class AgentRuntimeService {
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      enableExpertise,
       expertise,
       executionPlan,
       maxSteps,
@@ -544,6 +545,7 @@ export class AgentRuntimeService {
       const initialState = {
         activatedStepTools,
         createdAt: new Date().toISOString(),
+        enableExpertise,
         expertise,
         // Store initialContext for executeSync to use
         initialContext,

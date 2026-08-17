@@ -240,6 +240,8 @@ export interface MessagesEngineParams {
   enableAgentMode?: boolean;
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
+  /** Whether to inject the operation expertise snapshot */
+  enableExpertise?: boolean;
   /** Force finish flag: when true, injects summary prompt for max-steps completion */
   forceFinish?: boolean;
   /** Function to format history summary */

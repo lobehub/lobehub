@@ -16,6 +16,7 @@ declare module '../types' {
 }
 
 export interface ExpertiseContextInjectorConfig {
+  enabled?: boolean;
   expertise?: ExpertiseContextSnapshot;
 }
 
@@ -71,13 +72,14 @@ export class ExpertiseContextInjector extends BaseFirstUserContentProvider {
   }
 
   protected buildContent(): null | string {
+    if (!this.config.enabled) return null;
     return this.config.expertise?.renderedContext || null;
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const result = await super.doProcess(context);
     const snapshot = this.config.expertise;
-    if (!snapshot?.renderedContext) return result;
+    if (!this.config.enabled || !snapshot?.renderedContext) return result;
 
     result.metadata.expertiseContentHash = snapshot.contentHash;
     result.metadata.expertiseDomainCount = snapshot.domains.length;

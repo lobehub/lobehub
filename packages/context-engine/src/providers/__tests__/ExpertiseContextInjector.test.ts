@@ -59,6 +59,7 @@ describe('ExpertiseContextInjector', () => {
 
   it('injects the operation snapshot before the first user message and records metadata', async () => {
     const result = await new MessagesEngine({
+      enableExpertise: true,
       expertise: snapshot,
       messages: [
         {
@@ -88,8 +89,32 @@ describe('ExpertiseContextInjector', () => {
     });
   });
 
+  it('does not inject an available snapshot when expertise is disabled', async () => {
+    const result = await new MessagesEngine({
+      enableExpertise: false,
+      expertise: snapshot,
+      messages: [
+        {
+          content: 'Hello',
+          createdAt: 1,
+          id: 'user-1',
+          role: 'user',
+          updatedAt: 1,
+        },
+      ],
+      model: 'test-model',
+      provider: 'test-provider',
+    }).process();
+
+    expect(result.messages.some(({ content }) => String(content).includes('<expertise>'))).toBe(
+      false,
+    );
+    expect(result.metadata).not.toHaveProperty('expertiseContentHash');
+  });
+
   it('does not add a context message without a snapshot', async () => {
     const result = await new MessagesEngine({
+      enableExpertise: true,
       messages: [
         {
           content: 'Hello',

@@ -36,6 +36,8 @@ export interface AgentState {
   costLimit?: CostLimit;
   // --- Metadata ---
   createdAt: string;
+  /** Whether ContextEngine may inject the operation expertise snapshot. */
+  enableExpertise?: boolean;
   error?: any;
   /** Immutable expertise snapshot resolved once when this operation starts. */
   expertise?: ExpertiseContextSnapshot;

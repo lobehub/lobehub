@@ -124,6 +124,7 @@ export const serverMessagesEngine = async ({
   systemRole,
   inputTemplate,
   enableAgentMode,
+  enableExpertise,
   enableHistoryCount,
   forceFinish,
   historyCount,
@@ -164,6 +165,7 @@ export const serverMessagesEngine = async ({
 
     // Agent configuration
     enableAgentMode,
+    enableExpertise,
     enableHistoryCount,
     expertise,
 

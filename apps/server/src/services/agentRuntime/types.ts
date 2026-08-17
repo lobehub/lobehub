@@ -411,6 +411,8 @@ export interface OperationCreationParams {
   deviceSystemInfo?: Record<string, string>;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
+  /** Whether ContextEngine may inject the operation expertise snapshot. */
+  enableExpertise?: boolean;
   evalContext?: any;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).

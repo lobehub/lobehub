@@ -328,7 +328,10 @@ export class MessagesEngine {
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
       // Operation-scoped learned expertise (captured once and reused verbatim across steps)
-      new ExpertiseContextInjector({ expertise: this.params.expertise }),
+      new ExpertiseContextInjector({
+        enabled: this.params.enableExpertise,
+        expertise: this.params.expertise,
+      }),
       // Group context (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
         currentAgentId: agentGroup?.currentAgentId,

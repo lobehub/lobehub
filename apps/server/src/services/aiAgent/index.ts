@@ -170,7 +170,6 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
-import { isExpertiseInjectionEnabledForUser } from '@/server/services/expertise/featureGate';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -2863,6 +2862,7 @@ export class AiAgentService {
     // Agent-level memory config takes priority; fallback to user-level setting
     const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
     let globalMemoryEnabled = agentMemoryEnabled ?? false;
+    let enableExpertise = false;
     let userTimezone: string | undefined;
     // Resolved once below (alongside the group-tool authorization fetch) and
     // forwarded into op metadata for the per-step context engine.
@@ -2878,6 +2878,12 @@ export class AiAgentService {
       userTimezone = generalSettings?.timezone;
     } catch (error) {
       log('execAgent: failed to fetch user settings: %O', error);
+    }
+    try {
+      const preference = await new UserModel(this.db, this.userId).getUserPreference();
+      enableExpertise = preference?.lab?.enableSelfLearning === true;
+    } catch (error) {
+      console.error('Failed to resolve expertise injection Lab preference:', error);
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -4503,17 +4509,15 @@ export class AiAgentService {
       log('execAgent: failed to build operationSkillSet: %O', error);
     }
 
-    // Expertise changes model-visible behavior, so keep it behind the opt-in Self Learning Lab.
-    // Once enabled, resolve it only here so every step uses the exact same operation snapshot.
+    // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
+    // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
+    const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
     let expertise;
-    if (await isExpertiseInjectionEnabledForUser(this.db, this.userId)) {
-      const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
-      try {
-        const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
-        expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-      } catch (error) {
-        console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
-      }
+    try {
+      const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
     }
 
     // 19. Create operation using AgentRuntimeService
@@ -4595,6 +4599,7 @@ export class AiAgentService {
         deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
         discordContext,
         evalContext,
+        enableExpertise,
         expertise,
         initialContext,
         initialMessages: allMessages,
