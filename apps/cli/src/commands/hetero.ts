@@ -211,16 +211,28 @@ const parseImageArg = (value: string): AgentImageSource => {
  * Accepts:
  *   - `'plain text'` → single text block
  *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...] }` (Anthropic message shape) → unwraps `content`
+ *   - `{ content: [...], resumeFallback?: [...] }` → unwraps the primary prompt
+ *     and reserves the fallback for a retry without native resume
  *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
  */
-const coerceJsonPrompt = (parsed: unknown): AgentPromptInput => {
-  if (typeof parsed === 'string') return parsed;
-  if (Array.isArray(parsed)) return parsed as AgentContentBlock[];
+const coerceJsonPrompt = (
+  parsed: unknown,
+): Pick<ResolvedPrompt, 'prompt' | 'resumeFallbackPrompt'> => {
+  if (typeof parsed === 'string') return { prompt: parsed };
+  if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.content)) return obj.content as AgentContentBlock[];
-    if (obj.type === 'text' || obj.type === 'image') return [obj as AgentContentBlock];
+    if (Array.isArray(obj.content)) {
+      return {
+        prompt: obj.content as AgentContentBlock[],
+        ...(Array.isArray(obj.resumeFallback)
+          ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
+          : {}),
+      };
+    }
+    if (obj.type === 'text' || obj.type === 'image') {
+      return { prompt: [obj as unknown as AgentContentBlock] };
+    }
   }
   throw new Error(
     'Invalid --input-json shape: expected a string, array of content blocks, ' +
@@ -232,6 +244,8 @@ interface ResolvedPrompt {
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   prompt: AgentPromptInput;
+  /** Full prompt used only when native resume fails and the CLI retries fresh. */
+  resumeFallbackPrompt?: AgentPromptInput;
 }
 
 const buildPromptFromText = (text: string, images: string[]): ResolvedPrompt => {
@@ -273,7 +287,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
       throw new Error('--image cannot be combined with --input-json (put images in the JSON).');
     }
     const raw = await readInputJson(options.inputJson);
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
 
   if (options.prompt !== undefined && options.prompt !== '-') {
@@ -283,7 +297,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   // No --prompt or --prompt -: read stdin and auto-detect.
   const raw = await readStdin();
   if (looksLikeJsonInput(raw)) {
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
   return buildPromptFromText(raw, images);
 };
@@ -842,7 +856,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         includePartialMessages: options.type === 'claude-code',
         initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
-        prompt: resolved.prompt,
+        prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,
         // No resumeSessionId — start fresh
       },

@@ -16,6 +16,8 @@ export interface SpawnHeteroAgentRunParams {
   jwt: string;
   operationId: string;
   prompt: string;
+  /** System context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   serverUrl: string;
   systemContext?: string;
@@ -62,6 +64,7 @@ export function spawnHeteroAgentRun(
     jwt,
     operationId,
     prompt,
+    resumeFallbackSystemContext,
     resumeSessionId,
     serverUrl,
     systemContext,
@@ -95,7 +98,12 @@ export function spawnHeteroAgentRun(
   // array: context block first, then the user's prompt, then images — mirrors
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
-  const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+  const stdinPayload = buildHeteroExecStdinPayload({
+    imageList,
+    prompt,
+    resumeFallbackSystemContext,
+    systemContext,
+  });
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;

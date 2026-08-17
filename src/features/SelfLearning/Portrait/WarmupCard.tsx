@@ -3,7 +3,7 @@
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, keyframes } from 'antd-style';
-import { GraduationCapIcon, HistoryIcon } from 'lucide-react';
+import { DnaIcon, HistoryIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,7 +72,7 @@ const WarmupCard = memo<WarmupCardProps>(({ candidateCount, domainTitles, warmup
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
-            <Icon icon={GraduationCapIcon} size={15} />
+            <Icon icon={DnaIcon} size={15} />
             <Text weight={600}>{title}</Text>
           </Flexbox>
           <Text fontSize={12.5} type={'secondary'}>

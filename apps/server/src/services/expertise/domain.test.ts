@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExpertiseDomainService } from './domain';
+import type { DomainDraft } from './domain';
+import { EditableDomainDraftSchema, ExpertiseDomainService } from './domain';
 
 const getAgentModelConfig = vi.fn();
 const generateObject = vi.fn();
@@ -42,7 +43,7 @@ const draft = {
   outOfScope: 'Exclude general architecture discussions without an incident.',
   rationale: 'The brief is about incidents end to end.',
   title: 'Production incident response',
-};
+} satisfies DomainDraft;
 
 describe('ExpertiseDomainService', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -58,6 +59,12 @@ describe('ExpertiseDomainService', () => {
 
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining('domain-native levels of abstraction'),
+            role: 'system',
+          }),
+        ]),
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
       expect.any(Object),
@@ -65,6 +72,52 @@ describe('ExpertiseDomainService', () => {
     expect(result.layers).toHaveLength(2);
     expect(result.canonEntries[0].key).toBe('blameless');
     expect(createDomain).not.toHaveBeenCalled();
+
+    const systemPrompt = generateObject.mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain('generic seniority labels');
+    expect(systemPrompt).toContain(
+      'what larger or more abstract unit can now be handled coherently?',
+    );
+  });
+
+  it('revises the current draft from a natural-language adjustment', async () => {
+    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
+    generateObject.mockResolvedValue(draft);
+
+    await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({
+      adjustment: 'Make the layers a progressive capability hierarchy.',
+      agentId: 'agent_1',
+      brief: 'Help it improve at production incidents.',
+      currentDraft: draft,
+    });
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining(
+              'Requested adjustment:\nMake the layers a progressive capability hierarchy.',
+            ),
+            role: 'user',
+          }),
+        ]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('accepts temporarily invalid editable fields for AI refinement', () => {
+    const editableDraft = EditableDomainDraftSchema.parse({
+      ...draft,
+      canonEntries: [{ key: '', source: '', statement: '', title: '' }],
+      domainFilter: '',
+      layers: [{ description: null, key: '', title: 'x'.repeat(200) }],
+      title: '',
+    });
+
+    expect(editableDraft.title).toBe('');
+    expect(editableDraft.layers[0].title).toHaveLength(200);
+    expect(editableDraft.canonEntries[0].key).toBe('');
   });
 
   it('persists the reviewed draft as the chosen anchor, carrying layers and canon', async () => {

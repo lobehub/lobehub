@@ -68,7 +68,7 @@ const LessonDetail = memo(() => {
   const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
   const domainPath =
     activeAgentId && domainId
-      ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
+      ? urlJoin('/agent', activeAgentId, 'self-evolving', domainId)
       : undefined;
   const experiencePath = domainPath ? urlJoin(domainPath, 'experience') : undefined;
   const sections = data?.lesson.sections.filter(

@@ -4,7 +4,7 @@ export default {
   'anchor.noLayers': 'no layers — lessons are not grouped by level',
   'anchor.outOfScope': 'Does not count',
   'anchor.subtitle': 'the standard it learns against, set when the direction was created',
-  'anchor.title': 'Its anchor',
+  'anchor.title': 'Domain Anchor',
   'charts.count': '{{count}} lessons',
   'charts.early': 'started at {{rate}}%',
   'charts.learned': 'Learned so far',
@@ -31,6 +31,22 @@ export default {
   'create.anchor.layerTitle': 'layer',
   'create.anchor.noCanon': 'No canon yet — it will still learn, but coverage cannot be judged.',
   'create.anchor.noLayers': 'No layers yet — lessons will not be grouped by level.',
+  'create.adjust.action': 'Apply adjustment',
+  'create.adjust.adjusting': 'Adjusting…',
+  'create.adjust.blockAction': 'Adjust with AI',
+  'create.adjust.failed': 'Could not adjust the anchor. Your current draft is unchanged.',
+  'create.adjust.generatingCountdown': 'Adjusting the anchor… about {{time}} remaining',
+  'create.adjust.help':
+    'Describe what should change. The current anchor and everything you do not mention will be preserved.',
+  'create.adjust.placeholder.canonEntries':
+    'e.g. Use recognised principles from a more authoritative framework…',
+  'create.adjust.placeholder.domainFilter':
+    'e.g. Include delegated scheduling and information triage, but only for a named principal…',
+  'create.adjust.placeholder.layers':
+    'e.g. Make these a true progression of proficiency, rather than stages in a workflow…',
+  'create.adjust.placeholder.outOfScope':
+    'e.g. Exclude general project management and decisions made on behalf of the principal…',
+  'create.adjust.title': 'Adjust with AI',
   'create.back': 'Back',
   'create.briefHelp':
     'Say what you want it to get better at, and what does not count. This sentence becomes the test for which conversations count as practice in this direction; we work out the name from it.',
@@ -39,18 +55,23 @@ export default {
   'create.cancel': 'Cancel',
   'create.confirm': 'Create',
   'create.failed': 'Could not create the direction. Try again.',
+  'create.field.brief': 'Direction brief',
   'create.field.domainFilter': 'What counts as practice',
   'create.field.outOfScope': 'What does not count',
   'create.field.outOfScopePlaceholder': 'e.g. design discussions, general Q&A…',
   'create.field.title': 'Name',
-  'create.generate': 'Generate',
+  'create.generate': 'Generate with AI',
   'create.generating': 'Reading your brief…',
-  'create.modalTitle': 'Start a new direction',
+  'create.generatingAlmostDone': 'Still working — this should be ready shortly…',
+  'create.generatingCanon': 'Finding recognised principles…',
+  'create.generatingCountdown': 'About {{time}} remaining',
+  'create.generatingLayers': 'Building a clear progression…',
+  'create.generatingScope': 'Clarifying what counts as practice…',
+  'create.modalTitle': 'New domain',
   'create.next': 'Next',
   'create.regenerate': 'Regenerate',
   'create.reviewHelp':
     'Here is the anchor it read out of your brief. Fix anything that is off — the filter decides which conversations it learns from; the layers and canon decide where lessons attach and what “coverage” means.',
-  'create.reviewStep': 'Review the anchor',
 
   'domain.delete': 'Delete',
   'domain.deleteConfirm.content':
@@ -81,7 +102,7 @@ export default {
   'habit.action.forget': 'Let it forget',
   'habit.action.source': 'See how it used this',
   'habit.action.teachAgain': 'Teach it again',
-  'habit.hint.freshNone': 'no chance to test yet',
+  'habit.hint.freshNone': 'awaiting validation',
   'habit.hint.freshOne': 'used once',
   'habit.hint.recurring': 'wrong {{bad}} of the last {{total}} times · last in “{{topic}}”',
   'habit.hint.recurringNoTopic': 'wrong {{bad}} of the last {{total}} times',
@@ -121,7 +142,7 @@ export default {
   'headline.sublineMulti':
     '{{domains}} directions · {{habits}} habits · lessons take effect as soon as they are learned; correct anything you see wrong',
 
-  'nav.newDomain': 'Start a new direction',
+  'nav.newDomain': 'Create new domain',
   'nav.teach': 'Teach it one',
   'nav.warmup': 'Review past conversations',
 
@@ -173,7 +194,7 @@ export default {
     'e.g. When verifying a journalist, check their byline history before their social accounts…',
 
   'tier.fresh': 'Just learned',
-  'tier.freshSub': 'not tested yet',
+  'tier.freshSub': 'awaiting validation',
   'tier.recurring': 'Recurring',
   'tier.recurringSub': 'has the rule, keeps breaking it — worth teaching again',
   'tier.shaky': 'Shaky',

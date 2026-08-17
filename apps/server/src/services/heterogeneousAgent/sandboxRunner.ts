@@ -40,6 +40,8 @@ export interface SandboxRunParams {
   prompt: string;
   /** GitHub repos to clone before running the agent (e.g. ['owner/repo', ...]). */
   repos?: string[];
+  /** Full system context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
@@ -183,6 +185,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList: params.imageList,
     prompt,
+    resumeFallbackSystemContext: params.resumeFallbackSystemContext,
     systemContext: params.systemContext,
   });
   const base64Payload = Buffer.from(stdinPayload).toString('base64');

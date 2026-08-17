@@ -370,6 +370,16 @@ export class BrowserManager {
       if (browser.webContents) this.webContentsMap.set(browser.webContents, browser.identifier);
     });
 
+    // Dynamic windows may use a stable identifier (for example, one window per
+    // workspace). Once such a window is closed, discard its Browser wrapper so
+    // reopening it can apply the latest path and inherited dimensions instead
+    // of recreating a BrowserWindow from the wrapper's original options.
+    browser.browserWindow.on('closed', () => {
+      if (!(identifier in appBrowsers) && this.browsers.get(identifier) === browser) {
+        this.browsers.delete(identifier);
+      }
+    });
+
     return browser;
   }
 

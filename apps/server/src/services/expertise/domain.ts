@@ -19,6 +19,34 @@ const CanonEntrySchema = z.object({
   title: z.string().min(1).max(80),
 });
 
+export const EditableDomainDraftSchema = z.object({
+  canonEntries: z
+    .array(
+      z.object({
+        key: z.string().max(2000),
+        source: z.string().max(2000),
+        statement: z.string().max(10_000),
+        title: z.string().max(2000),
+      }),
+    )
+    .max(20),
+  domainFilter: z.string().max(10_000),
+  layerCanonRef: z.string().max(2000).nullable(),
+  layerSource: z.enum(['canonical', 'invented']),
+  layers: z
+    .array(
+      z.object({
+        description: z.string().max(10_000).nullable(),
+        key: z.string().max(2000),
+        title: z.string().max(2000),
+      }),
+    )
+    .max(20),
+  outOfScope: z.string().max(10_000).nullable(),
+  rationale: z.string().max(10_000).nullable(),
+  title: z.string().max(2000),
+});
+
 /**
  * A draft is a full anchor candidate, not just a name and a filter: the layer model and the
  * canon decide where lessons attach and what "coverage" even means, so the person creating a
@@ -35,6 +63,7 @@ export const DomainDraftSchema = z.object({
   title: z.string().min(1).max(80),
 });
 export type DomainDraft = z.infer<typeof DomainDraftSchema>;
+export type EditableDomainDraft = z.infer<typeof EditableDomainDraftSchema>;
 
 const DOMAIN_DRAFT_JSON_SCHEMA: GenerateObjectSchema = {
   name: 'expertise_domain_draft',
@@ -94,11 +123,19 @@ const DOMAIN_DRAFT_JSON_SCHEMA: GenerateObjectSchema = {
 const DRAFT_SYSTEM_PROMPT = [
   'Convert the user brief into one executable expertise domain — an anchor the agent will learn against.',
   'Return: a concise title; domainFilter stating which conversations and work count as practice; outOfScope stating explicit exclusions;',
-  'layers — the 2 to 5 levels this expertise is judged on (a stable key, a short title, one-line description). Prefer a canonical layer model from a well-known framework in this field and name it in layerCanonRef with layerSource="canonical"; only invent layers (layerSource="invented", layerCanonRef=null) when no canonical model fits;',
+  'layers — 3 to 5 ordered, domain-native levels of abstraction for the same expertise (a stable key, a short title, and a one-line observable criterion). Model a widening unit of reasoning and decision scope: for example from an individual element, to an end-to-end flow, to a coherent system, to cross-system or strategic judgement. Every later level must subsume the earlier levels and require demonstrably greater complexity, judgement, reliability, or autonomy. Use concise conceptual level names that express the abstraction boundary; never use generic seniority labels such as novice, competent, proficient, or expert, job titles, workflow steps, lifecycle stages, task lists, taxonomies, or parallel dimensions as layers. Prefer a domain-specific recognised framework only when its levels express these cumulative abstraction boundaries; a generic maturity model such as Dreyfus is not sufficient by itself. When no fitting hierarchy exists, invent an honest domain-native progression and set layerSource="invented", layerCanonRef=null;',
   'canonEntries — 3 to 8 referenceable principles from recognised books, frameworks or methodologies in this field (stable key, title, source, and the general statement of why the failure recurs);',
   'rationale — one or two sentences on why this anchor fits the brief.',
+  'Before returning, verify that each layer answers “what larger or more abstract unit can now be handled coherently?”, that a practitioner at each layer can do everything in the prior layer, and that adjacent layers can be distinguished through observable work quality. If any test fails, rewrite the layers.',
   'Preserve the user intent, do not invent a broader domain, keep keys short ASCII slugs, and write all human-facing fields in the language used by the user.',
 ].join(' ');
+
+interface DraftFromBriefInput {
+  adjustment?: string;
+  agentId: string;
+  brief: string;
+  currentDraft?: EditableDomainDraft;
+}
 
 export class ExpertiseDomainService {
   constructor(
@@ -108,7 +145,7 @@ export class ExpertiseDomainService {
   ) {}
 
   /** Turns one natural-language brief into an editable domain draft; nothing is persisted. */
-  draftFromBrief = async (input: { agentId: string; brief: string }) => {
+  draftFromBrief = async (input: DraftFromBriefInput) => {
     const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
     const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
     if (!modelConfig) throw new Error('Agent model configuration is unavailable');
@@ -117,10 +154,23 @@ export class ExpertiseDomainService {
     return DomainDraftSchema.parse(
       await ai.generateObject(
         {
-          messages: [
-            { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
-            { content: input.brief.trim(), role: 'user' },
-          ],
+          messages: input.currentDraft
+            ? [
+                { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
+                {
+                  content: [
+                    `Original brief:\n${input.brief.trim()}`,
+                    `Current editable draft:\n${JSON.stringify(input.currentDraft)}`,
+                    `Requested adjustment:\n${input.adjustment?.trim()}`,
+                    'Revise the current draft to satisfy the requested adjustment while preserving unaffected fields and the original intent. Return the complete revised draft.',
+                  ].join('\n\n'),
+                  role: 'user',
+                },
+              ]
+            : [
+                { content: DRAFT_SYSTEM_PROMPT, role: 'system' },
+                { content: input.brief.trim(), role: 'user' },
+              ],
           ...modelConfig,
           schema: DOMAIN_DRAFT_JSON_SCHEMA,
         },
@@ -128,7 +178,7 @@ export class ExpertiseDomainService {
           metadata: { trigger: 'expertise_domain_draft' },
           tracing: {
             agentId: input.agentId,
-            promptVersion: 'expertise-domain-draft-v2',
+            promptVersion: 'expertise-domain-draft-v3',
             scenario: TRACING_SCENARIOS.TopicAutoSummary,
             schemaName: DOMAIN_DRAFT_JSON_SCHEMA.name,
           },

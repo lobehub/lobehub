@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   earlyPassRate,
   habitTier,
+  layerLabel,
   passRateSeries,
   profileWord,
   recentPassRate,
@@ -41,6 +42,13 @@ describe('profileWord', () => {
   it('is stable only when everything is stable', () => {
     expect(profileWord({ fresh: 1, recurring: 0, shaky: 0, stable: 3 }, 4)).toBe('mostlyStable');
     expect(profileWord({ fresh: 0, recurring: 0, shaky: 0, stable: 4 }, 4)).toBe('stable');
+  });
+});
+
+describe('layerLabel', () => {
+  it('uses a sequential user-facing label instead of the internal layer key', () => {
+    expect(layerLabel(0)).toBe('L1');
+    expect(layerLabel(11)).toBe('L12');
   });
 });
 
