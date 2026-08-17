@@ -1,6 +1,7 @@
 'use client';
 
-import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';

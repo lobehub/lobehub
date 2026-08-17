@@ -2,7 +2,14 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, MessagesSquareIcon, SearchIcon, TargetIcon } from 'lucide-react';
+import {
+  GraduationCapIcon,
+  ListTodoIcon,
+  MessageSquarePlusIcon,
+  MessagesSquareIcon,
+  SearchIcon,
+  TargetIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -25,6 +32,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
+  const { t: tSelfLearning } = useTranslation('selfLearning');
   const params = useActiveRouteParams();
   const agentId = params.aid;
   const { pathname } = useActiveLocation();
@@ -36,6 +44,9 @@ const Nav = memo(() => {
     pathname.includes('/channel') ||
     pathname.endsWith('/statistics');
   const isGoalsActive = pathname.endsWith('/goals');
+  // 下钻页 /self-learning/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
+  const isSelfLearningActive = pathname.includes('/self-learning');
+  const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
   const isTopicsActive = pathname.endsWith('/topics');
@@ -50,6 +61,7 @@ const Nav = memo(() => {
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
   const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -98,6 +110,17 @@ const Nav = memo(() => {
           }}
         />
       )}
+      {enableSelfLearning && (
+        <NavItem
+          active={isSelfLearningActive}
+          icon={GraduationCapIcon}
+          title={tSelfLearning('title')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'self-learning'));
+          }}
+        />
+      )}
       {enableTopicAcceptance && (
         <NavItem
           active={isGoalsActive}
@@ -109,6 +132,15 @@ const Nav = memo(() => {
           }}
         />
       )}
+      <NavItem
+        active={isTasksActive}
+        icon={ListTodoIcon}
+        title={t('tab.tasks')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'tasks'));
+        }}
+      />
     </Flexbox>
   );
 });

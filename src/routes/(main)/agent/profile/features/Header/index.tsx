@@ -37,6 +37,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { openAgentSettingsModal } from '../AgentSettings';
@@ -159,7 +160,12 @@ const Header = memo(() => {
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await removeAgent(activeAgentId);
+        try {
+          await removeAgent(activeAgentId);
+        } catch (error) {
+          toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+          return;
+        }
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },

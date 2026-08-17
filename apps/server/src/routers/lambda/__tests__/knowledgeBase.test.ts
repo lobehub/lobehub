@@ -22,6 +22,15 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
 }));
 
+const mockPermissionRemoveAll = vi.fn();
+const mockPermissionSetAccessLevel = vi.fn();
+vi.mock('@/database/models/resourcePermission', () => ({
+  ResourcePermissionModel: vi.fn(() => ({
+    removeAll: mockPermissionRemoveAll,
+    setAccessLevel: mockPermissionSetAccessLevel,
+  })),
+}));
+
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(() => ({
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
@@ -37,6 +46,7 @@ describe('knowledgeBaseRouter', () => {
     serverDB: {},
     userId: 'test-user',
     workspaceId: 'workspace-active',
+    workspaceRole: 'member',
   };
 
   const caller = knowledgeBaseRouter.createCaller(ctx as any);
@@ -90,6 +100,34 @@ describe('knowledgeBaseRouter', () => {
     });
   });
 
+  describe('transferKnowledgeBase permission rows', () => {
+    it('removes the source-workspace row and seeds the default level in a public target', async () => {
+      await caller.transferKnowledgeBase({
+        id: 'kb-1',
+        targetVisibility: 'public',
+        targetWorkspaceId: 'workspace-target',
+      });
+
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).toHaveBeenCalledWith(
+        'knowledgeBase',
+        'kb-1',
+        'edit',
+        'test-user',
+      );
+    });
+
+    it('only clears the source row when moving to personal scope', async () => {
+      await caller.transferKnowledgeBase({
+        id: 'kb-1',
+        targetWorkspaceId: null,
+      });
+
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
+    });
+  });
+
   describe('copyKnowledgeBaseToWorkspace', () => {
     it('checks target storage before copying a library', async () => {
       await caller.copyKnowledgeBaseToWorkspace({
@@ -109,6 +147,25 @@ describe('knowledgeBaseRouter', () => {
         'test-user',
         undefined,
       );
+    });
+
+    it("rejects copying another member's library before any target or storage side effects", async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        userId: 'another-member',
+      });
+
+      await expect(
+        caller.copyKnowledgeBaseToWorkspace({
+          id: 'kb-1',
+          targetWorkspaceId: 'workspace-target',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(routerMocks.hasWorkspaceScopedPermission).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCountFileUsage).not.toHaveBeenCalled();
+      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCopyToWorkspace).not.toHaveBeenCalled();
     });
 
     it('rejects target workspace copy when RBAC denies knowledge base creation', async () => {

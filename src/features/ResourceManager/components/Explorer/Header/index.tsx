@@ -24,6 +24,7 @@ import SortDropdown from '../ToolBar/SortDropdown';
 import SourceFilter from '../ToolBar/SourceFilter';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
+import KnowledgeBasePermissionAction from './KnowledgeBasePermissionAction';
 import SearchInput from './SearchInput';
 
 /**
@@ -183,8 +184,9 @@ const Header = memo(() => {
         : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
     </Flexbox>
   ) : (
-    <Flexbox style={{ marginLeft: 8 }}>
+    <Flexbox horizontal align={'center'} gap={4} style={{ marginLeft: 8 }}>
       <Breadcrumb category={category} knowledgeBaseId={libraryId} />
+      <KnowledgeBasePermissionAction knowledgeBaseId={libraryId} />
     </Flexbox>
   );
 

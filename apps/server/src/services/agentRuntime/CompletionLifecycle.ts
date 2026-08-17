@@ -349,8 +349,30 @@ export class CompletionLifecycle {
   async emitSignalEvents(operationId: string, state: any, reason: string): Promise<SignalEvent[]> {
     try {
       const { assistantMessageId, metadata } = this.buildLifecycleEvent(operationId, state, reason);
-      const selfIteration =
+      let selfIteration =
         reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
+      if (reason !== 'error' && !selfIteration) {
+        try {
+          const operation = await this.agentOperationModel.findById(operationId);
+          const operationMetadata = operation?.metadata;
+          if (operationMetadata?.agentSignal) {
+            selfIteration = extractSelfIterationCompletionPayload({
+              ...state,
+              metadata: {
+                ...operationMetadata,
+                ...metadata,
+                userId: metadata?.userId || this.userId,
+              },
+            });
+          }
+        } catch (error) {
+          log(
+            '[completion-lifecycle] failed to hydrate Agent Signal marker op=%s: %O',
+            operationId,
+            error,
+          );
+        }
+      }
       if (reason !== 'error') {
         log(
           '[completion-lifecycle] emit agent.execution.completed op=%s userId=%s assistant=%s metaAssistant=%s selfIteration=%s',

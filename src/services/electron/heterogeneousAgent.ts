@@ -25,6 +25,7 @@ class HeterogeneousAgentService {
     command: string;
     cwd?: string;
     env?: Record<string, string>;
+    initialModel?: string;
     resumeSessionId?: string;
     useClaudeCodeSdk?: boolean;
     useCodexAppServer?: boolean;

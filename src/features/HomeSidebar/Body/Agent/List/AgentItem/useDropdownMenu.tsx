@@ -42,7 +42,7 @@ import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors, homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
@@ -148,7 +148,7 @@ export const useAgentDropdownMenu = ({
   const { allowed: canManageLabels } = usePermission('manage_settings');
   const canCreateLabel =
     Boolean(openCreateLabelModal) && (activeWorkspaceId ? canManageLabels : true);
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess('agent', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
 
   // Row-level ownership: delete/transfer/visibility management stays scoped
@@ -419,8 +419,9 @@ export const useAgentDropdownMenu = ({
         ...(canConfigure
           ? [
               // Permissions live on their own page now — the sidebar keeps a
-              // shortcut so members don't have to open the Agent first.
-              ...(activeWorkspaceId
+              // shortcut so creators and workspace owners don't have to open
+              // the Agent first.
+              ...(activeWorkspaceId && canManageResource
                 ? [
                     { type: 'divider' as const },
                     {
@@ -534,13 +535,7 @@ export const useAgentDropdownMenu = ({
                               await removeAgent(id);
                               toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
-                              toast.error(
-                                isOwnerOnlyForbiddenError(error)
-                                  ? t('deleteSharedOwnerOnly', { ns: 'common' })
-                                  : isForbiddenError(error)
-                                    ? t('manageOnlyCreator', { ns: 'common' })
-                                    : t('operationFailed', { ns: 'common' }),
-                              );
+                              toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                             }
                           },
                           title: t('delete', { ns: 'common' }),
@@ -560,6 +555,7 @@ export const useAgentDropdownMenu = ({
       canConfigure,
       canEdit,
       canManage,
+      canManageResource,
       navigate,
       pinned,
       id,

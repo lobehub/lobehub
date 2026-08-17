@@ -9,15 +9,17 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Alert, CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
 import {
+  Alert,
   Button,
+  Checkbox,
   createModal,
   type ModalInstance,
   ScrollArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Checkbox, Typography } from 'antd';
+import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import {

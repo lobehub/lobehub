@@ -238,10 +238,11 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
 export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {

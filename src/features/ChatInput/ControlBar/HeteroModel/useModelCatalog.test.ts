@@ -21,7 +21,7 @@ describe('useModelCatalog', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder'] as const)(
+  it.each(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder', 'trae'] as const)(
     'starts loading the %s catalog as soon as the selector mounts',
     async (type) => {
       const pendingCatalog = new Promise<
@@ -48,6 +48,33 @@ describe('useModelCatalog', () => {
       expect(result.current.isLoading).toBe(true);
     },
   );
+
+  it('passes TRAE ACP provider arguments to model discovery', async () => {
+    const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels').mockResolvedValue({
+      models: [],
+      status: 'success',
+      updatedAt: 1,
+    });
+
+    renderHook(
+      () =>
+        useModelCatalog({
+          isDeviceListLoading: false,
+          isPreferenceLoading: false,
+          open: false,
+          provider: { args: ['--feature=test'], type: 'trae' },
+          targetReady: true,
+          type: 'trae',
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() =>
+      expect(listModels).toHaveBeenCalledWith(
+        expect.objectContaining({ args: ['--feature=test'], type: 'trae' }),
+      ),
+    );
+  });
 
   it('does not preload the shared fallback while a member device preference is loading', async () => {
     const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels');

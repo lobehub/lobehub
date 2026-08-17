@@ -6,10 +6,12 @@ import {
   CodeBuddyAdapter,
   CodexAdapter,
   CursorAdapter,
+  GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
+  TraeAcpAdapter,
 } from './adapters';
 import { HETEROGENEOUS_AGENT_CONFIGS } from './config';
 import { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
@@ -43,6 +45,10 @@ describe('registry', () => {
       expect(createAdapter('cursor')).toBeInstanceOf(CursorAdapter);
     });
 
+    it('creates a GrokBuildAdapter for "grok-build"', () => {
+      expect(createAdapter('grok-build')).toBeInstanceOf(GrokBuildAdapter);
+    });
+
     it('creates an OpenCodeAdapter for "opencode"', () => {
       expect(createAdapter('opencode')).toBeInstanceOf(OpenCodeAdapter);
     });
@@ -53,6 +59,10 @@ describe('registry', () => {
 
     it('creates a QoderAdapter for "qoder"', () => {
       expect(createAdapter('qoder')).toBeInstanceOf(QoderAdapter);
+    });
+
+    it('creates a TraeAcpAdapter for "trae"', () => {
+      expect(createAdapter('trae')).toBeInstanceOf(TraeAcpAdapter);
     });
 
     it('throws for unknown agent type', () => {

@@ -94,6 +94,14 @@ describe('preferenceSelectors', () => {
       expect(labPreferSelectors.enableDesktopSplitView(store)).toBe(true);
     });
 
+    it('should default project workspaces to disabled and honor the lab preference', () => {
+      store.preference.lab = undefined;
+      expect(labPreferSelectors.enableProjects(store)).toBe(false);
+
+      store.preference.lab = { enableProjects: true };
+      expect(labPreferSelectors.enableProjects(store)).toBe(true);
+    });
+
     it('returns false for message text selection actions by default', () => {
       store.preference.lab = undefined;
 

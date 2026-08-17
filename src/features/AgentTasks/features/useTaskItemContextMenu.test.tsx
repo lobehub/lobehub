@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   refreshTaskList: vi.fn(),
   runTask: vi.fn(),
   transferItems: [
-    { key: 'transfer-task', label: 'Transfer to...' },
+    { key: 'transfer-task', label: 'Move to…' },
     { key: 'copy-task', label: 'Copy to...' },
   ],
   updateTask: vi.fn(),

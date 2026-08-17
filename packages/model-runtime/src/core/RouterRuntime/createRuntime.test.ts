@@ -917,6 +917,39 @@ describe('createRouterRuntime', () => {
       expect(mockChatFail).toHaveBeenCalledTimes(1);
     });
 
+    it('should not retry an InvalidRequestFormat media download failure', async () => {
+      const invalidRequestError = {
+        error: { message: 'failed to download or process media content' },
+        errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(invalidRequestError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['mimo-v2.5'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'mimo-v2.5', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(invalidRequestError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+    });
+
     it('should not retry when the response_format schema is invalid', async () => {
       const invalidSchemaError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,

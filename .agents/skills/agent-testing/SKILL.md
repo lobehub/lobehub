@@ -482,6 +482,10 @@ Hard rules worth front-loading:
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
+  Keep the captured resolution by default. Before publishing, inspect the first,
+  middle, and final frames at readable size and reject evidence with colored
+  quantization noise, blurred text, or illegible one-pixel borders. Set
+  `GIF_WIDTH` only when the resulting dimensions are genuinely too large.
 - **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
   alert tone: attach the clip the feature produced so the page renders a player.
   Prose about a sound, or a screenshot of a waveform, proves nothing —

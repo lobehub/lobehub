@@ -5,7 +5,6 @@ import type { StrictOnly } from './zodStrict';
 export const MAX_COLLECTION_COUNT = 1_000_000;
 export const MAX_COLLECTION_ERRORS = 16;
 export const MAX_DIAGNOSTIC_CODE_LENGTH = 64;
-export const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 160;
 export const MAX_DIAGNOSTIC_OPERATION_LENGTH = 64;
 export const MAX_PROVIDER_ID_LENGTH = 64;
 export const MAX_ANALYSIS_DESCRIPTION_LENGTH = 2000;
@@ -279,8 +278,8 @@ export interface StartOnboardingUnderstandingInput extends OnboardingUnderstandi
  * Adds direct feedback and newly selected providers to an active Understanding session.
  */
 export interface ReviseOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
-  /** Feedback revision observed by the caller; prevents duplicate or stale appends. */
-  expectedFeedbackRevision: number;
+  /** Feedback revision observed by the caller; required when `feedback` is provided. */
+  expectedFeedbackRevision?: number;
   /** Optional direct guidance appended to the cumulative writer prompt. */
   feedback?: string;
   /** Additive provider identifiers; existing sources are never removed. */
@@ -313,7 +312,7 @@ export interface ConfirmOnboardingUnderstandingResult {
 export const CollectionErrorSchema = z
   .object({
     code: z.string().max(MAX_DIAGNOSTIC_CODE_LENGTH),
-    message: z.string().max(MAX_DIAGNOSTIC_MESSAGE_LENGTH),
+    message: z.string(),
     operation: z.string().max(MAX_DIAGNOSTIC_OPERATION_LENGTH),
     provider: z.string().max(MAX_PROVIDER_ID_LENGTH),
     retryable: z.boolean(),

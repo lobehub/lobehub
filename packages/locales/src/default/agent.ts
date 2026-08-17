@@ -371,7 +371,7 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'transfer.title': 'Move',
-  'transfer.copyTo': 'Copy to...',
+  'transfer.copyTo': 'Copy to…',
   'transfer.desc': 'Move this Agent to another Workspace or your personal account.',
   'transfer.button': 'Move',
   'transfer.selectTarget': 'Move Agent to',
@@ -385,6 +385,6 @@ export default {
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
   'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after moving',
   'transfer.success': 'Agent moved successfully',
-  'transfer.transferTo': 'Move to...',
+  'transfer.transferTo': 'Move to…',
   'transfer.error': 'Failed to move agent',
 } as const;

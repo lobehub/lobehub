@@ -1,4 +1,10 @@
-export { AmpAdapter, ClaudeCodeAdapter, CodeBuddyAdapter, QoderAdapter } from './adapters';
+export {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  CodeBuddyAdapter,
+  GrokBuildAdapter,
+  QoderAdapter,
+} from './adapters';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
@@ -24,6 +30,8 @@ export {
   CURSOR_CLI_INSTALL_DOCS_URL,
   getHeterogeneousAgentConfig,
   getHeterogeneousAgentConfigOrThrow,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
   HETEROGENEOUS_AGENT_CONFIGS,
   isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,

@@ -570,6 +570,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       };
     })
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
+  // Overview is the only tab that always exists, so once it stands alone the
+  // strip has nothing left to close — closing it collapses the whole panel.
+  const isOverviewOnlyTab = displayedTabs.length === 0;
   const createTabContextMenuItems = useCallback(
     (tab: string, index: number): NativeContextMenuItem[] => {
       const pinned = pinnedTabsSet.has(tab);
@@ -623,6 +626,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
   const overviewContextMenuItems = useMemo<NativeContextMenuItem[]>(
     () => [
+      ...(isOverviewOnlyTab
+        ? [
+            {
+              icon: XIcon,
+              key: 'closePanel',
+              label: t('workingPanel.tabs.closePanel'),
+              onClick: () => toggleRightPanel(false),
+            } as NativeContextMenuItem,
+            { type: 'divider' as const },
+          ]
+        : []),
       {
         disabled: !openedTabs.some((tab) => !pinnedTabsSet.has(tab)),
         key: 'closeOthers',
@@ -630,7 +644,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         onClick: () => closeTabs(openedTabs),
       },
     ],
-    [closeTabs, openedTabs, pinnedTabsSet, t],
+    [closeTabs, isOverviewOnlyTab, openedTabs, pinnedTabsSet, t, toggleRightPanel],
   );
   const tabsRef = useRef<HTMLDivElement>(null);
   const pendingTabFocusRef = useRef<string | undefined>(undefined);
@@ -845,12 +859,13 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           <div className={styles.tabsArea}>
             <div className={styles.tabs} ref={tabsRef}>
               <WorkspaceTab
-                fixed
                 active={activeTab === 'overview'}
+                closeLabel={t('workingPanel.tabs.closePanel')}
                 contextMenuItems={overviewContextMenuItems}
                 icon={LayoutDashboardIcon}
                 label={t('workingPanel.overview.title')}
                 tabKey={'overview'}
+                onClose={isOverviewOnlyTab ? () => toggleRightPanel(false) : undefined}
                 onSelect={() => openTab('overview')}
               />
               {displayedTabs.map((tab, index) => (

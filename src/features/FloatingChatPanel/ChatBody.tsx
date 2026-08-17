@@ -2,6 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 
+import AgentHome from '@/features/AgentHome';
 import { ChatList } from '@/features/Conversation';
 
 const ChatBody = () => {
@@ -13,7 +14,7 @@ const ChatBody = () => {
       style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
       width={'100%'}
     >
-      <ChatList />
+      <ChatList welcome={<AgentHome />} />
     </Flexbox>
   );
 };

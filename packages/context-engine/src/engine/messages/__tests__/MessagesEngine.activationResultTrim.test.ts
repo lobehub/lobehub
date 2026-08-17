@@ -8,7 +8,7 @@ import { MessagesEngine } from '../MessagesEngine';
 import type { MessagesEngineParams } from '../types';
 
 /**
- * Regression tests for LOBE-5684: after dynamic activation, the full tool
+ * Regression tests: after dynamic activation, the full tool
  * systemRole / skill content must reach the final LLM payload exactly once —
  * either via the system prompt injection OR via the activation tool result,
  * never both.
@@ -134,7 +134,7 @@ const countInPayload = (messages: any[], needle: string) => {
   return haystack.split(needle).length - 1;
 };
 
-describe('MessagesEngine — activation result trimming (LOBE-5684)', () => {
+describe('MessagesEngine — activation result trimming', () => {
   describe('activateTools', () => {
     it('should carry an activated manifest systemRole exactly once when injected', async () => {
       const engine = new MessagesEngine(

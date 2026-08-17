@@ -7,7 +7,7 @@ import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react'
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -65,15 +65,17 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface AgentGoalsPageProps {
-  agentId: string;
+  agentId?: string;
+  projectId?: string;
 }
 
-const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
+const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const goals = useGoalStore(goalSelectors.goalList(agentId));
-  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(agentId));
+  const goals = useGoalStore(goalSelectors.goalList(scopeId));
+  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
@@ -82,7 +84,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
   const acceptanceBySubjectMap = useVerifyStore((s) => s.acceptanceBySubjectMap);
   const acceptanceBundleMap = useVerifyStore((s) => s.acceptanceBundleMap);
-  const { error, isLoading } = useFetchGoals(agentId);
+  const { error, isLoading } = useFetchGoals(agentId, projectId);
   const summary = useMemo(() => {
     const delivered = goals.filter((goal) => goal.status === 'completed').length;
 
@@ -94,11 +96,11 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
     return goals.filter((goal) => {
       const acceptance = acceptanceBySubjectMap[`task:${goal.id}`];
       const bundle = acceptance ? acceptanceBundleMap[acceptance.id] : undefined;
-      const config = goal.config as { goal?: { maxIterations?: number | null } } | null;
       const presentation = getGoalPresentation({
         acceptanceStatus: bundle?.acceptance.status,
         checks: bundle?.checks,
-        maxRounds: config?.goal?.maxIterations,
+        goalStatus: goal.goal?.status,
+        maxRounds: goal.goal?.maxRounds,
         rounds: goal.totalTopics ?? 0,
         taskStatus: goal.status,
       });
@@ -114,14 +116,21 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
       initialRequirement: seed?.requirement,
       initialRoundBudget: seed?.roundBudget,
       initialTitle: seed?.title,
-      onCreated: () => void refreshGoals(agentId),
+      projectId,
+      onCreated: () => void refreshGoals(scopeId),
     });
   };
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />}
+        left={
+          agentId ? (
+            <AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />
+          ) : (
+            <Text weight={600}>{t('goalList.title')}</Text>
+          )
+        }
         right={
           <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
             {t('goalPage.create')}
@@ -135,9 +144,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && !isInitialized ? (
-          <Flexbox align={'center'} flex={1} justify={'center'}>
-            <NeuralNetworkLoading />
-          </Flexbox>
+          <GoalSkeleton showHeader={false} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
             <Flexbox align={'center'} gap={12}>
@@ -148,7 +155,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
               <Button
                 icon={RefreshCwIcon}
                 size={'small'}
-                onClick={() => void refreshGoals(agentId)}
+                onClick={() => void refreshGoals(scopeId)}
               >
                 {t('goalList.retry')}
               </Button>
@@ -248,7 +255,12 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
                   filteredGoals
                     .slice(0, visibleLimit)
                     .map((goal) => (
-                      <GoalItem hideAchieved={filter === 'active'} key={goal.id} task={goal} />
+                      <GoalItem
+                        hideAchieved={filter === 'active'}
+                        key={goal.id}
+                        projectId={projectId}
+                        task={goal}
+                      />
                     ))
                 )}
               </div>

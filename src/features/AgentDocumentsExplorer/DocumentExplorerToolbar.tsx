@@ -1,7 +1,8 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { FilePlusIcon, FolderPlusIcon } from 'lucide-react';
-import { memo } from 'react';
+import { FilePlusIcon, FolderPlusIcon, PlusIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -25,25 +26,36 @@ interface Props {
 
 const DocumentExplorerToolbar = memo<Props>(({ onCreateDocument, onCreateFolder }) => {
   const { t } = useTranslation('chat');
+  const createMenuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        icon: <Icon icon={FilePlusIcon} />,
+        key: 'new-document',
+        label: t('workingPanel.resources.tree.newDocument'),
+        onClick: onCreateDocument,
+      },
+      {
+        icon: <Icon icon={FolderPlusIcon} />,
+        key: 'new-folder',
+        label: t('workingPanel.resources.tree.newFolder'),
+        onClick: onCreateFolder,
+      },
+    ],
+    [onCreateDocument, onCreateFolder, t],
+  );
+
   return (
     <Flexbox horizontal align={'center'} className={styles.toolbar} distribution={'space-between'}>
       <Text className={styles.title} type={'secondary'}>
         {t('workingPanel.resources.filter.documents')}
       </Text>
-      <Flexbox horizontal gap={2}>
+      <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
         <ActionIcon
-          icon={FolderPlusIcon}
+          icon={PlusIcon}
           size={'small'}
-          title={t('workingPanel.resources.tree.newFolder')}
-          onClick={onCreateFolder}
+          title={t('workingPanel.resources.tree.create')}
         />
-        <ActionIcon
-          icon={FilePlusIcon}
-          size={'small'}
-          title={t('workingPanel.resources.tree.newDocument')}
-          onClick={onCreateDocument}
-        />
-      </Flexbox>
+      </DropdownMenu>
     </Flexbox>
   );
 });

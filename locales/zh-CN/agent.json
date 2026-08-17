@@ -296,7 +296,7 @@
   "transfer.confirm.plugins": "自定义技能可能无法在目标工作区使用",
   "transfer.confirm.title": "移动助理",
   "transfer.confirm.warning": "部分关联不会一起移动：",
-  "transfer.copyTo": "复制到...",
+  "transfer.copyTo": "复制到…",
   "transfer.desc": "将此助理移动到另一个工作区或您的个人账户。",
   "transfer.error": "移动助理失败",
   "transfer.personalAccount": "个人账户",
@@ -304,5 +304,5 @@
   "transfer.selectTarget": "将助理移动到",
   "transfer.success": "助理已移动",
   "transfer.title": "移动",
-  "transfer.transferTo": "移动到..."
+  "transfer.transferTo": "移动到…"
 }

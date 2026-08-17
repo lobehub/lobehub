@@ -2,8 +2,9 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { CopyButton, Flexbox } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Descriptions, Skeleton, Typography } from 'antd';
+import { Descriptions, Skeleton, Typography } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';

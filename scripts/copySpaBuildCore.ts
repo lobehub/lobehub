@@ -2,6 +2,12 @@ import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const copyDirs = ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor'] as const;
+
+// Workers are requested root-relative, not from under the entry prefix, because
+// `new Worker` needs a same-origin script and the file is byte-identical across
+// variants. So this one lands in `public/` itself rather than in each SPA
+// directory — a single copy behind a single path.
+const rootCopyDirs = ['app-workers'] as const;
 const copyRootFilePatterns = [/^favicon.*\.ico$/, /^apple-touch-icon\.png$/] as const;
 const targets = [
   { distDir: 'desktop', publicDir: 'public/_spa' },
@@ -24,6 +30,15 @@ export const copySpaBuild = (root = path.resolve(import.meta.dirname, '..')) => 
 
       cpSync(sourceDir, targetDir, { recursive: true });
       console.log(`Copied dist/${distDir}/${dir} -> ${publicDir}/${dir}`);
+    }
+
+    for (const dir of rootCopyDirs) {
+      const sourceDir = path.resolve(distRoot, dir);
+
+      if (!existsSync(sourceDir)) continue;
+
+      cpSync(sourceDir, path.resolve(root, 'public', dir), { recursive: true });
+      console.log(`Copied dist/${distDir}/${dir} -> public/${dir}`);
     }
 
     if (!existsSync(distRoot)) continue;

@@ -563,7 +563,8 @@ export class AgentDocumentModel {
     documentId: string,
     params?: {
       content?: string;
-      editorData?: Record<string, any>;
+      editorData?: Record<string, any> | null;
+      fileType?: string;
       loadPosition?: DocumentLoadPosition;
       loadRules?: Partial<DocumentLoadRules>;
       metadata?: Record<string, any>;
@@ -571,7 +572,7 @@ export class AgentDocumentModel {
       policyLoad?: PolicyLoad;
     },
   ): Promise<void> {
-    const { content, editorData, loadPosition, loadRules, metadata, policy, policyLoad } =
+    const { content, editorData, fileType, loadPosition, loadRules, metadata, policy, policyLoad } =
       params ?? {};
 
     const existing = await this.findById(documentId);
@@ -608,7 +609,12 @@ export class AgentDocumentModel {
     };
 
     await this.db.transaction(async (trx) => {
-      if (content !== undefined || editorData !== undefined || metadata !== undefined) {
+      if (
+        content !== undefined ||
+        editorData !== undefined ||
+        fileType !== undefined ||
+        metadata !== undefined
+      ) {
         const documentUpdate: Partial<NewDocument> = {};
 
         if (content !== undefined) {
@@ -628,6 +634,10 @@ export class AgentDocumentModel {
 
         if (editorData !== undefined) {
           documentUpdate.editorData = editorData;
+        }
+
+        if (fileType !== undefined) {
+          documentUpdate.fileType = fileType;
         }
 
         if (metadata !== undefined) {

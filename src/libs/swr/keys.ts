@@ -124,6 +124,7 @@ export const topicKeys = {
     containerKey,
     opts,
   ]),
+  detail: def('topic:detail', (topicId: string) => ['topic:detail', topicId]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,
@@ -262,15 +263,28 @@ export const recentKeys = {
 };
 
 // ---- task ---------------------------------------------------------------
+/**
+ * SWR `mutate` matcher for every cached `task:list` variant — any agent scope,
+ * visibility chip, ordering, or automation filter. A task edit can move a row
+ * across each of those boundaries at once (reassigning, sharing, touching its
+ * `updatedAt`, attaching a schedule), so refresh invalidates by key root
+ * instead of enumerating variants.
+ */
+export const isTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:list';
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
     'task:groupList',
-    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
-      'task:groupList',
-      agentKey,
-      visibility,
-    ],
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      projectId?: string,
+    ) =>
+      projectId
+        ? ['task:groupList', agentKey, visibility, projectId]
+        : ['task:groupList', agentKey, visibility],
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
@@ -286,7 +300,31 @@ export const taskKeys = {
       // Part of the key, not a detail: Home orders by activity while the Tasks
       // page orders by creation, and they read the same store field.
       orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
-    ) => ['task:list', agentKey, visibility, orderBy],
+      projectId?: string,
+      // Same reasoning as `orderBy`: Home's recent block excludes live
+      // automation and finished statuses server-side while the Tasks page
+      // fetches everything, and a shared entry would serve one surface the
+      // other's filter. Folded into one trailing slot (appended only when a
+      // filter is actually set) so unfiltered keys keep their shape.
+      filters?: { automated?: boolean; statuses?: readonly string[] },
+    ) => {
+      const key = projectId
+        ? ['task:list', agentKey, visibility, orderBy, projectId]
+        : ['task:list', agentKey, visibility, orderBy];
+      const automated = filters?.automated;
+      // Order-insensitive: the same status set must hash to the same key.
+      const statuses = filters?.statuses?.length
+        ? [...filters.statuses].sort().join(',')
+        : undefined;
+      if (automated === undefined && statuses === undefined) return key;
+      return [
+        ...key,
+        {
+          ...(automated === undefined ? {} : { automated }),
+          ...(statuses === undefined ? {} : { statuses }),
+        },
+      ];
+    },
   ),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a
@@ -885,6 +923,16 @@ export const messengerKeys = {
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
+export const expertiseKeys = {
+  domain: def('expertise:domain', (domainId: string) => ['expertise:domain', domainId]),
+  historyCount: def('expertise:historyCount', (agentId: string) => [
+    'expertise:historyCount',
+    agentId,
+  ]),
+  lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
+  overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
+};
+
 export const verifyKeys = {
   acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
     'verify:acceptanceBundle',
@@ -1194,6 +1242,7 @@ export const swrKeys = {
   document: documentSWRKeys,
   electron: electronKeys,
   eval: evalKeys,
+  expertise: expertiseKeys,
   favorite: favoriteKeys,
   file: fileKeys,
   fork: forkKeys,

@@ -82,6 +82,7 @@ beforeEach(() => {
       agentTopicsViewMap: {},
       searchTopics: [],
       topicDataMap: {},
+      topicDetailMap: {},
       // ... initial state
     },
     false,
@@ -624,6 +625,29 @@ describe('topic action', () => {
       expect(updateSpy).toHaveBeenCalledWith(topicId, { status: 'running' });
     });
   });
+  describe('useFetchTopicDetail', () => {
+    // Regression: an archived (completed) topic is excluded from the sidebar
+    // list fetch, so the active topic vanished from topicDataMap and the
+    // header degraded to the "new topic" placeholder. The by-id detail fetch
+    // caches the row in topicDetailMap, which currentActiveTopic falls back to.
+    it('caches the fetched topic in topicDetailMap', async () => {
+      const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
+      (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
+
+      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(archived);
+      });
+      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
+    });
+
+    it('does not fetch when no topic id is given', () => {
+      renderHook(() => useChatStore().useFetchTopicDetail(undefined));
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+    });
+  });
+
   describe('useFetchTopics', () => {
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';
@@ -1065,6 +1089,30 @@ describe('topic action', () => {
       // Verify that the refreshTopic was called to update the state
       expect(refreshTopicSpy).toHaveBeenCalled();
     });
+
+    it('should update the detail cache when the topic is absent from list buckets', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Old title' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.updateTopicTitle(topicId, 'New title');
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toMatchObject({
+        status: 'completed',
+        title: 'New title',
+      });
+    });
   });
   describe('switchTopic', () => {
     it('should update activeTopicId and softly revalidate messages', async () => {
@@ -1406,6 +1454,28 @@ describe('topic action', () => {
       expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
+    });
+
+    it('should evict a detail-only topic after deletion', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'test-session-id',
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Archived' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId);
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toBeUndefined();
     });
     it('should forward removeFiles so the topic attachments are deleted', async () => {
       const topicId = 'topic-1';

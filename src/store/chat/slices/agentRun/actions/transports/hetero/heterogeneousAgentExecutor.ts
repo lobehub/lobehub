@@ -37,6 +37,7 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
@@ -1830,6 +1831,12 @@ export const executeHeterogeneousAgent = async (
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
+      initialModel:
+        adapterType === 'trae' &&
+        heterogeneousProvider.model &&
+        heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+          ? heterogeneousProvider.model
+          : undefined,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),

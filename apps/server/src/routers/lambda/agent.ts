@@ -1,7 +1,8 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import { CreateAgentSchema, type KnowledgeItem } from '@lobechat/types';
-import { KnowledgeType } from '@lobechat/types';
+import type { KnowledgeItem } from '@lobechat/types';
+import { CreateAgentSchema, KnowledgeType } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -49,7 +50,37 @@ import {
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import {
+  getRestrictedKnowledgeBaseIds,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
+
+const AGENT_PERMISSION_POLICY_KEYS = [
+  'executionTargetSelectionPolicy',
+  'modelSelectionPolicy',
+] as const;
+
+const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
+  const agencyConfig = value.agencyConfig;
+
+  return isRecord(agencyConfig) && AGENT_PERMISSION_POLICY_KEYS.some((key) => key in agencyConfig)
+    ? agencyConfig
+    : null;
+};
+
+const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
+  const policyPatch = getAgentPermissionPolicyPatch(value);
+  if (!policyPatch) return value;
+
+  const {
+    executionTargetSelectionPolicy: _executionTargetSelectionPolicy,
+    modelSelectionPolicy: _modelSelectionPolicy,
+    ...safeAgencyConfig
+  } = policyPatch;
+
+  return { ...value, agencyConfig: safeAgencyConfig };
+};
 
 const protectAgentConfig = async <T extends Record<string, any>>(
   ctx: {
@@ -651,6 +682,23 @@ export const agentRouter = router({
 
       const knowledge = await ctx.agentModel.getAgentAssignedKnowledge(input.agentId);
 
+      // Member-restricted (No-access) KBs disappear from the picker for
+      // non-privileged members, except ones already attached to this agent —
+      // an invisible-but-attached row would be impossible to unmount. Managers
+      // keep seeing them, with a flag so the client can badge the icon.
+      const [restrictedForCaller, useLevelIds] = ctx.workspaceId
+        ? await Promise.all([
+            getRestrictedKnowledgeBaseIds(ctx),
+            getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          ])
+        : [[], []];
+      const restrictedSet = new Set(restrictedForCaller);
+      const memberRestrictedSet = new Set(useLevelIds);
+      const visibleKnowledgeBases = knowledgeBases.filter(
+        (kb) =>
+          !restrictedSet.has(kb.id) || knowledge.knowledgeBases.some((item) => item.id === kb.id),
+      );
+
       return [
         ...files
           // Filter out all images
@@ -664,11 +712,12 @@ export const agentRouter = router({
             type: KnowledgeType.File,
             visibility: file.visibility as 'private' | 'public',
           })),
-        ...knowledgeBases.map((knowledgeBase) => ({
+        ...visibleKnowledgeBases.map((knowledgeBase) => ({
           avatar: knowledgeBase.avatar,
           description: knowledgeBase.description,
           enabled: knowledge.knowledgeBases.some((item) => item.id === knowledgeBase.id),
           id: knowledgeBase.id,
+          memberRestricted: memberRestrictedSet.has(knowledgeBase.id),
           name: knowledgeBase.name,
           ownerUserId: knowledgeBase.userId,
           type: KnowledgeType.KnowledgeBase,
@@ -1234,6 +1283,29 @@ export const agentRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
+      let safeValue = input.value;
+
+      // Model / execution-environment selection policies govern every member.
+      // Only the creator or workspace primary owner may write them; other
+      // collaborators send a fully merged agencyConfig, so strip the protected
+      // keys instead of comparing and later merging stale values over a newer
+      // owner update.
+      if (ctx.workspaceId) {
+        const policyPatch = getAgentPermissionPolicyPatch(input.value);
+
+        if (policyPatch) {
+          const canUpdatePolicies =
+            (await ctx.agentModel.existsOwnedById(input.agentId)) ||
+            (await isWorkspacePrimaryOwner({
+              db: ctx.serverDB,
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId,
+            }));
+
+          if (!canUpdatePolicies) safeValue = stripAgentPermissionPolicies(input.value);
+        }
+      }
+
       // Collaborative edit lock: reject writes to a workspace agent another
       // member is actively editing. Inert until a client acquires the lock.
       if (ctx.workspaceId) {
@@ -1248,7 +1320,7 @@ export const agentRouter = router({
       }
 
       // Use AgentService to update and return the updated agent data
-      return ctx.agentService.updateAgentConfig(input.agentId, input.value);
+      return ctx.agentService.updateAgentConfig(input.agentId, safeValue);
     }),
 
   /**

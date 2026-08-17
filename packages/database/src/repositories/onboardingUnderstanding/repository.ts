@@ -108,11 +108,16 @@ interface PrepareWritingInput {
 }
 
 interface ExtendSessionInput {
-  expectedFeedbackRevision: number;
+  expectedFeedbackRevision?: number;
   feedback?: string;
   providerIds: string[];
   sessionId: string;
   topicId: string;
+}
+
+interface ExtendSessionResult {
+  attempts: Array<{ id: string; revision: number }>;
+  session: OnboardingUnderstandingSession;
 }
 
 interface CommitWritingInput {
@@ -331,7 +336,7 @@ export class OnboardingUnderstandingRepository {
     providerIds,
     sessionId,
     topicId,
-  }: ExtendSessionInput): Promise<OnboardingUnderstandingSession> => {
+  }: ExtendSessionInput): Promise<ExtendSessionResult> => {
     providerIds.forEach(assertProviderId);
     return this.db.transaction((tx) =>
       mutateTopicSession(tx, this.userId, topicId, (persisted) => {
@@ -340,16 +345,44 @@ export class OnboardingUnderstandingRepository {
 
         const trimmedFeedback = feedback?.trim();
         const currentFeedback = session.feedback ?? { revision: 0, turns: [] };
-        if (currentFeedback.revision !== expectedFeedbackRevision) {
-          throw new StaleUnderstandingRevisionError('feedback', expectedFeedbackRevision);
+        if (trimmedFeedback && currentFeedback.revision !== expectedFeedbackRevision) {
+          throw new StaleUnderstandingRevisionError(
+            'feedback',
+            expectedFeedbackRevision ?? 'missing',
+          );
         }
         if (trimmedFeedback && currentFeedback.turns.length >= MAX_UNDERSTANDING_FEEDBACK_TURNS) {
           throw new UnderstandingPreconditionError('feedback_limit_reached');
         }
 
         const sources = { ...session.sources };
-        for (const providerId of new Set(providerIds)) {
-          sources[providerId] ??= initialProviderState();
+        const attempts: ExtendSessionResult['attempts'] = [];
+        for (const providerId of [...new Set(providerIds)].sort()) {
+          const current = sources[providerId];
+          if (!current) {
+            sources[providerId] = {
+              ...initialProviderState(),
+              revision: 1,
+              status: 'running',
+            };
+            attempts.push({ id: providerId, revision: 1 });
+            continue;
+          }
+          if (current.status !== 'failed' || !current.errors.some(({ retryable }) => retryable)) {
+            continue;
+          }
+
+          const revision = current.revision + 1;
+          sources[providerId] = {
+            ...current,
+            completedAt: undefined,
+            errors: [],
+            failedCount: 0,
+            revision,
+            status: 'running',
+            succeededCount: 0,
+          };
+          attempts.push({ id: providerId, revision });
         }
         const nextFeedback = trimmedFeedback
           ? {
@@ -364,12 +397,18 @@ export class OnboardingUnderstandingRepository {
               ],
             }
           : currentFeedback;
-        const changed =
-          trimmedFeedback || Object.keys(sources).length !== Object.keys(session.sources).length;
-        if (!changed) return { nextSession: session, result: session, write: false };
+        const changed = Boolean(trimmedFeedback) || attempts.length > 0;
+        if (!changed) {
+          return { nextSession: session, result: { attempts, session }, write: false };
+        }
 
         const nextSession = parseSession({ ...session, feedback: nextFeedback, sources });
-        return { nextSession, result: nextSession, write: true };
+        return {
+          clearTaskRecommendations: attempts.length > 0,
+          nextSession,
+          result: { attempts, session: nextSession },
+          write: true,
+        };
       }),
     );
   };

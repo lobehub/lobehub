@@ -38,6 +38,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 16px;
     width: 100%;
 
+    @media (width >= 1600px) {
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+    }
+
     @media (width <= 920px) {
       grid-template-columns: repeat(2, minmax(280px, 1fr));
     }
