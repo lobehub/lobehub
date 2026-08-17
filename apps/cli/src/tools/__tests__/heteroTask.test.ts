@@ -410,6 +410,32 @@ describe('runHeteroTask (openclaw)', () => {
       expect(call[0]).toBe('ws-99');
     }
   });
+
+  it('reports a signal exit as a cancelled terminal signal', async () => {
+    const child = makeMockChild(7788);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-cancelled',
+      prompt: 'cancel me',
+      taskId: 'task-cancelled',
+      topicId: 'topic-cancelled',
+    });
+
+    child._emit('close', null, 'SIGINT');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelled: true,
+        done: true,
+        operationId: 'op-cancelled',
+        role: 'assistant',
+        topicId: 'topic-cancelled',
+      }),
+    );
+  });
 });
 
 describe('runHeteroTask retry ownership', () => {

@@ -109,9 +109,9 @@ async function sendAutoNotify(
  * `agent_runtime_end`, close the frontend subscription, and fire the run's
  * lifecycle hooks (task lifecycle + IM bot callback).
  *
- * Pass `error` to finalize the run as FAILED (non-zero process exit) — the
- * server marks the owning task failed and renders the error. Omit it for a
- * clean completion (the agent already sent its final message via `lh notify`).
+ * Pass `error` to finalize the run as FAILED (non-zero process exit), or
+ * `cancelled` to finalize it as INTERRUPTED (signal exit). Omit both for a clean
+ * completion (the agent already sent its final message via `lh notify`).
  */
 async function sendTerminalSignal(
   topicId: string,
@@ -119,6 +119,7 @@ async function sendTerminalSignal(
   operationId?: string,
   workspaceId?: string,
   error?: { message: string; type?: string },
+  cancelled = false,
 ): Promise<void> {
   try {
     const client = await getTrpcClient(workspaceId);
@@ -127,6 +128,7 @@ async function sendTerminalSignal(
       content: '',
       done: true,
       operationId,
+      ...(cancelled ? { cancelled: true } : {}),
       ...(error ? { error } : {}),
       role: 'assistant',
       topicId,
@@ -286,6 +288,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
             operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+            cancelled,
           ),
         );
       } else {
@@ -373,6 +376,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
             operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+            cancelled,
           ),
         );
         return;

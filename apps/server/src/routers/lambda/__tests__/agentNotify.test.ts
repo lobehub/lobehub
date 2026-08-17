@@ -150,6 +150,35 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     expect(mockTopicTakeRunningOperation).toHaveBeenCalledWith(TOPIC, OP);
   });
 
+  it('cancelled terminal signal finalizes the run as interrupted', async () => {
+    const { onComplete, onError } = registerHooks();
+
+    await createCaller().notify({
+      cancelled: true,
+      content: '',
+      done: true,
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(mockPublishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalState: { reason: 'interrupted' },
+        operationId: OP,
+        reason: 'interrupted',
+      }),
+    );
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(onComplete.mock.calls[0][0]).toMatchObject({
+      operationId: OP,
+      reason: 'interrupted',
+    });
+    expect(onError).not.toHaveBeenCalled();
+    expect(mockInstantiateVerifyPlan).not.toHaveBeenCalled();
+    expect(mockTopicTakeRunningOperation).toHaveBeenCalledWith(TOPIC, OP);
+  });
+
   it('uses the marker snapshot read before terminal lifecycle completion', async () => {
     const completeOperationSpy = vi
       .spyOn(CompletionLifecycle.prototype, 'completeOperation')

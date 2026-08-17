@@ -49,6 +49,8 @@ const agentNotifyWriteProcedure = agentNotifyProcedure.use(withScopedPermission(
 const NotifySchema = z.object({
   /** Agent ID to trigger (overrides the topic's default agent) */
   agentId: z.string().optional(),
+  /** Signal that the remote hetero run was cancelled by a process signal. */
+  cancelled: z.boolean().optional(),
   /** Message content from the external agent */
   content: z.string(),
   /**
@@ -115,6 +117,7 @@ export const agentNotifyRouter = router({
       threadId,
       role = 'user',
       continue: shouldContinue = false,
+      cancelled = false,
       done = false,
       error: terminalError,
       messageId,
@@ -122,7 +125,8 @@ export const agentNotifyRouter = router({
 
     // An error is itself a terminal signal — finalize the run even if the
     // remote agent didn't also set `done`.
-    const isTerminal = done || !!terminalError;
+    const isTerminal = done || !!terminalError || cancelled;
+    const completionReason = terminalError ? 'error' : cancelled ? 'interrupted' : 'done';
 
     log(
       'notify: topicId=%s, agentId=%s, role=%s, continue=%s, done=%s, messageId=%s, content=%s',
@@ -239,11 +243,11 @@ export const agentNotifyRouter = router({
             lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
           }
           // Mirror heteroFinish's done-path prep (this is the openclaw/hermes
-          // equivalent terminal funnel). Skipped on the error path (verify is
-          // done-only). Each step is self-guarded so a failure degrades instead
+          // equivalent terminal funnel). Only needed for successful completion
+          // (verify is done-only). Each step is self-guarded so a failure degrades instead
           // of aborting the terminal funnel.
           let goal: unknown = '';
-          if (!terminalError) {
+          if (completionReason === 'done') {
             // Guarantee the task's verify plan is DURABLY persisted before the gate
             // (completeOperation → runVerifyOnCompletion) reads it. The start-side
             // instantiation in execAgent is fire-and-forget on a SEPARATE
@@ -298,7 +302,7 @@ export const agentNotifyRouter = router({
                 topicId,
                 userId: ctx.userId,
               },
-              terminalError ? 'error' : 'done',
+              completionReason,
               // openclaw/hermes surface their failure via the runtime-end stream event
               // + their own message write, not the lifecycle's assistant-row error
               // write — keep that prior behavior on the error path.
@@ -314,13 +318,18 @@ export const agentNotifyRouter = router({
             if (!claimed) return;
           }
 
+          const streamReason = completionReason === 'done' ? 'success' : completionReason;
           await stream.publishAgentRuntimeEnd({
             finalState: terminalError
               ? { error: terminalError.message, reason: 'error' }
-              : { reason: 'success' },
+              : { reason: streamReason },
             operationId: remoteOperationId,
-            reason: terminalError ? 'error' : 'success',
-            reasonDetail: terminalError?.message ?? 'Remote hetero agent task completed',
+            reason: streamReason,
+            reasonDetail:
+              terminalError?.message ??
+              (cancelled
+                ? 'Remote hetero agent task cancelled'
+                : 'Remote hetero agent task completed'),
             stepIndex: 0,
           });
         } else {

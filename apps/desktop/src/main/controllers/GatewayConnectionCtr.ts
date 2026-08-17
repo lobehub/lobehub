@@ -807,6 +807,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           }).finally(() =>
             this.sendNotify({
               agentId,
+              cancelled: !!signal,
               content: '',
               done: true,
               error: terminalError,
@@ -921,6 +922,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           }).finally(() =>
             this.sendNotify({
               agentId,
+              cancelled: !!signal,
               content: '',
               done: true,
               error: terminalError,
@@ -1061,6 +1063,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    */
   private async sendNotify(params: {
     agentId?: string;
+    cancelled?: boolean;
     content: string;
     done?: boolean;
     error?: { message: string; type?: string };

@@ -1103,6 +1103,31 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('reports a signal exit as a cancelled terminal signal', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-cancelled-child',
+        prompt: 'hello',
+        taskId: 'task-cancelled-child',
+        topicId: 'topic-cancelled-child',
+      });
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          done: true,
+          error: undefined,
+          operationId: 'op-cancelled-child',
+        }),
+      );
+    });
+
     it.each([
       {
         environmentAgentId: 'ops-default',
