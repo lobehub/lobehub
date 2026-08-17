@@ -34,11 +34,17 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
           ].filter(Boolean);
           return (
             <div className={styles.profileRow} key={layer.key}>
-              <Flexbox horizontal align={'center'} gap={10} minWidth={0}>
+              <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
                 <Text className={styles.profileKey} fontSize={12} type={'secondary'}>
                   {layer.key}
                 </Text>
-                <Text ellipsis fontSize={14} minWidth={0} title={layer.title} weight={600}>
+                <Text
+                  ellipsis
+                  fontSize={14}
+                  style={{ minWidth: 0 }}
+                  title={layer.title}
+                  weight={600}
+                >
                   {layer.title}
                 </Text>
               </Flexbox>
