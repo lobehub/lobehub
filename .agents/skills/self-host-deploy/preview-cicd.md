@@ -81,6 +81,10 @@ Promote to production after smoke tests:
 gh pr create --base canary --head preview --title "Promote preview to canary"
 ```
 
+## Version in the app
+
+On the preview host, **Settings → About** shows SemVer, channel tag `preview`, short Git SHA (click to copy), and build time. Confirms you are not looking at the prod stack.
+
 ## Related
 
 - Prod canary docs: [canary-cicd.md](canary-cicd.md)

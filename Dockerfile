@@ -144,6 +144,18 @@ ENV MIDDLEWARE_REWRITE_THROUGH_LOCAL="1"
 ENV HOSTNAME="0.0.0.0" \
     PORT="3210"
 
+# Panachat deploy metadata (injected by CI build-args; shown on Settings → About)
+ARG GIT_SHA=""
+ARG SHA=""
+ARG PANACHAT_CHANNEL=""
+ARG PANACHAT_VERSION=""
+ARG BUILD_TIME=""
+ENV GIT_SHA="${GIT_SHA}" \
+    SHA="${SHA}" \
+    PANACHAT_CHANNEL="${PANACHAT_CHANNEL}" \
+    PANACHAT_VERSION="${PANACHAT_VERSION}" \
+    BUILD_TIME="${BUILD_TIME}"
+
 # General Variables
 ENV APP_URL="" \
     API_KEY_SELECT_MODE="" \

@@ -50,6 +50,14 @@ jobs:
           echo "image=${{ env.REGISTRY }}/${owner_lc}/panachat" >> "$GITHUB_OUTPUT"
           echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          # Optional SemVer from tag vX.Y.Z (no auto-bump)
+          ref='${{ github.ref }}'
+          if [[ "$ref" == refs/tags/v* ]]; then
+            echo "panachat_version=${ref#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "panachat_version=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,7 +91,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            GIT_SHA=${{ steps.vars.outputs.sha }}
             SHA=${{ steps.vars.outputs.sha_short }}
+            PANACHAT_CHANNEL=canary
+            PANACHAT_VERSION=${{ steps.vars.outputs.panachat_version }}
+            BUILD_TIME=${{ steps.vars.outputs.build_time }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
