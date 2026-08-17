@@ -93,4 +93,28 @@ describe('Project Router Integration', () => {
       'Invalid project identifier',
     );
   });
+
+  it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
+    'rejects the route-unsafe slug %s when creating a project',
+    async (slug) => {
+      await expect(
+        caller.create({ identifier: 'VALID', name: 'Invalid slug', slug }),
+      ).rejects.toThrow('Invalid project slug');
+    },
+  );
+
+  it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
+    'rejects the route-unsafe slug %s when updating a project',
+    async (slug) => {
+      const project = await caller.create({
+        identifier: 'VALID',
+        name: 'Valid project',
+        slug: 'valid-project',
+      });
+
+      await expect(caller.update({ id: project.data.id, slug })).rejects.toThrow(
+        'Invalid project slug',
+      );
+    },
+  );
 });
