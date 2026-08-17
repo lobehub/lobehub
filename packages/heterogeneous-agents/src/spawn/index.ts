@@ -16,6 +16,7 @@ export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  type CodexApprovalDecision,
   CodexAppServerClient,
   type CodexAppServerClientOptions,
   CodexAppServerConnectionError,

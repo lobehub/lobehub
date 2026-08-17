@@ -32,6 +32,7 @@ export const useCreateHeteroAgent = () => {
           agencyConfig: {
             heterogeneousProvider: {
               command: definition.defaultCommand,
+              ...(definition.type === 'codex' ? { permissionMode: 'ask' as const } : {}),
               type: definition.type,
             },
           },

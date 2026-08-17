@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import type { CodexPermissionMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
@@ -78,6 +79,15 @@ const ProfileEditor = memo(() => {
     });
   };
 
+  const updateCodexPermissionMode = async (permissionMode: CodexPermissionMode) => {
+    if (!canEdit || heterogeneousProvider?.type !== 'codex') return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, permissionMode },
+      },
+    });
+  };
+
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateAgentConfigById(agentId, {
       agencyConfig: { ...config?.agencyConfig, boundDeviceId, executionTarget: 'device' },
@@ -113,6 +123,7 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               provider={heterogeneousProvider}
               onCommandChange={updateHeterogeneousCommand}
+              onPermissionModeChange={updateCodexPermissionMode}
             />
           ),
         },

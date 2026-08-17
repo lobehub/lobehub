@@ -347,6 +347,22 @@ export default {
   'heterogeneousStatus.command.edit': 'Edit command',
   'heterogeneousStatus.command.label': 'Launch Command',
   'heterogeneousStatus.command.placeholder': 'Command name or absolute path',
+  'heterogeneousStatus.codexPermission.description.ask':
+    'Can edit the workspace, but asks the user before sensitive commands or file changes.',
+  'heterogeneousStatus.codexPermission.description.auto-review':
+    'Can edit the workspace; Codex automatically reviews approval requests.',
+  'heterogeneousStatus.codexPermission.description.custom':
+    'Uses the legacy permission arguments in the CLI configuration.',
+  'heterogeneousStatus.codexPermission.description.full-access':
+    'Runs without a sandbox or approval prompts.',
+  'heterogeneousStatus.codexPermission.description.read-only':
+    'Can inspect files but cannot change the workspace.',
+  'heterogeneousStatus.codexPermission.label': 'Permissions',
+  'heterogeneousStatus.codexPermission.mode.ask': 'Ask before changes',
+  'heterogeneousStatus.codexPermission.mode.auto-review': 'Auto review',
+  'heterogeneousStatus.codexPermission.mode.custom': 'Custom CLI arguments',
+  'heterogeneousStatus.codexPermission.mode.full-access': 'Full access',
+  'heterogeneousStatus.codexPermission.mode.read-only': 'Read only',
   'heterogeneousStatus.detecting': 'Detecting {{name}} CLI...',
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',

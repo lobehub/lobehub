@@ -210,10 +210,11 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   }
 
   class MockCodexThreadSession {
-    canFallbackToExec = true;
+    canFallbackToExec: boolean;
     private closed = false;
 
     constructor(private readonly options: any) {
+      this.canFallbackToExec = options.allowExecFallback !== false;
       codexAppServerConsumerCount.value += 1;
       codexAppServerConstructMock(options);
     }
@@ -1753,6 +1754,60 @@ describe('HeterogeneousAgentCtr', () => {
         agentSessionId: 'thread_app_server',
       });
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('forces configured permission modes through app-server with no exec fallback', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args: [
+          '--sandbox',
+          'danger-full-access',
+          '--ask-for-approval',
+          'never',
+          '--model',
+          'gpt-5.5-codex',
+        ],
+        codexPermissionMode: 'ask',
+        command: 'codex',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'ask safely', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(codexAppServerConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowExecFallback: false,
+          threadParams: expect.objectContaining({
+            approvalPolicy: 'on-request',
+            approvalsReviewer: 'user',
+            model: 'gpt-5.5-codex',
+            sandbox: 'workspace-write',
+          }),
+        }),
+      );
+    });
+
+    it('fails closed when app-server is incompatible with a configured permission mode', async () => {
+      codexAppServerShouldFallback.value = true;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        codexPermissionMode: 'read-only',
+        command: 'codex',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'inspect safely', sessionId }),
+      ).rejects.toThrow('Method not found: initialize');
+
+      expect(spawnCalls).toHaveLength(0);
     });
 
     it('reuses one native app-server client for multiple new Codex sessions', async () => {

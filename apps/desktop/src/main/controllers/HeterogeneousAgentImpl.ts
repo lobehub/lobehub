@@ -41,7 +41,11 @@ import {
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
-import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentStreamEvent,
+  CodexApprovalDecision,
+  UsageData,
+} from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
   AgentStreamPipeline,
@@ -68,6 +72,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
 import type {
+  CodexPermissionMode,
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
@@ -184,6 +189,8 @@ interface StartSessionParams {
   agentType?: HeterogeneousCliAgentType;
   /** Additional CLI arguments */
   args?: string[];
+  /** Effective typed Codex permission preset. Omitted for legacy full/custom sessions. */
+  codexPermissionMode?: CodexPermissionMode;
   /** Command to execute */
   command: string;
   /** Working directory */
@@ -255,6 +262,8 @@ interface SubmitInterventionParams {
   cancelled?: boolean;
   /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
   cancelReason?: 'timeout' | 'user_cancelled';
+  /** Runtime callback id when it differs from the parent tool item. */
+  interventionId?: string;
   /** Operation id stamped on the request the renderer is responding to. */
   operationId: string;
   /** Structured user answer; ignored when `cancelled` is true. */
@@ -309,6 +318,7 @@ interface AgentSession {
    */
   cancelledByUs?: boolean;
   codexAppServerFallback?: boolean;
+  codexPermissionMode?: CodexPermissionMode;
   command: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -1089,6 +1099,7 @@ export default class HeterogeneousAgentCtr {
       agentType,
       args: params.args || [],
       command: params.command,
+      codexPermissionMode: params.codexPermissionMode,
       cwd: params.cwd,
       env: params.env,
       model: params.initialModel,
@@ -1163,14 +1174,15 @@ export default class HeterogeneousAgentCtr {
     if (
       session.agentType === 'codex' &&
       !session.codexAppServerFallback &&
-      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+      (session.codexPermissionMode || session.useCodexAppServer || this.isCodexAppServerLabEnabled)
     ) {
       const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        permissionMode: session.codexPermissionMode,
         resume: !!session.agentSessionId,
       });
       if (unsupportedArgs.length === 0) {
         if (await this.sendPromptWithCodexAppServer(params, session)) return;
-      } else if (session.agentSessionId) {
+      } else if (session.agentSessionId || session.codexPermissionMode) {
         const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
         this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
         throw new Error(message);
@@ -1507,6 +1519,7 @@ export default class HeterogeneousAgentCtr {
     const appServerSession =
       session.appServerSession ??
       new CodexThreadSession({
+        allowExecFallback: !session.codexPermissionMode,
         client,
         initialCumulativeUsage,
         initialModel: session.model,
@@ -1531,7 +1544,12 @@ export default class HeterogeneousAgentCtr {
           if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
         },
         sessionId: session.sessionId,
-        threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
+        threadParams: buildCodexAppServerThreadParams(
+          session.args,
+          cwd,
+          session.model,
+          session.codexPermissionMode,
+        ),
       });
     session.appServerSession = appServerSession;
 
@@ -2334,6 +2352,26 @@ export default class HeterogeneousAgentCtr {
    * up already (op finished / cancelled).
    */
   async submitIntervention(params: SubmitInterventionParams): Promise<void> {
+    const result = isPlainObject(params.result) ? params.result : undefined;
+    const rawDecision = result?.decision;
+    if (
+      rawDecision === 'accept' ||
+      rawDecision === 'acceptForSession' ||
+      rawDecision === 'decline' ||
+      rawDecision === 'cancel' ||
+      params.cancelled
+    ) {
+      const decision: CodexApprovalDecision = params.cancelled ? 'cancel' : rawDecision;
+      const interventionId = params.interventionId ?? params.toolCallId;
+      for (const session of this.sessions.values()) {
+        if (
+          session.appServerSession?.resolveApproval(params.operationId, interventionId, decision)
+        ) {
+          return;
+        }
+      }
+    }
+
     const slot = this.opIdToIntervention.get(params.operationId);
     if (!slot) {
       logger.warn('submitIntervention: no active intervention for operationId', params.operationId);

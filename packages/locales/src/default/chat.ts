@@ -320,6 +320,27 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.codexPermission.agentDefault': 'Agent default · {{mode}}',
+  'heteroAgent.codexPermission.description.ask':
+    'Can edit the workspace, but asks you before sensitive commands or file changes.',
+  'heteroAgent.codexPermission.description.auto-review':
+    'Can edit the workspace; Codex automatically reviews approval requests.',
+  'heteroAgent.codexPermission.description.custom':
+    'Uses custom permission arguments from this Agent’s CLI configuration.',
+  'heteroAgent.codexPermission.description.full-access':
+    'Runs without a sandbox or approval prompts. Codex can read and change any accessible file.',
+  'heteroAgent.codexPermission.description.read-only':
+    'Can inspect files but cannot change the workspace.',
+  'heteroAgent.codexPermission.localOnly':
+    'This mode requires Codex app-server in the local desktop app.',
+  'heteroAgent.codexPermission.mode.ask': 'Ask before changes',
+  'heteroAgent.codexPermission.mode.auto-review': 'Auto review',
+  'heteroAgent.codexPermission.mode.custom': 'Custom CLI arguments',
+  'heteroAgent.codexPermission.mode.full-access': 'Full access',
+  'heteroAgent.codexPermission.mode.read-only': 'Read only',
+  'heteroAgent.codexPermission.nextRun': 'The new permission mode applies to the next run.',
+  'heteroAgent.codexPermission.startTopic': 'Start a conversation before setting a topic override.',
+  'heteroAgent.codexPermission.updateFailed': 'Couldn’t update the Codex permission mode.',
   'heteroAgent.claudeQuota.accountActive': 'In use',
   'heteroAgent.claudeQuota.accountSwitch': 'Switch',
   'heteroAgent.claudeQuota.accounts': 'Accounts',

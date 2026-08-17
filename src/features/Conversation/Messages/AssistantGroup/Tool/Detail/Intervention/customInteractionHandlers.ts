@@ -16,6 +16,7 @@ import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
 const QODER_IDENTIFIER = 'qoder';
+const CODEX_IDENTIFIER = 'codex';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
@@ -165,6 +166,7 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   ClaudeCodeIdentifier,
+  CODEX_IDENTIFIER,
   QODER_IDENTIFIER,
 ]);
 

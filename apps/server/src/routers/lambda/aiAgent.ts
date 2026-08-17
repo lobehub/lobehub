@@ -656,6 +656,7 @@ const WaitInterventionResponseSchema = z.object({
 const SubmitHeteroInterventionSchema = z.object({
   cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
   cancelled: z.boolean().optional(),
+  interventionId: z.string().min(1).optional(),
   operationId: z.string().min(1),
   result: z.unknown().optional(),
   /** Producer step index; harmless placeholder — correlation is by toolCallId. */
@@ -1870,7 +1871,15 @@ export const aiAgentRouter = router({
   submitHeteroIntervention: aiAgentWriteProcedure
     .input(SubmitHeteroInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
+      const {
+        operationId,
+        toolCallId,
+        interventionId,
+        stepIndex,
+        result,
+        cancelled,
+        cancelReason,
+      } = input;
 
       log(
         'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
@@ -1891,6 +1900,7 @@ export const aiAgentRouter = router({
         data: {
           cancelReason: cancelled ? (cancelReason ?? 'user_cancelled') : undefined,
           cancelled,
+          interventionId,
           result: cancelled ? undefined : result,
           toolCallId,
         },

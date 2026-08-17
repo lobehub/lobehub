@@ -24,6 +24,7 @@ interface ClientHarness {
   notify: (method: string, params: unknown) => Promise<void> | void;
   registeredResumeParams: () => unknown;
   releaseConsumer: ReturnType<typeof vi.fn>;
+  requestApproval: (method: string, params: unknown) => Promise<unknown> | undefined;
   requests: Array<{ method: string; params: unknown }>;
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
@@ -41,11 +42,13 @@ const createClientHarness = (
     initialThreadId?: string;
     interruptError?: Error;
     malformedThreadStart?: boolean;
+    permissionMismatch?: boolean;
     threadNameError?: Error;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler: ((method: string, params: unknown) => Promise<unknown>) | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -91,12 +94,21 @@ const createClientHarness = (
       if (method === 'thread/start') {
         await threadStartGate;
         if (options.malformedThreadStart) return { thread: {} };
-        return { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } };
+        return {
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
+          model: 'gpt-5.5-codex',
+          sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+          thread: { id: 'thread-1' },
+        };
       }
       if (method === 'thread/resume') {
         if (options.failResume) throw new Error('Thread not found');
         return {
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           model: 'gpt-5.5-codex',
+          sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
           thread: { id: options.initialThreadId ?? 'thread-1' },
         };
       }
@@ -144,31 +156,47 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn((_threadId: string, handler: typeof serverRequestHandler) => {
+      serverRequestHandler = handler;
+      return vi.fn();
+    }),
   };
 
   return {
     client,
     disconnect: () => disconnectHandler?.(),
     notify,
+    requestApproval: (method, params) => serverRequestHandler?.(method, params),
     registeredResumeParams: () => resumeParams,
     releaseConsumer,
     requests,
     resolveThreadStart,
     resolveTurnStart,
     resume: (model = 'gpt-5.5-codex') =>
-      registration?.onResume({ model, thread: { id: options.initialThreadId ?? 'thread-1' } }),
+      registration?.onResume({
+        approvalPolicy: 'never',
+        approvalsReviewer: 'user',
+        model,
+        sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+        thread: { id: options.initialThreadId ?? 'thread-1' },
+      }),
   };
 };
 
 const createSession = (
   harness: ClientHarness,
-  options: { initialThreadId?: string; onEventsError?: Error; threadName?: string } = {},
+  options: {
+    allowExecFallback?: boolean;
+    initialThreadId?: string;
+    onEventsError?: Error;
+    threadName?: string;
+  } = {},
 ) => {
   const events: any[] = [];
   const statuses: string[] = [];
   const onSessionId = vi.fn();
   const session = new CodexThreadSession({
+    allowExecFallback: options.allowExecFallback,
     client: harness.client,
     initialThreadId: options.initialThreadId,
     threadName: options.threadName,
@@ -181,6 +209,7 @@ const createSession = (
     sessionId: 'session-1',
     threadParams: {
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
     },
@@ -207,6 +236,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/start',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
         },
@@ -292,6 +322,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/resume',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
           threadId: 'thread-existing',
@@ -308,6 +339,7 @@ describe('CodexThreadSession', () => {
     expect(onSessionId).not.toHaveBeenCalled();
     expect(harness.registeredResumeParams()).toEqual({
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
       threadId: 'thread-existing',
@@ -352,6 +384,54 @@ describe('CodexThreadSession', () => {
     expect(error).toBeInstanceOf(CodexAppServerConnectionError);
     expect(isCodexAppServerCompatibilityError(error)).toBe(true);
     expect(session.canFallbackToExec).toBe(true);
+    session.close();
+  });
+
+  it('fails closed when app-server echoes a different permission profile', async () => {
+    const harness = createClientHarness({ permissionMismatch: true });
+    const { run, session } = createSession(harness, { allowExecFallback: false });
+
+    await expect(run('operation-1', 'start')).rejects.toThrow(
+      'Codex app-server did not apply the requested permission profile',
+    );
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  it.each([
+    [
+      'item/commandExecution/requestApproval',
+      { approvalId: 'approval-1', itemId: 'item-1' },
+      'approval-1',
+      'command_execution',
+    ],
+    ['item/fileChange/requestApproval', { itemId: 'item-1' }, 'item-1', 'file_change'],
+  ])('bridges %s requests to an intervention decision', async (method, params, id, apiName) => {
+    const harness = createClientHarness({ autoComplete: false });
+    const { events, run, session } = createSession(harness);
+    const running = run('operation-1', 'start');
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    const approval = harness.requestApproval(method, params);
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ apiName, interventionId: id, toolCallId: 'item-1' }),
+          operationId: 'operation-1',
+          type: 'agent_intervention_request',
+        }),
+      ),
+    );
+    expect(session.resolveApproval('operation-1', id, 'acceptForSession')).toBe(true);
+    await expect(approval).resolves.toEqual({ decision: 'acceptForSession' });
+
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await running;
     session.close();
   });
 

@@ -92,4 +92,15 @@ describe('buildConnectAgentConfig', () => {
       }),
     ).toMatchObject({ provider: 'claude-code' });
   });
+
+  it('defaults newly connected Codex agents to ask before changes', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('codex')!,
+        target: { kind: 'local' },
+      }),
+    ).toMatchObject({
+      agencyConfig: { heterogeneousProvider: { permissionMode: 'ask', type: 'codex' } },
+    });
+  });
 });
