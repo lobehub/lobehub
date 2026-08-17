@@ -8,13 +8,20 @@ ARG NODEJS_VERSION="24"
 
 FROM node:${NODEJS_VERSION}-bookworm-slim AS builder
 
+# This repo sets lockfile=false (.npmrc / pnpm-workspace.yaml). `--frozen-lockfile`
+# plus CI=true (GitHub Actions / Buildx) makes the next `pnpm run` attempt a
+# headless install and fail with:
+#   Headless installation requires a pnpm-lock.yaml file
+# Match the product Dockerfile: `pnpm i` (not frozen). Empty CI so pnpm does not
+# treat the environment as CI. Allow postinstall so vite's esbuild binary exists.
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_OPTIONS=--max-old-space-size=8192 \
     APP_URL=http://app.com \
     DATABASE_DRIVER=node \
     DATABASE_URL=postgres://postgres:password@localhost:5432/postgres \
     KEY_VAULTS_SECRET=use-for-build \
-    AUTH_SECRET=use-for-build
+    AUTH_SECRET=use-for-build \
+    CI=
 
 WORKDIR /app
 
@@ -26,8 +33,9 @@ RUN apt-get update \
 COPY . .
 
 RUN corepack use "$(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json)" \
-    && pnpm i --frozen-lockfile \
-    && pnpm run build:spa:control-plane \
+    && pnpm i --config.dangerouslyAllowAllBuilds=true
+
+RUN pnpm run build:spa:control-plane \
     && pnpm --filter @aico/control-plane build \
     && test -f apps/aico-control-plane/dist/standalone.js \
     && test -f apps/aico-control-plane/web/spa/index.html
