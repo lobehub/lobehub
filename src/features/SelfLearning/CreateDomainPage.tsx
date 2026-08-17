@@ -2,9 +2,11 @@
 
 import { ActionIcon, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Button, Popover, toast } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
+  ArrowLeftIcon,
   LayersIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -398,6 +400,18 @@ const CreateDomainPage = memo(() => {
           <Flexbox className={styles.content} onKeyDown={onKeyDown}>
             <Flexbox horizontal className={styles.head}>
               <Flexbox flex={1} gap={6}>
+                {step === 'review' && (
+                  <Flexbox horizontal>
+                    <Button
+                      icon={ArrowLeftIcon}
+                      size={'small'}
+                      type={'text'}
+                      onClick={() => setStep('describe')}
+                    >
+                      {t('create.back')}
+                    </Button>
+                  </Flexbox>
+                )}
                 {step === 'review' && draft ? (
                   <input
                     className={styles.title}
@@ -498,6 +512,7 @@ const CreateDomainPage = memo(() => {
                     onChange={(e) => setBrief(e.target.value)}
                   />
                 </Flexbox>
+                <Divider style={{ margin: 0 }} />
                 <Flexbox className={styles.reviewSection} gap={12}>
                   <Text fontSize={14} type={'secondary'}>
                     {t('create.reviewHelp')}

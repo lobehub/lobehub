@@ -41,6 +41,7 @@
   "create.anchor.layersInvented": "没有合适的经典分层 —— 按你的描述提议的分层",
   "create.anchor.noCanon": "还没有经典依据 —— 它照样会学，但没法判断「覆盖」了没。",
   "create.anchor.noLayers": "还没有分层 —— 经验不会按层归类。",
+  "create.back": "返回",
   "create.briefHelp": "说清楚你想让它在什么事情上变强，以及什么不算。这句话会成为「哪些对话算这个方向的实践」的判据，名称我们从里面解析出来。",
   "create.briefPlaceholder": "例如：我想让它在处理线上故障上变强，从现象到根因再到防复发。方案讨论、通用运维问答都不算。",
   "create.cancel": "取消",
