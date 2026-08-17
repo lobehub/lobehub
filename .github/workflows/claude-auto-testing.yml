@@ -1,10 +1,9 @@
 name: Claude Auto Testing Coverage
 # Automatically add unit tests to improve code coverage
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  schedule:
-    # Run daily at 05:30 UTC (13:30 Beijing Time)
-    - cron: '30 5 * * *'
   workflow_dispatch:
     inputs:
       target_module:

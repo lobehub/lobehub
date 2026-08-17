@@ -2,13 +2,10 @@ name: Revalidate Docs
 permissions:
   contents: read
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  push:
-    branches:
-      - main
-      - next
-    paths:
-      - 'docs/**'
+  workflow_dispatch: {}
 
 jobs:
   revalidate:

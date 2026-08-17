@@ -1,10 +1,9 @@
 name: Claude Auto E2E Testing
 # Automatically add E2E tests to improve user journey coverage
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  schedule:
-    # Run daily at 21:00 UTC (05:00 Beijing Time)
-    - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
       target_module:

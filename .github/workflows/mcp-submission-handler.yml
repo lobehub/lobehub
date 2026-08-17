@@ -1,9 +1,9 @@
 name: MCP Submission Handler
 # Auto-close "Add my MCP server to the marketplace" issues and redirect to the self-service CLI
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  issues:
-    types: [opened, labeled]
   workflow_dispatch:
     inputs:
       issue_number:
