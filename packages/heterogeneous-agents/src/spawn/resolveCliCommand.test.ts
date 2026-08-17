@@ -326,15 +326,23 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
     it('accepts the official canonical trae-cli executable when it exposes ACP', async () => {
       callExecFile('trae-cli version 0.120.52');
       callExecFile(TRAE_ACP_HELP);
+      const probeEnv = { ...process.env, PATH: '/custom/node/bin:/usr/bin' };
 
       const { detectHeterogeneousCliCommand } = await importModule();
-      const status = await detectHeterogeneousCliCommand('trae', '/usr/local/bin/trae-cli');
+      const status = await detectHeterogeneousCliCommand(
+        'trae',
+        '/usr/local/bin/trae-cli',
+        probeEnv,
+      );
 
       expect(status).toMatchObject({
         available: true,
         path: '/usr/local/bin/trae-cli',
+        resolvedPathEnv: '/custom/node/bin:/usr/bin',
         version: '0.120.52',
       });
+      expect(execFileMock.mock.calls[0]![2]).toMatchObject({ env: probeEnv });
+      expect(execFileMock.mock.calls[1]![2]).toMatchObject({ env: probeEnv });
     });
 
     it('rejects the unrelated trae-cli trajectory runner by its missing ACP capability', async () => {

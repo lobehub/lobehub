@@ -524,7 +524,11 @@ describe('spawnAgent', () => {
       for await (const event of handle.events) events.push(event);
 
       await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
-      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith('trae', 'traecli');
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        'traecli',
+        expect.objectContaining({ PATH: process.env.PATH }),
+      );
       expect(spawnCalls[0]).toMatchObject({
         args: ['acp', 'serve', '--yolo', '--feature=test'],
         command: 'traecli',
@@ -563,6 +567,7 @@ describe('spawnAgent', () => {
       const handle = await spawnAgent({
         agentType: 'trae',
         command: 'trae-cli',
+        env: { PATH: '/custom/node/bin' },
         operationId: 'op-trae',
         prompt: 'do a thing',
       });
@@ -574,7 +579,13 @@ describe('spawnAgent', () => {
       expect(spawnCalls[0]).toMatchObject({
         args: ['acp', 'serve', '--yolo'],
         command: '/usr/local/bin/trae-cli',
+        options: { env: { PATH: '/custom/node/bin' } },
       });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        'trae-cli',
+        expect.objectContaining({ PATH: '/custom/node/bin' }),
+      );
     } finally {
       killSpy.mockRestore();
     }
@@ -593,7 +604,11 @@ describe('spawnAgent', () => {
         prompt: 'do a thing',
       }),
     ).rejects.toThrow('TRAE command does not expose the required ACP runtime: trae-cli');
-    expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith('trae', 'trae-cli');
+    expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+      'trae',
+      'trae-cli',
+      expect.objectContaining({ PATH: process.env.PATH }),
+    );
     expect(spawnCalls).toHaveLength(0);
   });
 

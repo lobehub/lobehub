@@ -13,7 +13,6 @@ import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
-import { detectHeterogeneousCliCommand } from './resolveCliCommand';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 
 export interface SpawnAgentOptions {
@@ -736,7 +735,9 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
       workingDirectory: cwd,
     });
   }
-  const commandStatus = await detectHeterogeneousCliCommand('trae', requestedCommand);
+  const childEnv = { ...process.env, ...options.env };
+  const { detectHeterogeneousCliCommand } = await import('./resolveCliCommand');
+  const commandStatus = await detectHeterogeneousCliCommand('trae', requestedCommand, childEnv);
   if (!commandStatus.available || !commandStatus.path) {
     throw new Error(`TRAE command does not expose the required ACP runtime: ${requestedCommand}`);
   }
@@ -758,9 +759,8 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
     commandPath: commandStatus.path,
     cwd,
     env: {
-      ...process.env,
+      ...childEnv,
       ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
-      ...options.env,
     },
     initialModel: options.initialModel,
     onEvents: (events) => {
