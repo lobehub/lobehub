@@ -210,7 +210,10 @@ const InboxModalContent = memo(() => {
 
   const handleMarkAsRead = useCallback(
     async (id: string) => {
-      listHandleRef.current?.optimisticRemove(id);
+      // A row read in the unread view leaves the list; in the All view it
+      // STAYS (as combined history), so removing it there would drop it from
+      // the cache until a later refresh — let the revalidation flip its state.
+      if (readStatus !== 'all') listHandleRef.current?.optimisticRemove(id);
       try {
         await notificationService.markAsRead([id]);
         refreshInbox();
@@ -220,7 +223,7 @@ const InboxModalContent = memo(() => {
         refreshInbox();
       }
     },
-    [refreshInbox, t],
+    [readStatus, refreshInbox, t],
   );
 
   const handleArchive = useCallback(

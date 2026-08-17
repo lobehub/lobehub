@@ -26,13 +26,14 @@ const notificationWriteProcedure = notificationProcedure.use(
 );
 
 /**
- * Live incoming transfer requests for the current workspace context (empty in
- * personal mode). Call this BEFORE snapshotting any notification counts:
- * `listPendingForUser` lazily expires overdue transfers (settling their linked
- * rows as read), so counting first would preserve a ghost unread row for a
- * request that this very call just expired.
+ * Live transfer requests rendered as inbox cards for this user — incoming
+ * (recipient answers) AND outgoing (initiator may withdraw), matching what
+ * `Content` renders from `listMine`. Empty in personal mode. Call this BEFORE
+ * snapshotting any notification counts: `listPendingForUser` lazily expires
+ * overdue transfers (settling their linked rows as read), so counting first
+ * would preserve a ghost unread row for a request this very call just expired.
  */
-const listLiveIncomingTransfers = async (ctx: {
+const listLiveTransferCards = async (ctx: {
   serverDB: ConstructorParameters<typeof ResourceTransferRequestModel>[0];
   userId: string;
   workspaceId?: string | null;
@@ -40,8 +41,7 @@ const listLiveIncomingTransfers = async (ctx: {
   if (!ctx.workspaceId) return [];
 
   const transferModel = new ResourceTransferRequestModel(ctx.serverDB, ctx.workspaceId);
-  const live = await transferModel.listPendingForUser(ctx.userId);
-  return live.filter((request) => request.recipientId === ctx.userId);
+  return transferModel.listPendingForUser(ctx.userId);
 };
 
 export const notificationRouter = router({
@@ -59,22 +59,24 @@ export const notificationRouter = router({
     // The pending category is action-driven, not read-driven: while a
     // transfer request awaits the user, its count must keep prompting even
     // after the linked inbox row was read. Swap the linked rows out of the
-    // row-based counts and count the live incoming requests themselves.
-    const incoming = await listLiveIncomingTransfers(ctx);
+    // row-based counts and count the live request cards themselves —
+    // outgoing (withdrawable) cards render in the unread view too, so they
+    // count the same as incoming ones.
+    const cards = await listLiveTransferCards(ctx);
     const counts = await ctx.notificationModel.getNavigationCounts();
-    if (incoming.length === 0) return counts;
+    if (cards.length === 0) return counts;
 
     const linked = await ctx.notificationModel.countLinkedToTransfers(
-      incoming.map((request) => request.id),
+      cards.map((request) => request.id),
     );
-    // Each live incoming request renders exactly one UNREAD card, replacing
+    // Each live request renders exactly one UNREAD card, replacing
     // its linked row (when one exists) in every tally — a request whose
     // linked row is missing or archived still shows a card, so it must still
     // count, while a linked row that was read is suppressed by the card and
     // must leave the read tally it would otherwise inflate.
     const linkedRead = linked.total - linked.unread;
-    const unreadDelta = incoming.length - linked.unread;
-    const totalDelta = incoming.length - linked.total;
+    const unreadDelta = cards.length - linked.unread;
+    const totalDelta = cards.length - linked.total;
     const pending = counts.find((item) => item.category === 'pending');
     if (pending) {
       pending.unreadCount = Math.max(0, pending.unreadCount + unreadDelta);
@@ -120,14 +122,14 @@ export const notificationRouter = router({
     // The header bell must keep prompting while a transfer awaits the user —
     // even if the linked row was read/archived or its delivery failed — so
     // apply the same live-transfer reconciliation as `navigationCounts`.
-    const incoming = await listLiveIncomingTransfers(ctx);
+    const cards = await listLiveTransferCards(ctx);
     const unread = await ctx.notificationModel.getUnreadCount();
-    if (incoming.length === 0) return unread;
+    if (cards.length === 0) return unread;
 
     const linked = await ctx.notificationModel.countLinkedToTransfers(
-      incoming.map((request) => request.id),
+      cards.map((request) => request.id),
     );
-    return Math.max(0, unread + incoming.length - linked.unread);
+    return Math.max(0, unread + cards.length - linked.unread);
   }),
 });
 
