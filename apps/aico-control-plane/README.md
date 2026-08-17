@@ -65,6 +65,16 @@ moz -i # status includes control-plane /health
 
 Open **<http://127.0.0.1:3020/>** — design-system panel with login. Auth is proxied to the product app; tRPC stays on 3020.
 
+## Production image (CI)
+
+Build from repo root (never bind-mount git over `/app`):
+
+```bash
+docker build -f apps/aico-control-plane/Dockerfile -t panachat-control-plane .
+```
+
+Canary/Preview Actions push `ghcr.io/<owner>/panachat-control-plane:<sha>` and the remote deploy script recreates `${PANACHAT_STACK}-control-plane`. Set `AICO_CONTROL_PLANE_PUBLIC_URL` to the browser origin (kamyar: `https://adchat.panafor.com`).
+
 ## Optional Vite HMR (3021)
 
 Only for UI development with hot reload:
