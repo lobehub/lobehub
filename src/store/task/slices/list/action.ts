@@ -6,12 +6,7 @@ import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
-import type {
-  TaskGroupItem,
-  TaskListItem,
-  TaskListVisibilityFilter,
-  TaskViewMode,
-} from './initialState';
+import type { TaskGroupItem, TaskListItem, TaskListVisibilityFilter } from './initialState';
 
 /**
  * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
@@ -123,10 +118,6 @@ export class TaskListSliceActionImpl {
       false,
       'setListVisibility',
     );
-  };
-
-  setViewMode = (mode: TaskViewMode): void => {
-    this.#set({ viewMode: mode }, false, 'setViewMode');
   };
 
   useFetchTaskGroupList = (

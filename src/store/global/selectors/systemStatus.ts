@@ -114,6 +114,8 @@ const taskListViewOptions = (s: GlobalState) =>
     subGroupBy: 'none',
   };
 
+const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
+
 // Default the inline composer to collapsed so a populated task list keeps the
 // records at the top of the fold; the empty-state hero still shows the full
 // composer, and the header "+" expands it inline on demand.
@@ -506,6 +508,7 @@ export const systemStatusSelectors = {
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
+  taskListViewMode,
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,

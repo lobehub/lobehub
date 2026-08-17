@@ -4,8 +4,6 @@ import type { taskService } from '@/services/task';
 export type TaskListItem = Awaited<ReturnType<typeof taskService.list>>['data'][number];
 export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['data'][number];
 
-export type TaskViewMode = 'kanban' | 'list';
-
 /**
  * Top-of-list visibility chip selection:
  *   - 'all'       → don't narrow further, show every visible task
@@ -46,7 +44,6 @@ export interface TaskListSliceState {
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
-  viewMode: TaskViewMode;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
@@ -60,5 +57,4 @@ export const initialTaskListSliceState: TaskListSliceState = {
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,
-  viewMode: 'list',
 };

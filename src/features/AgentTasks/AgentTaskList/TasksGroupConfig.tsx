@@ -13,8 +13,9 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useGlobalStore } from '@/store/global';
+import type { TaskViewMode } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
 
@@ -37,8 +38,8 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
   const { t } = useTranslation('chat');
-  const viewMode = useTaskStore(taskListSelectors.viewMode);
-  const setViewMode = useTaskStore((s) => s.setViewMode);
+  const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
     () => [
       { label: t('taskList.groupBy.none'), value: 'none' },
@@ -173,7 +174,9 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           list: { display: 'flex', width: '100%' },
           tab: { flex: 1 },
         }}
-        onChange={(key) => setViewMode(key as 'kanban' | 'list')}
+        onChange={(key) =>
+          updateSystemStatus({ taskListViewMode: key as TaskViewMode }, 'updateTaskListViewMode')
+        }
       />
       {viewMode === 'list' && (
         <Form
