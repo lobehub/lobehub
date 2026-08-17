@@ -38,6 +38,7 @@ import {
   type AgentGroupConfig,
   type AgentManagementContext,
   type BotPlatformContext,
+  buildExpertiseContextSnapshot,
   type LobeToolManifest,
   SkillEngine,
   type ToolExecutor,
@@ -103,6 +104,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
+import { ExpertiseModel } from '@/database/models/expertise';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -168,7 +170,6 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
-import { ExpertiseContextService } from '@/server/services/expertise/context';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -4505,17 +4506,10 @@ export class AiAgentService {
     const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
     let expertise;
     try {
-      expertise = await new ExpertiseContextService(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).buildSnapshot(expertiseAgentId);
+      const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
     } catch (error) {
-      log(
-        'execAgent: failed to build expertise snapshot for agent %s: %O',
-        expertiseAgentId,
-        error,
-      );
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
     }
 
     // 19. Create operation using AgentRuntimeService

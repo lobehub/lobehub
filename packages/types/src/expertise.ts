@@ -56,6 +56,9 @@ export interface ExpertiseLessonSection {
   key: ExpertiseLessonSectionKey;
 }
 
+/** Schema version for operation-scoped expertise snapshots. */
+export const EXPERTISE_CONTEXT_SCHEMA_VERSION = 1;
+
 /** Immutable expertise context captured once when an agent operation starts. */
 export interface ExpertiseContextSnapshot {
   /** Hash of the rendered context, used to verify that every step sees the same snapshot. */

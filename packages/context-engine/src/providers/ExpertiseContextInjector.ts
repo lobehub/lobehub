@@ -1,4 +1,8 @@
+import type { ExpertisePromptDomain, ExpertisePromptLesson } from '@lobechat/prompts';
+import { promptExpertise } from '@lobechat/prompts';
 import type { ExpertiseContextSnapshot } from '@lobechat/types';
+import { EXPERTISE_CONTEXT_SCHEMA_VERSION } from '@lobechat/types';
+import { Md5 } from 'ts-md5';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
@@ -14,6 +18,47 @@ declare module '../types' {
 export interface ExpertiseContextInjectorConfig {
   expertise?: ExpertiseContextSnapshot;
 }
+
+interface ExpertiseContextDomain extends ExpertisePromptDomain {
+  id: string;
+}
+
+interface ExpertiseContextLesson extends ExpertisePromptLesson {
+  id: string;
+}
+
+export interface ExpertiseContextSource {
+  listDomainsForAgent: (
+    agentId: string,
+  ) => Promise<Array<{ domain: Omit<ExpertiseContextDomain, 'lessons'> }>>;
+  listLessons: (domainId: string) => Promise<ExpertiseContextLesson[]>;
+}
+
+export const buildExpertiseContextSnapshot = async (
+  source: ExpertiseContextSource,
+  agentId: string,
+): Promise<ExpertiseContextSnapshot | undefined> => {
+  const bindings = await source.listDomainsForAgent(agentId);
+  if (bindings.length === 0) return undefined;
+
+  const domains = await Promise.all(
+    bindings.map(async ({ domain }) => ({
+      ...domain,
+      lessons: await source.listLessons(domain.id),
+    })),
+  );
+  const renderedContext = promptExpertise(domains);
+
+  return {
+    contentHash: Md5.hashStr(renderedContext),
+    domains: domains.map((domain) => ({
+      id: domain.id,
+      lessonIds: domain.lessons.map(({ id }) => id),
+    })),
+    renderedContext,
+    schemaVersion: EXPERTISE_CONTEXT_SCHEMA_VERSION,
+  };
+};
 
 export class ExpertiseContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'ExpertiseContextInjector';
