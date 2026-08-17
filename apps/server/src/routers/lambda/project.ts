@@ -19,7 +19,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
 const projectWriteProcedure = projectProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
-const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 const projectIdentifierInput = z
   .string()
   .trim()

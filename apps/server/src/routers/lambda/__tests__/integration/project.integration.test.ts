@@ -117,4 +117,16 @@ describe('Project Router Integration', () => {
       );
     },
   );
+
+  it('accepts underscores in project slugs', async () => {
+    const project = await caller.create({
+      identifier: 'VALID',
+      name: 'Valid project',
+      slug: 'team_launch',
+    });
+    expect(project.data.slug).toBe('team_launch');
+
+    const updated = await caller.update({ id: project.data.id, slug: 'team_launch_v2' });
+    expect(updated.data.slug).toBe('team_launch_v2');
+  });
 });
