@@ -119,19 +119,21 @@ const Content = memo<ContentProps>(
       [mutateTransfers, onRefreshInbox],
     );
 
-    // The VList renders `visibleNotifications`, so the bottom index must be
-    // compared against the rendered count — measuring against the unfiltered
-    // page length would stall pagination once suppressed rows accumulate.
+    // The VList renders the live transfer items followed by
+    // `visibleNotifications`, so the bottom index must be compared against the
+    // rendered count — measuring against the unfiltered page length would
+    // stall pagination once suppressed rows accumulate.
     const visibleCount = visibleNotifications.length;
+    const renderedCount = liveRequests.length + visibleCount;
     const handleScroll = useCallback(() => {
       const ref = virtuaRef.current;
       if (!ref || !hasMore || isValidating || error) return;
 
       const bottomVisibleIndex = ref.findItemIndex(ref.scrollOffset + ref.viewportSize);
-      if (bottomVisibleIndex + 5 > visibleCount) {
+      if (bottomVisibleIndex + 5 > renderedCount) {
         setSize((prev) => prev + 1);
       }
-    }, [error, hasMore, isValidating, visibleCount, setSize]);
+    }, [error, hasMore, isValidating, renderedCount, setSize]);
 
     // When every loaded row is suppressed by a live request there is no VList
     // to scroll, so pagination would never advance — fetch the next page until
@@ -162,44 +164,44 @@ const Content = memo<ContentProps>(
       );
     }
 
-    const transferItems =
-      currentUserId &&
-      liveRequests.map((request) => (
-        <Flexbox className={styles.item} key={request.id}>
-          <TransferRequestItem
-            currentUserId={currentUserId}
-            request={request}
-            onSettled={handleTransferSettled}
-          />
-        </Flexbox>
-      ));
+    // Rendered INSIDE the VList (not as fixed siblings): the modal caps its
+    // height and hides overflow, so cards outside the scroll container would
+    // clip once several transfers (with their manifest rows) stack up.
+    const transferItems = currentUserId
+      ? liveRequests.map((request) => (
+          <Flexbox className={styles.item} key={request.id}>
+            <TransferRequestItem
+              currentUserId={currentUserId}
+              request={request}
+              onSettled={handleTransferSettled}
+            />
+          </Flexbox>
+        ))
+      : [];
 
-    if (visibleNotifications.length === 0) {
+    if (visibleNotifications.length === 0 && transferItems.length === 0) {
       return (
         <Flexbox height="100%">
-          {transferItems}
-          {liveRequests.length === 0 && (
-            <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
-              <Icon color={cssVar.colorTextQuaternary} icon={BellOffIcon} size={40} />
-              <Text type="secondary">
-                {t(
-                  isRead === undefined
-                    ? 'inbox.empty'
-                    : isRead
-                      ? 'inbox.emptyRead'
-                      : 'inbox.emptyUnread',
-                )}
-              </Text>
-            </Flexbox>
-          )}
+          <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
+            <Icon color={cssVar.colorTextQuaternary} icon={BellOffIcon} size={40} />
+            <Text type="secondary">
+              {t(
+                isRead === undefined
+                  ? 'inbox.empty'
+                  : isRead
+                    ? 'inbox.emptyRead'
+                    : 'inbox.emptyUnread',
+              )}
+            </Text>
+          </Flexbox>
         </Flexbox>
       );
     }
 
     return (
       <Flexbox height="100%">
-        {transferItems}
         <VList ref={virtuaRef} style={{ flex: 1 }} onScroll={handleScroll}>
+          {transferItems}
           {visibleNotifications.map((item) => (
             <Flexbox className={styles.item} key={item.id}>
               <NotificationItem
