@@ -3,9 +3,26 @@ import path from 'node:path';
 
 import { app } from 'electron';
 
+import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('modules:cliEmbedding');
+
+/**
+ * Server the wrapper falls back to, as a shell default rather than an override.
+ *
+ * The embedded CLI resolves its server from `LOBEHUB_SERVER` first, then its own
+ * stored settings, then a compile-time official URL. The spawn paths inside the
+ * app (`remoteFileUploadSrv`, the hetero agents) always inject the variable, but
+ * these wrappers are what a user runs by hand from a terminal — and they carried
+ * no environment at all, so the CLI fell through to the bundled default. In a
+ * distribution built against a different server that default is the wrong host.
+ *
+ * Assigned only when unset, deliberately. Exporting it unconditionally would
+ * silently outrank `login --server <url>`, which is a legitimate thing to do and
+ * would then appear to succeed against the wrong deployment.
+ */
+const SERVER_ENV_VAR = 'LOBEHUB_SERVER';
 
 /**
  * Resolve the correct Electron binary path per platform.
@@ -54,6 +71,7 @@ export async function generateCliWrapper(): Promise<void> {
     const content = [
       '@echo off',
       'set ELECTRON_RUN_AS_NODE=1',
+      `if "%${SERVER_ENV_VAR}%"=="" set "${SERVER_ENV_VAR}=${OFFICIAL_CLOUD_SERVER}"`,
       `"${electronBin}" "${cliScript}" %*`,
     ].join('\r\n');
 
@@ -69,6 +87,8 @@ export async function generateCliWrapper(): Promise<void> {
   } else {
     const content = [
       '#!/bin/sh',
+      `: "\${${SERVER_ENV_VAR}:=${OFFICIAL_CLOUD_SERVER}}"`,
+      `export ${SERVER_ENV_VAR}`,
       `ELECTRON_RUN_AS_NODE=1 exec "${electronBin}" "${cliScript}" "$@"`,
     ].join('\n');
 
