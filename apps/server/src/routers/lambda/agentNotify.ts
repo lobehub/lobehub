@@ -80,6 +80,11 @@ const NotifySchema = z.object({
    * in-place, keeping a single bubble in the UI.
    */
   messageId: z.string().optional(),
+  /**
+   * Server-assigned operation identity for this callback. Remote CLI/Desktop
+   * clients propagate it through LOBEHUB_OPERATION_ID; assistant callbacks
+   * need it to distinguish concurrent group members sharing one topic.
+   */
   operationId: z.string().optional(),
   /**
    * Role of the message to write:
