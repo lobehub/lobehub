@@ -287,7 +287,7 @@ export const getCodexPermissionProfile = (
     }
     case 'ask': {
       return {
-        approvalPolicy: 'on-request',
+        approvalPolicy: 'untrusted',
         approvalsReviewer: 'user',
         sandbox: 'workspace-write',
       };

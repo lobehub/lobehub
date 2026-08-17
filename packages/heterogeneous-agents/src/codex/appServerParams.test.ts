@@ -104,10 +104,7 @@ describe('Codex app-server payload builders', () => {
       'full-access',
       { approvalPolicy: 'never', approvalsReviewer: 'user', sandbox: 'danger-full-access' },
     ],
-    [
-      'ask',
-      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' },
-    ],
+    ['ask', { approvalPolicy: 'untrusted', approvalsReviewer: 'user', sandbox: 'workspace-write' }],
     [
       'auto-review',
       {

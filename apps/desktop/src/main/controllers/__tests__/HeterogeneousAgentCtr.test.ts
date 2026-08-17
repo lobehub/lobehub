@@ -1782,7 +1782,7 @@ describe('HeterogeneousAgentCtr', () => {
         expect.objectContaining({
           allowExecFallback: false,
           threadParams: expect.objectContaining({
-            approvalPolicy: 'on-request',
+            approvalPolicy: 'untrusted',
             approvalsReviewer: 'user',
             model: 'gpt-5.5-codex',
             sandbox: 'workspace-write',
