@@ -1,3 +1,5 @@
+import { BRANDING_NAME, LOBE_CHAT_CLOUD } from '@lobechat/business-const';
+import { OFFICIAL_URL } from '@lobechat/const/url';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
@@ -700,13 +702,23 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         },
       },
       info: {
-        description:
-          'LobeHub platform REST API. Generated from `packages/openapi` routes — do not edit openapi.yml by hand; run `bun generate:openapi` instead.',
-        title: 'LobeHub API',
+        description: `${BRANDING_NAME} platform REST API. Generated from \`packages/openapi\` routes — do not edit openapi.yml by hand; run \`bun generate:openapi\` instead.`,
+        title: `${BRANDING_NAME} API`,
         version: '1.0.0',
       },
       security: [{ bearerAuth: [] }],
-      servers: [{ description: 'LobeHub Cloud', url: 'https://app.lobehub.com' }],
+      // `/openapi.json` and `/docs` are PUBLIC and unauthenticated (see app.ts —
+      // `userAuthMiddleware` sets a null userId rather than throwing, and
+      // neither route mounts `requireAuth`). So this document is the most
+      // widely readable thing the deployment serves, and it was announcing
+      // someone else's product and origin to anyone who asked.
+      //
+      // The url reads the RAW env var on purpose. `appEnv.APP_URL` always
+      // resolves — to a localhost default when unset — which would rewrite the
+      // committed `openapi.yml` to `http://localhost:3210` every time it is
+      // regenerated offline. Only an explicitly configured APP_URL should
+      // outrank the official origin.
+      servers: [{ description: LOBE_CHAT_CLOUD, url: process.env.APP_URL || OFFICIAL_URL }],
     },
   });
 

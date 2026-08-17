@@ -187,6 +187,20 @@ export const AGENT_GROUP_CREATION_ENABLED = true;
 export const HOME_PORTRAIT_ENABLED = true;
 
 /**
+ * Service identifier returned by `GET /api/v1/health`.
+ *
+ * That endpoint is public and unauthenticated, so this string is readable by
+ * anyone who can reach the deployment — which makes it a branding surface, not
+ * an internal name. A slot rather than a literal so a white-label distribution
+ * does not answer health checks with someone else's product name.
+ *
+ * The default keeps the historical `lobe-chat-api` value: nothing in this repo
+ * reads it, but external monitoring may match on it, so upstream's observable
+ * output stays byte-identical.
+ */
+export const API_SERVICE_ID = 'lobe-chat-api';
+
+/**
  * The infrastructure the cloud sandbox actually runs on, as told to the model.
  *
  * A slot rather than a literal because this is a deployment fact, not a product

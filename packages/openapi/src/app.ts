@@ -1,3 +1,4 @@
+import { API_SERVICE_ID, BRANDING_NAME } from '@lobechat/business-const';
 import { Scalar } from '@scalar/hono-api-reference';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -42,7 +43,9 @@ app.onError((error: Error, c) => {
 // Health check endpoint
 app.get('/health', describeRoute({ summary: 'Health check', tags: ['health'] }), (c) => {
   return c.json({
-    service: 'lobe-chat-api',
+    // Unauthenticated, so this identifier is public. Slotted rather than
+    // hardcoded for the same reason as the spec's title.
+    service: API_SERVICE_ID,
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
@@ -93,7 +96,7 @@ app.get('/docs', (c, next) => {
     customCss: SCALAR_CUSTOM_CSS,
     favicon: '/favicon.ico',
     ...(locale ? { localization: { locale } } : {}),
-    pageTitle: 'LobeHub API',
+    pageTitle: `${BRANDING_NAME} API`,
     // 'none' keeps the runtime bundle from injecting its own theme stylesheet
     // after our customCss, which would override every variable we set.
     theme: 'none',

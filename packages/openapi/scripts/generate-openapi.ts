@@ -71,6 +71,36 @@ if (missing.length > 0 || extra.length > 0) {
 }
 
 // ---------- Emit ----------
+
+// `spec.info.title` and `servers[].description` now come from the branding slot
+// (`@lobechat/business-const`), which a white-label distribution overrides
+// through pnpm. That makes this generated file brand-dependent: run from such a
+// workspace it would write the distribution's product name into a tracked file
+// and offer it up for commit.
+//
+// Refuse instead. The committed artifact must always be the upstream document —
+// downstream builds get their branding from the RUNTIME `/api/v1/openapi.json`,
+// which is rebuilt from the live routes on first request and never read from
+// here. Nothing legitimate needs to regenerate this file under custom branding.
+// Both modes have to bail out, for opposite reasons: writing would leak the
+// product name into the tracked file, and `--check` would compare a branded
+// document against the upstream one and report spurious drift forever.
+const { isCustomBranding } = await import('@lobechat/const');
+
+if (isCustomBranding) {
+  if (process.argv.includes('--check')) {
+    console.log('• openapi.yml drift check skipped: custom branding slot in this workspace.');
+    process.exit(0);
+  }
+  console.error(
+    '✗ refusing to write openapi.yml: this workspace resolves a custom branding slot,\n' +
+      "  so the output would carry that distribution's product name into a tracked file.\n" +
+      '  Regenerate from an unmodified checkout. The runtime /api/v1/openapi.json is\n' +
+      '  built from the live routes and already reflects local branding.',
+  );
+  process.exit(1);
+}
+
 const output = YAML.stringify(spec, { aliasDuplicateObjects: false });
 
 if (process.argv.includes('--check')) {
