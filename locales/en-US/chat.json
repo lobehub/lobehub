@@ -640,7 +640,7 @@
   "heteroAgent.codexPermission.mode.custom": "Custom CLI arguments",
   "heteroAgent.codexPermission.mode.full-access": "Full access",
   "heteroAgent.codexPermission.mode.read-only": "Read only",
-  "heteroAgent.codexPermission.nextRun": "The new permission mode applies to the next run.",
+  "heteroAgent.codexPermission.nextRun": "The new permission mode applies to the next run (updated).",
   "heteroAgent.codexPermission.updateFailed": "Couldn’t update the Codex permission mode.",
   "heteroAgent.codexQuota.doesNotExpire": "Does not expire",
   "heteroAgent.codexQuota.expiresIn": "Expires in {{duration}}",
