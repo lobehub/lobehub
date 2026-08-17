@@ -258,6 +258,15 @@ gateway/device route, then assert the complete persisted tree: original owner
 user, target assistant/tool call, tool result, and target final response. Also
 assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
+### L-E18 — 从「没有默认导入」推断某个 composer 表面是死代码
+
+**Wrong approach:** 改动技能行这类被 ActionBar 复用的组件后，grep `ActionBar/Tools` 的默认导入没有命中，就断定该表面未挂载，只验证 `+` 菜单一条路径。
+
+**Why it fails:** ActionBar 的表面不是靠直接 import 挂载的，而是靠 action key 注册表 + 各路由自己的 `leftActions` 数组启用。`ActionBar/config` 里 `tools: Tools` 一直注册着，真正决定它是否渲染的是
+`src/routes/(main)/**/MainChatInput` 里的 `leftActions`—— 群聊 composer 就启用了 `'tools'`，走的是 `PopoverContent → ToolsList` 这条与 `+` 菜单不同的组合路径。漏掉它会让一次绿色的验证只覆盖一半用户可见面。
+
+**Correct approach:** 改动任何被 ActionBar 复用的组件后，先枚举 action key 的真实启用点（grep 各路由的 `leftActions` 数组，而不是组件的 import），对每个启用该 key 的表面分别取证；确实不打算验的表面要显式标记未测。
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -516,6 +525,14 @@ server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` an
 restart before diagnosing anything. The restarted server is then yours to stop at
 teardown even though you did not start the original.
 
+**Same failure, third shape — files removed from the working tree still being served.**
+After a `git stash` used to capture a "before" frame, the dev server can keep serving the
+pre-stash transform: a file deleted from disk still answers **200** and the module body still
+contains the new code. Reloading the page does not help. Restart the process (and clear
+`node_modules/.vite`) before capturing, and gate the capture on a marker that cannot collide
+with unrelated identifiers — a component name like `SkillRow` also matches a CSS class such as
+`addSkillRow`, so a substring count "confirms" the wrong state.
+
 ---
 
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
@@ -572,6 +589,30 @@ rather than trusting the pass line. When it was skipped, apply the branch's SQL
 directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_STOP=1`
 — and treat the collision as a local multi-worktree artifact, never as a defect of
 the branch or of canary (the numbers get rebased on merge).
+
+### L-S10 — Judging popover/menu behaviour from a Chrome MCP tab (it is hidden)
+
+**Wrong approach:** drive the debug-proxy page through the Chrome MCP tools, click a
+popover trigger, read the DOM \~500ms later, see no popup, and conclude the trigger is
+broken — then bisect, revert a refactor, and write up a root cause from those readings.
+
+**Why it fails:** the MCP tab is not the foreground tab. Measured inside it:
+`document.visibilityState === 'hidden'`, `requestAnimationFrame` delivers **0 frames**,
+and `setInterval(16ms)` fires **once per second** (Chrome's background throttling). A
+base-ui popup still opens in its store and mounts in the DOM, but its entry transition
+never advances, so it sits at `data-starting-style` with `visibility: hidden` and zero
+size — indistinguishable from "the click did nothing". Anything else timed from that
+tab (perceived latency, "it landed 7 seconds later") is an artifact of the same
+throttling, not of the code under test.
+
+**Correct approach:** in an MCP tab, assert on **state**, not on visibility — the
+component's own store/props (`handle.store.state.open`, a probed React state), or DOM
+presence with `data-open`, never `visibility`/painted pixels or a rAF-timed measurement.
+Confirm the tab's own health first (`visibilityState`, a rAF frame count) before
+trusting any negative UI observation, and get behaviour that depends on animation or
+input timing confirmed in a foreground tab — the user's window, or a screenshot-based
+check that tolerates a frozen transition. A negative result from a hidden tab is not
+evidence of a defect.
 
 ## Historical source
 

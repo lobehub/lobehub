@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CacheRevalidate, CacheTag } from '@lobechat/types';
 import { MarketSDK } from '@lobehub/market-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -751,5 +752,35 @@ describe('MarketService', () => {
       const sdk = service.getSDK();
       expect(sdk).toBe((service as any).market);
     });
+  });
+});
+
+describe('MarketService.searchSkill', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * The skill store was the one browse surface hitting Market on every open and
+   * every page, so it alone went down when the upstream was throttled or a
+   * credential went stale — the MCP tab looked healthy through the same
+   * incidents only because it was served from this cache.
+   */
+  it('caches the catalogue like every other discover list', async () => {
+    const service = new MarketService();
+    const getSkillList = service.market.marketSkills.getSkillList as ReturnType<typeof vi.fn>;
+    getSkillList.mockResolvedValue({ currentPage: 1, items: [], totalPages: 1 });
+
+    await service.searchSkill({ page: 1, sort: 'installCount' });
+
+    expect(getSkillList).toHaveBeenCalledWith(
+      { page: 1, sort: 'installCount' },
+      expect.objectContaining({
+        next: expect.objectContaining({
+          revalidate: CacheRevalidate.List,
+          tags: expect.arrayContaining([CacheTag.Discover, CacheTag.Skills]),
+        }),
+      }),
+    );
   });
 });

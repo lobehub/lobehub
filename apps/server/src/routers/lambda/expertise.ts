@@ -1,13 +1,22 @@
 import { z } from 'zod';
 
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ExpertiseModel } from '@/database/models/expertise';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DomainDraftSchema, ExpertiseDomainService } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
-const expertiseProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+/**
+ * Workspace-scoped like every other content router: `wsCompatProcedure` resolves and
+ * authorizes `X-Workspace-Id` (membership in the cloud build), so the models below only
+ * ever see a workspace the caller actually belongs to.
+ */
+const expertiseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
@@ -62,6 +71,9 @@ const toMaturity = (s?: {
     usable: true as const,
   };
 };
+
+/** Anything that changes what the agent learns needs at least member standing in the workspace. */
+const expertiseWriteProcedure = expertiseProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
 export const expertiseRouter = router({
   /**
@@ -121,8 +133,7 @@ export const expertiseRouter = router({
             lastHitAt: l.lastHitAt,
             layer: l.layer,
             recent: l.recent,
-            /** Taught by the user directly (as opposed to distilled from practice). */
-            taughtByUser: l.createdByUserId != null,
+            taughtByUser: l.taughtByUser,
             title: l.title,
           })),
           outOfScope: domain.outOfScope,
@@ -207,14 +218,19 @@ export const expertiseRouter = router({
     }),
 
   /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
-  draftDomain: expertiseProcedure
+  draftDomain: expertiseWriteProcedure
     .input(z.object({ agentId: z.string(), brief: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.draftFromBrief(input)),
 
   /** Step 2 of creation: persist the reviewed anchor and bind it to the agent. */
-  createDomain: expertiseProcedure
+  createDomain: expertiseWriteProcedure
     .input(DomainDraftSchema.extend({ agentId: z.string(), brief: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.create(input)),
+
+  /** The user drops a direction; everything learned in it goes with it. */
+  deleteDomain: expertiseWriteProcedure
+    .input(z.object({ domainId: z.string() }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.deleteDomain(input.domainId)),
 
   /** How many past conversations a history warm-up would read. */
   countHistory: expertiseProcedure
@@ -224,26 +240,26 @@ export const expertiseRouter = router({
     })),
 
   /** The user teaches one lesson directly, in their own words. */
-  teachLesson: expertiseProcedure
+  teachLesson: expertiseWriteProcedure
     .input(z.object({ domainId: z.string(), text: z.string().min(1).max(2000) }))
     .mutation(async ({ ctx, input }) =>
       ctx.expertiseModel.teachLesson({ domainId: input.domainId, text: input.text }),
     ),
 
   /** The user corrects a lesson; the correction is versioned and joins the lesson body. */
-  reviseLesson: expertiseProcedure
+  reviseLesson: expertiseWriteProcedure
     .input(z.object({ lessonId: z.string(), text: z.string().min(1).max(2000) }))
     .mutation(async ({ ctx, input }) =>
       ctx.expertiseModel.reviseLesson(input.lessonId, input.text),
     ),
 
   /** The user asks it to forget a lesson. */
-  retireLesson: expertiseProcedure
+  retireLesson: expertiseWriteProcedure
     .input(z.object({ lessonId: z.string() }))
     .mutation(async ({ ctx, input }) => ctx.expertiseModel.retireLesson(input.lessonId)),
 
   /** Explicitly bootstraps expertise from conversations that existed before the domain did. */
-  ingestHistory: expertiseProcedure
+  ingestHistory: expertiseWriteProcedure
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const candidateCount = await ctx.expertiseIngestionService.countHistoricalTopics(
@@ -260,7 +276,7 @@ export const expertiseRouter = router({
     }),
 
   /** Dismisses an incorrect generated insight. */
-  dismissInsight: expertiseProcedure
+  dismissInsight: expertiseWriteProcedure
     .input(z.object({ insightId: z.string(), reason: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.expertiseModel.dismissInsight(input.insightId, input.reason);

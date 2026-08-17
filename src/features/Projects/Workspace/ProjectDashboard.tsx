@@ -144,6 +144,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const goals = useGoalStore(goalSelectors.goalList(goalScope));
   const goalSWR = useGoalStore((s) => s.useFetchGoals)(undefined, projectId);
   const coordinatorAgentId = detail.project.coordinatorAgentId;
+  const projectReference = detail.project.slug ?? projectId;
   const workSWR = useClientDataSWR(
     coordinatorAgentId
       ? workKeys.workspace(workspaceId, `project:${projectId}:${coordinatorAgentId}`)
@@ -181,7 +182,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               <Center gap={10}>
                 <Icon icon={TargetIcon} size={24} />
                 <Text type={'secondary'}>{t('overview.goalsEmpty')}</Text>
-                <Button onClick={() => navigate(getProjectGoalsPath(projectId))}>
+                <Button onClick={() => navigate(getProjectGoalsPath(projectReference))}>
                   {t('goals.create')}
                 </Button>
               </Center>
@@ -228,7 +229,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             action={t('overview.viewAllTasks')}
             count={activeTasks.length}
             title={t('overview.activeTasks')}
-            onAction={() => navigate(getProjectTasksPath(projectId))}
+            onAction={() => navigate(getProjectTasksPath(projectReference))}
           />
           {activeTasks.length === 0 ? (
             <Text style={{ paddingBlock: 16 }} type={'secondary'}>
@@ -301,7 +302,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
           {detail.project.status === 'reviewing' && (
             <Button
               icon={TriangleAlertIcon}
-              onClick={() => navigate(getProjectAcceptancePath(projectId))}
+              onClick={() => navigate(getProjectAcceptancePath(projectReference))}
             >
               {t('overview.reviewProject')}
             </Button>

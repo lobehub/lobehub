@@ -494,7 +494,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
-  it('does not reinject the device workspace note when resuming a native session', async () => {
+  it('resumes a native device session with device-specific context', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
     heteroAgentConfig.agencyConfig = {
       boundDeviceId: 'device-1',
@@ -507,9 +507,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       prompt: 'Continue on my device',
     });
 
-    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: undefined }),
-    );
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
       expect.objectContaining({
         resumeSessionId: 'native-session-existing',

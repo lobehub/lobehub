@@ -46,7 +46,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface WarmupCardProps {
   candidateCount?: number;
-  domainTitle: string;
+  /** The directions this warm-up is for; several when the overview has more than one fresh one. */
+  domainTitles: string[];
   warmup: ReturnType<typeof useHistoryWarmup>;
 }
 
@@ -54,8 +55,17 @@ interface WarmupCardProps {
  * 让它温习历史对话 —— 不是审批流：学到的立刻开始用，卡片只负责让「正在学」可感。
  * 单行布局：左边说明，右边动作 / 进度。后端不报进度，所以条是流动的，数字才是真实的。
  */
-const WarmupCard = memo<WarmupCardProps>(({ candidateCount, domainTitle, warmup }) => {
+const WarmupCard = memo<WarmupCardProps>(({ candidateCount, domainTitles, warmup }) => {
   const { t } = useTranslation('selfLearning');
+  // A history review reads every bound direction at once, so several fresh directions share
+  // one card — name them instead of pretending the review is about only the first.
+  const title =
+    domainTitles.length > 1
+      ? t('warmup.titleMulti', {
+          count: domainTitles.length,
+          names: domainTitles.join(t('warmup.namesSep')),
+        })
+      : t('warmup.title', { name: domainTitles[0] ?? '' });
 
   return (
     <Block padding={'12px 16px'} variant={'outlined'}>
@@ -63,7 +73,7 @@ const WarmupCard = memo<WarmupCardProps>(({ candidateCount, domainTitle, warmup 
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon icon={GraduationCapIcon} size={15} />
-            <Text weight={600}>{t('warmup.title', { name: domainTitle })}</Text>
+            <Text weight={600}>{title}</Text>
           </Flexbox>
           <Text fontSize={12.5} type={'secondary'}>
             {warmup.phase === 'idle' &&

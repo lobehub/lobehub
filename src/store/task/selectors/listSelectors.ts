@@ -13,8 +13,6 @@ const scheduledTaskListTotal = (s: TaskStoreState) => s.scheduledTasksTotal;
 
 const isScheduledTaskListInit = (s: TaskStoreState) => s.isScheduledTaskListInit;
 
-const viewMode = (s: TaskStoreState) => s.viewMode;
-
 const listVisibility = (s: TaskStoreState) => s.listVisibility;
 
 const statusDisplayMap: Record<string, string> = {
@@ -65,5 +63,4 @@ export const taskListSelectors = {
   taskGroups,
   taskList,
   taskListTotal,
-  viewMode,
 };

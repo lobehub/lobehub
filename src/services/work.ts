@@ -11,6 +11,7 @@ import type {
   WorkVersionEventItem,
   WorkVersionEventMap,
   WorkVersionItem,
+  WorkVisibility,
 } from '@lobechat/types';
 
 import { mutate } from '@/libs/swr';
@@ -74,6 +75,7 @@ class WorkService {
     originAgentId?: string | null;
     provider?: WorkSkillProvider;
     type?: WorkType | null;
+    visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
     lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
 

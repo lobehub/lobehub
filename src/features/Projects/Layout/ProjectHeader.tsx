@@ -28,7 +28,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
     () =>
       projects.map((item) => ({
         avatar: item.avatar || item.name,
-        id: item.id,
+        id: item.slug ?? item.id,
         private: item.visibility === 'private',
         title: item.name,
       })),
@@ -36,7 +36,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   );
 
   const handleSelect = useCallback(
-    (projectId: string) => navigate(`/project/${projectId}`),
+    (projectSlug: string) => navigate(`/project/${projectSlug}`),
     [navigate],
   );
 
@@ -47,7 +47,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
         <SidebarHeaderSelectPopover
           content={
             <SwitcherMenu
-              activeId={project?.id}
+              activeId={project?.slug ?? project?.id}
               error={error}
               isLoading={isLoading && items.length === 0}
               items={items}

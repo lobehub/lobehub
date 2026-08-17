@@ -62,7 +62,7 @@ const CreateProjectContent = memo(() => {
     try {
       const project = await createProject(createInput);
       close();
-      navigate(`/project/${project.id}`);
+      navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
       console.error('Failed to create project', error);
       toast.error(t('operationFailed', { ns: 'common' }));

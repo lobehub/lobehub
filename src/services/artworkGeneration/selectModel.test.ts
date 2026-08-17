@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { selectAgentArtworkModel } from './utils';
+import { selectAgentArtworkModel } from './selectModel';
 
 const provider = (id: string, modelIds: string[]) =>
   ({

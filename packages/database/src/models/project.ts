@@ -1,6 +1,6 @@
 import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { knowledgeBases } from '../schemas/file';
@@ -133,6 +133,15 @@ export class ProjectModel {
       .select()
       .from(projects)
       .where(and(eq(projects.id, id), this.readable()))
+      .limit(1);
+    return project ?? null;
+  }
+
+  async findByIdOrSlug(reference: string) {
+    const [project] = await this.db
+      .select()
+      .from(projects)
+      .where(and(or(eq(projects.id, reference), eq(projects.slug, reference)), this.readable()))
       .limit(1);
     return project ?? null;
   }

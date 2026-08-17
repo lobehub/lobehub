@@ -19,11 +19,13 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
 const projectWriteProcedure = projectProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 const projectIdentifierInput = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
   .pipe(z.string().regex(PROJECT_IDENTIFIER_REGEX, 'Invalid project identifier'));
+const projectSlugInput = z.string().max(100).regex(PROJECT_SLUG_REGEX, 'Invalid project slug');
 
 function requireResult<T>(result: T | null, message = 'Project not found'): T {
   if (!result) throw new TRPCError({ code: 'NOT_FOUND', message });
@@ -103,7 +105,7 @@ export const projectRouter = router({
         description: z.string().optional(),
         identifier: projectIdentifierInput,
         name: z.string().min(1).max(255),
-        slug: z.string().max(100).optional(),
+        slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
     )
@@ -133,7 +135,7 @@ export const projectRouter = router({
 
   detail: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      const project = requireResult(await ctx.projectModel.findById(input.id));
+      const project = requireResult(await ctx.projectModel.findByIdOrSlug(input.id));
       const [agents, completionReviews, knowledgeBases, tasks] = await Promise.all([
         ctx.projectModel.listAgents(project.id),
         ctx.projectModel.listCompletionReviews(project.id),
@@ -151,7 +153,10 @@ export const projectRouter = router({
 
   find: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      return { data: requireResult(await ctx.projectModel.findById(input.id)), success: true };
+      return {
+        data: requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        success: true,
+      };
     } catch (error) {
       mapProjectError(error, 'find');
     }
@@ -265,7 +270,7 @@ export const projectRouter = router({
         avatar: z.string().nullish(),
         description: z.string().nullish(),
         name: z.string().min(1).max(255).optional(),
-        slug: z.string().max(100).nullish(),
+        slug: projectSlugInput.nullish(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
     )

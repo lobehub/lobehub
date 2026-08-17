@@ -135,6 +135,39 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
+    '%s serves the self-learning experience list and redirects legacy /rules links to it',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+      const listMatches = matchRoutes(routes, '/agent/agent-1/self-learning/domain-1/experience');
+      const lessonMatches = matchRoutes(
+        routes,
+        '/agent/agent-1/self-learning/domain-1/experience/lesson-1',
+      );
+      const rulesMatches = matchRoutes(routes, '/agent/agent-1/self-learning/domain-1/rules');
+      const legacyLessonMatches = matchRoutes(
+        routes,
+        '/agent/agent-1/self-learning/domain-1/rules/lesson-1',
+      );
+
+      expect(listMatches?.at(-1)?.route.path).toBe('experience');
+      expect(listMatches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+      expect(lessonMatches?.at(-1)?.route.path).toBe('experience/:lessonId');
+      expect(lessonMatches?.at(-1)?.params).toMatchObject({
+        domainId: 'domain-1',
+        lessonId: 'lesson-1',
+      });
+      // Legacy deep-links: `/rules` redirects relative to the domain route, i.e. to
+      // `/self-learning/:domainId/experience`; `/rules/:lessonId` keeps its own redirect page.
+      expect(rulesMatches?.at(-1)?.route.path).toBe('rules');
+      expect(
+        (rulesMatches?.at(-1)?.route.element as ReactElement<{ to: string }> | undefined)?.props.to,
+      ).toBe('../experience');
+      expect(rulesMatches?.at(-2)?.pathname).toBe('/agent/agent-1/self-learning/domain-1');
+      expect(legacyLessonMatches?.at(-1)?.route.path).toBe('rules/:lessonId');
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s exposes projects as task and goal containers only',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');

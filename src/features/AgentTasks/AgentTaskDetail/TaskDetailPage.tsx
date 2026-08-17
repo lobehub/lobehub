@@ -104,7 +104,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
         }}
       />
       <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
-        <WideScreenContainer>
+        <WideScreenContainer fullWidth paddingInline={16}>
           {isInitialLoading ? <TaskDetailSkeleton /> : <TaskDetailSections />}
         </WideScreenContainer>
       </Flexbox>

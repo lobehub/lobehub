@@ -233,30 +233,49 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentSelfLearningRouteMeta },
             path: 'self-learning',
           },
-          // 单个专长的完整拟合面板。做成路由而不是页内状态，深链才打得开。
+          // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]'),
-              'Desktop > Chat > Self Learning > Domain',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+                  'Desktop > Chat > Self Learning > Domain',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                index: true,
+              },
+              // 一个方向的全部经验（不折叠的完整清单）和单条经验详情。
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/experience'),
+                  'Desktop > Chat > Self Learning > Domain > Experience',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/agent/self-learning/[domainId]/experience/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Lesson',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience/:lessonId',
+              },
+              // Legacy `/rules` deep-links — kept so old links keep opening.
+              {
+                element: redirectElement('../experience'),
+                path: 'rules',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Legacy Rule',
+                ),
+                path: 'rules/:lessonId',
+              },
+            ],
             path: 'self-learning/:domainId',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules'),
-              'Desktop > Chat > Self Learning > Domain > Rules',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
-              'Desktop > Chat > Self Learning > Domain > Rule',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules/:lessonId',
           },
           {
             element: dynamicElement(

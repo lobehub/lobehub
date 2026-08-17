@@ -14,9 +14,10 @@ import {
 } from 'lucide-react';
 import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ExpertiseHabit } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 
@@ -26,10 +27,14 @@ import TeachBox from './TeachBox';
 
 interface HabitListProps {
   agentId: string;
+  /** Start with the "formed" group open — the full-list page has nothing to fold. */
+  defaultStableOpen?: boolean;
   /** Present when the list mixes several domains, so each row can say which one it belongs to. */
   domainTitles?: Record<string, string>;
   habits: (ExpertiseHabit & { domainId: string })[];
   onChanged: () => void;
+  /** Where the complete, unfolded list lives; renders a "view all" link in the header. */
+  viewAllPath?: string;
 }
 
 const RecentDots = memo<{ recent: ExpertiseHabit['recent'] }>(({ recent }) => {
@@ -68,7 +73,7 @@ interface HabitRowProps {
 
 const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, tier }) => {
   const { t } = useTranslation('selfLearning');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [teaching, setTeaching] = useState(false);
 
   const hint = useMemo(() => {
@@ -117,7 +122,14 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
     }
   };
 
-  const lessonPath = urlJoin('/agent', agentId, 'self-learning', habit.domainId, 'rules', habit.id);
+  const lessonPath = urlJoin(
+    '/agent',
+    agentId,
+    'self-learning',
+    habit.domainId,
+    'experience',
+    habit.id,
+  );
   const menu: DropdownItem[] = [
     {
       icon: <Icon icon={PencilIcon} />,
@@ -202,112 +214,121 @@ HabitRow.displayName = 'ExpertiseHabitRow';
  * 习惯清单，按可靠度分组：老毛病 → 还不稳 → 刚学的 展开，已养成 折起。
  * 值得看的都在上面，稳的收起来 —— 用户不需要有精力逐条过。
  */
-const HabitList = memo<HabitListProps>(({ agentId, domainTitles, habits, onChanged }) => {
-  const { t } = useTranslation('selfLearning');
-  const [search, setSearch] = useState('');
-  const [stableOpen, setStableOpen] = useState(false);
+const HabitList = memo<HabitListProps>(
+  ({ agentId, defaultStableOpen = false, domainTitles, habits, onChanged, viewAllPath }) => {
+    const { t } = useTranslation('selfLearning');
+    const [search, setSearch] = useState('');
+    const [stableOpen, setStableOpen] = useState(defaultStableOpen);
 
-  const counts = useMemo(() => countTiers(habits), [habits]);
-  const grouped = useMemo(() => {
-    const g: Record<HabitTier, HabitListProps['habits']> = {
-      fresh: [],
-      recurring: [],
-      shaky: [],
-      stable: [],
-    };
-    const q = search.trim().toLowerCase();
-    for (const h of habits) {
-      if (q && !h.title.toLowerCase().includes(q) && !h.code.toLowerCase().includes(q)) continue;
-      g[habitTier(h.recent)].push(h);
-    }
-    return g;
-  }, [habits, search]);
+    const counts = useMemo(() => countTiers(habits), [habits]);
+    const grouped = useMemo(() => {
+      const g: Record<HabitTier, HabitListProps['habits']> = {
+        fresh: [],
+        recurring: [],
+        shaky: [],
+        stable: [],
+      };
+      const q = search.trim().toLowerCase();
+      for (const h of habits) {
+        if (q && !h.title.toLowerCase().includes(q) && !h.code.toLowerCase().includes(q)) continue;
+        g[habitTier(h.recent)].push(h);
+      }
+      return g;
+    }, [habits, search]);
 
-  const stableVisible = stableOpen || !!search.trim();
+    const stableVisible = stableOpen || !!search.trim();
 
-  return (
-    <Flexbox gap={10}>
-      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
-        <Flexbox horizontal align={'baseline'} gap={8}>
-          <Text weight={600}>{t('habits.title')}</Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('habits.summary', counts)}
-          </Text>
-        </Flexbox>
-        <SearchBar
-          placeholder={t('habits.search')}
-          style={{ width: 200 }}
-          value={search}
-          variant={'filled'}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </Flexbox>
-      <Block padding={0} variant={'outlined'}>
-        {TIER_ORDER.filter((tier) => tier !== 'stable').map((tier) => {
-          const rows = grouped[tier];
-          if (rows.length === 0) return null;
-          return (
-            <Fragment key={tier}>
-              <Flexbox horizontal align={'center'} className={styles.groupHead} gap={8}>
-                <Text
-                  className={tier === 'recurring' ? styles.accent : undefined}
-                  fontSize={12.5}
-                  weight={600}
-                >
-                  {t(`tier.${tier}`)} {rows.length}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t(`tier.${tier}Sub`)}
-                </Text>
-              </Flexbox>
-              {rows.map((h) => (
-                <HabitRow
-                  agentId={agentId}
-                  domainTitle={domainTitles?.[h.domainId]}
-                  habit={h}
-                  key={h.id}
-                  tier={tier}
-                  onChanged={onChanged}
-                />
-              ))}
-            </Fragment>
-          );
-        })}
-        <Flexbox
-          horizontal
-          align={'center'}
-          as={'button'}
-          className={styles.groupHead}
-          gap={8}
-          justify={'space-between'}
-          style={{ background: undefined, color: 'inherit', cursor: 'pointer', width: '100%' }}
-          onClick={() => setStableOpen((v) => !v)}
-        >
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text fontSize={12.5} weight={600}>
-              {t('tier.stable')} {grouped.stable.length}
-            </Text>
+    return (
+      <Flexbox gap={10}>
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
+          <Flexbox horizontal align={'baseline'} gap={8}>
+            <Text weight={600}>{t('habits.title')}</Text>
             <Text fontSize={12} type={'secondary'}>
-              {t('tier.stableSub')}
+              {t('habits.summary', counts)}
             </Text>
           </Flexbox>
-          <Icon icon={stableVisible ? ChevronUpIcon : ChevronDownIcon} size={14} />
-        </Flexbox>
-        {stableVisible &&
-          grouped.stable.map((h) => (
-            <HabitRow
-              agentId={agentId}
-              domainTitle={domainTitles?.[h.domainId]}
-              habit={h}
-              key={h.id}
-              tier={'stable'}
-              onChanged={onChanged}
+          <Flexbox horizontal align={'center'} gap={8}>
+            {viewAllPath && (
+              <Link className={styles.viewAll} to={viewAllPath}>
+                {t('habits.viewAll', { count: habits.length })}
+              </Link>
+            )}
+            <SearchBar
+              placeholder={t('habits.search')}
+              style={{ width: 200 }}
+              value={search}
+              variant={'filled'}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          ))}
-      </Block>
-    </Flexbox>
-  );
-});
+          </Flexbox>
+        </Flexbox>
+        <Block padding={0} variant={'outlined'}>
+          {TIER_ORDER.filter((tier) => tier !== 'stable').map((tier) => {
+            const rows = grouped[tier];
+            if (rows.length === 0) return null;
+            return (
+              <Fragment key={tier}>
+                <Flexbox horizontal align={'center'} className={styles.groupHead} gap={8}>
+                  <Text
+                    className={tier === 'recurring' ? styles.accent : undefined}
+                    fontSize={12.5}
+                    weight={600}
+                  >
+                    {t(`tier.${tier}`)} {rows.length}
+                  </Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t(`tier.${tier}Sub`)}
+                  </Text>
+                </Flexbox>
+                {rows.map((h) => (
+                  <HabitRow
+                    agentId={agentId}
+                    domainTitle={domainTitles?.[h.domainId]}
+                    habit={h}
+                    key={h.id}
+                    tier={tier}
+                    onChanged={onChanged}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
+          <Flexbox
+            horizontal
+            align={'center'}
+            as={'button'}
+            className={styles.groupHead}
+            gap={8}
+            justify={'space-between'}
+            style={{ background: undefined, color: 'inherit', cursor: 'pointer', width: '100%' }}
+            onClick={() => setStableOpen((v) => !v)}
+          >
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Text fontSize={12.5} weight={600}>
+                {t('tier.stable')} {grouped.stable.length}
+              </Text>
+              <Text fontSize={12} type={'secondary'}>
+                {t('tier.stableSub')}
+              </Text>
+            </Flexbox>
+            <Icon icon={stableVisible ? ChevronUpIcon : ChevronDownIcon} size={14} />
+          </Flexbox>
+          {stableVisible &&
+            grouped.stable.map((h) => (
+              <HabitRow
+                agentId={agentId}
+                domainTitle={domainTitles?.[h.domainId]}
+                habit={h}
+                key={h.id}
+                tier={'stable'}
+                onChanged={onChanged}
+              />
+            ))}
+        </Block>
+      </Flexbox>
+    );
+  },
+);
 
 HabitList.displayName = 'ExpertiseHabitList';
 

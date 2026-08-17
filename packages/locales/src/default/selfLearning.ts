@@ -52,6 +52,14 @@ export default {
     'Here is the anchor it read out of your brief. Fix anything that is off — the filter decides which conversations it learns from; the layers and canon decide where lessons attach and what “coverage” means.',
   'create.reviewStep': 'Review the anchor',
 
+  'domain.delete': 'Delete',
+  'domain.deleteConfirm.content':
+    'Its {{habits}} habits and {{runs}} practice records in this direction go with it. This cannot be undone.',
+  'domain.deleteConfirm.ok': 'Delete',
+  'domain.deleteConfirm.title': 'Delete “{{name}}”?',
+  'domain.deleted': 'Direction deleted.',
+  'domain.deleteFailed': 'Could not delete the direction. Try again.',
+  'domain.more': 'More',
   'domains.meta': '{{habits}} habits · {{runs}} practices',
   'domains.title': 'Directions',
   'domains.word.fresh': 'just starting',
@@ -62,6 +70,12 @@ export default {
   'empty.desc':
     'Point it at something it does often, and lessons will grow out of repeated real practice.',
   'empty.title': 'Turn real work into expertise',
+
+  'experience.emptyDesc': 'Lessons show up here as it practices, or as you teach it.',
+  'experience.emptyTitle': 'Nothing learned in this direction yet',
+  'experience.notFound': 'This direction no longer exists',
+  'experience.subtitle': 'All {{count}} lessons in “{{name}}”, nothing folded',
+  'experience.title': 'All lessons',
 
   'habit.action.correct': 'Correct this',
   'habit.action.forget': 'Let it forget',
@@ -90,6 +104,7 @@ export default {
   'habits.search': 'Search habits',
   'habits.summary': '{{stable}} formed · {{shaky}} shaky · {{recurring}} recurring · {{fresh}} new',
   'habits.title': 'Its habits',
+  'habits.viewAll': 'All {{count}} lessons',
 
   'headline.multi.ok': 'Across {{domains}} directions, everything it learned has become a habit.',
   'headline.single.fresh':
@@ -121,7 +136,6 @@ export default {
   'profile.word.unstable': 'slips sometimes',
   'profile.word.weak': 'weak spot',
 
-  'rules.allTitle': 'All lessons',
   'rules.detail.domainUnavailable': 'Direction context could not be loaded',
   'rules.detail.examples': 'Where it was tested',
   'rules.detail.eyebrow': 'Lesson {{code}}',
@@ -149,6 +163,7 @@ export default {
   'taught.arc.recurring': 'slipped again',
   'taught.arc.shaky': 'goes either way',
   'taught.arc.used': 'used ✓',
+  'taught.showAll': 'Show all {{count}}',
   'taught.title': 'You taught it {{count}} things',
 
   'teachNew.domain': 'Direction',
@@ -178,5 +193,7 @@ export default {
     'No past conversations to review yet. It starts learning from the next matching one.',
   'warmup.running': 'Reviewing {{count}} past conversations… {{learned}} lessons so far',
   'warmup.start': 'Review {{count}} past conversations',
+  'warmup.namesSep': '”, “',
   'warmup.title': '“{{name}}” is ready',
+  'warmup.titleMulti': '“{{names}}” — {{count}} directions are ready',
 };
