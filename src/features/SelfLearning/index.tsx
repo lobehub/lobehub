@@ -149,8 +149,9 @@ const SelfLearning = memo(() => {
   const freshDomain = scoped.find((d) => d.runCount === 0 && d.lessons.length === 0);
   const showWarmup = warmup.phase !== 'idle' || !!freshDomain;
   const warmupTitle = freshDomain?.title ?? current?.title ?? scoped[0]?.title ?? '';
-  // Only the warm-up card needs the candidate count; keep it out of the portrait's own request
-  // so a slow count can never hold the whole page (tRPC batches concurrent queries together).
+  // Only the warm-up card needs the candidate count, so it is not requested at all once every
+  // direction has been practiced; when it is needed it batches with the portrait only on a
+  // warm SWR cache (cold loads resolve the portrait first).
   const { data: history } = useHistoryCount(showWarmup ? (activeAgentId ?? undefined) : undefined);
 
   const teach = async (text: string) => {

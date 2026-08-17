@@ -817,7 +817,17 @@ Page.addScriptToEvaluateOnNewDocument({
 ```
 
 Assert the clear actually ran in the new document (set a flag in that script and
-read it back) rather than trusting the removal. Pair it with a warm control run: if
+read it back) rather than trusting the removal.
+
+**The same cache tier inverts _request-gating_ assertions, not just rendered values.**
+When a component decides whether to fire a secondary query from data it reads out of
+the portrait/list query (`useX(shouldFetch ? id : undefined)`), the hydrated cache is
+what the gate sees on the mount frame. Change the underlying state with raw SQL and
+the gate still fires off the stale cached copy, so a correct gate measures as broken —
+and the reverse can hide a broken one. Drive the state change through the product
+write path (whose success handler revalidates), or re-measure after the list query has
+resolved once and the cache is reconciled; report the steady state, and record the
+stale frame separately if you observed it. Pair it with a warm control run: if
 the warm run renders data while the request is held paused and the cold run shows
 the skeleton, the cache tier is proven to be what the render reads.
 
@@ -1204,7 +1214,12 @@ agent-browser --cdp 9222 click "[data-qc=entry]"
 ```
 
 Enumerate candidates with `pop.querySelectorAll("button,[role=button],span[role]")`
-and read each node's `svg` class when the icon's identity is unknown. Two follow-ons
+and read each node's `svg` class when the icon's identity is unknown. **The class is
+the icon's _rendered_ lucide name, not the React symbol you imported** — a component
+imported as `MoreHorizontalIcon` renders `svg.lucide-ellipsis`, so a selector guessed
+from the import name matches nothing and reads as "the affordance was never rendered".
+Enumerate the classes present, then disambiguate duplicates by geometry (a header
+control is the top-most, right-most non-zero rect) rather than by DOM order. Two follow-ons
 worth knowing: a stray click on a tagged text node can dismiss the popover (re-open
 and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped cell
 needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
