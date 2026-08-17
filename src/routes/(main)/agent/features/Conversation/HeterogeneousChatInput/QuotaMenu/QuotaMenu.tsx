@@ -89,10 +89,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 28px;
-    padding-inline: 8px;
+    padding-block: 2px;
+    padding-inline: 4px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 4px;
 
     font: inherit;
     font-size: 12px;
@@ -106,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
 
     &[data-quota-level='low'] {

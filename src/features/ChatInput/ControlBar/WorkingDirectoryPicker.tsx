@@ -69,9 +69,9 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 28px;
-    padding-inline: 8px;
-    border-radius: 6px;
+    padding-block: 2px;
+    padding-inline: 4px;
+    border-radius: 4px;
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
@@ -80,7 +80,7 @@ const styles = createStaticStyles(({ css }) => ({
     transition: background 0.2s;
 
     &:hover {
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   buttonLabel: css`
