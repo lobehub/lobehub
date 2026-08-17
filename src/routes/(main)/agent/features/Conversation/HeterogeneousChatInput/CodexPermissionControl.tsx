@@ -9,12 +9,15 @@ import { CircleAlertIcon, ShieldCheckIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { agentRunSelectors, topicSelectors } from '@/store/chat/selectors';
 
-const AGENT_DEFAULT_VALUE = 'agent-default';
-
-type CodexPermissionSelection = CodexPermissionMode | typeof AGENT_DEFAULT_VALUE;
+import {
+  AGENT_DEFAULT_VALUE,
+  type CodexPermissionSelection,
+  persistCodexPermissionSelection,
+} from './codexPermission';
 
 const styles = createStaticStyles(({ css }) => ({
   danger: css`
@@ -28,15 +31,17 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface CodexPermissionControlProps {
+  agentId: string;
   canConfigure: boolean;
   isLocalExecution: boolean;
   provider: HeterogeneousProviderConfig;
 }
 
 const CodexPermissionControl = memo<CodexPermissionControlProps>(
-  ({ canConfigure, isLocalExecution, provider }) => {
+  ({ agentId, canConfigure, isLocalExecution, provider }) => {
     const { t } = useTranslation('chat');
     const [saving, setSaving] = useState(false);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const activeTopicId = useChatStore((s) => s.activeTopicId);
     const topicPermissionMode = useChatStore(
       (s) => topicSelectors.currentTopicMetadata(s)?.codexPermissionMode,
@@ -54,12 +59,12 @@ const CodexPermissionControl = memo<CodexPermissionControlProps>(
       topicPermissionMode,
     }).mode;
     const value = topicPermissionMode ?? AGENT_DEFAULT_VALUE;
-    const readOnly = !canConfigure || !activeTopicId || saving;
+    const readOnly = !agentId || !canConfigure || saving;
     const description = t(`heteroAgent.codexPermission.description.${effectiveMode}`);
     const tooltip = !isLocalExecution
       ? `${description} ${t('heteroAgent.codexPermission.localOnly')}`
       : !activeTopicId
-        ? `${description} ${t('heteroAgent.codexPermission.startTopic')}`
+        ? `${description} ${t('heteroAgent.codexPermission.noTopic')}`
         : description;
     const options = [
       {
@@ -76,12 +81,21 @@ const CodexPermissionControl = memo<CodexPermissionControlProps>(
     ];
 
     const updatePermission = async (selection: CodexPermissionSelection) => {
-      if (!activeTopicId || !canConfigure || saving) return;
+      if (!agentId || !canConfigure || saving) return;
 
       try {
         setSaving(true);
-        await updateTopicMetadata(activeTopicId, {
-          codexPermissionMode: selection === AGENT_DEFAULT_VALUE ? null : selection,
+        await persistCodexPermissionSelection({
+          activeTopicId,
+          selection,
+          updateAgentPermissionMode: (permissionMode) =>
+            updateAgentConfigById(agentId, {
+              agencyConfig: {
+                heterogeneousProvider: { ...provider, permissionMode },
+              },
+            }),
+          updateTopicPermissionMode: (topicId, permissionMode) =>
+            updateTopicMetadata(topicId, { codexPermissionMode: permissionMode }),
         });
         if (isRunning) toast.info(t('heteroAgent.codexPermission.nextRun'));
       } catch (error) {

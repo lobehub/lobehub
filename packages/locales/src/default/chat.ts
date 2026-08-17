@@ -339,7 +339,8 @@ export default {
   'heteroAgent.codexPermission.mode.full-access': 'Full access',
   'heteroAgent.codexPermission.mode.read-only': 'Read only',
   'heteroAgent.codexPermission.nextRun': 'The new permission mode applies to the next run.',
-  'heteroAgent.codexPermission.startTopic': 'Start a conversation before setting a topic override.',
+  'heteroAgent.codexPermission.noTopic':
+    'No conversation exists yet, so choosing a mode updates the Agent default.',
   'heteroAgent.codexPermission.updateFailed': 'Couldn’t update the Codex permission mode.',
   'heteroAgent.claudeQuota.accountActive': 'In use',
   'heteroAgent.claudeQuota.accountSwitch': 'Switch',

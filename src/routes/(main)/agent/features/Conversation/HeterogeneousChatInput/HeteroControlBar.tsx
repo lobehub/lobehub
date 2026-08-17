@@ -152,6 +152,7 @@ const HeteroControlBar = memo(() => {
   const codexPermissionControl =
     heteroProvider?.type === 'codex' ? (
       <CodexPermissionControl
+        agentId={agentId}
         canConfigure={canConfigureResource}
         isLocalExecution={isLocalHeteroExecution}
         provider={heteroProvider}
