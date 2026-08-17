@@ -52,11 +52,6 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     padding-block-end: 24px;
   `,
-  briefInput: css`
-    textarea {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
   generatingStatus: css`
     padding-block: 12px;
     padding-inline: 14px;
@@ -326,11 +321,10 @@ const CreateDomainPage = memo(() => {
                     <TextArea
                       autoFocus
                       autoSize={{ maxRows: 10, minRows: 5 }}
-                      className={styles.briefInput}
                       disabled={step === 'preparing'}
                       placeholder={t('create.briefPlaceholder')}
                       value={brief}
-                      variant={'filled'}
+                      variant={'outlined'}
                       onChange={(e) => setBrief(e.target.value)}
                     />
                     {step === 'preparing' ? (

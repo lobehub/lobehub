@@ -12,6 +12,10 @@ const styles = createStaticStyles(({ css }) => ({
   anchorCard: css`
     overflow: hidden;
   `,
+  anchorContent: css`
+    padding-block: 8px 16px;
+    padding-inline: 16px;
+  `,
   canonCard: css`
     display: flex;
     flex-direction: column;
@@ -90,7 +94,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
     <Block className={styles.anchorCard} variant={'outlined'}>
       <Accordion defaultExpandedKeys={['anchor']} indicatorPlacement={'end'} variant={'borderless'}>
         <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
-          <Flexbox gap={18} paddingBlock={8}>
+          <Flexbox className={styles.anchorContent} gap={18}>
             {(domainFilter || outOfScope) && (
               <div className={styles.definition}>
                 {domainFilter && (
