@@ -1183,6 +1183,42 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
 
+    it('cancels a remote child operation without touching the supervisor device', async () => {
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            deviceId: 'supervisor-desktop',
+            deviceUserId: 'supervisor-user',
+            heteroType: 'openclaw',
+            operationId: 'operation-parent',
+            childOperations: [
+              {
+                deviceId: 'member-desktop',
+                deviceUserId: 'member-user',
+                heteroType: 'hermes',
+                operationId: 'operation-child',
+              },
+            ],
+          },
+        },
+      });
+
+      await service.interruptTask({ operationId: 'operation-child', topicId: 'topic-1' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        {
+          deviceId: 'member-desktop',
+          userId: 'member-user',
+          workspaceId: undefined,
+        },
+        expect.objectContaining({
+          apiName: 'cancelHeteroTask',
+          arguments: JSON.stringify({ signal: 'SIGINT', taskId: 'operation-child' }),
+        }),
+        5_000,
+      );
+    });
+
     it('recovers the topic from the operation when the cancellation caller omits it', async () => {
       (service as any).agentOperationModel.findById = vi
         .fn()

@@ -196,6 +196,53 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     completeOperationSpy.mockRestore();
   });
 
+  it('retries a failed stream publish without firing completion hooks again', async () => {
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
+    mockTopicFindById
+      .mockResolvedValueOnce({
+        agentId: 'agent-1',
+        metadata: { runningOperation: { operationId: OP, assistantMessageId: FINAL_MSG_ID } },
+      })
+      .mockResolvedValueOnce({ agentId: 'agent-1', metadata: { runningOperation: null } });
+    mockTopicTakeRunningOperation.mockResolvedValueOnce({
+      isRoot: true,
+      operation: { operationId: OP, assistantMessageId: FINAL_MSG_ID },
+    });
+    mockOpFindById.mockResolvedValue({
+      completedAt: new Date(),
+      parentOperationId: null,
+      taskId: null,
+    });
+    mockPublishAgentRuntimeEnd
+      .mockRejectedValueOnce(new Error('stream unavailable'))
+      .mockResolvedValue(undefined);
+
+    await expect(
+      createCaller().notify({
+        content: '',
+        done: true,
+        operationId: OP,
+        role: 'assistant',
+        topicId: TOPIC,
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+
+    await createCaller().notify({
+      content: '',
+      done: true,
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    expect(completeOperationSpy).toHaveBeenCalledTimes(1);
+    expect(mockPublishAgentRuntimeEnd).toHaveBeenCalledTimes(2);
+    expect(mockTopicTakeRunningOperation).toHaveBeenCalledTimes(1);
+    completeOperationSpy.mockRestore();
+  });
+
   it('durably ensures the verify plan for a task-bound run before the gate', async () => {
     // The start-side plan instantiation (execAgent) is fire-and-forget on a
     // SEPARATE CompletionLifecycle instance, so the completion-side gate here
@@ -296,12 +343,47 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     completeOperationSpy.mockRestore();
   });
 
-  it('requires operationId when child operations are active', async () => {
+  it('accepts a legacy callback when there is one remote child', async () => {
+    const childOperationId = 'op-child-legacy';
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
     mockTopicFindById.mockResolvedValue({
       agentId: 'agent-1',
       metadata: {
         runningOperation: {
-          childOperations: [{ operationId: 'op-child-1', orchestrationRole: 'member' }],
+          childOperations: [
+            { operationId: childOperationId, heteroType: 'openclaw', orchestrationRole: 'member' },
+          ],
+          operationId: OP,
+        },
+      },
+    });
+    mockTopicTakeRunningOperation.mockResolvedValue({
+      isRoot: false,
+      operation: { operationId: childOperationId, orchestrationRole: 'member' },
+    });
+
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    expect(completeOperationSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: childOperationId }),
+      'done',
+      expect.anything(),
+    );
+    expect(mockTopicTakeRunningOperation).toHaveBeenCalledWith(TOPIC, childOperationId);
+    completeOperationSpy.mockRestore();
+  });
+
+  it('requires operationId when multiple remote children are active', async () => {
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      metadata: {
+        runningOperation: {
+          childOperations: [
+            { operationId: 'op-child-1', heteroType: 'openclaw', orchestrationRole: 'member' },
+            { operationId: 'op-child-2', heteroType: 'hermes', orchestrationRole: 'member' },
+          ],
           operationId: OP,
         },
       },

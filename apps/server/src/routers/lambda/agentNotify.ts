@@ -1,4 +1,5 @@
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -141,13 +142,34 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const marker = (topic.metadata as any)?.runningOperation;
-    const remoteOperationId = input.operationId ?? marker?.operationId;
-    const activeOperation =
+    let remoteOperationId = input.operationId ?? marker?.operationId;
+    let activeOperation =
       remoteOperationId && marker
         ? marker.operationId === remoteOperationId
           ? marker
           : marker.childOperations?.find((child: any) => child.operationId === remoteOperationId)
         : marker;
+
+    // Legacy CLI clients do not send operationId. Keep them working when the
+    // topic has exactly one remote operation; concurrent remote members remain
+    // ambiguous and must use an operation-scoped client.
+    if (role === 'assistant' && !input.operationId && marker?.childOperations?.length) {
+      const remoteCandidates = [marker, ...(marker.childOperations ?? [])].filter((operation) =>
+        isRemoteHeterogeneousType(operation.heteroType),
+      );
+      if (remoteCandidates.length === 1) {
+        [activeOperation] = remoteCandidates;
+        remoteOperationId = activeOperation.operationId;
+      } else {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            remoteCandidates.length > 1
+              ? 'operationId is required when multiple remote operations are active'
+              : 'operationId is required for child operations',
+        });
+      }
+    }
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -167,19 +189,21 @@ export const agentNotifyRouter = router({
       workspaceId: ctx.workspaceId,
     });
 
-    if (role === 'assistant' && marker?.childOperations?.length && !input.operationId) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'operationId is required while child operations are active',
-      });
-    }
-
     // Reject late callbacks after their exact operation marker has been removed.
     // This applies to progress as well as terminal delivery: a delayed update must
     // not overwrite a completed member's final message.
+    let terminalRetry = false;
     if (role === 'assistant' && input.operationId && !activeOperation) {
-      log('notify: ignoring stale callback for operationId=%s', input.operationId);
-      return { messageId: undefined, operationId: undefined, topicId };
+      const operation = await new AgentOperationModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).findById(input.operationId);
+      terminalRetry = isTerminal && !!operation?.completedAt;
+      if (!terminalRetry) {
+        log('notify: ignoring stale callback for operationId=%s', input.operationId);
+        return { messageId: undefined, operationId: undefined, topicId };
+      }
     }
 
     const terminalOperation = activeOperation;
@@ -251,33 +275,40 @@ export const agentNotifyRouter = router({
               log('notify: failed to resolve verify goal (non-fatal): %O', err);
             }
           }
-          await new CompletionLifecycle(
-            ctx.serverDB,
-            ctx.userId,
-            ctx.workspaceId ?? undefined,
-          ).completeOperation(
-            {
-              agentId,
-              assistantMessageId: writtenMessageId,
-              deliverable: lastAssistantContent,
-              error: terminalError ?? undefined,
-              goal,
-              operationId: remoteOperationId,
-              orchestrationRole: terminalOperation?.orchestrationRole,
-              serializedHooks,
-              topicId,
-              userId: ctx.userId,
-            },
-            terminalError ? 'error' : 'done',
-            // openclaw/hermes surface their failure via the runtime-end stream event
-            // + their own message write, not the lifecycle's assistant-row error
-            // write — keep that prior behavior on the error path.
-            { skipErrorMessageWrite: true },
-          );
+          if (!terminalRetry) {
+            await new CompletionLifecycle(
+              ctx.serverDB,
+              ctx.userId,
+              ctx.workspaceId ?? undefined,
+            ).completeOperation(
+              {
+                agentId,
+                assistantMessageId: writtenMessageId,
+                deliverable: lastAssistantContent,
+                error: terminalError ?? undefined,
+                goal,
+                operationId: remoteOperationId,
+                orchestrationRole: terminalOperation?.orchestrationRole,
+                serializedHooks,
+                topicId,
+                userId: ctx.userId,
+              },
+              terminalError ? 'error' : 'done',
+              // openclaw/hermes surface their failure via the runtime-end stream event
+              // + their own message write, not the lifecycle's assistant-row error
+              // write — keep that prior behavior on the error path.
+              { skipErrorMessageWrite: true },
+            );
+          }
 
-          // Publish the terminal event only after durable lifecycle completion.
-          // A connected client may clear the live marker as soon as it receives
-          // this event, so doing this first would make a failed lifecycle retryless.
+          // Claim the marker before publishing. A retry after a successful
+          // lifecycle can then publish the missing stream event without firing
+          // completion hooks a second time.
+          if (!terminalRetry) {
+            const claimed = await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId);
+            if (!claimed) return;
+          }
+
           await stream.publishAgentRuntimeEnd({
             finalState: terminalError
               ? { error: terminalError.message, reason: 'error' }
@@ -287,8 +318,6 @@ export const agentNotifyRouter = router({
             reasonDetail: terminalError?.message ?? 'Remote hetero agent task completed',
             stepIndex: 0,
           });
-
-          await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId);
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {

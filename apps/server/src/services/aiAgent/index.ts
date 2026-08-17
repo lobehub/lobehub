@@ -5764,29 +5764,40 @@ export class AiAgentService {
             deviceWorkspaceId?: string;
             heteroType?: string;
             operationId?: string;
+            childOperations?: Array<{
+              deviceId?: string;
+              deviceUserId?: string;
+              deviceWorkspaceId?: string;
+              heteroType?: string;
+              operationId?: string;
+            }>;
           }
         | undefined;
+      const targetOperation =
+        runningOp?.operationId === resolvedOperationId
+          ? runningOp
+          : runningOp?.childOperations?.find((child) => child.operationId === resolvedOperationId);
 
       if (
-        runningOp?.deviceId &&
-        runningOp.heteroType &&
-        runningOp.operationId === resolvedOperationId &&
-        isRemoteHeterogeneousType(runningOp.heteroType)
+        targetOperation?.deviceId &&
+        targetOperation.heteroType &&
+        isRemoteHeterogeneousType(targetOperation.heteroType)
       ) {
-        const taskId = runningOp.operationId ?? resolvedOperationId;
+        const taskId = targetOperation.operationId ?? resolvedOperationId;
         log(
           'interruptTask: cancelling remote hetero process heteroType=%s deviceId=%s taskId=%s',
-          runningOp.heteroType,
-          runningOp.deviceId,
+          targetOperation.heteroType,
+          targetOperation.deviceId,
           taskId,
         );
         const cancelWorkspaceId =
-          runningOp.deviceWorkspaceId ?? (await this.resolveDeviceWorkspaceId(runningOp.deviceId));
+          targetOperation.deviceWorkspaceId ??
+          (await this.resolveDeviceWorkspaceId(targetOperation.deviceId));
         await deviceGateway
           .executeToolCall(
             {
-              deviceId: runningOp.deviceId,
-              userId: runningOp.deviceUserId ?? this.userId,
+              deviceId: targetOperation.deviceId,
+              userId: targetOperation.deviceUserId ?? this.userId,
               workspaceId: cancelWorkspaceId,
             },
             {
