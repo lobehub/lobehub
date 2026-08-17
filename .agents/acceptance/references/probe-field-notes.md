@@ -1308,3 +1308,14 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
   gives assertable output; reuse `-t` to keep multi-step cases in one topic.
   Root cause (local JWKS mismatch) is worth a separate investigation, not a test-run fix.
   The CLI-as-run-driver methodology this enables lives in PROJECT.md §4 CLI.
+
+### E44. Task SPA routes can show a debug fallback before the real route is ready
+
+- **Situation**: opening the Task UI in local SPA development can briefly show the dynamic-route
+  debug fallback, while an `agent-browser` screenshot may keep an older frame even after the DOM
+  has advanced to the real Task page.
+- **Doesn't work**: treating `/task` as the Task list, or declaring the renderer blank solely from
+  one screenshot when `innerText` and element geometry already show mounted Task content.
+- **Works**: use `/tasks` for the list and `/task/<identifier>` for detail, wait for a route-specific
+  heading or control, and compare DOM text plus target geometry with a raw CDP screenshot. If only
+  `agent-browser` remains stale, reset that browser session and reseed its auth state before retrying.

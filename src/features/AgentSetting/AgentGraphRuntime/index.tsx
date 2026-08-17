@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReasoningGraph } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import type { AgentGraph, LobeAgentChatConfig } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { Alert, Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -39,17 +39,23 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const formatGraph = (graph?: ReasoningGraph | null) =>
-  graph ? JSON.stringify(graph, null, 2) : '';
+const formatGraph = (graph?: AgentGraph | null) => (graph ? JSON.stringify(graph, null, 2) : '');
 
 const AgentGraphRuntime = memo(() => {
   const { t } = useTranslation('setting');
   const config = useStore(selectors.currentAgentConfig, isEqual);
   const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setAgentConfig]);
-  const initialEnabled = config.chatConfig?.enableGraphMode === true;
+  // Legacy rows may still store the graph on chatConfig until their next write
+  // migrates it. The server keeps running those via the legacy fallback, so the
+  // editor must show the effective config — otherwise an actively-running graph
+  // agent would render as disabled with an empty snapshot.
+  const legacyChatConfig = config.chatConfig as
+    (LobeAgentChatConfig & { enableGraphMode?: boolean; graph?: AgentGraph | null }) | undefined;
+  const initialEnabled =
+    config.agencyConfig?.enableGraphMode === true || legacyChatConfig?.enableGraphMode === true;
   const initialGraphText = useMemo(
-    () => formatGraph(config.chatConfig?.graph),
-    [config.chatConfig?.graph],
+    () => formatGraph(config.agencyConfig?.graph ?? legacyChatConfig?.graph),
+    [config.agencyConfig?.graph, legacyChatConfig?.graph],
   );
 
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -74,7 +80,7 @@ const AgentGraphRuntime = memo(() => {
       return;
     }
 
-    let graph: ReasoningGraph | undefined;
+    let graph: AgentGraph | undefined;
 
     if (trimmedGraphText) {
       let parsedGraph: unknown;
@@ -86,7 +92,7 @@ const AgentGraphRuntime = memo(() => {
         return;
       }
 
-      const graphResult = ReasoningGraphSchema.safeParse(parsedGraph);
+      const graphResult = AgentGraphSchema.safeParse(parsedGraph);
 
       if (!graphResult.success) {
         setError(
@@ -106,7 +112,7 @@ const AgentGraphRuntime = memo(() => {
 
     try {
       await updateConfig({
-        chatConfig: { enableGraphMode: enabled, graph: graph ?? null },
+        agencyConfig: { enableGraphMode: enabled, graph: graph ?? null },
       });
     } finally {
       setSaving(false);

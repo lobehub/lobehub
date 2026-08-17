@@ -6,7 +6,7 @@ import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import AgentBuilder from '@/features/AgentBuilder';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -62,7 +62,7 @@ const ProfileArea = memo(() => {
           // gate on `!configError` so under loading→error precedence the loading
           // branch yields to the error state instead of spinning forever.
           isLoading={isAgentConfigLoading && !configError}
-          loading={<SurfaceSkeleton variant={'editor'} />}
+          loading={<ProfileSkeleton />}
           onRetry={() => retryAgentConfigFetch()}
         >
           <Header />
@@ -103,8 +103,9 @@ const AgentProfile: FC = () => {
   const { aid } = useParams<{ aid: string }>();
 
   return (
-    <Suspense fallback={<SurfaceSkeleton variant={'editor'} />}>
+    <Suspense fallback={<ProfileSkeleton />}>
       <ResourceConfigAccessGate
+        loading={<ProfileSkeleton />}
         redirectPath={`/agent/${aid ?? ''}`}
         resourceId={aid}
         resourceType="agent"

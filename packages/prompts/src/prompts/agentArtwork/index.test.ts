@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_ARTWORK_STYLES, buildAgentArtworkPrompt } from './index';
+import {
+  AGENT_ARTWORK_STYLES,
+  buildAgentArtworkPrompt,
+  buildWorkspaceArtworkPrompt,
+} from './index';
 
 describe('buildAgentArtworkPrompt', () => {
   it('injects escaped Agent identity and description into the avatar prompt', () => {
@@ -145,5 +149,55 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(prompt).toContain('hand-painted watercolor');
     expect(prompt).not.toContain('illustration style');
+  });
+});
+
+describe('buildWorkspaceArtworkPrompt', () => {
+  it('injects escaped workspace identity and description', () => {
+    const prompt = buildWorkspaceArtworkPrompt({
+      description: 'Design & research for climate tooling',
+      id: 'ws-1',
+      name: 'Acme "Labs"',
+    });
+
+    expect(prompt).toContain('<workspace id="ws-1" name="Acme &quot;Labs&quot;">');
+    expect(prompt).toContain(
+      '<description>Design &amp; research for climate tooling</description>',
+    );
+    expect(prompt).toContain('square profile icon for the team workspace');
+    expect(prompt).toContain('full-bleed composition');
+  });
+
+  it('re-points the mascot direction from the agent to the team', () => {
+    const prompt = buildWorkspaceArtworkPrompt({ id: 'ws-1' });
+
+    expect(prompt).toContain('mascot-style 3D emoji character');
+    expect(prompt).toContain("the team's character");
+    expect(prompt).not.toContain("the agent's personality");
+  });
+
+  it('steers the motif toward the team instead of AI clichés', () => {
+    const prompt = buildWorkspaceArtworkPrompt({ id: 'ws-1' });
+
+    expect(prompt).toContain('Avoid generic AI and technology clichés');
+    expect(prompt).toContain('what this team actually works on');
+  });
+
+  it('asks style references to inspire a new character for the team', () => {
+    const prompt = buildWorkspaceArtworkPrompt({
+      id: 'ws-1',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(prompt).toContain('as the target character style');
+    expect(prompt).toContain('invent a new character for the team described above');
+  });
+
+  it('renders a distinct direction for every style preset', () => {
+    const prompts = AGENT_ARTWORK_STYLES.map((style) =>
+      buildWorkspaceArtworkPrompt({ id: 'ws-1', style }),
+    );
+
+    expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
   });
 });

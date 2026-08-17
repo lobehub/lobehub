@@ -1,17 +1,19 @@
 'use client';
 
-import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useTheme } from 'antd-style';
+import { ActionIcon, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import {
-  ChevronRightIcon,
   GraduationCapIcon,
   HistoryIcon,
+  MoreHorizontalIcon,
   PlusIcon,
-  SparklesIcon,
+  Trash2Icon,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -25,173 +27,248 @@ import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
 import { openCreateDomainModal } from './CreateDomainModal';
-import Curves from './Curves';
-import { type ExpertiseShape, shapeOf, useExpertiseOverview } from './hooks';
+import { countTiers, habitTier } from './helpers';
+import { useExpertiseOverview, useHistoryCount } from './hooks';
+import AnchorCard from './Portrait/AnchorCard';
+import DomainList from './Portrait/DomainList';
+import GrowthCharts from './Portrait/GrowthCharts';
+import HabitList from './Portrait/HabitList';
+import LayerProfile from './Portrait/LayerProfile';
+import { portraitStyles } from './Portrait/styles';
+import TaughtList from './Portrait/TaughtList';
+import TeachBox from './Portrait/TeachBox';
+import { useHistoryWarmup } from './Portrait/useHistoryWarmup';
+import WarmupCard from './Portrait/WarmupCard';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
     display: flex;
   `,
-  insight: css`
-    cursor: pointer;
-
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 10px;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 11px;
-    padding-inline: 14px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  sentence: css`
-    font-size: 26px;
-    font-weight: 700;
-    line-height: 1.5;
-  `,
-  swatch: css`
-    width: 14px;
-    height: 3px;
-    border-radius: 2px;
-  `,
 }));
 
-/** 线尾带标签的那几条的配色，按 focus 顺序取。 */
-const FOCUS_MAX = 3;
-
-const useShapeLabels = () => {
-  const { t } = useTranslation('selfLearning');
-  const theme = useTheme();
-  return {
-    declining: { color: theme.colorWarning, label: t('shape.declining') },
-    fresh: { color: theme.colorTextQuaternary, label: t('shape.fresh') },
-    flat: { color: theme.colorSuccess, label: t('shape.flat') },
-    rising: { color: theme.colorInfo, label: t('shape.rising') },
-    stuck: { color: theme.colorTextTertiary, label: t('shape.stuck') },
-  } satisfies Record<ExpertiseShape, { color: string; label: string }>;
-};
-
+/**
+ * 成长画像 —— 自进化的 L0，也是单方向时的全部。
+ *
+ * 感知单位是「习惯 + 它靠不靠谱」，不是「学到几条」：判断句、按层画像、习惯分组、做对率曲线
+ * 全部由 hits.outcome 折出来。这里没有任何必办事项 —— 教学台，不是审批台。
+ * 带 :domainId 进来时就是同一张画像收窄到一个方向。
+ */
 const SelfLearning = memo(() => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
+  const { domainId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { data, error, isLoading, mutate } = useExpertiseOverview(activeAgentId ?? undefined);
-  const [hoverId, setHoverId] = useState<string>();
-  const [isImportingHistory, setIsImportingHistory] = useState(false);
-  const shapes = useShapeLabels();
+  const [teachOpen, setTeachOpen] = useState(false);
+  const [teachDomainId, setTeachDomainId] = useState<string>();
 
-  const domains = useMemo(() => data?.domains ?? [], [data]);
-  /** 全都还没练过的时候，坐标轴会退化成一排「第 1 次」—— 那张空网格不如不画。 */
-  const hasCurves = domains.some((d) => d.series.length > 1);
+  // Two-phase: read once to know how many lessons exist, then let the warm-up hook decide the poll.
+  const first = useExpertiseOverview(activeAgentId ?? undefined);
+  const learnedTotal = useMemo(
+    () => first.data?.domains.reduce((a, d) => a + d.lessons.length, 0) ?? 0,
+    [first.data],
+  );
+  const warmup = useHistoryWarmup(activeAgentId ?? undefined, learnedTotal);
+  const { data, error, isLoading, mutate } = useExpertiseOverview(
+    activeAgentId ?? undefined,
+    warmup.refreshInterval,
+  );
+  const allDomains = useMemo(() => data?.domains ?? [], [data]);
+  const scoped = useMemo(
+    () => (domainId ? allDomains.filter((d) => d.id === domainId) : allDomains),
+    [allDomains, domainId],
+  );
+  const single = scoped.length === 1;
+  const current: ExpertiseDomainItem | undefined = single ? scoped[0] : undefined;
+  const habits = useMemo(
+    () => scoped.flatMap((d) => d.lessons.map((l) => ({ ...l, domainId: d.id }))),
+    [scoped],
+  );
+  const runs = scoped.reduce((a, d) => a + d.runCount, 0);
+  const domainTitles = useMemo(
+    () => Object.fromEntries(allDomains.map((d) => [d.id, d.title])),
+    [allDomains],
+  );
 
-  const openDomain = (domainId: string) => {
-    if (!activeAgentId) return;
-    navigate(urlJoin('/agent', activeAgentId, 'self-learning', domainId));
-  };
+  /**
+   * 判断句永远说一件具体的事 —— 多个方向时也是先挑最值得说的那个方向（老毛病 > 还不稳），
+   * 「N 个方向、M 个习惯」这种盘点放到副标题里。
+   */
+  const sentenceFor = useCallback(
+    (d: ExpertiseDomainItem): { detail?: string; headline: string } => {
+      const name = d.title;
+      const list = d.lessons;
+      const c = countTiers(list);
+      if (d.runCount === 0) return { headline: t('headline.single.notPracticed', { name }) };
+      const recurring = list.find((h) => habitTier(h.recent) === 'recurring');
+      if (recurring)
+        return {
+          detail: t('headline.detail.recurring', {
+            title:
+              recurring.title.length > 18 ? `${recurring.title.slice(0, 17)}…` : recurring.title,
+          }),
+          headline: t('headline.single.recurring', { name, runs: d.runCount }),
+        };
+      if (c.shaky > 0)
+        return {
+          detail: t('headline.detail.shaky', { count: c.shaky }),
+          headline: t('headline.single.shaky', { name, runs: d.runCount }),
+        };
+      if (c.stable === 0)
+        return {
+          headline: t('headline.single.fresh', { count: list.length, name, runs: d.runCount }),
+        };
+      return { headline: t('headline.single.stable', { name, runs: d.runCount }) };
+    },
+    [t],
+  );
 
-  const importHistory = async () => {
-    if (!activeAgentId || isImportingHistory) return;
-    setIsImportingHistory(true);
+  const sentence = useMemo(() => {
+    if (scoped.length === 0) return { headline: '' };
+    if (single && current) return sentenceFor(current);
+    const rank = (d: ExpertiseDomainItem) => {
+      const c = countTiers(d.lessons);
+      return c.recurring > 0 ? 0 : c.shaky > 0 ? 1 : d.runCount === 0 ? 3 : 2;
+    };
+    const focus = [...scoped].sort((a, b) => rank(a) - rank(b))[0];
+    return rank(focus) <= 1
+      ? sentenceFor(focus)
+      : { headline: t('headline.multi.ok', { domains: scoped.length }) };
+  }, [current, scoped, sentenceFor, single, t]);
+
+  const subline = [
+    sentence.detail,
+    single
+      ? t('headline.subline', { habits: habits.length, runs })
+      : t('headline.sublineMulti', { domains: scoped.length, habits: habits.length }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // The warm-up card is front and centre only for directions that have never been practiced.
+  const freshDomains = scoped.filter((d) => d.runCount === 0 && d.lessons.length === 0);
+  const showWarmup = warmup.phase !== 'idle' || freshDomains.length > 0;
+  const warmupTitles =
+    freshDomains.length > 0
+      ? freshDomains.map((d) => d.title)
+      : [current?.title ?? scoped[0]?.title ?? ''];
+  // Only the warm-up card needs the candidate count, so it is not requested at all once every
+  // direction has been practiced; when it is needed it batches with the portrait only on a
+  // warm SWR cache (cold loads resolve the portrait first).
+  const { data: history } = useHistoryCount(showWarmup ? (activeAgentId ?? undefined) : undefined);
+
+  const teach = async (text: string) => {
+    const target = teachDomainId ?? current?.id ?? scoped[0]?.id;
+    if (!target) return;
     try {
-      const result = await expertiseService.ingestHistory(activeAgentId);
-      if (result.candidateCount === 0) {
-        toast.info(t('history.empty'));
-      } else {
-        toast.success(t('history.started', { count: result.candidateCount }));
-      }
+      await expertiseService.teachLesson({ domainId: target, text });
+      toast.success(t('habit.teach.done'));
+      setTeachOpen(false);
+      void mutate();
     } catch {
-      toast.error(t('history.failed'));
-    } finally {
-      setIsImportingHistory(false);
+      toast.error(t('habit.teach.failed'));
     }
   };
 
-  /**
-   * 主图只给三条线上色，其余淡成背景 —— 十个专长十条彩线就是一团糊。
-   * 挑的是「练得最多」的三个：练得越多，曲线的形状越是结论而不是噪声。
-   *
-   * **颜色编码的是形状，不是排名。** 图例说的就是这四种形状，颜色要是按名次发的，
-   * 图例就成了摆设 —— 一条被标成「掉头 = 能力在退」的黄线其实在涨，比不上色更糟。
-   */
-  const { colors, focusIds } = useMemo(() => {
-    const ids = [...domains]
-      .sort((a, b) => b.runCount - a.runCount)
-      .slice(0, FOCUS_MAX)
-      .map((d) => d.id);
-    return {
-      colors: Object.fromEntries(
-        domains.map((d) => [d.id, shapes[shapeOf(d.maturity, d.delta, d.runCount)].color]),
-      ),
-      focusIds: ids,
-    };
-  }, [domains, shapes]);
+  const openCreate = () => {
+    if (!activeAgentId) return;
+    openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() });
+  };
 
-  /** 一句判断句放在最前面 —— 用户先要的是结论，不是图。 */
-  const headline = useMemo(() => {
-    if (domains.length === 0) return null;
-    const withShape = domains.map((d) => ({ d, shape: shapeOf(d.maturity, d.delta, d.runCount) }));
-    const flat = withShape.find((x) => x.shape === 'flat');
-    const declining = withShape.find((x) => x.shape === 'declining');
-    const rising = withShape.find((x) => x.shape === 'rising');
-    const lead = flat
-      ? t('headline.flat', { name: flat.d.title })
-      : rising
-        ? t('headline.rising', { name: rising.d.title })
-        : t('headline.none');
-    const restParts = [
-      rising && flat ? t('headline.alsoRising', { name: rising.d.title }) : null,
-      declining ? t('headline.alsoDeclining', { name: declining.d.title }) : null,
-    ].filter(Boolean);
-    return { lead, rest: restParts.join('') };
-  }, [domains, t]);
+  // Dropping a direction takes its habits and practice history with it — say so before asking.
+  const confirmDelete = (domain: ExpertiseDomainItem) => {
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('domain.deleteConfirm.content', {
+        habits: domain.lessons.length,
+        runs: domain.runCount,
+      }),
+      okButtonProps: { danger: true },
+      okText: t('domain.deleteConfirm.ok'),
+      onOk: async () => {
+        try {
+          await expertiseService.deleteDomain(domain.id);
+          toast.success(t('domain.deleted'));
+          await mutate();
+          if (domainId && activeAgentId)
+            navigate(urlJoin('/agent', activeAgentId, 'self-learning'));
+        } catch {
+          toast.error(t('domain.deleteFailed'));
+        }
+      },
+      title: t('domain.deleteConfirm.title', { name: domain.title }),
+    });
+  };
+
+  // Secondary actions live in one menu: reviewing history is occasional, deleting is rare.
+  const moreMenu: DropdownItem[] = [
+    ...(showWarmup
+      ? []
+      : [
+          {
+            disabled: warmup.starting,
+            icon: <Icon icon={HistoryIcon} />,
+            key: 'warmup',
+            label: t('nav.warmup'),
+            onClick: () => void warmup.start(),
+          } satisfies DropdownItem,
+        ]),
+    ...(current
+      ? [
+          ...(showWarmup ? [] : [{ type: 'divider' } satisfies DropdownItem]),
+          {
+            danger: true,
+            icon: <Icon icon={Trash2Icon} />,
+            key: 'delete',
+            label: t('domain.delete'),
+            onClick: () => confirmDelete(current),
+          } satisfies DropdownItem,
+        ]
+      : []),
+  ];
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
-        left={activeAgentId ? <AgentBreadcrumb agentId={activeAgentId} title={t('title')} /> : null}
         styles={{ left: { paddingInlineStart: 24 } }}
-        right={
+        left={
           activeAgentId ? (
+            <AgentBreadcrumb
+              agentId={activeAgentId}
+              // Whenever the portrait is about one direction — drilled in, or the only one
+              // there is — say so in the trail; otherwise the headline reads like a page title.
+              extraItems={current ? [current.title] : undefined}
+              title={
+                domainId && current ? (
+                  <Link to={urlJoin('/agent', activeAgentId, 'self-learning')}>{t('title')}</Link>
+                ) : (
+                  t('title')
+                )
+              }
+            />
+          ) : null
+        }
+        right={
+          activeAgentId && allDomains.length > 0 ? (
             <Flexbox horizontal gap={8}>
-              {domains.length > 0 && (
-                <Button icon={HistoryIcon} loading={isImportingHistory} onClick={importHistory}>
-                  {t('history.entry')}
+              <Button icon={PlusIcon} onClick={() => setTeachOpen((v) => !v)}>
+                {t('nav.teach')}
+              </Button>
+              {/* Starting a new direction belongs to the overview, not to one direction's page. */}
+              {!domainId && (
+                <Button type={'text'} onClick={openCreate}>
+                  {t('nav.newDomain')}
                 </Button>
               )}
-              <Button
-                icon={PlusIcon}
-                onClick={() =>
-                  openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() })
-                }
-              >
-                {t('create.entry')}
-              </Button>
+              {moreMenu.length > 0 && (
+                <DropdownMenu items={moreMenu}>
+                  <ActionIcon
+                    icon={MoreHorizontalIcon}
+                    loading={warmup.starting}
+                    title={t('domain.more')}
+                  />
+                </DropdownMenu>
+              )}
             </Flexbox>
           ) : null
         }
@@ -202,7 +279,7 @@ const SelfLearning = memo(() => {
             data={data}
             error={error}
             errorVariant={'page'}
-            isEmpty={!error && domains.length === 0}
+            isEmpty={!error && allDomains.length === 0}
             isLoading={isLoading}
             loading={<Loading debugId="SelfLearning" />}
             empty={
@@ -214,18 +291,8 @@ const SelfLearning = memo(() => {
                   style={{ maxWidth: 420 }}
                   title={t('empty.title')}
                   action={
-                    <Button
-                      icon={PlusIcon}
-                      type={'primary'}
-                      onClick={() => {
-                        if (!activeAgentId) return;
-                        openCreateDomainModal({
-                          agentId: activeAgentId,
-                          onCreated: () => void mutate(),
-                        });
-                      }}
-                    >
-                      {t('create.entry')}
+                    <Button icon={PlusIcon} type={'primary'} onClick={openCreate}>
+                      {t('nav.newDomain')}
                     </Button>
                   }
                 />
@@ -233,102 +300,82 @@ const SelfLearning = memo(() => {
             }
             onRetry={() => mutate()}
           >
-            <Flexbox gap={24} paddingBlock={'26px 64px'}>
-              {headline && (
-                <Text className={styles.sentence}>
-                  {headline.lead}
-                  {headline.rest && (
-                    <>
-                      <br />
-                      <Text className={styles.sentence} type={'secondary'}>
-                        {headline.rest}
-                      </Text>
-                    </>
-                  )}
-                </Text>
-              )}
+            <Flexbox gap={20} paddingBlock={'22px 64px'}>
+              <Flexbox gap={4}>
+                <Text className={portraitStyles.sentence}>{sentence.headline}</Text>
+                <Text type={'secondary'}>{subline}</Text>
+              </Flexbox>
 
-              {!!data?.insights.length && (
-                <Flexbox gap={10}>
-                  <Flexbox horizontal align={'center'} justify={'space-between'}>
-                    <Flexbox horizontal align={'center'} gap={7}>
-                      <Icon icon={SparklesIcon} size={14} />
-                      <Text fontSize={13} weight={600}>
-                        {t('insights.title')}
+              {teachOpen && (
+                <Block padding={12} variant={'outlined'}>
+                  <Flexbox gap={8}>
+                    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('teachNew.help')}
                       </Text>
-                    </Flexbox>
-                    <Text fontSize={12.5} type={'secondary'}>
-                      {t('overview.totals', {
-                        domains: data.totals.domains,
-                        lessons: data.totals.lessons,
-                      })}
-                    </Text>
-                  </Flexbox>
-                  {data.insights.map((it) => (
-                    <Flexbox
-                      as={'button'}
-                      className={styles.insight}
-                      gap={7}
-                      key={it.id}
-                      style={{ background: 'transparent', color: 'inherit', textAlign: 'start' }}
-                      onClick={() => it.domainId && openDomain(it.domainId)}
-                    >
-                      <Text fontSize={11.5} type={'secondary'}>
-                        {it.headline}
-                      </Text>
-                      <Text fontSize={14.5} lineHeight={1.7}>
-                        {it.body}
-                      </Text>
-                      {it.actionLabel && (
-                        <Flexbox horizontal>
-                          <Text fontSize={12.5} type={'info'}>
-                            {it.actionLabel} ›
+                      {!single && (
+                        <Flexbox horizontal align={'center'} gap={6}>
+                          <Text fontSize={12} type={'secondary'}>
+                            {t('teachNew.domain')}
                           </Text>
+                          {scoped.map((d) => (
+                            <Button
+                              key={d.id}
+                              size={'small'}
+                              type={
+                                (teachDomainId ?? scoped[0].id) === d.id ? 'primary' : 'default'
+                              }
+                              onClick={() => setTeachDomainId(d.id)}
+                            >
+                              {d.title}
+                            </Button>
+                          ))}
                         </Flexbox>
                       )}
                     </Flexbox>
-                  ))}
-                </Flexbox>
-              )}
-
-              <Flexbox gap={8}>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('overview.allDomains', { count: domains.length })}
-                </Text>
-                <Block padding={0} variant={'outlined'}>
-                  {domains.map((domain) => (
-                    <DomainRow
-                      color={colors[domain.id]}
-                      domain={domain}
-                      key={domain.id}
-                      onHover={setHoverId}
-                      onOpen={openDomain}
-                    />
-                  ))}
-                </Block>
-              </Flexbox>
-
-              {hasCurves && (
-                <Block gap={10} padding={16} variant={'outlined'}>
-                  <Curves
-                    colors={colors}
-                    domains={domains}
-                    focusIds={focusIds}
-                    hoverId={hoverId}
-                    onHover={setHoverId}
-                    onOpen={openDomain}
-                  />
-                  <Flexbox horizontal align={'center'} gap={14} wrap={'wrap'}>
-                    {(['flat', 'rising', 'declining', 'stuck'] as ExpertiseShape[]).map((key) => (
-                      <Flexbox horizontal align={'center'} gap={6} key={key}>
-                        <div className={styles.swatch} style={{ background: shapes[key].color }} />
-                        <Text fontSize={11.5} type={'secondary'}>
-                          {shapes[key].label}
-                        </Text>
-                      </Flexbox>
-                    ))}
+                    <TeachBox autoFocus placeholder={t('teachNew.placeholder')} onSubmit={teach} />
                   </Flexbox>
                 </Block>
+              )}
+
+              {showWarmup && (
+                <WarmupCard
+                  candidateCount={history?.candidateCount}
+                  domainTitles={warmupTitles}
+                  warmup={warmup}
+                />
+              )}
+
+              {runs > 0 && <GrowthCharts domains={scoped} />}
+
+              {current && <LayerProfile domain={current} />}
+
+              <TaughtList habits={habits} />
+
+              {habits.length > 0 && activeAgentId && (
+                <HabitList
+                  agentId={activeAgentId}
+                  domainTitles={single ? undefined : domainTitles}
+                  habits={habits}
+                  viewAllPath={
+                    current
+                      ? urlJoin('/agent', activeAgentId, 'self-learning', current.id, 'experience')
+                      : undefined
+                  }
+                  onChanged={() => void mutate()}
+                />
+              )}
+
+              {current && <AnchorCard domain={current} />}
+
+              {!single && !domainId && (
+                <DomainList
+                  domains={allDomains}
+                  onOpen={(id) => {
+                    if (!activeAgentId) return;
+                    navigate(urlJoin('/agent', activeAgentId, 'self-learning', id));
+                  }}
+                />
               )}
             </Flexbox>
           </AsyncBoundary>
@@ -338,101 +385,6 @@ const SelfLearning = memo(() => {
   );
 });
 
-interface DomainRowProps {
-  color?: string;
-  domain: ExpertiseDomainItem;
-  onHover: (id?: string) => void;
-  onOpen: (id: string) => void;
-}
-
-/**
- * 一行一个专长，右边是它自己的累计柱。
- *
- * 柱高 = 当时的成熟度，所以**涨到顶就是满了** —— 用新增柱的话得先让人理解
- * 「柱子变矮是好事」，那是一层不必要的翻译。
- */
-const DomainRow = memo<DomainRowProps>(({ domain, color, onOpen, onHover }) => {
-  const { t } = useTranslation('selfLearning');
-  const theme = useTheme();
-  const shape = shapeOf(domain.maturity, domain.delta, domain.runCount);
-  const ceiling = domain.maturity.usable
-    ? (domain.maturity.pInf ?? 0)
-    : Math.max(1, ...domain.series.map((p) => p.n));
-
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      as={'button'}
-      className={styles.row}
-      gap={12}
-      style={{ background: 'transparent', color: 'inherit', textAlign: 'start', width: '100%' }}
-      onClick={() => onOpen(domain.id)}
-      onMouseEnter={() => onHover(domain.id)}
-      onMouseLeave={() => onHover(undefined)}
-    >
-      <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <Text fontSize={13.5} weight={500}>
-            {domain.title}
-          </Text>
-          <Tag>{domain.runCount === 1 ? t('overview.firstPractice') : t(`shape.tag.${shape}`)}</Tag>
-        </Flexbox>
-        <Text fontSize={11} type={'secondary'}>
-          {t('overview.rowMeta', { lessons: domain.lessonCount, runs: domain.runCount })}
-        </Text>
-      </Flexbox>
-
-      {domain.series.length > 1 && (
-        <svg height={18} style={{ flex: 'none' }} viewBox={'0 0 64 18'} width={64}>
-          {domain.series.map((p, k) => {
-            const w = 64 / Math.max(1, domain.series.length);
-            const h = Math.max((p.n / ceiling) * 16, 1.2);
-            return (
-              <rect
-                fill={color ?? theme.colorTextQuaternary}
-                height={h}
-                key={p.run}
-                opacity={0.5 + (p.n / ceiling) * 0.5}
-                rx={0.8}
-                width={Math.max(w - 1.4, 1.4)}
-                x={k * w}
-                y={18 - h}
-              />
-            );
-          })}
-        </svg>
-      )}
-
-      {domain.runCount === 1 ? (
-        <Text fontSize={12} type={'secondary'}>
-          {t('overview.trendPending')}
-        </Text>
-      ) : (
-        <>
-          <Text
-            fontSize={12.5}
-            style={{ flex: 'none', textAlign: 'right', width: 68 }}
-            type={domain.maturity.usable ? undefined : 'secondary'}
-            weight={600}
-          >
-            {domain.maturity.usable ? `${Math.round((domain.maturity.maturity ?? 0) * 100)}%` : '—'}
-          </Text>
-          <Text
-            fontSize={12}
-            style={{ flex: 'none', textAlign: 'right', width: 42 }}
-            type={domain.delta > 0 ? 'success' : domain.delta < 0 ? 'warning' : 'secondary'}
-          >
-            {domain.delta > 0 ? `+${domain.delta}` : domain.delta < 0 ? domain.delta : '—'}
-          </Text>
-        </>
-      )}
-      <Icon icon={ChevronRightIcon} size={13} style={{ flex: 'none' }} />
-    </Flexbox>
-  );
-});
-
-DomainRow.displayName = 'DomainRow';
 SelfLearning.displayName = 'SelfLearning';
 
 export default SelfLearning;

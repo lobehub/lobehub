@@ -50,4 +50,10 @@ describe('filterSwitcherItems', () => {
   it('matches titles case-insensitively', () => {
     expect(filterSwitcherItems(items, 'wr')).toEqual([item('2', 'Writing')]);
   });
+
+  it('matches secondary titles case-insensitively', () => {
+    const roleItem = { id: '4', subtitle: 'Claude Code', title: 'Little C' };
+
+    expect(filterSwitcherItems([...items, roleItem], 'claude')).toEqual([roleItem]);
+  });
 });

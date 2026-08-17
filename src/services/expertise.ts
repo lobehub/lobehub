@@ -4,34 +4,46 @@ export type ExpertiseOverview = Awaited<
   ReturnType<typeof lambdaClient.expertise.listByAgent.query>
 >;
 export type ExpertiseDomainItem = ExpertiseOverview['domains'][number];
-export type ExpertiseInsightItem = ExpertiseOverview['insights'][number];
+export type ExpertiseHabit = ExpertiseDomainItem['lessons'][number];
 export type ExpertiseDomainDetail = NonNullable<
   Awaited<ReturnType<typeof lambdaClient.expertise.getDomain.query>>
 >;
-export type ExpertiseLessonItem = Awaited<
-  ReturnType<typeof lambdaClient.expertise.listLessons.query>
->[number];
 export type ExpertiseLessonDetail = NonNullable<
   Awaited<ReturnType<typeof lambdaClient.expertise.getLesson.query>>
 >;
-/** Maturity is a union: usable results expose a value, while unusable results expose a reason. */
-export type ExpertiseMaturity = ExpertiseDomainItem['maturity'];
+export type ExpertiseDomainDraft = Awaited<
+  ReturnType<typeof lambdaClient.expertise.draftDomain.mutate>
+>;
 
 class ExpertiseService {
   listByAgent = async (agentId: string) => lambdaClient.expertise.listByAgent.query({ agentId });
 
   getDomain = async (domainId: string) => lambdaClient.expertise.getDomain.query({ domainId });
 
-  listLessons = async (params: { domainId: string; layer?: string; search?: string }) =>
-    lambdaClient.expertise.listLessons.query(params);
-
   getLesson = async (lessonId: string) => lambdaClient.expertise.getLesson.query({ lessonId });
 
-  createDomain = async (params: { agentId: string; brief: string }) =>
+  draftDomain = async (params: { agentId: string; brief: string }) =>
+    lambdaClient.expertise.draftDomain.mutate(params);
+
+  createDomain = async (params: ExpertiseDomainDraft & { agentId: string; brief: string }) =>
     lambdaClient.expertise.createDomain.mutate(params);
+
+  deleteDomain = async (domainId: string) =>
+    lambdaClient.expertise.deleteDomain.mutate({ domainId });
+
+  countHistory = async (agentId: string) => lambdaClient.expertise.countHistory.query({ agentId });
 
   ingestHistory = async (agentId: string) =>
     lambdaClient.expertise.ingestHistory.mutate({ agentId });
+
+  teachLesson = async (params: { domainId: string; text: string }) =>
+    lambdaClient.expertise.teachLesson.mutate(params);
+
+  reviseLesson = async (params: { lessonId: string; text: string }) =>
+    lambdaClient.expertise.reviseLesson.mutate(params);
+
+  retireLesson = async (lessonId: string) =>
+    lambdaClient.expertise.retireLesson.mutate({ lessonId });
 
   dismissInsight = async (insightId: string, reason?: string) =>
     lambdaClient.expertise.dismissInsight.mutate({ insightId, reason });

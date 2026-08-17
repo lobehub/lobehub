@@ -1,14 +1,12 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { memo } from 'react';
+import { Navigate, useParams } from 'react-router';
 
-import Loading from '@/components/Loading/BrandTextLoading';
-import LessonDetail from '@/features/SelfLearning/LessonDetail';
+/** Legacy `/rules/:lessonId` deep-links land on the renamed `/experience/:lessonId`. */
+const LegacyRuleRedirect = memo(() => {
+  const { lessonId } = useParams();
+  return <Navigate replace to={`../experience/${lessonId}`} />;
+});
 
-const AgentSelfLearningLessonPage = memo(() => (
-  <Suspense fallback={<Loading debugId={'SelfLearningLesson'} />}>
-    <LessonDetail />
-  </Suspense>
-));
-
-export default AgentSelfLearningLessonPage;
+export default LegacyRuleRedirect;

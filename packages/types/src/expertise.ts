@@ -56,6 +56,26 @@ export interface ExpertiseLessonSection {
   key: ExpertiseLessonSectionKey;
 }
 
+/** Schema version for operation-scoped expertise snapshots. */
+export const EXPERTISE_CONTEXT_SCHEMA_VERSION = 1;
+
+/** Immutable expertise context captured once when an agent operation starts. */
+export interface ExpertiseContextSnapshot {
+  /** Hash of the rendered context, used to verify that every step sees the same snapshot. */
+  contentHash: string;
+  /** Stable domain and lesson identities retained for tracing and post-run attribution. */
+  domains: ExpertiseContextSnapshotDomain[];
+  /** Prompt-ready context reused verbatim for every LLM call in the operation. */
+  renderedContext: string;
+  /** Server-side snapshot schema version. This value is not rendered into the prompt. */
+  schemaVersion: number;
+}
+
+export interface ExpertiseContextSnapshotDomain {
+  id: string;
+  lessonIds: string[];
+}
+
 /**
  * One referenceable entry in an expertise canon. Canon entries must be addressable: when the canon
  * was stored as one prose string, lessons could not reliably populate canonAnchor.

@@ -16,8 +16,19 @@ export interface PushDeliveryContext {
   content: string;
   /** Underlying notifications.id — sent as `data.notificationId` for tracing */
   notificationId: string;
+  /** Optional native presentation hints for notification service extensions. */
+  pushPresentation?: {
+    /** Extra JSON-safe string values merged into Expo's custom data payload. */
+    data?: Record<string, string>;
+    /** Public HTTPS image used by supported system notification surfaces. */
+    image?: string;
+    /** Sets APNs `mutable-content: 1` so an iOS service extension can enrich the alert. */
+    mutableContent?: boolean;
+  };
   /** Notification title */
   title: string;
+  /** Scenario identifier sent in custom data for client/native routing. */
+  type?: string;
   /** Ignored by push (kept for cloud `NotificationChannel` compatibility) */
   userEmail?: string;
   /** Target user — push channel fans out to all of this user's `push_tokens` */

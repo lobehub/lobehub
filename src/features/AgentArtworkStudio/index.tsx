@@ -5,7 +5,7 @@ import { t } from 'i18next';
 
 import AgentArtworkStudioContent from './Content';
 
-export { styleReferencesForArtworkStyle } from './lobeStyleReferences';
+export { styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 
 /**
  * Large avatar workshop for one agent: make your own (upload) or one-click

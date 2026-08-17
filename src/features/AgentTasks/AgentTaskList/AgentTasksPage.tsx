@@ -10,10 +10,10 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
+import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
-import type { TaskViewMode } from '@/store/task/slices/list/initialState';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -81,7 +81,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
-  const viewMode = useTaskStore(taskListSelectors.viewMode);
+  const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, mutate } = useFetchTaskList(
@@ -191,8 +191,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         </Flexbox>
       ) : (
         <WideScreenContainer
+          fullWidth
           gap={16}
           paddingBlock={16}
+          paddingInline={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
           {!inlineCollapsed && (

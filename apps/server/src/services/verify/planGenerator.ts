@@ -46,7 +46,7 @@ export interface GeneratePlanParams {
   verifyRubricId?: string | null;
 }
 
-/** One agent-authored check, fully specified by the model (the `generateVerifyPlan` tool). */
+/** One check draft, fully specified by its author (AI generation or user editing). */
 export interface CriterionDraft {
   /** One-sentence summary; stored on the `verify_criteria.description` column. */
   description?: string;
@@ -159,96 +159,6 @@ export class VerifyPlanGeneratorService {
     return this.callerAgentVisibility === 'private' || this.callerAgentVisibility === 'public'
       ? { visibility: this.callerAgentVisibility }
       : {};
-  }
-
-  /**
-   * The agent-authored path (the `generateVerifyPlan` tool): the model enumerates
-   * the checks itself, so we (1) create a `verify_criteria` row per check, (2)
-   * create a `verify_rubric` titled by the goal and aggregate the criteria under
-   * it (reusable), (3) snapshot the rubric onto the operation and confirm it so
-   * the checks run automatically on completion. Mirrors `createDocument`: full
-   * creation from the model's input, not instantiation of a pre-existing rubric.
-   */
-  async createPlanFromCriteria(params: {
-    criteria: CriterionDraft[];
-    operationId: string;
-    title: string;
-  }): Promise<{ items: VerifyCheckItem[]; rubricId: string }> {
-    // 1. Create the rubric (the run's named, reusable delivery standard).
-    const rubric = await this.rubricModel.create({ title: params.title });
-
-    // 2. Create each criterion and build the frozen snapshot items in one pass.
-    const items: VerifyCheckItem[] = [];
-    const links: { criterionId: string; sortOrder: number }[] = [];
-    for (const [index, draft] of params.criteria.entries()) {
-      // Default to auto-repair: a failing check should attempt a fix rather than
-      // silently waiting for manual intervention.
-      const onFail = draft.onFail ?? 'auto_repair';
-      const required = draft.required ?? true;
-      const verifierType = draft.verifierType ?? 'llm';
-
-      // The detailed judging instruction is the criterion's rule body — it lives
-      // in a document (editable, history-tracked), referenced by documentId.
-      let documentId: string | null = null;
-      if (draft.instruction) {
-        const doc = await this.documentModel.create({
-          content: draft.instruction,
-          fileType: VERIFY_INSTRUCTION_FILE_TYPE,
-          source: `verify-criterion:${rubric.id}:${index}`,
-          sourceType: 'agent',
-          title: draft.title,
-          totalCharCount: draft.instruction.length,
-          totalLineCount: draft.instruction.split('\n').length,
-          ...this.inheritedVisibility,
-        });
-        documentId = doc.id;
-      }
-
-      const verifierConfig = {
-        ...draft.verifierConfig,
-        ...(draft.requiredEvidence ? { requiredEvidence: draft.requiredEvidence } : {}),
-      };
-      const criterion = await this.criterionModel.create({
-        description: draft.description,
-        documentId,
-        onFail,
-        required,
-        title: draft.title,
-        verifierConfig,
-        verifierType,
-      });
-
-      links.push({ criterionId: criterion.id, sortOrder: index });
-      items.push({
-        description: draft.description,
-        documentId,
-        id: criterion.id,
-        index,
-        onFail,
-        required,
-        sourceCriterionId: criterion.id,
-        sourceRubricId: rubric.id,
-        title: draft.title,
-        verifierConfig,
-        verifierType,
-      });
-    }
-
-    // 3. Aggregate the criteria under the rubric (criteria reusable across rubrics).
-    await this.rubricModel.setCriteria(rubric.id, links);
-
-    // 4. Snapshot onto the run + confirm so it runs when the op completes.
-    const run = await this.runModel.ensureForOperation(params.operationId, { title: params.title });
-    await this.runModel.setPlan(run.id, items);
-    await this.runModel.confirmPlan(run.id);
-
-    log(
-      'created rubric %s with %d criteria for op %s',
-      rubric.id,
-      items.length,
-      params.operationId,
-    );
-    return { items, rubricId: rubric.id };
   }
 
   /**

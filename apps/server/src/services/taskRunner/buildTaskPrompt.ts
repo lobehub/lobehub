@@ -3,6 +3,7 @@ import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types'
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -28,8 +29,8 @@ const resolveGoalLoopContext = async (
   task: TaskItem,
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
-  const { db, taskModel, userId, workspaceId } = deps;
-  const goal = taskModel.getGoalConfig(task);
+  const { db, userId, workspaceId } = deps;
+  const goal = await new GoalModel(db, userId, workspaceId).findBySubject('task', task.id);
   if (!goal || !task.totalTopics) return undefined;
 
   const budget = resolveGoalRoundBudget(goal);

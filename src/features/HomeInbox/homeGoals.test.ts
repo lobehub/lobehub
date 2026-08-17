@@ -12,7 +12,9 @@ import {
 const goal = (overrides: Partial<GoalListItem> & Pick<GoalListItem, 'id'>): GoalListItem =>
   ({
     assigneeAgentId: 'agt_1',
-    config: { goal: { maxIterations: 3 } },
+    // No `status` on the entity here: these cases exercise the task-status
+    // fallback tier of the derivation (legacy rows before the backfill ran).
+    goal: { maxRounds: 3 },
     identifier: `T-${overrides.id}`,
     instruction: 'do the thing',
     name: `goal ${overrides.id}`,
@@ -88,9 +90,7 @@ describe('buildHomeGoalEntries', () => {
   });
 
   it('carries the round budget and falls back to the identifier for an unnamed goal', () => {
-    const goals = [
-      goal({ config: { goal: { maxIterations: 5 } }, id: 'x', instruction: '', name: null }),
-    ];
+    const goals = [goal({ goal: { maxRounds: 5 } as any, id: 'x', instruction: '', name: null })];
 
     expect(buildHomeGoalEntries(goals)[0]).toMatchObject({
       agentId: 'agt_1',
@@ -100,8 +100,8 @@ describe('buildHomeGoalEntries', () => {
     });
   });
 
-  it('reports no round budget when the goal config carries none', () => {
-    const goals = [goal({ config: {}, id: 'x' })];
+  it('reports no round budget when the goal entity carries none', () => {
+    const goals = [goal({ goal: { maxRounds: null } as any, id: 'x' })];
 
     expect(buildHomeGoalEntries(goals)[0].maxRounds).toBeNull();
   });

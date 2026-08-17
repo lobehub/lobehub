@@ -3,6 +3,10 @@
 import { useLocation } from 'react-router';
 
 import ConversationLayoutSkeleton from './Conversation/Layout';
+import GoalSkeleton from './Goal';
+import GoalDetailSkeleton from './GoalDetail';
+import MemorySkeleton from './Memory';
+import ProfileSkeleton from './Profile';
 import SettingsPageSkeleton from './Settings/Page';
 import SurfaceSkeleton, { type SurfaceSkeletonVariant } from './Surface';
 
@@ -40,9 +44,17 @@ const isConversationPath = (pathname: string) => {
  */
 const RouteSegmentSkeleton = () => {
   const { pathname } = useLocation();
+  const segments = pathname.split('/').filter(Boolean);
 
   if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
+  if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton />;
+  if (segments[0] === 'agent' && segments[2] === 'goals') return <GoalSkeleton />;
+  if (segments[0] === 'agent' && segments[2] === 'goal') return <GoalDetailSkeleton />;
+  if (segments[0] === 'agent' && segments[2] === 'profile') return <ProfileSkeleton />;
+  if (segments[0] === 'group' && segments[2] === 'profile') {
+    return <ProfileSkeleton variant={'group'} />;
+  }
 
   return <SurfaceSkeleton variant={getSurfaceVariant(pathname)} />;
 };

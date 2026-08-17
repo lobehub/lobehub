@@ -26,6 +26,11 @@ import {
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
+import MemorySkeleton from '@/components/Skeleton/Memory';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -160,6 +165,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goals'),
               'Desktop > Chat > Goals',
+              { fallback: <GoalSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goals',
@@ -168,6 +174,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goal/[goalId]'),
               'Desktop > Chat > Goal Detail',
+              { fallback: <GoalDetailSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goal/:goalId',
@@ -176,6 +183,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
+              { fallback: <ProfileSkeleton /> },
             ),
             handle: { meta: agentProfileRouteMeta },
             path: 'profile',
@@ -225,30 +233,49 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentSelfLearningRouteMeta },
             path: 'self-learning',
           },
-          // 单个专长的完整拟合面板。做成路由而不是页内状态，深链才打得开。
+          // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]'),
-              'Desktop > Chat > Self Learning > Domain',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+                  'Desktop > Chat > Self Learning > Domain',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                index: true,
+              },
+              // 一个方向的全部经验（不折叠的完整清单）和单条经验详情。
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/experience'),
+                  'Desktop > Chat > Self Learning > Domain > Experience',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/agent/self-learning/[domainId]/experience/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Lesson',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience/:lessonId',
+              },
+              // Legacy `/rules` deep-links — kept so old links keep opening.
+              {
+                element: redirectElement('../experience'),
+                path: 'rules',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Legacy Rule',
+                ),
+                path: 'rules/:lessonId',
+              },
+            ],
             path: 'self-learning/:domainId',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules'),
-              'Desktop > Chat > Self Learning > Domain > Rules',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
-              'Desktop > Chat > Self Learning > Domain > Rule',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules/:lessonId',
           },
           {
             element: dynamicElement(
@@ -305,6 +332,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/group/profile'),
               'Desktop > Agent Group > Profile',
+              { fallback: <ProfileSkeleton variant={'group'} /> },
             ),
             handle: { meta: groupProfileRouteMeta },
             path: 'profile',
@@ -326,7 +354,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(main)/group/_layout'),
           'Desktop > Group > Layout',
-          { preloadId: 'group' },
+          { fallback: <GroupLayoutSkeleton />, preloadId: 'group' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':gid',
@@ -646,7 +674,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(main)/memory/(home)'),
           'Desktop > Memory > Home',
-          { preloadId: 'memory' },
+          { fallback: <MemorySkeleton />, preloadId: 'memory' },
         ),
         handle: {
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),

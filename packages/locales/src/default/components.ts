@@ -49,7 +49,7 @@ export default {
   'FileManager.actions.moveError': 'Failed to move file',
   'FileManager.actions.moveHere': 'Move here',
   'FileManager.actions.moveSuccess': 'File moved successfully',
-  'FileManager.actions.moveToFolder': 'Move to...',
+  'FileManager.actions.moveToFolder': 'Move to…',
   'FileManager.actions.moveToOtherLibrary': 'Move to another Library',
   'FileManager.actions.moveToRoot': 'Move to root directory',
   'FileManager.actions.moving': 'Moving...',
