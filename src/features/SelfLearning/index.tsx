@@ -171,7 +171,7 @@ const SelfLearning = memo(() => {
 
   const openCreate = () => {
     if (!activeAgentId) return;
-    navigate(urlJoin('/agent', activeAgentId, 'self-learning/new'));
+    navigate(urlJoin('/agent', activeAgentId, 'self-evolving/new'));
   };
 
   // Dropping a direction takes its habits and practice history with it — say so before asking.
@@ -190,7 +190,7 @@ const SelfLearning = memo(() => {
           toast.success(t('domain.deleted'));
           await mutate();
           if (domainId && activeAgentId)
-            navigate(urlJoin('/agent', activeAgentId, 'self-learning'));
+            navigate(urlJoin('/agent', activeAgentId, 'self-evolving'));
         } catch {
           toast.error(t('domain.deleteFailed'));
         }
@@ -239,7 +239,7 @@ const SelfLearning = memo(() => {
               extraItems={current ? [current.title] : undefined}
               title={
                 domainId && current ? (
-                  <Link to={urlJoin('/agent', activeAgentId, 'self-learning')}>{t('title')}</Link>
+                  <Link to={urlJoin('/agent', activeAgentId, 'self-evolving')}>{t('title')}</Link>
                 ) : (
                   t('title')
                 )
@@ -358,7 +358,7 @@ const SelfLearning = memo(() => {
                   habits={habits}
                   viewAllPath={
                     current
-                      ? urlJoin('/agent', activeAgentId, 'self-learning', current.id, 'experience')
+                      ? urlJoin('/agent', activeAgentId, 'self-evolving', current.id, 'experience')
                       : undefined
                   }
                   onChanged={() => void mutate()}
@@ -372,7 +372,7 @@ const SelfLearning = memo(() => {
                   domains={allDomains}
                   onOpen={(id) => {
                     if (!activeAgentId) return;
-                    navigate(urlJoin('/agent', activeAgentId, 'self-learning', id));
+                    navigate(urlJoin('/agent', activeAgentId, 'self-evolving', id));
                   }}
                 />
               )}

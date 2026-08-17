@@ -36,4 +36,17 @@ describe('useCreateDomainDraft', () => {
     act(() => result.current.setBrief('Updated agent draft'));
     await waitFor(() => expect(localStorage.getItem(storageKey)).toContain('Updated agent draft'));
   });
+
+  it('clears the in-progress draft and its persisted copy', async () => {
+    const storageKey = 'self-learning:create:agent_1';
+    const { result } = renderHook(() => useCreateDomainDraft('agent_1'));
+
+    act(() => result.current.setBrief('Draft to discard'));
+    await waitFor(() => expect(localStorage.getItem(storageKey)).toContain('Draft to discard'));
+
+    act(() => result.current.clearDraft());
+
+    expect(result.current.brief).toBe('');
+    await waitFor(() => expect(localStorage.getItem(storageKey)).toBeNull());
+  });
 });

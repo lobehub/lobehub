@@ -62,8 +62,16 @@ export const useCreateDomainDraft = (agentId?: string) => {
     }
   }, [brief, draft, storageKey]);
 
+  const clearDraft = () => {
+    if (storageKey) localStorage.removeItem(storageKey);
+    setBrief('');
+    setDraft(undefined);
+    setStep('describe');
+  };
+
   return {
     brief,
+    clearDraft,
     draft,
     setBrief,
     setDraft,

@@ -45,7 +45,7 @@ const ExperienceList = memo(() => {
   );
   const domainPath =
     activeAgentId && domainId
-      ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
+      ? urlJoin('/agent', activeAgentId, 'self-evolving', domainId)
       : undefined;
 
   return (
@@ -63,7 +63,7 @@ const ExperienceList = memo(() => {
                 t('experience.title'),
               ]}
               title={
-                <Link to={urlJoin('/agent', activeAgentId, 'self-learning')}>{t('title')}</Link>
+                <Link to={urlJoin('/agent', activeAgentId, 'self-evolving')}>{t('title')}</Link>
               }
             />
           ) : null

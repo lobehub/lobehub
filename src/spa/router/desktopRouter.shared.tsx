@@ -231,7 +231,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Self Learning',
             ),
             handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning',
+            path: 'self-evolving',
           },
           {
             element: dynamicElement(
@@ -239,7 +239,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Self Learning > Create',
             ),
             handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/new',
+            path: 'self-evolving/new',
           },
           // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
@@ -283,7 +283,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 path: 'rules/:lessonId',
               },
             ],
-            path: 'self-learning/:domainId',
+            path: 'self-evolving/:domainId',
+          },
+          // Legacy `/self-learning` deep-links keep their remaining path when redirected.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/legacy'),
+              'Desktop > Chat > Legacy Self Learning Redirect',
+            ),
+            path: 'self-learning/*',
           },
           {
             element: dynamicElement(

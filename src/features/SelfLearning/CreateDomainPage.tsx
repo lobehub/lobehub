@@ -200,7 +200,7 @@ const CreateDomainPage = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { agentId: routeAgentId } = useResolvedAgentRouteId(aid);
   const agentId = routeAgentId || activeAgentId;
-  const { brief, draft, setBrief, setDraft, setStep, step, storageKey } =
+  const { brief, clearDraft, draft, setBrief, setDraft, setStep, step, storageKey } =
     useCreateDomainDraft(agentId);
   const [creating, setCreating] = useState(false);
   const [adjustments, setAdjustments] = useState(emptyAdjustments);
@@ -280,7 +280,7 @@ const CreateDomainPage = memo(() => {
         title: draft.title.trim(),
       });
       if (storageKey) localStorage.removeItem(storageKey);
-      navigate(urlJoin('/agent', agentId, 'self-learning', id));
+      navigate(urlJoin('/agent', agentId, 'self-evolving', id));
     } catch {
       toast.error(t('create.failed'));
     } finally {
@@ -372,7 +372,14 @@ const CreateDomainPage = memo(() => {
   };
 
   const patch = (p: Partial<ExpertiseDomainDraft>) => setDraft((d) => (d ? { ...d, ...p } : d));
-  const overviewPath = agentId ? urlJoin('/agent', agentId, 'self-learning') : '/';
+  const overviewPath = agentId ? urlJoin('/agent', agentId, 'self-evolving') : '/';
+  const returnToOverview = () => {
+    clearDraft();
+    setAdjustments(emptyAdjustments);
+    setOpenAdjustment(undefined);
+    setRefiningTarget(undefined);
+    navigate(overviewPath);
+  };
   const generatingMessages = [
     t('create.generating'),
     t('create.generatingScope'),
@@ -406,7 +413,7 @@ const CreateDomainPage = memo(() => {
                       icon={ArrowLeftIcon}
                       size={'small'}
                       type={'text'}
-                      onClick={() => setStep('describe')}
+                      onClick={returnToOverview}
                     >
                       {t('create.back')}
                     </Button>
