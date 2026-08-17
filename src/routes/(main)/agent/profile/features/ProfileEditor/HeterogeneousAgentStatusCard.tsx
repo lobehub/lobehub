@@ -9,7 +9,7 @@ import {
 import type { CodexPermissionMode, HeterogeneousProviderConfig } from '@lobechat/types';
 import { CODEX_PERMISSION_MODES, resolveLegacyCodexPermissionMode } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { confirmModal, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -565,7 +565,20 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                     !isLocalExecution
                   )
                     return;
-                  void onPermissionModeChange?.(value as CodexPermissionMode);
+                  const nextMode = value as CodexPermissionMode;
+                  if (nextMode !== 'full-access' || permissionMode === 'full-access') {
+                    void onPermissionModeChange?.(nextMode);
+                    return;
+                  }
+
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: t('heterogeneousStatus.codexPermission.fullAccessConfirm.description'),
+                    okButtonProps: { danger: true },
+                    okText: t('heterogeneousStatus.codexPermission.fullAccessConfirm.confirm'),
+                    onOk: () => onPermissionModeChange?.(nextMode),
+                    title: t('heterogeneousStatus.codexPermission.fullAccessConfirm.title'),
+                  });
                 }}
               />
             </Tooltip>

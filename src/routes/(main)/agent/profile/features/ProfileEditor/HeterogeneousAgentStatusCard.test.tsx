@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
-const { detectHeterogeneousAgentCommand, getClaudeAuthStatus } = vi.hoisted(() => ({
+const { confirmModal, detectHeterogeneousAgentCommand, getClaudeAuthStatus } = vi.hoisted(() => ({
+  confirmModal: vi.fn(),
   detectHeterogeneousAgentCommand: vi.fn(),
   getClaudeAuthStatus: vi.fn(),
 }));
@@ -100,6 +101,7 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal,
   Select: ({
     disabled,
     onChange,
@@ -431,6 +433,40 @@ describe('HeterogeneousAgentStatusCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit command' }));
 
     expect(await screen.findByDisplayValue('claude')).toBeInTheDocument();
+  });
+
+  it('confirms before enabling full access', async () => {
+    confirmModal.mockClear();
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    const onPermissionModeChange = vi.fn();
+    const provider = {
+      permissionMode: 'ask',
+      type: 'codex',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          isLocalExecution
+          provider={provider}
+          onPermissionModeChange={onPermissionModeChange}
+        />
+      </MemoryRouter>,
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Permissions' });
+    fireEvent.change(select, { target: { value: 'full-access' } });
+
+    expect(onPermissionModeChange).not.toHaveBeenCalled();
+    expect(confirmModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        okButtonProps: { danger: true },
+        onOk: expect.any(Function),
+      }),
+    );
+
+    await confirmModal.mock.calls[0][0].onOk();
+    expect(onPermissionModeChange).toHaveBeenCalledWith('full-access');
   });
 
   it('disables Codex permission changes for non-local execution', async () => {

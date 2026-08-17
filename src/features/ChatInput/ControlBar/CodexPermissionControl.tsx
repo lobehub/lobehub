@@ -3,7 +3,7 @@
 import type { CodexPermissionMode, HeterogeneousProviderConfig } from '@lobechat/types';
 import { CODEX_PERMISSION_MODES, resolveCodexPermissionMode } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
-import { Select, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleAlertIcon, ShieldCheckIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -95,6 +95,22 @@ export const CodexPermissionControl = ({
     }
   };
 
+  const selectPermission = (nextMode: CodexPermissionMode) => {
+    if (nextMode !== 'full-access' || permissionMode === 'full-access') {
+      void updatePermission(nextMode);
+      return;
+    }
+
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('heteroAgent.codexPermission.fullAccessConfirm.description'),
+      okButtonProps: { danger: true },
+      okText: t('heteroAgent.codexPermission.fullAccessConfirm.confirm'),
+      onOk: () => updatePermission(nextMode),
+      title: t('heteroAgent.codexPermission.fullAccessConfirm.title'),
+    });
+  };
+
   return (
     <Tooltip title={tooltip}>
       <Select
@@ -115,7 +131,7 @@ export const CodexPermissionControl = ({
             typeof selection === 'string' &&
             CODEX_PERMISSION_MODES.includes(selection as CodexPermissionMode)
           ) {
-            void updatePermission(selection as CodexPermissionMode);
+            selectPermission(selection as CodexPermissionMode);
           }
         }}
       />

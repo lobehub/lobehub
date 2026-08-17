@@ -44,6 +44,12 @@ export const CODEX_PERMISSION_MODES = ['full-access', 'ask', 'auto-review', 'rea
 export type CodexPermissionMode = (typeof CODEX_PERMISSION_MODES)[number];
 export type EffectiveCodexPermissionMode = CodexPermissionMode | 'custom';
 
+export interface CodexPermissionProfile {
+  approvalPolicy: 'never' | 'on-request';
+  approvalsReviewer: 'auto_review' | 'user';
+  sandbox: 'danger-full-access' | 'read-only' | 'workspace-write';
+}
+
 export interface ResolvedCodexPermissionMode {
   mode: EffectiveCodexPermissionMode;
   source: 'agent' | 'legacy';
@@ -297,42 +303,51 @@ export const stripCodexPermissionArgs = (args: string[] | undefined): string[] |
   return stripped;
 };
 
-export const getCodexPermissionModeArgs = (mode: CodexPermissionMode): string[] => {
+export const getCodexPermissionProfile = (mode: CodexPermissionMode): CodexPermissionProfile => {
   switch (mode) {
     case 'full-access': {
-      return [CODEX_DANGEROUS_BYPASS_FLAG];
-    }
-    case 'ask': {
-      return [
-        '--sandbox',
-        'workspace-write',
-        '--ask-for-approval',
-        'on-request',
-        '-c',
-        'approvals_reviewer="user"',
-      ];
+      return {
+        approvalPolicy: 'never',
+        approvalsReviewer: 'user',
+        sandbox: 'danger-full-access',
+      };
     }
     case 'auto-review': {
-      return [
-        '--sandbox',
-        'workspace-write',
-        '--ask-for-approval',
-        'on-request',
-        '-c',
-        'approvals_reviewer="auto_review"',
-      ];
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'auto_review',
+        sandbox: 'workspace-write',
+      };
+    }
+    case 'ask': {
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandbox: 'workspace-write',
+      };
     }
     case 'read-only': {
-      return [
-        '--sandbox',
-        'read-only',
-        '--ask-for-approval',
-        'never',
-        '-c',
-        'approvals_reviewer="user"',
-      ];
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandbox: 'read-only',
+      };
     }
   }
+};
+
+export const getCodexPermissionModeArgs = (mode: CodexPermissionMode): string[] => {
+  if (mode === 'full-access') return [CODEX_DANGEROUS_BYPASS_FLAG];
+
+  const profile = getCodexPermissionProfile(mode);
+  return [
+    '--sandbox',
+    profile.sandbox,
+    '--ask-for-approval',
+    profile.approvalPolicy,
+    '-c',
+    `approvals_reviewer="${profile.approvalsReviewer}"`,
+  ];
 };
 
 /**
@@ -426,7 +441,7 @@ export const resolveLegacyCodexPermissionMode = (
     return 'full-access';
   if (sandbox === 'workspace-write' && approvalPolicy === 'on-request')
     return reviewer === 'auto_review' ? 'auto-review' : reviewer === 'user' ? 'ask' : 'custom';
-  if (sandbox === 'read-only' && approvalPolicy === 'never' && reviewer === 'user')
+  if (sandbox === 'read-only' && approvalPolicy === 'on-request' && reviewer === 'user')
     return 'read-only';
   return 'custom';
 };

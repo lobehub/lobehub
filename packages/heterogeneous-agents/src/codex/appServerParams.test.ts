@@ -104,7 +104,10 @@ describe('Codex app-server payload builders', () => {
       'full-access',
       { approvalPolicy: 'never', approvalsReviewer: 'user', sandbox: 'danger-full-access' },
     ],
-    ['ask', { approvalPolicy: 'untrusted', approvalsReviewer: 'user', sandbox: 'workspace-write' }],
+    [
+      'ask',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' },
+    ],
     [
       'auto-review',
       {
@@ -113,7 +116,10 @@ describe('Codex app-server payload builders', () => {
         sandbox: 'workspace-write',
       },
     ],
-    ['read-only', { approvalPolicy: 'never', approvalsReviewer: 'user', sandbox: 'read-only' }],
+    [
+      'read-only',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'read-only' },
+    ],
   ] as const)('maps %s to an exact app-server profile', (mode, expected) => {
     expect(getCodexPermissionProfile(mode)).toEqual(expected);
     expect(

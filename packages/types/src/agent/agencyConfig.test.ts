@@ -86,7 +86,14 @@ describe('Codex permission modes', () => {
     ],
     [
       'read-only',
-      ['--sandbox', 'read-only', '--ask-for-approval', 'never', '-c', 'approvals_reviewer="user"'],
+      [
+        '--sandbox',
+        'read-only',
+        '--ask-for-approval',
+        'on-request',
+        '-c',
+        'approvals_reviewer="user"',
+      ],
     ],
   ] as const)('maps %s to exact CLI arguments', (mode, args) => {
     expect(getCodexPermissionModeArgs(mode)).toEqual(args);
@@ -115,6 +122,9 @@ describe('Codex permission modes', () => {
     ).toBe('custom');
     expect(resolveLegacyCodexPermissionMode(['--sandbox', 'workspace-write'])).toBe('custom');
     expect(resolveLegacyCodexPermissionMode(['-c', 'approvals_reviewer="other"'])).toBe('custom');
+    expect(
+      resolveLegacyCodexPermissionMode(['--sandbox', 'read-only', '--ask-for-approval', 'never']),
+    ).toBe('custom');
   });
 
   it('removes every legacy permission override before applying a typed mode', () => {

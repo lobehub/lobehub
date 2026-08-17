@@ -93,7 +93,7 @@ describe('buildConnectAgentConfig', () => {
     ).toMatchObject({ provider: 'claude-code' });
   });
 
-  it('defaults newly connected local Codex agents to ask before changes', () => {
+  it('defaults newly connected local Codex agents to ask for approval', () => {
     expect(
       buildConnectAgentConfig({
         provider: getConnectableProvider('codex')!,

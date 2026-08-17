@@ -1,17 +1,13 @@
 import path from 'node:path';
 
-import type { CodexPermissionMode } from '@lobechat/types';
-import { stripCodexPermissionArgs } from '@lobechat/types';
+import type { CodexPermissionMode, CodexPermissionProfile } from '@lobechat/types';
+import { getCodexPermissionProfile, stripCodexPermissionArgs } from '@lobechat/types';
 
 import type { AgentInputPlan } from '../spawn/input';
-import type {
-  ApprovalsReviewer,
-  AskForApproval,
-  JsonValue,
-  SandboxMode,
-  ThreadStartParams,
-  UserInput,
-} from './protocol';
+import type { JsonValue, SandboxMode, ThreadStartParams, UserInput } from './protocol';
+
+export type { CodexPermissionProfile };
+export { getCodexPermissionProfile };
 
 const CODEX_DANGEROUS_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox';
 const CODEX_FULL_AUTO_FLAG = '--full-auto';
@@ -266,47 +262,6 @@ export const buildCodexAppServerThreadParams = (
     sandbox: permissionMode ? permissionProfile.sandbox : sandbox,
     ...(serviceTier ? { serviceTier } : {}),
   };
-};
-
-export interface CodexPermissionProfile {
-  approvalPolicy: AskForApproval;
-  approvalsReviewer: ApprovalsReviewer;
-  sandbox: SandboxMode;
-}
-
-export const getCodexPermissionProfile = (
-  permissionMode: CodexPermissionMode,
-): CodexPermissionProfile => {
-  switch (permissionMode) {
-    case 'full-access': {
-      return {
-        approvalPolicy: 'never',
-        approvalsReviewer: 'user',
-        sandbox: 'danger-full-access',
-      };
-    }
-    case 'ask': {
-      return {
-        approvalPolicy: 'untrusted',
-        approvalsReviewer: 'user',
-        sandbox: 'workspace-write',
-      };
-    }
-    case 'auto-review': {
-      return {
-        approvalPolicy: 'on-request',
-        approvalsReviewer: 'auto_review',
-        sandbox: 'workspace-write',
-      };
-    }
-    case 'read-only': {
-      return {
-        approvalPolicy: 'never',
-        approvalsReviewer: 'user',
-        sandbox: 'read-only',
-      };
-    }
-  }
 };
 
 export const buildCodexAppServerInput = (plan: AgentInputPlan): UserInput[] => {
