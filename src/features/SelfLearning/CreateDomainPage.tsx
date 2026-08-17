@@ -32,7 +32,7 @@ import { shinyTextStyles } from '@/styles';
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
 
-const GENERATION_ESTIMATE_SECONDS = 120;
+const GENERATION_ESTIMATE_SECONDS = 40;
 
 const emptyAdjustments: Record<AdjustmentTarget, string> = {
   canonEntries: '',
@@ -499,10 +499,16 @@ const CreateDomainPage = memo(() => {
             {step === 'review' && draft && (
               <Flexbox className={styles.body}>
                 <Flexbox className={styles.reviewSection} gap={10}>
-                  <Flexbox horizontal align={'center'} justify={'space-between'}>
-                    <Text fontSize={13} weight={600}>
-                      {t('create.field.brief')}
-                    </Text>
+                  <Text fontSize={13} weight={600}>
+                    {t('create.field.brief')}
+                  </Text>
+                  <TextArea
+                    autoSize={{ maxRows: 8, minRows: 3 }}
+                    value={brief}
+                    variant={'filled'}
+                    onChange={(e) => setBrief(e.target.value)}
+                  />
+                  <Flexbox horizontal justify={'end'}>
                     <Button
                       disabled={!brief.trim() || !!refiningTarget}
                       icon={RefreshCwIcon}
@@ -512,12 +518,6 @@ const CreateDomainPage = memo(() => {
                       {t('create.regenerateAfterEdit')}
                     </Button>
                   </Flexbox>
-                  <TextArea
-                    autoSize={{ maxRows: 8, minRows: 3 }}
-                    value={brief}
-                    variant={'filled'}
-                    onChange={(e) => setBrief(e.target.value)}
-                  />
                 </Flexbox>
                 <Divider style={{ margin: 0 }} />
                 <Flexbox className={styles.reviewSection} gap={12}>

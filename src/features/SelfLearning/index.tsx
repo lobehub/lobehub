@@ -4,13 +4,7 @@ import { ActionIcon, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import {
-  GraduationCapIcon,
-  HistoryIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { DnaIcon, HistoryIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -286,7 +280,7 @@ const SelfLearning = memo(() => {
                 <Empty
                   description={t('empty.desc')}
                   descriptionProps={{ fontSize: 13 }}
-                  icon={GraduationCapIcon}
+                  icon={DnaIcon}
                   style={{ maxWidth: 420 }}
                   title={t('empty.title')}
                   action={

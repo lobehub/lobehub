@@ -37,7 +37,7 @@ vi.mock('@lobehub/ui/icons', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  GraduationCapIcon: () => null,
+  DnaIcon: () => null,
   ListTodoIcon: () => null,
   MessageSquarePlusIcon: () => null,
   MessagesSquareIcon: () => null,

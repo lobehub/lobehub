@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
 import {
-  GraduationCapIcon,
+  DnaIcon,
   ListTodoIcon,
   MessageSquarePlusIcon,
   MessagesSquareIcon,
@@ -113,7 +113,7 @@ const Nav = memo(() => {
       {enableSelfLearning && (
         <NavItem
           active={isSelfLearningActive}
-          icon={GraduationCapIcon}
+          icon={DnaIcon}
           title={tSelfLearning('title')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
