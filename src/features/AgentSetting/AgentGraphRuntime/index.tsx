@@ -46,10 +46,10 @@ const AgentGraphRuntime = memo(() => {
   const { t } = useTranslation('setting');
   const config = useStore(selectors.currentAgentConfig, isEqual);
   const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setAgentConfig]);
-  const initialEnabled = config.chatConfig?.enableGraphMode === true;
+  const initialEnabled = config.agencyConfig?.enableGraphMode === true;
   const initialGraphText = useMemo(
-    () => formatGraph(config.chatConfig?.graph),
-    [config.chatConfig?.graph],
+    () => formatGraph(config.agencyConfig?.graph),
+    [config.agencyConfig?.graph],
   );
 
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -106,7 +106,7 @@ const AgentGraphRuntime = memo(() => {
 
     try {
       await updateConfig({
-        chatConfig: { enableGraphMode: enabled, graph: graph ?? null },
+        agencyConfig: { enableGraphMode: enabled, graph: graph ?? null },
       });
     } finally {
       setSaving(false);
