@@ -1,8 +1,9 @@
 'use client';
 
 import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ExpertiseHabit } from '@/services/expertise';
@@ -10,14 +11,27 @@ import type { ExpertiseHabit } from '@/services/expertise';
 import { habitTier } from '../helpers';
 import { portraitStyles as styles } from './styles';
 
+/** The card is a glance, not a ledger: only the latest few teachings stay open by default. */
+const VISIBLE_LIMIT = 5;
+
 /**
  * 教学的回响：你教过的每一件事，现在怎么样了。
  * 「用上了」这一档要等注入回路才会真的发生 —— 在那之前它只会停在「还没机会用」。
+ * 教得多了也只露最近几条 —— 完整清单在下面的习惯列表里，这里不重复。
  */
 const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
   const { t } = useTranslation('selfLearning');
-  const taught = habits.filter((h) => h.taughtByUser);
+  const [expanded, setExpanded] = useState(false);
+  const taught = useMemo(
+    () =>
+      habits
+        .filter((h) => h.taughtByUser)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [habits],
+  );
   if (taught.length === 0) return null;
+  const visible = expanded ? taught : taught.slice(0, VISIBLE_LIMIT);
+  const hidden = taught.length - visible.length;
 
   return (
     <Block padding={'10px 14px'} variant={'outlined'}>
@@ -25,7 +39,7 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
         <Text fontSize={12} type={'secondary'}>
           {t('taught.title', { count: taught.length })}
         </Text>
-        {taught.map((h) => {
+        {visible.map((h) => {
           const tier = habitTier(h.recent);
           const arc =
             tier === 'recurring'
@@ -55,6 +69,13 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
             </Flexbox>
           );
         })}
+        {hidden > 0 && (
+          <Flexbox horizontal>
+            <Button size={'small'} type={'text'} onClick={() => setExpanded(true)}>
+              {t('taught.more', { count: hidden })}
+            </Button>
+          </Flexbox>
+        )}
       </Flexbox>
     </Block>
   );

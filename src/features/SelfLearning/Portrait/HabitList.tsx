@@ -14,9 +14,9 @@ import {
 } from 'lucide-react';
 import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ExpertiseHabit } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 
@@ -68,7 +68,7 @@ interface HabitRowProps {
 
 const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, tier }) => {
   const { t } = useTranslation('selfLearning');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [teaching, setTeaching] = useState(false);
 
   const hint = useMemo(() => {

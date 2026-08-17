@@ -160,6 +160,7 @@ export class ExpertiseModel {
         id: expertiseLessons.id,
         lastHitAt: expertiseLessons.lastHitAt,
         layer: expertiseLessons.layer,
+        originRunId: expertiseLessons.originRunId,
         title: expertiseLessons.title,
       })
       .from(expertiseLessons)
@@ -221,7 +222,16 @@ export class ExpertiseModel {
       });
       recentByLesson.set(r.lessonId, list);
     }
-    return lessons.map((l) => ({ ...l, recent: recentByLesson.get(l.id) ?? [] }));
+    return lessons.map(({ createdByUserId, originRunId, ...l }) => ({
+      ...l,
+      recent: recentByLesson.get(l.id) ?? [],
+      /**
+       * Taught by the user directly, as opposed to distilled from practice. Older ingestion
+       * runs stamped the acting user on distilled lessons too, so a lesson that traces back to
+       * a run is never "taught", whoever created the row.
+       */
+      taughtByUser: createdByUserId != null && originRunId == null,
+    }));
   };
 
   /** Lists the agents that have practiced each domain. */
@@ -455,6 +465,19 @@ export class ExpertiseModel {
       });
     });
     return id;
+  };
+
+  /**
+   * Deletes a domain the user owns together with everything learned in it — bindings, lessons,
+   * runs, hits, snapshots and insights all cascade from the domain row. Nothing is kept: the
+   * user chose to drop the direction, not to pause it.
+   */
+  deleteDomain = async (domainId: string) => {
+    const [row] = await this.db
+      .delete(expertiseDomains)
+      .where(and(eq(expertiseDomains.id, domainId), this.scopeWhere()))
+      .returning({ id: expertiseDomains.id });
+    return row ?? null;
   };
 
   /** Stores a lesson the user taught directly; it takes effect on the next matching practice. */

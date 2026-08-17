@@ -233,30 +233,32 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentSelfLearningRouteMeta },
             path: 'self-learning',
           },
-          // 单个专长的完整拟合面板。做成路由而不是页内状态，深链才打得开。
+          // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]'),
-              'Desktop > Chat > Self Learning > Domain',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+                  'Desktop > Chat > Self Learning > Domain',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                index: true,
+              },
+              // 习惯清单就长在方向画像上；老的 /rules 深链回到画像，不再单独成页。
+              {
+                element: redirectElement('..'),
+                path: 'rules',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Rule',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'rules/:lessonId',
+              },
+            ],
             path: 'self-learning/:domainId',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules'),
-              'Desktop > Chat > Self Learning > Domain > Rules',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
-              'Desktop > Chat > Self Learning > Domain > Rule',
-            ),
-            handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning/:domainId/rules/:lessonId',
           },
           {
             element: dynamicElement(

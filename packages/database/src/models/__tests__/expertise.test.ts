@@ -156,6 +156,112 @@ describe('ExpertiseModel', () => {
     });
   });
 
+  it('marks only directly taught lessons as taught by the user', async () => {
+    await serverDB.insert(expertiseDomains).values({
+      anchorChosenAt: new Date(),
+      domainFilter: 'Taught domain',
+      id: 'taught-domain',
+      slug: 'taught-domain',
+      title: 'Taught domain',
+      userId,
+    });
+    await serverDB.insert(expertiseRuns).values({
+      actorId: 'agent-1',
+      actorType: 'agent',
+      domainId: 'taught-domain',
+      id: runId,
+      runIndex: 1,
+      subjectId: 'some-topic',
+      subjectType: 'topic',
+      userId,
+    });
+    // Older ingestion runs stamped the acting user on distilled lessons as well.
+    await serverDB.insert(expertiseLessons).values({
+      code: 'P-01',
+      createdByUserId: userId,
+      domainId: 'taught-domain',
+      id: lessonId,
+      originRunId: runId,
+      polarity: 'rule',
+      sections: [{ body: 'distilled', key: 'rule' }],
+      title: 'distilled',
+    });
+    const model = new ExpertiseModel(serverDB, userId);
+    const taught = await model.teachLesson({ domainId: 'taught-domain', text: 'taught' });
+
+    const lessons = await model.listLessonsWithRecent(['taught-domain']);
+
+    expect(lessons.map((l) => [l.title, l.taughtByUser])).toEqual([
+      ['distilled', false],
+      ['taught', true],
+    ]);
+    expect(taught?.code).toBe('P-02');
+  });
+
+  it('deletes an owned domain with everything learned in it, and nothing else', async () => {
+    const foreignUserId = 'expertise-delete-foreign-user';
+    await serverDB.insert(users).values({ id: foreignUserId });
+    await serverDB.insert(agents).values({ id: 'delete-agent', userId });
+    await serverDB.insert(expertiseDomains).values([
+      {
+        anchorChosenAt: new Date(),
+        domainFilter: 'Mine',
+        id: 'delete-domain',
+        slug: 'delete-domain',
+        title: 'Mine',
+        userId,
+      },
+      {
+        anchorChosenAt: new Date(),
+        domainFilter: 'Theirs',
+        id: 'delete-foreign-domain',
+        slug: 'delete-foreign-domain',
+        title: 'Theirs',
+        userId: foreignUserId,
+      },
+    ]);
+    await serverDB.insert(expertiseBindings).values({
+      agentId: 'delete-agent',
+      domainId: 'delete-domain',
+    });
+    await serverDB.insert(expertiseRuns).values({
+      actorId: 'delete-agent',
+      actorType: 'agent',
+      domainId: 'delete-domain',
+      id: runId,
+      runIndex: 1,
+      subjectId: 'topic',
+      subjectType: 'topic',
+      userId,
+    });
+    await serverDB.insert(expertiseLessons).values({
+      code: 'P-01',
+      domainId: 'delete-domain',
+      id: lessonId,
+      polarity: 'rule',
+      sections: [],
+      title: 'lesson',
+    });
+    await serverDB.insert(expertiseHits).values({
+      domainId: 'delete-domain',
+      id: hitId,
+      lessonId,
+      outcome: 'pass',
+      runId,
+    });
+    const model = new ExpertiseModel(serverDB, userId);
+
+    await expect(model.deleteDomain('delete-foreign-domain')).resolves.toBeNull();
+    await expect(model.deleteDomain('delete-domain')).resolves.toEqual({ id: 'delete-domain' });
+
+    await expect(model.listDomainsForAgent('delete-agent')).resolves.toEqual([]);
+    await expect(serverDB.select().from(expertiseLessons)).resolves.toEqual([]);
+    await expect(serverDB.select().from(expertiseHits)).resolves.toEqual([]);
+    await expect(serverDB.select().from(expertiseRuns)).resolves.toEqual([]);
+    const remaining = await serverDB.select({ id: expertiseDomains.id }).from(expertiseDomains);
+    expect(remaining).toEqual([{ id: 'delete-foreign-domain' }]);
+  });
+
   it('keeps cross-domain insights isolated to the active workspace', async () => {
     await serverDB.insert(workspaces).values([
       { id: 'expertise-workspace-1', name: 'Workspace 1', primaryOwnerId: userId, slug: 'ws-1' },

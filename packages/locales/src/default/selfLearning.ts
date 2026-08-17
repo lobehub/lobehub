@@ -52,6 +52,14 @@ export default {
     'Here is the anchor it read out of your brief. Fix anything that is off — the filter decides which conversations it learns from; the layers and canon decide where lessons attach and what “coverage” means.',
   'create.reviewStep': 'Review the anchor',
 
+  'domain.delete': 'Delete this direction',
+  'domain.deleteConfirm.content':
+    'Its {{habits}} habits and {{runs}} practice records in this direction go with it. This cannot be undone.',
+  'domain.deleteConfirm.ok': 'Delete',
+  'domain.deleteConfirm.title': 'Delete “{{name}}”?',
+  'domain.deleted': 'Direction deleted.',
+  'domain.deleteFailed': 'Could not delete the direction. Try again.',
+  'domain.more': 'More',
   'domains.meta': '{{habits}} habits · {{runs}} practices',
   'domains.title': 'Directions',
   'domains.word.fresh': 'just starting',
@@ -121,7 +129,6 @@ export default {
   'profile.word.unstable': 'slips sometimes',
   'profile.word.weak': 'weak spot',
 
-  'rules.allTitle': 'All lessons',
   'rules.detail.domainUnavailable': 'Direction context could not be loaded',
   'rules.detail.examples': 'Where it was tested',
   'rules.detail.eyebrow': 'Lesson {{code}}',
@@ -149,6 +156,7 @@ export default {
   'taught.arc.recurring': 'slipped again',
   'taught.arc.shaky': 'goes either way',
   'taught.arc.used': 'used ✓',
+  'taught.more': '{{count}} more',
   'taught.title': 'You taught it {{count}} things',
 
   'teachNew.domain': 'Direction',

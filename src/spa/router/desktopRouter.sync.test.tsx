@@ -135,6 +135,30 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
+    '%s sends legacy self-learning /rules deep-links back to the domain portrait',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+      const rulesMatches = matchRoutes(routes, '/agent/agent-1/self-learning/domain-1/rules');
+      const lessonMatches = matchRoutes(
+        routes,
+        '/agent/agent-1/self-learning/domain-1/rules/lesson-1',
+      );
+
+      expect(rulesMatches?.at(-1)?.route.path).toBe('rules');
+      // The redirect resolves against the parent route, i.e. the domain portrait.
+      expect(
+        (rulesMatches?.at(-1)?.route.element as ReactElement<{ to: string }> | undefined)?.props.to,
+      ).toBe('..');
+      expect(rulesMatches?.at(-2)?.pathname).toBe('/agent/agent-1/self-learning/domain-1');
+      expect(lessonMatches?.at(-1)?.route.path).toBe('rules/:lessonId');
+      expect(lessonMatches?.at(-1)?.params).toMatchObject({
+        domainId: 'domain-1',
+        lessonId: 'lesson-1',
+      });
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s exposes projects as task and goal containers only',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');

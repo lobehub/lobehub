@@ -11,19 +11,7 @@ import {
   topics,
 } from '@lobechat/database/schemas';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import {
-  and,
-  asc,
-  countDistinct,
-  desc,
-  eq,
-  gt,
-  isNotNull,
-  isNull,
-  max,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
@@ -167,12 +155,38 @@ export class ExpertiseIngestionService {
     } as const;
   };
 
+  /**
+   * The topics an agent has ever spoken in, resolved through indexes rather than a scan.
+   *
+   * A message belongs to the agent when `messages.agentId` says so, or — for rows written
+   * before messages carried an agent — when the topic itself is the agent's. The naive
+   * `COALESCE(messages.agentId, topics.agentId) = ?` form expresses the same thing but forces
+   * Postgres to walk every message the user owns; both arms here start from an agent index.
+   */
+  private historicalTopicCandidates = (agentId: string) => {
+    const scope = this.workspaceId
+      ? eq(messages.workspaceId, this.workspaceId)
+      : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
+
+    const byMessageAgent = this.db
+      .select({ topicId: messages.topicId })
+      .from(messages)
+      .where(and(scope, eq(messages.agentId, agentId), isNotNull(messages.topicId)));
+    const byTopicAgent = this.db
+      .select({ topicId: messages.topicId })
+      .from(messages)
+      .innerJoin(topics, eq(topics.id, messages.topicId))
+      .where(and(scope, isNull(messages.agentId), eq(topics.agentId, agentId)));
+
+    return byMessageAgent.union(byTopicAgent).as('historical_topic_candidates');
+  };
+
   /** Lists existing conversations owned by this agent for an explicit historical backfill. */
   listHistoricalTopics = async (
     agentId: string,
     options: { cursor?: { lastActivityAt: Date; topicId: string }; limit?: number } = {},
   ) => {
-    const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
+    const candidates = this.historicalTopicCandidates(agentId);
     const scope = this.workspaceId
       ? eq(messages.workspaceId, this.workspaceId)
       : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
@@ -184,8 +198,8 @@ export class ExpertiseIngestionService {
         topicId: sql<string>`${messages.topicId}`,
       })
       .from(messages)
-      .leftJoin(topics, eq(topics.id, messages.topicId))
-      .where(and(scope, eq(effectiveAgentId, agentId), isNotNull(messages.topicId)))
+      .innerJoin(candidates, eq(candidates.topicId, messages.topicId))
+      .where(scope)
       .groupBy(messages.topicId)
       .having(
         options.cursor
@@ -204,15 +218,8 @@ export class ExpertiseIngestionService {
 
   /** Counts historical topics so the UI can explain the scope before scheduling the backfill. */
   countHistoricalTopics = async (agentId: string) => {
-    const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
-    const scope = this.workspaceId
-      ? eq(messages.workspaceId, this.workspaceId)
-      : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
-    const [row] = await this.db
-      .select({ count: countDistinct(messages.topicId) })
-      .from(messages)
-      .leftJoin(topics, eq(topics.id, messages.topicId))
-      .where(and(scope, eq(effectiveAgentId, agentId), isNotNull(messages.topicId)));
+    const candidates = this.historicalTopicCandidates(agentId);
+    const [row] = await this.db.select({ count: count() }).from(candidates);
 
     return row?.count ?? 0;
   };
@@ -413,9 +420,10 @@ export class ExpertiseIngestionService {
           newCount += 1;
           const lessonId = randomUUID();
           const code = `P-${String(nextCodeNumber++).padStart(2, '0')}`;
+          // Distilled from practice, not taught: leave `createdByUserId` empty so the portrait
+          // does not list every learned habit under "you taught it".
           await tx.insert(expertiseLessons).values({
             code,
-            createdByUserId: this.userId,
             domainId: input.domain.id,
             id: lessonId,
             exampleCount: 1,

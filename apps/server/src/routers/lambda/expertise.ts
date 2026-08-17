@@ -121,8 +121,7 @@ export const expertiseRouter = router({
             lastHitAt: l.lastHitAt,
             layer: l.layer,
             recent: l.recent,
-            /** Taught by the user directly (as opposed to distilled from practice). */
-            taughtByUser: l.createdByUserId != null,
+            taughtByUser: l.taughtByUser,
             title: l.title,
           })),
           outOfScope: domain.outOfScope,
@@ -215,6 +214,11 @@ export const expertiseRouter = router({
   createDomain: expertiseProcedure
     .input(DomainDraftSchema.extend({ agentId: z.string(), brief: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseDomainService.create(input)),
+
+  /** The user drops a direction; everything learned in it goes with it. */
+  deleteDomain: expertiseProcedure
+    .input(z.object({ domainId: z.string() }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.deleteDomain(input.domainId)),
 
   /** How many past conversations a history warm-up would read. */
   countHistory: expertiseProcedure

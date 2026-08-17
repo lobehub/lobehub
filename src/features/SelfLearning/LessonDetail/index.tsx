@@ -70,7 +70,6 @@ const LessonDetail = memo(() => {
     activeAgentId && domainId
       ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
       : undefined;
-  const rulesPath = domainPath ? urlJoin(domainPath, 'rules') : undefined;
   const sections = data?.lesson.sections.filter(
     (section) =>
       section.key !== 'rule' ||
@@ -89,9 +88,6 @@ const LessonDetail = memo(() => {
               extraItems={[
                 <Link key={'domain'} to={domainPath ?? '#'}>
                   {domain?.domain.title ?? '…'}
-                </Link>,
-                <Link key={'rules'} to={rulesPath ?? '#'}>
-                  {t('rules.allTitle')}
                 </Link>,
                 data?.lesson.code ?? '…',
               ]}
