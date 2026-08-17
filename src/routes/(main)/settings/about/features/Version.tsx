@@ -6,15 +6,18 @@ import {
 } from '@lobechat/electron-client-ipc';
 import { Block, Flexbox, Tag } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type VersionResponseData } from '@/app/(backend)/api/version/route';
 import { ProductLogo } from '@/components/Branding';
 import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import {
@@ -31,6 +34,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const shortSha = (sha: string) => (sha.length > 7 ? sha.slice(0, 7) : sha);
+
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
   const [latestVersion, serverVersion, useCheckServerVersion, useCheckLatestVersion] =
@@ -41,8 +46,26 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
       s.useCheckLatestVersion,
     ]);
   const { t } = useTranslation(['common', 'setting']);
+  const { message } = App.useApp();
+
+  const [buildInfo, setBuildInfo] = useState<VersionResponseData | null>(null);
 
   useCheckServerVersion();
+
+  useEffect(() => {
+    let cancelled = false;
+    void globalService
+      .getBuildInfo()
+      .then((info) => {
+        if (!cancelled) setBuildInfo(info);
+      })
+      .catch(() => {
+        if (!cancelled) setBuildInfo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Read the shared latest-version check state (deduped by key, no extra fetch)
   // so a failed update check can surface a retry instead of silently rendering
@@ -56,7 +79,9 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     mutate: recheckUpdate,
   } = useCheckLatestVersion(enableCheckUpdates);
 
-  const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
+  const displayVersion = buildInfo?.version || APP_VERSION;
+  const showServerVersion =
+    serverVersion && serverVersion !== CURRENT_VERSION && serverVersion !== displayVersion;
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
 
   const [updaterState, setUpdaterState] = useState<UpdaterState>({ stage: 'idle' });
@@ -76,6 +101,9 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     setUpdaterState(state);
   });
 
+  const deployChannel = buildInfo?.channel || null;
+  const gitSha = buildInfo?.gitSha || null;
+
   const devDockGestureEnabled = import.meta.env.PROD && canAccessDevDock;
 
   const handleVersionClick = () => {
@@ -84,6 +112,16 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     const result = advanceDevDockClickSequence(devDockClickSequence.current, Date.now());
     devDockClickSequence.current = result.sequence;
     if (result.completed) toggleDevDockUnlocked();
+  };
+
+  const handleCopySha = async () => {
+    if (!gitSha) return;
+    try {
+      await navigator.clipboard.writeText(gitSha);
+      message.success(t('upgradeVersion.shaCopied'));
+    } catch {
+      // ignore clipboard failures
+    }
   };
 
   const renderUpdateButton = () => {
@@ -173,13 +211,33 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         </a>
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
-          <Flexbox gap={6} horizontal={!mobile}>
+          <Flexbox gap={6} horizontal={!mobile} wrap={'wrap'}>
             <Tag
               style={{ cursor: devDockGestureEnabled ? 'pointer' : 'default' }}
               onClick={handleVersionClick}
             >
-              v{APP_VERSION}
+              v{displayVersion}
             </Tag>
+
+            {deployChannel && (
+              <Tag color={deployChannel === 'preview' ? 'gold' : 'blue'}>
+                {t('upgradeVersion.buildChannel', { channel: deployChannel })}
+              </Tag>
+            )}
+
+            {gitSha && (
+              <Tag style={{ cursor: 'pointer' }} onClick={() => void handleCopySha()}>
+                {t('upgradeVersion.gitSha', { sha: shortSha(gitSha) })}
+              </Tag>
+            )}
+
+            {buildInfo?.builtAt && (
+              <Tag>
+                {t('upgradeVersion.builtAt', {
+                  time: new Date(buildInfo.builtAt).toLocaleString(),
+                })}
+              </Tag>
+            )}
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>
