@@ -2,6 +2,13 @@ import type {
   DesktopNotificationResult,
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
+import {
+  getAuthorizationStatus as getMacAuthorizationStatus,
+  isSupported as isMacNotificationsSupported,
+  onNotificationEvent as onMacNotificationEvent,
+  requestAuthorization as requestMacAuthorization,
+  showNotification as showMacNotification,
+} from '@lobechat/electron-mac-notifications';
 import { app, Notification } from 'electron';
 
 import { getIpcContext } from '@/utils/ipc';
@@ -12,11 +19,30 @@ import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:NotificationCtr');
 
+const NAVIGATE_MAP_LIMIT = 100;
+
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';
 
+  private readonly navigateByNotificationId = new Map<
+    string,
+    ShowDesktopNotificationParams['navigate']
+  >();
+
+  private get useMacNotifications() {
+    return electronIs.macOS() && isMacNotificationsSupported();
+  }
+
   @IpcMethod()
   async getNotificationPermissionStatus(): Promise<string> {
+    if (this.useMacNotifications) {
+      const status = await getMacAuthorizationStatus();
+      if (status !== 'unsupported') {
+        if (status === 'authorized' || status === 'provisional') return 'authorized';
+        return status;
+      }
+    }
+
     if (!Notification.isSupported()) return 'denied';
     // Keep a stable status string for renderer-side UI mapping.
     // Screen3 expects macOS to return 'authorized' when granted.
@@ -34,6 +60,12 @@ export default class NotificationCtr extends ControllerModule {
 
   @IpcMethod()
   async requestNotificationPermission(): Promise<void> {
+    if (this.useMacNotifications) {
+      const granted = await requestMacAuthorization();
+      logger.debug('macOS notification authorization requested, granted:', granted);
+      return;
+    }
+
     logger.debug('Requesting notification permission by sending a test notification');
 
     if (!Notification.isSupported()) {
@@ -67,6 +99,54 @@ export default class NotificationCtr extends ControllerModule {
    */
   afterAppReady() {
     this.setupNotifications();
+    this.setupMacNotificationClicks();
+  }
+
+  private setupMacNotificationClicks() {
+    if (!this.useMacNotifications) return;
+
+    onMacNotificationEvent((event) => {
+      if (event.type !== 'clicked') return;
+      logger.debug('macOS notification clicked:', event.id);
+      const navigate = this.navigateByNotificationId.get(event.id);
+      this.navigateByNotificationId.delete(event.id);
+      this.app.browserManager.showMainWindow();
+      if (navigate?.path) {
+        this.app.browserManager.getMainWindow().broadcast('navigate', navigate);
+      }
+    });
+  }
+
+  private async showViaMacNotifications(
+    params: ShowDesktopNotificationParams,
+  ): Promise<DesktopNotificationResult | undefined> {
+    try {
+      const result = await showMacNotification({
+        body: params.body,
+        sender: params.sender,
+        silent: params.silent,
+        title: params.title,
+      });
+
+      if (!result.ok) {
+        logger.warn('macOS notification addon failed, falling back to Electron:', result.reason);
+        return undefined;
+      }
+
+      if (params.navigate?.path) {
+        this.navigateByNotificationId.set(result.id, params.navigate);
+        if (this.navigateByNotificationId.size > NAVIGATE_MAP_LIMIT) {
+          const oldest = this.navigateByNotificationId.keys().next().value;
+          if (oldest) this.navigateByNotificationId.delete(oldest);
+        }
+      }
+
+      logger.info('macOS notification shown via native addon:', result.id);
+      return { success: true };
+    } catch (error) {
+      logger.error('macOS notification addon threw, falling back to Electron:', error);
+      return undefined;
+    }
   }
 
   /**
@@ -126,6 +206,11 @@ export default class NotificationCtr extends ControllerModule {
 
       if (params.requestAttention && isWindowHidden) {
         this.requestUserAttention();
+      }
+
+      if (this.useMacNotifications) {
+        const macResult = await this.showViaMacNotifications(params);
+        if (macResult) return macResult;
       }
 
       logger.info('Showing desktop notification:', params.title);

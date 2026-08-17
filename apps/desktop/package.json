@@ -68,6 +68,7 @@
     "@lobechat/device-identity": "workspace:*",
     "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
+    "@lobechat/electron-mac-notifications": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",

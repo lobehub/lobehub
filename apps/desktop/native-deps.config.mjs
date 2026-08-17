@@ -39,7 +39,7 @@ const dependencyOptions = isDarwin ? { skipOptionalDependenciesFor: new Set(['ge
  */
 export const nativeModules = [
   // macOS-only native modules
-  ...(isDarwin ? ['node-mac-permissions'] : []),
+  ...(isDarwin ? ['@lobechat/electron-mac-notifications', 'node-mac-permissions'] : []),
   '@lydell/node-pty',
   'get-windows',
   'node-screenshots',
@@ -68,6 +68,7 @@ export function getNativeModulesFilesConfig() {
  */
 export function getAsarUnpackPatterns() {
   return [
+    'node_modules/@lobechat/electron-mac-notifications/build/Release/*.node',
     'node_modules/@lydell/node-pty-*/prebuilds/**/*.node',
     'node_modules/@lydell/node-pty-*/prebuilds/*/spawn-helper',
     'node_modules/font-list/libs/darwin/fontlist',
