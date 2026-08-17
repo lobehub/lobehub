@@ -728,17 +728,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 /** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
 export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const command = resolveHeterogeneousAgentCommand('trae', options.command);
-  const commandName = command
-    .trim()
-    .split(/[\\/]/)
-    .at(-1)
-    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
-  if (commandName?.toLowerCase() === 'trae-cli') {
-    throw new Error(
-      'The open-source `trae-cli` trajectory runner is unsupported; install TRAE Enterprise `traecli` instead.',
-    );
-  }
-
   const cwd = options.cwd || process.cwd();
   if (!existsSync(cwd)) {
     throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {

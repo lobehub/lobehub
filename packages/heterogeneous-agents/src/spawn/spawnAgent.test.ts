@@ -537,18 +537,31 @@ describe('spawnAgent', () => {
     }
   });
 
-  it('does not treat the open-source trae-cli trajectory runner as TRAE ACP', async () => {
-    const { spawnAgent } = await import('./spawnAgent');
+  it('allows the official canonical trae-cli command to run through ACP', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
-    await expect(
-      spawnAgent({
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
         agentType: 'trae',
         command: 'trae-cli',
         operationId: 'op-trae',
         prompt: 'do a thing',
-      }),
-    ).rejects.toThrow('trajectory runner is unsupported');
-    expect(spawnCalls).toHaveLength(0);
+      });
+
+      for await (const _event of handle.events) {
+        // Consume the ACP session to completion.
+      }
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', 'serve', '--yolo'],
+        command: 'trae-cli',
+      });
+    } finally {
+      killSpy.mockRestore();
+    }
   });
 
   it('passes --include-partial-messages only when includePartialMessages=true', async () => {

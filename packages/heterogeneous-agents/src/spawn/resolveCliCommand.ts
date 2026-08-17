@@ -45,7 +45,6 @@ export interface CliCommandStatus {
 }
 
 interface ValidateOptions {
-  rejectPattern?: RegExp;
   validateFlag?: string;
   /** Capability-probe argv. Defaults to `--help`. */
   validateHelpArgs?: string[];
@@ -387,7 +386,6 @@ export const detectValidatedCommand = async (
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
   const {
-    rejectPattern,
     validateFlag = '--version',
     validateHelpArgs = ['--help'],
     validateHelpKeywords,
@@ -417,9 +415,6 @@ export const detectValidatedCommand = async (
     const output = `${result.stdout}\n${result.stderr}`.trim();
     const firstLine = output.split(/\r?\n/)[0]!.trim();
     const loweredOutput = output.toLowerCase();
-    if (rejectPattern?.test(firstLine) || rejectPattern?.test(output)) {
-      return { available: false };
-    }
     const matchesKeyword = validateKeywords?.some((keyword) =>
       loweredOutput.includes(keyword.toLowerCase()),
     );
@@ -434,9 +429,9 @@ export const detectValidatedCommand = async (
       return { available: false };
     }
 
-    // Kimi Code shares the `kimi` executable name with the retired Python
-    // kimi-cli. Both can print a valid version, so capability-probe the exact
-    // resolved binary before accepting it as the stream-json runtime.
+    // Some command names and version banners identify multiple products. When
+    // configured, capability-probe the exact resolved binary before accepting
+    // it as the runtime this adapter needs.
     if (validateHelpKeywords?.length) {
       let helpResult;
       try {
@@ -555,10 +550,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'trae': {
-    // TRAE Enterprise releases may print either a product-prefixed version or
-    // a bare semver. Reject the unrelated open-source trajectory runner even
-    // when its executable has been renamed.
-    rejectPattern: /^trae-cli\b/i,
+    // The official binary and the unrelated open-source trajectory runner both
+    // identify themselves as `trae-cli`. Distinguish them by the ACP runtime
+    // LobeHub actually needs rather than by executable name or version banner.
+    validateHelpArgs: ['acp', 'serve', '--help'],
+    validateHelpKeywords: ['Start the ACP server', '--yolo'],
     validateKeywords: ['trae', 'traecode'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
@@ -698,9 +694,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
       ];
     }
     case 'trae': {
-      // TRAE CLI is distributed through TRAE Enterprise and has no verified
-      // cross-platform standalone install location. Resolve it from PATH only.
-      return [];
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (!localAppData) return [];
+
+        const binDir = path.win32.join(localAppData, 'trae-cli', 'bin');
+        return [path.win32.join(binDir, 'traecli.exe'), path.win32.join(binDir, 'trae-cli.exe')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'traecli'),
+        path.join(homedir(), '.local', 'bin', 'trae-cli'),
+      ];
     }
     default: {
       return [];
@@ -712,17 +718,6 @@ export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
 ): Promise<CliCommandStatus> => {
-  const commandName = command
-    .trim()
-    .split(/[\\/]/)
-    .at(-1)
-    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
-  // `trae-cli` belongs to the unrelated open-source trajectory runner. LobeHub
-  // integrates only the TRAE Enterprise `traecli acp serve` runtime.
-  if (agentType === 'trae' && commandName?.toLowerCase() === 'trae-cli') {
-    return { available: false };
-  }
-
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 
