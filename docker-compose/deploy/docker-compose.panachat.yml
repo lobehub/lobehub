@@ -1,21 +1,23 @@
-# Panachat production / canary CI-CD stack (blue-green app + durable data plane).
+# Panachat production / canary / preview CI-CD stack (blue-green app + durable data plane).
 #
 # Usage (from docker-compose/deploy):
 #   export PANACHAT_IMAGE=ghcr.io/panafor-ai-team/panachat:<sha>
-#   docker compose -f docker-compose.panachat.yml --env-file ../../.env --env-file .env up -d
+#   export PANACHAT_STACK=panachat                    # or panachat-preview
+#   export PANACHAT_VOLUME_PREFIX=panachat            # or panachat_preview
+#   docker compose -p "$PANACHAT_STACK" -f docker-compose.panachat.yml \
+#     --env-file ../../.env --env-file .env up -d
 #
-# Deploy script (scripts/panachat-deploy-remote.sh) starts only the inactive
-# app slot, verifies it, flips nginx, then stops the old slot.
-# Never run `docker compose down -v` — named volumes hold production data.
+# Preview uses a separate project, volumes, and ports — never share prod data.
+# Never run `docker compose down -v` — named volumes hold durable data.
 
-name: panachat
+name: ${PANACHAT_STACK:-panachat}
 
 services:
   # App slots are profile-gated so `compose up -d` (data plane) never
   # accidentally restarts a stopped color. Deploy script starts one profile.
   panachat-blue:
     image: ${PANACHAT_IMAGE:?set PANACHAT_IMAGE to ghcr.io/<owner>/panachat:<sha>}
-    container_name: panachat-blue
+    container_name: ${PANACHAT_STACK:-panachat}-blue
     pull_policy: always
     profiles:
       - slot-blue
@@ -48,15 +50,15 @@ services:
       - 'AICO_CONTROL_PLANE_URL=${AICO_CONTROL_PLANE_URL:-http://panachat-control-plane:3020}'
       - 'OPENROUTER_MANAGEMENT_API_KEY='
     env_file:
-      - ../../.env
-      - .env
+      - ${PANACHAT_APP_ENV_FILE:-../../.env}
+      - ${PANACHAT_INFRA_ENV_FILE:-.env}
     networks:
       - panachat-network
     restart: unless-stopped
 
   panachat-green:
     image: ${PANACHAT_IMAGE:?set PANACHAT_IMAGE to ghcr.io/<owner>/panachat:<sha>}
-    container_name: panachat-green
+    container_name: ${PANACHAT_STACK:-panachat}-green
     pull_policy: always
     profiles:
       - slot-green
@@ -89,15 +91,15 @@ services:
       - 'AICO_CONTROL_PLANE_URL=${AICO_CONTROL_PLANE_URL:-http://panachat-control-plane:3020}'
       - 'OPENROUTER_MANAGEMENT_API_KEY='
     env_file:
-      - ../../.env
-      - .env
+      - ${PANACHAT_APP_ENV_FILE:-../../.env}
+      - ${PANACHAT_INFRA_ENV_FILE:-.env}
     networks:
       - panachat-network
     restart: unless-stopped
 
   panachat-control-plane:
     image: ${PANACHAT_CONTROL_PLANE_IMAGE:-node:24-bookworm-slim}
-    container_name: panachat-control-plane
+    container_name: ${PANACHAT_STACK:-panachat}-control-plane
     profiles:
       - control-plane
     working_dir: ${PANACHAT_CONTROL_PLANE_WORKDIR:-/repo/apps/aico-control-plane}
@@ -105,8 +107,8 @@ services:
       - ${PANACHAT_REPO_ROOT:-../..}:/repo
     command: ['node', 'dist/standalone.js']
     env_file:
-      - ../../.env
-      - .env
+      - ${PANACHAT_APP_ENV_FILE:-../../.env}
+      - ${PANACHAT_INFRA_ENV_FILE:-.env}
     environment:
       AICO_IS_CONTROL_PLANE: '1'
       AICO_CONTROL_PLANE_PORT: '3020'
@@ -148,9 +150,9 @@ services:
 
   postgresql:
     image: paradedb/paradedb:latest-pg17
-    container_name: panachat-postgres
+    container_name: ${PANACHAT_STACK:-panachat}-postgres
     volumes:
-      - panachat_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
     environment:
       - 'POSTGRES_DB=${PANACHAT_DB_NAME}'
@@ -166,10 +168,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: panachat-redis
+    container_name: ${PANACHAT_STACK:-panachat}-redis
     command: redis-server --save 60 1000 --appendonly yes
     volumes:
-      - panachat_redis_data:/data
+      - redis_data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -181,7 +183,7 @@ services:
 
   rustfs:
     image: rustfs/rustfs:latest
-    container_name: panachat-rustfs
+    container_name: ${PANACHAT_STACK:-panachat}-rustfs
     ports:
       - '127.0.0.1:${RUSTFS_PORT:-9000}:9000'
     environment:
@@ -189,7 +191,7 @@ services:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
     volumes:
-      - panachat_rustfs_data:/data
+      - rustfs_data:/data
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
@@ -203,7 +205,7 @@ services:
 
   rustfs-init:
     image: minio/mc:latest
-    container_name: panachat-rustfs-init
+    container_name: ${PANACHAT_STACK:-panachat}-rustfs-init
     depends_on:
       rustfs:
         condition: service_healthy
@@ -217,7 +219,7 @@ services:
 
   searxng:
     image: searxng/searxng
-    container_name: panachat-searxng
+    container_name: ${PANACHAT_STACK:-panachat}-searxng
     volumes:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
@@ -226,17 +228,17 @@ services:
     networks:
       - panachat-network
     env_file:
-      - .env
+      - ${PANACHAT_INFRA_ENV_FILE:-.env}
 
 networks:
   panachat-network:
-    name: panachat-network
+    name: ${PANACHAT_STACK:-panachat}-network
     driver: bridge
 
 volumes:
-  panachat_postgres_data:
-    name: panachat_postgres_data
-  panachat_redis_data:
-    name: panachat_redis_data
-  panachat_rustfs_data:
-    name: panachat_rustfs_data
+  postgres_data:
+    name: ${PANACHAT_VOLUME_PREFIX:-panachat}_postgres_data
+  redis_data:
+    name: ${PANACHAT_VOLUME_PREFIX:-panachat}_redis_data
+  rustfs_data:
+    name: ${PANACHAT_VOLUME_PREFIX:-panachat}_rustfs_data
