@@ -25,7 +25,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
-import { shinyTextStyles } from '@/styles';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
@@ -63,12 +62,57 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-end: 24px;
   `,
   generatingStatus: css`
-    padding-block: 12px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    min-height: 36px;
+    padding-block: 6px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  generatingTextItem: css`
+    display: flex;
+    align-items: center;
 
-    background: ${cssVar.colorFillQuaternary};
+    height: 22px;
+
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    white-space: nowrap;
+  `,
+  generatingTextTrack: css`
+    animation: self-learning-generation-roll 16s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+
+    @keyframes self-learning-generation-roll {
+      0%,
+      20% {
+        transform: translateY(0);
+      }
+
+      25%,
+      45% {
+        transform: translateY(-22px);
+      }
+
+      50%,
+      70% {
+        transform: translateY(-44px);
+      }
+
+      75%,
+      95% {
+        transform: translateY(-66px);
+      }
+
+      100% {
+        transform: translateY(-88px);
+      }
+    }
+  `,
+  generatingTextViewport: css`
+    overflow: hidden;
+    height: 22px;
   `,
   itemRow: css`
     display: grid;
@@ -316,6 +360,13 @@ const CreateDomainPage = memo(() => {
 
   const patch = (p: Partial<ExpertiseDomainDraft>) => setDraft((d) => (d ? { ...d, ...p } : d));
   const overviewPath = agentId ? urlJoin('/agent', agentId, 'self-learning') : '/';
+  const generatingMessages = [
+    t('create.generating'),
+    t('create.generatingScope'),
+    t('create.generatingCanon'),
+    t('create.generatingLayers'),
+    t('create.generating'),
+  ];
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
@@ -371,9 +422,19 @@ const CreateDomainPage = memo(() => {
                       >
                         <Flexbox horizontal align={'center'} gap={8}>
                           <NeuralNetworkLoading size={18} />
-                          <Text className={shinyTextStyles.shinyText} weight={500}>
-                            {t('create.generating')}
-                          </Text>
+                          <div
+                            aria-label={t('create.generating')}
+                            className={styles.generatingTextViewport}
+                            role={'status'}
+                          >
+                            <div aria-hidden className={styles.generatingTextTrack}>
+                              {generatingMessages.map((message, index) => (
+                                <div className={styles.generatingTextItem} key={index}>
+                                  {message}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </Flexbox>
                         <Text fontSize={12} type={'secondary'}>
                           {remainingSeconds > 0
