@@ -25,12 +25,15 @@
 #   PANACHAT_IMAGE_KEEP           keep last N SHA images (default 5)
 #   PANACHAT_SKIP_BACKUP=1
 #   PANACHAT_SKIP_NGINX=1
+#   PANACHAT_ALLOW_DB_DRIFT=1     allow deploy when live user count dropped vs fingerprint
 #   COMPOSE_PROFILES              e.g. control-plane
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="${PANACHAT_ROOT:-$ROOT}"
+# shellcheck source=moz-pgdata-guards.sh
+source "$ROOT/scripts/moz-pgdata-guards.sh"
 DEPLOY_DIR="$ROOT/docker-compose/deploy"
 COMPOSE_FILE="$DEPLOY_DIR/docker-compose.panachat.yml"
 HEALTH_TIMEOUT="${PANACHAT_HEALTH_TIMEOUT_SEC:-180}"
@@ -224,6 +227,74 @@ set_image_env() {
   done
 }
 
+fingerprint_file() {
+  echo "${PANACHAT_DATA_DIR:-$STATE_DIR/data}/.moz-db-fingerprint"
+}
+
+postgres_user_count() {
+  local container="${POSTGRES_CONTAINER:-${PANACHAT_STACK}-postgres}"
+  local db="${LOBE_DB_NAME:-${PANACHAT_DB_NAME:-lobechat}}"
+  docker exec "$container" psql -U postgres -d "$db" -Atc "SELECT count(*) FROM users;" 2>/dev/null || echo "?"
+}
+
+# Same safety as moz: refuse deploy if live users dropped vs last healthy fingerprint.
+assert_db_fingerprint_matches() {
+  if [[ "${PANACHAT_ALLOW_DB_DRIFT:-0}" == "1" ]]; then
+    log "Skipping DB fingerprint check (PANACHAT_ALLOW_DB_DRIFT=1)"
+    return 0
+  fi
+  local file fp_users live_users
+  file="$(fingerprint_file)"
+  [[ -f "$file" ]] || return 0
+  fp_users="$(grep -E '^users=' "$file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  live_users="$(postgres_user_count)"
+  if [[ "$fp_users" =~ ^[0-9]+$ && "$live_users" =~ ^[0-9]+$ ]] && ((live_users < fp_users)); then
+    err "refusing deploy — live users ($live_users) < fingerprint ($fp_users)"
+    err "Fingerprint: $file"
+    err "Override only if intentional: PANACHAT_ALLOW_DB_DRIFT=1"
+    return 1
+  fi
+}
+
+save_db_fingerprint() {
+  local file live_users
+  file="$(fingerprint_file)"
+  mkdir -p "$(dirname "$file")"
+  live_users="$(postgres_user_count)"
+  # Do not stamp users=0 as healthy — that would hide a later wipe.
+  [[ "$live_users" =~ ^[0-9]+$ && "$live_users" -gt 0 ]] || return 0
+  cat >"$file" <<EOF
+saved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+stack=${PANACHAT_STACK}
+users=${live_users}
+EOF
+  log "DB fingerprint saved users=${live_users} ($file)"
+}
+
+# Until DNS, APP_URL may be http://IP:3210 or :3211. Rewrite to the slot we are starting
+# so auth redirects do not send browsers to the stopped color. HTTPS domains are left alone.
+sync_app_url_to_slot() {
+  local slot="$1"
+  local port envf current new
+  port="$(slot_port "$slot")"
+  envf="$APP_ENV_FILE"
+  [[ -f "$envf" ]] || return 0
+  current="$(grep -E '^APP_URL=' "$envf" | head -1 | cut -d= -f2- || true)"
+  case "$current" in
+    http://*:${PORT_BLUE} | http://*:${PORT_GREEN} | https://*:${PORT_BLUE} | https://*:${PORT_GREEN} | \
+    http://*:${PORT_BLUE}/* | http://*:${PORT_GREEN}/* | https://*:${PORT_BLUE}/* | https://*:${PORT_GREEN}/*) ;;
+    *) return 0 ;;
+  esac
+  new="${current/:$PORT_BLUE/:$port}"
+  new="${new/:$PORT_GREEN/:$port}"
+  if [[ "$new" == "$current" ]]; then
+    return 0
+  fi
+  log "Rewriting APP_URL ${current} → ${new} for slot ${slot}"
+  sed -i.bak "s|^APP_URL=.*|APP_URL=${new}|" "$envf"
+  rm -f "${envf}.bak"
+}
+
 run_backup() {
   if [[ "${PANACHAT_SKIP_BACKUP:-0}" == "1" ]]; then
     log "Skipping backup (PANACHAT_SKIP_BACKUP=1)"
@@ -235,6 +306,7 @@ run_backup() {
   export RUSTFS_VOLUME_NAME="${RUSTFS_VOLUME_NAME:-${PANACHAT_VOLUME_PREFIX}_rustfs_data}"
   export LOBE_DB_NAME="${LOBE_DB_NAME:-${PANACHAT_DB_NAME:-lobechat}}"
   export PANACHAT_BACKUP_DIR="${PANACHAT_BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+  export PANACHAT_DATA_DIR="${PANACHAT_DATA_DIR:-$STATE_DIR/data}"
   "$ROOT/scripts/panachat-backup.sh" --reason pre-deploy
 }
 
@@ -438,6 +510,7 @@ cmd_bootstrap() {
   verify_slot_spa "$PORT_BLUE"
   flip_nginx blue || true
   write_state blue "$(image_sha_tag "$image")" "" ""
+  save_db_fingerprint
   log "Bootstrap complete — active slot=blue stack=$PANACHAT_STACK"
 }
 
@@ -464,8 +537,10 @@ cmd_deploy() {
 
   log "Active=$active → deploying $image onto $inactive (stack=$PANACHAT_STACK)"
 
+  assert_db_fingerprint_matches
   run_backup
   set_image_env "$image"
+  sync_app_url_to_slot "$inactive"
 
   log "Pulling $image"
   docker pull "$image"
@@ -502,6 +577,7 @@ cmd_deploy() {
   clear_network_alias "$active_svc" || true
 
   write_state "$inactive" "$(image_sha_tag "$image")" "$active" "$prev_sha"
+  save_db_fingerprint
   prune_old_images
 
   if [[ -n "${PANACHAT_PUBLIC_URL:-}" ]]; then

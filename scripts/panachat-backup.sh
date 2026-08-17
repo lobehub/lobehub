@@ -471,6 +471,14 @@ EOF
     docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres -d "$LOBE_DB_NAME" --no-owner --no-acl \
       | gzip -c >"$sql_path"
     echo "    SQL: $(basename "$sql_path") ($(du -h "$sql_path" | awk '{print $1}'))"
+    if [[ "$live_users" =~ ^[0-9]+$ && "$live_users" -gt 0 ]]; then
+      mkdir -p "$(dirname "$(fingerprint_file)")"
+      cat >"$(fingerprint_file)" <<EOF
+saved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+users=${live_users}
+postgres_volume=${POSTGRES_VOLUME_NAME}
+EOF
+    fi
   fi
 
   if docker volume inspect "$RUSTFS_VOLUME_NAME" >/dev/null 2>&1; then
