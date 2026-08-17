@@ -28,9 +28,17 @@ import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 import { shinyTextStyles } from '@/styles';
 
+import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
 
 const GENERATION_ESTIMATE_SECONDS = 120;
+
+const emptyAdjustments: Record<AdjustmentTarget, string> = {
+  canonEntries: '',
+  domainFilter: '',
+  layers: '',
+  outOfScope: '',
+};
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -140,21 +148,23 @@ const CreateDomainPage = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { agentId: routeAgentId } = useResolvedAgentRouteId(aid);
   const agentId = routeAgentId || activeAgentId;
-  const { adjustment, brief, draft, setAdjustment, setBrief, setDraft, setStep, step, storageKey } =
+  const { brief, draft, setBrief, setDraft, setStep, step, storageKey } =
     useCreateDomainDraft(agentId);
   const [creating, setCreating] = useState(false);
-  const [refining, setRefining] = useState(false);
+  const [adjustments, setAdjustments] = useState(emptyAdjustments);
+  const [openAdjustment, setOpenAdjustment] = useState<AdjustmentTarget>();
+  const [refiningTarget, setRefiningTarget] = useState<AdjustmentTarget>();
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
 
   useEffect(() => {
-    if (step !== 'preparing' && !refining) return;
+    if (step !== 'preparing' && !refiningTarget) return;
     setRemainingSeconds(GENERATION_ESTIMATE_SECONDS);
     const timer = window.setInterval(
       () => setRemainingSeconds((value) => Math.max(0, value - 1)),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, [refining, step]);
+  }, [refiningTarget, step]);
 
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
@@ -177,25 +187,29 @@ const CreateDomainPage = memo(() => {
     }
   }, [agentId, brief, draft, setDraft, setStep, t]);
 
-  const refine = useCallback(async () => {
-    if (!agentId || !brief.trim() || !draft || !adjustment.trim()) return;
-    setRefining(true);
-    try {
-      setDraft(
-        await expertiseService.draftDomain({
-          adjustment: adjustment.trim(),
+  const refine = useCallback(
+    async (target: AdjustmentTarget) => {
+      const adjustment = adjustments[target].trim();
+      if (!agentId || !brief.trim() || !draft || !adjustment) return;
+      setRefiningTarget(target);
+      try {
+        const adjusted = await expertiseService.draftDomain({
+          adjustment,
           agentId,
           brief: brief.trim(),
           currentDraft: draft,
-        }),
-      );
-      setAdjustment('');
-    } catch {
-      toast.error(t('create.adjust.failed'));
-    } finally {
-      setRefining(false);
-    }
-  }, [adjustment, agentId, brief, draft, setAdjustment, setDraft, t]);
+        });
+        setDraft((current) => (current ? mergeAdjustedBlock(current, adjusted, target) : current));
+        setAdjustments((current) => ({ ...current, [target]: '' }));
+        setOpenAdjustment(undefined);
+      } catch {
+        toast.error(t('create.adjust.failed'));
+      } finally {
+        setRefiningTarget(undefined);
+      }
+    },
+    [adjustments, agentId, brief, draft, setDraft, t],
+  );
 
   const canCreate = !!draft && !!draft.title.trim() && !!draft.domainFilter.trim() && !creating;
 
@@ -232,14 +246,74 @@ const CreateDomainPage = memo(() => {
     }
   }, []);
   const onAdjustmentKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
+    (target: AdjustmentTarget, e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key !== 'Enter' || (!e.metaKey && !e.ctrlKey)) return;
       e.preventDefault();
       e.stopPropagation();
-      void refine();
+      void refine(target);
     },
     [refine],
   );
+
+  const renderAdjustmentButton = (target: AdjustmentTarget) => {
+    const isOpen = openAdjustment === target;
+    const isRefining = refiningTarget === target;
+
+    return (
+      <Button
+        disabled={!!refiningTarget && !isRefining}
+        icon={SparklesIcon}
+        size={'small'}
+        type={'text'}
+        onClick={() => setOpenAdjustment(isOpen ? undefined : target)}
+      >
+        {t('create.adjust.blockAction')}
+      </Button>
+    );
+  };
+
+  const renderAdjustmentPanel = (target: AdjustmentTarget) => {
+    const isOpen = openAdjustment === target;
+    const isRefining = refiningTarget === target;
+
+    if (!isOpen) return null;
+
+    return (
+      <Block padding={10} variant={'outlined'} onKeyDown={(e) => onAdjustmentKeyDown(target, e)}>
+        <Flexbox horizontal align={'end'} gap={8}>
+          <TextArea
+            autoFocus
+            autoSize={{ maxRows: 5, minRows: 2 }}
+            disabled={isRefining}
+            placeholder={t(`create.adjust.placeholder.${target}`)}
+            style={{ flex: 1 }}
+            value={adjustments[target]}
+            variant={'filled'}
+            onChange={(e) =>
+              setAdjustments((current) => ({ ...current, [target]: e.target.value }))
+            }
+          />
+          <Button
+            disabled={!adjustments[target].trim() || isRefining}
+            icon={RefreshCwIcon}
+            loading={isRefining}
+            onClick={() => void refine(target)}
+          >
+            {isRefining ? t('create.adjust.adjusting') : t('create.adjust.action')}
+          </Button>
+        </Flexbox>
+        {isRefining && (
+          <Text fontSize={12} type={'secondary'}>
+            {remainingSeconds > 0
+              ? t('create.adjust.generatingCountdown', {
+                  time: formatRemainingTime(remainingSeconds),
+                })
+              : t('create.generatingAlmostDone')}
+          </Text>
+        )}
+      </Block>
+    );
+  };
 
   const patch = (p: Partial<ExpertiseDomainDraft>) => setDraft((d) => (d ? { ...d, ...p } : d));
   const overviewPath = agentId ? urlJoin('/agent', agentId, 'self-learning') : '/';
@@ -343,9 +417,19 @@ const CreateDomainPage = memo(() => {
             {step === 'review' && draft && (
               <Flexbox className={styles.body}>
                 <Flexbox className={styles.reviewSection} gap={10}>
-                  <Text fontSize={13} weight={600}>
-                    {t('create.field.brief')}
-                  </Text>
+                  <Flexbox horizontal align={'center'} justify={'space-between'}>
+                    <Text fontSize={13} weight={600}>
+                      {t('create.field.brief')}
+                    </Text>
+                    <Button
+                      disabled={!brief.trim() || !!refiningTarget}
+                      icon={RefreshCwIcon}
+                      size={'small'}
+                      onClick={() => void generate()}
+                    >
+                      {t('create.regenerateAfterEdit')}
+                    </Button>
+                  </Flexbox>
                   <TextArea
                     autoSize={{ maxRows: 8, minRows: 3 }}
                     value={brief}
@@ -364,57 +448,28 @@ const CreateDomainPage = memo(() => {
                   )}
                 </Flexbox>
 
-                <Block padding={12} variant={'outlined'} onKeyDown={onAdjustmentKeyDown}>
-                  <Flexbox gap={10}>
-                    <Flexbox gap={4}>
-                      <Text fontSize={13} weight={600}>
-                        {t('create.adjust.title')}
-                      </Text>
-                      <Text fontSize={12} type={'secondary'}>
-                        {refining
-                          ? remainingSeconds > 0
-                            ? t('create.adjust.generatingCountdown', {
-                                time: formatRemainingTime(remainingSeconds),
-                              })
-                            : t('create.generatingAlmostDone')
-                          : t('create.adjust.help')}
-                      </Text>
-                    </Flexbox>
-                    <Flexbox horizontal align={'end'} gap={8}>
-                      <TextArea
-                        autoSize={{ maxRows: 6, minRows: 2 }}
-                        disabled={refining}
-                        placeholder={t('create.adjust.placeholder')}
-                        style={{ flex: 1 }}
-                        value={adjustment}
-                        variant={'filled'}
-                        onChange={(e) => setAdjustment(e.target.value)}
-                      />
-                      <Button
-                        disabled={!adjustment.trim() || refining}
-                        icon={RefreshCwIcon}
-                        loading={refining}
-                        onClick={() => void refine()}
-                      >
-                        {refining ? t('create.adjust.adjusting') : t('create.adjust.action')}
-                      </Button>
-                    </Flexbox>
-                  </Flexbox>
-                </Block>
-
                 <Flexbox className={styles.reviewSection} gap={10}>
-                  <Text fontSize={13} weight={600}>
-                    {t('create.field.domainFilter')}
-                  </Text>
+                  <Flexbox horizontal align={'center'} justify={'space-between'}>
+                    <Text fontSize={13} weight={600}>
+                      {t('create.field.domainFilter')}
+                    </Text>
+                    {renderAdjustmentButton('domainFilter')}
+                  </Flexbox>
                   <TextArea
                     autoSize={{ maxRows: 6, minRows: 2 }}
                     value={draft.domainFilter}
                     variant={'filled'}
                     onChange={(e) => patch({ domainFilter: e.target.value })}
                   />
-                  <Text fontSize={13} weight={600}>
-                    {t('create.field.outOfScope')}
-                  </Text>
+                  {renderAdjustmentPanel('domainFilter')}
+                </Flexbox>
+                <Flexbox className={styles.reviewSection} gap={10}>
+                  <Flexbox horizontal align={'center'} justify={'space-between'}>
+                    <Text fontSize={13} weight={600}>
+                      {t('create.field.outOfScope')}
+                    </Text>
+                    {renderAdjustmentButton('outOfScope')}
+                  </Flexbox>
                   <TextArea
                     autoSize={{ maxRows: 5, minRows: 2 }}
                     placeholder={t('create.field.outOfScopePlaceholder')}
@@ -422,6 +477,7 @@ const CreateDomainPage = memo(() => {
                     variant={'filled'}
                     onChange={(e) => patch({ outOfScope: e.target.value })}
                   />
+                  {renderAdjustmentPanel('outOfScope')}
                 </Flexbox>
 
                 <Flexbox className={styles.reviewSection} gap={10}>
@@ -435,26 +491,29 @@ const CreateDomainPage = memo(() => {
                         {t('create.anchor.canonHint')}
                       </Text>
                     </Flexbox>
-                    <Button
-                      icon={PlusIcon}
-                      size={'small'}
-                      type={'text'}
-                      onClick={() =>
-                        patch({
-                          canonEntries: [
-                            ...draft.canonEntries,
-                            {
-                              key: `canon-${draft.canonEntries.length + 1}`,
-                              source: '',
-                              statement: '',
-                              title: '',
-                            },
-                          ],
-                        })
-                      }
-                    >
-                      {t('create.anchor.addCanon')}
-                    </Button>
+                    <Flexbox horizontal align={'center'} gap={4}>
+                      {renderAdjustmentButton('canonEntries')}
+                      <Button
+                        icon={PlusIcon}
+                        size={'small'}
+                        type={'text'}
+                        onClick={() =>
+                          patch({
+                            canonEntries: [
+                              ...draft.canonEntries,
+                              {
+                                key: `canon-${draft.canonEntries.length + 1}`,
+                                source: '',
+                                statement: '',
+                                title: '',
+                              },
+                            ],
+                          })
+                        }
+                      >
+                        {t('create.anchor.addCanon')}
+                      </Button>
+                    </Flexbox>
                   </Flexbox>
                   {draft.canonEntries.length === 0 && (
                     <Text fontSize={12} type={'secondary'}>
@@ -522,6 +581,7 @@ const CreateDomainPage = memo(() => {
                       />
                     </div>
                   ))}
+                  {renderAdjustmentPanel('canonEntries')}
                 </Flexbox>
                 <Flexbox className={styles.reviewSection} gap={10}>
                   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
@@ -536,25 +596,28 @@ const CreateDomainPage = memo(() => {
                           : t('create.anchor.layersInvented')}
                       </Text>
                     </Flexbox>
-                    <Button
-                      icon={PlusIcon}
-                      size={'small'}
-                      type={'text'}
-                      onClick={() =>
-                        patch({
-                          layers: [
-                            ...draft.layers,
-                            {
-                              description: null,
-                              key: `layer-${draft.layers.length + 1}`,
-                              title: '',
-                            },
-                          ],
-                        })
-                      }
-                    >
-                      {t('create.anchor.addLayer')}
-                    </Button>
+                    <Flexbox horizontal align={'center'} gap={4}>
+                      {renderAdjustmentButton('layers')}
+                      <Button
+                        icon={PlusIcon}
+                        size={'small'}
+                        type={'text'}
+                        onClick={() =>
+                          patch({
+                            layers: [
+                              ...draft.layers,
+                              {
+                                description: null,
+                                key: `layer-${draft.layers.length + 1}`,
+                                title: '',
+                              },
+                            ],
+                          })
+                        }
+                      >
+                        {t('create.anchor.addLayer')}
+                      </Button>
+                    </Flexbox>
                   </Flexbox>
                   {draft.layers.length === 0 && (
                     <Text fontSize={12} type={'secondary'}>
@@ -603,6 +666,7 @@ const CreateDomainPage = memo(() => {
                       />
                     </div>
                   ))}
+                  {renderAdjustmentPanel('layers')}
                 </Flexbox>
               </Flexbox>
             )}
@@ -611,24 +675,14 @@ const CreateDomainPage = memo(() => {
               <Flexbox horizontal align={'center'} className={styles.footer} justify={'end'}>
                 <Flexbox horizontal align={'center'} gap={4}>
                   <Button
-                    disabled={refining}
-                    icon={RefreshCwIcon}
-                    size={'small'}
-                    style={{ color: cssVar.colorTextTertiary }}
-                    type={'text'}
-                    onClick={() => void generate()}
-                  >
-                    {t('create.regenerate')}
-                  </Button>
-                  <Button
-                    disabled={refining || !canCreate}
-                    loading={creating || refining}
+                    disabled={!!refiningTarget || !canCreate}
+                    loading={creating}
                     shape={'round'}
                     size={'small'}
                     type={'primary'}
                     onClick={() => void primaryRef.current?.()}
                   >
-                    {refining ? t('create.adjust.adjusting') : t('create.confirm')}
+                    {t('create.confirm')}
                   </Button>
                 </Flexbox>
               </Flexbox>

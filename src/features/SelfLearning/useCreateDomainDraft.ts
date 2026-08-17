@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 
 export interface StoredCreateDraft {
-  adjustment?: string;
   brief: string;
   draft?: ExpertiseDomainDraft;
 }
@@ -27,7 +26,6 @@ const readStoredCreateDraft = (storageKey?: string) =>
 export const useCreateDomainDraft = (agentId?: string) => {
   const storageKey = agentId ? `self-learning:create:${agentId}` : undefined;
   const [stored] = useState(() => readStoredCreateDraft(storageKey));
-  const [adjustment, setAdjustment] = useState(stored.adjustment ?? '');
   const [brief, setBrief] = useState(stored.brief);
   const [draft, setDraft] = useState<ExpertiseDomainDraft | undefined>(stored.draft);
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>(
@@ -42,7 +40,6 @@ export const useCreateDomainDraft = (agentId?: string) => {
     const next = readStoredCreateDraft(storageKey);
     hydratedStorageKeyRef.current = storageKey;
     skipPersistKeyRef.current = storageKey;
-    setAdjustment(next.adjustment ?? '');
     setBrief(next.brief);
     setDraft(next.draft);
     setStep(next.draft ? 'review' : 'describe');
@@ -55,21 +52,19 @@ export const useCreateDomainDraft = (agentId?: string) => {
       return;
     }
 
-    if (brief.trim() || draft || adjustment.trim()) {
+    if (brief.trim() || draft) {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ adjustment, brief, draft } satisfies StoredCreateDraft),
+        JSON.stringify({ brief, draft } satisfies StoredCreateDraft),
       );
     } else {
       localStorage.removeItem(storageKey);
     }
-  }, [adjustment, brief, draft, storageKey]);
+  }, [brief, draft, storageKey]);
 
   return {
-    adjustment,
     brief,
     draft,
-    setAdjustment,
     setBrief,
     setDraft,
     setStep,
