@@ -106,7 +106,7 @@ interface CategoryCount {
   unreadCount: number;
 }
 
-type ReadStatus = 'read' | 'unread';
+type ReadStatus = 'all' | 'read' | 'unread';
 
 const ALL_FILTER = '__all__';
 const PERSONAL_INBOX_CATEGORIES: readonly string[] = [
@@ -125,10 +125,6 @@ const WORKSPACE_INBOX_CATEGORIES: readonly string[] = [
   'system',
   'workspace',
 ];
-const KNOWN_INBOX_CATEGORIES = new Set([
-  ...PERSONAL_INBOX_CATEGORIES,
-  ...WORKSPACE_INBOX_CATEGORIES,
-]);
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   agent: BotIcon,
   billing: CreditCardIcon,
@@ -149,7 +145,8 @@ const InboxModalContent = memo(() => {
   const registerListHandle = useCallback((handle: NotificationListHandle) => {
     listHandleRef.current = handle;
   }, []);
-  const isRead = readStatus === 'read';
+  // `undefined` = the combined "all" view (no read-state filter).
+  const isRead = readStatus === 'all' ? undefined : readStatus === 'read';
 
   const {
     data: navigationCounts,
@@ -169,8 +166,11 @@ const InboxModalContent = memo(() => {
   const categoryLabel = (value: string) =>
     t(`category.${value}`, { defaultValue: value, ns: 'notification' });
   const collator = new Intl.Collator(i18n.resolvedLanguage || i18n.language);
+  // Filter extras against the CURRENT context's configured list, not the union
+  // of both contexts: a category configured only for the other context (e.g. a
+  // personal-scope `workspace` notification) must still get its own entry here.
   const extraCategoryCounts = categoryCounts
-    .filter((item) => !KNOWN_INBOX_CATEGORIES.has(item.category))
+    .filter((item) => !configuredCategories.includes(item.category))
     .sort((a, b) => collator.compare(categoryLabel(a.category), categoryLabel(b.category)));
   const visibleCategoryCounts = [
     ...configuredCategories.map(
@@ -240,7 +240,9 @@ const InboxModalContent = memo(() => {
 
   const handleMarkAllAsRead = useCallback(async () => {
     setBulkAction('read');
-    listHandleRef.current?.optimisticClear();
+    // Rows only leave the unread view when read; in the all view they stay
+    // (as read rows), so there the post-action refresh updates them in place.
+    if (readStatus === 'unread') listHandleRef.current?.optimisticClear();
     void refreshNavigationCounts((counts) => counts?.map((item) => ({ ...item, unreadCount: 0 })), {
       revalidate: false,
     });
@@ -254,7 +256,7 @@ const InboxModalContent = memo(() => {
     } finally {
       setBulkAction(undefined);
     }
-  }, [refreshInbox, refreshNavigationCounts, t]);
+  }, [readStatus, refreshInbox, refreshNavigationCounts, t]);
 
   const handleArchiveAll = useCallback(async () => {
     setBulkAction('archive');
@@ -271,10 +273,12 @@ const InboxModalContent = memo(() => {
     }
   }, [refreshInbox, t]);
 
-  const allCount = categoryCounts.reduce(
-    (total, item) => total + (isRead ? item.readCount : item.unreadCount),
-    0,
-  );
+  const countForStatus = (item: CategoryCount) => {
+    if (readStatus === 'all') return item.totalCount;
+    return isRead ? item.readCount : item.unreadCount;
+  };
+  const allCount = categoryCounts.reduce((total, item) => total + countForStatus(item), 0);
+  const allUnreadCount = categoryCounts.reduce((total, item) => total + item.unreadCount, 0);
   const allTotalCount = categoryCounts.reduce((total, item) => total + item.totalCount, 0);
   return (
     <Flexbox className={styles.root} height={'100%'}>
@@ -296,18 +300,19 @@ const InboxModalContent = memo(() => {
             items={[
               { key: 'unread', label: t('inbox.unread') },
               { key: 'read', label: t('inbox.read') },
+              { key: 'all', label: t('inbox.allStatus') },
             ]}
             onChange={(key) => setReadStatus(key as ReadStatus)}
           />
           <Flexbox horizontal align="center" gap={4}>
-            {!isRead && (
+            {readStatus !== 'read' && (
               <Button
                 icon={CheckCheckIcon}
                 loading={bulkAction === 'read'}
                 size="small"
                 type="text"
                 disabled={
-                  allCount === 0 ||
+                  allUnreadCount === 0 ||
                   !!bulkAction ||
                   isNavigationCountsLoading ||
                   !!navigationCountsError
@@ -373,7 +378,7 @@ const InboxModalContent = memo(() => {
                   />
                 )}
                 {visibleCategoryCounts.map((item) => {
-                  const count = isRead ? item.readCount : item.unreadCount;
+                  const count = countForStatus(item);
 
                   return (
                     <NavItem

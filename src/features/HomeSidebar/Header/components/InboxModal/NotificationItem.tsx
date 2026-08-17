@@ -17,6 +17,7 @@ import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { getNotificationAgentId } from './getNotificationAgentId';
+import { createNotificationDetailModal } from './NotificationDetailModal';
 import { toNotificationPreview } from './toNotificationPreview';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -93,6 +94,20 @@ const NotificationItem = memo<NotificationItemProps>(
       }
     }, [actionUrl, close, handleMarkAsRead, navigate]);
 
+    // The row only shows a two-line preview, so a click must always give access
+    // to the full body — the detail modal is the only place a content-only
+    // notification (no actionUrl) can be read in full.
+    const handleOpenDetail = useCallback(() => {
+      handleMarkAsRead();
+      createNotificationDetailModal({
+        content,
+        context,
+        createdAt,
+        onAction: actionUrl && !metadata?.transfer ? handleAction : undefined,
+        title,
+      });
+    }, [actionUrl, content, context, createdAt, handleAction, handleMarkAsRead, metadata, title]);
+
     const handleActionClick = useCallback(
       (event: MouseEvent) => {
         event.stopPropagation();
@@ -120,8 +135,9 @@ const NotificationItem = memo<NotificationItemProps>(
           gap={4}
           paddingBlock={12}
           paddingInline={20}
+          style={{ cursor: 'pointer' }}
           variant="borderless"
-          onClick={handleMarkAsRead}
+          onClick={handleOpenDetail}
         >
           <Flexbox horizontal align="flex-start" gap={12}>
             {!isRead && <span className={styles.unreadDot} />}
@@ -151,6 +167,18 @@ const NotificationItem = memo<NotificationItemProps>(
                 {preview}
               </Text>
               <Flexbox horizontal align="center" gap={6}>
+                {/* The actor snapshot exists so the reader can tell WHO acted
+                    without recognizing the avatar — render the name visibly. */}
+                {actor?.name && (
+                  <Text
+                    ellipsis
+                    fontSize={12}
+                    style={{ flexShrink: 0, maxWidth: 160 }}
+                    type="secondary"
+                  >
+                    {actor.name}
+                  </Text>
+                )}
                 <Text fontSize={12} style={{ flexShrink: 0 }} type="secondary">
                   {formatNotificationRelativeTime(createdAt, dateLocale)}
                 </Text>

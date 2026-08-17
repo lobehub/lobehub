@@ -17,7 +17,8 @@ export interface NotificationListHandle {
 
 interface UseNotificationListOptions {
   category?: string;
-  isRead: boolean;
+  /** Filter by read state; omit for the combined "all" view. */
+  isRead?: boolean;
   /**
    * Registers the list's bound mutate operations with the caller. The global
    * filter-form `mutate` cannot reach this list: SWR's key-filter mutate
@@ -50,7 +51,7 @@ export const useNotificationList = ({
     return notificationService.list({
       category: filterCategory as string | undefined,
       cursor: cursor as string | undefined,
-      isRead: filterIsRead as boolean,
+      isRead: filterIsRead as boolean | undefined,
       limit: PAGE_SIZE,
     });
   });

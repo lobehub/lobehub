@@ -45,6 +45,7 @@
   "image_generation_completed_title": "图片生成完成",
   "inbox.actionFailed": "通知更新失败，请重试。",
   "inbox.all": "全部通知",
+  "inbox.allStatus": "全部",
   "inbox.archive": "归档",
   "inbox.archiveAll": "全部归档",
   "inbox.empty": "暂无通知",

@@ -35,7 +35,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface ContentProps {
   category?: string;
-  isRead: boolean;
+  /** Read-state filter; `undefined` renders the combined "all" view. */
+  isRead?: boolean;
   onArchive: (id: string) => void;
   onMarkAsRead: (id: string) => void;
   /**
@@ -74,7 +75,7 @@ const Content = memo<ContentProps>(
     // actionable work belongs — but the live list is fetched for EVERY filter,
     // because row suppression below must hold on all of them (a linked row
     // must never show alongside, or instead of, its live item).
-    const showTransfers = !isRead && (!category || category === 'pending');
+    const showTransfers = isRead !== true && (!category || category === 'pending');
     const { data: transferRequests, mutate: mutateTransfers } = useClientDataSWR<
       PendingTransferRequest[]
     >(workspaceId ? [PENDING_TRANSFERS_SWR_KEY, workspaceId] : null, () =>
@@ -114,15 +115,29 @@ const Content = memo<ContentProps>(
       [mutateTransfers, onRefreshInbox],
     );
 
+    // The VList renders `visibleNotifications`, so the bottom index must be
+    // compared against the rendered count — measuring against the unfiltered
+    // page length would stall pagination once suppressed rows accumulate.
+    const visibleCount = visibleNotifications.length;
     const handleScroll = useCallback(() => {
       const ref = virtuaRef.current;
       if (!ref || !hasMore || isValidating || error) return;
 
       const bottomVisibleIndex = ref.findItemIndex(ref.scrollOffset + ref.viewportSize);
-      if (bottomVisibleIndex + 5 > notifications.length) {
+      if (bottomVisibleIndex + 5 > visibleCount) {
         setSize((prev) => prev + 1);
       }
-    }, [error, hasMore, isValidating, notifications.length, setSize]);
+    }, [error, hasMore, isValidating, visibleCount, setSize]);
+
+    // When every loaded row is suppressed by a live request there is no VList
+    // to scroll, so pagination would never advance — fetch the next page until
+    // something renders or the stream ends.
+    const allLoadedSuppressed = visibleCount === 0 && notifications.length > 0;
+    useEffect(() => {
+      if (allLoadedSuppressed && hasMore && !isValidating && !error) {
+        setSize((prev) => prev + 1);
+      }
+    }, [allLoadedSuppressed, error, hasMore, isValidating, setSize]);
 
     if (isLoading) {
       return (
@@ -162,7 +177,15 @@ const Content = memo<ContentProps>(
           {liveRequests.length === 0 && (
             <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
               <Icon color={cssVar.colorTextQuaternary} icon={BellOffIcon} size={40} />
-              <Text type="secondary">{t(isRead ? 'inbox.emptyRead' : 'inbox.emptyUnread')}</Text>
+              <Text type="secondary">
+                {t(
+                  isRead === undefined
+                    ? 'inbox.empty'
+                    : isRead
+                      ? 'inbox.emptyRead'
+                      : 'inbox.emptyUnread',
+                )}
+              </Text>
             </Flexbox>
           )}
         </Flexbox>

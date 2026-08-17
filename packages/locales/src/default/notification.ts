@@ -57,6 +57,7 @@ export default {
   'image_generation_completed_title': 'Image generation completed',
   'inbox.actionFailed': 'Could not update notifications. Please try again.',
   'inbox.all': 'All notifications',
+  'inbox.allStatus': 'All',
   'inbox.archive': 'Archive',
   'inbox.archiveAll': 'Archive all',
   'inbox.empty': 'No notifications yet',

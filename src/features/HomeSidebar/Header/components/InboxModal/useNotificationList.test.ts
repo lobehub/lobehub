@@ -89,4 +89,16 @@ describe('useNotificationList', () => {
     expect(result.current.data?.flat() ?? []).toEqual([]);
     expect(listMock.mock.calls.length).toBe(callsBefore);
   });
+
+  it('omits the isRead filter for the combined "all" view', async () => {
+    // Regression: the hook always forwarded a boolean isRead, so the combined
+    // chronological history (no read-state filter) was impossible to request.
+    listMock.mockClear();
+    listMock.mockImplementation(async () => []);
+
+    renderHook(() => useNotificationList({ registerHandle: () => {} }), { wrapper });
+
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    expect((listMock.mock.calls[0][0] as { isRead?: boolean }).isRead).toBeUndefined();
+  });
 });

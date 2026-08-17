@@ -3,7 +3,6 @@
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { Avatar, Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,22 +20,6 @@ import { TransferErrorCode } from '@/types/transferError';
 import { isTransferManifestActionable } from './manifestState';
 import { refreshCachesAfterOwnershipChange } from './refreshAfterOwnershipChange';
 import TransferManifestList from './TransferManifestList';
-
-const styles = createStaticStyles(({ css }) => ({
-  // Mirrors the NotificationItem unread dot. A pending item's read state IS
-  // its handled state: the dot stays until the request is resolved — clicking
-  // does not clear it, acting does.
-  unreadDot: css`
-    flex-shrink: 0;
-
-    width: 8px;
-    height: 8px;
-    margin-block-start: 7px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-}));
 
 const partyLabel = (party: TransferRequestParty | null, fallback: string) =>
   party?.fullName?.trim() || party?.username?.trim() || fallback;
@@ -83,6 +66,13 @@ const RESOURCE_CHAT_URLS: Record<string, (id: string) => string> = {
   agentGroup: GROUP_CHAT_URL,
 };
 
+/**
+ * Request ids with an action currently in flight. Module-scoped (not component
+ * state) so the lock survives the item unmounting — switching tabs or closing
+ * the modal mid-action must not let a remounted card submit a duplicate.
+ */
+const actingRequestIds = new Set<string>();
+
 export interface TransferRequestItemProps {
   currentUserId: string;
   /**
@@ -108,8 +98,14 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
     const navigate = useWorkspaceAwareNavigate();
     // Stays true after a successful action until the refreshed list unmounts
     // this item — a failed refresh must not re-enable a duplicate submission.
-    // A failed action resets it so the user can retry.
-    const [acting, setActing] = useState(false);
+    // A failed action resets it so the user can retry. Seeded from the
+    // module-level set so a remounted card restores an in-flight lock.
+    const [acting, setActingState] = useState(() => actingRequestIds.has(request.id));
+    const setActing = (value: boolean) => {
+      if (value) actingRequestIds.add(request.id);
+      else actingRequestIds.delete(request.id);
+      setActingState(value);
+    };
 
     const isRecipient = request.recipientId === currentUserId;
 
@@ -196,8 +192,11 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
         paddingInline={20}
         variant="borderless"
       >
+        {/* No unread dot: it is not clearable by clicking (a pending item is
+            "unread" until acted on), and a dot that ignores clicks reads as
+            broken. The Pending badge and the action buttons carry the
+            "awaiting you" signal. */}
         <Flexbox horizontal align="flex-start" gap={12}>
-          {isRecipient && <span className={styles.unreadDot} />}
           <Avatar
             avatar={request.resource?.avatar || undefined}
             background={request.resource?.backgroundColor || undefined}
