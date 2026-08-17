@@ -645,6 +645,22 @@ references also cannot be inlined as data URIs: `import.meta.url` and SVG
 are under the inline size limit. Judge a Vite publish by the running page
 (images, icons, counter), not by whether `index.html` listed three tags.
 
+### L-S13 — macOS `/tmp` and `/private/tmp` are the same workspace
+
+**Wrong approach:** treat a Files-tree path and the topic working directory as
+outside each other when one string starts with `/tmp` and the other with
+`/private/tmp`.
+
+**Why it fails:** Darwin's `/tmp` is a symlink to `/private/tmp`. Electron's
+project index reports the real path; topic cwd is often the public alias. A
+prefix check then marks `./app.css` as an escape, HTML-only publish keeps the
+relative hrefs, and the live host 404s those files.
+
+**Correct approach:** canonicalize those Darwin private aliases before workspace
+containment. Prove a publish by fetching the public HTML (data URIs or 200
+sidecars) and opening the live page — in-app preview of the local file does not
+prove the hosted assets.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions

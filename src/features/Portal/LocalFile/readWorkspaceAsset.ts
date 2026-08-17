@@ -67,6 +67,14 @@ const isTextContentType = (contentType: string): boolean => {
 const guessContentType = (path: string): string =>
   CONTENT_TYPE_BY_EXTENSION[getFileExtension(path).toLowerCase()] ?? 'application/octet-stream';
 
+export const resolveWorkspaceAssetContentType = (path: string, reported?: string): string => {
+  const guessed = guessContentType(path);
+  if (guessed !== 'application/octet-stream') return guessed;
+
+  const reportedType = reported?.split(';')[0]?.trim();
+  return reportedType || guessed;
+};
+
 const quoteShellArg = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
 
 const decodeBase64Bytes = (value: string): Uint8Array | undefined => {
@@ -176,7 +184,10 @@ export const readWorkspaceAsset = async ({
 
         return {
           bytes,
-          contentType: result.result.mimeType || contentType,
+          contentType: resolveWorkspaceAssetContentType(
+            path,
+            result.result.mimeType || contentType,
+          ),
           ok: true,
           text,
         };
@@ -188,7 +199,7 @@ export const readWorkspaceAsset = async ({
         return { ok: false, reason: 'oversized' };
       }
 
-      return { bytes, contentType, ok: true };
+      return { bytes, contentType: resolveWorkspaceAssetContentType(path, contentType), ok: true };
     }
 
     const preview = await projectFileService.getLocalFilePreview({
@@ -197,7 +208,12 @@ export const readWorkspaceAsset = async ({
       workingDirectory,
     });
     const fromPreview = await previewToBytes(preview);
-    if (fromPreview) return fromPreview;
+    if (fromPreview) {
+      return {
+        ...fromPreview,
+        contentType: resolveWorkspaceAssetContentType(path, fromPreview.contentType),
+      };
+    }
 
     if (!deviceId && isDesktop) {
       const bytesResult = await localFileService.readLocalFileBytes({
@@ -209,10 +225,11 @@ export const readWorkspaceAsset = async ({
         return { ok: false, reason: 'oversized' };
       }
 
-      const text = isTextContentType(bytesResult.contentType)
+      const contentType = resolveWorkspaceAssetContentType(path, bytesResult.contentType);
+      const text = isTextContentType(contentType)
         ? new TextDecoder().decode(bytesResult.bytes)
         : undefined;
-      return { ...bytesResult, ok: true, text };
+      return { ...bytesResult, contentType, ok: true, text };
     }
 
     return { ok: false, reason: 'unreadable' };

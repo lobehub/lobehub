@@ -1,6 +1,11 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, ScrollArea, useModalContext } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { Button, createModal, ScrollArea, useModalContext } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
+
+import type { WorkspaceHtmlPublishPlan } from './prepareWorkspaceHtmlPublish';
+import { hasWorkspaceHtmlPackingDetails } from './publishHtmlArtifactUi';
+import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
 
 const CONFIRM_BODY_MAX_HEIGHT = 'min(52vh, 360px)';
 
@@ -32,7 +37,13 @@ export const PublishHtmlArtifactConfirmContent = ({
   uploadedPaths,
 }: PublishHtmlArtifactConfirmContentProps) => {
   const { t } = useTranslation('chat');
-  const hasLocalFiles = inlinedPaths.length > 0 || uploadedPaths.length > 0;
+  const showDetails = hasWorkspaceHtmlPackingDetails({
+    inlinedPaths,
+    missing,
+    oversized,
+    remotes,
+    uploadedPaths,
+  });
 
   return (
     <ScrollArea
@@ -43,43 +54,61 @@ export const PublishHtmlArtifactConfirmContent = ({
     >
       <Flexbox gap={8} style={{ paddingBlock: 12, paddingInline: 16 }}>
         <Text>{t('workingPanel.localFile.publish.privacy')}</Text>
-        {!hasLocalFiles && <Text>{t('workingPanel.localFile.publish.noLocalFiles')}</Text>}
-        {inlinedPaths.length > 0 && (
-          <>
-            <Text>
-              {t('workingPanel.localFile.publish.inline', {
-                count: inlinedPaths.length,
-                limit: inlineLimit,
-              })}
-            </Text>
-            <PathList items={inlinedPaths} />
-          </>
+        {showDetails && (
+          <Accordion defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
+            <AccordionItem
+              defaultExpand={false}
+              indicatorPlacement={'start'}
+              itemKey={'details'}
+              paddingBlock={4}
+              paddingInline={0}
+              title={
+                <Text fontSize={12} type={'secondary'} weight={500}>
+                  {t('workingPanel.localFile.publish.details')}
+                </Text>
+              }
+            >
+              <Flexbox gap={8} paddingBlock={'4px 0'}>
+                {inlinedPaths.length > 0 && (
+                  <>
+                    <Text>
+                      {t('workingPanel.localFile.publish.inline', {
+                        count: inlinedPaths.length,
+                        limit: inlineLimit,
+                      })}
+                    </Text>
+                    <PathList items={inlinedPaths} />
+                  </>
+                )}
+                {uploadedPaths.length > 0 && (
+                  <>
+                    <Text>
+                      {t('workingPanel.localFile.publish.upload', { count: uploadedPaths.length })}
+                    </Text>
+                    <PathList items={uploadedPaths} />
+                  </>
+                )}
+                {missing.length > 0 && (
+                  <Text type={'secondary'}>
+                    {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
+                  </Text>
+                )}
+                {oversized.length > 0 && (
+                  <Text type={'secondary'}>
+                    {t('workingPanel.localFile.publish.oversized', { list: oversized.join(', ') })}
+                  </Text>
+                )}
+                {remotes.length > 0 && (
+                  <>
+                    <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
+                    <PathList items={remotes} />
+                  </>
+                )}
+                <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
+              </Flexbox>
+            </AccordionItem>
+          </Accordion>
         )}
-        {uploadedPaths.length > 0 && (
-          <>
-            <Text>
-              {t('workingPanel.localFile.publish.upload', { count: uploadedPaths.length })}
-            </Text>
-            <PathList items={uploadedPaths} />
-          </>
-        )}
-        {missing.length > 0 && (
-          <Text type={'secondary'}>
-            {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
-          </Text>
-        )}
-        {oversized.length > 0 && (
-          <Text type={'secondary'}>
-            {t('workingPanel.localFile.publish.oversized', { list: oversized.join(', ') })}
-          </Text>
-        )}
-        {remotes.length > 0 && (
-          <>
-            <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
-            <PathList items={remotes} />
-          </>
-        )}
-        <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
         <Text type={'secondary'}>{t('workingPanel.localFile.publish.note')}</Text>
       </Flexbox>
     </ScrollArea>
@@ -121,4 +150,38 @@ export const PublishHtmlArtifactConfirmFooter = ({
       </Button>
     </Flexbox>
   );
+};
+
+export const openWorkspaceHtmlPublishConfirm = ({
+  onOk,
+  plan,
+}: {
+  onOk: () => void;
+  plan: Extract<WorkspaceHtmlPublishPlan, { gathered: unknown }>;
+}) => {
+  const okText = t(
+    plan.hasExisting
+      ? 'workingPanel.localFile.publish.version'
+      : 'workingPanel.localFile.publish.action',
+    { ns: 'chat' },
+  );
+
+  createModal({
+    content: (
+      <PublishHtmlArtifactConfirmContent
+        inlineLimit={`${WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES / 1024} KB`}
+        inlinedPaths={plan.packed.inlinedPaths}
+        missing={plan.gathered.missing}
+        oversized={plan.gathered.oversized}
+        remotes={plan.gathered.remotes}
+        uploadedPaths={plan.packed.sidecars.map((file) => file.path)}
+      />
+    ),
+    footer: <PublishHtmlArtifactConfirmFooter okText={okText} onOk={onOk} />,
+    styles: {
+      content: { minHeight: 0, overflow: 'hidden', padding: 0 },
+    },
+    title: t('workingPanel.localFile.publish.confirmTitle', { ns: 'chat' }),
+    width: 420,
+  });
 };

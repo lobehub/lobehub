@@ -6,6 +6,7 @@ import {
   lowestCommonAncestorDirectory,
   parentDirectory,
   resolveLocalResourceHref,
+  toWorkspaceAbsolutePath,
   toWorkspaceRelativePath,
 } from './workspaceHtmlPath';
 
@@ -16,6 +17,7 @@ export {
   lowestCommonAncestorDirectory,
   parentDirectory,
   resolveLocalResourceHref,
+  toWorkspaceAbsolutePath,
   toWorkspaceRelativePath,
 };
 

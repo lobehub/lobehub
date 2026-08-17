@@ -37,6 +37,50 @@ describe('packWorkspaceHtmlDocument', () => {
     expect(packed.html).not.toContain('src="dot.png"');
     expect(packed.inlinedPaths).toEqual(['app.css', 'dot.png']);
     expect(packed.sidecars).toEqual([]);
+    expect(packed.unresolvedHrefs).toEqual([]);
+  });
+
+  it('inlines svg as image/svg+xml even when the gathered type is text/plain', () => {
+    const packed = packWorkspaceHtmlDocument({
+      entryPath: 'index.html',
+      files: [
+        {
+          content: '<html><img alt="dot" src="./dot.svg"></html>',
+          contentType: 'text/html',
+          encoding: 'utf8',
+          path: 'index.html',
+        },
+        {
+          content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+          contentType: 'text/plain',
+          encoding: 'utf8',
+          path: 'dot.svg',
+        },
+      ],
+    });
+
+    expect(packed.html).toContain('data:image/svg+xml;base64,');
+    expect(packed.html).not.toContain('data:text/plain');
+    expect(packed.unresolvedHrefs).toEqual([]);
+  });
+
+  it('reports leftover relative files that were not packed', () => {
+    const packed = packWorkspaceHtmlDocument({
+      entryPath: 'index.html',
+      files: [
+        {
+          content:
+            '<html><link rel="stylesheet" href="./app.css"><img alt="dot" src="./dot.svg"></html>',
+          contentType: 'text/html',
+          encoding: 'utf8',
+          path: 'index.html',
+        },
+      ],
+    });
+
+    expect(packed.html).toContain('href="./app.css"');
+    expect(packed.html).toContain('src="./dot.svg"');
+    expect(packed.unresolvedHrefs.sort()).toEqual(['./app.css', './dot.svg']);
   });
 
   it('rewrites unquoted html attributes so inlined files are not left behind', () => {
@@ -176,6 +220,7 @@ describe('packWorkspaceHtmlDocument', () => {
       html,
       inlinedPaths: [],
       sidecars: [],
+      unresolvedHrefs: [],
     });
   });
 });

@@ -118,6 +118,32 @@ describe('publishWorkspaceHtmlArtifact', () => {
     });
   });
 
+  it('refuses to publish html that still points at unpacked local files', async () => {
+    await expect(
+      publishWorkspaceHtmlArtifact(
+        {
+          agentId: 'agt_1',
+          entryPath: 'index.html',
+          files: [
+            {
+              content: '<html><link rel="stylesheet" href="./app.css"></html>',
+              contentType: 'text/html',
+              encoding: 'utf8',
+              path: 'index.html',
+            },
+          ],
+          identifier: 'workspace-html-index-html',
+          title: 'Demo',
+          topicId: 'tpc_1',
+        },
+        {
+          createMessage: vi.fn(),
+          publishArtifact: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('unresolved-local-assets');
+  });
+
   it('refuses to publish without an agent', async () => {
     await expect(
       publishWorkspaceHtmlArtifact(

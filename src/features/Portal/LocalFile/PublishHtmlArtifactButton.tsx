@@ -1,7 +1,9 @@
-import { ActionIcon, copyToClipboard, Flexbox } from '@lobehub/ui';
-import { Button, createModal, toast } from '@lobehub/ui/base-ui';
-import { CopyIcon, ExternalLinkIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActionIcon, CopyButton, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ExternalLinkIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceHtmlArtifactPublish } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
@@ -11,15 +13,15 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import { createWorkspaceHtmlArtifactIdentifier } from './collectHtmlLocalResources';
-import { gatherWorkspaceHtmlArtifact } from './gatherWorkspaceHtmlArtifact';
-import { packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
 import {
-  PublishHtmlArtifactConfirmContent,
-  PublishHtmlArtifactConfirmFooter,
-} from './PublishHtmlArtifactConfirm';
-import { readWorkspaceAsset, WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
+  notifyWorkspaceHtmlPublishBlocked,
+  prepareWorkspaceHtmlPublish,
+} from './prepareWorkspaceHtmlPublish';
+import { openWorkspaceHtmlPublishConfirm } from './PublishHtmlArtifactConfirm';
+import { getPublishHtmlArtifactSlots } from './publishHtmlArtifactUi';
 
 interface PublishHtmlArtifactButtonProps {
+  children?: ReactNode;
   content: string;
   deviceId?: string;
   filePath: string;
@@ -27,6 +29,35 @@ interface PublishHtmlArtifactButtonProps {
   topicId?: string | null;
   workingDirectory: string;
 }
+
+interface PublishHtmlArtifactModel {
+  busy: 'publishing' | 'scanning' | null;
+  handlePublish: () => void;
+  publicUrl?: string;
+  showLiveBar: boolean;
+  showOverlayTrigger: boolean;
+  topicId?: string | null;
+}
+
+const liveBarStyles = createStaticStyles(({ css }) => ({
+  bar: css`
+    flex-shrink: 0;
+
+    min-width: 0;
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  url: css`
+    min-width: 0;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM}px;
+  `,
+}));
+
+const PublishHtmlArtifactContext = createContext<PublishHtmlArtifactModel | null>(null);
 
 const relativeHtmlPath = (filePath: string, workingDirectory: string) => {
   const target = filePath.replaceAll('\\', '/');
@@ -36,14 +67,14 @@ const relativeHtmlPath = (filePath: string, workingDirectory: string) => {
   return filePath.split(/[/\\]/).at(-1) ?? filePath;
 };
 
-export const PublishHtmlArtifactButton = ({
+const usePublishHtmlArtifactModel = ({
   content,
   deviceId,
   filePath,
   sandboxTopicId,
   topicId,
   workingDirectory,
-}: PublishHtmlArtifactButtonProps) => {
+}: Omit<PublishHtmlArtifactButtonProps, 'children'>): PublishHtmlArtifactModel => {
   const { t } = useTranslation(['chat', 'portal', 'common']);
   const enabled = useUserStore(labPreferSelectors.enableArtifactDeployment);
   const agentId = useChatStore((s) => s.activeAgentId);
@@ -52,13 +83,14 @@ export const PublishHtmlArtifactButton = ({
   const [publicUrl, setPublicUrl] = useState<string>();
   const [hasExisting, setHasExisting] = useState(false);
 
+  const isHtml = isHtmlFile({ path: filePath });
   const identifier = useMemo(
     () => createWorkspaceHtmlArtifactIdentifier(relativeHtmlPath(filePath, workingDirectory)),
     [filePath, workingDirectory],
   );
 
   useEffect(() => {
-    if (!available || !topicId) {
+    if (!available || !enabled || !isHtml || !topicId) {
       setHasExisting(false);
       setPublicUrl(undefined);
       return;
@@ -74,13 +106,7 @@ export const PublishHtmlArtifactButton = ({
     return () => {
       cancelled = true;
     };
-  }, [available, getExisting, identifier, topicId]);
-
-  const handleCopy = useCallback(async () => {
-    if (!publicUrl) return;
-    await copyToClipboard(publicUrl);
-    toast.success(t('artifacts.deploy.copySuccess', { ns: 'portal' }));
-  }, [publicUrl, t]);
+  }, [available, enabled, getExisting, identifier, isHtml, topicId]);
 
   const runPublish = useCallback(
     async (gathered: Awaited<ReturnType<typeof gatherWorkspaceHtmlArtifact>>) => {
@@ -102,9 +128,11 @@ export const PublishHtmlArtifactButton = ({
         toast.success(t('workingPanel.localFile.publish.success'));
       } catch (error) {
         toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : t('workingPanel.localFile.publish.failed'),
+          error instanceof Error && error.message === 'unresolved-local-assets'
+            ? t('workingPanel.localFile.publish.unresolvedLocals')
+            : error instanceof Error && error.message
+              ? error.message
+              : t('workingPanel.localFile.publish.failed'),
         );
       } finally {
         setBusy(null);
@@ -118,64 +146,26 @@ export const PublishHtmlArtifactButton = ({
 
     setBusy('scanning');
     try {
-      const gathered = await gatherWorkspaceHtmlArtifact({
-        htmlContent: content,
-        htmlFilePath: filePath,
-        readAsset: (absolutePath) =>
-          readWorkspaceAsset({
-            deviceId,
-            path: absolutePath,
-            sandboxTopicId,
-            workingDirectory,
-          }),
+      const plan = await prepareWorkspaceHtmlPublish({
+        content,
+        deviceId,
+        filePath,
+        hasExisting,
+        sandboxTopicId,
+        topicId,
         workingDirectory,
       });
 
-      if (gathered.blocked === 'too-many' || gathered.blocked === 'too-large') {
-        toast.error(
-          t(
-            gathered.blocked === 'too-many'
-              ? 'workingPanel.localFile.publish.tooMany'
-              : 'workingPanel.localFile.publish.tooLarge',
-            { size: gathered.totalBytes },
-          ),
-        );
+      if ('blocked' in plan) {
+        notifyWorkspaceHtmlPublishBlocked(plan);
         return;
       }
 
-      const packed = packWorkspaceHtmlDocument({
-        entryPath: gathered.entryPath,
-        files: gathered.files,
-      });
-      const okText = t(
-        hasExisting
-          ? 'workingPanel.localFile.publish.version'
-          : 'workingPanel.localFile.publish.action',
-      );
-      createModal({
-        content: (
-          <PublishHtmlArtifactConfirmContent
-            inlineLimit={`${WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES / 1024} KB`}
-            inlinedPaths={packed.inlinedPaths}
-            missing={gathered.missing}
-            oversized={gathered.oversized}
-            remotes={gathered.remotes}
-            uploadedPaths={packed.sidecars.map((file) => file.path)}
-          />
-        ),
-        footer: (
-          <PublishHtmlArtifactConfirmFooter
-            okText={okText}
-            onOk={() => {
-              void runPublish(gathered);
-            }}
-          />
-        ),
-        styles: {
-          content: { minHeight: 0, overflow: 'hidden', padding: 0 },
+      openWorkspaceHtmlPublishConfirm({
+        plan,
+        onOk: () => {
+          void runPublish(plan.gathered);
         },
-        title: t('workingPanel.localFile.publish.confirmTitle'),
-        width: 420,
       });
     } catch {
       toast.error(t('workingPanel.localFile.publish.failed'));
@@ -195,43 +185,99 @@ export const PublishHtmlArtifactButton = ({
     workingDirectory,
   ]);
 
-  if (!enabled || !available || !isHtmlFile({ path: filePath })) return null;
+  const slots = getPublishHtmlArtifactSlots({
+    available,
+    enabled,
+    isHtml,
+    publicUrl,
+  });
+
+  return {
+    busy,
+    handlePublish,
+    publicUrl,
+    topicId,
+    ...slots,
+  };
+};
+
+export const PublishHtmlArtifactProvider = ({
+  children,
+  ...input
+}: PublishHtmlArtifactButtonProps) => {
+  const model = usePublishHtmlArtifactModel(input);
+
+  return <PublishHtmlArtifactContext value={model}>{children}</PublishHtmlArtifactContext>;
+};
+
+const PublishAction = () => {
+  const { t } = useTranslation('chat');
+  const model = use(PublishHtmlArtifactContext);
+  if (!model) return null;
 
   return (
-    <Flexbox horizontal align={'center'} gap={4}>
-      <Button
-        disabled={!topicId}
-        loading={!!busy}
-        size={'small'}
-        title={topicId ? undefined : t('workingPanel.localFile.publish.noTopic')}
-        onClick={() => {
-          void handlePublish();
-        }}
-      >
-        {t(
-          hasExisting
-            ? 'workingPanel.localFile.publish.version'
-            : 'workingPanel.localFile.publish.action',
-        )}
-      </Button>
-      {publicUrl && (
-        <>
-          <ActionIcon
-            icon={CopyIcon}
-            size={'small'}
-            title={t('artifacts.deploy.copy', { ns: 'portal' })}
-            onClick={() => {
-              void handleCopy();
-            }}
-          />
-          <ActionIcon
-            icon={ExternalLinkIcon}
-            size={'small'}
-            title={t('artifacts.deploy.open', { ns: 'portal' })}
-            onClick={() => window.open(publicUrl, '_blank', 'noopener,noreferrer')}
-          />
-        </>
+    <Button
+      disabled={!model.topicId}
+      loading={!!model.busy}
+      size={'small'}
+      title={model.topicId ? undefined : t('workingPanel.localFile.publish.noTopic')}
+      onClick={() => {
+        void model.handlePublish();
+      }}
+    >
+      {t(
+        model.publicUrl
+          ? 'workingPanel.localFile.publish.version'
+          : 'workingPanel.localFile.publish.action',
       )}
+    </Button>
+  );
+};
+
+export const PublishHtmlArtifactLiveBar = () => {
+  const { t } = useTranslation(['chat', 'portal']);
+  const model = use(PublishHtmlArtifactContext);
+  if (!model?.showLiveBar || !model.publicUrl) return null;
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={liveBarStyles.bar}
+      gap={8}
+      justify={'space-between'}
+    >
+      <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+        <Tag color={'success'} style={{ marginInlineEnd: 0 }}>
+          {t('workingPanel.localFile.publish.live')}
+        </Tag>
+        <Text ellipsis className={liveBarStyles.url}>
+          {model.publicUrl}
+        </Text>
+        <CopyButton content={model.publicUrl} size={'small'} />
+        <ActionIcon
+          icon={ExternalLinkIcon}
+          size={'small'}
+          title={t('artifacts.deploy.open', { ns: 'portal' })}
+          onClick={() => window.open(model.publicUrl, '_blank', 'noopener,noreferrer')}
+        />
+      </Flexbox>
+      <Flexbox flex={'none'}>
+        <PublishAction />
+      </Flexbox>
     </Flexbox>
   );
 };
+
+export const PublishHtmlArtifactTrigger = () => {
+  const model = use(PublishHtmlArtifactContext);
+  if (!model?.showOverlayTrigger) return null;
+
+  return <PublishAction />;
+};
+
+export const PublishHtmlArtifactButton = (props: PublishHtmlArtifactButtonProps) => (
+  <PublishHtmlArtifactProvider {...props}>
+    <PublishHtmlArtifactTrigger />
+  </PublishHtmlArtifactProvider>
+);

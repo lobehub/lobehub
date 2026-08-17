@@ -24,7 +24,20 @@ vi.mock('@/services/projectFile', () => ({
   },
 }));
 
-const { readWorkspaceAsset } = await import('./readWorkspaceAsset');
+const { readWorkspaceAsset, resolveWorkspaceAssetContentType } =
+  await import('./readWorkspaceAsset');
+
+describe('resolveWorkspaceAssetContentType', () => {
+  it('prefers the svg image type over a generic text/plain preview', () => {
+    expect(resolveWorkspaceAssetContentType('/tmp/site/dot.svg', 'text/plain')).toBe(
+      'image/svg+xml',
+    );
+    expect(resolveWorkspaceAssetContentType('/tmp/site/app.css', 'text/plain')).toBe('text/css');
+    expect(resolveWorkspaceAssetContentType('/tmp/site/notes.bin', 'application/x-foo')).toBe(
+      'application/x-foo',
+    );
+  });
+});
 
 describe('readWorkspaceAsset', () => {
   beforeEach(() => {

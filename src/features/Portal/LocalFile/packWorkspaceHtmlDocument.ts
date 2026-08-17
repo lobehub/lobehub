@@ -5,7 +5,10 @@ import {
   collectJsResourceHrefs,
   collectLocalResourceRefs,
 } from './collectHtmlLocalResources';
-import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
+import {
+  resolveWorkspaceAssetContentType,
+  WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES,
+} from './readWorkspaceAsset';
 import { resolveLocalResourceHref, toWorkspaceRelativePath } from './workspaceHtmlPath';
 
 const SITE_ROOT = '/__workspace_html_site__';
@@ -14,6 +17,7 @@ export interface PackedWorkspaceHtmlSite {
   html: string;
   inlinedPaths: string[];
   sidecars: WorkspaceHtmlArtifactFile[];
+  unresolvedHrefs: string[];
 }
 
 const escapeRegExp = (value: string) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -162,11 +166,13 @@ export const packWorkspaceHtmlDocument = ({
       return `data:text/css;base64,${utf8ToBase64(css)}`;
     }
 
+    const contentType = resolveWorkspaceAssetContentType(file.path, file.contentType);
+
     if (file.encoding === 'base64') {
-      return `data:${file.contentType};base64,${file.content}`;
+      return `data:${contentType};base64,${file.content}`;
     }
 
-    return `data:${file.contentType};base64,${utf8ToBase64(file.content)}`;
+    return `data:${contentType};base64,${utf8ToBase64(file.content)}`;
   };
 
   const rewriteHref = (href: string, sourcePath: string): string | undefined => {
@@ -202,9 +208,13 @@ export const packWorkspaceHtmlDocument = ({
   });
 
   let packed = html;
+  const unresolvedHrefs: string[] = [];
   for (const ref of collected.refs) {
     const replacement = rewriteHref(ref.href, entry.path);
-    if (!replacement) continue;
+    if (!replacement) {
+      unresolvedHrefs.push(ref.href);
+      continue;
+    }
     packed = replaceHrefToken(packed, ref.href, replacement);
   }
 
@@ -232,5 +242,6 @@ export const packWorkspaceHtmlDocument = ({
     html: packed,
     inlinedPaths,
     sidecars,
+    unresolvedHrefs,
   };
 };

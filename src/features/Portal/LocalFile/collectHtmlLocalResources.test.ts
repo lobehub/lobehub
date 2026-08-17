@@ -8,6 +8,7 @@ import {
   isPathInsideWorkspace,
   lowestCommonAncestorDirectory,
   resolveLocalResourceHref,
+  toWorkspaceAbsolutePath,
   toWorkspaceRelativePath,
 } from './collectHtmlLocalResources';
 
@@ -206,6 +207,47 @@ describe('path helpers', () => {
     expect(isPathInsideWorkspace('/project-other/a.html', '/project')).toBe(false);
   });
 
+  it('treats macOS /private/tmp and /tmp as the same workspace', () => {
+    expect(
+      isPathInsideWorkspace(
+        '/private/tmp/lobe-html-publish-fixture/app.css',
+        '/tmp/lobe-html-publish-fixture',
+      ),
+    ).toBe(true);
+    expect(
+      isPathInsideWorkspace(
+        '/tmp/lobe-html-publish-fixture/app.css',
+        '/private/tmp/lobe-html-publish-fixture',
+      ),
+    ).toBe(true);
+    expect(isPathInsideWorkspace('/private/tmp-other/app.css', '/tmp')).toBe(false);
+
+    expect(
+      resolveLocalResourceHref({
+        href: './app.css',
+        sourcePath: '/private/tmp/lobe-html-publish-fixture/index.html',
+        workingDirectory: '/tmp/lobe-html-publish-fixture',
+      }),
+    ).toEqual({
+      absolutePath: '/private/tmp/lobe-html-publish-fixture/app.css',
+      href: './app.css',
+      kind: 'resolved',
+    });
+
+    expect(
+      toWorkspaceRelativePath(
+        '/private/tmp/lobe-html-publish-fixture/index.html',
+        '/tmp/lobe-html-publish-fixture',
+      ),
+    ).toBe('index.html');
+    expect(
+      toWorkspaceAbsolutePath(
+        '/private/tmp/lobe-html-publish-fixture/index.html',
+        '/tmp/lobe-html-publish-fixture',
+      ),
+    ).toBe('/private/tmp/lobe-html-publish-fixture/index.html');
+  });
+
   it('computes the lowest common ancestor inside the workspace', () => {
     expect(
       lowestCommonAncestorDirectory(
@@ -258,6 +300,13 @@ describe('path helpers', () => {
   it('returns the workspace-relative path', () => {
     expect(toWorkspaceRelativePath('/project/pages/index.html', '/project')).toBe(
       'pages/index.html',
+    );
+  });
+
+  it('joins a workspace-relative html path onto the working directory', () => {
+    expect(toWorkspaceAbsolutePath('index.html', '/tmp/site')).toBe('/tmp/site/index.html');
+    expect(toWorkspaceAbsolutePath('/tmp/site/index.html', '/tmp/site')).toBe(
+      '/tmp/site/index.html',
     );
   });
 });

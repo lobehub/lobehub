@@ -9,6 +9,21 @@ const fromSlashPath = (filePath: string, sourcePath: string): string => {
 
 const stripTrailingSlash = (value: string) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
+const DARWIN_PRIVATE_ROOTS = ['/tmp', '/var', '/etc'] as const;
+
+const canonicalizeWorkspacePath = (filePath: string): string => {
+  const slashPath = stripTrailingSlash(toSlashPath(filePath));
+
+  for (const root of DARWIN_PRIVATE_ROOTS) {
+    const privateRoot = `/private${root}`;
+    if (slashPath === privateRoot || slashPath.startsWith(`${privateRoot}/`)) {
+      return slashPath.slice('/private'.length);
+    }
+  }
+
+  return slashPath;
+};
+
 const decodePathSegment = (segment: string): string => {
   try {
     return decodeURIComponent(segment);
@@ -67,17 +82,30 @@ const parentDirectory = (filePath: string): string => {
 };
 
 export const isPathInsideWorkspace = (targetPath: string, workingDirectory: string): boolean => {
-  const target = stripTrailingSlash(toSlashPath(targetPath));
-  const root = stripTrailingSlash(toSlashPath(workingDirectory));
+  const target = canonicalizeWorkspacePath(targetPath);
+  const root = canonicalizeWorkspacePath(workingDirectory);
   return target === root || target.startsWith(`${root}/`);
 };
 
-export const toWorkspaceRelativePath = (absolutePath: string, workingDirectory: string): string => {
-  const target = stripTrailingSlash(toSlashPath(absolutePath));
+export const toWorkspaceAbsolutePath = (filePath: string, workingDirectory: string): string => {
+  const slashPath = toSlashPath(filePath);
+  if (isPathInsideWorkspace(filePath, workingDirectory)) {
+    return fromSlashPath(slashPath, workingDirectory);
+  }
+
+  const isAbsolute = slashPath.startsWith('/') || /^[a-zA-Z]:/u.test(filePath);
+  if (isAbsolute) return filePath;
+
   const root = stripTrailingSlash(toSlashPath(workingDirectory));
+  return fromSlashPath(normalizeSlashPath(`${root}/${slashPath}`), workingDirectory);
+};
+
+export const toWorkspaceRelativePath = (absolutePath: string, workingDirectory: string): string => {
+  const target = canonicalizeWorkspacePath(absolutePath);
+  const root = canonicalizeWorkspacePath(workingDirectory);
   if (target === root) return '';
   if (target.startsWith(`${root}/`)) return target.slice(root.length + 1);
-  return target.split('/').at(-1) ?? target;
+  return stripTrailingSlash(toSlashPath(absolutePath)).split('/').at(-1) ?? absolutePath;
 };
 
 export const lowestCommonAncestorDirectory = (

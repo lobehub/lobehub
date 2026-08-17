@@ -61,6 +61,10 @@ export const publishWorkspaceHtmlArtifact = async (
     files: input.files,
   });
 
+  if (packed.unresolvedHrefs.length > 0) {
+    throw new Error('unresolved-local-assets');
+  }
+
   if (packed.sidecars.length > 0) {
     if (!deps.publishSite) {
       throw new Error('unavailable');

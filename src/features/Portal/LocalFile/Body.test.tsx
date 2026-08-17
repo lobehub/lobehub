@@ -90,6 +90,9 @@ vi.mock('./MarkdownImage', () => ({
 
 vi.mock('./PublishHtmlArtifactButton', () => ({
   PublishHtmlArtifactButton: () => null,
+  PublishHtmlArtifactLiveBar: () => null,
+  PublishHtmlArtifactProvider: ({ children }: { children: ReactNode }) => children,
+  PublishHtmlArtifactTrigger: () => null,
 }));
 
 const mockClearPortalStack = vi.hoisted(() => vi.fn());

@@ -7,6 +7,7 @@ import {
   extractHtmlTitle,
   lowestCommonAncestorDirectory,
   parentDirectory,
+  toWorkspaceAbsolutePath,
   toWorkspaceRelativePath,
 } from './collectHtmlLocalResources';
 import {
@@ -81,10 +82,11 @@ export const gatherWorkspaceHtmlArtifact = async ({
   readAsset: (absolutePath: string) => Promise<ReadWorkspaceAssetResult>;
   workingDirectory: string;
 }): Promise<GatheredWorkspaceHtmlArtifact> => {
+  const absoluteHtmlPath = toWorkspaceAbsolutePath(htmlFilePath, workingDirectory);
   const htmlRefs = collectLocalResourceRefs({
     content: htmlContent,
     sourceKind: 'html',
-    sourcePath: htmlFilePath,
+    sourcePath: absoluteHtmlPath,
     workingDirectory,
   });
 
@@ -95,7 +97,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
   const missing: string[] = [];
   const oversized: string[] = [];
   const remotes: string[] = [];
-  const htmlDirectory = parentDirectory(htmlFilePath);
+  const htmlDirectory = parentDirectory(absoluteHtmlPath);
 
   const addRemotes = (skipped: typeof htmlRefs.skipped) => {
     for (const item of skipped) {
@@ -105,6 +107,10 @@ export const gatherWorkspaceHtmlArtifact = async ({
   };
 
   addRemotes(htmlRefs.skipped);
+  for (const item of htmlRefs.skipped) {
+    if (item.reason !== 'escape') continue;
+    if (!missing.includes(item.href)) missing.push(item.href);
+  }
   const resolvedAssets: Array<{
     absolutePath: string;
     bytes: Uint8Array;
@@ -177,11 +183,11 @@ export const gatherWorkspaceHtmlArtifact = async ({
 
   const htmlBytes = new TextEncoder().encode(htmlContent);
   const siteRoot = lowestCommonAncestorDirectory(
-    [htmlFilePath, ...resolvedAssets.map((asset) => asset.absolutePath)],
+    [absoluteHtmlPath, ...resolvedAssets.map((asset) => asset.absolutePath)],
     workingDirectory,
   );
-  const entryPath = toWorkspaceRelativePath(htmlFilePath, siteRoot) || 'index.html';
-  const relativeHtmlPath = toWorkspaceRelativePath(htmlFilePath, workingDirectory);
+  const entryPath = toWorkspaceRelativePath(absoluteHtmlPath, siteRoot) || 'index.html';
+  const relativeHtmlPath = toWorkspaceRelativePath(absoluteHtmlPath, workingDirectory);
   const filename = htmlFilePath.split(/[/\\]/).at(-1) || 'index.html';
 
   const files: WorkspaceHtmlArtifactFile[] = [
