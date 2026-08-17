@@ -93,6 +93,35 @@ describe('knowledgeBaseRouter', () => {
       });
     });
 
+    // Regression: the input used to be `insertKnowledgeBasesSchema.partial()`,
+    // so a member with collaborative `edit` access could reassign the row, move
+    // it to another workspace, or take it private through the rename endpoint.
+    it('drops identity and scope fields from the update payload', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        userId: 'another-member',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({
+        id: 'kb-1',
+        value: {
+          description: 'New description',
+          id: 'hijacked-id',
+          name: 'Updated library',
+          userId: 'test-user',
+          visibility: 'private',
+          workspaceId: 'other-workspace',
+        },
+      } as Parameters<typeof caller.updateKnowledgeBase>[0]);
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        description: 'New description',
+        name: 'Updated library',
+      });
+    });
+
     it('does not update the library when resource edit access is denied', async () => {
       routerMocks.assertCanPerformResourceAction.mockRejectedValue(new Error('denied'));
 
