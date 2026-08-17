@@ -18,7 +18,7 @@ Keep a single Linux VPS in sync with GitHub `canary`: build in Actions → priva
 
 ## One-time server bootstrap
 
-For the **kamyar VPS** (`https://chat.panafor.com` + `https://preview.panafor.com`), use the numbered Ubuntu 24.04 operator runbook (packages, env, DNS/TLS, first GHCR image, bootstrap):
+For the **kamyar VPS** (`https://chat.panafor.com` + `https://preview.panafor.com` + admin `https://adchat.panafor.com`), use the numbered Ubuntu 24.04 operator runbook (packages, env, DNS/TLS, first GHCR image, bootstrap):
 
 → **[SERVER-BOOTSTRAP.md](../../../docker-compose/deploy/SERVER-BOOTSTRAP.md)**
 
