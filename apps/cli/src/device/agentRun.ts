@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import os from 'node:os';
 
 import {
   buildHeteroExecStdinPayload,
@@ -47,11 +49,9 @@ interface SpawnHeteroAgentRunLogger {
  * detached `lh connect --daemon` child where `PATH` may be minimal.
  *
  * Resolves only once the child's outcome is known: `accepted` on the `spawn`
- * event, `rejected` on an early `error`. `spawn()` reports failures (missing or
- * inaccessible `cwd`, etc.) asynchronously via `error`, so acking eagerly would
- * report a false success and leave the run with no process to emit
- * `heteroFinish` — surfacing as a stuck assistant message. A rejected ack
- * instead flows back as a dispatch failure the user can see.
+ * event, `rejected` on an early wrapper-process `error`. A missing target cwd
+ * is handled inside `lh hetero exec`, which can classify it and emit
+ * `heteroFinish`; other wrapper spawn failures flow back as rejected dispatches.
  */
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
@@ -74,6 +74,10 @@ export function spawnHeteroAgentRun(
     workspaceId,
   } = params;
   const workDir = cwd ?? process.cwd();
+  // A stale project path must not prevent the wrapper CLI from starting: the
+  // inner spawnAgent preflight owns cwd classification and reports the
+  // structured working_directory_not_found error through heteroFinish.
+  const spawnCwd = existsSync(workDir) ? workDir : os.homedir();
 
   // Server-ingest mode (--topic + --operation-id): events are batch-POSTed to
   // the server, not rendered. `--input-json -` reads the prompt from stdin.
@@ -117,7 +121,7 @@ export function spawnHeteroAgentRun(
     };
 
     const child = spawn(process.execPath, [...process.execArgv, ...cliArgs], {
-      cwd: workDir,
+      cwd: spawnCwd,
       env: {
         ...process.env,
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),

@@ -2641,14 +2641,22 @@ export default class HeterogeneousAgentCtr {
       workspaceId,
     } = params;
     const workDir = cwd ?? process.cwd();
+    // Let the embedded CLI classify a stale project path and finish the
+    // operation through heteroFinish instead of failing this wrapper spawn as
+    // the misleading `spawn LobeHub.exe ENOENT`.
+    const workDirExists = existsSync(workDir);
+    const spawnCwd = workDirExists ? workDir : os.homedir();
 
     // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
     // packaged builds), have `lh hetero exec` persist the agent process's RAW
     // stream-json (pre-adapter) on this device. The remote-device path
     // otherwise leaves no local record — the CLI consumes stdout internally and
     // only POSTs adapted events to the server — so without this there's nothing
-    // to inspect when a remote run misbehaves.
-    const rawDumpDir = this.shouldTraceCliOutput ? this.resolveTraceRootDir(workDir) : undefined;
+    // to inspect when a remote run misbehaves. Do not pass a cwd-relative dump
+    // path for a missing workDir: RawStreamDump would recreate the deleted
+    // directory before spawnAgent can report it.
+    const rawDumpDir =
+      this.shouldTraceCliOutput && workDirExists ? this.resolveTraceRootDir(workDir) : undefined;
 
     const args = [
       'hetero',
@@ -2703,7 +2711,7 @@ export default class HeterogeneousAgentCtr {
     // an older global install earlier on PATH, letting model discovery report a
     // capability that the actual execution runtime does not support.
     const child = spawn(process.execPath, [cliScript, ...args], {
-      cwd: workDir,
+      cwd: spawnCwd,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
     });

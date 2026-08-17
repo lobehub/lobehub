@@ -2745,6 +2745,7 @@ describe('HeterogeneousAgentCtr', () => {
         '--operation-id',
         'op-gateway',
       ]);
+      expect(spawnCall.options.cwd).toBe(process.cwd());
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
@@ -2826,8 +2827,34 @@ describe('HeterogeneousAgentCtr', () => {
       expect(proc.stdin.write).not.toHaveBeenCalled();
     });
 
+    it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
+      const missingCwd = '/missing/project';
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, cwd: missingCwd });
+
+      expect(spawnCalls).toHaveLength(1);
+      const [spawnCall] = spawnCalls;
+      const cwdArgIndex = spawnCall.args.indexOf('--cwd');
+      expect(spawnCall.options.cwd).toBe(os.homedir());
+      expect(spawnCall.args[cwdArgIndex + 1]).toBe(missingCwd);
+      expect(spawnCall.args).not.toContain('--raw-dump');
+      proc.emit('spawn');
+
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+      expect(proc.stdin.write).toHaveBeenCalledOnce();
+    });
+
     it('rejects before spawn when the embedded CLI is missing', async () => {
-      vi.mocked(existsSync).mockReturnValueOnce(false);
+      vi.mocked(existsSync).mockImplementation(
+        (candidate) => candidate !== '/fake/cli/dist/index.js',
+      );
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
