@@ -3,15 +3,44 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { isRecord } from '@lobechat/utils/object';
 
-import type { CommandExecutionApprovalDecision, FileChangeApprovalDecision } from './protocol';
+import type { CommandExecutionApprovalDecision } from './protocol';
 
 const DEFAULT_CODEX_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
 
-export type CodexApprovalDecision = Extract<
-  CommandExecutionApprovalDecision & FileChangeApprovalDecision,
-  string
->;
+export type CodexApprovalDecision = CommandExecutionApprovalDecision;
+
+export const isCodexApprovalDecision = (decision: unknown): decision is CodexApprovalDecision => {
+  if (
+    decision === 'accept' ||
+    decision === 'acceptForSession' ||
+    decision === 'decline' ||
+    decision === 'cancel'
+  ) {
+    return true;
+  }
+  if (!isRecord(decision)) return false;
+
+  const execPolicyAmendment = decision.acceptWithExecpolicyAmendment;
+  if (
+    isRecord(execPolicyAmendment) &&
+    Array.isArray(execPolicyAmendment.execpolicy_amendment) &&
+    execPolicyAmendment.execpolicy_amendment.every((part) => typeof part === 'string')
+  ) {
+    return true;
+  }
+
+  const networkPolicyAmendment = decision.applyNetworkPolicyAmendment;
+  if (
+    !isRecord(networkPolicyAmendment) ||
+    !isRecord(networkPolicyAmendment.network_policy_amendment)
+  ) {
+    return false;
+  }
+  const policy = networkPolicyAmendment.network_policy_amendment;
+  return typeof policy.host === 'string' && (policy.action === 'allow' || policy.action === 'deny');
+};
 
 interface ApprovalRequest {
   apiName: 'command_execution' | 'file_change';

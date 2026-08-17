@@ -24,6 +24,7 @@ export {
   CodexThreadSession,
   type CodexThreadSessionOptions,
   getCodexAppServerUnsupportedArgs,
+  isCodexApprovalDecision,
   isCodexAppServerCompatibilityError,
 } from '../codex';
 export type { UsageData } from '../types';

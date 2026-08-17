@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CodexApprovalDecision } from './CodexApprovalBridge';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
@@ -401,39 +402,69 @@ describe('CodexThreadSession', () => {
   it.each([
     [
       'item/commandExecution/requestApproval',
-      { approvalId: 'approval-1', itemId: 'item-1' },
+      {
+        approvalId: 'approval-1',
+        availableDecisions: [
+          'accept',
+          {
+            acceptWithExecpolicyAmendment: {
+              execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+            },
+          },
+          'cancel',
+        ],
+        itemId: 'item-1',
+      },
       'approval-1',
       'command_execution',
+      {
+        acceptWithExecpolicyAmendment: {
+          execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+        },
+      } satisfies CodexApprovalDecision,
     ],
-    ['item/fileChange/requestApproval', { itemId: 'item-1' }, 'item-1', 'file_change'],
-  ])('bridges %s requests to an intervention decision', async (method, params, id, apiName) => {
-    const harness = createClientHarness({ autoComplete: false });
-    const { events, run, session } = createSession(harness);
-    const running = run('operation-1', 'start');
-    await vi.waitFor(() =>
-      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
-    );
+    [
+      'item/fileChange/requestApproval',
+      { itemId: 'item-1' },
+      'item-1',
+      'file_change',
+      'acceptForSession' satisfies CodexApprovalDecision,
+    ],
+  ])(
+    'bridges %s requests to an intervention decision',
+    async (method, params, id, apiName, decision) => {
+      const harness = createClientHarness({ autoComplete: false });
+      const { events, run, session } = createSession(harness);
+      const running = run('operation-1', 'start');
+      await vi.waitFor(() =>
+        expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+      );
 
-    const approval = harness.requestApproval(method, params);
-    await vi.waitFor(() =>
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          data: expect.objectContaining({ apiName, interventionId: id, toolCallId: 'item-1' }),
-          operationId: 'operation-1',
-          type: 'agent_intervention_request',
-        }),
-      ),
-    );
-    expect(session.resolveApproval('operation-1', id, 'acceptForSession')).toBe(true);
-    await expect(approval).resolves.toEqual({ decision: 'acceptForSession' });
+      const approval = harness.requestApproval(method, params);
+      await vi.waitFor(() =>
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            data: expect.objectContaining({ apiName, interventionId: id, toolCallId: 'item-1' }),
+            operationId: 'operation-1',
+            type: 'agent_intervention_request',
+          }),
+        ),
+      );
+      const intervention = events.find(
+        (event) => event.type === 'agent_intervention_request' && event.data.interventionId === id,
+      );
+      expect(JSON.parse(intervention!.data.arguments)).toMatchObject(params);
+      expect(session.resolveApproval('operation-1', id, decision)).toBe(true);
+      await expect(approval).resolves.toEqual({ decision });
 
-    await harness.notify('turn/completed', {
-      threadId: 'thread-1',
-      turn: turn('turn-1', 'completed'),
-    });
-    await running;
-    session.close();
-  });
+      await harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await running;
+      session.close();
+    },
+  );
 
   it('does not register a thread if the host closes while thread/start is pending', async () => {
     const harness = createClientHarness({ delayThreadStart: true });

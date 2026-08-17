@@ -64,6 +64,7 @@ import {
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
+  isCodexApprovalDecision,
   isCodexAppServerCompatibilityError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
@@ -2354,14 +2355,12 @@ export default class HeterogeneousAgentCtr {
   async submitIntervention(params: SubmitInterventionParams): Promise<void> {
     const result = isPlainObject(params.result) ? params.result : undefined;
     const rawDecision = result?.decision;
-    if (
-      rawDecision === 'accept' ||
-      rawDecision === 'acceptForSession' ||
-      rawDecision === 'decline' ||
-      rawDecision === 'cancel' ||
-      params.cancelled
-    ) {
-      const decision: CodexApprovalDecision = params.cancelled ? 'cancel' : rawDecision;
+    const decision: CodexApprovalDecision | undefined = params.cancelled
+      ? 'cancel'
+      : isCodexApprovalDecision(rawDecision)
+        ? rawDecision
+        : undefined;
+    if (decision) {
       const interventionId = params.interventionId ?? params.toolCallId;
       for (const session of this.sessions.values()) {
         if (

@@ -5,7 +5,11 @@ export {
   getCodexAppServerUnsupportedArgs,
   getCodexPermissionProfile,
 } from './appServerParams';
-export { CodexApprovalBridge, type CodexApprovalDecision } from './CodexApprovalBridge';
+export {
+  CodexApprovalBridge,
+  type CodexApprovalDecision,
+  isCodexApprovalDecision,
+} from './CodexApprovalBridge';
 export {
   CodexAppServerClient,
   type CodexAppServerClientOptions,

@@ -54,6 +54,7 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "@lobehub/icons": "^5.11.0"
   },
   "devDependencies": {

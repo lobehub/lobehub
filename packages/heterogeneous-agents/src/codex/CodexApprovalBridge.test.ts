@@ -2,7 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CodexApprovalDecision } from './CodexApprovalBridge';
-import { CodexApprovalBridge } from './CodexApprovalBridge';
+import { CodexApprovalBridge, isCodexApprovalDecision } from './CodexApprovalBridge';
 
 const createBridge = (timeoutMs = 1000) => {
   const events: AgentStreamEvent[] = [];
@@ -29,28 +29,60 @@ afterEach(() => {
 });
 
 describe('CodexApprovalBridge', () => {
-  it.each<CodexApprovalDecision>(['accept', 'acceptForSession', 'decline', 'cancel'])(
-    'returns the %s decision to Codex',
-    async (decision) => {
-      const { bridge, events, request } = createBridge();
-      const pending = request();
-
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            apiName: 'command_execution',
-            identifier: 'codex',
-            interventionId: 'approval-1',
-            toolCallId: 'item-1',
-          }),
-          operationId: 'operation-1',
-          type: 'agent_intervention_request',
-        }),
-      );
-      expect(bridge.resolve('approval-1', decision)).toBe(true);
-      await expect(pending).resolves.toBe(decision);
+  it.each<CodexApprovalDecision>([
+    'accept',
+    'acceptForSession',
+    'decline',
+    'cancel',
+    {
+      acceptWithExecpolicyAmendment: {
+        execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+      },
     },
-  );
+    {
+      applyNetworkPolicyAmendment: {
+        network_policy_amendment: { action: 'allow', host: 'github.com' },
+      },
+    },
+  ])('returns the %s decision to Codex', async (decision) => {
+    const { bridge, events, request } = createBridge();
+    const pending = request();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          apiName: 'command_execution',
+          identifier: 'codex',
+          interventionId: 'approval-1',
+          toolCallId: 'item-1',
+        }),
+        operationId: 'operation-1',
+        type: 'agent_intervention_request',
+      }),
+    );
+    expect(bridge.resolve('approval-1', decision)).toBe(true);
+    await expect(pending).resolves.toEqual(decision);
+  });
+
+  it('validates structured decisions received over IPC', () => {
+    expect(
+      isCodexApprovalDecision({
+        acceptWithExecpolicyAmendment: { execpolicy_amendment: ['git', 'status'] },
+      }),
+    ).toBe(true);
+    expect(
+      isCodexApprovalDecision({
+        applyNetworkPolicyAmendment: {
+          network_policy_amendment: { action: 'deny', host: 'example.com' },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isCodexApprovalDecision({
+        acceptWithExecpolicyAmendment: { execpolicy_amendment: ['git', 42] },
+      }),
+    ).toBe(false);
+  });
 
   it('queues repeated approvals for the same tool item', async () => {
     const { bridge, request } = createBridge();
