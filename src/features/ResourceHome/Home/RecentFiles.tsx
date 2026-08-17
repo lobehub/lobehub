@@ -92,7 +92,7 @@ const RecentFiles = memo(() => {
     : undefined;
 
   const { data, error, isLoading, mutate } = useClientDataSWR(
-    resourceKeys.recentFiles(visibility),
+    resourceKeys.recentFiles(workspaceId ?? null, visibility),
     () => fileService.getRecentFiles(8, visibility),
   );
 

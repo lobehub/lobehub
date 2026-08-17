@@ -80,7 +80,7 @@ const RecentPages = memo(() => {
     : undefined;
 
   const { data, error, isLoading, mutate } = useClientDataSWR(
-    resourceKeys.recentPages(visibility),
+    resourceKeys.recentPages(workspaceId ?? null, visibility),
     () => fileService.getRecentPages(6, visibility),
   );
 

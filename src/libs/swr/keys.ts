@@ -1172,15 +1172,30 @@ export const resourceKeys = {
     params,
     workspaceId,
   ]),
-  recentFiles: def('resource:recentFiles', (visibility?: 'private' | 'public') => [
+  // Every Resources cache entry is workspace-scoped: the same visibility means
+  // different rows in each workspace, so leaving `workspaceId` out of the key
+  // makes a workspace switch serve the previous workspace's rows from cache.
+  recentFiles: def(
     'resource:recentFiles',
-    visibility ?? null,
-  ]),
-  recentPages: def('resource:recentPages', (visibility?: 'private' | 'public') => [
+    (workspaceId: string | null, visibility?: 'private' | 'public') => [
+      'resource:recentFiles',
+      workspaceId,
+      visibility ?? null,
+    ],
+  ),
+  recentPages: def(
     'resource:recentPages',
-    visibility ?? null,
+    (workspaceId: string | null, visibility?: 'private' | 'public') => [
+      'resource:recentPages',
+      workspaceId,
+      visibility ?? null,
+    ],
+  ),
+  search: def('resource:search', (params: unknown, workspaceId: string | null) => [
+    'resource:search',
+    params,
+    workspaceId,
   ]),
-  search: def('resource:search', (params: unknown) => ['resource:search', params]),
 };
 export const providerKeys = {
   clientConfig: def('provider:clientConfig', (id: string) => ['provider:clientConfig', id]),
