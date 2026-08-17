@@ -180,6 +180,29 @@ describe('Knowledge base list item dropdown menu', () => {
     ]);
   });
 
+  it('still separates move/copy when there is no member permission entry', () => {
+    mocks.canManage = true;
+
+    expect(getMenuStructure(getItems())).toEqual([
+      'rename',
+      'editDescription',
+      'divider',
+      'transfer-knowledge-base',
+      'copy-knowledge-base',
+      'divider',
+      'delete',
+    ]);
+  });
+
+  it('never opens or closes the menu with a divider', () => {
+    mocks.canEdit = false;
+    mocks.canManage = true;
+
+    const items = getItems(true);
+
+    expect(getMenuStructure(items)).toEqual(['member-permissions']);
+  });
+
   it('omits rename and edit when the workspace role cannot edit content', () => {
     mocks.canEdit = false;
 

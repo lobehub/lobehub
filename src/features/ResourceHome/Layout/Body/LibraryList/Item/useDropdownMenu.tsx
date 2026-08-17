@@ -155,85 +155,98 @@ export const useDropdownMenu = ({
     });
   }, [isOwnPublicKb, id, setKnowledgeBaseVisibility, t]);
 
-  return useCallback(
-    () =>
+  return useCallback(() => {
+    // Assemble the menu as ordered groups and let the dividers fall out of which
+    // groups survived. Hand-wiring a divider next to each entry silently drops
+    // or duplicates separators as soon as one capability combination changes.
+    const groups: NonNullable<MenuProps['items']>[] = [
+      // Content edits: gated by the workspace role only. Row ownership no longer
+      // gates them — the server accepts any member holding an `edit` grant.
+      canEdit
+        ? [
+            {
+              icon: <Icon icon={PencilLine} />,
+              key: 'rename',
+              label: t('rename', { ns: 'common' }),
+              onClick: (info: any) => {
+                info.domEvent?.stopPropagation();
+                if (!canEdit) return;
+                // Defer to next frame so the DropdownMenu fully finishes its
+                // close animation and event handlers before the Popover opens.
+                // Otherwise the tail-end mouseup/click bubbles to document and
+                // Popover's outside-click detection fires `onOpenChange(false)`
+                // one tick after we set it to true, causing the input to flash
+                // open and immediately snap shut.
+                requestAnimationFrame(() => toggleEditing(true));
+              },
+            },
+            {
+              icon: <Icon icon={FileText} />,
+              key: 'editDescription',
+              label: t('edit', { ns: 'common' }),
+              onClick: (info: any) => {
+                info.domEvent?.stopPropagation();
+                handleEditDescription();
+              },
+            },
+          ]
+        : [],
+      // Sharing: visibility switches plus the member-permission page.
       [
-        canEdit && {
-          icon: <Icon icon={PencilLine} />,
-          key: 'rename',
-          label: t('rename', { ns: 'common' }),
-          onClick: (info: any) => {
-            info.domEvent?.stopPropagation();
-            if (!canEdit) return;
-            // Defer to next frame so the DropdownMenu fully finishes its
-            // close animation and event handlers before the Popover opens.
-            // Otherwise the tail-end mouseup/click bubbles to document and
-            // Popover's outside-click detection fires `onOpenChange(false)`
-            // one tick after we set it to true, causing the input to flash
-            // open and immediately snap shut.
-            requestAnimationFrame(() => toggleEditing(true));
-          },
-        },
-        canEdit && {
-          icon: <Icon icon={FileText} />,
-          key: 'editDescription',
-          label: t('edit', { ns: 'common' }),
-          onClick: (info: any) => {
-            info.domEvent?.stopPropagation();
-            handleEditDescription();
-          },
-        },
-        canEdit &&
-          (isOwnPrivateKb || isOwnPublicKb || memberPermissionMenuItem) && { type: 'divider' },
-        canEdit &&
-          isOwnPrivateKb && {
-            icon: <Icon icon={GlobeIcon} />,
-            key: 'publishToWorkspace',
-            label: t('library.publish'),
-            onClick: (info: any) => {
-              info.domEvent?.stopPropagation();
-              handlePublish();
-            },
-          },
-        canEdit &&
-          isOwnPublicKb && {
-            icon: <Icon icon={EyeOffIcon} />,
-            key: 'makePrivate',
-            label: t('makePrivate', { ns: 'common' }),
-            onClick: (info: any) => {
-              info.domEvent?.stopPropagation();
-              handleMakePrivate();
-            },
-          },
+        canEdit && isOwnPrivateKb
+          ? {
+              icon: <Icon icon={GlobeIcon} />,
+              key: 'publishToWorkspace',
+              label: t('library.publish'),
+              onClick: (info: any) => {
+                info.domEvent?.stopPropagation();
+                handlePublish();
+              },
+            }
+          : null,
+        canEdit && isOwnPublicKb
+          ? {
+              icon: <Icon icon={EyeOffIcon} />,
+              key: 'makePrivate',
+              label: t('makePrivate', { ns: 'common' }),
+              onClick: (info: any) => {
+                info.domEvent?.stopPropagation();
+                handleMakePrivate();
+              },
+            }
+          : null,
         memberPermissionMenuItem,
-        memberPermissionMenuItem &&
-          canEdit &&
-          canManage &&
-          transferMenuItems?.length && { type: 'divider' },
-        ...(canEdit && canManage ? (transferMenuItems ?? []) : []),
-        canEdit && canManage && { type: 'divider' },
-        canEdit &&
-          canManage && {
-            danger: true,
-            icon: <Icon icon={Trash} />,
-            key: 'delete',
-            label: t('delete', { ns: 'common' }),
-            onClick: handleDelete,
-          },
-      ].filter(Boolean) as MenuProps['items'],
-    [
-      canEdit,
-      canManage,
-      t,
-      toggleEditing,
-      handleDelete,
-      handleEditDescription,
-      handlePublish,
-      handleMakePrivate,
-      isOwnPrivateKb,
-      isOwnPublicKb,
-      memberPermissionMenuItem,
-      transferMenuItems,
-    ],
-  );
+      ].filter(Boolean) as NonNullable<MenuProps['items']>,
+      // Cross-workspace move / copy: creator-or-owner only.
+      canEdit && canManage ? (transferMenuItems ?? []) : [],
+      canEdit && canManage
+        ? [
+            {
+              danger: true,
+              icon: <Icon icon={Trash} />,
+              key: 'delete',
+              label: t('delete', { ns: 'common' }),
+              onClick: handleDelete,
+            },
+          ]
+        : [],
+    ];
+
+    return groups
+      .filter((group) => group.length > 0)
+      .flatMap((group, index) => (index === 0 ? group : [{ type: 'divider' as const }, ...group]));
+  }, [
+    canEdit,
+    canManage,
+    t,
+    toggleEditing,
+    handleDelete,
+    handleEditDescription,
+    handlePublish,
+    handleMakePrivate,
+    isOwnPrivateKb,
+    isOwnPublicKb,
+    memberPermissionMenuItem,
+    transferMenuItems,
+  ]);
 };
