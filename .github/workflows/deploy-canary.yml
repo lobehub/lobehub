@@ -139,6 +139,8 @@ jobs:
             set -euo pipefail
             DEPLOY_PATH="${DEPLOY_PATH:-$HOME/panachat}"
             cd "$DEPLOY_PATH"
+            git fetch origin canary
+            git merge --ff-only FETCH_HEAD || echo "WARN: could not fast-forward (local changes?); deploying with existing scripts"
             if [ -n "${GHCR_TOKEN:-}" ]; then
               echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             fi
